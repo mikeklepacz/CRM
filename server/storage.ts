@@ -182,20 +182,19 @@ export class DatabaseStorage implements IStorage {
     const existing = await this.getUserPreferences(userId);
 
     if (existing) {
-      // Merge with existing preferences to avoid data loss
-      const merged = {
-        visibleColumns: preferences.visibleColumns ?? existing.visibleColumns,
-        columnOrder: preferences.columnOrder ?? existing.columnOrder,
-        columnWidths: preferences.columnWidths ?? existing.columnWidths,
-        selectedTags: preferences.selectedTags ?? existing.selectedTags,
-        selectedKeywords: preferences.selectedKeywords ?? existing.selectedKeywords,
-        selectedStates: preferences.selectedStates ?? existing.selectedStates,
-        updatedAt: new Date(),
-      };
+      // Build update object only with provided fields to avoid overwriting with undefined
+      const updates: any = { updatedAt: new Date() };
+      
+      if (preferences.visibleColumns !== undefined) updates.visibleColumns = preferences.visibleColumns;
+      if (preferences.columnOrder !== undefined) updates.columnOrder = preferences.columnOrder;
+      if (preferences.columnWidths !== undefined) updates.columnWidths = preferences.columnWidths;
+      if (preferences.selectedTags !== undefined) updates.selectedTags = preferences.selectedTags;
+      if (preferences.selectedKeywords !== undefined) updates.selectedKeywords = preferences.selectedKeywords;
+      if (preferences.selectedStates !== undefined) updates.selectedStates = preferences.selectedStates;
 
       const [updated] = await db
         .update(userPreferences)
-        .set(merged)
+        .set(updates)
         .where(eq(userPreferences.userId, userId))
         .returning();
       return updated;
