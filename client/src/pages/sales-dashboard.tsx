@@ -10,7 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -34,6 +35,7 @@ export default function SalesDashboard() {
   const [expandedCell, setExpandedCell] = useState<{ row: any; column: string; value: string; isEditable: boolean } | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [openCombobox, setOpenCombobox] = useState<string | null>(null);
 
   // Fetch available sheets and auto-detect by purpose
   const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
@@ -159,6 +161,18 @@ export default function SalesDashboard() {
       setSortColumn(column);
       setSortDirection('asc');
     }
+  };
+
+  // Get unique values for a column (for dropdowns)
+  const getUniqueColumnValues = (column: string): string[] => {
+    const values = new Set<string>();
+    data.forEach((row: any) => {
+      const value = row[column];
+      if (value && String(value).trim()) {
+        values.add(String(value).trim());
+      }
+    });
+    return Array.from(values).sort();
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
@@ -461,8 +475,11 @@ export default function SalesDashboard() {
                             const isPhoneColumn = header.toLowerCase().includes('phone');
                             const isWebsiteColumn = header.toLowerCase().includes('website') || header.toLowerCase().includes('url') || header.toLowerCase().includes('site');
                             const isLinkColumn = header.toLowerCase() === 'link';
+                            const isStateColumn = header.toLowerCase() === 'state';
                             const isLeaflyLink = cellValue.toLowerCase().includes('leafly');
                             const hasData = cellValue.length > 0;
+                            const comboboxKey = `${rowKey}-${header}`;
+                            const uniqueStates = isStateColumn ? getUniqueColumnValues(header) : [];
 
                             return (
                               <TableCell 
@@ -473,69 +490,155 @@ export default function SalesDashboard() {
                                 {isEditable ? (
                                   hasData ? (
                                     // Has data: Show value with edit on double-click
-                                    <div className="flex items-center gap-2">
-                                      {isPhoneColumn ? (
-                                        <a 
-                                          href={`tel:${cellValue}`}
-                                          className="flex items-center gap-1 text-primary hover:underline"
-                                          data-testid={`link-phone-${rowKey}-${header}`}
-                                        >
-                                          <Phone className="h-4 w-4" />
-                                          <span>{displayValue}</span>
-                                        </a>
-                                      ) : isWebsiteColumn ? (
-                                        <a 
-                                          href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="flex items-center gap-1 text-primary hover:underline"
-                                          data-testid={`link-website-${rowKey}-${header}`}
-                                        >
-                                          <ExternalLink className="h-4 w-4" />
-                                          <span>{extractDomain(cellValue)}</span>
-                                        </a>
-                                      ) : isLinkColumn ? (
-                                        <a 
-                                          href={cellValue}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-2xl hover:scale-110 transition-transform"
-                                          data-testid={`link-leafly-${rowKey}-${header}`}
-                                          title={cellValue}
-                                        >
-                                          {isLeaflyLink ? '🍁' : '🔗'}
-                                        </a>
-                                      ) : (
-                                        <span 
-                                          className="cursor-pointer hover:text-primary"
-                                          data-testid={`text-cell-${rowKey}-${header}`}
-                                        >
-                                          {displayValue}
-                                        </span>
-                                      )}
-                                      {!isLinkColumn && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-8 w-8 flex-shrink-0"
-                                          onDoubleClick={() => openExpandedView(row, header, cellValue, true)}
-                                          onClick={() => openExpandedView(row, header, cellValue, true)}
-                                          data-testid={`button-edit-${rowKey}-${header}`}
-                                          title="Click to edit"
-                                        >
-                                          <Maximize2 className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                    </div>
+                                    isStateColumn ? (
+                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox === comboboxKey}
+                                            className="w-full justify-between"
+                                            data-testid={`button-state-${rowKey}-${header}`}
+                                          >
+                                            {cellValue || "Select state..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[200px] p-0">
+                                          <Command>
+                                            <CommandInput placeholder="Search state..." />
+                                            <CommandList>
+                                              <CommandEmpty>No state found.</CommandEmpty>
+                                              <CommandGroup>
+                                                {uniqueStates.map((state) => (
+                                                  <CommandItem
+                                                    key={state}
+                                                    value={state}
+                                                    onSelect={() => {
+                                                      handleCellEdit(row, header, state);
+                                                      setOpenCombobox(null);
+                                                    }}
+                                                    data-testid={`option-state-${state}`}
+                                                  >
+                                                    <Check
+                                                      className={`mr-2 h-4 w-4 ${cellValue === state ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    {state}
+                                                  </CommandItem>
+                                                ))}
+                                              </CommandGroup>
+                                            </CommandList>
+                                          </Command>
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        {isPhoneColumn ? (
+                                          <a 
+                                            href={`tel:${cellValue}`}
+                                            className="flex items-center gap-1 text-primary hover:underline"
+                                            data-testid={`link-phone-${rowKey}-${header}`}
+                                          >
+                                            <Phone className="h-4 w-4" />
+                                            <span>{displayValue}</span>
+                                          </a>
+                                        ) : isWebsiteColumn ? (
+                                          <a 
+                                            href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-1 text-primary hover:underline"
+                                            data-testid={`link-website-${rowKey}-${header}`}
+                                          >
+                                            <ExternalLink className="h-4 w-4" />
+                                            <span>{extractDomain(cellValue)}</span>
+                                          </a>
+                                        ) : isLinkColumn ? (
+                                          <a 
+                                            href={cellValue}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-2xl hover:scale-110 transition-transform"
+                                            data-testid={`link-leafly-${rowKey}-${header}`}
+                                            title={cellValue}
+                                          >
+                                            {isLeaflyLink ? '🍁' : '🔗'}
+                                          </a>
+                                        ) : (
+                                          <span 
+                                            className="cursor-pointer hover:text-primary"
+                                            data-testid={`text-cell-${rowKey}-${header}`}
+                                          >
+                                            {displayValue}
+                                          </span>
+                                        )}
+                                        {!isLinkColumn && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 flex-shrink-0"
+                                            onDoubleClick={() => openExpandedView(row, header, cellValue, true)}
+                                            onClick={() => openExpandedView(row, header, cellValue, true)}
+                                            data-testid={`button-edit-${rowKey}-${header}`}
+                                            title="Click to edit"
+                                          >
+                                            <Maximize2 className="h-4 w-4" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    )
                                   ) : (
                                     // Empty cell: Allow inline editing for new data
-                                    <Input
-                                      value={cellValue}
-                                      onChange={(e) => handleCellEdit(row, header, e.target.value)}
-                                      placeholder="Enter value..."
-                                      className="w-full"
-                                      data-testid={`input-cell-${rowKey}-${header}`}
-                                    />
+                                    isStateColumn ? (
+                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox === comboboxKey}
+                                            className="w-full justify-between"
+                                            data-testid={`button-state-${rowKey}-${header}`}
+                                          >
+                                            {cellValue || "Select state..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[200px] p-0">
+                                          <Command>
+                                            <CommandInput placeholder="Search state..." />
+                                            <CommandList>
+                                              <CommandEmpty>No state found.</CommandEmpty>
+                                              <CommandGroup>
+                                                {uniqueStates.map((state) => (
+                                                  <CommandItem
+                                                    key={state}
+                                                    value={state}
+                                                    onSelect={() => {
+                                                      handleCellEdit(row, header, state);
+                                                      setOpenCombobox(null);
+                                                    }}
+                                                    data-testid={`option-state-${state}`}
+                                                  >
+                                                    <Check
+                                                      className={`mr-2 h-4 w-4 ${cellValue === state ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    {state}
+                                                  </CommandItem>
+                                                ))}
+                                              </CommandGroup>
+                                            </CommandList>
+                                          </Command>
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : (
+                                      <Input
+                                        value={cellValue}
+                                        onChange={(e) => handleCellEdit(row, header, e.target.value)}
+                                        placeholder="Enter value..."
+                                        className="w-full"
+                                        data-testid={`input-cell-${rowKey}-${header}`}
+                                      />
+                                    )
                                   )
                                 ) : (
                                   <div className="flex items-center gap-2">

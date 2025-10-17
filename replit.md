@@ -79,6 +79,7 @@ The Sales Dashboard automatically loads both sheets:
 - **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices
 - **Website URLs**: Auto-shortened to domain name (e.g., "lionheartcannabis.com") with external link icon, opens in new tab
 - **Link Column**: Shows 🍁 emoji for Leafly links, 🔗 for other links - clickable to open in new tab
+- **State Column**: Searchable dropdown showing only states in your current data - type to filter or scroll to select
 - **Existing Data**: Click the edit icon (⛶) to open popup editor (prevents accidental data loss)
 - **Empty Cells**: Inline editing for new data entry
 - **Long Text (>100 chars)**: Auto-truncated with expand icon for full view/edit in popup
