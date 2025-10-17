@@ -117,9 +117,10 @@ export const userIntegrations = pgTable("user_integrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id).unique(),
   // WooCommerce settings
-  wooUrl: varchar("woo_url"),
-  wooConsumerKey: varchar("woo_consumer_key"),
-  wooConsumerSecret: varchar("woo_consumer_secret"),
+  wooUrl: text("woo_url"),
+  wooConsumerKey: text("woo_consumer_key"),
+  wooConsumerSecret: text("woo_consumer_secret"),
+  wooLastSyncedAt: timestamp("woo_last_synced_at"),
   // Google OAuth credentials
   googleClientId: varchar("google_client_id"),
   googleClientSecret: varchar("google_client_secret"),

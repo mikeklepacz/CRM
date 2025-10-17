@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { RefreshCw, Loader2, Package, Link2 } from "lucide-react";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -44,6 +44,13 @@ export function WooCommerceSync() {
     },
   });
 
+  const { data: wooSettings } = useQuery({
+    queryKey: ["/api/woocommerce/settings"],
+    queryFn: async () => {
+      return await apiRequest("GET", "/api/woocommerce/settings");
+    },
+  });
+
   const syncMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest("POST", "/api/woocommerce/sync", {});
@@ -51,6 +58,7 @@ export function WooCommerceSync() {
     onSuccess: (data) => {
       setSyncResult(data);
       refetchOrders();
+      queryClient.invalidateQueries({ queryKey: ["/api/woocommerce/settings"] });
       toast({
         title: "Sync completed",
         description: `Synced ${data.synced} orders, matched ${data.matched} clients`,
@@ -134,21 +142,31 @@ export function WooCommerceSync() {
           )}
         </Button>
 
-        {syncResult && (
+        {(syncResult || wooSettings?.lastSyncedAt) && (
           <div className="text-sm space-y-1 p-3 bg-muted rounded-md">
-            <p><strong>Total Orders:</strong> {syncResult.total || 0}</p>
-            <p><strong>Synced:</strong> {syncResult.synced || 0}</p>
-            <p><strong>Matched to Clients:</strong> {syncResult.matched || 0}</p>
-            {syncResult.total > 0 && syncResult.matched === 0 && (
-              <p className="text-yellow-600 dark:text-yellow-500 mt-2">
-                ⚠️ Orders were synced but couldn't be matched to any clients. 
-                Make sure client emails or company names match the WooCommerce billing details.
+            {syncResult && (
+              <>
+                <p><strong>Total Orders:</strong> {syncResult.total || 0}</p>
+                <p><strong>Synced:</strong> {syncResult.synced || 0}</p>
+                <p><strong>Matched to Clients:</strong> {syncResult.matched || 0}</p>
+                {syncResult.total > 0 && syncResult.matched === 0 && (
+                  <p className="text-yellow-600 dark:text-yellow-500 mt-2">
+                    ⚠️ Orders were synced but couldn't be matched to any clients. 
+                    Make sure client emails or company names match the WooCommerce billing details.
+                  </p>
+                )}
+                {syncResult.message && (
+                  <p className="text-muted-foreground italic mt-2">{syncResult.message}</p>
+                )}
+              </>
+            )}
+            {wooSettings?.lastSyncedAt && (
+              <p className="text-muted-foreground mt-2">
+                <strong>Last synced:</strong> {new Date(wooSettings.lastSyncedAt).toLocaleString()}
               </p>
             )}
-            {syncResult.message && (
-              <p className="text-muted-foreground italic mt-2">{syncResult.message}</p>
-            )}
           </div>
+        )}</div>
         )}
 
         {orders.length > 0 && (

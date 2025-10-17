@@ -258,7 +258,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         url: integration?.wooUrl || "",
         consumerKey: integration?.wooConsumerKey || "",
-        consumerSecret: integration?.wooConsumerSecret || ""
+        consumerSecret: integration?.wooConsumerSecret || "",
+        lastSyncedAt: integration?.wooLastSyncedAt || null
       });
     } catch (error: any) {
       console.error("Error fetching WooCommerce settings:", error);
@@ -815,6 +816,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('Sync completed:', { total: orders.length, synced, matched });
+
+      // Update last synced timestamp
+      await storage.updateUserIntegration(userId, {
+        wooLastSyncedAt: new Date()
+      });
 
       res.json({
         message: "WooCommerce sync completed",
