@@ -42,10 +42,10 @@ export default function Login() {
           title: "Success",
           description: "Login successful! Redirecting...",
         });
-        // Small delay to show the success message
+        // Longer delay to ensure session cookie is set
         setTimeout(() => {
           window.location.href = "/";
-        }, 500);
+        }, 1000);
       } else {
         const error = await response.json();
         toast({

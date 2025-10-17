@@ -37,11 +37,13 @@ export function getSession() {
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
+    name: 'connect.sid',
     cookie: {
       httpOnly: true,
       secure: false, // Set to false for development on Replit
       sameSite: 'lax',
       maxAge: sessionTtl,
+      path: '/',
     },
   });
 }
