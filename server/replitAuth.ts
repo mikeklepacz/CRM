@@ -39,7 +39,8 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // Set to false for development on Replit
+      sameSite: 'lax',
       maxAge: sessionTtl,
     },
   });
@@ -99,8 +100,15 @@ export async function setupAuth(app: Express) {
     passport.use(strategy);
   }
 
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+  passport.serializeUser((user: any, cb) => {
+    // Store the entire user object in session
+    cb(null, user);
+  });
+  
+  passport.deserializeUser((user: any, cb) => {
+    // Retrieve the user object from session
+    cb(null, user);
+  });
 
   app.get("/api/login", (req, res, next) => {
     passport.authenticate(`replitauth:${req.hostname}`, {
