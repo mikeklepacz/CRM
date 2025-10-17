@@ -11,9 +11,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { format, parse, isValid } from "date-fns";
 
 interface GoogleSheet {
   id: string;
@@ -705,6 +707,7 @@ export default function SalesDashboard() {
                             const isStateColumn = header.toLowerCase() === 'state';
                             const isTagColumn = header.toLowerCase().includes('tag');
                             const isHoursColumn = header.toLowerCase().includes('hour');
+                            const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
                             
                             // Clean display based on column type
                             let cleanedValue = cellValue;
@@ -731,7 +734,33 @@ export default function SalesDashboard() {
                                 {isEditable ? (
                                   hasData ? (
                                     // Has data: Show value with edit on double-click
-                                    isStateColumn ? (
+                                    isDateColumn ? (
+                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            className="w-full justify-start text-left font-normal"
+                                            data-testid={`button-date-${rowKey}-${header}`}
+                                          >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {cellValue || "Pick a date"}
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                          <Calendar
+                                            mode="single"
+                                            selected={cellValue ? parse(cellValue, 'M/d/yyyy', new Date()) : undefined}
+                                            onSelect={(date) => {
+                                              if (date) {
+                                                handleCellEdit(row, header, format(date, 'M/d/yyyy'));
+                                              }
+                                              setOpenCombobox(null);
+                                            }}
+                                            initialFocus
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : isStateColumn ? (
                                       <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
                                           <Button
@@ -830,7 +859,32 @@ export default function SalesDashboard() {
                                     )
                                   ) : (
                                     // Empty cell: Allow inline editing for new data
-                                    isStateColumn ? (
+                                    isDateColumn ? (
+                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            className="w-full justify-start text-left font-normal"
+                                            data-testid={`button-date-${rowKey}-${header}`}
+                                          >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            Pick a date
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                          <Calendar
+                                            mode="single"
+                                            onSelect={(date) => {
+                                              if (date) {
+                                                handleCellEdit(row, header, format(date, 'M/d/yyyy'));
+                                              }
+                                              setOpenCombobox(null);
+                                            }}
+                                            initialFocus
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : isStateColumn ? (
                                       <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
                                           <Button
