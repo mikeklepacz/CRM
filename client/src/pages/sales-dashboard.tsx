@@ -27,6 +27,7 @@ export default function SalesDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [editedCells, setEditedCells] = useState<Record<string, { rowIndex: number; column: string; value: string; sheetId: string }>>({});
 
   // Fetch available sheets and auto-detect by purpose
@@ -70,15 +71,18 @@ export default function SalesDashboard() {
   const storeHeaders = mergedData?.storeHeaders || [];
   const trackerHeaders = mergedData?.trackerHeaders || [];
 
-  // Initialize visible columns and column order
+  // Initialize visible columns, column order, and widths
   useEffect(() => {
     if (headers.length > 0) {
       const initialVisible: Record<string, boolean> = {};
+      const initialWidths: Record<string, number> = {};
       headers.forEach((header: string) => {
         initialVisible[header] = true;
+        initialWidths[header] = 200; // Default width 200px
       });
       setVisibleColumns(initialVisible);
-      setColumnOrder(headers); // Initialize order from sheet headers
+      setColumnOrder(headers);
+      setColumnWidths(initialWidths);
     }
   }, [headers.length, storeSheetId, trackerSheetId]);
 
@@ -108,6 +112,13 @@ export default function SalesDashboard() {
       [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
       return newOrder;
     });
+  };
+
+  const handleColumnResize = (column: string, width: number) => {
+    setColumnWidths(prev => ({
+      ...prev,
+      [column]: Math.max(100, width), // Minimum width 100px
+    }));
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
@@ -311,11 +322,40 @@ export default function SalesDashboard() {
                   <TableHeader>
                     <TableRow>
                       {visibleHeaders.map((header: string) => (
-                        <TableHead key={header} className="whitespace-nowrap">
-                          {header}
-                          {editableColumns.includes(header) && (
-                            <span className="ml-1 text-xs text-muted-foreground">✏️</span>
-                          )}
+                        <TableHead 
+                          key={header} 
+                          className="whitespace-nowrap relative group"
+                          style={{ width: columnWidths[header] || 200 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>
+                              {header}
+                              {editableColumns.includes(header) && (
+                                <span className="ml-1 text-xs text-muted-foreground">✏️</span>
+                              )}
+                            </span>
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                const startX = e.clientX;
+                                const startWidth = columnWidths[header] || 200;
+
+                                const handleMouseMove = (moveEvent: MouseEvent) => {
+                                  const diff = moveEvent.clientX - startX;
+                                  handleColumnResize(header, startWidth + diff);
+                                };
+
+                                const handleMouseUp = () => {
+                                  document.removeEventListener('mousemove', handleMouseMove);
+                                  document.removeEventListener('mouseup', handleMouseUp);
+                                };
+
+                                document.addEventListener('mousemove', handleMouseMove);
+                                document.addEventListener('mouseup', handleMouseUp);
+                              }}
+                            />
+                          </div>
                         </TableHead>
                       ))}
                     </TableRow>
@@ -334,12 +374,16 @@ export default function SalesDashboard() {
                             const cellValue = editedCells[cellKey]?.value ?? row[header] ?? '';
 
                             return (
-                              <TableCell key={header} className="whitespace-nowrap">
+                              <TableCell 
+                                key={header} 
+                                className="whitespace-nowrap"
+                                style={{ width: columnWidths[header] || 200 }}
+                              >
                                 {isEditable ? (
                                   <Input
                                     value={cellValue}
                                     onChange={(e) => handleCellEdit(row, header, e.target.value)}
-                                    className="min-w-[150px]"
+                                    className="w-full"
                                     data-testid={`input-cell-${rowKey}-${header}`}
                                   />
                                 ) : (
