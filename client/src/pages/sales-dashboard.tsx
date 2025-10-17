@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -132,6 +132,20 @@ export default function SalesDashboard() {
     if (!expandedCell) return;
     handleCellEdit(expandedCell.row, expandedCell.column, expandedCell.value);
     setExpandedCell(null);
+  };
+
+  const extractDomain = (url: string): string => {
+    if (!url) return '';
+    try {
+      // Add protocol if missing
+      const urlWithProtocol = url.startsWith('http') ? url : `https://${url}`;
+      const urlObj = new URL(urlWithProtocol);
+      return urlObj.hostname.replace('www.', '');
+    } catch {
+      // If URL parsing fails, try to extract domain manually
+      const match = url.match(/(?:https?:\/\/)?(?:www\.)?([^\/\?]+)/i);
+      return match ? match[1] : url;
+    }
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
@@ -389,6 +403,7 @@ export default function SalesDashboard() {
                             const isLongText = cellValue.length > 100;
                             const displayValue = isLongText ? cellValue.substring(0, 100) + '...' : cellValue;
                             const isPhoneColumn = header.toLowerCase().includes('phone');
+                            const isWebsiteColumn = header.toLowerCase().includes('website') || header.toLowerCase().includes('url') || header.toLowerCase().includes('site');
                             const hasData = cellValue.length > 0;
 
                             return (
@@ -409,6 +424,17 @@ export default function SalesDashboard() {
                                         >
                                           <Phone className="h-4 w-4" />
                                           <span>{displayValue}</span>
+                                        </a>
+                                      ) : isWebsiteColumn ? (
+                                        <a 
+                                          href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1 text-primary hover:underline"
+                                          data-testid={`link-website-${rowKey}-${header}`}
+                                        >
+                                          <ExternalLink className="h-4 w-4" />
+                                          <span>{extractDomain(cellValue)}</span>
                                         </a>
                                       ) : (
                                         <span 
@@ -451,6 +477,17 @@ export default function SalesDashboard() {
                                         <Phone className="h-4 w-4" />
                                         <span>{displayValue}</span>
                                       </a>
+                                    ) : isWebsiteColumn && cellValue ? (
+                                      <a 
+                                        href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1 text-primary hover:underline"
+                                        data-testid={`link-website-${rowKey}-${header}`}
+                                      >
+                                        <ExternalLink className="h-4 w-4" />
+                                        <span>{extractDomain(cellValue)}</span>
+                                      </a>
                                     ) : (
                                       <span 
                                         data-testid={`text-cell-${rowKey}-${header}`}
@@ -460,7 +497,7 @@ export default function SalesDashboard() {
                                         {displayValue}
                                       </span>
                                     )}
-                                    {isLongText && !isPhoneColumn && (
+                                    {isLongText && !isPhoneColumn && !isWebsiteColumn && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
