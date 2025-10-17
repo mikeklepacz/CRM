@@ -67,6 +67,7 @@ export interface IStorage {
   createOrder(order: InsertOrder): Promise<Order>;
   getOrderById(id: string): Promise<Order | undefined>;
   updateOrder(id: string, updates: Partial<InsertOrder>): Promise<Order>;
+  deleteOrder(id: string): Promise<void>;
   getAllOrders(): Promise<Order[]>;
 
   // CSV Upload operations
@@ -317,6 +318,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllOrders(): Promise<Order[]> {
     return await db.select().from(orders).orderBy(orders.orderDate);
+  }
+
+  async deleteOrder(id: string): Promise<void> {
+    await db.delete(orders).where(eq(orders.id, id));
   }
 
   // CSV Upload operations

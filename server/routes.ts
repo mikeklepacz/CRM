@@ -863,7 +863,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log('Sync completed:', { total: orders.length, synced, matched });
+      // TWO-WAY SYNC: Delete local orders that no longer exist in WooCommerce
+      // This handles cancelled, deleted, or refunded orders
+      const allLocalOrders = await storage.getAllOrders();
+      const wooOrderIds = new Set(orders.map((o: any) => o.id.toString()));
+      let deleted = 0;
+
+      for (const localOrder of allLocalOrders) {
+        if (!wooOrderIds.has(localOrder.id)) {
+          // This order exists locally but not in WooCommerce anymore
+          console.log(`Deleting order ${localOrder.id} (no longer in WooCommerce)`);
+          await storage.deleteOrder(localOrder.id);
+          deleted++;
+        }
+      }
+
+      console.log('Sync completed:', { total: orders.length, synced, matched, deleted });
 
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
@@ -871,7 +886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json({
-        message: "WooCommerce sync completed",
+        message: `WooCommerce sync completed. ${deleted > 0 ? `Removed ${deleted} deleted/cancelled orders.` : ''}`,
         synced,
         matched,
         total: orders.length,
