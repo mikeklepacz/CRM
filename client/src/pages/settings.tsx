@@ -172,7 +172,7 @@ export default function Settings() {
 
   const connectGoogleMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("GET", "/api/google/auth-url", {});
+      const res = await apiRequest("GET", "/api/google/auth-url");
       return res.json();
     },
     onSuccess: (data: { url: string }) => {
