@@ -191,8 +191,7 @@ export function GoogleSheetsSync() {
 
   const createCommissionTrackerMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/sheets/create-commission-tracker", {});
-      return res.json();
+      return await apiRequest("POST", "/api/sheets/create-commission-tracker", {});
     },
     onSuccess: (data) => {
       toast({
