@@ -30,14 +30,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Create session using passport's login with proper user object
-      const sessionUser = { 
-        userId: user.id, 
-        isPasswordAuth: true,
-        claims: { sub: user.id } // Add claims for compatibility
-      };
-      
-      req.login(sessionUser, (err: any) => {
+      // Create session using passport's login
+      req.login({ id: user.id, isPasswordAuth: true }, (err: any) => {
         if (err) {
           console.error("Session creation error:", err);
           return res.status(500).json({ message: "Login failed" });
@@ -103,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = req.user as any;
 
     // Check if using password auth - it's valid as long as session exists
-    if (user && user.isPasswordAuth) {
+    if (user.isPasswordAuth) {
       console.log("Auth success: password auth user");
       return next();
     }
@@ -142,12 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      let userId;
-      if (req.user.isPasswordAuth) {
-        userId = req.user.userId;
-      } else {
-        userId = req.user.claims.sub;
-      }
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -159,12 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin middleware
   const isAdmin = async (req: any, res: any, next: any) => {
     try {
-      let userId;
-      if (req.user.isPasswordAuth) {
-        userId = req.user.userId;
-      } else {
-        userId = req.user.claims.sub;
-      }
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       if (!user || user.role !== 'admin') {
         return res.status(403).json({ message: "Admin access required" });
@@ -179,12 +163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user middleware
   const getCurrentUser = async (req: any, res: any, next: any) => {
     try {
-      let userId;
-      if (req.user.isPasswordAuth) {
-        userId = req.user.userId;
-      } else {
-        userId = req.user.claims.sub;
-      }
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
