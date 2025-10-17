@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RefreshCw, Settings2, Save } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -26,6 +26,7 @@ export default function SalesDashboard() {
   const joinColumn = "link"; // Hardcoded to "link"
   const [searchTerm, setSearchTerm] = useState("");
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [editedCells, setEditedCells] = useState<Record<string, { rowIndex: number; column: string; value: string; sheetId: string }>>({});
 
   // Fetch available sheets and auto-detect by purpose
@@ -69,7 +70,7 @@ export default function SalesDashboard() {
   const storeHeaders = mergedData?.storeHeaders || [];
   const trackerHeaders = mergedData?.trackerHeaders || [];
 
-  // Initialize visible columns
+  // Initialize visible columns and column order
   useEffect(() => {
     if (headers.length > 0) {
       const initialVisible: Record<string, boolean> = {};
@@ -77,6 +78,7 @@ export default function SalesDashboard() {
         initialVisible[header] = true;
       });
       setVisibleColumns(initialVisible);
+      setColumnOrder(headers); // Initialize order from sheet headers
     }
   }, [headers.length, storeSheetId, trackerSheetId]);
 
@@ -86,6 +88,26 @@ export default function SalesDashboard() {
       ...prev,
       [column]: !prev[column],
     }));
+  };
+
+  const moveColumnLeft = (column: string) => {
+    setColumnOrder(prev => {
+      const index = prev.indexOf(column);
+      if (index <= 0) return prev; // Already at the start
+      const newOrder = [...prev];
+      [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+      return newOrder;
+    });
+  };
+
+  const moveColumnRight = (column: string) => {
+    setColumnOrder(prev => {
+      const index = prev.indexOf(column);
+      if (index === -1 || index >= prev.length - 1) return prev; // Already at the end
+      const newOrder = [...prev];
+      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+      return newOrder;
+    });
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
@@ -137,7 +159,7 @@ export default function SalesDashboard() {
     });
   });
 
-  const visibleHeaders = headers.filter((h: string) => visibleColumns[h]);
+  const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
   const hasUnsavedChanges = Object.keys(editedCells).length > 0;
 
   return (
@@ -220,13 +242,14 @@ export default function SalesDashboard() {
                       Columns
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80">
+                  <PopoverContent className="w-96">
                     <div className="space-y-2">
-                      <h4 className="font-medium">Show/Hide Columns</h4>
+                      <h4 className="font-medium">Manage Columns</h4>
+                      <p className="text-xs text-muted-foreground">Show/hide and reorder columns (doesn't affect Google Sheets)</p>
                       <ScrollArea className="h-72">
                         <div className="space-y-2">
-                          {headers.map((header: string) => (
-                            <div key={header} className="flex items-center space-x-2">
+                          {columnOrder.map((header: string, index: number) => (
+                            <div key={header} className="flex items-center gap-2 group">
                               <Checkbox
                                 id={`col-${header}`}
                                 checked={visibleColumns[header]}
@@ -235,13 +258,35 @@ export default function SalesDashboard() {
                               />
                               <Label 
                                 htmlFor={`col-${header}`} 
-                                className="text-sm cursor-pointer"
+                                className="text-sm cursor-pointer flex-1"
                               >
                                 {header}
                                 {editableColumns.includes(header) && (
-                                  <span className="ml-2 text-xs text-muted-foreground">(editable)</span>
+                                  <span className="ml-2 text-xs text-muted-foreground">✏️</span>
                                 )}
                               </Label>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => moveColumnLeft(header)}
+                                  disabled={index === 0}
+                                  data-testid={`button-move-left-${header}`}
+                                >
+                                  <ChevronLeft className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => moveColumnRight(header)}
+                                  disabled={index === columnOrder.length - 1}
+                                  data-testid={`button-move-right-${header}`}
+                                >
+                                  <ChevronRight className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
