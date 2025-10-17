@@ -585,14 +585,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 
   // Sync WooCommerce orders
-  app.post('/api/woocommerce/sync', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.post('/api/woocommerce/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const wooUrl = process.env.WOOCOMMERCE_URL;
-      const consumerKey = process.env.WOOCOMMERCE_CONSUMER_KEY;
-      const consumerSecret = process.env.WOOCOMMERCE_CONSUMER_SECRET;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // Get WooCommerce credentials from database
+      const integration = await storage.getUserIntegration(userId);
+      const wooUrl = integration?.woocommerceUrl;
+      const consumerKey = integration?.woocommerceConsumerKey;
+      const consumerSecret = integration?.woocommerceConsumerSecret;
 
       if (!wooUrl || !consumerKey || !consumerSecret) {
-        return res.status(500).json({ message: "WooCommerce credentials not configured" });
+        return res.status(500).json({ message: "WooCommerce credentials not configured. Please configure in Settings." });
       }
 
       // Fetch orders from WooCommerce
