@@ -39,6 +39,7 @@ export default function SalesDashboard() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
 
   // Fetch available sheets and auto-detect by purpose
@@ -260,11 +261,7 @@ export default function SalesDashboard() {
   // Get all unique tags from the data
   const allTags = (() => {
     const tags = new Set<string>();
-    const tagColumns = headers.filter((h: string) => 
-      h.toLowerCase().includes('tag') || 
-      h.toLowerCase().includes('keyword') || 
-      h.toLowerCase().includes('phrase')
-    );
+    const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
     data.forEach((row: any) => {
       tagColumns.forEach((col: string) => {
         const value = row[col];
@@ -285,12 +282,46 @@ export default function SalesDashboard() {
     return Array.from(tags).sort();
   })();
 
+  // Get all unique keywords/phrases from the data
+  const allKeywords = (() => {
+    const keywords = new Set<string>();
+    const keywordColumns = headers.filter((h: string) => 
+      h.toLowerCase().includes('keyword') || 
+      h.toLowerCase().includes('phrase')
+    );
+    data.forEach((row: any) => {
+      keywordColumns.forEach((col: string) => {
+        const value = row[col];
+        if (value && String(value).trim()) {
+          // Split by comma if multiple keywords in one cell
+          String(value).split(',').forEach((keyword: string) => {
+            let cleaned = keyword.trim();
+            // Remove quotes and brackets
+            cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
+            cleaned = cleaned.replace(/^["']+|["']+$/g, '');
+            if (cleaned && cleaned !== '""' && cleaned !== "''") {
+              keywords.add(cleaned);
+            }
+          });
+        }
+      });
+    });
+    return Array.from(keywords).sort();
+  })();
+
   // Initialize selected tags when data loads
   useEffect(() => {
     if (allTags.length > 0 && selectedTags.size === 0) {
       setSelectedTags(new Set(allTags));
     }
   }, [allTags.length]);
+
+  // Initialize selected keywords when data loads
+  useEffect(() => {
+    if (allKeywords.length > 0 && selectedKeywords.size === 0) {
+      setSelectedKeywords(new Set(allKeywords));
+    }
+  }, [allKeywords.length]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -335,6 +366,24 @@ export default function SalesDashboard() {
 
   const clearAllTags = () => {
     setSelectedTags(new Set());
+  };
+
+  const toggleKeyword = (keyword: string) => {
+    const newSelected = new Set(selectedKeywords);
+    if (newSelected.has(keyword)) {
+      newSelected.delete(keyword);
+    } else {
+      newSelected.add(keyword);
+    }
+    setSelectedKeywords(newSelected);
+  };
+
+  const selectAllKeywords = () => {
+    setSelectedKeywords(new Set(allKeywords));
+  };
+
+  const clearAllKeywords = () => {
+    setSelectedKeywords(new Set());
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
@@ -391,11 +440,7 @@ export default function SalesDashboard() {
 
     // Then filter by tags
     if (selectedTags.size > 0 && selectedTags.size < allTags.length) {
-      const tagColumns = headers.filter((h: string) => 
-        h.toLowerCase().includes('tag') || 
-        h.toLowerCase().includes('keyword') || 
-        h.toLowerCase().includes('phrase')
-      );
+      const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
       filtered = filtered.filter((row: any) => {
         // Check if row has at least one selected tag
         return tagColumns.some((col: string) => {
@@ -409,6 +454,31 @@ export default function SalesDashboard() {
               return cleaned;
             });
             return rowTags.some((tag: string) => tag && tag !== '""' && tag !== "''" && selectedTags.has(tag));
+          }
+          return false;
+        });
+      });
+    }
+
+    // Then filter by keywords/phrases
+    if (selectedKeywords.size > 0 && selectedKeywords.size < allKeywords.length) {
+      const keywordColumns = headers.filter((h: string) => 
+        h.toLowerCase().includes('keyword') || 
+        h.toLowerCase().includes('phrase')
+      );
+      filtered = filtered.filter((row: any) => {
+        // Check if row has at least one selected keyword
+        return keywordColumns.some((col: string) => {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            const rowKeywords = String(value).split(',').map((k: string) => {
+              let cleaned = k.trim();
+              // Remove quotes and brackets
+              cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
+              cleaned = cleaned.replace(/^["']+|["']+$/g, '');
+              return cleaned;
+            });
+            return rowKeywords.some((keyword: string) => keyword && keyword !== '""' && keyword !== "''" && selectedKeywords.has(keyword));
           }
           return false;
         });
@@ -537,6 +607,65 @@ export default function SalesDashboard() {
                                   className="text-sm cursor-pointer flex-1"
                                 >
                                   {tag}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+
+                {allKeywords.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" data-testid="button-keywords-filter">
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        Keywords/Phrases ({selectedKeywords.size}/{allKeywords.length})
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">Filter by Keywords/Phrases</h4>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={selectAllKeywords}
+                              data-testid="button-select-all-keywords"
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={clearAllKeywords}
+                              data-testid="button-clear-all-keywords"
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Uncheck items to hide rows with those keywords/phrases
+                        </p>
+                        <ScrollArea className="h-64">
+                          <div className="space-y-2">
+                            {allKeywords.map((keyword: string) => (
+                              <div key={keyword} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`keyword-${keyword}`}
+                                  checked={selectedKeywords.has(keyword)}
+                                  onCheckedChange={() => toggleKeyword(keyword)}
+                                  data-testid={`checkbox-keyword-${keyword}`}
+                                />
+                                <Label 
+                                  htmlFor={`keyword-${keyword}`} 
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  {keyword}
                                 </Label>
                               </div>
                             ))}
