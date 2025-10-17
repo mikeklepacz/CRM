@@ -584,6 +584,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Note: To make a user admin, run this SQL command in the database console:
   // UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 
+  // Get all orders
+  app.get('/api/orders', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const orders = await storage.getAllOrders();
+      res.json(orders);
+    } catch (error: any) {
+      console.error("Error fetching orders:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch orders" });
+    }
+  });
+
   // Sync WooCommerce orders
   app.post('/api/woocommerce/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

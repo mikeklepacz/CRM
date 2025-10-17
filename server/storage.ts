@@ -34,11 +34,11 @@ export interface IStorage {
   updateUserRole(id: string, role: string): Promise<User>;
   updateUser(id: string, updates: Partial<UpsertUser>): Promise<User>;
   getAgents(): Promise<User[]>;
-  
+
   // User integrations operations
   getUserIntegration(userId: string): Promise<UserIntegration | undefined>;
   updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration>;
-  
+
   // Client operations
   getAllClients(): Promise<Client[]>;
   getClientsByAgent(agentId: string): Promise<Client[]>;
@@ -48,20 +48,21 @@ export interface IStorage {
   claimClient(clientId: string, agentId: string): Promise<Client>;
   unclaimClient(clientId: string): Promise<Client>;
   findClientByUniqueKey(key: string, value: string): Promise<Client | undefined>;
-  
+
   // Notes operations
   getClientNotes(clientId: string): Promise<Note[]>;
   createNote(note: InsertNote): Promise<Note>;
-  
+
   // Order operations
   createOrder(order: InsertOrder): Promise<Order>;
   getOrderById(id: string): Promise<Order | undefined>;
   updateOrder(id: string, updates: Partial<InsertOrder>): Promise<Order>;
-  
+  getAllOrders(): Promise<Order[]>;
+
   // CSV Upload operations
   createCsvUpload(upload: InsertCsvUpload): Promise<CsvUpload>;
   getRecentCsvUploads(limit: number): Promise<CsvUpload[]>;
-  
+
   // Google Sheets operations
   getActiveGoogleSheet(): Promise<GoogleSheet | null>;
   createGoogleSheetConnection(connection: InsertGoogleSheet): Promise<GoogleSheet>;
@@ -136,7 +137,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration> {
     // First check if integration exists
     const existing = await this.getUserIntegration(userId);
-    
+
     if (existing) {
       const [updated] = await db
         .update(userIntegrations)
@@ -254,6 +255,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(orders.id, id))
       .returning();
     return updated;
+  }
+
+  async getAllOrders(): Promise<Order[]> {
+    return await db.select().from(orders).orderBy(orders.orderDate);
   }
 
   // CSV Upload operations
