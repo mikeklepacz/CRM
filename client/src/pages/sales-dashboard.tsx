@@ -186,8 +186,13 @@ export default function SalesDashboard() {
         if (value && String(value).trim()) {
           // Split by comma if multiple tags in one cell
           String(value).split(',').forEach((tag: string) => {
-            const trimmed = tag.trim();
-            if (trimmed) tags.add(trimmed);
+            let cleaned = tag.trim();
+            // Remove quotes and brackets
+            cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
+            cleaned = cleaned.replace(/^["']+|["']+$/g, '');
+            if (cleaned && cleaned !== '""' && cleaned !== "''") {
+              tags.add(cleaned);
+            }
           });
         }
       });
@@ -280,8 +285,14 @@ export default function SalesDashboard() {
         return tagColumns.some((col: string) => {
           const value = row[col];
           if (value && String(value).trim()) {
-            const rowTags = String(value).split(',').map((t: string) => t.trim());
-            return rowTags.some((tag: string) => selectedTags.has(tag));
+            const rowTags = String(value).split(',').map((t: string) => {
+              let cleaned = t.trim();
+              // Remove quotes and brackets
+              cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
+              cleaned = cleaned.replace(/^["']+|["']+$/g, '');
+              return cleaned;
+            });
+            return rowTags.some((tag: string) => tag && tag !== '""' && tag !== "''" && selectedTags.has(tag));
           }
           return false;
         });
