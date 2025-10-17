@@ -679,9 +679,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       while (hasMore) {
         const response = await axios.get(apiUrl, {
+          auth: {
+            username: consumerKey,
+            password: consumerSecret,
+          },
           params: {
-            consumer_key: consumerKey,
-            consumer_secret: consumerSecret,
             per_page: 100,
             page: page,
             orderby: 'date',
@@ -689,7 +691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
 
-        console.log(`Fetching page ${page}: ${response.data.length} orders`);
+        console.log(`Fetched page ${page}: ${response.data.length} orders`);
         
         if (response.data.length === 0) {
           hasMore = false;
