@@ -5,9 +5,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Loader2, Package, Link2 } from "lucide-react";
+import { RefreshCw, Loader2, Package, Link2, Search, Sparkles } from "lucide-react";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,8 @@ export function WooCommerceSync() {
   const [syncResult, setSyncResult] = useState<any>(null);
   const [matchingOrderId, setMatchingOrderId] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [clientSearch, setClientSearch] = useState<string>("");
+  const [showAllClients, setShowAllClients] = useState<boolean>(false);
   
   const { data: orders = [], refetch: refetchOrders } = useQuery({
     queryKey: ["/api/orders"],
@@ -49,6 +52,16 @@ export function WooCommerceSync() {
     queryFn: async () => {
       return await apiRequest("GET", "/api/woocommerce/settings");
     },
+  });
+
+  // Fetch smart match suggestions for the order being matched
+  const { data: matchSuggestions } = useQuery({
+    queryKey: ["/api/orders", matchingOrderId, "match-suggestions"],
+    queryFn: async () => {
+      if (!matchingOrderId) return null;
+      return await apiRequest("GET", `/api/orders/${matchingOrderId}/match-suggestions`);
+    },
+    enabled: !!matchingOrderId,
   });
 
   const syncMutation = useMutation({
@@ -216,6 +229,13 @@ export function WooCommerceSync() {
                             if (!open) {
                               setMatchingOrderId(null);
                               setSelectedClientId("");
+                              setShowAllClients(false);
+                              setClientSearch("");
+                            } else {
+                              // Reset state when opening dialog
+                              setSelectedClientId("");
+                              setShowAllClients(false);
+                              setClientSearch("");
                             }
                           }}>
                             <DialogTrigger asChild>
@@ -228,7 +248,7 @@ export function WooCommerceSync() {
                                 Match
                               </Button>
                             </DialogTrigger>
-                            <DialogContent>
+                            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                               <DialogHeader>
                                 <DialogTitle>Match Order to Client</DialogTitle>
                                 <DialogDescription>
@@ -236,27 +256,122 @@ export function WooCommerceSync() {
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4 py-4">
-                                <div className="space-y-2">
+                                <div className="space-y-2 p-3 bg-muted rounded-md">
                                   <p className="text-sm"><strong>Email:</strong> {order.billingEmail || 'N/A'}</p>
                                   <p className="text-sm"><strong>Company:</strong> {order.billingCompany || 'N/A'}</p>
                                   <p className="text-sm"><strong>Total:</strong> ${parseFloat(order.total).toFixed(2)}</p>
                                 </div>
-                                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a client" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {clients.map((client: any) => (
-                                      <SelectItem key={client.id} value={client.id}>
-                                        {client.data?.Company || client.data?.company || client.data?.Email || client.data?.email || client.uniqueIdentifier || client.id}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+
+                                {/* Smart Suggestions */}
+                                {matchSuggestions?.suggestions && matchSuggestions.suggestions.length > 0 && !showAllClients && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                      <Sparkles className="h-4 w-4 text-primary" />
+                                      <h4 className="font-semibold text-sm">Smart Suggestions</h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                      {matchSuggestions.suggestions.map((suggestion: any) => (
+                                        <button
+                                          key={suggestion.client.id}
+                                          onClick={() => setSelectedClientId(suggestion.client.id)}
+                                          className={`w-full text-left p-3 rounded-md border-2 transition-all hover-elevate ${
+                                            selectedClientId === suggestion.client.id
+                                              ? 'border-primary bg-primary/10'
+                                              : 'border-border'
+                                          }`}
+                                          data-testid={`suggestion-${suggestion.client.id}`}
+                                        >
+                                          <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                              <p className="font-medium">{suggestion.displayName}</p>
+                                              {suggestion.displayInfo && (
+                                                <p className="text-sm text-muted-foreground">{suggestion.displayInfo}</p>
+                                              )}
+                                              <div className="flex flex-wrap gap-1 mt-2">
+                                                {suggestion.reasons.map((reason: string, idx: number) => (
+                                                  <Badge key={idx} variant="secondary" className="text-xs">
+                                                    {reason}
+                                                  </Badge>
+                                                ))}
+                                              </div>
+                                            </div>
+                                            <Badge 
+                                              variant={suggestion.score >= 80 ? "default" : "secondary"}
+                                              className="ml-2"
+                                            >
+                                              {Math.round(suggestion.score)}% match
+                                            </Badge>
+                                          </div>
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setShowAllClients(true)}
+                                      className="w-full"
+                                      data-testid="button-show-all-clients"
+                                    >
+                                      <Search className="h-4 w-4 mr-2" />
+                                      Search All Clients
+                                    </Button>
+                                  </div>
+                                )}
+
+                                {/* Show all clients with search */}
+                                {(showAllClients || !matchSuggestions?.suggestions || matchSuggestions.suggestions.length === 0) && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                      <Search className="h-4 w-4" />
+                                      <Input
+                                        placeholder="Search clients by name, company, email..."
+                                        value={clientSearch}
+                                        onChange={(e) => setClientSearch(e.target.value)}
+                                        data-testid="input-search-clients"
+                                      />
+                                    </div>
+                                    <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                                      <SelectTrigger data-testid="select-client">
+                                        <SelectValue placeholder="Select a client" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {clients
+                                          .filter((client: any) => {
+                                            if (!clientSearch) return true;
+                                            const search = clientSearch.toLowerCase();
+                                            const name = (client.data?.name || client.data?.Name || '').toLowerCase();
+                                            const company = (client.data?.company || client.data?.Company || '').toLowerCase();
+                                            const email = (client.data?.email || client.data?.Email || '').toLowerCase();
+                                            return name.includes(search) || company.includes(search) || email.includes(search);
+                                          })
+                                          .map((client: any) => (
+                                            <SelectItem key={client.id} value={client.id}>
+                                              {client.data?.Company || client.data?.company || client.data?.Name || client.data?.name || client.data?.Email || client.data?.email || client.uniqueIdentifier || client.id}
+                                            </SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {showAllClients && matchSuggestions?.suggestions && matchSuggestions.suggestions.length > 0 && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          setShowAllClients(false);
+                                          setClientSearch("");
+                                        }}
+                                        className="w-full"
+                                      >
+                                        Back to Suggestions
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+
                                 <Button 
                                   onClick={handleMatchOrder}
                                   disabled={!selectedClientId || matchOrderMutation.isPending}
                                   className="w-full"
+                                  data-testid="button-confirm-match"
                                 >
                                   {matchOrderMutation.isPending ? (
                                     <>

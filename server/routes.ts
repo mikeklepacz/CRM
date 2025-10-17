@@ -9,6 +9,47 @@ import * as client from "openid-client";
 import * as googleSheets from "./googleSheets";
 import { z } from "zod";
 
+// Helper function for fuzzy string matching (Levenshtein distance)
+function stringSimilarity(str1: string, str2: string): number {
+  if (!str1 || !str2) return 0;
+  
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+  
+  if (s1 === s2) return 1;
+  
+  const len1 = s1.length;
+  const len2 = s2.length;
+  
+  if (len1 === 0) return len2 === 0 ? 1 : 0;
+  if (len2 === 0) return 0;
+  
+  const matrix: number[][] = [];
+  
+  for (let i = 0; i <= len2; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= len1; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= len2; i++) {
+    for (let j = 1; j <= len1; j++) {
+      const cost = s1[j - 1] === s2[i - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  
+  const distance = matrix[len2][len1];
+  const maxLen = Math.max(len1, len2);
+  return 1 - (distance / maxLen);
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -631,6 +672,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error fetching orders:", error);
       res.status(500).json({ message: error.message || "Failed to fetch orders" });
+    }
+  });
+
+  // Get smart match suggestions for an order
+  app.get('/api/orders/:orderId/match-suggestions', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const allClients = await storage.getAllClients();
+      const suggestions: any[] = [];
+
+      const orderCompany = order.billingCompany || '';
+      const orderEmail = order.billingEmail || '';
+
+      for (const client of allClients) {
+        let score = 0;
+        const reasons: string[] = [];
+
+        // Get client fields
+        const clientName = client.data?.['name'] || client.data?.['Name'] || '';
+        const clientCompany = client.data?.['company'] || client.data?.['Company'] || '';
+        const clientEmail = client.data?.['email'] || client.data?.['Email'] || client.data?.['Contact Email'] || '';
+        const clientAddress = client.data?.['address'] || client.data?.['Address'] || '';
+        const clientCity = client.data?.['city'] || client.data?.['City'] || '';
+        const clientState = client.data?.['state'] || client.data?.['State'] || '';
+
+        // Company name similarity (weighted heavily)
+        if (orderCompany && (clientCompany || clientName)) {
+          const companySimilarity = Math.max(
+            stringSimilarity(orderCompany, clientCompany),
+            stringSimilarity(orderCompany, clientName)
+          );
+          if (companySimilarity > 0.6) {
+            score += companySimilarity * 50;
+            reasons.push(`Company name ${Math.round(companySimilarity * 100)}% similar`);
+          }
+        }
+
+        // Email similarity
+        if (orderEmail && clientEmail) {
+          const emailSimilarity = stringSimilarity(orderEmail, clientEmail);
+          if (emailSimilarity > 0.8) {
+            score += emailSimilarity * 30;
+            reasons.push(`Email ${Math.round(emailSimilarity * 100)}% similar`);
+          }
+        }
+
+        // Exact email match (highest priority)
+        if (orderEmail && clientEmail && orderEmail.toLowerCase() === clientEmail.toLowerCase()) {
+          score += 100;
+          reasons.push('Exact email match');
+        }
+
+        // Exact company match
+        if (orderCompany && (clientCompany || clientName)) {
+          if (orderCompany.toLowerCase() === clientCompany.toLowerCase() || 
+              orderCompany.toLowerCase() === clientName.toLowerCase()) {
+            score += 100;
+            reasons.push('Exact company name match');
+          }
+        }
+
+        if (score > 10) {
+          suggestions.push({
+            client,
+            score: Math.min(score, 100),
+            reasons,
+            displayName: clientName || clientCompany || clientEmail,
+            displayInfo: `${clientCity ? clientCity + ', ' : ''}${clientState || ''}`.trim(),
+          });
+        }
+      }
+
+      // Sort by score descending and return top 5
+      suggestions.sort((a, b) => b.score - a.score);
+      const topSuggestions = suggestions.slice(0, 5);
+
+      res.json({
+        order,
+        suggestions: topSuggestions,
+      });
+    } catch (error: any) {
+      console.error("Error getting match suggestions:", error);
+      res.status(500).json({ message: error.message || "Failed to get suggestions" });
     }
   });
 
