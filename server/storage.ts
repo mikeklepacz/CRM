@@ -29,6 +29,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
+import { v4 as uuidv4 } from 'uuid';
 
 export interface IStorage {
   // User operations - Required for Replit Auth
@@ -177,33 +178,37 @@ export class DatabaseStorage implements IStorage {
     return preferences;
   }
 
-  async saveUserPreferences(userId: string, preferences: Partial<InsertUserPreferences>): Promise<UserPreferences> {
-    // First check if preferences exist
+  async saveUserPreferences(userId: string, preferences: Partial<UserPreferences>) {
     const existing = await this.getUserPreferences(userId);
 
-    if (existing) {
-      // Build update object only with provided fields to avoid overwriting with undefined
-      const updates: any = { updatedAt: new Date() };
-      
-      if (preferences.visibleColumns !== undefined) updates.visibleColumns = preferences.visibleColumns;
-      if (preferences.columnOrder !== undefined) updates.columnOrder = preferences.columnOrder;
-      if (preferences.columnWidths !== undefined) updates.columnWidths = preferences.columnWidths;
-      if (preferences.selectedTags !== undefined) updates.selectedTags = preferences.selectedTags;
-      if (preferences.selectedKeywords !== undefined) updates.selectedKeywords = preferences.selectedKeywords;
-      if (preferences.selectedStates !== undefined) updates.selectedStates = preferences.selectedStates;
+    // Ensure arrays are properly formatted for PostgreSQL
+    const formattedPreferences = {
+      ...preferences,
+      selectedTags: preferences.selectedTags || existing?.selectedTags || [],
+      selectedKeywords: preferences.selectedKeywords || existing?.selectedKeywords || [],
+      selectedStates: preferences.selectedStates || existing?.selectedStates || [],
+    };
 
-      const [updated] = await db
+    if (existing) {
+      const updated = await db
         .update(userPreferences)
-        .set(updates)
+        .set({
+          ...formattedPreferences,
+          updatedAt: new Date(),
+        })
         .where(eq(userPreferences.userId, userId))
         .returning();
-      return updated;
+      return updated[0];
     } else {
-      const [created] = await db
+      const created = await db
         .insert(userPreferences)
-        .values({ userId, ...preferences })
+        .values({
+          id: uuidv4(),
+          userId,
+          ...formattedPreferences,
+        })
         .returning();
-      return created;
+      return created[0];
     }
   }
 
