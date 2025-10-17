@@ -296,7 +296,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         clientId: integration?.googleClientId || "",
-        clientSecret: integration?.googleClientSecret || ""
+        clientSecret: integration?.googleClientSecret || "",
+        googleEmail: integration?.googleEmail || null
       });
     } catch (error: any) {
       console.error("Error fetching Google OAuth settings:", error);

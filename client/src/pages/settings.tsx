@@ -568,18 +568,34 @@ export default function Settings() {
 
                   <div className="border-t pt-6">
                     <h3 className="text-sm font-medium mb-3">Connection Status</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      After saving your credentials above, click Connect to authorize Google Sheets access
-                    </p>
+                    
+                    {googleSettings?.googleEmail ? (
+                      <div className="mb-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-green-700 dark:text-green-400" data-testid="text-google-status">
+                            Active
+                          </span>
+                        </div>
+                        <p className="text-sm text-green-600 dark:text-green-500">
+                          Connected as: {googleSettings.googleEmail}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground mb-4">
+                        After saving your credentials above, click Connect to authorize Google Sheets access
+                      </p>
+                    )}
+                    
                     {googleSettings?.clientId ? (
                       <Button
-                        variant="default"
+                        variant={googleSettings?.googleEmail ? "outline" : "default"}
                         onClick={() => connectGoogleOAuthMutation.mutate()}
                         disabled={connectGoogleOAuthMutation.isPending}
                         data-testid="button-connect-google-oauth"
                       >
                         <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        {connectGoogleOAuthMutation.isPending ? "Opening..." : "Connect Google Sheets"}
+                        {connectGoogleOAuthMutation.isPending ? "Opening..." : googleSettings?.googleEmail ? "Reconnect Google Sheets" : "Connect Google Sheets"}
                       </Button>
                     ) : (
                       <p className="text-sm text-muted-foreground">
