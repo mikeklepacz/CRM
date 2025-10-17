@@ -75,6 +75,10 @@ The Sales Dashboard automatically loads both sheets:
 - Sort columns by clicking headers (toggles ascending/descending)
 - Editable columns marked with ✏️
 
+**Filtering:**
+- **Search**: Search across all columns using the search box
+- **Tags Filter**: Click "Tags" button to filter by tags - all tags selected by default, uncheck to hide rows with those tags
+
 **Editing Features:**
 - **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices
 - **Website URLs**: Auto-shortened to domain name (e.g., "lionheartcannabis.com") with external link icon, opens in new tab

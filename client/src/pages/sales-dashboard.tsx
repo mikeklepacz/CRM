@@ -36,6 +36,7 @@ export default function SalesDashboard() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
   // Fetch available sheets and auto-detect by purpose
   const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
@@ -175,6 +176,50 @@ export default function SalesDashboard() {
     return Array.from(values).sort();
   };
 
+  // Get all unique tags from the data
+  const allTags = (() => {
+    const tags = new Set<string>();
+    const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
+    data.forEach((row: any) => {
+      tagColumns.forEach((col: string) => {
+        const value = row[col];
+        if (value && String(value).trim()) {
+          // Split by comma if multiple tags in one cell
+          String(value).split(',').forEach((tag: string) => {
+            const trimmed = tag.trim();
+            if (trimmed) tags.add(trimmed);
+          });
+        }
+      });
+    });
+    return Array.from(tags).sort();
+  })();
+
+  // Initialize selected tags when data loads
+  useEffect(() => {
+    if (allTags.length > 0 && selectedTags.size === 0) {
+      setSelectedTags(new Set(allTags));
+    }
+  }, [allTags.length]);
+
+  const toggleTag = (tag: string) => {
+    const newSelected = new Set(selectedTags);
+    if (newSelected.has(tag)) {
+      newSelected.delete(tag);
+    } else {
+      newSelected.add(tag);
+    }
+    setSelectedTags(newSelected);
+  };
+
+  const selectAllTags = () => {
+    setSelectedTags(new Set(allTags));
+  };
+
+  const clearAllTags = () => {
+    setSelectedTags(new Set());
+  };
+
   const handleCellEdit = (row: any, column: string, value: string) => {
     // Determine which sheet this column belongs to
     const isTrackerColumn = trackerHeaders.includes(column);
@@ -218,7 +263,7 @@ export default function SalesDashboard() {
 
   // Filter and sort data
   const filteredData = (() => {
-    // First filter
+    // First filter by search
     let filtered = data.filter((row: any) => {
       const searchLower = searchTerm.toLowerCase();
       return headers.some((header: string) => {
@@ -226,6 +271,22 @@ export default function SalesDashboard() {
         return value.includes(searchLower);
       });
     });
+
+    // Then filter by tags
+    if (selectedTags.size > 0 && selectedTags.size < allTags.length) {
+      const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
+      filtered = filtered.filter((row: any) => {
+        // Check if row has at least one selected tag
+        return tagColumns.some((col: string) => {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            const rowTags = String(value).split(',').map((t: string) => t.trim());
+            return rowTags.some((tag: string) => selectedTags.has(tag));
+          }
+          return false;
+        });
+      });
+    }
 
     // Then sort
     if (sortColumn) {
@@ -325,6 +386,65 @@ export default function SalesDashboard() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Refresh
                 </Button>
+
+                {allTags.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" data-testid="button-tags-filter">
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        Tags ({selectedTags.size}/{allTags.length})
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">Filter by Tags</h4>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={selectAllTags}
+                              data-testid="button-select-all-tags"
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={clearAllTags}
+                              data-testid="button-clear-all-tags"
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Uncheck tags to hide rows with those tags
+                        </p>
+                        <ScrollArea className="h-64">
+                          <div className="space-y-2">
+                            {allTags.map((tag: string) => (
+                              <div key={tag} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`tag-${tag}`}
+                                  checked={selectedTags.has(tag)}
+                                  onCheckedChange={() => toggleTag(tag)}
+                                  data-testid={`checkbox-tag-${tag}`}
+                                />
+                                <Label 
+                                  htmlFor={`tag-${tag}`} 
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  {tag}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
 
                 <Popover>
                   <PopoverTrigger asChild>
