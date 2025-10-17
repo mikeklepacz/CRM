@@ -45,6 +45,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/memoizee": "^0.4.12",
     "@types/papaparse": "^5.3.16",
+    "@types/uuid": "^10.0.0",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "class-variance-authority": "^0.7.1",
