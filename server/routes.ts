@@ -6,6 +6,7 @@ import { differenceInMonths } from "date-fns";
 import axios from "axios";
 import bcrypt from "bcrypt";
 import * as client from "openid-client";
+import * as googleSheets from "./googleSheets";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -454,6 +455,268 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         message: error.response?.data?.message || error.message || "Sync failed" 
       });
+    }
+  });
+
+  // ========== GOOGLE SHEETS ROUTES ==========
+
+  // List user's Google Sheets
+  app.get('/api/sheets/list', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const sheets = await googleSheets.listSpreadsheets();
+      res.json(sheets);
+    } catch (error: any) {
+      console.error("Error listing sheets:", error);
+      res.status(500).json({ message: error.message || "Failed to list sheets" });
+    }
+  });
+
+  // Get spreadsheet info (sheets/tabs)
+  app.get('/api/sheets/:spreadsheetId/info', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { spreadsheetId } = req.params;
+      const info = await googleSheets.getSpreadsheetInfo(spreadsheetId);
+      res.json(info);
+    } catch (error: any) {
+      console.error("Error getting sheet info:", error);
+      res.status(500).json({ message: error.message || "Failed to get sheet info" });
+    }
+  });
+
+  // Get active Google Sheet connection
+  app.get('/api/sheets/active', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const activeSheet = await storage.getActiveGoogleSheet();
+      res.json(activeSheet);
+    } catch (error: any) {
+      console.error("Error getting active sheet:", error);
+      res.status(500).json({ message: error.message || "Failed to get active sheet" });
+    }
+  });
+
+  // Connect a Google Sheet
+  app.post('/api/sheets/connect', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { spreadsheetId, spreadsheetName, sheetName, uniqueIdentifierColumn } = req.body;
+
+      if (!spreadsheetId || !sheetName || !uniqueIdentifierColumn) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      // Verify sheet exists and has the identifier column
+      const range = `${sheetName}!A1:ZZ1`;
+      const headers = await googleSheets.readSheetData(spreadsheetId, range);
+      
+      if (!headers || headers.length === 0) {
+        return res.status(400).json({ message: "Sheet is empty or not found" });
+      }
+
+      const headerRow = headers[0];
+      const hasIdentifier = headerRow.some((h: string) => 
+        h.toLowerCase() === uniqueIdentifierColumn.toLowerCase()
+      );
+
+      if (!hasIdentifier) {
+        return res.status(400).json({ 
+          message: `Column "${uniqueIdentifierColumn}" not found in sheet. Available columns: ${headerRow.join(', ')}` 
+        });
+      }
+
+      const userId = req.user.id;
+
+      // Deactivate any existing active sheet
+      await storage.deactivateAllGoogleSheets();
+
+      // Create new connection
+      const connection = await storage.createGoogleSheetConnection({
+        spreadsheetId,
+        spreadsheetName: spreadsheetName || spreadsheetId,
+        sheetName,
+        uniqueIdentifierColumn,
+        connectedBy: userId,
+        syncStatus: 'active',
+      });
+
+      res.json({ message: "Sheet connected successfully", connection });
+    } catch (error: any) {
+      console.error("Error connecting sheet:", error);
+      res.status(500).json({ message: error.message || "Failed to connect sheet" });
+    }
+  });
+
+  // Disconnect Google Sheet
+  app.post('/api/sheets/disconnect', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      await storage.deactivateAllGoogleSheets();
+      res.json({ message: "Sheet disconnected successfully" });
+    } catch (error: any) {
+      console.error("Error disconnecting sheet:", error);
+      res.status(500).json({ message: error.message || "Failed to disconnect sheet" });
+    }
+  });
+
+  // Sync FROM Google Sheets TO CRM (import)
+  app.post('/api/sheets/sync/import', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const activeSheet = await storage.getActiveGoogleSheet();
+      if (!activeSheet) {
+        return res.status(400).json({ message: "No active Google Sheet connected" });
+      }
+
+      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = activeSheet;
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "Sheet is empty" });
+      }
+
+      const parsed = googleSheets.parseSheetDataToObjects(rows, uniqueIdentifierColumn);
+      let created = 0;
+      let updated = 0;
+
+      for (const item of parsed) {
+        const existing = await storage.getClientByUniqueIdentifier(item.uniqueId);
+
+        if (existing) {
+          // Update existing client
+          await storage.updateClient(existing.id, {
+            data: item.data,
+            googleSheetId: spreadsheetId,
+            googleSheetRowId: item.rowIndex,
+            lastSyncedAt: new Date(),
+          });
+          updated++;
+        } else {
+          // Create new client
+          await storage.createClient({
+            uniqueIdentifier: item.uniqueId,
+            googleSheetId: spreadsheetId,
+            googleSheetRowId: item.rowIndex,
+            data: item.data,
+            status: 'unassigned',
+            lastSyncedAt: new Date(),
+          });
+          created++;
+        }
+      }
+
+      // Update last synced time on the sheet connection
+      await storage.updateGoogleSheetLastSync(activeSheet.id);
+
+      res.json({
+        message: "Import completed",
+        created,
+        updated,
+        total: parsed.length,
+      });
+    } catch (error: any) {
+      console.error("Error importing from sheet:", error);
+      res.status(500).json({ message: error.message || "Import failed" });
+    }
+  });
+
+  // Sync FROM CRM TO Google Sheets (export)
+  app.post('/api/sheets/sync/export', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const activeSheet = await storage.getActiveGoogleSheet();
+      if (!activeSheet) {
+        return res.status(400).json({ message: "No active Google Sheet connected" });
+      }
+
+      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = activeSheet;
+      
+      // Get headers from sheet
+      const headerRange = `${sheetName}!A1:ZZ1`;
+      const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
+      
+      if (!headerRows || headerRows.length === 0) {
+        return res.status(400).json({ message: "Cannot read sheet headers" });
+      }
+
+      const headers = headerRows[0];
+
+      // Get all clients
+      const clients = await storage.getAllClients();
+      const rows: any[][] = [];
+
+      for (const client of clients) {
+        if (client.googleSheetRowId && client.uniqueIdentifier) {
+          // Update existing row
+          const range = `${sheetName}!A${client.googleSheetRowId}`;
+          const row = googleSheets.convertObjectsToSheetRows(headers, [client.data])[0];
+          await googleSheets.writeSheetData(spreadsheetId, range, [row]);
+        }
+      }
+
+      await storage.updateGoogleSheetLastSync(activeSheet.id);
+
+      res.json({
+        message: "Export completed",
+        updated: clients.length,
+      });
+    } catch (error: any) {
+      console.error("Error exporting to sheet:", error);
+      res.status(500).json({ message: error.message || "Export failed" });
+    }
+  });
+
+  // Bidirectional sync (import then export)
+  app.post('/api/sheets/sync/bidirectional', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const activeSheet = await storage.getActiveGoogleSheet();
+      if (!activeSheet) {
+        return res.status(400).json({ message: "No active Google Sheet connected" });
+      }
+
+      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = activeSheet;
+      
+      // STEP 1: Import from sheet
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "Sheet is empty" });
+      }
+
+      const parsed = googleSheets.parseSheetDataToObjects(rows, uniqueIdentifierColumn);
+      let created = 0;
+      let updated = 0;
+
+      for (const item of parsed) {
+        const existing = await storage.getClientByUniqueIdentifier(item.uniqueId);
+
+        if (existing) {
+          await storage.updateClient(existing.id, {
+            data: item.data,
+            googleSheetId: spreadsheetId,
+            googleSheetRowId: item.rowIndex,
+            lastSyncedAt: new Date(),
+          });
+          updated++;
+        } else {
+          await storage.createClient({
+            uniqueIdentifier: item.uniqueId,
+            googleSheetId: spreadsheetId,
+            googleSheetRowId: item.rowIndex,
+            data: item.data,
+            status: 'unassigned',
+            lastSyncedAt: new Date(),
+          });
+          created++;
+        }
+      }
+
+      await storage.updateGoogleSheetLastSync(activeSheet.id);
+
+      res.json({
+        message: "Bidirectional sync completed",
+        imported: { created, updated },
+        total: parsed.length,
+      });
+    } catch (error: any) {
+      console.error("Error in bidirectional sync:", error);
+      res.status(500).json({ message: error.message || "Sync failed" });
     }
   });
 

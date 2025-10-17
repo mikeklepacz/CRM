@@ -50,10 +50,27 @@ export const csvUploads = pgTable("csv_uploads", {
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
-// Client data table - stores CSV data + tracking fields
+// Google Sheets connection tracking
+export const googleSheets = pgTable("google_sheets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spreadsheetId: varchar("spreadsheet_id").notNull().unique(),
+  spreadsheetName: varchar("spreadsheet_name").notNull(),
+  sheetName: varchar("sheet_name").notNull(), // Tab/worksheet name
+  uniqueIdentifierColumn: varchar("unique_identifier_column").notNull(), // Which column to use as unique ID (e.g., "link")
+  connectedBy: varchar("connected_by").notNull().references(() => users.id),
+  lastSyncedAt: timestamp("last_synced_at"),
+  syncStatus: varchar("sync_status", { length: 50 }).default('active'), // active, paused, error
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Client data table - stores CSV/Google Sheets data + tracking fields
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  // CSV data stored as JSONB for flexibility
+  // Google Sheets sync fields
+  uniqueIdentifier: varchar("unique_identifier").unique(), // Leafly link or other unique ID
+  googleSheetId: varchar("google_sheet_id"), // ID of the connected Google Sheet
+  googleSheetRowId: integer("google_sheet_row_id"), // Row number in Google Sheet
+  // CSV/Sheet data stored as JSONB for flexibility
   data: jsonb("data").notNull().$type<Record<string, any>>(),
   // Tracking fields
   assignedAgent: varchar("assigned_agent").references(() => users.id),
@@ -65,6 +82,8 @@ export const clients = pgTable("clients", {
   lastOrderDate: timestamp("last_order_date"),
   totalSales: decimal("total_sales", { precision: 12, scale: 2 }).default('0'),
   commissionTotal: decimal("commission_total", { precision: 12, scale: 2 }).default('0'),
+  // Sync tracking
+  lastSyncedAt: timestamp("last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -133,6 +152,13 @@ export const csvUploadsRelations = relations(csvUploads, ({ one }) => ({
   }),
 }));
 
+export const googleSheetsRelations = relations(googleSheets, ({ one }) => ({
+  connector: one(users, {
+    fields: [googleSheets.connectedBy],
+    references: [users.id],
+  }),
+}));
+
 // Zod Schemas
 export const insertClientSchema = createInsertSchema(clients).omit({
   id: true,
@@ -154,6 +180,11 @@ export const insertCsvUploadSchema = createInsertSchema(csvUploads).omit({
   uploadedAt: true,
 });
 
+export const insertGoogleSheetSchema = createInsertSchema(googleSheets).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -165,3 +196,5 @@ export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type CsvUpload = typeof csvUploads.$inferSelect;
 export type InsertCsvUpload = z.infer<typeof insertCsvUploadSchema>;
+export type GoogleSheet = typeof googleSheets.$inferSelect;
+export type InsertGoogleSheet = z.infer<typeof insertGoogleSheetSchema>;

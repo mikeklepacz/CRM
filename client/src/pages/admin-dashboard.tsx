@@ -8,6 +8,7 @@ import { ClientFilters } from "@/components/client-filters";
 import { ClientsTable } from "@/components/clients-table";
 import { CsvUpload } from "@/components/csv-upload";
 import { WooCommerceSync } from "@/components/woocommerce-sync";
+import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { Users, DollarSign, FileSpreadsheet, TrendingUp } from "lucide-react";
 import type { Client, User } from "@shared/schema";
 
@@ -150,6 +151,7 @@ export default function AdminDashboard() {
       <Tabs defaultValue="clients" className="space-y-6">
         <TabsList>
           <TabsTrigger value="clients" data-testid="tab-clients">Clients</TabsTrigger>
+          <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
           <TabsTrigger value="upload" data-testid="tab-upload">CSV Upload</TabsTrigger>
           <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
         </TabsList>
@@ -176,6 +178,10 @@ export default function AdminDashboard() {
             currentUser={user}
             isLoading={clientsLoading}
           />
+        </TabsContent>
+
+        <TabsContent value="sheets">
+          <GoogleSheetsSync />
         </TabsContent>
 
         <TabsContent value="upload">

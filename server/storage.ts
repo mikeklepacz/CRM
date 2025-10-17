@@ -5,6 +5,7 @@ import {
   notes,
   orders,
   csvUploads,
+  googleSheets,
   type User,
   type UpsertUser,
   type Client,
@@ -15,6 +16,8 @@ import {
   type InsertOrder,
   type CsvUpload,
   type InsertCsvUpload,
+  type GoogleSheet,
+  type InsertGoogleSheet,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql } from "drizzle-orm";
@@ -50,6 +53,13 @@ export interface IStorage {
   // CSV Upload operations
   createCsvUpload(upload: InsertCsvUpload): Promise<CsvUpload>;
   getRecentCsvUploads(limit: number): Promise<CsvUpload[]>;
+  
+  // Google Sheets operations
+  getActiveGoogleSheet(): Promise<GoogleSheet | null>;
+  createGoogleSheetConnection(connection: InsertGoogleSheet): Promise<GoogleSheet>;
+  deactivateAllGoogleSheets(): Promise<void>;
+  updateGoogleSheetLastSync(id: string): Promise<void>;
+  getClientByUniqueIdentifier(uniqueId: string): Promise<Client | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -212,6 +222,45 @@ export class DatabaseStorage implements IStorage {
       .from(csvUploads)
       .orderBy(csvUploads.uploadedAt)
       .limit(limit);
+  }
+
+  // Google Sheets operations
+  async getActiveGoogleSheet(): Promise<GoogleSheet | null> {
+    const [sheet] = await db
+      .select()
+      .from(googleSheets)
+      .where(eq(googleSheets.syncStatus, 'active'))
+      .limit(1);
+    return sheet || null;
+  }
+
+  async createGoogleSheetConnection(connection: InsertGoogleSheet): Promise<GoogleSheet> {
+    const [newConnection] = await db
+      .insert(googleSheets)
+      .values(connection)
+      .returning();
+    return newConnection;
+  }
+
+  async deactivateAllGoogleSheets(): Promise<void> {
+    await db
+      .update(googleSheets)
+      .set({ syncStatus: 'paused' });
+  }
+
+  async updateGoogleSheetLastSync(id: string): Promise<void> {
+    await db
+      .update(googleSheets)
+      .set({ lastSyncedAt: new Date() })
+      .where(eq(googleSheets.id, id));
+  }
+
+  async getClientByUniqueIdentifier(uniqueId: string): Promise<Client | undefined> {
+    const [client] = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.uniqueIdentifier, uniqueId));
+    return client;
   }
 }
 
