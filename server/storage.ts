@@ -7,6 +7,7 @@ import {
   csvUploads,
   googleSheets,
   userIntegrations,
+  dashboardCards,
   type User,
   type UpsertUser,
   type Client,
@@ -21,6 +22,7 @@ import {
   type InsertGoogleSheet,
   type UserIntegration,
   type InsertUserIntegration,
+  type DashboardCard,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql } from "drizzle-orm";
@@ -69,6 +71,10 @@ export interface IStorage {
   deactivateAllGoogleSheets(): Promise<void>;
   updateGoogleSheetLastSync(id: string): Promise<void>;
   getClientByUniqueIdentifier(uniqueId: string): Promise<Client | undefined>;
+
+  // Dashboard operations
+  getDashboardCardsByRole(role: string): Promise<any[]>;
+  getDashboardStats(userId: string, role: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {

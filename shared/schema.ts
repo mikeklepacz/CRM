@@ -36,6 +36,7 @@ export const users = pgTable("users", {
   username: varchar("username").unique(),
   passwordHash: varchar("password_hash"),
   role: varchar("role", { length: 20 }).notNull().default('agent'), // 'admin' or 'agent'
+  referredBy: varchar("referred_by").references(() => users.id), // MLM: who referred this user
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -133,6 +134,19 @@ export const userIntegrations = pgTable("user_integrations", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Dashboard card configurations - controls which roles see which cards
+export const dashboardCards = pgTable("dashboard_cards", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  cardType: varchar("card_type", { length: 50 }).notNull(), // 'total_sales', 'last_order', 'commission_warning', etc.
+  title: varchar("title").notNull(),
+  description: text("description"),
+  visibleToRoles: text("visible_to_roles").array().default(sql`ARRAY['admin']::text[]`), // ['admin', 'agent']
+  isActive: boolean("is_active").default(true),
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
@@ -213,6 +227,12 @@ export const insertUserIntegrationSchema = createInsertSchema(userIntegrations).
   updatedAt: true,
 });
 
+export const insertDashboardCardSchema = createInsertSchema(dashboardCards).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -228,3 +248,5 @@ export type GoogleSheet = typeof googleSheets.$inferSelect;
 export type InsertGoogleSheet = z.infer<typeof insertGoogleSheetSchema>;
 export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
+export type DashboardCard = typeof dashboardCards.$inferSelect;
+export type InsertDashboardCard = z.infer<typeof insertDashboardCardSchema>;
