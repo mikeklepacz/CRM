@@ -438,34 +438,8 @@ export default function SalesDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>Sales Dashboard</CardTitle>
-          <CardDescription>
-            View and edit data from Store Database and Commission Tracker
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Auto-detected sheets info */}
-          {(storeSheetId || trackerSheetId) && (
-            <div className="bg-muted/50 p-4 rounded-md space-y-1 text-sm">
-              <p className="font-medium mb-2">Connected Sheets:</p>
-              {storeSheetId && (
-                <p className="flex items-center gap-2">
-                  <span className="text-green-600">✓</span>
-                  Store Database: {sheets.find(s => s.id === storeSheetId)?.sheetName}
-                </p>
-              )}
-              {trackerSheetId && (
-                <p className="flex items-center gap-2">
-                  <span className="text-green-600">✓</span>
-                  Commission Tracker: {sheets.find(s => s.id === trackerSheetId)?.sheetName}
-                </p>
-              )}
-              <p className="flex items-center gap-2 text-muted-foreground">
-                <span className="text-green-600">✓</span>
-                Joining by column: <span className="font-medium">link</span>
-              </p>
-            </div>
-          )}
-          
           {!storeSheetId && !trackerSheetId && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
