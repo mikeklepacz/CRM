@@ -96,7 +96,7 @@ export default function SalesDashboard() {
     if (sheets.length > 0) {
       const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-      
+
       if (storeSheet) setStoreSheetId(storeSheet.id);
       if (trackerSheet) setTrackerSheetId(trackerSheet.id);
     }
@@ -131,7 +131,7 @@ export default function SalesDashboard() {
       const initialVisible: Record<string, boolean> = {};
       const initialWidths: Record<string, number> = {};
       const hiddenColumns = ['title', 'error']; // Columns to hide by default
-      
+
       // Check if we have saved preferences
       if (userPreferences) {
         // Load saved preferences if available
@@ -145,7 +145,7 @@ export default function SalesDashboard() {
             initialVisible[header] = !hiddenColumns.includes(header.toLowerCase());
           });
         }
-        
+
         if (userPreferences.columnOrder && userPreferences.columnOrder.length > 0) {
           // Use saved column order, adding any new columns at the end
           const savedOrder = userPreferences.columnOrder.filter((col: string) => headers.includes(col));
@@ -154,7 +154,7 @@ export default function SalesDashboard() {
         } else {
           setColumnOrder(headers);
         }
-        
+
         if (userPreferences.columnWidths) {
           headers.forEach((header: string) => {
             initialWidths[header] = userPreferences.columnWidths![header] || 200;
@@ -164,7 +164,7 @@ export default function SalesDashboard() {
             initialWidths[header] = 200;
           });
         }
-        
+
         setVisibleColumns(initialVisible);
         setColumnWidths(initialWidths);
         setPreferencesLoaded(true);
@@ -394,6 +394,10 @@ export default function SalesDashboard() {
   const allStates = (() => {
     const states = new Set<string>();
     const stateColumns = headers.filter((h: string) => h.toLowerCase() === 'state');
+    console.log('=== STATE FILTER DEBUG ===');
+    console.log('Headers:', headers);
+    console.log('State columns found:', stateColumns);
+    console.log('Number of data rows:', data.length);
     data.forEach((row: any) => {
       stateColumns.forEach((col: string) => {
         const value = row[col];
@@ -403,7 +407,11 @@ export default function SalesDashboard() {
         }
       });
     });
-    return Array.from(states).sort();
+    const statesArray = Array.from(states).sort();
+    console.log('All states extracted:', statesArray);
+    console.log('States count:', statesArray.length);
+    console.log('=== END STATE FILTER DEBUG ===');
+    return statesArray;
   })();
 
   // Initialize selected tags when data loads (or from saved preferences)
@@ -448,7 +456,7 @@ export default function SalesDashboard() {
   // Auto-save user preferences when they change (debounced)
   useEffect(() => {
     if (!preferencesLoaded) return; // Don't save until we've loaded initial preferences
-    
+
     const timeoutId = setTimeout(async () => {
       try {
         await apiRequest('PUT', '/api/user/preferences', {
@@ -553,9 +561,9 @@ export default function SalesDashboard() {
     const isTrackerColumn = trackerHeaders.includes(column);
     const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
     const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
-    
+
     if (!sheetId || !rowIndex) return;
-    
+
     // Use a unique key that doesn't break on hyphens in column names
     const key = JSON.stringify({ rowIndex, column, sheetId });
     setEditedCells(prev => ({
@@ -668,15 +676,15 @@ export default function SalesDashboard() {
       filtered = [...filtered].sort((a: any, b: any) => {
         const aVal = String(a[sortColumn] || '');
         const bVal = String(b[sortColumn] || '');
-        
+
         // Try numeric comparison first
         const aNum = parseFloat(aVal);
         const bNum = parseFloat(bVal);
-        
+
         if (!isNaN(aNum) && !isNaN(bNum)) {
           return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
         }
-        
+
         // Fall back to string comparison
         const comparison = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
         return sortDirection === 'asc' ? comparison : -comparison;
@@ -1057,7 +1065,7 @@ export default function SalesDashboard() {
                             const isTagColumn = header.toLowerCase().includes('tag') || header.toLowerCase().includes('keyword') || header.toLowerCase().includes('phrase');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
-                            
+
                             const statusOptions = [
                               '1 – Contacted',
                               '2 – Interested',
@@ -1066,7 +1074,7 @@ export default function SalesDashboard() {
                               '5 – Closed Won',
                               '6 – Closed Lost'
                             ];
-                            
+
                             // Clean display based on column type
                             let cleanedValue = cellValue;
                             if (isTagColumn) {
@@ -1074,10 +1082,10 @@ export default function SalesDashboard() {
                             } else if (isHoursColumn) {
                               cleanedValue = formatHours(cellValue);
                             }
-                            
+
                             const isLongText = cleanedValue.length > 100;
                             const displayValue = isLongText ? cleanedValue.substring(0, 100) + '...' : cleanedValue;
-                            
+
                             const isLeaflyLink = cellValue.toLowerCase().includes('leafly');
                             const hasData = cellValue.length > 0;
                             const comboboxKey = `${rowKey}-${header}`;
