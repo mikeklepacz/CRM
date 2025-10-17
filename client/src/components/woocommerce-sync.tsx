@@ -74,9 +74,12 @@ export function WooCommerceSync() {
 
         {syncResult && (
           <div className="text-sm space-y-1 p-3 bg-muted rounded-md">
-            <p><strong>Total Orders:</strong> {syncResult.total}</p>
-            <p><strong>Synced:</strong> {syncResult.synced}</p>
-            <p><strong>Matched to Clients:</strong> {syncResult.matched}</p>
+            <p><strong>Total Orders:</strong> {syncResult.total ?? 0}</p>
+            <p><strong>Synced:</strong> {syncResult.synced ?? 0}</p>
+            <p><strong>Matched to Clients:</strong> {syncResult.matched ?? 0}</p>
+            {syncResult.message && (
+              <p className="text-muted-foreground italic mt-2">{syncResult.message}</p>
+            )}
           </div>
         )}
       </CardContent>

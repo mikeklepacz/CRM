@@ -595,12 +595,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const consumerKey = integration?.wooConsumerKey;
       const consumerSecret = integration?.wooConsumerSecret;
 
+      console.log('WooCommerce sync started for user:', userId);
+      console.log('WooCommerce URL:', wooUrl);
+      console.log('Has consumer key:', !!consumerKey);
+      console.log('Has consumer secret:', !!consumerSecret);
+
       if (!wooUrl || !consumerKey || !consumerSecret) {
         return res.status(500).json({ message: "WooCommerce credentials not configured. Please configure in Settings." });
       }
 
       // Fetch orders from WooCommerce
-      const response = await axios.get(`${wooUrl}/wp-json/wc/v3/orders`, {
+      const apiUrl = `${wooUrl}/wp-json/wc/v3/orders`;
+      console.log('Fetching from:', apiUrl);
+      
+      const response = await axios.get(apiUrl, {
         params: {
           consumer_key: consumerKey,
           consumer_secret: consumerSecret,
@@ -610,25 +618,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
+      console.log('WooCommerce response status:', response.status);
+      console.log('WooCommerce response data type:', typeof response.data);
+      console.log('Number of orders received:', Array.isArray(response.data) ? response.data.length : 'not an array');
+
       const orders = response.data;
+      
+      if (!Array.isArray(orders)) {
+        console.error('Expected array of orders but got:', typeof orders);
+        return res.status(500).json({ 
+          message: "Invalid response from WooCommerce API",
+          total: 0,
+          synced: 0,
+          matched: 0
+        });
+      }
+
+      if (orders.length === 0) {
+        console.log('No orders found in WooCommerce');
+        return res.json({
+          message: "No orders found in WooCommerce",
+          total: 0,
+          synced: 0,
+          matched: 0,
+        });
+      }
       let synced = 0;
       let matched = 0;
+
+      console.log(`Processing ${orders.length} orders...`);
 
       for (const order of orders) {
         // Try to find matching client by email or company
         const email = order.billing?.email;
         const company = order.billing?.company;
 
+        console.log(`Processing order ${order.id}:`, {
+          email,
+          company,
+          total: order.total,
+          status: order.status,
+          date: order.date_created
+        });
+
         let client = null;
         
         if (email) {
           client = await storage.findClientByUniqueKey('Email', email) ||
                    await storage.findClientByUniqueKey('email', email);
+          console.log(`Client lookup by email '${email}':`, client ? 'FOUND' : 'NOT FOUND');
         }
         
         if (!client && company) {
           client = await storage.findClientByUniqueKey('Company', company) ||
                    await storage.findClientByUniqueKey('company', company);
+          console.log(`Client lookup by company '${company}':`, client ? 'FOUND' : 'NOT FOUND');
         }
 
         // Create or update order
@@ -687,6 +731,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      console.log('Sync completed:', { total: orders.length, synced, matched });
+
       res.json({
         message: "WooCommerce sync completed",
         synced,
@@ -695,8 +741,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("WooCommerce sync error:", error);
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       res.status(500).json({ 
-        message: error.response?.data?.message || error.message || "Sync failed" 
+        message: error.response?.data?.message || error.message || "Sync failed",
+        total: 0,
+        synced: 0,
+        matched: 0
       });
     }
   });
