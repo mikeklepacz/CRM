@@ -1,17 +1,16 @@
 # Hemp Wick CRM & Commission Tracker
 
 ## Overview
-A comprehensive web-based CRM and commission tracking system for internal hemp wick sales teams. Features CSV-powered client management, role-based access control, WooCommerce integration, and automated commission calculations.
+A Google Sheets-powered CRM and commission tracking system for hemp wick sales teams. Features dual-sheet management (Store Database + Commission Tracker), inline editing, role-based access control, and WooCommerce order sync.
 
 ## Features
 - **Authentication**: Replit Auth with Admin and Agent roles
-- **Google Sheets Integration**: Real-time bidirectional sync with Google Sheets for client data management
-- **CSV Management**: Upload client data with automatic header detection and smart merging
-- **Client Management**: Claim system, filtering, search, and detailed tracking
-- **Commission Tracking**: Automated calculation (25% first 6 months, 10% thereafter)
-- **WooCommerce Sync**: Automatic order synchronization and client matching
-- **Notes & Follow-ups**: Track client interactions and follow-up activities
-- **Dashboards**: Separate views for Admin (all clients) and Agent (claimed clients only)
+- **Google Sheets Integration**: Direct editing of Store Database and Commission Tracker sheets
+- **Sales Dashboard**: Unified view of both sheets with column visibility controls and reordering
+- **Inline Editing**: Edit cells directly in the dashboard, saves back to Google Sheets
+- **Row-Level Security**: Agents see all unclaimed stores + only their claimed stores
+- **Commission Tracking**: Track sales, follow-ups, and commissions per store
+- **WooCommerce Sync**: Automatic order synchronization and commission calculation
 
 ## Setup Instructions
 
@@ -32,29 +31,47 @@ UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 ```
 4. Log out and log back in to see the Admin dashboard
 
-### 3. Connect Google Sheets (Recommended)
-The preferred method for managing client data is through Google Sheets integration:
+### 3. Connect Google Sheets
+Connect your two Google Sheets to power the Sales Dashboard:
 
 1. Go to Admin Dashboard → Google Sheets tab
 2. Click to authorize access to your Google Sheets
-3. Select the spreadsheet containing your client data
-4. Choose the sheet/tab name (e.g., "Dispensaries")
-5. Set the unique identifier column (e.g., "link" for Leafly URLs)
-6. Click "Connect Sheet"
-7. Use "Bidirectional Sync" to keep data synchronized in real-time
+3. **Connect Store Database Sheet:**
+   - Select your spreadsheet
+   - Choose the sheet/tab with store data
+   - Set Purpose: "Store Database"
+   - This sheet contains all stores to contact
+4. **Connect Commission Tracker Sheet:**
+   - Select your spreadsheet
+   - Choose the sheet/tab for tracking
+   - Set Purpose: "Commission Tracker"
+   - This sheet tracks agent activity and sales
 
-**Benefits of Google Sheets:**
-- Real-time updates: Changes in the sheet appear instantly in the CRM
-- Flexible columns: Add new columns anytime and they sync automatically
-- Team collaboration: Multiple people can update the sheet simultaneously
-- No file uploads: Direct integration eliminates manual CSV imports
+**Required Columns:**
+- Both sheets must have a "link" column (unique identifier per store)
+- Commission Tracker must have an "Agent" column (for row-level security)
 
-### 4. Alternative: Upload CSV Data
-If you prefer CSV files:
-1. Go to Admin Dashboard → CSV Upload tab
-2. Select your client CSV file
-3. Choose a unique identifier column (e.g., Email, Company, or Link)
-4. Upload - the system will merge existing clients and create new ones
+### 4. Sales Dashboard Workflow
+The Sales Dashboard automatically loads both sheets:
+
+**For Agents:**
+1. See all unclaimed stores (from Store Database)
+2. See only their claimed stores (from Commission Tracker)
+3. Update status to claim a store
+4. Track calls, emails, and follow-ups
+5. Edit phone, email, notes, status, etc.
+6. Save changes back to Google Sheets
+
+**For Admins:**
+- See all stores and all agent activity
+- Manage both sheets
+- Sync WooCommerce orders
+
+**Column Management:**
+- All columns shown by default
+- Hide/show any column using the Columns button
+- Reorder columns with left/right arrows (UX only, doesn't affect Google Sheets)
+- Editable columns marked with ✏️
 
 ### 5. Sync WooCommerce Orders
 To synchronize orders and calculate commissions:
@@ -62,17 +79,9 @@ To synchronize orders and calculate commissions:
 2. Click "Sync Orders"
 3. The system will:
    - Fetch recent orders from WooCommerce
-   - Match orders to clients by email or company name
-   - Calculate commissions based on claim dates
-   - Update client sales totals
-
-### 6. Agent Workflow
-Agents can:
-1. View all unassigned clients in their dashboard
-2. Claim clients to start earning commission
-3. Filter clients by inactivity (90/180/365 days) to prioritize follow-ups
-4. Add notes and track follow-up activities
-5. View their total sales and commission earnings
+   - Match orders to stores
+   - Calculate commissions
+   - Update sales totals in Commission Tracker
 
 ## Commission Calculation
 - **First 6 months after claim**: 25% commission on all sales
@@ -82,19 +91,20 @@ Agents can:
 ## User Roles
 
 ### Admin
-- Connect and manage Google Sheets integration
-- Upload and manage CSV data
-- View all clients across all agents
+- Connect and manage Google Sheets (Store Database + Commission Tracker)
+- View all stores and all agent activity in Sales Dashboard
 - Sync WooCommerce orders
-- Unclaim clients and reassign them
-- View overall sales and commission metrics
+- Edit any cell in either sheet
+- Manage team assignments
 
 ### Agent (Default)
-- View and claim unassigned clients
-- See only their claimed clients
-- Track their sales and commission
-- Add notes and follow-ups to their clients
-- Filter clients by inactivity for targeted outreach
+- View all unclaimed stores (from Store Database)
+- View only their claimed stores (from Commission Tracker)
+- Claim stores by updating status
+- Track calls, emails, and follow-ups
+- Edit phone, email, notes, status, dates
+- Search and filter stores
+- Customize column visibility and order
 
 ## Technical Stack
 - **Frontend**: React, Tailwind CSS, Shadcn UI
@@ -104,12 +114,25 @@ Agents can:
 - **External API**: WooCommerce REST API
 
 ## Data Model
+
+### Database Tables
 - **Users**: Authentication and role management
-- **Clients**: CSV data + tracking fields (assigned agent, claim date, sales, commission)
-- **Orders**: WooCommerce order data linked to clients
-- **Notes**: Follow-up tracking and client communications
-- **CSV Uploads**: Upload history and metadata
-- **Google Sheets**: Connected spreadsheet tracking and sync status
+- **Google Sheets**: Connected spreadsheet tracking (Store Database + Commission Tracker)
+- **Orders**: WooCommerce order data (future integration)
+
+### Google Sheets Structure
+**Store Database Sheet:**
+- Contains master list of all stores to contact
+- Editable fields: phone, email, additional phone, additional email
+- Must have "link" column as unique identifier
+- Admin maintains this data
+
+**Commission Tracker Sheet:**
+- Tracks agent activity and sales per store
+- All columns editable except "Agent" and "link"
+- "Agent" column determines row-level access
+- Must have "link" column to join with Store Database
+- Typical columns: Status, Follow-Up Date, Next Action, Notes, Sales Total, Commission
 
 ## Environment Variables
 All required environment variables are already configured:
@@ -124,15 +147,16 @@ All required environment variables are already configured:
 ## Maintenance
 
 ### Regular Tasks
-1. **Sync Orders**: Run WooCommerce sync regularly (daily/weekly) to keep commission data current
-2. **Review Claims**: Admin should monitor unclaimed clients and agent performance
-3. **Google Sheets Sync**: Use bidirectional sync to keep data current between CRM and Google Sheets
-4. **CSV Updates**: Upload fresh CSV data when client information changes (if not using Google Sheets)
+1. **Update Store Database**: Add new stores to the Store Database sheet in Google Sheets
+2. **Sync WooCommerce**: Run sync regularly (daily/weekly) to update sales and commissions
+3. **Monitor Agent Activity**: Review Commission Tracker sheet for follow-ups and conversions
+4. **Column Management**: Add new columns to Google Sheets as needed - they'll appear automatically in the dashboard
 
 ### Troubleshooting
-- If orders don't match clients, ensure client CSV has accurate email or company names
-- If agents can't see claimed clients, refresh the page after claiming
-- For commission discrepancies, verify the claim date is set correctly
+- **Sheets not loading**: Ensure both sheets are connected with Purpose "Store Database" and "Commission Tracker"
+- **Can't save edits**: Check that you have edit permissions in Google Sheets
+- **Wrong data showing**: Verify "link" column exists in both sheets and has matching values
+- **Agents see wrong stores**: Check "Agent" column in Commission Tracker matches user email exactly
 
 ## Security Notes
 - User roles are managed in the database
