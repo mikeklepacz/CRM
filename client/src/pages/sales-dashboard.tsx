@@ -1,17 +1,15 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RefreshCw, Settings2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 
 interface GoogleSheet {
   id: string;
@@ -24,19 +22,28 @@ export default function SalesDashboard() {
   const { toast } = useToast();
   const [storeSheetId, setStoreSheetId] = useState<string>("");
   const [trackerSheetId, setTrackerSheetId] = useState<string>("");
-  const [joinColumn, setJoinColumn] = useState<string>("name");
+  const joinColumn = "link"; // Hardcoded to "link"
   const [searchTerm, setSearchTerm] = useState("");
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [editedCells, setEditedCells] = useState<Record<string, { rowIndex: number; column: string; value: string; sheetId: string }>>({});
 
-  // Fetch available sheets
+  // Fetch available sheets and auto-detect by purpose
   const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
     queryKey: ['/api/sheets'],
   });
 
   const sheets = sheetsData?.sheets || [];
-  const storeSheets = sheets.filter(s => s.sheetPurpose === 'store_database');
-  const trackerSheets = sheets.filter(s => s.sheetPurpose === 'commission_tracker');
+
+  // Auto-detect sheets by purpose
+  useEffect(() => {
+    if (sheets.length > 0) {
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
+      
+      if (storeSheet) setStoreSheetId(storeSheet.id);
+      if (trackerSheet) setTrackerSheetId(trackerSheet.id);
+    }
+  }, [sheets.length]);
 
   // Fetch merged data
   const { data: mergedData, isLoading, refetch } = useQuery({
@@ -142,51 +149,36 @@ export default function SalesDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Sheet Selection */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="store-sheet">Store Database Sheet</Label>
-              <Select value={storeSheetId} onValueChange={setStoreSheetId}>
-                <SelectTrigger id="store-sheet" data-testid="select-store-sheet">
-                  <SelectValue placeholder="Select store sheet" />
-                </SelectTrigger>
-                <SelectContent>
-                  {storeSheets.map((sheet) => (
-                    <SelectItem key={sheet.id} value={sheet.id}>
-                      {sheet.spreadsheetName} - {sheet.sheetName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* Auto-detected sheets info */}
+          {(storeSheetId || trackerSheetId) && (
+            <div className="bg-muted/50 p-4 rounded-md space-y-1 text-sm">
+              <p className="font-medium mb-2">Connected Sheets:</p>
+              {storeSheetId && (
+                <p className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Store Database: {sheets.find(s => s.id === storeSheetId)?.sheetName}
+                </p>
+              )}
+              {trackerSheetId && (
+                <p className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Commission Tracker: {sheets.find(s => s.id === trackerSheetId)?.sheetName}
+                </p>
+              )}
+              <p className="flex items-center gap-2 text-muted-foreground">
+                <span className="text-green-600">✓</span>
+                Joining by column: <span className="font-medium">link</span>
+              </p>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="tracker-sheet">Commission Tracker Sheet</Label>
-              <Select value={trackerSheetId} onValueChange={setTrackerSheetId}>
-                <SelectTrigger id="tracker-sheet" data-testid="select-tracker-sheet">
-                  <SelectValue placeholder="Select tracker sheet" />
-                </SelectTrigger>
-                <SelectContent>
-                  {trackerSheets.map((sheet) => (
-                    <SelectItem key={sheet.id} value={sheet.id}>
-                      {sheet.spreadsheetName} - {sheet.sheetName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          )}
+          
+          {!storeSheetId && !trackerSheetId && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                No sheets found. Please connect your Store Database and Commission Tracker sheets in the Admin Dashboard → Google Sheets tab.
+              </p>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="join-column">Join Column</Label>
-              <Input
-                id="join-column"
-                value={joinColumn}
-                onChange={(e) => setJoinColumn(e.target.value)}
-                placeholder="e.g., name, link"
-                data-testid="input-join-column"
-              />
-            </div>
-          </div>
+          )}
 
           {/* Controls */}
           {storeSheetId && trackerSheetId && (
