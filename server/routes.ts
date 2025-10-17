@@ -268,6 +268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     columnWidths: z.record(z.number()).optional(),
     selectedTags: z.array(z.string()).optional(),
     selectedKeywords: z.array(z.string()).optional(),
+    selectedStates: z.array(z.string()).optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {

@@ -189,6 +189,7 @@ export class DatabaseStorage implements IStorage {
         columnWidths: preferences.columnWidths ?? existing.columnWidths,
         selectedTags: preferences.selectedTags ?? existing.selectedTags,
         selectedKeywords: preferences.selectedKeywords ?? existing.selectedKeywords,
+        selectedStates: preferences.selectedStates ?? existing.selectedStates,
         updatedAt: new Date(),
       };
       

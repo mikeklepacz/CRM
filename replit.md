@@ -61,6 +61,7 @@ Your dashboard view preferences are automatically saved to the database and sync
 - Column widths (resized widths)
 - Selected tags filter
 - Selected keywords/phrases filter
+- Selected states filter
 
 **How It Works:**
 - Preferences save automatically 1 second after you make changes
@@ -95,6 +96,7 @@ The Sales Dashboard automatically loads both sheets:
 - **Search**: Search across all columns using the search box
 - **Tags Filter**: Click "Tags" button to filter by tags - all tags selected by default, uncheck to hide rows with those tags. Works with columns containing "tag" in the name.
 - **Keywords/Phrases Filter**: Click "Keywords/Phrases" button to filter by keywords and phrases - all selected by default, uncheck to hide rows with those items. Works with columns containing "keyword" or "phrase" in the name.
+- **States Filter**: Click "States" button to filter by state - all states selected by default, uncheck to hide rows from those states. Displays full state names (e.g., "Montana" instead of "MT") for better readability.
 
 **Editing Features:**
 - **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices

@@ -158,6 +158,7 @@ export const userPreferences = pgTable("user_preferences", {
   columnWidths: jsonb("column_widths").$type<Record<string, number>>(),
   selectedTags: jsonb("selected_tags").$type<string[]>(),
   selectedKeywords: jsonb("selected_keywords").$type<string[]>(),
+  selectedStates: jsonb("selected_states").$type<string[]>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -17,6 +17,27 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
 
+// US State abbreviations to full names mapping
+const US_STATES: Record<string, string> = {
+  'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
+  'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
+  'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
+  'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+  'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
+  'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
+  'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
+  'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+  'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
+  'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
+};
+
+// Helper function to get full state name from abbreviation
+const getStateName = (state: string): string => {
+  if (!state) return '';
+  const upperState = state.toUpperCase().trim();
+  return US_STATES[upperState] || state;
+};
+
 interface GoogleSheet {
   id: string;
   spreadsheetName: string;
@@ -40,6 +61,7 @@ export default function SalesDashboard() {
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
+  const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
@@ -50,6 +72,7 @@ export default function SalesDashboard() {
     columnWidths?: Record<string, number>;
     selectedTags?: string[];
     selectedKeywords?: string[];
+    selectedStates?: string[];
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
@@ -361,6 +384,22 @@ export default function SalesDashboard() {
     return Array.from(keywords).sort();
   })();
 
+  // Get all unique states from the data (with full names)
+  const allStates = (() => {
+    const states = new Set<string>();
+    const stateColumns = headers.filter((h: string) => h.toLowerCase() === 'state');
+    data.forEach((row: any) => {
+      stateColumns.forEach((col: string) => {
+        const value = row[col];
+        if (value && String(value).trim()) {
+          const stateName = getStateName(String(value).trim());
+          states.add(stateName);
+        }
+      });
+    });
+    return Array.from(states).sort();
+  })();
+
   // Initialize selected tags when data loads (or from saved preferences)
   useEffect(() => {
     if (allTags.length > 0 && selectedTags.size === 0) {
@@ -387,6 +426,19 @@ export default function SalesDashboard() {
     }
   }, [allKeywords.length, userPreferences]);
 
+  // Initialize selected states when data loads (or from saved preferences)
+  useEffect(() => {
+    if (allStates.length > 0 && selectedStates.size === 0) {
+      if (userPreferences?.selectedStates && userPreferences.selectedStates.length > 0) {
+        // Filter saved states to only include ones that still exist in the data
+        const validStates = userPreferences.selectedStates.filter((state: string) => allStates.includes(state));
+        setSelectedStates(new Set(validStates.length > 0 ? validStates : allStates));
+      } else {
+        setSelectedStates(new Set(allStates));
+      }
+    }
+  }, [allStates.length, userPreferences]);
+
   // Auto-save user preferences when they change (debounced)
   useEffect(() => {
     if (!preferencesLoaded) return; // Don't save until we've loaded initial preferences
@@ -399,6 +451,7 @@ export default function SalesDashboard() {
           columnWidths,
           selectedTags: Array.from(selectedTags),
           selectedKeywords: Array.from(selectedKeywords),
+          selectedStates: Array.from(selectedStates),
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -406,7 +459,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, preferencesLoaded]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, preferencesLoaded]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -469,6 +522,24 @@ export default function SalesDashboard() {
 
   const clearAllKeywords = () => {
     setSelectedKeywords(new Set());
+  };
+
+  const toggleState = (state: string) => {
+    const newSelected = new Set(selectedStates);
+    if (newSelected.has(state)) {
+      newSelected.delete(state);
+    } else {
+      newSelected.add(state);
+    }
+    setSelectedStates(newSelected);
+  };
+
+  const selectAllStates = () => {
+    setSelectedStates(new Set(allStates));
+  };
+
+  const clearAllStates = () => {
+    setSelectedStates(new Set());
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
@@ -564,6 +635,22 @@ export default function SalesDashboard() {
               return cleaned;
             });
             return rowKeywords.some((keyword: string) => keyword && keyword !== '""' && keyword !== "''" && selectedKeywords.has(keyword));
+          }
+          return false;
+        });
+      });
+    }
+
+    // Then filter by states
+    if (selectedStates.size > 0 && selectedStates.size < allStates.length) {
+      const stateColumns = headers.filter((h: string) => h.toLowerCase() === 'state');
+      filtered = filtered.filter((row: any) => {
+        // Check if row's state is in selected states
+        return stateColumns.some((col: string) => {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            const stateName = getStateName(String(value).trim());
+            return selectedStates.has(stateName);
           }
           return false;
         });
@@ -751,6 +838,65 @@ export default function SalesDashboard() {
                                   className="text-sm cursor-pointer flex-1"
                                 >
                                   {keyword}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+
+                {allStates.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" data-testid="button-states-filter">
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        States ({selectedStates.size}/{allStates.length})
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">Filter by State</h4>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={selectAllStates}
+                              data-testid="button-select-all-states"
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={clearAllStates}
+                              data-testid="button-clear-all-states"
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Uncheck states to hide rows from those states
+                        </p>
+                        <ScrollArea className="h-64">
+                          <div className="space-y-2">
+                            {allStates.map((state: string) => (
+                              <div key={state} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`state-${state}`}
+                                  checked={selectedStates.has(state)}
+                                  onCheckedChange={() => toggleState(state)}
+                                  data-testid={`checkbox-state-${state}`}
+                                />
+                                <Label 
+                                  htmlFor={`state-${state}`} 
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  {state}
                                 </Label>
                               </div>
                             ))}
