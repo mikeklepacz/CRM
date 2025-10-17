@@ -39,8 +39,8 @@ export default function SalesDashboard() {
   // Auto-detect sheets by purpose
   useEffect(() => {
     if (sheets.length > 0) {
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
       
       if (storeSheet) setStoreSheetId(storeSheet.id);
       if (trackerSheet) setTrackerSheetId(trackerSheet.id);
@@ -198,7 +198,7 @@ export default function SalesDashboard() {
           {!storeSheetId && !trackerSheetId && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                No sheets found. Please connect your Store Database and Commission Tracker sheets in the Admin Dashboard → Google Sheets tab.
+                No sheets found. Please connect your sheets in Admin Dashboard → Google Sheets tab with purposes "clients" (Store Database) and "commissions" (Commission Tracker).
               </p>
             </div>
           )}
