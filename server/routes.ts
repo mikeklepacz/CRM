@@ -604,25 +604,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "WooCommerce credentials not configured. Please configure in Settings." });
       }
 
-      // Fetch orders from WooCommerce
+      // Fetch ALL orders from WooCommerce with pagination
       const apiUrl = `${wooUrl}/wp-json/wc/v3/orders`;
       console.log('Fetching from:', apiUrl);
       
-      const response = await axios.get(apiUrl, {
-        params: {
-          consumer_key: consumerKey,
-          consumer_secret: consumerSecret,
-          per_page: 100,
-          orderby: 'date',
-          order: 'desc',
-        },
-      });
+      let allOrders: any[] = [];
+      let page = 1;
+      let hasMore = true;
 
-      console.log('WooCommerce response status:', response.status);
-      console.log('WooCommerce response data type:', typeof response.data);
-      console.log('Number of orders received:', Array.isArray(response.data) ? response.data.length : 'not an array');
+      while (hasMore) {
+        const response = await axios.get(apiUrl, {
+          params: {
+            consumer_key: consumerKey,
+            consumer_secret: consumerSecret,
+            per_page: 100,
+            page: page,
+            orderby: 'date',
+            order: 'desc',
+          },
+        });
 
-      const orders = response.data;
+        console.log(`Fetching page ${page}: ${response.data.length} orders`);
+        
+        if (response.data.length === 0) {
+          hasMore = false;
+        } else {
+          allOrders = allOrders.concat(response.data);
+          page++;
+        }
+
+        // Safety check to prevent infinite loops
+        if (page > 1000) {
+          console.log('Reached maximum page limit (1000)');
+          hasMore = false;
+        }
+      }
+
+      console.log('WooCommerce total orders fetched:', allOrders.length);
+      const orders = allOrders;
       
       if (!Array.isArray(orders)) {
         console.error('Expected array of orders but got:', typeof orders);
