@@ -5,6 +5,7 @@ A comprehensive web-based CRM and commission tracking system for internal hemp w
 
 ## Features
 - **Authentication**: Replit Auth with Admin and Agent roles
+- **Google Sheets Integration**: Real-time bidirectional sync with Google Sheets for client data management
 - **CSV Management**: Upload client data with automatic header detection and smart merging
 - **Client Management**: Claim system, filtering, search, and detailed tracking
 - **Commission Tracking**: Automated calculation (25% first 6 months, 10% thereafter)
@@ -31,14 +32,31 @@ UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 ```
 4. Log out and log back in to see the Admin dashboard
 
-### 3. Upload Client Data
-As an admin:
+### 3. Connect Google Sheets (Recommended)
+The preferred method for managing client data is through Google Sheets integration:
+
+1. Go to Admin Dashboard → Google Sheets tab
+2. Click to authorize access to your Google Sheets
+3. Select the spreadsheet containing your client data
+4. Choose the sheet/tab name (e.g., "Dispensaries")
+5. Set the unique identifier column (e.g., "link" for Leafly URLs)
+6. Click "Connect Sheet"
+7. Use "Bidirectional Sync" to keep data synchronized in real-time
+
+**Benefits of Google Sheets:**
+- Real-time updates: Changes in the sheet appear instantly in the CRM
+- Flexible columns: Add new columns anytime and they sync automatically
+- Team collaboration: Multiple people can update the sheet simultaneously
+- No file uploads: Direct integration eliminates manual CSV imports
+
+### 4. Alternative: Upload CSV Data
+If you prefer CSV files:
 1. Go to Admin Dashboard → CSV Upload tab
 2. Select your client CSV file
 3. Choose a unique identifier column (e.g., Email, Company, or Link)
 4. Upload - the system will merge existing clients and create new ones
 
-### 4. Sync WooCommerce Orders
+### 5. Sync WooCommerce Orders
 To synchronize orders and calculate commissions:
 1. Go to Admin Dashboard → WooCommerce Sync tab
 2. Click "Sync Orders"
@@ -48,7 +66,7 @@ To synchronize orders and calculate commissions:
    - Calculate commissions based on claim dates
    - Update client sales totals
 
-### 5. Agent Workflow
+### 6. Agent Workflow
 Agents can:
 1. View all unassigned clients in their dashboard
 2. Claim clients to start earning commission
@@ -64,6 +82,7 @@ Agents can:
 ## User Roles
 
 ### Admin
+- Connect and manage Google Sheets integration
 - Upload and manage CSV data
 - View all clients across all agents
 - Sync WooCommerce orders
@@ -90,6 +109,7 @@ Agents can:
 - **Orders**: WooCommerce order data linked to clients
 - **Notes**: Follow-up tracking and client communications
 - **CSV Uploads**: Upload history and metadata
+- **Google Sheets**: Connected spreadsheet tracking and sync status
 
 ## Environment Variables
 All required environment variables are already configured:
@@ -106,7 +126,8 @@ All required environment variables are already configured:
 ### Regular Tasks
 1. **Sync Orders**: Run WooCommerce sync regularly (daily/weekly) to keep commission data current
 2. **Review Claims**: Admin should monitor unclaimed clients and agent performance
-3. **CSV Updates**: Upload fresh CSV data when client information changes
+3. **Google Sheets Sync**: Use bidirectional sync to keep data current between CRM and Google Sheets
+4. **CSV Updates**: Upload fresh CSV data when client information changes (if not using Google Sheets)
 
 ### Troubleshooting
 - If orders don't match clients, ensure client CSV has accurate email or company names
