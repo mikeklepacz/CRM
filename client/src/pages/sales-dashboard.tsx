@@ -154,6 +154,22 @@ export default function SalesDashboard() {
     }
   };
 
+  const cleanTagDisplay = (value: string): string => {
+    if (!value) return '';
+    // Split by comma, clean each tag, filter out empty ones, and rejoin
+    return String(value)
+      .split(',')
+      .map((tag: string) => {
+        let cleaned = tag.trim();
+        // Remove brackets and quotes
+        cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
+        cleaned = cleaned.replace(/^["']+|["']+$/g, '');
+        return cleaned;
+      })
+      .filter((tag: string) => tag && tag !== '""' && tag !== "''")
+      .join(', ');
+  };
+
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       // Toggle direction if same column
@@ -621,12 +637,17 @@ export default function SalesDashboard() {
                             const cellKey = JSON.stringify({ rowIndex, column: header, sheetId });
                             const cellValue = editedCells[cellKey]?.value ?? row[header] ?? '';
 
-                            const isLongText = cellValue.length > 100;
-                            const displayValue = isLongText ? cellValue.substring(0, 100) + '...' : cellValue;
                             const isPhoneColumn = header.toLowerCase().includes('phone');
                             const isWebsiteColumn = header.toLowerCase().includes('website') || header.toLowerCase().includes('url') || header.toLowerCase().includes('site');
                             const isLinkColumn = header.toLowerCase() === 'link';
                             const isStateColumn = header.toLowerCase() === 'state';
+                            const isTagColumn = header.toLowerCase().includes('tag');
+                            
+                            // Clean tag display
+                            const cleanedValue = isTagColumn ? cleanTagDisplay(cellValue) : cellValue;
+                            const isLongText = cleanedValue.length > 100;
+                            const displayValue = isLongText ? cleanedValue.substring(0, 100) + '...' : cleanedValue;
+                            
                             const isLeaflyLink = cellValue.toLowerCase().includes('leafly');
                             const hasData = cellValue.length > 0;
                             const comboboxKey = `${rowKey}-${header}`;
