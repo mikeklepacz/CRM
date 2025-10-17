@@ -25,7 +25,7 @@ import {
   type DashboardCard,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User operations - Required for Replit Auth
