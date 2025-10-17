@@ -11,8 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
+import { Link } from "wouter";
 
 export function Header() {
   const { user } = useAuth();
@@ -29,11 +30,23 @@ export function Header() {
     <header className="border-b bg-card">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-6">
             <h1 className="text-lg font-semibold text-foreground">Hemp Wick CRM</h1>
-            {user.role === 'admin' && (
-              <Badge variant="default" data-testid="badge-admin-role">Admin</Badge>
-            )}
+            
+            <nav className="flex items-center gap-1">
+              <Link href={user.role === 'admin' ? '/admin' : '/agent'}>
+                <Button variant="ghost" size="sm" data-testid="nav-dashboard">
+                  <Home className="mr-2 h-4 w-4" />
+                  Dashboard
+                </Button>
+              </Link>
+              <Link href="/sales">
+                <Button variant="ghost" size="sm" data-testid="nav-sales">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Sales
+                </Button>
+              </Link>
+            </nav>
           </div>
           
           <div className="flex items-center gap-3">
