@@ -166,7 +166,6 @@ export function WooCommerceSync() {
               </p>
             )}
           </div>
-        )}</div>
         )}
 
         {orders.length > 0 && (
