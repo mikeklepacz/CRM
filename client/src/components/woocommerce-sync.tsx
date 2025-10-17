@@ -5,18 +5,42 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Loader2, Package } from "lucide-react";
+import { RefreshCw, Loader2, Package, Link2 } from "lucide-react";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export function WooCommerceSync() {
   const { toast } = useToast();
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [matchingOrderId, setMatchingOrderId] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
   
   const { data: orders = [], refetch: refetchOrders } = useQuery({
     queryKey: ["/api/orders"],
     queryFn: async () => {
       return await apiRequest("GET", "/api/orders");
+    },
+  });
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ["/api/clients"],
+    queryFn: async () => {
+      return await apiRequest("GET", "/api/clients");
     },
   });
 
@@ -51,6 +75,34 @@ export function WooCommerceSync() {
       });
     },
   });
+
+  const matchOrderMutation = useMutation({
+    mutationFn: async ({ orderId, clientId }: { orderId: string; clientId: string }) => {
+      return await apiRequest("POST", `/api/orders/${orderId}/match`, { clientId });
+    },
+    onSuccess: () => {
+      refetchOrders();
+      setMatchingOrderId(null);
+      setSelectedClientId("");
+      toast({
+        title: "Success",
+        description: "Order matched to client successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleMatchOrder = () => {
+    if (matchingOrderId && selectedClientId) {
+      matchOrderMutation.mutate({ orderId: matchingOrderId, clientId: selectedClientId });
+    }
+  };
 
   return (
     <Card>
@@ -135,7 +187,64 @@ export function WooCommerceSync() {
                         {order.clientId ? (
                           <Badge variant="default">Matched</Badge>
                         ) : (
-                          <Badge variant="outline">Unmatched</Badge>
+                          <Dialog open={matchingOrderId === order.id} onOpenChange={(open) => {
+                            if (!open) {
+                              setMatchingOrderId(null);
+                              setSelectedClientId("");
+                            }
+                          }}>
+                            <DialogTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => setMatchingOrderId(order.id)}
+                              >
+                                <Link2 className="h-4 w-4 mr-1" />
+                                Match
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Match Order to Client</DialogTitle>
+                                <DialogDescription>
+                                  Select a client to match with order #{order.orderNumber}
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                  <p className="text-sm"><strong>Email:</strong> {order.billingEmail || 'N/A'}</p>
+                                  <p className="text-sm"><strong>Company:</strong> {order.billingCompany || 'N/A'}</p>
+                                  <p className="text-sm"><strong>Total:</strong> ${parseFloat(order.total).toFixed(2)}</p>
+                                </div>
+                                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a client" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {clients.map((client: any) => (
+                                      <SelectItem key={client.id} value={client.id}>
+                                        {client.data?.Company || client.data?.company || client.data?.Email || client.data?.email || client.uniqueIdentifier || client.id}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button 
+                                  onClick={handleMatchOrder}
+                                  disabled={!selectedClientId || matchOrderMutation.isPending}
+                                  className="w-full"
+                                >
+                                  {matchOrderMutation.isPending ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Matching...
+                                    </>
+                                  ) : (
+                                    "Match Order"
+                                  )}
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                         )}
                       </TableCell>
                     </TableRow>

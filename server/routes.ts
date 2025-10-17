@@ -595,6 +595,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manually match an order to a client
+  app.post('/api/orders/:orderId/match', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { clientId } = req.body;
+
+      if (!clientId) {
+        return res.status(400).json({ message: "Client ID is required" });
+      }
+
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const client = await storage.getClient(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      // Update order with client ID
+      await storage.updateOrder(orderId, { clientId });
+
+      // Update client sales data
+      const orderDate = new Date(order.orderDate);
+      const orderTotal = parseFloat(order.total);
+      
+      const updates: any = {
+        lastOrderDate: orderDate,
+        totalSales: (parseFloat(client.totalSales || '0') + orderTotal).toString(),
+      };
+
+      if (!client.firstOrderDate || new Date(client.firstOrderDate) > orderDate) {
+        updates.firstOrderDate = orderDate;
+      }
+
+      // Calculate commission if client is claimed
+      if (client.assignedAgent && client.claimDate) {
+        const monthsSinceClaim = differenceInMonths(orderDate, new Date(client.claimDate));
+        const rate = monthsSinceClaim < 6 ? 0.25 : 0.10;
+        const commission = orderTotal * rate;
+        updates.commissionTotal = (parseFloat(client.commissionTotal || '0') + commission).toString();
+      }
+
+      await storage.updateClient(client.id, updates);
+
+      res.json({ message: "Order matched successfully", order: { ...order, clientId } });
+    } catch (error: any) {
+      console.error("Error matching order:", error);
+      res.status(500).json({ message: error.message || "Failed to match order" });
+    }
+  });
+
   // Sync WooCommerce orders
   app.post('/api/woocommerce/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
