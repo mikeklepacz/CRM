@@ -8,7 +8,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -29,6 +31,7 @@ export default function SalesDashboard() {
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [editedCells, setEditedCells] = useState<Record<string, { rowIndex: number; column: string; value: string; sheetId: string }>>({});
+  const [expandedCell, setExpandedCell] = useState<{ row: any; column: string; value: string; isEditable: boolean } | null>(null);
 
   // Fetch available sheets and auto-detect by purpose
   const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
@@ -119,6 +122,16 @@ export default function SalesDashboard() {
       ...prev,
       [column]: Math.max(100, width), // Minimum width 100px
     }));
+  };
+
+  const openExpandedView = (row: any, column: string, value: string, isEditable: boolean) => {
+    setExpandedCell({ row, column, value, isEditable });
+  };
+
+  const saveExpandedCell = () => {
+    if (!expandedCell) return;
+    handleCellEdit(expandedCell.row, expandedCell.column, expandedCell.value);
+    setExpandedCell(null);
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
@@ -373,6 +386,9 @@ export default function SalesDashboard() {
                             const cellKey = JSON.stringify({ rowIndex, column: header, sheetId });
                             const cellValue = editedCells[cellKey]?.value ?? row[header] ?? '';
 
+                            const isLongText = cellValue.length > 100;
+                            const displayValue = isLongText ? cellValue.substring(0, 100) + '...' : cellValue;
+
                             return (
                               <TableCell 
                                 key={header} 
@@ -380,14 +396,47 @@ export default function SalesDashboard() {
                                 style={{ width: columnWidths[header] || 200 }}
                               >
                                 {isEditable ? (
-                                  <Input
-                                    value={cellValue}
-                                    onChange={(e) => handleCellEdit(row, header, e.target.value)}
-                                    className="w-full"
-                                    data-testid={`input-cell-${rowKey}-${header}`}
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      value={isLongText ? displayValue : cellValue}
+                                      onChange={(e) => handleCellEdit(row, header, e.target.value)}
+                                      className="w-full"
+                                      data-testid={`input-cell-${rowKey}-${header}`}
+                                      readOnly={isLongText}
+                                    />
+                                    {isLongText && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 flex-shrink-0"
+                                        onClick={() => openExpandedView(row, header, cellValue, true)}
+                                        data-testid={`button-expand-${rowKey}-${header}`}
+                                      >
+                                        <Maximize2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 ) : (
-                                  <span data-testid={`text-cell-${rowKey}-${header}`}>{cellValue}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span 
+                                      data-testid={`text-cell-${rowKey}-${header}`}
+                                      className={isLongText ? "cursor-pointer hover:text-primary" : ""}
+                                      onClick={() => isLongText && openExpandedView(row, header, cellValue, false)}
+                                    >
+                                      {displayValue}
+                                    </span>
+                                    {isLongText && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 flex-shrink-0"
+                                        onClick={() => openExpandedView(row, header, cellValue, false)}
+                                        data-testid={`button-expand-${rowKey}-${header}`}
+                                      >
+                                        <Maximize2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 )}
                               </TableCell>
                             );
@@ -416,6 +465,42 @@ export default function SalesDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Expanded Cell Dialog */}
+      <Dialog open={!!expandedCell} onOpenChange={(open) => !open && setExpandedCell(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>{expandedCell?.column}</DialogTitle>
+            <DialogDescription>
+              {expandedCell?.isEditable ? "View and edit the full content" : "View the full content"}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[50vh] mt-4">
+            {expandedCell?.isEditable ? (
+              <Textarea
+                value={expandedCell.value}
+                onChange={(e) => setExpandedCell({ ...expandedCell, value: e.target.value })}
+                className="min-h-[300px] font-mono text-sm"
+                data-testid="textarea-expanded"
+              />
+            ) : (
+              <div className="p-4 bg-muted/50 rounded-md whitespace-pre-wrap font-mono text-sm" data-testid="text-expanded">
+                {expandedCell?.value}
+              </div>
+            )}
+          </ScrollArea>
+          <DialogFooter>
+            {expandedCell?.isEditable && (
+              <Button onClick={saveExpandedCell} data-testid="button-save-expanded">
+                Save Changes
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setExpandedCell(null)} data-testid="button-close-expanded">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
