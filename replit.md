@@ -96,7 +96,7 @@ The Sales Dashboard automatically loads both sheets:
 - **Search**: Search across all columns using the search box
 - **Tags Filter**: Click "Tags" button to filter by tags - all tags selected by default, uncheck to hide rows with those tags. Works with columns containing "tag" in the name.
 - **Keywords/Phrases Filter**: Click "Keywords/Phrases" button to filter by keywords and phrases - all selected by default, uncheck to hide rows with those items. Works with columns containing "keyword" or "phrase" in the name.
-- **States Filter**: Click "States" button to filter by state - all states selected by default, uncheck to hide rows from those states. Displays full state names (e.g., "Montana" instead of "MT") for better readability.
+- **States Filter**: Click "States" button to filter by state/province - all regions selected by default, uncheck to hide rows from those locations. Displays full names (e.g., "Montana" instead of "MT", "Alberta" instead of "AB") for both US states and Canadian provinces. To focus on US-only locations, simply uncheck the Canadian provinces.
 
 **Editing Features:**
 - **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices

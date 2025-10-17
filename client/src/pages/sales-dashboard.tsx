@@ -17,8 +17,9 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
 
-// US State abbreviations to full names mapping
-const US_STATES: Record<string, string> = {
+// US States and Canadian Provinces abbreviations to full names mapping
+const REGIONS: Record<string, string> = {
+  // US States
   'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
   'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
   'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
@@ -28,14 +29,19 @@ const US_STATES: Record<string, string> = {
   'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
   'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
   'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
-  'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
+  'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming',
+  // Canadian Provinces and Territories
+  'AB': 'Alberta', 'BC': 'British Columbia', 'MB': 'Manitoba', 'NB': 'New Brunswick',
+  'NL': 'Newfoundland and Labrador', 'NS': 'Nova Scotia', 'NT': 'Northwest Territories',
+  'NU': 'Nunavut', 'ON': 'Ontario', 'PE': 'Prince Edward Island', 'QC': 'Quebec',
+  'SK': 'Saskatchewan', 'YT': 'Yukon'
 };
 
-// Helper function to get full state name from abbreviation
+// Helper function to get full state/province name from abbreviation
 const getStateName = (state: string): string => {
   if (!state) return '';
   const upperState = state.toUpperCase().trim();
-  return US_STATES[upperState] || state;
+  return REGIONS[upperState] || state;
 };
 
 interface GoogleSheet {
