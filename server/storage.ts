@@ -192,7 +192,7 @@ export class DatabaseStorage implements IStorage {
         selectedStates: preferences.selectedStates ?? existing.selectedStates,
         updatedAt: new Date(),
       };
-      
+
       const [updated] = await db
         .update(userPreferences)
         .set(merged)
