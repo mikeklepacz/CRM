@@ -72,6 +72,7 @@ The Sales Dashboard automatically loads both sheets:
 - Hide/show any column using the Columns button
 - Reorder columns with left/right arrows (UX only, doesn't affect Google Sheets)
 - Resize columns by dragging the right edge of column headers (min 100px)
+- Sort columns by clicking headers (toggles ascending/descending)
 - Editable columns marked with ✏️
 
 **Editing Features:**

@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, ExternalLink } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -32,6 +32,8 @@ export default function SalesDashboard() {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [editedCells, setEditedCells] = useState<Record<string, { rowIndex: number; column: string; value: string; sheetId: string }>>({});
   const [expandedCell, setExpandedCell] = useState<{ row: any; column: string; value: string; isEditable: boolean } | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Fetch available sheets and auto-detect by purpose
   const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
@@ -148,6 +150,17 @@ export default function SalesDashboard() {
     }
   };
 
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
   const handleCellEdit = (row: any, column: string, value: string) => {
     // Determine which sheet this column belongs to
     const isTrackerColumn = trackerHeaders.includes(column);
@@ -189,13 +202,39 @@ export default function SalesDashboard() {
     }
   };
 
-  const filteredData = data.filter((row: any) => {
-    const searchLower = searchTerm.toLowerCase();
-    return headers.some((header: string) => {
-      const value = row[header]?.toString().toLowerCase() || '';
-      return value.includes(searchLower);
+  // Filter and sort data
+  const filteredData = (() => {
+    // First filter
+    let filtered = data.filter((row: any) => {
+      const searchLower = searchTerm.toLowerCase();
+      return headers.some((header: string) => {
+        const value = row[header]?.toString().toLowerCase() || '';
+        return value.includes(searchLower);
+      });
     });
-  });
+
+    // Then sort
+    if (sortColumn) {
+      filtered = [...filtered].sort((a: any, b: any) => {
+        const aVal = String(a[sortColumn] || '');
+        const bVal = String(b[sortColumn] || '');
+        
+        // Try numeric comparison first
+        const aNum = parseFloat(aVal);
+        const bNum = parseFloat(bVal);
+        
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+        
+        // Fall back to string comparison
+        const comparison = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    return filtered;
+  })();
 
   const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
   const hasUnsavedChanges = Object.keys(editedCells).length > 0;
@@ -354,17 +393,33 @@ export default function SalesDashboard() {
                           className="whitespace-nowrap relative group"
                           style={{ width: columnWidths[header] || 200 }}
                         >
-                          <div className="flex items-center justify-between">
-                            <span>
-                              {header}
-                              {editableColumns.includes(header) && (
-                                <span className="ml-1 text-xs text-muted-foreground">✏️</span>
+                          <div className="flex items-center justify-between pr-2">
+                            <button
+                              onClick={() => handleSort(header)}
+                              className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer"
+                              data-testid={`button-sort-${header}`}
+                            >
+                              <span>
+                                {header}
+                                {editableColumns.includes(header) && (
+                                  <span className="ml-1 text-xs text-muted-foreground">✏️</span>
+                                )}
+                              </span>
+                              {sortColumn === header ? (
+                                sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="h-4 w-4 opacity-30" />
                               )}
-                            </span>
+                            </button>
                             <div
                               className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
                               onMouseDown={(e) => {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 const startX = e.clientX;
                                 const startWidth = columnWidths[header] || 200;
 
