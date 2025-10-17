@@ -71,7 +71,15 @@ The Sales Dashboard automatically loads both sheets:
 - All columns shown by default
 - Hide/show any column using the Columns button
 - Reorder columns with left/right arrows (UX only, doesn't affect Google Sheets)
+- Resize columns by dragging the right edge of column headers (min 100px)
 - Editable columns marked with ✏️
+
+**Editing Features:**
+- **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices
+- **Existing Data**: Click the edit icon (⛶) to open popup editor (prevents accidental data loss)
+- **Empty Cells**: Inline editing for new data entry
+- **Long Text (>100 chars)**: Auto-truncated with expand icon for full view/edit in popup
+- **Double-Click Protection**: All existing data edited via popup modal with Save button
 
 ### 5. Sync WooCommerce Orders
 To synchronize orders and calculate commissions:

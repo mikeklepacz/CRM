@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -388,6 +388,8 @@ export default function SalesDashboard() {
 
                             const isLongText = cellValue.length > 100;
                             const displayValue = isLongText ? cellValue.substring(0, 100) + '...' : cellValue;
+                            const isPhoneColumn = header.toLowerCase().includes('phone');
+                            const hasData = cellValue.length > 0;
 
                             return (
                               <TableCell 
@@ -396,36 +398,69 @@ export default function SalesDashboard() {
                                 style={{ width: columnWidths[header] || 200 }}
                               >
                                 {isEditable ? (
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      value={isLongText ? displayValue : cellValue}
-                                      onChange={(e) => handleCellEdit(row, header, e.target.value)}
-                                      className="w-full"
-                                      data-testid={`input-cell-${rowKey}-${header}`}
-                                      readOnly={isLongText}
-                                    />
-                                    {isLongText && (
+                                  hasData ? (
+                                    // Has data: Show value with edit on double-click
+                                    <div className="flex items-center gap-2">
+                                      {isPhoneColumn ? (
+                                        <a 
+                                          href={`tel:${cellValue}`}
+                                          className="flex items-center gap-1 text-primary hover:underline"
+                                          data-testid={`link-phone-${rowKey}-${header}`}
+                                        >
+                                          <Phone className="h-4 w-4" />
+                                          <span>{displayValue}</span>
+                                        </a>
+                                      ) : (
+                                        <span 
+                                          className="cursor-pointer hover:text-primary"
+                                          data-testid={`text-cell-${rowKey}-${header}`}
+                                        >
+                                          {displayValue}
+                                        </span>
+                                      )}
                                       <Button
                                         variant="ghost"
                                         size="icon"
                                         className="h-8 w-8 flex-shrink-0"
+                                        onDoubleClick={() => openExpandedView(row, header, cellValue, true)}
                                         onClick={() => openExpandedView(row, header, cellValue, true)}
-                                        data-testid={`button-expand-${rowKey}-${header}`}
+                                        data-testid={`button-edit-${rowKey}-${header}`}
+                                        title="Click to edit"
                                       >
                                         <Maximize2 className="h-4 w-4" />
                                       </Button>
-                                    )}
-                                  </div>
+                                    </div>
+                                  ) : (
+                                    // Empty cell: Allow inline editing for new data
+                                    <Input
+                                      value={cellValue}
+                                      onChange={(e) => handleCellEdit(row, header, e.target.value)}
+                                      placeholder="Enter value..."
+                                      className="w-full"
+                                      data-testid={`input-cell-${rowKey}-${header}`}
+                                    />
+                                  )
                                 ) : (
                                   <div className="flex items-center gap-2">
-                                    <span 
-                                      data-testid={`text-cell-${rowKey}-${header}`}
-                                      className={isLongText ? "cursor-pointer hover:text-primary" : ""}
-                                      onClick={() => isLongText && openExpandedView(row, header, cellValue, false)}
-                                    >
-                                      {displayValue}
-                                    </span>
-                                    {isLongText && (
+                                    {isPhoneColumn && cellValue ? (
+                                      <a 
+                                        href={`tel:${cellValue}`}
+                                        className="flex items-center gap-1 text-primary hover:underline"
+                                        data-testid={`link-phone-${rowKey}-${header}`}
+                                      >
+                                        <Phone className="h-4 w-4" />
+                                        <span>{displayValue}</span>
+                                      </a>
+                                    ) : (
+                                      <span 
+                                        data-testid={`text-cell-${rowKey}-${header}`}
+                                        className={isLongText ? "cursor-pointer hover:text-primary" : ""}
+                                        onClick={() => isLongText && openExpandedView(row, header, cellValue, false)}
+                                      >
+                                        {displayValue}
+                                      </span>
+                                    )}
+                                    {isLongText && !isPhoneColumn && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
@@ -477,12 +512,21 @@ export default function SalesDashboard() {
           </DialogHeader>
           <ScrollArea className="max-h-[50vh] mt-4">
             {expandedCell?.isEditable ? (
-              <Textarea
-                value={expandedCell.value}
-                onChange={(e) => setExpandedCell({ ...expandedCell, value: e.target.value })}
-                className="min-h-[300px] font-mono text-sm"
-                data-testid="textarea-expanded"
-              />
+              expandedCell.value.length > 100 ? (
+                <Textarea
+                  value={expandedCell.value}
+                  onChange={(e) => setExpandedCell({ ...expandedCell, value: e.target.value })}
+                  className="min-h-[300px] font-mono text-sm"
+                  data-testid="textarea-expanded"
+                />
+              ) : (
+                <Input
+                  value={expandedCell.value}
+                  onChange={(e) => setExpandedCell({ ...expandedCell, value: e.target.value })}
+                  className="text-base"
+                  data-testid="input-expanded"
+                />
+              )
             ) : (
               <div className="p-4 bg-muted/50 rounded-md whitespace-pre-wrap font-mono text-sm" data-testid="text-expanded">
                 {expandedCell?.value}
