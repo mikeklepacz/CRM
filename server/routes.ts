@@ -42,7 +42,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session creation error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
-        res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
+        
+        // Explicitly save session before responding
+        req.session.save((saveErr: any) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ message: "Session save failed" });
+          }
+          console.log("Session saved successfully for user:", user.id);
+          res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
+        });
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -81,8 +90,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Custom authentication middleware that supports both Replit Auth and username/password
   const isAuthenticatedCustom = async (req: any, res: any, next: any) => {
+    console.log("Auth check - isAuthenticated:", req.isAuthenticated());
+    console.log("Auth check - session:", req.session);
+    console.log("Auth check - user:", req.user);
+    
     // Check if user is authenticated at all
     if (!req.isAuthenticated()) {
+      console.log("Auth failed: not authenticated");
       return res.status(401).json({ message: "Unauthorized" });
     }
 
@@ -90,6 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Check if using password auth - it's valid as long as session exists
     if (user && user.isPasswordAuth) {
+      console.log("Auth success: password auth user");
       return next();
     }
     
