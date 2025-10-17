@@ -119,7 +119,9 @@ export const userIntegrations = pgTable("user_integrations", {
   wooUrl: varchar("woo_url"),
   wooConsumerKey: varchar("woo_consumer_key"),
   wooConsumerSecret: varchar("woo_consumer_secret"),
-  // Google OAuth credentials (encrypted)
+  // Google OAuth credentials
+  googleClientId: varchar("google_client_id"),
+  googleClientSecret: varchar("google_client_secret"),
   googleAccessToken: text("google_access_token"),
   googleRefreshToken: text("google_refresh_token"),
   googleTokenExpiry: timestamp("google_token_expiry"),

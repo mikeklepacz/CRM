@@ -44,16 +44,20 @@ const wooCommerceSchema = z.object({
   consumerSecret: z.string().min(1, "Consumer secret is required"),
 });
 
-type GoogleSheetsAuth = {
-  connected: boolean;
-  email?: string;
-  connectedAt?: string;
-};
+const googleOAuthSchema = z.object({
+  clientId: z.string().min(1, "Client ID is required"),
+  clientSecret: z.string().min(1, "Client Secret is required"),
+});
 
 type WooCommerceSettings = {
   url: string;
   consumerKey: string;
   consumerSecret: string;
+};
+
+type GoogleOAuthSettings = {
+  clientId: string;
+  clientSecret: string;
 };
 
 export default function Settings() {
@@ -62,14 +66,14 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
 
-  // Fetch Google Sheets auth status
-  const { data: googleAuth } = useQuery<GoogleSheetsAuth>({
-    queryKey: ["/api/google/auth-status"],
-  });
-
   // Fetch WooCommerce settings
   const { data: wooSettings } = useQuery<WooCommerceSettings>({
     queryKey: ["/api/woocommerce/settings"],
+  });
+
+  // Fetch Google OAuth settings
+  const { data: googleSettings } = useQuery<GoogleOAuthSettings>({
+    queryKey: ["/api/google/settings"],
   });
 
   const profileForm = useForm({
@@ -101,6 +105,18 @@ export default function Settings() {
       url: wooSettings.url || "",
       consumerKey: wooSettings.consumerKey || "",
       consumerSecret: wooSettings.consumerSecret || "",
+    } : undefined,
+  });
+
+  const googleForm = useForm({
+    resolver: zodResolver(googleOAuthSchema),
+    defaultValues: {
+      clientId: "",
+      clientSecret: "",
+    },
+    values: googleSettings ? {
+      clientId: googleSettings.clientId || "",
+      clientSecret: googleSettings.clientSecret || "",
     } : undefined,
   });
 
@@ -170,34 +186,15 @@ export default function Settings() {
     },
   });
 
-  const connectGoogleMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("GET", "/api/google/auth-url");
-      return res.json();
-    },
-    onSuccess: (data: { url: string }) => {
-      window.open(data.url, "_blank", "width=600,height=700");
-      queryClient.invalidateQueries({ queryKey: ["/api/google/auth-status"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const disconnectGoogleMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/google/disconnect", {});
+  const updateGoogleMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof googleOAuthSchema>) => {
+      const res = await apiRequest("PUT", "/api/google/settings", data);
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/google/auth-status"] });
       toast({
         title: "Success",
-        description: "Google Sheets disconnected",
+        description: "Google OAuth settings updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -480,26 +477,81 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle>Google Sheets Integration</CardTitle>
                   <CardDescription>
-                    Google Sheets authentication is managed by Replit
+                    Configure your Google OAuth credentials and connect to Google Sheets
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-muted rounded-lg p-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <FileSpreadsheet className="h-5 w-5 text-primary mt-0.5" />
-                      <div className="space-y-2 flex-1">
-                        <p className="text-sm font-medium">How to Connect Google Sheets</p>
-                        <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                          <li>Open the <strong>Tools</strong> panel in Replit (left sidebar)</li>
-                          <li>Find and click on <strong>Google Sheets</strong> integration</li>
-                          <li>Click <strong>Connect</strong> and authorize with your Google account</li>
-                          <li>Once connected, you can use Google Sheets sync in the Admin Dashboard</li>
-                        </ol>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    The Google Sheets integration is already installed in this project. Authentication is handled automatically by Replit's secure connection system.
+                <CardContent className="space-y-6">
+                  <Form {...googleForm}>
+                    <form onSubmit={googleForm.handleSubmit((data) => updateGoogleMutation.mutate(data))} className="space-y-4">
+                      <FormField
+                        control={googleForm.control}
+                        name="clientId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Client ID</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Your Google OAuth Client ID"
+                                {...field}
+                                data-testid="input-google-client-id"
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Get this from Google Cloud Console → APIs & Services → Credentials
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={googleForm.control}
+                        name="clientSecret"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Client Secret</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="password"
+                                placeholder="Your Google OAuth Client Secret"
+                                {...field}
+                                data-testid="input-google-client-secret"
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Your Google OAuth 2.0 client secret
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="submit"
+                        disabled={updateGoogleMutation.isPending}
+                        data-testid="button-save-google"
+                      >
+                        {updateGoogleMutation.isPending ? "Saving..." : "Save Credentials"}
+                      </Button>
+                    </form>
+                  </Form>
+
+                  <div className="border-t pt-6">
+                    <h3 className="text-sm font-medium mb-3">Connection Status</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      After saving your credentials above, click Connect to authorize Google Sheets access
+                    </p>
+                    {googleSettings?.clientId ? (
+                      <Button
+                        variant="default"
+                        data-testid="button-connect-google-oauth"
+                      >
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                        Connect Google Sheets
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Please save your Client ID and Secret first
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>

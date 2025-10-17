@@ -197,6 +197,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     consumerSecret: z.string().min(1, "Consumer secret is required"),
   });
 
+  const googleOAuthSchema = z.object({
+    clientId: z.string().min(1, "Client ID is required"),
+    clientSecret: z.string().min(1, "Client Secret is required"),
+  });
+
   // User settings endpoints
   app.put('/api/user/profile', isAuthenticatedCustom, async (req: any, res) => {
     try {
@@ -284,48 +289,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/google/auth-status', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.get('/api/google/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const integration = await storage.getUserIntegration(userId);
       
       res.json({
-        connected: !!integration?.googleAccessToken,
-        email: integration?.googleEmail || undefined,
-        connectedAt: integration?.googleConnectedAt || undefined
+        clientId: integration?.googleClientId || "",
+        clientSecret: integration?.googleClientSecret || ""
       });
     } catch (error: any) {
-      console.error("Error fetching Google auth status:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch auth status" });
+      console.error("Error fetching Google OAuth settings:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch settings" });
     }
   });
 
-  app.get('/api/google/auth-url', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.put('/api/google/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      // Placeholder - will implement full OAuth later
-      res.json({ url: "https://accounts.google.com/o/oauth2/v2/auth?...placeholder..." });
-    } catch (error: any) {
-      console.error("Error generating auth URL:", error);
-      res.status(500).json({ message: error.message || "Failed to generate auth URL" });
-    }
-  });
+      const validation = googleOAuthSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
 
-  app.post('/api/google/disconnect', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { clientId, clientSecret } = validation.data;
       
       await storage.updateUserIntegration(userId, {
-        googleAccessToken: null,
-        googleRefreshToken: null,
-        googleTokenExpiry: null,
-        googleEmail: null,
-        googleConnectedAt: null
+        googleClientId: clientId,
+        googleClientSecret: clientSecret
       });
       
-      res.json({ message: "Google Sheets disconnected successfully" });
+      res.json({ message: "Google OAuth settings updated successfully" });
     } catch (error: any) {
-      console.error("Error disconnecting Google:", error);
-      res.status(500).json({ message: error.message || "Failed to disconnect" });
+      console.error("Error updating Google OAuth settings:", error);
+      res.status(500).json({ message: error.message || "Failed to update settings" });
     }
   });
 
