@@ -404,6 +404,8 @@ export default function SalesDashboard() {
                             const displayValue = isLongText ? cellValue.substring(0, 100) + '...' : cellValue;
                             const isPhoneColumn = header.toLowerCase().includes('phone');
                             const isWebsiteColumn = header.toLowerCase().includes('website') || header.toLowerCase().includes('url') || header.toLowerCase().includes('site');
+                            const isLinkColumn = header.toLowerCase() === 'link';
+                            const isLeaflyLink = cellValue.toLowerCase().includes('leafly');
                             const hasData = cellValue.length > 0;
 
                             return (
@@ -436,6 +438,17 @@ export default function SalesDashboard() {
                                           <ExternalLink className="h-4 w-4" />
                                           <span>{extractDomain(cellValue)}</span>
                                         </a>
+                                      ) : isLinkColumn ? (
+                                        <a 
+                                          href={cellValue}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-2xl hover:scale-110 transition-transform"
+                                          data-testid={`link-leafly-${rowKey}-${header}`}
+                                          title={cellValue}
+                                        >
+                                          {isLeaflyLink ? '🍁' : '🔗'}
+                                        </a>
                                       ) : (
                                         <span 
                                           className="cursor-pointer hover:text-primary"
@@ -444,17 +457,19 @@ export default function SalesDashboard() {
                                           {displayValue}
                                         </span>
                                       )}
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 flex-shrink-0"
-                                        onDoubleClick={() => openExpandedView(row, header, cellValue, true)}
-                                        onClick={() => openExpandedView(row, header, cellValue, true)}
-                                        data-testid={`button-edit-${rowKey}-${header}`}
-                                        title="Click to edit"
-                                      >
-                                        <Maximize2 className="h-4 w-4" />
-                                      </Button>
+                                      {!isLinkColumn && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 flex-shrink-0"
+                                          onDoubleClick={() => openExpandedView(row, header, cellValue, true)}
+                                          onClick={() => openExpandedView(row, header, cellValue, true)}
+                                          data-testid={`button-edit-${rowKey}-${header}`}
+                                          title="Click to edit"
+                                        >
+                                          <Maximize2 className="h-4 w-4" />
+                                        </Button>
+                                      )}
                                     </div>
                                   ) : (
                                     // Empty cell: Allow inline editing for new data
@@ -488,6 +503,17 @@ export default function SalesDashboard() {
                                         <ExternalLink className="h-4 w-4" />
                                         <span>{extractDomain(cellValue)}</span>
                                       </a>
+                                    ) : isLinkColumn && cellValue ? (
+                                      <a 
+                                        href={cellValue}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-2xl hover:scale-110 transition-transform"
+                                        data-testid={`link-leafly-${rowKey}-${header}`}
+                                        title={cellValue}
+                                      >
+                                        {isLeaflyLink ? '🍁' : '🔗'}
+                                      </a>
                                     ) : (
                                       <span 
                                         data-testid={`text-cell-${rowKey}-${header}`}
@@ -497,7 +523,7 @@ export default function SalesDashboard() {
                                         {displayValue}
                                       </span>
                                     )}
-                                    {isLongText && !isPhoneColumn && !isWebsiteColumn && (
+                                    {isLongText && !isPhoneColumn && !isWebsiteColumn && !isLinkColumn && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
