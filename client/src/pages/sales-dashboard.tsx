@@ -138,7 +138,7 @@ export default function SalesDashboard() {
         if (userPreferences.visibleColumns) {
           // Merge saved preferences with new headers (in case new columns were added)
           headers.forEach((header: string) => {
-            initialVisible[header] = userPreferences.visibleColumns[header] ?? !hiddenColumns.includes(header.toLowerCase());
+            initialVisible[header] = userPreferences.visibleColumns![header] ?? !hiddenColumns.includes(header.toLowerCase());
           });
         } else {
           headers.forEach((header: string) => {
@@ -157,7 +157,7 @@ export default function SalesDashboard() {
         
         if (userPreferences.columnWidths) {
           headers.forEach((header: string) => {
-            initialWidths[header] = userPreferences.columnWidths[header] || 200;
+            initialWidths[header] = userPreferences.columnWidths![header] || 200;
           });
         } else {
           headers.forEach((header: string) => {
