@@ -242,8 +242,9 @@ export default function SalesDashboard() {
     }
   };
 
-  const cleanTagDisplay = (value: string, filterBySelected: boolean = false): string => {
+  const cleanTagDisplay = (value: string, filterBySelected: boolean = false, selectedSet?: Set<string>): string => {
     if (!value) return '';
+    const setToUse = selectedSet || selectedTags;
     // Split by comma, clean each tag, filter out empty ones, and rejoin
     return String(value)
       .split(',')
@@ -258,7 +259,7 @@ export default function SalesDashboard() {
         if (!tag || tag === '""' || tag === "''") return false;
         // If filtering by selected tags, only show selected ones
         if (filterBySelected) {
-          return selectedTags.has(tag);
+          return setToUse.has(tag);
         }
         return true;
       })
@@ -1098,7 +1099,8 @@ export default function SalesDashboard() {
                             const isLinkColumn = header.toLowerCase() === 'link';
                             const isStateColumn = header.toLowerCase() === 'state';
                             const isStatusColumn = header.toLowerCase().includes('status');
-                            const isTagColumn = header.toLowerCase().includes('tag') || header.toLowerCase().includes('keyword') || header.toLowerCase().includes('phrase');
+                            const isKeywordColumn = header.toLowerCase().includes('keyword') || header.toLowerCase().includes('phrase');
+                            const isTagColumn = header.toLowerCase().includes('tag');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
 
@@ -1113,8 +1115,10 @@ export default function SalesDashboard() {
 
                             // Clean display based on column type
                             let cleanedValue = cellValue;
-                            if (isTagColumn) {
-                              cleanedValue = cleanTagDisplay(cellValue, true);
+                            if (isKeywordColumn) {
+                              cleanedValue = cleanTagDisplay(cellValue, true, selectedKeywords);
+                            } else if (isTagColumn) {
+                              cleanedValue = cleanTagDisplay(cellValue, true, selectedTags);
                             } else if (isHoursColumn) {
                               cleanedValue = formatHours(cellValue);
                             }
