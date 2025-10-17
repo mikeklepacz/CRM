@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Textarea } from "@/components/ui/textarea";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
@@ -1095,6 +1095,7 @@ export default function SalesDashboard() {
                             const cellValue = editedCells[cellKey]?.value ?? row[header] ?? '';
 
                             const isPhoneColumn = header.toLowerCase().includes('phone');
+                            const isEmailColumn = header.toLowerCase().includes('email') || header.toLowerCase().includes('e-mail');
                             const isWebsiteColumn = header.toLowerCase().includes('website') || header.toLowerCase().includes('url') || header.toLowerCase().includes('site');
                             const isLinkColumn = header.toLowerCase() === 'link';
                             const isStateColumn = header.toLowerCase() === 'state';
@@ -1257,6 +1258,15 @@ export default function SalesDashboard() {
                                             data-testid={`link-phone-${rowKey}-${header}`}
                                           >
                                             <Phone className="h-4 w-4" />
+                                            <span>{displayValue}</span>
+                                          </a>
+                                        ) : isEmailColumn ? (
+                                          <a 
+                                            href={`mailto:${cellValue}`}
+                                            className="flex items-center gap-1 text-primary hover:underline"
+                                            data-testid={`link-email-${rowKey}-${header}`}
+                                          >
+                                            <Mail className="h-4 w-4" />
                                             <span>{displayValue}</span>
                                           </a>
                                         ) : isWebsiteColumn ? (
