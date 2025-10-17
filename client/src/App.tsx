@@ -38,11 +38,13 @@ function Router() {
     <>
       <Header />
       <Switch>
-        {user?.role === 'admin' ? (
-          <Route path="/" component={AdminDashboard} />
-        ) : (
-          <Route path="/" component={AgentDashboard} />
-        )}
+        <Route path="/admin">
+          {user?.role === 'admin' ? <AdminDashboard /> : <NotFound />}
+        </Route>
+        <Route path="/agent" component={AgentDashboard} />
+        <Route path="/">
+          {user?.role === 'admin' ? <AdminDashboard /> : <AgentDashboard />}
+        </Route>
         <Route component={NotFound} />
       </Switch>
     </>
