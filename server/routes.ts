@@ -401,11 +401,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const userinfo = await userinfoResponse.json();
 
-      // Store tokens
+      // Store tokens - convert expiry to Unix timestamp (milliseconds)
+      const expiryTimestamp = Date.now() + (tokens.expires_in * 1000);
       await storage.updateUserIntegration(userId, {
         googleAccessToken: tokens.access_token,
         googleRefreshToken: tokens.refresh_token,
-        googleTokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+        googleTokenExpiry: expiryTimestamp,
         googleEmail: userinfo.email,
         googleConnectedAt: new Date()
       });

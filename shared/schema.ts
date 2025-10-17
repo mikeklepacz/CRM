@@ -10,6 +10,7 @@ import {
   decimal,
   boolean,
   integer,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -124,7 +125,7 @@ export const userIntegrations = pgTable("user_integrations", {
   googleClientSecret: varchar("google_client_secret"),
   googleAccessToken: text("google_access_token"),
   googleRefreshToken: text("google_refresh_token"),
-  googleTokenExpiry: timestamp("google_token_expiry"),
+  googleTokenExpiry: bigint("google_token_expiry", { mode: "number" }),
   googleEmail: varchar("google_email"),
   googleConnectedAt: timestamp("google_connected_at"),
   createdAt: timestamp("created_at").defaultNow(),
