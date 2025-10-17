@@ -31,6 +31,7 @@ const REGIONS: Record<string, string> = {
   'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
   'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming',
   // Canadian Provinces and Territories
+  'AA': 'Alberta', // Alias for Alberta
   'AB': 'Alberta', 'BC': 'British Columbia', 'MB': 'Manitoba', 'NB': 'New Brunswick',
   'NL': 'Newfoundland and Labrador', 'NS': 'Nova Scotia', 'NT': 'Northwest Territories',
   'NU': 'Nunavut', 'ON': 'Ontario', 'PE': 'Prince Edward Island', 'QC': 'Quebec',
@@ -418,9 +419,12 @@ export default function SalesDashboard() {
             }
           }
           
-          const stateName = getStateName(stateAbbrev);
-          if (stateName) {
-            states.add(stateName);
+          // Only accept 2-letter state codes
+          if (stateAbbrev.length === 2) {
+            const stateName = getStateName(stateAbbrev);
+            if (stateName) {
+              states.add(stateName);
+            }
           }
         }
       });
