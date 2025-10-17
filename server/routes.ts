@@ -1,10 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import axios from "axios";
 import bcrypt from "bcrypt";
+import * as client from "openid-client";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -29,12 +30,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Create session
-      (req as any).login({ userId: user.id, isPasswordAuth: true }, (err: any) => {
+      // Create session using passport's login
+      req.login({ userId: user.id, isPasswordAuth: true }, (err: any) => {
         if (err) {
+          console.error("Session creation error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
-        res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
+        // Explicitly save the session
+        (req.session as any).save((saveErr: any) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ message: "Login failed" });
+          }
+          res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
+        });
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -73,12 +82,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Custom authentication middleware that supports both Replit Auth and username/password
   const isAuthenticatedCustom = async (req: any, res: any, next: any) => {
+    // Check if user is authenticated at all
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     // Check if using password auth
     if (req.user && req.user.isPasswordAuth) {
       return next();
     }
-    // Fall back to Replit Auth
-    return isAuthenticated(req, res, next);
+    
+    // Using Replit Auth - check token expiry
+    const user = req.user as any;
+    if (!user.expires_at) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    if (now <= user.expires_at) {
+      return next();
+    }
+
+    // Try to refresh Replit Auth token
+    const refreshToken = user.refresh_token;
+    if (!refreshToken) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const config = await getOidcConfig();
+      const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
+      
+      user.claims = tokenResponse.claims();
+      user.access_token = tokenResponse.access_token;
+      user.refresh_token = tokenResponse.refresh_token;
+      user.expires_at = user.claims?.exp;
+      
+      return next();
+    } catch (error) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
   };
 
   // Auth routes
