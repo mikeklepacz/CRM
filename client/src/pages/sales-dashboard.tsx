@@ -555,9 +555,9 @@ export default function SalesDashboard() {
               <p className="mt-2 text-muted-foreground">Loading data...</p>
             </div>
           ) : storeSheetId && trackerSheetId && data.length > 0 ? (
-            <div className="border rounded-md">
-              <ScrollArea className="h-[600px]">
-                <Table>
+            <div className="border rounded-md overflow-auto">
+              <div className="h-[600px] w-full overflow-auto">
+                <Table className="min-w-full">
                   <TableHeader>
                     <TableRow>
                       {visibleHeaders.map((header: string) => (
@@ -854,7 +854,7 @@ export default function SalesDashboard() {
                     })}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
             </div>
           ) : storeSheetId && trackerSheetId ? (
             <div className="text-center py-8 text-muted-foreground">
