@@ -189,6 +189,38 @@ export function GoogleSheetsSync() {
     },
   });
 
+  const createCommissionTrackerMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/sheets/create-commission-tracker", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Commission Tracker Created!",
+        description: (
+          <div className="space-y-2">
+            <p>{data.message}</p>
+            <a 
+              href={data.spreadsheetUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary underline block"
+            >
+              Open Sheet →
+            </a>
+          </div>
+        ),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleConnect = () => {
     const sheet = sheets.find(s => s.id === selectedSpreadsheet);
     if (!sheet || !selectedSheetName || !uniqueIdColumn) {
@@ -293,6 +325,23 @@ export function GoogleSheetsSync() {
                 <strong>Import:</strong> Bring data from Google Sheets → CRM<br />
                 <strong>Export:</strong> Push CRM data → Google Sheets<br />
                 <strong>Bidirectional:</strong> Sync both ways (recommended)
+              </p>
+            </div>
+
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium mb-3">Commission Tracking</h4>
+              <Button
+                onClick={() => createCommissionTrackerMutation.mutate()}
+                disabled={createCommissionTrackerMutation.isPending}
+                variant="secondary"
+                data-testid="button-create-commission-tracker"
+                className="w-full"
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                {createCommissionTrackerMutation.isPending ? "Creating..." : "Create Commission Tracker Sheet"}
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2">
+                Creates a new Google Sheet with columns for tracking agent commissions, flat fees, and payment status
               </p>
             </div>
           </CardContent>

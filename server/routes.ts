@@ -1059,6 +1059,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create a new Commission Tracking Google Sheet
+  app.post('/api/sheets/create-commission-tracker', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // Check if user has Google connected
+      const integration = await storage.getUserIntegration(userId);
+      if (!integration?.googleAccessToken) {
+        return res.status(400).json({ message: "Google Sheets not connected. Please connect in Settings." });
+      }
+
+      // Define commission tracking sheet structure
+      const headers = [[
+        'Date',
+        'Agent Name',
+        'Order ID',
+        'Client Name',
+        'Commission Type',
+        'Amount',
+        'Status',
+        'Notes'
+      ]];
+
+      const title = `Hemp Wick CRM - Commission Tracker - ${new Date().toLocaleDateString()}`;
+      
+      const spreadsheet = await googleSheets.createSpreadsheet(userId, title, headers);
+      
+      res.json({
+        message: "Commission tracking sheet created successfully!",
+        spreadsheetId: spreadsheet.spreadsheetId,
+        spreadsheetUrl: spreadsheet.spreadsheetUrl,
+        title: spreadsheet.properties?.title,
+      });
+    } catch (error: any) {
+      console.error("Error creating commission sheet:", error);
+      res.status(500).json({ message: error.message || "Failed to create sheet" });
+    }
+  });
+
   // Bidirectional sync (import then export)
   app.post('/api/sheets/sync/bidirectional', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
