@@ -177,6 +177,58 @@ export default function SalesDashboard() {
       .join(', ');
   };
 
+  const formatHours = (value: string): string => {
+    if (!value) return '';
+    try {
+      // Try to parse as JSON
+      const hours = JSON.parse(value);
+      if (typeof hours !== 'object') return value;
+
+      const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      const dayAbbrev: Record<string, string> = {
+        monday: 'Mon',
+        tuesday: 'Tue',
+        wednesday: 'Wed',
+        thursday: 'Thu',
+        friday: 'Fri',
+        saturday: 'Sat',
+        sunday: 'Sun'
+      };
+
+      // Group consecutive days with same hours
+      const groups: { days: string[]; hours: string }[] = [];
+      let currentGroup: { days: string[]; hours: string } | null = null;
+
+      dayOrder.forEach((day) => {
+        const dayHours = hours[day] || hours[day.toLowerCase()];
+        if (!dayHours) return;
+
+        if (!currentGroup || currentGroup.hours !== dayHours) {
+          // Start new group
+          currentGroup = { days: [day], hours: dayHours };
+          groups.push(currentGroup);
+        } else {
+          // Add to current group
+          currentGroup.days.push(day);
+        }
+      });
+
+      // Format groups
+      return groups.map((group) => {
+        if (group.days.length === 1) {
+          return `${dayAbbrev[group.days[0]]}: ${group.hours}`;
+        } else {
+          const first = dayAbbrev[group.days[0]];
+          const last = dayAbbrev[group.days[group.days.length - 1]];
+          return `${first}-${last}: ${group.hours}`;
+        }
+      }).join(' • ');
+    } catch {
+      // Not valid JSON, return as-is
+      return value;
+    }
+  };
+
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       // Toggle direction if same column
@@ -649,9 +701,16 @@ export default function SalesDashboard() {
                             const isLinkColumn = header.toLowerCase() === 'link';
                             const isStateColumn = header.toLowerCase() === 'state';
                             const isTagColumn = header.toLowerCase().includes('tag');
+                            const isHoursColumn = header.toLowerCase().includes('hour');
                             
-                            // Clean tag display and filter by selected tags
-                            const cleanedValue = isTagColumn ? cleanTagDisplay(cellValue, true) : cellValue;
+                            // Clean display based on column type
+                            let cleanedValue = cellValue;
+                            if (isTagColumn) {
+                              cleanedValue = cleanTagDisplay(cellValue, true);
+                            } else if (isHoursColumn) {
+                              cleanedValue = formatHours(cellValue);
+                            }
+                            
                             const isLongText = cleanedValue.length > 100;
                             const displayValue = isLongText ? cleanedValue.substring(0, 100) + '...' : cleanedValue;
                             
