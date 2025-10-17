@@ -591,9 +591,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get WooCommerce credentials from database
       const integration = await storage.getUserIntegration(userId);
-      const wooUrl = integration?.woocommerceUrl;
-      const consumerKey = integration?.woocommerceConsumerKey;
-      const consumerSecret = integration?.woocommerceConsumerSecret;
+      const wooUrl = integration?.wooUrl;
+      const consumerKey = integration?.wooConsumerKey;
+      const consumerSecret = integration?.wooConsumerSecret;
 
       if (!wooUrl || !consumerKey || !consumerSecret) {
         return res.status(500).json({ message: "WooCommerce credentials not configured. Please configure in Settings." });
