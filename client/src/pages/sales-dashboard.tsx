@@ -1084,8 +1084,14 @@ export default function SalesDashboard() {
                   <TableBody>
                     {filteredData.map((row: any, rowIdx: number) => {
                       const rowKey = row._storeRowIndex || row._trackerRowIndex || rowIdx;
+                      const isDeletedRow = row._deletedFromStore;
                       return (
-                        <TableRow key={rowKey} data-testid={`row-data-${rowIdx}`}>
+                        <TableRow 
+                          key={rowKey} 
+                          data-testid={`row-data-${rowIdx}`}
+                          className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
+                          title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
+                        >
                           {visibleHeaders.map((header: string) => {
                             const isEditable = editableColumns.includes(header);
                             const isTrackerColumn = trackerHeaders.includes(header);

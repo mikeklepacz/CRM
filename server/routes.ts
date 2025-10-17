@@ -1089,17 +1089,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filteredTrackerData = trackerData.filter(row => row['Agent'] === userEmail);
       }
 
-      // Merge data by join column
-      const mergedData = storeData.map(storeRow => {
+      // Merge data by join column - include rows from BOTH sheets
+      const mergedDataMap = new Map();
+      
+      // First, add all store rows
+      storeData.forEach(storeRow => {
         const joinValue = storeRow[joinColumn];
         const trackerRow = filteredTrackerData.find(tr => tr[joinColumn] === joinValue) || {};
         
-        return {
+        mergedDataMap.set(joinValue, {
           ...storeRow,
           ...trackerRow,
           _hasTrackerData: Object.keys(trackerRow).length > 0,
-        };
+          _deletedFromStore: false,
+        });
       });
+      
+      // Then, add tracker rows that don't exist in store (deleted orders)
+      filteredTrackerData.forEach(trackerRow => {
+        const joinValue = trackerRow[joinColumn];
+        if (!mergedDataMap.has(joinValue)) {
+          // This row only exists in tracker - it was deleted from store
+          mergedDataMap.set(joinValue, {
+            ...trackerRow,
+            _hasTrackerData: true,
+            _deletedFromStore: true,
+          });
+        }
+      });
+      
+      const mergedData = Array.from(mergedDataMap.values());
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)
       const allHeaders = [...storeHeaders];
