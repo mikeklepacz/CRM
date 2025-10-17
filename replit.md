@@ -77,7 +77,7 @@ The Sales Dashboard automatically loads both sheets:
 
 **Filtering:**
 - **Search**: Search across all columns using the search box
-- **Tags Filter**: Click "Tags" button to filter by tags - all tags selected by default, uncheck to hide rows with those tags
+- **Tags Filter**: Click "Tags" button to filter by tags/keywords/phrases - all selected by default, uncheck to hide rows with those items. Works with any column containing "tag", "keyword", or "phrase" in the name.
 
 **Editing Features:**
 - **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices
@@ -86,7 +86,7 @@ The Sales Dashboard automatically loads both sheets:
 - **State Column**: Searchable dropdown showing only states in your current data - type to filter or scroll to select
 - **Status Column**: Dropdown with predefined statuses (1 – Contacted, 2 – Interested, 3 – Sample Sent, 4 – Follow-Up, 5 – Closed Won, 6 – Closed Lost)
 - **Date/Follow-up Columns**: Calendar date picker for easy date selection - saves in M/d/yyyy format
-- **Tags Column**: Auto-cleans quotes and brackets, filters by selected tags in Tags filter
+- **Tags/Keywords/Phrases Columns**: Auto-cleans quotes and brackets, comma-separated display, filters via Tags button. Any column with "tag", "keyword", or "phrase" in the name gets this treatment.
 - **Hours Column**: Smart formatting that compresses consecutive days (e.g., "Mon-Fri: 9am - 5pm")
 - **Existing Data**: Click the edit icon (⛶) to open popup editor (prevents accidental data loss)
 - **Empty Cells**: Inline editing for new data entry

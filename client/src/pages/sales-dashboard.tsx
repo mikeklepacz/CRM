@@ -260,7 +260,11 @@ export default function SalesDashboard() {
   // Get all unique tags from the data
   const allTags = (() => {
     const tags = new Set<string>();
-    const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
+    const tagColumns = headers.filter((h: string) => 
+      h.toLowerCase().includes('tag') || 
+      h.toLowerCase().includes('keyword') || 
+      h.toLowerCase().includes('phrase')
+    );
     data.forEach((row: any) => {
       tagColumns.forEach((col: string) => {
         const value = row[col];
@@ -387,7 +391,11 @@ export default function SalesDashboard() {
 
     // Then filter by tags
     if (selectedTags.size > 0 && selectedTags.size < allTags.length) {
-      const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
+      const tagColumns = headers.filter((h: string) => 
+        h.toLowerCase().includes('tag') || 
+        h.toLowerCase().includes('keyword') || 
+        h.toLowerCase().includes('phrase')
+      );
       filtered = filtered.filter((row: any) => {
         // Check if row has at least one selected tag
         return tagColumns.some((col: string) => {
@@ -680,7 +688,7 @@ export default function SalesDashboard() {
                             const isLinkColumn = header.toLowerCase() === 'link';
                             const isStateColumn = header.toLowerCase() === 'state';
                             const isStatusColumn = header.toLowerCase().includes('status');
-                            const isTagColumn = header.toLowerCase().includes('tag');
+                            const isTagColumn = header.toLowerCase().includes('tag') || header.toLowerCase().includes('keyword') || header.toLowerCase().includes('phrase');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
                             
