@@ -480,52 +480,27 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle>Google Sheets Integration</CardTitle>
                   <CardDescription>
-                    Connect your Google account to sync with Google Sheets
+                    Google Sheets authentication is managed by Replit
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {googleAuth?.connected ? (
-                    <div className="space-y-4">
-                      <div className="bg-muted rounded-lg p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">Connected Account</p>
-                            <p className="text-sm text-muted-foreground">{googleAuth.email}</p>
-                            {googleAuth.connectedAt && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Connected {new Date(googleAuth.connectedAt).toLocaleDateString()}
-                              </p>
-                            )}
-                          </div>
-                          <Button
-                            variant="outline"
-                            onClick={() => disconnectGoogleMutation.mutate()}
-                            disabled={disconnectGoogleMutation.isPending}
-                            data-testid="button-disconnect-google"
-                          >
-                            {disconnectGoogleMutation.isPending ? "Disconnecting..." : "Disconnect"}
-                          </Button>
-                        </div>
+                  <div className="bg-muted rounded-lg p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <FileSpreadsheet className="h-5 w-5 text-primary mt-0.5" />
+                      <div className="space-y-2 flex-1">
+                        <p className="text-sm font-medium">How to Connect Google Sheets</p>
+                        <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                          <li>Open the <strong>Tools</strong> panel in Replit (left sidebar)</li>
+                          <li>Find and click on <strong>Google Sheets</strong> integration</li>
+                          <li>Click <strong>Connect</strong> and authorize with your Google account</li>
+                          <li>Once connected, you can use Google Sheets sync in the Admin Dashboard</li>
+                        </ol>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        You can now use Google Sheets sync in the Admin Dashboard
-                      </p>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Connect your Google account to enable Google Sheets synchronization for client data
-                      </p>
-                      <Button
-                        onClick={() => connectGoogleMutation.mutate()}
-                        disabled={connectGoogleMutation.isPending}
-                        data-testid="button-connect-google"
-                      >
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        {connectGoogleMutation.isPending ? "Connecting..." : "Connect Google Sheets"}
-                      </Button>
-                    </div>
-                  )}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    The Google Sheets integration is already installed in this project. Authentication is handled automatically by Replit's secure connection system.
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
