@@ -1,0 +1,71 @@
+Here’s a ready-to-copy explanation (you can paste this straight into your Replit prompt, or send it to a dev):
+
+⸻
+
+What the CRM needs to do (copy-paste this)
+
+My WooCommerce site (https://hempwick.eu) has a custom plugin that adds a field called _sales_agent to each order.
+When you fetch orders from the WooCommerce REST API, this value appears inside each order’s meta_data array.
+
+Your job is to pull orders, extract that field, and store it with the rest of the order data.
+
+The WooCommerce REST API endpoint is:
+
+https://hempwick.eu/wp-json/wc/v3/orders?consumer_key=ck_xxx&consumer_secret=cs_xxx
+
+Example order payload:
+
+{
+  "id": 713,
+  "status": "processing",
+  "total": "1500.00",
+  "billing": {
+    "first_name": "Johnny",
+    "last_name": "Choy"
+  },
+  "meta_data": [
+    {
+      "id": 6406,
+      "key": "_sales_agent",
+      "value": "Dante"
+    }
+  ]
+}
+
+In the CRM backend, loop through each order and look inside meta_data for an object with "key": "_sales_agent".
+Save that value (the agent name, e.g. "Dante") into a sales_agent field for that order.
+
+Example pseudocode:
+
+import fetch from "node-fetch";
+
+// WooCommerce credentials (store securely in Replit Secrets)
+const base = "https://hempwick.eu/wp-json/wc/v3/orders";
+const ck = process.env.WC_KEY;
+const cs = process.env.WC_SECRET;
+
+async function syncOrders() {
+  const url = `${base}?consumer_key=${ck}&consumer_secret=${cs}`;
+  const res = await fetch(url);
+  const orders = await res.json();
+
+  const cleaned = orders.map(order => {
+    const agentMeta = order.meta_data.find(m => m.key === "_sales_agent");
+    const salesAgent = agentMeta ? agentMeta.value : null;
+
+    return {
+      order_id: order.id,
+      customer: `${order.billing.first_name} ${order.billing.last_name}`,
+      total: order.total,
+      status: order.status,
+      sales_agent: salesAgent
+    };
+  });
+
+  console.log(cleaned);
+  // save `cleaned` to Google Sheets, database, etc.
+}
+
+syncOrders();
+
+That’s all the logic needed for Replit to read the agent data and make it available for dashboards, filters, or commission tracking later.

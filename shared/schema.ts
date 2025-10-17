@@ -107,6 +107,7 @@ export const orders = pgTable("orders", {
   orderNumber: varchar("order_number").notNull(),
   billingEmail: varchar("billing_email"),
   billingCompany: varchar("billing_company"),
+  salesAgentName: varchar("sales_agent_name"), // From WooCommerce custom field _sales_agent
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
   status: varchar("status", { length: 50 }).notNull(),
   orderDate: timestamp("order_date").notNull(),

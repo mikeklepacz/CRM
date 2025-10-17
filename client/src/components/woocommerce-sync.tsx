@@ -182,6 +182,7 @@ export function WooCommerceSync() {
                     <TableHead>Date</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Company</TableHead>
+                    <TableHead>Sales Agent</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead>Matched Client</TableHead>
@@ -194,6 +195,13 @@ export function WooCommerceSync() {
                       <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
                       <TableCell>{order.billingEmail || '-'}</TableCell>
                       <TableCell>{order.billingCompany || '-'}</TableCell>
+                      <TableCell>
+                        {order.salesAgentName ? (
+                          <Badge variant="outline">{order.salesAgentName}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={order.status === 'completed' ? 'default' : 'secondary'}>
                           {order.status}

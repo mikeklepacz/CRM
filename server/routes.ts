@@ -738,10 +738,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Try to find matching client by email or company
         const email = order.billing?.email;
         const company = order.billing?.company;
+        
+        // Extract sales agent from WooCommerce custom field _sales_agent
+        const salesAgentMeta = order.meta_data?.find((m: any) => m.key === '_sales_agent');
+        const salesAgentName = salesAgentMeta?.value || null;
 
         console.log(`Processing order ${order.id}:`, {
           email,
           company,
+          salesAgentName,
           total: order.total,
           status: order.status,
           date: order.date_created
@@ -770,6 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             orderNumber: order.number || order.id.toString(),
             billingEmail: email,
             billingCompany: company,
+            salesAgentName: salesAgentName,
             total: order.total,
             status: order.status,
             orderDate: new Date(order.date_created),
@@ -781,6 +787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             orderNumber: order.number || order.id.toString(),
             billingEmail: email,
             billingCompany: company,
+            salesAgentName: salesAgentName,
             total: order.total,
             status: order.status,
             orderDate: new Date(order.date_created),
