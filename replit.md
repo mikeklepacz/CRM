@@ -84,6 +84,10 @@ The Sales Dashboard automatically loads both sheets:
 - **Website URLs**: Auto-shortened to domain name (e.g., "lionheartcannabis.com") with external link icon, opens in new tab
 - **Link Column**: Shows 🍁 emoji for Leafly links, 🔗 for other links - clickable to open in new tab
 - **State Column**: Searchable dropdown showing only states in your current data - type to filter or scroll to select
+- **Status Column**: Dropdown with predefined statuses (1 – Contacted, 2 – Interested, 3 – Sample Sent, 4 – Follow-Up, 5 – Closed Won, 6 – Closed Lost)
+- **Date/Follow-up Columns**: Calendar date picker for easy date selection - saves in M/d/yyyy format
+- **Tags Column**: Auto-cleans quotes and brackets, filters by selected tags in Tags filter
+- **Hours Column**: Smart formatting that compresses consecutive days (e.g., "Mon-Fri: 9am - 5pm")
 - **Existing Data**: Click the edit icon (⛶) to open popup editor (prevents accidental data loss)
 - **Empty Cells**: Inline editing for new data entry
 - **Long Text (>100 chars)**: Auto-truncated with expand icon for full view/edit in popup

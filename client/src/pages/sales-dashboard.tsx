@@ -679,9 +679,19 @@ export default function SalesDashboard() {
                             const isWebsiteColumn = header.toLowerCase().includes('website') || header.toLowerCase().includes('url') || header.toLowerCase().includes('site');
                             const isLinkColumn = header.toLowerCase() === 'link';
                             const isStateColumn = header.toLowerCase() === 'state';
+                            const isStatusColumn = header.toLowerCase().includes('status');
                             const isTagColumn = header.toLowerCase().includes('tag');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
+                            
+                            const statusOptions = [
+                              '1 – Contacted',
+                              '2 – Interested',
+                              '3 – Sample Sent',
+                              '4 – Follow-Up',
+                              '5 – Closed Won',
+                              '6 – Closed Lost'
+                            ];
                             
                             // Clean display based on column type
                             let cleanedValue = cellValue;
@@ -732,6 +742,47 @@ export default function SalesDashboard() {
                                             }}
                                             initialFocus
                                           />
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : isStatusColumn ? (
+                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox === comboboxKey}
+                                            className="w-full justify-between"
+                                            data-testid={`button-status-${rowKey}-${header}`}
+                                          >
+                                            {cellValue || "Select status..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[200px] p-0">
+                                          <Command>
+                                            <CommandInput placeholder="Search status..." />
+                                            <CommandList>
+                                              <CommandEmpty>No status found.</CommandEmpty>
+                                              <CommandGroup>
+                                                {statusOptions.map((status) => (
+                                                  <CommandItem
+                                                    key={status}
+                                                    value={status}
+                                                    onSelect={() => {
+                                                      handleCellEdit(row, header, status);
+                                                      setOpenCombobox(null);
+                                                    }}
+                                                    data-testid={`option-status-${status}`}
+                                                  >
+                                                    <Check
+                                                      className={`mr-2 h-4 w-4 ${cellValue === status ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    {status}
+                                                  </CommandItem>
+                                                ))}
+                                              </CommandGroup>
+                                            </CommandList>
+                                          </Command>
                                         </PopoverContent>
                                       </Popover>
                                     ) : isStateColumn ? (
@@ -856,6 +907,47 @@ export default function SalesDashboard() {
                                             }}
                                             initialFocus
                                           />
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : isStatusColumn ? (
+                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox === comboboxKey}
+                                            className="w-full justify-between"
+                                            data-testid={`button-status-${rowKey}-${header}`}
+                                          >
+                                            {cellValue || "Select status..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[200px] p-0">
+                                          <Command>
+                                            <CommandInput placeholder="Search status..." />
+                                            <CommandList>
+                                              <CommandEmpty>No status found.</CommandEmpty>
+                                              <CommandGroup>
+                                                {statusOptions.map((status) => (
+                                                  <CommandItem
+                                                    key={status}
+                                                    value={status}
+                                                    onSelect={() => {
+                                                      handleCellEdit(row, header, status);
+                                                      setOpenCombobox(null);
+                                                    }}
+                                                    data-testid={`option-status-${status}`}
+                                                  >
+                                                    <Check
+                                                      className={`mr-2 h-4 w-4 ${cellValue === status ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    {status}
+                                                  </CommandItem>
+                                                ))}
+                                              </CommandGroup>
+                                            </CommandList>
+                                          </Command>
                                         </PopoverContent>
                                       </Popover>
                                     ) : isStateColumn ? (
