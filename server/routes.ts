@@ -4,15 +4,92 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import axios from "axios";
+import bcrypt from "bcrypt";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Username/Password Authentication Routes
+  app.post('/api/auth/login', async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const { username, password } = req.body;
+
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password required" });
+      }
+
+      const user = await storage.getUserByUsername(username);
+      if (!user || !user.passwordHash) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      const validPassword = await bcrypt.compare(password, user.passwordHash);
+      if (!validPassword) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Create session
+      (req as any).login({ userId: user.id, isPasswordAuth: true }, (err: any) => {
+        if (err) {
+          return res.status(500).json({ message: "Login failed" });
+        }
+        res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const { username, password, email } = req.body;
+
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password required" });
+      }
+
+      const existing = await storage.getUserByUsername(username);
+      if (existing) {
+        return res.status(409).json({ message: "Username already exists" });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await storage.createPasswordUser({
+        username,
+        passwordHash,
+        email: email || `${username}@example.com`,
+        firstName: username,
+        lastName: "",
+      });
+
+      res.json({ message: "Registration successful", user: { id: user.id, username: user.username } });
+    } catch (error) {
+      console.error("Registration error:", error);
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  // Custom authentication middleware that supports both Replit Auth and username/password
+  const isAuthenticatedCustom = async (req: any, res: any, next: any) => {
+    // Check if using password auth
+    if (req.user && req.user.isPasswordAuth) {
+      return next();
+    }
+    // Fall back to Replit Auth
+    return isAuthenticated(req, res, next);
+  };
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      let userId;
+      if (req.user.isPasswordAuth) {
+        userId = req.user.userId;
+      } else {
+        userId = req.user.claims.sub;
+      }
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -24,7 +101,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin middleware
   const isAdmin = async (req: any, res: any, next: any) => {
     try {
-      const userId = req.user.claims.sub;
+      let userId;
+      if (req.user.isPasswordAuth) {
+        userId = req.user.userId;
+      } else {
+        userId = req.user.claims.sub;
+      }
       const user = await storage.getUser(userId);
       if (!user || user.role !== 'admin') {
         return res.status(403).json({ message: "Admin access required" });
@@ -39,7 +121,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user middleware
   const getCurrentUser = async (req: any, res: any, next: any) => {
     try {
-      const userId = req.user.claims.sub;
+      let userId;
+      if (req.user.isPasswordAuth) {
+        userId = req.user.userId;
+      } else {
+        userId = req.user.claims.sub;
+      }
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -52,7 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // CSV Upload endpoint
-  app.post('/api/csv/upload', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post('/api/csv/upload', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { headers, rows, uniqueKey, filename } = req.body;
       const userId = req.user.claims.sub;
@@ -110,7 +197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all clients (admin only)
-  app.get('/api/clients', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/clients', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const clients = await storage.getAllClients();
       res.json(clients);
@@ -121,7 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get agent's clients
-  app.get('/api/clients/my', isAuthenticated, getCurrentUser, async (req: any, res) => {
+  app.get('/api/clients/my', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const clients = await storage.getClientsByAgent(req.currentUser.id);
       res.json(clients);
@@ -132,7 +219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Claim client
-  app.post('/api/clients/:id/claim', isAuthenticated, getCurrentUser, async (req: any, res) => {
+  app.post('/api/clients/:id/claim', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const { id } = req.params;
       
@@ -155,7 +242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Unclaim client (admin only)
-  app.post('/api/clients/:id/unclaim', isAuthenticated, isAdmin, async (req, res) => {
+  app.post('/api/clients/:id/unclaim', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const updated = await storage.unclaimClient(id);
@@ -167,7 +254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get client notes
-  app.get('/api/clients/:id/notes', isAuthenticated, async (req, res) => {
+  app.get('/api/clients/:id/notes', isAuthenticatedCustom, async (req, res) => {
     try {
       const { id } = req.params;
       const notes = await storage.getClientNotes(id);
@@ -179,7 +266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add client note
-  app.post('/api/clients/:id/notes', isAuthenticated, getCurrentUser, async (req: any, res) => {
+  app.post('/api/clients/:id/notes', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const { id } = req.params;
       const { content, isFollowUp } = req.body;
@@ -203,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get agents (admin only)
-  app.get('/api/users/agents', isAuthenticated, isAdmin, async (req, res) => {
+  app.get('/api/users/agents', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const agents = await storage.getAgents();
       res.json(agents);
@@ -217,7 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 
   // Sync WooCommerce orders
-  app.post('/api/woocommerce/sync', isAuthenticated, isAdmin, async (req, res) => {
+  app.post('/api/woocommerce/sync', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const wooUrl = process.env.WOOCOMMERCE_URL;
       const consumerKey = process.env.WOOCOMMERCE_CONSUMER_KEY;

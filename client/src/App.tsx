@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/header";
 import NotFound from "@/pages/not-found";
-import Landing from "@/pages/landing";
+import Login from "@/pages/login";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AgentDashboard from "@/pages/agent-dashboard";
 
@@ -28,8 +28,8 @@ function Router() {
   if (!isAuthenticated) {
     return (
       <Switch>
-        <Route path="/" component={Landing} />
-        <Route component={NotFound} />
+        <Route path="/" component={Login} />
+        <Route component={Login} />
       </Switch>
     );
   }
