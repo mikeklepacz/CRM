@@ -154,7 +154,7 @@ export default function SalesDashboard() {
     }
   };
 
-  const cleanTagDisplay = (value: string): string => {
+  const cleanTagDisplay = (value: string, filterBySelected: boolean = false): string => {
     if (!value) return '';
     // Split by comma, clean each tag, filter out empty ones, and rejoin
     return String(value)
@@ -166,7 +166,14 @@ export default function SalesDashboard() {
         cleaned = cleaned.replace(/^["']+|["']+$/g, '');
         return cleaned;
       })
-      .filter((tag: string) => tag && tag !== '""' && tag !== "''")
+      .filter((tag: string) => {
+        if (!tag || tag === '""' || tag === "''") return false;
+        // If filtering by selected tags, only show selected ones
+        if (filterBySelected) {
+          return selectedTags.has(tag);
+        }
+        return true;
+      })
       .join(', ');
   };
 
@@ -643,8 +650,8 @@ export default function SalesDashboard() {
                             const isStateColumn = header.toLowerCase() === 'state';
                             const isTagColumn = header.toLowerCase().includes('tag');
                             
-                            // Clean tag display
-                            const cleanedValue = isTagColumn ? cleanTagDisplay(cellValue) : cellValue;
+                            // Clean tag display and filter by selected tags
+                            const cleanedValue = isTagColumn ? cleanTagDisplay(cellValue, true) : cellValue;
                             const isLongText = cleanedValue.length > 100;
                             const displayValue = isLongText ? cleanedValue.substring(0, 100) + '...' : cleanedValue;
                             
