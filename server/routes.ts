@@ -702,9 +702,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== GOOGLE SHEETS ROUTES ==========
 
   // List user's Google Sheets
-  app.get('/api/sheets/list', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.get('/api/sheets/list', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const sheets = await googleSheets.listSpreadsheets();
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const sheets = await googleSheets.listSpreadsheets(userId);
       res.json(sheets);
     } catch (error: any) {
       console.error("Error listing sheets:", error);
@@ -713,10 +714,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get spreadsheet info (sheets/tabs)
-  app.get('/api/sheets/:spreadsheetId/info', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.get('/api/sheets/:spreadsheetId/info', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { spreadsheetId } = req.params;
-      const info = await googleSheets.getSpreadsheetInfo(spreadsheetId);
+      const info = await googleSheets.getSpreadsheetInfo(userId, spreadsheetId);
       res.json(info);
     } catch (error: any) {
       console.error("Error getting sheet info:", error);
@@ -738,6 +740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Connect a Google Sheet
   app.post('/api/sheets/connect', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { spreadsheetId, spreadsheetName, sheetName, uniqueIdentifierColumn } = req.body;
 
       if (!spreadsheetId || !sheetName || !uniqueIdentifierColumn) {
@@ -746,7 +749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify sheet exists and has the identifier column
       const range = `${sheetName}!A1:ZZ1`;
-      const headers = await googleSheets.readSheetData(spreadsheetId, range);
+      const headers = await googleSheets.readSheetData(userId, spreadsheetId, range);
       
       if (!headers || headers.length === 0) {
         return res.status(400).json({ message: "Sheet is empty or not found" });
@@ -762,8 +765,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: `Column "${uniqueIdentifierColumn}" not found in sheet. Available columns: ${headerRow.join(', ')}` 
         });
       }
-
-      const userId = req.user.id;
 
       // Deactivate any existing active sheet
       await storage.deactivateAllGoogleSheets();
@@ -797,8 +798,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sync FROM Google Sheets TO CRM (import)
-  app.post('/api/sheets/sync/import', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.post('/api/sheets/sync/import', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const activeSheet = await storage.getActiveGoogleSheet();
       if (!activeSheet) {
         return res.status(400).json({ message: "No active Google Sheet connected" });
@@ -806,7 +808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { spreadsheetId, sheetName, uniqueIdentifierColumn } = activeSheet;
       const range = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+      const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
 
       if (rows.length === 0) {
         return res.status(400).json({ message: "Sheet is empty" });
@@ -858,8 +860,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sync FROM CRM TO Google Sheets (export)
-  app.post('/api/sheets/sync/export', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.post('/api/sheets/sync/export', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const activeSheet = await storage.getActiveGoogleSheet();
       if (!activeSheet) {
         return res.status(400).json({ message: "No active Google Sheet connected" });
@@ -869,7 +872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get headers from sheet
       const headerRange = `${sheetName}!A1:ZZ1`;
-      const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
+      const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
       
       if (!headerRows || headerRows.length === 0) {
         return res.status(400).json({ message: "Cannot read sheet headers" });
@@ -886,7 +889,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update existing row
           const range = `${sheetName}!A${client.googleSheetRowId}`;
           const row = googleSheets.convertObjectsToSheetRows(headers, [client.data])[0];
-          await googleSheets.writeSheetData(spreadsheetId, range, [row]);
+          await googleSheets.writeSheetData(userId, spreadsheetId, range, [row]);
         }
       }
 
@@ -903,8 +906,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bidirectional sync (import then export)
-  app.post('/api/sheets/sync/bidirectional', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.post('/api/sheets/sync/bidirectional', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const activeSheet = await storage.getActiveGoogleSheet();
       if (!activeSheet) {
         return res.status(400).json({ message: "No active Google Sheet connected" });
@@ -914,7 +918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // STEP 1: Import from sheet
       const range = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+      const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
 
       if (rows.length === 0) {
         return res.status(400).json({ message: "Sheet is empty" });

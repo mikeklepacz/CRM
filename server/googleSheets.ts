@@ -1,46 +1,49 @@
 import { google } from 'googleapis';
+import { storage } from './storage';
 
-let connectionSettings: any;
-
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
-  }
+async function getAccessToken(userId: string) {
+  const integration = await storage.getUserIntegration(userId);
   
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+  if (!integration?.googleAccessToken || !integration?.googleRefreshToken) {
+    throw new Error('Google OAuth not configured. Please connect Google Sheets in Settings.');
   }
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-sheet',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
+  // Check if token is expired (with 5-minute buffer)
+  const now = Date.now();
+  const expiryTime = integration.googleTokenExpiry || 0;
+  const isExpired = expiryTime <= now + (5 * 60 * 1000);
 
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
+  if (isExpired && integration.googleRefreshToken && integration.googleClientId && integration.googleClientSecret) {
+    // Refresh the token
+    const oauth2Client = new google.auth.OAuth2(
+      integration.googleClientId,
+      integration.googleClientSecret,
+      `${process.env.REPLIT_DOMAINS?.split(',')[0]}/api/google/callback`
+    );
 
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Google Sheet not connected');
+    oauth2Client.setCredentials({
+      refresh_token: integration.googleRefreshToken
+    });
+
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    
+    // Update tokens in database
+    await storage.updateUserIntegration(userId, {
+      googleAccessToken: credentials.access_token!,
+      googleTokenExpiry: credentials.expiry_date || (Date.now() + 3600000)
+    });
+
+    return credentials.access_token!;
   }
-  return accessToken;
+
+  return integration.googleAccessToken;
 }
 
 // WARNING: Never cache this client.
 // Access tokens expire, so a new client must be created each time.
 // Always call this function again to get a fresh client.
-export async function getUncachableGoogleSheetClient() {
-  const accessToken = await getAccessToken();
+export async function getUncachableGoogleSheetClient(userId: string) {
+  const accessToken = await getAccessToken(userId);
 
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({
@@ -51,8 +54,8 @@ export async function getUncachableGoogleSheetClient() {
 }
 
 // Read data from Google Sheet
-export async function readSheetData(spreadsheetId: string, range: string) {
-  const sheets = await getUncachableGoogleSheetClient();
+export async function readSheetData(userId: string, spreadsheetId: string, range: string) {
+  const sheets = await getUncachableGoogleSheetClient(userId);
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range,
@@ -61,8 +64,8 @@ export async function readSheetData(spreadsheetId: string, range: string) {
 }
 
 // Write data to Google Sheet
-export async function writeSheetData(spreadsheetId: string, range: string, values: any[][]) {
-  const sheets = await getUncachableGoogleSheetClient();
+export async function writeSheetData(userId: string, spreadsheetId: string, range: string, values: any[][]) {
+  const sheets = await getUncachableGoogleSheetClient(userId);
   const response = await sheets.spreadsheets.values.update({
     spreadsheetId,
     range,
@@ -75,8 +78,8 @@ export async function writeSheetData(spreadsheetId: string, range: string, value
 }
 
 // Append data to Google Sheet
-export async function appendSheetData(spreadsheetId: string, range: string, values: any[][]) {
-  const sheets = await getUncachableGoogleSheetClient();
+export async function appendSheetData(userId: string, spreadsheetId: string, range: string, values: any[][]) {
+  const sheets = await getUncachableGoogleSheetClient(userId);
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId,
     range,
@@ -90,8 +93,8 @@ export async function appendSheetData(spreadsheetId: string, range: string, valu
 }
 
 // Get spreadsheet metadata (sheet names, etc.)
-export async function getSpreadsheetInfo(spreadsheetId: string) {
-  const sheets = await getUncachableGoogleSheetClient();
+export async function getSpreadsheetInfo(userId: string, spreadsheetId: string) {
+  const sheets = await getUncachableGoogleSheetClient(userId);
   const response = await sheets.spreadsheets.get({
     spreadsheetId,
   });
@@ -99,8 +102,8 @@ export async function getSpreadsheetInfo(spreadsheetId: string) {
 }
 
 // List user's spreadsheets
-export async function listSpreadsheets() {
-  const accessToken = await getAccessToken();
+export async function listSpreadsheets(userId: string) {
+  const accessToken = await getAccessToken(userId);
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({
     access_token: accessToken
