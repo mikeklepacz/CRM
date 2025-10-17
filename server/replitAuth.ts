@@ -107,9 +107,23 @@ export async function setupAuth(app: Express) {
     cb(null, user);
   });
   
-  passport.deserializeUser((user: any, cb) => {
-    // Retrieve the user object from session
-    cb(null, user);
+  passport.deserializeUser(async (user: any, cb) => {
+    // For password auth users, we need to fetch the full user data
+    if (user.isPasswordAuth) {
+      try {
+        const fullUser = await storage.getUser(user.id);
+        if (!fullUser) {
+          return cb(new Error('User not found'));
+        }
+        // Return password auth user with a flag to skip token expiry checks
+        cb(null, { ...user, skipTokenCheck: true });
+      } catch (error) {
+        cb(error);
+      }
+    } else {
+      // For Replit Auth users, just return the session data
+      cb(null, user);
+    }
   });
 
   app.get("/api/login", (req, res, next) => {
@@ -141,7 +155,17 @@ export async function setupAuth(app: Express) {
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  // Password auth users don't have token expiry checks
+  if (user.skipTokenCheck) {
+    return next();
+  }
+
+  // Replit Auth users need token expiry checks
+  if (!user.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
