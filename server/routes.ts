@@ -331,6 +331,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const integration = await storage.getUserIntegration(userId);
       
+      console.log('OAuth URL request - userId:', userId);
+      console.log('Integration found:', !!integration);
+      console.log('Client ID:', integration?.googleClientId ? 'present' : 'missing');
+      
       if (!integration?.googleClientId) {
         return res.status(400).json({ message: "Please configure Google OAuth credentials first" });
       }
@@ -347,10 +351,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       oauthUrl.searchParams.set('prompt', 'consent');
       oauthUrl.searchParams.set('state', userId); // Pass userId as state
       
-      res.json({ url: oauthUrl.toString() });
+      const response = { url: oauthUrl.toString() };
+      console.log('Sending OAuth URL response:', response);
+      return res.json(response);
     } catch (error: any) {
       console.error("Error generating OAuth URL:", error);
-      res.status(500).json({ message: error.message || "Failed to generate OAuth URL" });
+      return res.status(500).json({ message: error.message || "Failed to generate OAuth URL" });
     }
   });
 
