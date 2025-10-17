@@ -38,7 +38,14 @@ export default function Login() {
       });
 
       if (response.ok) {
-        window.location.href = "/";
+        toast({
+          title: "Success",
+          description: "Login successful! Redirecting...",
+        });
+        // Small delay to show the success message
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 500);
       } else {
         const error = await response.json();
         toast({

@@ -30,20 +30,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Create session using passport's login
-      req.login({ userId: user.id, isPasswordAuth: true }, (err: any) => {
+      // Create session using passport's login with proper user object
+      const sessionUser = { 
+        userId: user.id, 
+        isPasswordAuth: true,
+        claims: { sub: user.id } // Add claims for compatibility
+      };
+      
+      req.login(sessionUser, (err: any) => {
         if (err) {
           console.error("Session creation error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
-        // Explicitly save the session
-        (req.session as any).save((saveErr: any) => {
-          if (saveErr) {
-            console.error("Session save error:", saveErr);
-            return res.status(500).json({ message: "Login failed" });
-          }
-          res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
-        });
+        res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -87,14 +86,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // Check if using password auth
-    if (req.user && req.user.isPasswordAuth) {
+    const user = req.user as any;
+
+    // Check if using password auth - it's valid as long as session exists
+    if (user && user.isPasswordAuth) {
       return next();
     }
     
     // Using Replit Auth - check token expiry
-    const user = req.user as any;
-    if (!user.expires_at) {
+    if (!user || !user.expires_at) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
