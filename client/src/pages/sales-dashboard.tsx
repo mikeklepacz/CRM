@@ -37,6 +37,7 @@ export default function SalesDashboard() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
 
   // Fetch available sheets and auto-detect by purpose
   const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
@@ -206,6 +207,33 @@ export default function SalesDashboard() {
       setSelectedTags(new Set(allTags));
     }
   }, [allTags.length]);
+
+  // Handle column resizing with global mouse events
+  useEffect(() => {
+    if (!resizingColumn) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      const diff = e.clientX - resizingColumn.startX;
+      const newWidth = Math.max(100, resizingColumn.startWidth + diff);
+      setColumnWidths(prev => ({
+        ...prev,
+        [resizingColumn.column]: newWidth,
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setResizingColumn(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingColumn]);
 
   const toggleTag = (tag: string) => {
     const newSelected = new Set(selectedTags);
@@ -565,21 +593,11 @@ export default function SalesDashboard() {
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                const startX = e.clientX;
-                                const startWidth = columnWidths[header] || 200;
-
-                                const handleMouseMove = (moveEvent: MouseEvent) => {
-                                  const diff = moveEvent.clientX - startX;
-                                  handleColumnResize(header, startWidth + diff);
-                                };
-
-                                const handleMouseUp = () => {
-                                  document.removeEventListener('mousemove', handleMouseMove);
-                                  document.removeEventListener('mouseup', handleMouseUp);
-                                };
-
-                                document.addEventListener('mousemove', handleMouseMove);
-                                document.addEventListener('mouseup', handleMouseUp);
+                                setResizingColumn({
+                                  column: header,
+                                  startX: e.clientX,
+                                  startWidth: columnWidths[header] || 200,
+                                });
                               }}
                               title="Drag to resize column"
                             >
