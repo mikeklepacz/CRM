@@ -40,8 +40,8 @@ export function getSession() {
     name: 'connect.sid',
     cookie: {
       httpOnly: true,
-      secure: false, // Set to false for development on Replit
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production', // Use secure in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: sessionTtl,
       path: '/',
     },
