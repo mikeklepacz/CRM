@@ -10,6 +10,7 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AgentDashboard from "@/pages/agent-dashboard";
+import Settings from "@/pages/settings";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -38,6 +39,7 @@ function Router() {
     <>
       <Header />
       <Switch>
+        <Route path="/settings" component={Settings} />
         <Route path="/admin">
           {user?.role === 'admin' ? <AdminDashboard /> : <NotFound />}
         </Route>

@@ -7,6 +7,7 @@ import axios from "axios";
 import bcrypt from "bcrypt";
 import * as client from "openid-client";
 import * as googleSheets from "./googleSheets";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -136,18 +137,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
   // Admin middleware
   const isAdmin = async (req: any, res: any, next: any) => {
     try {
@@ -177,6 +166,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "User fetch failed" });
     }
   };
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Validation schemas
+  const profileSchema = z.object({
+    firstName: z.string().min(1, "First name is required"),
+    lastName: z.string().min(1, "Last name is required"),
+    email: z.string().email("Invalid email address"),
+  });
+
+  const passwordSchema = z.object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(6, "Password must be at least 6 characters"),
+  });
+
+  const wooCommerceSchema = z.object({
+    url: z.string().url("Invalid URL"),
+    consumerKey: z.string().min(1, "Consumer key is required"),
+    consumerSecret: z.string().min(1, "Consumer secret is required"),
+  });
+
+  // User settings endpoints
+  app.put('/api/user/profile', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const validation = profileSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { firstName, lastName, email } = validation.data;
+      
+      const updated = await storage.updateUser(userId, { firstName, lastName, email });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ message: error.message || "Failed to update profile" });
+    }
+  });
+
+  app.put('/api/user/password', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const validation = passwordSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { currentPassword, newPassword } = validation.data;
+      
+      const user = await storage.getUser(userId);
+      if (!user?.passwordHash) {
+        return res.status(400).json({ message: "Password auth not enabled for this user" });
+      }
+
+      const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!validPassword) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateUser(userId, { passwordHash: newPasswordHash });
+      res.json({ message: "Password updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating password:", error);
+      res.status(500).json({ message: error.message || "Failed to update password" });
+    }
+  });
+
+  app.get('/api/woocommerce/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const integration = await storage.getUserIntegration(userId);
+      
+      res.json({
+        url: integration?.wooUrl || "",
+        consumerKey: integration?.wooConsumerKey || "",
+        consumerSecret: integration?.wooConsumerSecret || ""
+      });
+    } catch (error: any) {
+      console.error("Error fetching WooCommerce settings:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch settings" });
+    }
+  });
+
+  app.put('/api/woocommerce/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const validation = wooCommerceSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { url, consumerKey, consumerSecret } = validation.data;
+      
+      await storage.updateUserIntegration(userId, {
+        wooUrl: url,
+        wooConsumerKey: consumerKey,
+        wooConsumerSecret: consumerSecret
+      });
+      
+      res.json({ message: "WooCommerce settings updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating WooCommerce settings:", error);
+      res.status(500).json({ message: error.message || "Failed to update settings" });
+    }
+  });
+
+  app.get('/api/google/auth-status', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const integration = await storage.getUserIntegration(userId);
+      
+      res.json({
+        connected: !!integration?.googleAccessToken,
+        email: integration?.googleEmail || undefined,
+        connectedAt: integration?.googleConnectedAt || undefined
+      });
+    } catch (error: any) {
+      console.error("Error fetching Google auth status:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch auth status" });
+    }
+  });
+
+  app.get('/api/google/auth-url', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      // Placeholder - will implement full OAuth later
+      res.json({ url: "https://accounts.google.com/o/oauth2/v2/auth?...placeholder..." });
+    } catch (error: any) {
+      console.error("Error generating auth URL:", error);
+      res.status(500).json({ message: error.message || "Failed to generate auth URL" });
+    }
+  });
+
+  app.post('/api/google/disconnect', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      await storage.updateUserIntegration(userId, {
+        googleAccessToken: null,
+        googleRefreshToken: null,
+        googleTokenExpiry: null,
+        googleEmail: null,
+        googleConnectedAt: null
+      });
+      
+      res.json({ message: "Google Sheets disconnected successfully" });
+    } catch (error: any) {
+      console.error("Error disconnecting Google:", error);
+      res.status(500).json({ message: error.message || "Failed to disconnect" });
+    }
+  });
 
   // CSV Upload endpoint
   app.post('/api/csv/upload', isAuthenticatedCustom, isAdmin, async (req: any, res) => {

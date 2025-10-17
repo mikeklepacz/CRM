@@ -3,10 +3,20 @@ import { ThemeToggle } from "./theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { LogOut, Settings } from "lucide-react";
+import { useLocation } from "wouter";
 
 export function Header() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
 
   if (!user) return null;
 
@@ -27,25 +37,38 @@ export function Header() {
           </div>
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={user.profileImageUrl || undefined} alt={displayName} />
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
-              <span className="text-sm font-medium text-foreground hidden sm:inline" data-testid="text-user-name">
-                {displayName}
-              </span>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center gap-2" data-testid="button-user-menu">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.profileImageUrl || undefined} alt={displayName} />
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium text-foreground hidden sm:inline" data-testid="text-user-name">
+                    {displayName}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{displayName}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setLocation('/settings')} data-testid="menu-settings">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => window.location.href = "/api/logout"} data-testid="menu-logout">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => window.location.href = "/api/logout"}
-              data-testid="button-logout"
-            >
-              <LogOut className="h-5 w-5" />
-              <span className="sr-only">Sign out</span>
-            </Button>
           </div>
         </div>
       </div>

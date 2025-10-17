@@ -6,6 +6,7 @@ import {
   orders,
   csvUploads,
   googleSheets,
+  userIntegrations,
   type User,
   type UpsertUser,
   type Client,
@@ -18,6 +19,8 @@ import {
   type InsertCsvUpload,
   type GoogleSheet,
   type InsertGoogleSheet,
+  type UserIntegration,
+  type InsertUserIntegration,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql } from "drizzle-orm";
@@ -29,7 +32,12 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   createPasswordUser(userData: any): Promise<User>;
   updateUserRole(id: string, role: string): Promise<User>;
+  updateUser(id: string, updates: Partial<UpsertUser>): Promise<User>;
   getAgents(): Promise<User[]>;
+  
+  // User integrations operations
+  getUserIntegration(userId: string): Promise<UserIntegration | undefined>;
+  updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration>;
   
   // Client operations
   getAllClients(): Promise<Client[]>;
@@ -105,6 +113,44 @@ export class DatabaseStorage implements IStorage {
 
   async getAgents(): Promise<User[]> {
     return await db.select().from(users).where(eq(users.role, 'agent'));
+  }
+
+  async updateUser(id: string, updates: Partial<UpsertUser>): Promise<User> {
+    const [updated] = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return updated;
+  }
+
+  // User integrations operations
+  async getUserIntegration(userId: string): Promise<UserIntegration | undefined> {
+    const [integration] = await db
+      .select()
+      .from(userIntegrations)
+      .where(eq(userIntegrations.userId, userId));
+    return integration;
+  }
+
+  async updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration> {
+    // First check if integration exists
+    const existing = await this.getUserIntegration(userId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(userIntegrations)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(userIntegrations.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(userIntegrations)
+        .values({ userId, ...updates })
+        .returning();
+      return created;
+    }
   }
 
   // Client operations

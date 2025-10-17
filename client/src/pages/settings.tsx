@@ -1,0 +1,537 @@
+import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { User, ShoppingCart, FileSpreadsheet, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
+
+const profileSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+});
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+const wooCommerceSchema = z.object({
+  url: z.string().url("Invalid URL").min(1, "WooCommerce URL is required"),
+  consumerKey: z.string().min(1, "Consumer key is required"),
+  consumerSecret: z.string().min(1, "Consumer secret is required"),
+});
+
+type GoogleSheetsAuth = {
+  connected: boolean;
+  email?: string;
+  connectedAt?: string;
+};
+
+type WooCommerceSettings = {
+  url: string;
+  consumerKey: string;
+  consumerSecret: string;
+};
+
+export default function Settings() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+
+  // Fetch Google Sheets auth status
+  const { data: googleAuth } = useQuery<GoogleSheetsAuth>({
+    queryKey: ["/api/google/auth-status"],
+  });
+
+  // Fetch WooCommerce settings
+  const { data: wooSettings } = useQuery<WooCommerceSettings>({
+    queryKey: ["/api/woocommerce/settings"],
+  });
+
+  const profileForm = useForm({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
+      email: user?.email || "",
+    },
+  });
+
+  const passwordForm = useForm({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
+
+  const wooForm = useForm({
+    resolver: zodResolver(wooCommerceSchema),
+    defaultValues: {
+      url: "",
+      consumerKey: "",
+      consumerSecret: "",
+    },
+    values: wooSettings ? {
+      url: wooSettings.url || "",
+      consumerKey: wooSettings.consumerKey || "",
+      consumerSecret: wooSettings.consumerSecret || "",
+    } : undefined,
+  });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof profileSchema>) => {
+      const res = await apiRequest("PUT", "/api/user/profile", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updatePasswordMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof passwordSchema>) => {
+      const res = await apiRequest("PUT", "/api/user/password", {
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      passwordForm.reset();
+      setShowPasswordForm(false);
+      toast({
+        title: "Success",
+        description: "Password updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateWooMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof wooCommerceSchema>) => {
+      const res = await apiRequest("PUT", "/api/woocommerce/settings", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "WooCommerce settings updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const connectGoogleMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("GET", "/api/google/auth-url", {});
+      return res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      window.open(data.url, "_blank", "width=600,height=700");
+      queryClient.invalidateQueries({ queryKey: ["/api/google/auth-status"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const disconnectGoogleMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/google/disconnect", {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/google/auth-status"] });
+      toast({
+        title: "Success",
+        description: "Google Sheets disconnected",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (!user) return null;
+
+  const dashboardPath = user.role === 'admin' ? '/admin' : '/agent';
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <div className="mb-6">
+        <Link href={dashboardPath}>
+          <Button variant="ghost" size="sm" data-testid="button-back-dashboard">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Dashboard
+          </Button>
+        </Link>
+      </div>
+
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Settings</h1>
+        <p className="text-muted-foreground mt-2">
+          Manage your account settings and integrations
+        </p>
+      </div>
+
+      <Tabs defaultValue="profile" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="profile" data-testid="tab-profile">
+            <User className="mr-2 h-4 w-4" />
+            Profile
+          </TabsTrigger>
+          {user.role === 'admin' && (
+            <>
+              <TabsTrigger value="woocommerce" data-testid="tab-woocommerce">
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                WooCommerce
+              </TabsTrigger>
+              <TabsTrigger value="google-sheets" data-testid="tab-google">
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Google Sheets
+              </TabsTrigger>
+            </>
+          )}
+        </TabsList>
+
+        <TabsContent value="profile" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>Update your profile details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Form {...profileForm}>
+                <form onSubmit={profileForm.handleSubmit((data) => updateProfileMutation.mutate(data))} className="space-y-4">
+                  <FormField
+                    control={profileForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-first-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-last-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" {...field} data-testid="input-profile-email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={updateProfileMutation.isPending}
+                    data-testid="button-save-profile"
+                  >
+                    {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Password</CardTitle>
+              <CardDescription>Change your account password</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!showPasswordForm ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPasswordForm(true)}
+                  data-testid="button-change-password"
+                >
+                  Change Password
+                </Button>
+              ) : (
+                <Form {...passwordForm}>
+                  <form onSubmit={passwordForm.handleSubmit((data) => updatePasswordMutation.mutate(data))} className="space-y-4">
+                    <FormField
+                      control={passwordForm.control}
+                      name="currentPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Current Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" {...field} data-testid="input-current-password" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={passwordForm.control}
+                      name="newPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>New Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" {...field} data-testid="input-new-password" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={passwordForm.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Confirm New Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" {...field} data-testid="input-confirm-password" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="submit"
+                        disabled={updatePasswordMutation.isPending}
+                        data-testid="button-save-password"
+                      >
+                        {updatePasswordMutation.isPending ? "Updating..." : "Update Password"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          setShowPasswordForm(false);
+                          passwordForm.reset();
+                        }}
+                        data-testid="button-cancel-password"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {user.role === 'admin' && (
+          <>
+            <TabsContent value="woocommerce">
+              <Card>
+                <CardHeader>
+                  <CardTitle>WooCommerce Integration</CardTitle>
+                  <CardDescription>
+                    Configure your WooCommerce store connection for order syncing
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...wooForm}>
+                    <form onSubmit={wooForm.handleSubmit((data) => updateWooMutation.mutate(data))} className="space-y-4">
+                      <FormField
+                        control={wooForm.control}
+                        name="url"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Store URL</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="https://yourstore.com"
+                                {...field}
+                                data-testid="input-woo-url"
+                              />
+                            </FormControl>
+                            <FormDescription>Your WooCommerce store URL</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={wooForm.control}
+                        name="consumerKey"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Consumer Key</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="ck_..."
+                                {...field}
+                                data-testid="input-woo-key"
+                              />
+                            </FormControl>
+                            <FormDescription>WooCommerce REST API consumer key</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={wooForm.control}
+                        name="consumerSecret"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Consumer Secret</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="password"
+                                placeholder="cs_..."
+                                {...field}
+                                data-testid="input-woo-secret"
+                              />
+                            </FormControl>
+                            <FormDescription>WooCommerce REST API consumer secret</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="submit"
+                        disabled={updateWooMutation.isPending}
+                        data-testid="button-save-woo"
+                      >
+                        {updateWooMutation.isPending ? "Saving..." : "Save WooCommerce Settings"}
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="google-sheets">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Google Sheets Integration</CardTitle>
+                  <CardDescription>
+                    Connect your Google account to sync with Google Sheets
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {googleAuth?.connected ? (
+                    <div className="space-y-4">
+                      <div className="bg-muted rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium">Connected Account</p>
+                            <p className="text-sm text-muted-foreground">{googleAuth.email}</p>
+                            {googleAuth.connectedAt && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Connected {new Date(googleAuth.connectedAt).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            onClick={() => disconnectGoogleMutation.mutate()}
+                            disabled={disconnectGoogleMutation.isPending}
+                            data-testid="button-disconnect-google"
+                          >
+                            {disconnectGoogleMutation.isPending ? "Disconnecting..." : "Disconnect"}
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        You can now use Google Sheets sync in the Admin Dashboard
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Connect your Google account to enable Google Sheets synchronization for client data
+                      </p>
+                      <Button
+                        onClick={() => connectGoogleMutation.mutate()}
+                        disabled={connectGoogleMutation.isPending}
+                        data-testid="button-connect-google"
+                      >
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                        {connectGoogleMutation.isPending ? "Connecting..." : "Connect Google Sheets"}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
+    </div>
+  );
+}

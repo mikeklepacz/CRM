@@ -111,6 +111,24 @@ export const orders = pgTable("orders", {
   syncedAt: timestamp("synced_at").defaultNow(),
 });
 
+// User integrations - per-user integration credentials
+export const userIntegrations = pgTable("user_integrations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  // WooCommerce settings
+  wooUrl: varchar("woo_url"),
+  wooConsumerKey: varchar("woo_consumer_key"),
+  wooConsumerSecret: varchar("woo_consumer_secret"),
+  // Google OAuth credentials (encrypted)
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiry: timestamp("google_token_expiry"),
+  googleEmail: varchar("google_email"),
+  googleConnectedAt: timestamp("google_connected_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
@@ -185,6 +203,12 @@ export const insertGoogleSheetSchema = createInsertSchema(googleSheets).omit({
   createdAt: true,
 });
 
+export const insertUserIntegrationSchema = createInsertSchema(userIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -198,3 +222,5 @@ export type CsvUpload = typeof csvUploads.$inferSelect;
 export type InsertCsvUpload = z.infer<typeof insertCsvUploadSchema>;
 export type GoogleSheet = typeof googleSheets.$inferSelect;
 export type InsertGoogleSheet = z.infer<typeof insertGoogleSheetSchema>;
+export type UserIntegration = typeof userIntegrations.$inferSelect;
+export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
