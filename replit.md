@@ -11,6 +11,7 @@ A Google Sheets-powered CRM and commission tracking system for hemp wick sales t
 - **Row-Level Security**: Agents see all unclaimed stores + only their claimed stores
 - **Commission Tracking**: Track sales, follow-ups, and commissions per store
 - **WooCommerce Sync**: Automatic order synchronization and commission calculation
+- **Persistent User Preferences**: Dashboard view preferences (columns, filters, widths) automatically sync across all devices
 
 ## Setup Instructions
 
@@ -51,7 +52,22 @@ Connect your two Google Sheets to power the Sales Dashboard:
 - Both sheets must have a "link" column (unique identifier per store)
 - Commission Tracker must have an "Agent" column (for row-level security)
 
-### 4. Sales Dashboard Workflow
+### 4. User Preferences
+Your dashboard view preferences are automatically saved to the database and sync across all your devices:
+
+**Auto-Saved Preferences:**
+- Column visibility (which columns are shown/hidden)
+- Column order (custom arrangement)
+- Column widths (resized widths)
+- Selected tags filter
+- Selected keywords/phrases filter
+
+**How It Works:**
+- Preferences save automatically 1 second after you make changes
+- Login from any device (phone, computer, tablet) and see your custom view
+- No setup required - works automatically
+
+### 5. Sales Dashboard Workflow
 The Sales Dashboard automatically loads both sheets:
 
 **For Agents:**

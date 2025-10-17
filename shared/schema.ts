@@ -149,6 +149,19 @@ export const dashboardCards = pgTable("dashboard_cards", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// User preferences for Sales Dashboard view - syncs across devices
+export const userPreferences = pgTable("user_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id).unique(),
+  visibleColumns: jsonb("visible_columns").$type<Record<string, boolean>>(),
+  columnOrder: jsonb("column_order").$type<string[]>(),
+  columnWidths: jsonb("column_widths").$type<Record<string, number>>(),
+  selectedTags: jsonb("selected_tags").$type<string[]>(),
+  selectedKeywords: jsonb("selected_keywords").$type<string[]>(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
@@ -235,6 +248,12 @@ export const insertDashboardCardSchema = createInsertSchema(dashboardCards).omit
   updatedAt: true,
 });
 
+export const insertUserPreferencesSchema = createInsertSchema(userPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -252,3 +271,5 @@ export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
 export type DashboardCard = typeof dashboardCards.$inferSelect;
 export type InsertDashboardCard = z.infer<typeof insertDashboardCardSchema>;
+export type UserPreferences = typeof userPreferences.$inferSelect;
+export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;

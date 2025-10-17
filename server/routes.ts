@@ -250,6 +250,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User preferences endpoints
+  app.get('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const preferences = await storage.getUserPreferences(userId);
+      res.json(preferences || null);
+    } catch (error: any) {
+      console.error("Error fetching user preferences:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch preferences" });
+    }
+  });
+
+  const userPreferencesSchema = z.object({
+    visibleColumns: z.record(z.boolean()).optional(),
+    columnOrder: z.array(z.string()).optional(),
+    columnWidths: z.record(z.number()).optional(),
+    selectedTags: z.array(z.string()).optional(),
+    selectedKeywords: z.array(z.string()).optional(),
+  });
+
+  app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const validation = userPreferencesSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const preferences = await storage.saveUserPreferences(userId, validation.data);
+      
+      res.json(preferences);
+    } catch (error: any) {
+      console.error("Error saving user preferences:", error);
+      res.status(500).json({ message: error.message || "Failed to save preferences" });
+    }
+  });
+
   app.get('/api/woocommerce/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;

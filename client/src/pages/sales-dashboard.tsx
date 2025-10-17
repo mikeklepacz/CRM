@@ -41,6 +41,19 @@ export default function SalesDashboard() {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+
+  // Fetch user preferences
+  const { data: userPreferences, isFetched: preferencesQueryFetched } = useQuery<{
+    visibleColumns?: Record<string, boolean>;
+    columnOrder?: string[];
+    columnWidths?: Record<string, number>;
+    selectedTags?: string[];
+    selectedKeywords?: string[];
+  } | null>({
+    queryKey: ['/api/user/preferences'],
+    staleTime: Infinity, // Don't refetch preferences automatically
+  });
 
   // Fetch available sheets and auto-detect by purpose
   const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
@@ -83,23 +96,62 @@ export default function SalesDashboard() {
   const storeHeaders = mergedData?.storeHeaders || [];
   const trackerHeaders = mergedData?.trackerHeaders || [];
 
-  // Initialize visible columns, column order, and widths
+  // Initialize visible columns, column order, and widths (or load from saved preferences)
   useEffect(() => {
-    if (headers.length > 0) {
+    if (headers.length > 0 && preferencesQueryFetched && !preferencesLoaded) {
       const initialVisible: Record<string, boolean> = {};
       const initialWidths: Record<string, number> = {};
       const hiddenColumns = ['title', 'error']; // Columns to hide by default
       
-      headers.forEach((header: string) => {
-        // Hide title and error columns by default
-        initialVisible[header] = !hiddenColumns.includes(header.toLowerCase());
-        initialWidths[header] = 200; // Default width 200px
-      });
-      setVisibleColumns(initialVisible);
-      setColumnOrder(headers);
-      setColumnWidths(initialWidths);
+      // Check if we have saved preferences
+      if (userPreferences) {
+        // Load saved preferences if available
+        if (userPreferences.visibleColumns) {
+          // Merge saved preferences with new headers (in case new columns were added)
+          headers.forEach((header: string) => {
+            initialVisible[header] = userPreferences.visibleColumns[header] ?? !hiddenColumns.includes(header.toLowerCase());
+          });
+        } else {
+          headers.forEach((header: string) => {
+            initialVisible[header] = !hiddenColumns.includes(header.toLowerCase());
+          });
+        }
+        
+        if (userPreferences.columnOrder && userPreferences.columnOrder.length > 0) {
+          // Use saved column order, adding any new columns at the end
+          const savedOrder = userPreferences.columnOrder.filter((col: string) => headers.includes(col));
+          const newColumns = headers.filter((h: string) => !savedOrder.includes(h));
+          setColumnOrder([...savedOrder, ...newColumns]);
+        } else {
+          setColumnOrder(headers);
+        }
+        
+        if (userPreferences.columnWidths) {
+          headers.forEach((header: string) => {
+            initialWidths[header] = userPreferences.columnWidths[header] || 200;
+          });
+        } else {
+          headers.forEach((header: string) => {
+            initialWidths[header] = 200;
+          });
+        }
+        
+        setVisibleColumns(initialVisible);
+        setColumnWidths(initialWidths);
+        setPreferencesLoaded(true);
+      } else {
+        // No saved preferences, use defaults
+        headers.forEach((header: string) => {
+          initialVisible[header] = !hiddenColumns.includes(header.toLowerCase());
+          initialWidths[header] = 200;
+        });
+        setVisibleColumns(initialVisible);
+        setColumnOrder(headers);
+        setColumnWidths(initialWidths);
+        setPreferencesLoaded(true);
+      }
     }
-  }, [headers.length, storeSheetId, trackerSheetId]);
+  }, [headers.length, userPreferences, preferencesQueryFetched, preferencesLoaded]);
 
 
   const toggleColumn = (column: string) => {
@@ -309,19 +361,52 @@ export default function SalesDashboard() {
     return Array.from(keywords).sort();
   })();
 
-  // Initialize selected tags when data loads
+  // Initialize selected tags when data loads (or from saved preferences)
   useEffect(() => {
     if (allTags.length > 0 && selectedTags.size === 0) {
-      setSelectedTags(new Set(allTags));
+      if (userPreferences?.selectedTags && userPreferences.selectedTags.length > 0) {
+        // Filter saved tags to only include ones that still exist in the data
+        const validTags = userPreferences.selectedTags.filter((tag: string) => allTags.includes(tag));
+        setSelectedTags(new Set(validTags.length > 0 ? validTags : allTags));
+      } else {
+        setSelectedTags(new Set(allTags));
+      }
     }
-  }, [allTags.length]);
+  }, [allTags.length, userPreferences]);
 
-  // Initialize selected keywords when data loads
+  // Initialize selected keywords when data loads (or from saved preferences)
   useEffect(() => {
     if (allKeywords.length > 0 && selectedKeywords.size === 0) {
-      setSelectedKeywords(new Set(allKeywords));
+      if (userPreferences?.selectedKeywords && userPreferences.selectedKeywords.length > 0) {
+        // Filter saved keywords to only include ones that still exist in the data
+        const validKeywords = userPreferences.selectedKeywords.filter((kw: string) => allKeywords.includes(kw));
+        setSelectedKeywords(new Set(validKeywords.length > 0 ? validKeywords : allKeywords));
+      } else {
+        setSelectedKeywords(new Set(allKeywords));
+      }
     }
-  }, [allKeywords.length]);
+  }, [allKeywords.length, userPreferences]);
+
+  // Auto-save user preferences when they change (debounced)
+  useEffect(() => {
+    if (!preferencesLoaded) return; // Don't save until we've loaded initial preferences
+    
+    const timeoutId = setTimeout(async () => {
+      try {
+        await apiRequest('PUT', '/api/user/preferences', {
+          visibleColumns,
+          columnOrder,
+          columnWidths,
+          selectedTags: Array.from(selectedTags),
+          selectedKeywords: Array.from(selectedKeywords),
+        });
+      } catch (error) {
+        console.error('Failed to save preferences:', error);
+      }
+    }, 1000); // Save 1 second after last change
+
+    return () => clearTimeout(timeoutId);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, preferencesLoaded]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {

@@ -8,6 +8,7 @@ import {
   googleSheets,
   userIntegrations,
   dashboardCards,
+  userPreferences,
   type User,
   type UpsertUser,
   type Client,
@@ -23,6 +24,8 @@ import {
   type UserIntegration,
   type InsertUserIntegration,
   type DashboardCard,
+  type UserPreferences,
+  type InsertUserPreferences,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -40,6 +43,10 @@ export interface IStorage {
   // User integrations operations
   getUserIntegration(userId: string): Promise<UserIntegration | undefined>;
   updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration>;
+
+  // User preferences operations
+  getUserPreferences(userId: string): Promise<UserPreferences | undefined>;
+  saveUserPreferences(userId: string, preferences: Partial<InsertUserPreferences>): Promise<UserPreferences>;
 
   // Client operations
   getAllClients(): Promise<Client[]>;
@@ -156,6 +163,45 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db
         .insert(userIntegrations)
         .values({ userId, ...updates })
+        .returning();
+      return created;
+    }
+  }
+
+  // User preferences operations
+  async getUserPreferences(userId: string): Promise<UserPreferences | undefined> {
+    const [preferences] = await db
+      .select()
+      .from(userPreferences)
+      .where(eq(userPreferences.userId, userId));
+    return preferences;
+  }
+
+  async saveUserPreferences(userId: string, preferences: Partial<InsertUserPreferences>): Promise<UserPreferences> {
+    // First check if preferences exist
+    const existing = await this.getUserPreferences(userId);
+
+    if (existing) {
+      // Merge with existing preferences to avoid data loss
+      const merged = {
+        visibleColumns: preferences.visibleColumns ?? existing.visibleColumns,
+        columnOrder: preferences.columnOrder ?? existing.columnOrder,
+        columnWidths: preferences.columnWidths ?? existing.columnWidths,
+        selectedTags: preferences.selectedTags ?? existing.selectedTags,
+        selectedKeywords: preferences.selectedKeywords ?? existing.selectedKeywords,
+        updatedAt: new Date(),
+      };
+      
+      const [updated] = await db
+        .update(userPreferences)
+        .set(merged)
+        .where(eq(userPreferences.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(userPreferences)
+        .values({ userId, ...preferences })
         .returning();
       return created;
     }
