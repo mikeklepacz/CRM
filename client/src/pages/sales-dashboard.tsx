@@ -393,7 +393,11 @@ export default function SalesDashboard() {
   // Get all unique states from the data (with full names)
   const allStates = (() => {
     const states = new Set<string>();
-    const stateColumns = headers.filter((h: string) => h.toLowerCase() === 'state');
+    // Look for columns named "state" OR containing ", state" (like "City, State")
+    const stateColumns = headers.filter((h: string) => {
+      const lower = h.toLowerCase();
+      return lower === 'state' || lower.includes(', state');
+    });
     console.log('=== STATE FILTER DEBUG ===');
     console.log('Headers:', headers);
     console.log('State columns found:', stateColumns);
@@ -402,8 +406,22 @@ export default function SalesDashboard() {
       stateColumns.forEach((col: string) => {
         const value = row[col];
         if (value && String(value).trim()) {
-          const stateName = getStateName(String(value).trim());
-          states.add(stateName);
+          // Extract just the state part if it's "City, State" format
+          const valueStr = String(value).trim();
+          let stateAbbrev = valueStr;
+          
+          // If format is "City, ST", extract just the state abbreviation
+          if (valueStr.includes(',')) {
+            const parts = valueStr.split(',');
+            if (parts.length >= 2) {
+              stateAbbrev = parts[parts.length - 1].trim();
+            }
+          }
+          
+          const stateName = getStateName(stateAbbrev);
+          if (stateName) {
+            states.add(stateName);
+          }
         }
       });
     });
@@ -657,14 +675,28 @@ export default function SalesDashboard() {
 
     // Then filter by states
     if (selectedStates.size > 0 && selectedStates.size < allStates.length) {
-      const stateColumns = headers.filter((h: string) => h.toLowerCase() === 'state');
+      const stateColumns = headers.filter((h: string) => {
+        const lower = h.toLowerCase();
+        return lower === 'state' || lower.includes(', state');
+      });
       filtered = filtered.filter((row: any) => {
         // Check if row's state is in selected states
         return stateColumns.some((col: string) => {
           const value = row[col];
           if (value && String(value).trim()) {
-            const stateName = getStateName(String(value).trim());
-            return selectedStates.has(stateName);
+            const valueStr = String(value).trim();
+            let stateAbbrev = valueStr;
+            
+            // If format is "City, ST", extract just the state abbreviation
+            if (valueStr.includes(',')) {
+              const parts = valueStr.split(',');
+              if (parts.length >= 2) {
+                stateAbbrev = parts[parts.length - 1].trim();
+              }
+            }
+            
+            const stateName = getStateName(stateAbbrev);
+            return stateName && selectedStates.has(stateName);
           }
           return false;
         });
