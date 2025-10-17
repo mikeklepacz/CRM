@@ -326,6 +326,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/google/oauth-url', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const integration = await storage.getUserIntegration(userId);
+      
+      if (!integration?.googleClientId) {
+        return res.status(400).json({ message: "Please configure Google OAuth credentials first" });
+      }
+
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/google/callback`;
+      const scope = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+      
+      const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      oauthUrl.searchParams.set('client_id', integration.googleClientId);
+      oauthUrl.searchParams.set('redirect_uri', redirectUri);
+      oauthUrl.searchParams.set('response_type', 'code');
+      oauthUrl.searchParams.set('scope', scope);
+      oauthUrl.searchParams.set('access_type', 'offline');
+      oauthUrl.searchParams.set('prompt', 'consent');
+      oauthUrl.searchParams.set('state', userId); // Pass userId as state
+      
+      res.json({ url: oauthUrl.toString() });
+    } catch (error: any) {
+      console.error("Error generating OAuth URL:", error);
+      res.status(500).json({ message: error.message || "Failed to generate OAuth URL" });
+    }
+  });
+
+  app.get('/api/google/callback', async (req: any, res) => {
+    try {
+      const { code, state: userId } = req.query;
+      
+      if (!code || !userId) {
+        return res.send('<script>window.close();</script>');
+      }
+
+      const integration = await storage.getUserIntegration(userId);
+      if (!integration?.googleClientId || !integration?.googleClientSecret) {
+        return res.send('<script>alert("OAuth credentials not configured"); window.close();</script>');
+      }
+
+      // Exchange code for tokens
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/google/callback`;
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: integration.googleClientId,
+          client_secret: integration.googleClientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code'
+        })
+      });
+
+      if (!tokenResponse.ok) {
+        const error = await tokenResponse.text();
+        console.error('Token exchange failed:', error);
+        return res.send('<script>alert("Authentication failed"); window.close();</script>');
+      }
+
+      const tokens = await tokenResponse.json();
+      
+      // Get user email from Google
+      const userinfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` }
+      });
+      const userinfo = await userinfoResponse.json();
+
+      // Store tokens
+      await storage.updateUserIntegration(userId, {
+        googleAccessToken: tokens.access_token,
+        googleRefreshToken: tokens.refresh_token,
+        googleTokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+        googleEmail: userinfo.email,
+        googleConnectedAt: new Date()
+      });
+
+      res.send('<script>alert("Google Sheets connected successfully!"); window.close();</script>');
+    } catch (error: any) {
+      console.error("OAuth callback error:", error);
+      res.send('<script>alert("Connection failed"); window.close();</script>');
+    }
+  });
+
   // CSV Upload endpoint
   app.post('/api/csv/upload', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

@@ -192,9 +192,41 @@ export default function Settings() {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/google/settings"] });
       toast({
         title: "Success",
         description: "Google OAuth settings updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const connectGoogleOAuthMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("GET", "/api/google/oauth-url");
+      return res.json();
+    },
+    onSuccess: (data: { url: string }) => {
+      // Open OAuth popup
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      window.open(
+        data.url,
+        "Google OAuth",
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+      
+      toast({
+        title: "Opening Google Authentication",
+        description: "Please complete the authorization in the popup window",
       });
     },
     onError: (error: Error) => {
@@ -542,10 +574,12 @@ export default function Settings() {
                     {googleSettings?.clientId ? (
                       <Button
                         variant="default"
+                        onClick={() => connectGoogleOAuthMutation.mutate()}
+                        disabled={connectGoogleOAuthMutation.isPending}
                         data-testid="button-connect-google-oauth"
                       >
                         <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        Connect Google Sheets
+                        {connectGoogleOAuthMutation.isPending ? "Opening..." : "Connect Google Sheets"}
                       </Button>
                     ) : (
                       <p className="text-sm text-muted-foreground">
