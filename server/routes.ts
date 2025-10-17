@@ -601,11 +601,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch orders from WooCommerce
       const response = await axios.get(`${wooUrl}/wp-json/wc/v3/orders`, {
-        auth: {
-          username: consumerKey,
-          password: consumerSecret,
-        },
         params: {
+          consumer_key: consumerKey,
+          consumer_secret: consumerSecret,
           per_page: 100,
           orderby: 'date',
           order: 'desc',
