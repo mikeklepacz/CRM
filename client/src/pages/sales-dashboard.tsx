@@ -393,10 +393,10 @@ export default function SalesDashboard() {
                           className="whitespace-nowrap relative group"
                           style={{ width: columnWidths[header] || 200 }}
                         >
-                          <div className="flex items-center justify-between pr-2">
+                          <div className="flex items-center justify-between">
                             <button
                               onClick={() => handleSort(header)}
-                              className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer"
+                              className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer flex-1"
                               data-testid={`button-sort-${header}`}
                             >
                               <span>
@@ -416,7 +416,7 @@ export default function SalesDashboard() {
                               )}
                             </button>
                             <div
-                              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+                              className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-primary/50 transition-colors z-10"
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -436,6 +436,7 @@ export default function SalesDashboard() {
                                 document.addEventListener('mousemove', handleMouseMove);
                                 document.addEventListener('mouseup', handleMouseUp);
                               }}
+                              title="Drag to resize column"
                             />
                           </div>
                         </TableHead>
