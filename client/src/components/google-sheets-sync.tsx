@@ -194,21 +194,10 @@ export function GoogleSheetsSync() {
       return await apiRequest("POST", "/api/sheets/create-commission-tracker", {});
     },
     onSuccess: (data) => {
+      window.open(data.spreadsheetUrl, '_blank');
       toast({
         title: "Commission Tracker Created!",
-        description: (
-          <div className="space-y-2">
-            <p>{data.message}</p>
-            <a 
-              href={data.spreadsheetUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-primary underline block"
-            >
-              Open Sheet →
-            </a>
-          </div>
-        ),
+        description: `${data.message} - Opening in new tab...`,
       });
     },
     onError: (error: Error) => {
