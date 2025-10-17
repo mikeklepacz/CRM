@@ -22,8 +22,11 @@ import {
   Unlink,
   CheckCircle2,
   AlertCircle,
+  Plus,
+  Trash2,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 
 type GoogleSheet = {
   id: string;
@@ -43,37 +46,43 @@ type SheetInfo = {
   }>;
 };
 
-type ActiveSheet = {
+type ConnectedSheet = {
   id: string;
   spreadsheetId: string;
   spreadsheetName: string;
   sheetName: string;
+  sheetPurpose: string;
   uniqueIdentifierColumn: string;
   lastSyncedAt: string | null;
   syncStatus: string;
+  createdAt: string;
 };
 
 export function GoogleSheetsSync() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showAddForm, setShowAddForm] = useState(false);
   const [selectedSpreadsheet, setSelectedSpreadsheet] = useState("");
   const [selectedSheetName, setSelectedSheetName] = useState("");
+  const [sheetPurpose, setSheetPurpose] = useState("clients");
   const [uniqueIdColumn, setUniqueIdColumn] = useState("link");
 
-  // Fetch list of user's Google Sheets
-  const { data: sheets = [] } = useQuery<GoogleSheet[]>({
+  // Fetch list of user's Google Sheets from Drive
+  const { data: availableSheets = [] } = useQuery<GoogleSheet[]>({
     queryKey: ["/api/sheets/list"],
     retry: false,
   });
 
-  // Fetch active sheet connection
-  const { data: activeSheet, isLoading: activeSheetLoading } = useQuery<ActiveSheet | null>({
-    queryKey: ["/api/sheets/active"],
+  // Fetch all connected sheets
+  const { data: connectedSheetsData, isLoading: sheetsLoading } = useQuery<{ sheets: ConnectedSheet[] }>({
+    queryKey: ["/api/sheets"],
   });
 
-  // Fetch sheet info (tabs/worksheets)
+  const connectedSheets = connectedSheetsData?.sheets || [];
+
+  // Fetch sheet info (tabs/worksheets) for selected spreadsheet
   const { data: sheetInfo } = useQuery<SheetInfo>({
-    queryKey: ["/api/sheets", selectedSpreadsheet, "info"],
+    queryKey: [`/api/sheets/${selectedSpreadsheet}/info`],
     enabled: !!selectedSpreadsheet,
   });
 
@@ -82,13 +91,18 @@ export function GoogleSheetsSync() {
       spreadsheetId: string;
       spreadsheetName: string;
       sheetName: string;
+      sheetPurpose: string;
       uniqueIdentifierColumn: string;
     }) => {
-      const res = await apiRequest("POST", "/api/sheets/connect", data);
-      return res.json();
+      return await apiRequest("POST", "/api/sheets/connect", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets/active"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+      setShowAddForm(false);
+      setSelectedSpreadsheet("");
+      setSelectedSheetName("");
+      setSheetPurpose("clients");
+      setUniqueIdColumn("link");
       toast({
         title: "Success",
         description: "Google Sheet connected successfully",
@@ -104,12 +118,11 @@ export function GoogleSheetsSync() {
   });
 
   const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/sheets/disconnect", {});
-      return res.json();
+    mutationFn: async (sheetId: string) => {
+      return await apiRequest("POST", `/api/sheets/${sheetId}/disconnect`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets/active"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
       toast({
         title: "Success",
         description: "Google Sheet disconnected",
@@ -125,16 +138,15 @@ export function GoogleSheetsSync() {
   });
 
   const importMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/sheets/sync/import", {});
-      return res.json();
+    mutationFn: async (sheetId: string) => {
+      return await apiRequest("POST", `/api/sheets/${sheetId}/sync/import`, {});
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets/active"] });
       toast({
         title: "Import Complete",
-        description: `Imported ${data.created} new clients, updated ${data.updated} existing clients`,
+        description: "Data imported from Google Sheets successfully",
       });
     },
     onError: (error: Error) => {
@@ -147,15 +159,14 @@ export function GoogleSheetsSync() {
   });
 
   const exportMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/sheets/sync/export", {});
-      return res.json();
+    mutationFn: async (sheetId: string) => {
+      return await apiRequest("POST", `/api/sheets/${sheetId}/sync/export`, {});
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets/active"] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
       toast({
         title: "Export Complete",
-        description: `Updated ${data.updated} rows in Google Sheet`,
+        description: "Data exported to Google Sheets successfully",
       });
     },
     onError: (error: Error) => {
@@ -167,37 +178,16 @@ export function GoogleSheetsSync() {
     },
   });
 
-  const bidirectionalMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/sheets/sync/bidirectional", {});
-      return res.json();
+  const bidirectionalSyncMutation = useMutation({
+    mutationFn: async (sheetId: string) => {
+      return await apiRequest("POST", `/api/sheets/${sheetId}/sync/bidirectional`, {});
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets/active"] });
       toast({
-        title: "Bidirectional Sync Complete",
-        description: `Imported: ${data.imported.created} new, ${data.imported.updated} updated`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const createCommissionTrackerMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("POST", "/api/sheets/create-commission-tracker", {});
-    },
-    onSuccess: (data) => {
-      window.open(data.spreadsheetUrl, '_blank');
-      toast({
-        title: "Commission Tracker Created!",
-        description: `${data.message} - Opening in new tab...`,
+        title: "Sync Complete",
+        description: "Bidirectional sync completed successfully",
       });
     },
     onError: (error: Error) => {
@@ -210,7 +200,7 @@ export function GoogleSheetsSync() {
   });
 
   const handleConnect = () => {
-    const sheet = sheets.find(s => s.id === selectedSpreadsheet);
+    const sheet = availableSheets.find(s => s.id === selectedSpreadsheet);
     if (!sheet || !selectedSheetName || !uniqueIdColumn) {
       toast({
         title: "Error",
@@ -224,219 +214,240 @@ export function GoogleSheetsSync() {
       spreadsheetId: selectedSpreadsheet,
       spreadsheetName: sheet.name,
       sheetName: selectedSheetName,
+      sheetPurpose,
       uniqueIdentifierColumn: uniqueIdColumn,
     });
   };
 
-  return (
-    <div className="space-y-6">
-      {activeSheet ? (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                  Connected to Google Sheets
-                </CardTitle>
-                <CardDescription>Your CRM is synced with Google Sheets</CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => disconnectMutation.mutate()}
-                disabled={disconnectMutation.isPending}
-                data-testid="button-disconnect-sheet"
-              >
-                <Unlink className="mr-2 h-4 w-4" />
-                Disconnect
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium">Spreadsheet</Label>
-                <p className="text-sm text-muted-foreground">{activeSheet.spreadsheetName}</p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium">Sheet/Tab</Label>
-                <p className="text-sm text-muted-foreground">{activeSheet.sheetName}</p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium">Unique ID Column</Label>
-                <p className="text-sm text-muted-foreground">{activeSheet.uniqueIdentifierColumn}</p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium">Last Synced</Label>
-                <p className="text-sm text-muted-foreground">
-                  {activeSheet.lastSyncedAt
-                    ? new Date(activeSheet.lastSyncedAt).toLocaleString()
-                    : "Never"}
-                </p>
-              </div>
-            </div>
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "Never";
+    return new Date(dateString).toLocaleString();
+  };
 
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium mb-3">Sync Options</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Button
-                  onClick={() => importMutation.mutate()}
-                  disabled={importMutation.isPending}
-                  data-testid="button-import-from-sheet"
-                  className="w-full"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {importMutation.isPending ? "Importing..." : "Import from Sheet"}
-                </Button>
-                <Button
-                  onClick={() => exportMutation.mutate()}
-                  disabled={exportMutation.isPending}
-                  variant="outline"
-                  data-testid="button-export-to-sheet"
-                  className="w-full"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {exportMutation.isPending ? "Exporting..." : "Export to Sheet"}
-                </Button>
-                <Button
-                  onClick={() => bidirectionalMutation.mutate()}
-                  disabled={bidirectionalMutation.isPending}
-                  variant="outline"
-                  data-testid="button-bidirectional-sync"
-                  className="w-full"
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  {bidirectionalMutation.isPending ? "Syncing..." : "Bidirectional Sync"}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                <strong>Import:</strong> Bring data from Google Sheets → CRM<br />
-                <strong>Export:</strong> Push CRM data → Google Sheets<br />
-                <strong>Bidirectional:</strong> Sync both ways (recommended)
-              </p>
-            </div>
-
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium mb-3">Commission Tracking</h4>
-              <Button
-                onClick={() => createCommissionTrackerMutation.mutate()}
-                disabled={createCommissionTrackerMutation.isPending}
-                variant="secondary"
-                data-testid="button-create-commission-tracker"
-                className="w-full"
-              >
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-                {createCommissionTrackerMutation.isPending ? "Creating..." : "Create Commission Tracker Sheet"}
-              </Button>
-              <p className="text-xs text-muted-foreground mt-2">
-                Creates a new Google Sheet with columns for tracking agent commissions, flat fees, and payment status
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-muted-foreground" />
-              <CardTitle>Connect Google Sheets</CardTitle>
-            </div>
-            <CardDescription>Link your CRM to a Google Sheets spreadsheet for real-time sync</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="spreadsheet">Select Spreadsheet</Label>
-              <Select value={selectedSpreadsheet} onValueChange={setSelectedSpreadsheet}>
-                <SelectTrigger data-testid="select-spreadsheet">
-                  <SelectValue placeholder="Choose a spreadsheet" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sheets.map((sheet) => (
-                    <SelectItem key={sheet.id} value={sheet.id}>
-                      {sheet.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedSpreadsheet && sheetInfo && (
-              <div className="space-y-2">
-                <Label htmlFor="sheet-name">Select Sheet/Tab</Label>
-                <Select value={selectedSheetName} onValueChange={setSelectedSheetName}>
-                  <SelectTrigger data-testid="select-sheet-tab">
-                    <SelectValue placeholder="Choose a sheet/tab" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sheetInfo.sheets.map((sheet) => (
-                      <SelectItem key={sheet.properties.sheetId} value={sheet.properties.title}>
-                        {sheet.properties.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="unique-id">Unique Identifier Column</Label>
-              <Input
-                id="unique-id"
-                value={uniqueIdColumn}
-                onChange={(e) => setUniqueIdColumn(e.target.value)}
-                placeholder="e.g., link, email, id"
-                data-testid="input-unique-id-column"
-              />
-              <p className="text-xs text-muted-foreground">
-                Column name used to match records (case-insensitive). For dispensaries, use "link".
-              </p>
-            </div>
-
-            <Button
-              onClick={handleConnect}
-              disabled={!selectedSpreadsheet || !selectedSheetName || !uniqueIdColumn || connectMutation.isPending}
-              className="w-full"
-              data-testid="button-connect-sheet"
-            >
-              <Link className="mr-2 h-4 w-4" />
-              {connectMutation.isPending ? "Connecting..." : "Connect Sheet"}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
+  if (sheetsLoading) {
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>How It Works</CardTitle>
+          <CardTitle>Google Sheets Integration</CardTitle>
+          <CardDescription>Loading...</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="flex gap-3">
-            <FileSpreadsheet className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-            <div>
-              <p className="font-medium">Real-Time Sync</p>
-              <p className="text-muted-foreground">
-                Connect any Google Sheet to your CRM. Data syncs automatically - changes in the sheet appear in the CRM and vice versa.
-              </p>
-            </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-2">
+          <div>
+            <CardTitle>Google Sheets Connections</CardTitle>
+            <CardDescription>
+              Connect and sync multiple Google Sheets with your CRM
+            </CardDescription>
           </div>
-          <div className="flex gap-3">
-            <Download className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-            <div>
-              <p className="font-medium">Unique Identifier</p>
-              <p className="text-muted-foreground">
-                Choose a column as your unique ID (like "link" for Leafly URLs). This prevents duplicates and ensures records match correctly.
-              </p>
+          <Button
+            onClick={() => setShowAddForm(!showAddForm)}
+            size="sm"
+            data-testid="button-add-sheet"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Sheet
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {showAddForm && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Connect New Sheet</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="spreadsheet-select">Select Spreadsheet</Label>
+                  <Select
+                    value={selectedSpreadsheet}
+                    onValueChange={setSelectedSpreadsheet}
+                  >
+                    <SelectTrigger id="spreadsheet-select" data-testid="select-spreadsheet">
+                      <SelectValue placeholder="Choose a spreadsheet" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSheets.map((sheet) => (
+                        <SelectItem key={sheet.id} value={sheet.id}>
+                          {sheet.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedSpreadsheet && sheetInfo && (
+                  <div className="space-y-2">
+                    <Label htmlFor="sheet-name-select">Select Tab/Worksheet</Label>
+                    <Select
+                      value={selectedSheetName}
+                      onValueChange={setSelectedSheetName}
+                    >
+                      <SelectTrigger id="sheet-name-select" data-testid="select-sheet-name">
+                        <SelectValue placeholder="Choose a tab" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sheetInfo.sheets.map((sheet) => (
+                          <SelectItem
+                            key={sheet.properties.sheetId}
+                            value={sheet.properties.title}
+                          >
+                            {sheet.properties.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="purpose-select">Sheet Purpose</Label>
+                  <Select
+                    value={sheetPurpose}
+                    onValueChange={setSheetPurpose}
+                  >
+                    <SelectTrigger id="purpose-select" data-testid="select-purpose">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="clients">Client Data</SelectItem>
+                      <SelectItem value="commissions">Commission Tracking</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="unique-id">Unique Identifier Column</Label>
+                  <Input
+                    id="unique-id"
+                    value={uniqueIdColumn}
+                    onChange={(e) => setUniqueIdColumn(e.target.value)}
+                    placeholder="e.g., link, email, company"
+                    data-testid="input-unique-id"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Column name to use as unique identifier for matching records
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleConnect}
+                    disabled={
+                      connectMutation.isPending ||
+                      !selectedSpreadsheet ||
+                      !selectedSheetName ||
+                      !uniqueIdColumn
+                    }
+                    data-testid="button-connect-sheet"
+                    className="flex-1"
+                  >
+                    <Link className="mr-2 h-4 w-4" />
+                    {connectMutation.isPending ? "Connecting..." : "Connect Sheet"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAddForm(false)}
+                    data-testid="button-cancel-connect"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {connectedSheets.length === 0 && !showAddForm && (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileSpreadsheet className="mx-auto h-12 w-12 mb-4 opacity-50" />
+              <p>No Google Sheets connected yet</p>
+              <p className="text-sm">Click "Add Sheet" to connect your first sheet</p>
             </div>
-          </div>
-          <div className="flex gap-3">
-            <RefreshCw className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-            <div>
-              <p className="font-medium">Flexible Columns</p>
-              <p className="text-muted-foreground">
-                Your sheet columns become CRM fields automatically. Add new columns anytime - they'll sync on the next update.
-              </p>
-            </div>
-          </div>
+          )}
+
+          {connectedSheets.map((sheet) => (
+            <Card key={sheet.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      {sheet.spreadsheetName}
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      Tab: {sheet.sheetName} • Purpose: {sheet.sheetPurpose}
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={sheet.syncStatus === 'active' ? 'default' : 'secondary'}>
+                      {sheet.syncStatus}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => disconnectMutation.mutate(sheet.id)}
+                      disabled={disconnectMutation.isPending}
+                      data-testid={`button-disconnect-${sheet.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  <p>Unique ID: {sheet.uniqueIdentifierColumn}</p>
+                  <p>Last synced: {formatDate(sheet.lastSyncedAt)}</p>
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    onClick={() => importMutation.mutate(sheet.id)}
+                    disabled={importMutation.isPending}
+                    variant="outline"
+                    size="sm"
+                    data-testid={`button-import-${sheet.id}`}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Import
+                  </Button>
+                  <Button
+                    onClick={() => exportMutation.mutate(sheet.id)}
+                    disabled={exportMutation.isPending}
+                    variant="outline"
+                    size="sm"
+                    data-testid={`button-export-${sheet.id}`}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                  <Button
+                    onClick={() => bidirectionalSyncMutation.mutate(sheet.id)}
+                    disabled={bidirectionalSyncMutation.isPending}
+                    variant="default"
+                    size="sm"
+                    data-testid={`button-sync-${sheet.id}`}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Sync Both
+                  </Button>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  <strong>Import:</strong> Google Sheets → CRM • 
+                  <strong> Export:</strong> CRM → Google Sheets • 
+                  <strong> Sync Both:</strong> Bidirectional sync (recommended)
+                </p>
+              </CardContent>
+            </Card>
+          ))}
         </CardContent>
       </Card>
     </div>

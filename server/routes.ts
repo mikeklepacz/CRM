@@ -920,14 +920,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Deactivate any existing active sheet
-      await storage.deactivateAllGoogleSheets();
-
       // Create new connection
+      const { sheetPurpose = 'clients' } = req.body; // Default to 'clients' if not provided
       const connection = await storage.createGoogleSheetConnection({
         spreadsheetId,
         spreadsheetName: spreadsheetName || spreadsheetId,
         sheetName,
+        sheetPurpose,
         uniqueIdentifierColumn,
         connectedBy: userId,
         syncStatus: 'active',
@@ -940,10 +939,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Disconnect Google Sheet
-  app.post('/api/sheets/disconnect', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  // List all connected Google Sheets
+  app.get('/api/sheets', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
-      await storage.deactivateAllGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets();
+      res.json({ sheets });
+    } catch (error: any) {
+      console.error("Error fetching sheets:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch sheets" });
+    }
+  });
+
+  // Disconnect a specific Google Sheet
+  app.post('/api/sheets/:id/disconnect', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.disconnectGoogleSheet(id);
       res.json({ message: "Sheet disconnected successfully" });
     } catch (error: any) {
       console.error("Error disconnecting sheet:", error);
@@ -952,15 +963,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sync FROM Google Sheets TO CRM (import)
-  app.post('/api/sheets/sync/import', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.post('/api/sheets/:id/sync/import', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const activeSheet = await storage.getActiveGoogleSheet();
-      if (!activeSheet) {
-        return res.status(400).json({ message: "No active Google Sheet connected" });
+      const { id } = req.params;
+      
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(400).json({ message: "Google Sheet not found" });
       }
 
-      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = activeSheet;
+      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
       const range = `${sheetName}!A:ZZ`;
       const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
 
@@ -999,7 +1012,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update last synced time on the sheet connection
-      await storage.updateGoogleSheetLastSync(activeSheet.id);
+      await storage.updateGoogleSheetLastSync(sheet.id);
 
       res.json({
         message: "Import completed",
@@ -1014,15 +1027,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sync FROM CRM TO Google Sheets (export)
-  app.post('/api/sheets/sync/export', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.post('/api/sheets/:id/sync/export', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const activeSheet = await storage.getActiveGoogleSheet();
-      if (!activeSheet) {
-        return res.status(400).json({ message: "No active Google Sheet connected" });
+      const { id } = req.params;
+      
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(400).json({ message: "Google Sheet not found" });
       }
 
-      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = activeSheet;
+      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
       
       // Get headers from sheet
       const headerRange = `${sheetName}!A1:ZZ1`;
@@ -1047,7 +1062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      await storage.updateGoogleSheetLastSync(activeSheet.id);
+      await storage.updateGoogleSheetLastSync(sheet.id);
 
       res.json({
         message: "Export completed",
@@ -1059,55 +1074,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create a new Commission Tracking Google Sheet
-  app.post('/api/sheets/create-commission-tracker', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
-      // Check if user has Google connected
-      const integration = await storage.getUserIntegration(userId);
-      if (!integration?.googleAccessToken) {
-        return res.status(400).json({ message: "Google Sheets not connected. Please connect in Settings." });
-      }
-
-      // Define commission tracking sheet structure
-      const headers = [[
-        'Date',
-        'Agent Name',
-        'Order ID',
-        'Client Name',
-        'Commission Type',
-        'Amount',
-        'Status',
-        'Notes'
-      ]];
-
-      const title = `Hemp Wick CRM - Commission Tracker - ${new Date().toLocaleDateString()}`;
-      
-      const spreadsheet = await googleSheets.createSpreadsheet(userId, title, headers);
-      
-      res.json({
-        message: "Commission tracking sheet created successfully!",
-        spreadsheetId: spreadsheet.spreadsheetId,
-        spreadsheetUrl: spreadsheet.spreadsheetUrl,
-        title: spreadsheet.properties?.title,
-      });
-    } catch (error: any) {
-      console.error("Error creating commission sheet:", error);
-      res.status(500).json({ message: error.message || "Failed to create sheet" });
-    }
-  });
-
   // Bidirectional sync (import then export)
-  app.post('/api/sheets/sync/bidirectional', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.post('/api/sheets/:id/sync/bidirectional', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const activeSheet = await storage.getActiveGoogleSheet();
-      if (!activeSheet) {
-        return res.status(400).json({ message: "No active Google Sheet connected" });
+      const { id } = req.params;
+      
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(400).json({ message: "Google Sheet not found" });
       }
 
-      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = activeSheet;
+      const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
       
       // STEP 1: Import from sheet
       const range = `${sheetName}!A:ZZ`;
@@ -1145,7 +1123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      await storage.updateGoogleSheetLastSync(activeSheet.id);
+      await storage.updateGoogleSheetLastSync(sheet.id);
 
       res.json({
         message: "Bidirectional sync completed",

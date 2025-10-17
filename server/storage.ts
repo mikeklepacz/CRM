@@ -66,9 +66,10 @@ export interface IStorage {
   getRecentCsvUploads(limit: number): Promise<CsvUpload[]>;
 
   // Google Sheets operations
-  getActiveGoogleSheet(): Promise<GoogleSheet | null>;
+  getAllActiveGoogleSheets(): Promise<GoogleSheet[]>;
+  getGoogleSheetById(id: string): Promise<GoogleSheet | null>;
   createGoogleSheetConnection(connection: InsertGoogleSheet): Promise<GoogleSheet>;
-  deactivateAllGoogleSheets(): Promise<void>;
+  disconnectGoogleSheet(id: string): Promise<void>;
   updateGoogleSheetLastSync(id: string): Promise<void>;
   getClientByUniqueIdentifier(uniqueId: string): Promise<Client | undefined>;
 
@@ -282,11 +283,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Google Sheets operations
-  async getActiveGoogleSheet(): Promise<GoogleSheet | null> {
-    const [sheet] = await db
+  async getAllActiveGoogleSheets(): Promise<GoogleSheet[]> {
+    return await db
       .select()
       .from(googleSheets)
       .where(eq(googleSheets.syncStatus, 'active'))
+      .orderBy(desc(googleSheets.createdAt));
+  }
+
+  async getGoogleSheetById(id: string): Promise<GoogleSheet | null> {
+    const [sheet] = await db
+      .select()
+      .from(googleSheets)
+      .where(eq(googleSheets.id, id))
       .limit(1);
     return sheet || null;
   }
@@ -299,10 +308,11 @@ export class DatabaseStorage implements IStorage {
     return newConnection;
   }
 
-  async deactivateAllGoogleSheets(): Promise<void> {
+  async disconnectGoogleSheet(id: string): Promise<void> {
     await db
       .update(googleSheets)
-      .set({ syncStatus: 'paused' });
+      .set({ syncStatus: 'paused' })
+      .where(eq(googleSheets.id, id));
   }
 
   async updateGoogleSheetLastSync(id: string): Promise<void> {

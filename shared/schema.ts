@@ -55,9 +55,10 @@ export const csvUploads = pgTable("csv_uploads", {
 // Google Sheets connection tracking
 export const googleSheets = pgTable("google_sheets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  spreadsheetId: varchar("spreadsheet_id").notNull().unique(),
+  spreadsheetId: varchar("spreadsheet_id").notNull(),
   spreadsheetName: varchar("spreadsheet_name").notNull(),
   sheetName: varchar("sheet_name").notNull(), // Tab/worksheet name
+  sheetPurpose: varchar("sheet_purpose", { length: 100 }).default('clients'), // 'clients', 'commissions', 'custom'
   uniqueIdentifierColumn: varchar("unique_identifier_column").notNull(), // Which column to use as unique ID (e.g., "link")
   connectedBy: varchar("connected_by").notNull().references(() => users.id),
   lastSyncedAt: timestamp("last_synced_at"),

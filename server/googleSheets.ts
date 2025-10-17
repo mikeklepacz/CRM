@@ -125,49 +125,6 @@ export async function listSpreadsheets(userId: string) {
   return response.data.files || [];
 }
 
-// Create a new Google Sheet with specified structure
-export async function createSpreadsheet(userId: string, title: string, headers: string[][]) {
-  const sheets = await getUncachableGoogleSheetClient(userId);
-  
-  const response = await sheets.spreadsheets.create({
-    requestBody: {
-      properties: {
-        title: title,
-      },
-      sheets: [
-        {
-          properties: {
-            title: 'Commission Transactions',
-            gridProperties: {
-              rowCount: 1000,
-              columnCount: headers[0].length,
-            },
-          },
-          data: [
-            {
-              startRow: 0,
-              startColumn: 0,
-              rowData: [
-                {
-                  values: headers[0].map(header => ({
-                    userEnteredValue: { stringValue: header },
-                    userEnteredFormat: {
-                      textFormat: { bold: true },
-                      backgroundColor: { red: 0.9, green: 0.9, blue: 0.9 },
-                    },
-                  })),
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  });
-
-  return response.data;
-}
-
 // Parse sheet data into objects based on headers
 export function parseSheetDataToObjects(rows: any[][], uniqueIdentifierColumn: string) {
   if (rows.length === 0) return [];
