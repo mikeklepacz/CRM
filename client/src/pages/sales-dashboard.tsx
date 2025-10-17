@@ -85,8 +85,11 @@ export default function SalesDashboard() {
     if (headers.length > 0) {
       const initialVisible: Record<string, boolean> = {};
       const initialWidths: Record<string, number> = {};
+      const hiddenColumns = ['title', 'error']; // Columns to hide by default
+      
       headers.forEach((header: string) => {
-        initialVisible[header] = true;
+        // Hide title and error columns by default
+        initialVisible[header] = !hiddenColumns.includes(header.toLowerCase());
         initialWidths[header] = 200; // Default width 200px
       });
       setVisibleColumns(initialVisible);
