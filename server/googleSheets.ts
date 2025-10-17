@@ -14,26 +14,31 @@ async function getAccessToken(userId: string) {
   const isExpired = expiryTime <= now + (5 * 60 * 1000);
 
   if (isExpired && integration.googleRefreshToken && integration.googleClientId && integration.googleClientSecret) {
-    // Refresh the token
+    // Refresh the token (no redirect URI needed for refresh)
     const oauth2Client = new google.auth.OAuth2(
       integration.googleClientId,
-      integration.googleClientSecret,
-      `${process.env.REPLIT_DOMAINS?.split(',')[0]}/api/google/callback`
+      integration.googleClientSecret
     );
 
     oauth2Client.setCredentials({
       refresh_token: integration.googleRefreshToken
     });
 
-    const { credentials } = await oauth2Client.refreshAccessToken();
-    
-    // Update tokens in database
-    await storage.updateUserIntegration(userId, {
-      googleAccessToken: credentials.access_token!,
-      googleTokenExpiry: credentials.expiry_date || (Date.now() + 3600000)
-    });
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      
+      // Update tokens in database
+      await storage.updateUserIntegration(userId, {
+        googleAccessToken: credentials.access_token!,
+        googleTokenExpiry: credentials.expiry_date || (Date.now() + 3600000)
+      });
 
-    return credentials.access_token!;
+      console.log('Successfully refreshed Google access token for user:', userId);
+      return credentials.access_token!;
+    } catch (error) {
+      console.error('Failed to refresh Google access token:', error);
+      throw new Error('Failed to refresh Google access token. Please reconnect Google Sheets in Settings.');
+    }
   }
 
   return integration.googleAccessToken;
