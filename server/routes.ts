@@ -950,6 +950,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get raw data from a specific Google Sheet
+  app.get('/api/sheets/:id/data', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(404).json({ message: "Google Sheet not found" });
+      }
+
+      const { spreadsheetId, sheetName } = sheet;
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return res.json({ headers: [], data: [] });
+      }
+
+      const headers = rows[0];
+      const data = rows.slice(1).map((row, index) => {
+        const obj: any = { _rowIndex: index + 2 }; // +2 because row 1 is header, array is 0-indexed
+        headers.forEach((header, i) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      });
+
+      res.json({ 
+        headers,
+        data,
+        sheetInfo: {
+          id: sheet.id,
+          spreadsheetName: sheet.spreadsheetName,
+          sheetName: sheet.sheetName,
+          sheetPurpose: sheet.sheetPurpose,
+        }
+      });
+    } catch (error: any) {
+      console.error("Error fetching sheet data:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch sheet data" });
+    }
+  });
+
   // Disconnect a specific Google Sheet
   app.post('/api/sheets/:id/disconnect', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
