@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClientFilters } from "@/components/client-filters";
 import { ClientsTable } from "@/components/clients-table";
-import { CsvUpload } from "@/components/csv-upload";
 import { WooCommerceSync } from "@/components/woocommerce-sync";
 import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { Users, DollarSign, FileSpreadsheet, TrendingUp } from "lucide-react";
@@ -152,7 +151,6 @@ export default function AdminDashboard() {
         <TabsList>
           <TabsTrigger value="clients" data-testid="tab-clients">Clients</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
-          <TabsTrigger value="upload" data-testid="tab-upload">CSV Upload</TabsTrigger>
           <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
         </TabsList>
 
@@ -182,10 +180,6 @@ export default function AdminDashboard() {
 
         <TabsContent value="sheets">
           <GoogleSheetsSync />
-        </TabsContent>
-
-        <TabsContent value="upload">
-          <CsvUpload />
         </TabsContent>
 
         <TabsContent value="sync">
