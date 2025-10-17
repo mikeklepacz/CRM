@@ -1,0 +1,110 @@
+Hemp Wick CRM & Commission Tracker
+
+Description / Instructions:
+
+Build a web-based CRM and commission tracking system for internal sales.
+
+The system will be powered by a large CSV that the admin uploads. The app should automatically read all headers from the CSV and let users filter, search, and edit data directly in the browser.
+
+There are two user roles: Admin and Agent.
+
+⸻
+
+System Behavior and Requirements
+
+1. CSV Handling
+	•	Admin can upload a CSV file through the interface.
+	•	The system automatically detects all column headers.
+	•	Admin chooses a unique key (like “Link” or “Email”) to prevent duplicates.
+	•	The app stores and displays all rows and columns from the CSV.
+	•	When a new CSV is uploaded, existing rows update instead of duplicating.
+
+⸻
+
+2. Filtering and Search
+	•	Users can filter by:
+	•	State
+	•	Tag
+	•	Status
+	•	Assigned Agent
+	•	Add a date-based filter to show clients who have not ordered in the last 90, 180, or 365 days (custom range supported).
+	•	A global search bar filters across all fields.
+
+⸻
+
+3. Claim System
+	•	Agents can “claim” an unassigned client.
+	•	When a client is claimed:
+	•	The record is marked with the agent’s name.
+	•	A claim date is stored.
+	•	Other agents can no longer claim that client.
+	•	Admin can reassign or unclaim any client.
+
+⸻
+
+4. Dashboards
+
+Admin Dashboard
+	•	See all clients and agents.
+	•	Upload and merge CSVs.
+	•	Manage user accounts.
+	•	View total sales and commission owed per agent.
+	•	Adjust commissions if needed.
+
+Agent Dashboard
+	•	Shows only clients claimed by the logged-in agent.
+	•	Filter clients by state, tags, or inactivity (e.g. not ordered in 90, 180, or 365 days).
+	•	See key info at a glance:
+	•	Company name
+	•	Last order date
+	•	Total sales
+	•	Commission total
+	•	Add notes and mark follow-ups done.
+
+Agents use these filters to book follow-up calls with clients who haven’t ordered recently.
+
+⸻
+
+5. Order Tracking and Commission Logic
+	•	Integrate with WooCommerce (hempwick.eu).
+	•	Match incoming orders to clients using billing email or company name.
+	•	Each client has:
+	•	first_order_date
+	•	last_order_date
+	•	total_sales
+	•	When orders sync, the system calculates commissions:
+	•	25% gross for the first 6 months after claim date.
+	•	10% for all orders beyond 6 months.
+	•	Admin and agents both see commission totals in their dashboards.
+
+⸻
+
+6. Follow-Up and Communication
+	•	Each client record shows:
+	•	Last order date
+	•	“Not ordered since” time
+	•	A notes section for call/follow-up logs
+	•	Agents can mark a client as “followed up”.
+	•	Phone numbers and emails in the table are clickable:
+	•	Clicking a phone number uses tel: link to open the system dialer.
+	•	Clicking an email uses mailto: link to open the email client.
+
+⸻
+
+7. User Authentication
+	•	Login system with Admin and Agent roles.
+	•	Agents only see their clients; Admin sees everything.
+
+⸻
+
+8. General Design Goals
+	•	Keep the interface clean and fast.
+	•	Use readable tables with sorting and filtering controls.
+	•	Make inline edits easy.
+	•	Prioritize usability for sales staff over visuals.
+	•	Include export options for CSV reports.
+
+⸻
+
+End Goal
+A simple, functional internal CRM for tracking hemp wick leads and clients, showing who’s responsible for each account, when they last ordered, and what commissions are owed — with clear filters for follow-ups and sales reactivation.
