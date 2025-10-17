@@ -880,14 +880,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get active Google Sheet connection
+  // Get active Google Sheet connections (deprecated - use /api/sheets instead)
   app.get('/api/sheets/active', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
-      const activeSheet = await storage.getActiveGoogleSheet();
-      res.json(activeSheet);
+      const sheets = await storage.getAllActiveGoogleSheets();
+      res.json(sheets.length > 0 ? sheets[0] : null);
     } catch (error: any) {
-      console.error("Error getting active sheet:", error);
-      res.status(500).json({ message: error.message || "Failed to get active sheet" });
+      console.error("Error getting active sheets:", error);
+      res.status(500).json({ message: error.message || "Failed to get active sheets" });
     }
   });
 
@@ -991,6 +991,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error fetching sheet data:", error);
       res.status(500).json({ message: error.message || "Failed to fetch sheet data" });
+    }
+  });
+
+  // Get merged data from multiple sheets (for Sales Dashboard)
+  app.post('/api/sheets/merged-data', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { storeSheetId, trackerSheetId, joinColumn } = req.body;
+
+      if (!storeSheetId || !trackerSheetId || !joinColumn) {
+        return res.status(400).json({ message: "Store sheet ID, tracker sheet ID, and join column are required" });
+      }
+
+      // Fetch both sheets
+      const storeSheet = await storage.getGoogleSheetById(storeSheetId);
+      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
+
+      if (!storeSheet || !trackerSheet) {
+        return res.status(404).json({ message: "One or both sheets not found" });
+      }
+
+      // Read data from both sheets
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+
+      if (storeRows.length === 0) {
+        return res.json({ headers: [], data: [], editableColumns: [] });
+      }
+
+      // Parse store data
+      const storeHeaders = storeRows[0];
+      const storeData = storeRows.slice(1).map((row, index) => {
+        const obj: any = { _storeRowIndex: index + 2, _storeSheetId: storeSheetId };
+        storeHeaders.forEach((header, i) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      });
+
+      // Parse tracker data
+      const trackerHeaders = trackerRows.length > 0 ? trackerRows[0] : [];
+      const trackerData = trackerRows.length > 1 ? trackerRows.slice(1).map((row, index) => {
+        const obj: any = { _trackerRowIndex: index + 2, _trackerSheetId: trackerSheetId };
+        trackerHeaders.forEach((header, i) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      }) : [];
+
+      // Filter tracker data by agent (if user is not admin)
+      let filteredTrackerData = trackerData;
+      if (user?.role !== 'admin' && trackerHeaders.includes('Agent')) {
+        const userEmail = user?.email || '';
+        filteredTrackerData = trackerData.filter(row => row['Agent'] === userEmail);
+      }
+
+      // Merge data by join column
+      const mergedData = storeData.map(storeRow => {
+        const joinValue = storeRow[joinColumn];
+        const trackerRow = filteredTrackerData.find(tr => tr[joinColumn] === joinValue) || {};
+        
+        return {
+          ...storeRow,
+          ...trackerRow,
+          _hasTrackerData: Object.keys(trackerRow).length > 0,
+        };
+      });
+
+      // Combine headers (store headers + tracker headers, avoiding duplicates)
+      const allHeaders = [...storeHeaders];
+      trackerHeaders.forEach(header => {
+        if (!allHeaders.includes(header)) {
+          allHeaders.push(header);
+        }
+      });
+
+      // Define editable columns
+      const editableColumns = [
+        ...trackerHeaders.filter(h => !['Agent', joinColumn].includes(h)), // All tracker columns except Agent and join column
+        'phone', 'email', 'additional phone', 'additional email', // Editable store columns
+      ].filter(col => allHeaders.includes(col)); // Only include if they exist
+
+      res.json({
+        headers: allHeaders,
+        data: mergedData,
+        editableColumns,
+        storeSheetId,
+        trackerSheetId,
+        storeHeaders,
+        trackerHeaders,
+      });
+    } catch (error: any) {
+      console.error("Error fetching merged data:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch merged data" });
+    }
+  });
+
+  // Update a cell in a Google Sheet
+  app.put('/api/sheets/:id/update', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      const { rowIndex, column, value } = req.body;
+
+      if (!rowIndex || !column) {
+        return res.status(400).json({ message: "Row index and column are required" });
+      }
+
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(404).json({ message: "Google Sheet not found" });
+      }
+
+      const { spreadsheetId, sheetName } = sheet;
+      
+      // Read headers to find column index
+      const headerRange = `${sheetName}!1:1`;
+      const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+      const headers = headerRows[0] || [];
+      const columnIndex = headers.indexOf(column);
+
+      if (columnIndex === -1) {
+        return res.status(400).json({ message: `Column "${column}" not found in sheet` });
+      }
+
+      // Convert column index to letter (A, B, C, etc.)
+      const columnLetter = String.fromCharCode(65 + columnIndex);
+      const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
+
+      // Update the cell
+      await googleSheets.writeSheetData(userId, spreadsheetId, cellRange, [[value]]);
+
+      res.json({ message: "Cell updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating cell:", error);
+      res.status(500).json({ message: error.message || "Failed to update cell" });
     }
   });
 

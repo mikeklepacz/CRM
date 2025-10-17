@@ -1,274 +1,339 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileSpreadsheet, Settings, Search, RefreshCw } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RefreshCw, Settings2, Save } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
-type ConnectedSheet = {
+interface GoogleSheet {
   id: string;
   spreadsheetName: string;
   sheetName: string;
   sheetPurpose: string;
-};
-
-type SheetData = {
-  headers: string[];
-  data: Record<string, any>[];
-  sheetInfo: {
-    id: string;
-    spreadsheetName: string;
-    sheetName: string;
-    sheetPurpose: string;
-  };
-};
+}
 
 export default function SalesDashboard() {
-  const [selectedSheetId, setSelectedSheetId] = useState<string>("");
+  const { toast } = useToast();
+  const [storeSheetId, setStoreSheetId] = useState<string>("");
+  const [trackerSheetId, setTrackerSheetId] = useState<string>("");
+  const [joinColumn, setJoinColumn] = useState<string>("name");
+  const [searchTerm, setSearchTerm] = useState("");
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
-  const [searchQuery, setSearchQuery] = useState("");
+  const [editedCells, setEditedCells] = useState<Record<string, { rowIndex: number; column: string; value: string; sheetId: string }>>({});
 
-  // Fetch all connected sheets
-  const { data: connectedSheetsData } = useQuery<{ sheets: ConnectedSheet[] }>({
-    queryKey: ["/api/sheets"],
+  // Fetch available sheets
+  const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
+    queryKey: ['/api/sheets'],
   });
 
-  const connectedSheets = connectedSheetsData?.sheets || [];
+  const sheets = sheetsData?.sheets || [];
+  const storeSheets = sheets.filter(s => s.sheetPurpose === 'store_database');
+  const trackerSheets = sheets.filter(s => s.sheetPurpose === 'commission_tracker');
 
-  // Fetch sheet data when a sheet is selected
-  const { data: sheetData, isLoading, refetch } = useQuery<SheetData>({
-    queryKey: [`/api/sheets/${selectedSheetId}/data`],
-    enabled: !!selectedSheetId,
+  // Fetch merged data
+  const { data: mergedData, isLoading, refetch } = useQuery({
+    queryKey: ['merged-data', storeSheetId, trackerSheetId, joinColumn],
+    queryFn: async () => {
+      if (!storeSheetId || !trackerSheetId) return null;
+      const response = await fetch('/api/sheets/merged-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ storeSheetId, trackerSheetId, joinColumn }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch merged data');
+      return response.json();
+    },
+    enabled: !!storeSheetId && !!trackerSheetId,
   });
 
-  const headers = sheetData?.headers || [];
-  const data = sheetData?.data || [];
+  const headers = mergedData?.headers || [];
+  const data = mergedData?.data || [];
+  const editableColumns = mergedData?.editableColumns || [];
+  const storeHeaders = mergedData?.storeHeaders || [];
+  const trackerHeaders = mergedData?.trackerHeaders || [];
 
-  // Initialize all columns as visible when headers change
+  // Initialize visible columns
   useEffect(() => {
     if (headers.length > 0) {
       const initialVisible: Record<string, boolean> = {};
-      headers.forEach(header => {
+      headers.forEach((header: string) => {
         initialVisible[header] = true;
       });
       setVisibleColumns(initialVisible);
     }
-  }, [selectedSheetId, headers.length]); // Reset when sheet changes
+  }, [headers.length, storeSheetId, trackerSheetId]);
+
 
   const toggleColumn = (column: string) => {
     setVisibleColumns(prev => ({
       ...prev,
-      [column]: !prev[column]
+      [column]: !prev[column],
     }));
   };
 
-  const filteredData = data.filter(row => {
-    if (!searchQuery) return true;
-    return Object.values(row).some(value => 
-      String(value).toLowerCase().includes(searchQuery.toLowerCase())
-    );
+  const handleCellEdit = (row: any, column: string, value: string) => {
+    // Determine which sheet this column belongs to
+    const isTrackerColumn = trackerHeaders.includes(column);
+    const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
+    const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
+    
+    if (!sheetId || !rowIndex) return;
+    
+    // Use a unique key that doesn't break on hyphens in column names
+    const key = JSON.stringify({ rowIndex, column, sheetId });
+    setEditedCells(prev => ({
+      ...prev,
+      [key]: { rowIndex, column, value, sheetId },
+    }));
+  };
+
+  const handleSave = async () => {
+    const edits = Object.values(editedCells);
+    if (edits.length === 0) return;
+
+    try {
+      // Save all edits in parallel
+      await Promise.all(
+        edits.map(({ sheetId, rowIndex, column, value }) =>
+          apiRequest('PUT', `/api/sheets/${sheetId}/update`, { rowIndex, column, value })
+        )
+      );
+
+      // Only clear state after ALL saves succeed
+      toast({ title: "Success", description: `${edits.length} changes saved successfully` });
+      setEditedCells({});
+      refetch();
+    } catch (error: any) {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to save some changes. Please try again.", 
+        variant: "destructive" 
+      });
+    }
+  };
+
+  const filteredData = data.filter((row: any) => {
+    const searchLower = searchTerm.toLowerCase();
+    return headers.some((header: string) => {
+      const value = row[header]?.toString().toLowerCase() || '';
+      return value.includes(searchLower);
+    });
   });
 
-  const visibleHeaders = headers.filter(h => visibleColumns[h] !== false);
-  const visibleColumnCount = visibleHeaders.length;
+  const visibleHeaders = headers.filter((h: string) => visibleColumns[h]);
+  const hasUnsavedChanges = Object.keys(editedCells).length > 0;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Sales Dashboard</h1>
-        <p className="text-muted-foreground">
-          View and analyze your Google Sheets data in real-time
-        </p>
-      </div>
-
       <Card>
         <CardHeader>
-          <CardTitle>Select Data Source</CardTitle>
-          <CardDescription>Choose a connected Google Sheet to view</CardDescription>
+          <CardTitle>Sales Dashboard</CardTitle>
+          <CardDescription>
+            View and edit data from Store Database and Commission Tracker
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="sheet-select">Connected Sheets</Label>
-            <Select
-              value={selectedSheetId}
-              onValueChange={setSelectedSheetId}
-            >
-              <SelectTrigger id="sheet-select" data-testid="select-data-source">
-                <SelectValue placeholder="Select a sheet..." />
-              </SelectTrigger>
-              <SelectContent>
-                {connectedSheets.map((sheet) => (
-                  <SelectItem key={sheet.id} value={sheet.id}>
-                    <div className="flex items-center gap-2">
-                      <FileSpreadsheet className="h-4 w-4" />
+          {/* Sheet Selection */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="store-sheet">Store Database Sheet</Label>
+              <Select value={storeSheetId} onValueChange={setStoreSheetId}>
+                <SelectTrigger id="store-sheet" data-testid="select-store-sheet">
+                  <SelectValue placeholder="Select store sheet" />
+                </SelectTrigger>
+                <SelectContent>
+                  {storeSheets.map((sheet) => (
+                    <SelectItem key={sheet.id} value={sheet.id}>
                       {sheet.spreadsheetName} - {sheet.sheetName}
-                      <Badge variant="secondary" className="ml-2">
-                        {sheet.sheetPurpose}
-                      </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedSheetId && (
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => refetch()}
-                variant="outline"
-                size="sm"
-                data-testid="button-refresh-data"
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh Data
-              </Button>
-              {sheetData && (
-                <span className="text-sm text-muted-foreground">
-                  {filteredData.length} rows
-                </span>
-              )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {selectedSheetId && sheetData && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <CardTitle>
-                  {sheetData.sheetInfo.spreadsheetName} - {sheetData.sheetInfo.sheetName}
-                </CardTitle>
-                <CardDescription>
-                  {visibleColumnCount} of {headers.length} columns visible
-                </CardDescription>
-              </div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" data-testid="button-column-settings">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Columns
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80" align="end">
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Show/Hide Columns</h4>
-                    <ScrollArea className="h-[300px]">
-                      <div className="space-y-2">
-                        {headers.map((header) => (
-                          <div key={header} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`col-${header}`}
-                              checked={visibleColumns[header] !== false}
-                              onCheckedChange={() => toggleColumn(header)}
-                              data-testid={`checkbox-column-${header}`}
-                            />
-                            <label
-                              htmlFor={`col-${header}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                            >
-                              {header}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                </PopoverContent>
-              </Popover>
+            <div className="space-y-2">
+              <Label htmlFor="tracker-sheet">Commission Tracker Sheet</Label>
+              <Select value={trackerSheetId} onValueChange={setTrackerSheetId}>
+                <SelectTrigger id="tracker-sheet" data-testid="select-tracker-sheet">
+                  <SelectValue placeholder="Select tracker sheet" />
+                </SelectTrigger>
+                <SelectContent>
+                  {trackerSheets.map((sheet) => (
+                    <SelectItem key={sheet.id} value={sheet.id}>
+                      {sheet.spreadsheetName} - {sheet.sheetName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+
+            <div className="space-y-2">
+              <Label htmlFor="join-column">Join Column</Label>
               <Input
-                placeholder="Search across all columns..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8"
-                data-testid="input-search"
+                id="join-column"
+                value={joinColumn}
+                onChange={(e) => setJoinColumn(e.target.value)}
+                placeholder="e.g., name, link"
+                data-testid="input-join-column"
               />
             </div>
+          </div>
 
-            {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Loading data...
+          {/* Controls */}
+          {storeSheetId && trackerSheetId && (
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <Input
+                placeholder="Search all columns..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-sm"
+                data-testid="input-search"
+              />
+
+              <div className="flex items-center gap-2">
+                {hasUnsavedChanges && (
+                  <Button
+                    onClick={handleSave}
+                    data-testid="button-save-changes"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Changes ({Object.keys(editedCells).length})
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  onClick={() => refetch()}
+                  disabled={isLoading}
+                  data-testid="button-refresh"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh
+                </Button>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-column-settings">
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      Columns
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-2">
+                      <h4 className="font-medium">Show/Hide Columns</h4>
+                      <ScrollArea className="h-72">
+                        <div className="space-y-2">
+                          {headers.map((header: string) => (
+                            <div key={header} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`col-${header}`}
+                                checked={visibleColumns[header]}
+                                onCheckedChange={() => toggleColumn(header)}
+                                data-testid={`checkbox-column-${header}`}
+                              />
+                              <Label 
+                                htmlFor={`col-${header}`} 
+                                className="text-sm cursor-pointer"
+                              >
+                                {header}
+                                {editableColumns.includes(header) && (
+                                  <span className="ml-2 text-xs text-muted-foreground">(editable)</span>
+                                )}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
-            ) : filteredData.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No data found
-              </div>
-            ) : (
-              <ScrollArea className="h-[600px] rounded-md border">
+            </div>
+          )}
+
+          {/* Data Table */}
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-2 text-muted-foreground">Loading data...</p>
+            </div>
+          ) : storeSheetId && trackerSheetId && data.length > 0 ? (
+            <div className="border rounded-md">
+              <ScrollArea className="h-[600px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {visibleHeaders.map((header) => (
+                      {visibleHeaders.map((header: string) => (
                         <TableHead key={header} className="whitespace-nowrap">
                           {header}
+                          {editableColumns.includes(header) && (
+                            <span className="ml-1 text-xs text-muted-foreground">✏️</span>
+                          )}
                         </TableHead>
                       ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredData.map((row, index) => (
-                      <TableRow key={index} data-testid={`row-data-${index}`}>
-                        {visibleHeaders.map((header) => (
-                          <TableCell key={header} className="max-w-xs truncate">
-                            {row[header]}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
+                    {filteredData.map((row: any, rowIdx: number) => {
+                      const rowKey = row._storeRowIndex || row._trackerRowIndex || rowIdx;
+                      return (
+                        <TableRow key={rowKey} data-testid={`row-data-${rowIdx}`}>
+                          {visibleHeaders.map((header: string) => {
+                            const isEditable = editableColumns.includes(header);
+                            const isTrackerColumn = trackerHeaders.includes(header);
+                            const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
+                            const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
+                            const cellKey = JSON.stringify({ rowIndex, column: header, sheetId });
+                            const cellValue = editedCells[cellKey]?.value ?? row[header] ?? '';
+
+                            return (
+                              <TableCell key={header} className="whitespace-nowrap">
+                                {isEditable ? (
+                                  <Input
+                                    value={cellValue}
+                                    onChange={(e) => handleCellEdit(row, header, e.target.value)}
+                                    className="min-w-[150px]"
+                                    data-testid={`input-cell-${rowKey}-${header}`}
+                                  />
+                                ) : (
+                                  <span data-testid={`text-cell-${rowKey}-${header}`}>{cellValue}</span>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </ScrollArea>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {!selectedSheetId && (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center space-y-4">
-              <FileSpreadsheet className="mx-auto h-16 w-16 text-muted-foreground opacity-50" />
-              <div>
-                <h3 className="font-semibold text-lg">No Sheet Selected</h3>
-                <p className="text-muted-foreground">
-                  Select a Google Sheet above to view its data
-                </p>
-              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : storeSheetId && trackerSheetId ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No data found. Check your sheet selection and try refreshing.
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              Select both Store Database and Commission Tracker sheets to view data.
+            </div>
+          )}
+
+          {filteredData.length > 0 && (
+            <div className="text-sm text-muted-foreground">
+              Showing {filteredData.length} of {data.length} rows
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
