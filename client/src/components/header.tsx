@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, Tags } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 
@@ -46,14 +46,6 @@ export function Header() {
                   Sales
                 </Button>
               </Link>
-              {user.role === 'admin' && (
-                <Link href="/keywords">
-                  <Button variant="ghost" size="sm" data-testid="nav-keywords">
-                    <Tags className="mr-2 h-4 w-4" />
-                    Keywords
-                  </Button>
-                </Link>
-              )}
             </nav>
           </div>
           
