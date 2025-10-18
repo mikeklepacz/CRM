@@ -168,13 +168,65 @@ export default function SalesDashboard() {
 
   const [lightModeColors, setLightModeColors] = useState(defaultLightColors);
   const [darkModeColors, setDarkModeColors] = useState(defaultDarkColors);
-
-  // Get the active colors based on current theme (resolving 'auto' to actual theme)
-  const resolvedTheme = currentTheme === 'auto'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : currentTheme;
   const customColors = resolvedTheme === 'dark' ? darkModeColors : lightModeColors;
   const setCustomColors = resolvedTheme === 'dark' ? setDarkModeColors : setLightModeColors;
+
+  // Color presets state
+  const [colorPresets, setColorPresets] = useState<Array<{name: string, color: string}>>([]);
+  const [presetName, setPresetName] = useState("");
+  const [activeColorField, setActiveColorField] = useState<string | null>(null);
+
+  // Convert hex to HSL
+  const hexToHsl = (hex: string): { h: number; s: number; l: number } => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!result) return { h: 0, s: 0, l: 0 };
+
+    let r = parseInt(result[1], 16) / 255;
+    let g = parseInt(result[2], 16) / 255;
+    let b = parseInt(result[3], 16) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+  };
+
+  // Convert HSL to hex
+  const hslToHex = (h: number, s: number, l: number): string => {
+    s = s / 100;
+    l = l / 100;
+
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+
+    if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
+    else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
+    else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
+    else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
+    else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
+    else if (h >= 300 && h < 360) { r = c; g = 0; b = x; }
+
+    const toHex = (n: number) => {
+      const hex = Math.round((n + m) * 255).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  };
 
   // Mutation to update a cell in Google Sheets
   const updateCellMutation = useMutation({
@@ -334,6 +386,7 @@ export default function SalesDashboard() {
     // Add new preferences
     statusOptions?: string[];
     colorRowByStatus?: boolean;
+    colorPresets?: Array<{name: string, color: string}>;
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
@@ -464,6 +517,9 @@ export default function SalesDashboard() {
         }
         if (userPreferences.colorRowByStatus !== undefined) {
           setColorRowByStatus(userPreferences.colorRowByStatus);
+        }
+        if (userPreferences.colorPresets) {
+          setColorPresets(userPreferences.colorPresets);
         }
 
         setPreferencesLoaded(true);
@@ -819,6 +875,7 @@ export default function SalesDashboard() {
           verticalAlign, // Save alignment preferences
           statusOptions, // Save status options
           colorRowByStatus, // Save row coloring preference
+          colorPresets, // Save color presets
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -826,7 +883,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -1080,14 +1137,14 @@ export default function SalesDashboard() {
   const lightenColor = (color: string, percent: number): string => {
     // Parse hex color
     const hex = color.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
+    const r = parseInt(hex.substring(0, 2), 16) / 255;
+    const g = parseInt(hex.substring(2, 4), 16) / 255;
+    const b = parseInt(hex.substring(4, 6), 16) / 255;
 
     // Lighten by moving towards white
-    const newR = Math.min(255, Math.round(r + (255 - r) * (percent / 100)));
-    const newG = Math.min(255, Math.round(g + (255 - g) * (percent / 100)));
-    const newB = Math.min(255, Math.round(b + (255 - b) * (percent / 100)));
+    const newR = Math.min(255, Math.round(r * 255 + (255 - r * 255) * (percent / 100)));
+    const newG = Math.min(255, Math.round(g * 255 + (255 - g * 255) * (percent / 100)));
+    const newB = Math.min(255, Math.round(b * 255 + (255 - b * 255) * (percent / 100)));
 
     return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
   };
@@ -1447,172 +1504,208 @@ export default function SalesDashboard() {
                         Currently editing colors for {resolvedTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
                       </p>
                       <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="color-background" className="text-sm font-medium">Table Background</Label>
-                          <p className="text-xs text-muted-foreground">Data table background color</p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="color-background"
-                              type="color"
-                              value={customColors.background}
-                              onChange={(e) => setCustomColors({ ...customColors, background: e.target.value })}
-                              className="h-10 w-20 rounded cursor-pointer border"
-                              data-testid="input-color-background"
-                            />
-                            <Input
-                              value={customColors.background}
-                              onChange={(e) => setCustomColors({ ...customColors, background: e.target.value })}
-                              className="flex-1 font-mono text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setCustomColors({ ...customColors, background: '#ffffff' })}
-                              title="Reset to default"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
+                        {(['background', 'text', 'primary', 'accent'] as const).map((field) => {
+                          const fieldLabels = {
+                            background: 'Table Background',
+                            text: 'Text',
+                            primary: 'Primary',
+                            accent: 'Accent'
+                          };
+                          const fieldDescriptions = {
+                            background: 'Data table background color',
+                            text: 'Main text color in tables and content',
+                            primary: 'Button colors and key action elements',
+                            accent: 'Highlights and hover states'
+                          };
+                          const defaultColors = {
+                            background: '#ffffff',
+                            text: '#000000',
+                            primary: '#3b82f6',
+                            accent: '#8b5cf6'
+                          };
 
-                        <div className="space-y-2">
-                          <Label htmlFor="color-text" className="text-sm font-medium">Text</Label>
-                          <p className="text-xs text-muted-foreground">Main text color in tables and content</p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="color-text"
-                              type="color"
-                              value={customColors.text}
-                              onChange={(e) => setCustomColors({ ...customColors, text: e.target.value })}
-                              className="h-10 w-20 rounded cursor-pointer border"
-                              data-testid="input-color-text"
-                            />
-                            <Input
-                              value={customColors.text}
-                              onChange={(e) => setCustomColors({ ...customColors, text: e.target.value })}
-                              className="flex-1 font-mono text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setCustomColors({ ...customColors, text: '#000000' })}
-                              title="Reset to default"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
+                          const currentColor = customColors[field];
+                          const hslColor = hexToHsl(currentColor);
 
-                        <div className="space-y-2">
-                          <Label htmlFor="color-primary" className="text-sm font-medium">Primary</Label>
-                          <p className="text-xs text-muted-foreground">Button colors and key action elements</p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="color-primary"
-                              type="color"
-                              value={customColors.primary}
-                              onChange={(e) => setCustomColors({ ...customColors, primary: e.target.value })}
-                              className="h-10 w-20 rounded cursor-pointer border"
-                              data-testid="input-color-primary"
-                            />
-                            <Input
-                              value={customColors.primary}
-                              onChange={(e) => setCustomColors({ ...customColors, primary: e.target.value })}
-                              className="flex-1 font-mono text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setCustomColors({ ...customColors, primary: '#3b82f6' })}
-                              title="Reset to default"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
+                          return (
+                            <div key={field} className="space-y-2">
+                              <Label className="text-sm font-medium">{fieldLabels[field]}</Label>
+                              <p className="text-xs text-muted-foreground">{fieldDescriptions[field]}</p>
+
+                              <Popover open={activeColorField === field} onOpenChange={(open) => setActiveColorField(open ? field : null)}>
+                                <PopoverTrigger asChild>
+                                  <Button variant="outline" className="w-full justify-start gap-2" data-testid={`button-color-${field}`}>
+                                    <div
+                                      className="h-6 w-6 rounded border"
+                                      style={{ backgroundColor: currentColor }}
+                                    />
+                                    <span className="font-mono text-sm">{currentColor}</span>
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80" align="start">
+                                  <div className="space-y-4">
+                                    <HslColorPicker
+                                      color={hslColor}
+                                      onChange={(color) => {
+                                        const hexColor = hslToHex(color.h, color.s, color.l);
+                                        setCustomColors({ ...customColors, [field]: hexColor });
+                                      }}
+                                    />
+
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-muted-foreground">Hex Value</Label>
+                                      <Input
+                                        value={currentColor}
+                                        onChange={(e) => setCustomColors({ ...customColors, [field]: e.target.value })}
+                                        className="font-mono text-sm"
+                                      />
+                                    </div>
+
+                                    {colorPresets.length > 0 && (
+                                      <div className="space-y-2">
+                                        <Label className="text-xs text-muted-foreground">Saved Presets</Label>
+                                        <div className="grid grid-cols-5 gap-2">
+                                          {colorPresets.map((preset, idx) => (
+                                            <div key={idx} className="relative group">
+                                              <button
+                                                onClick={() => setCustomColors({ ...customColors, [field]: preset.color })}
+                                                className="h-10 w-full rounded border hover:ring-2 hover:ring-primary transition-all"
+                                                style={{ backgroundColor: preset.color }}
+                                                title={preset.name}
+                                              />
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setColorPresets(colorPresets.filter((_, i) => i !== idx));
+                                                  toast({ title: "Preset deleted", description: `"${preset.name}" removed` });
+                                                }}
+                                                className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs"
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-muted-foreground">Save as Preset</Label>
+                                      <div className="flex gap-2">
+                                        <Input
+                                          placeholder="Preset name"
+                                          value={presetName}
+                                          onChange={(e) => setPresetName(e.target.value)}
+                                          className="flex-1 text-sm"
+                                        />
+                                        <Button
+                                          size="sm"
+                                          onClick={() => {
+                                            if (presetName.trim()) {
+                                              setColorPresets([...colorPresets, { name: presetName, color: currentColor }]);
+                                              setPresetName("");
+                                              toast({ title: "Preset saved", description: `"${presetName}" added to presets` });
+                                            }
+                                          }}
+                                          disabled={!presetName.trim()}
+                                        >
+                                          <Save className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="w-full"
+                                      onClick={() => setCustomColors({ ...customColors, [field]: defaultColors[field] })}
+                                    >
+                                      <RotateCcw className="h-4 w-4 mr-2" />
+                                      Reset to Default
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                          );
+                        })}
+
+                        <Separator className="my-4" />
 
                         <div className="space-y-2">
                           <Label htmlFor="color-secondary" className="text-sm font-medium">Secondary/Card</Label>
                           <p className="text-xs text-muted-foreground">Card backgrounds and secondary buttons</p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="color-secondary"
-                              type="color"
-                              value={customColors.secondary}
-                              onChange={(e) => setCustomColors({ ...customColors, secondary: e.target.value })}
-                              className="h-10 w-20 rounded cursor-pointer border"
-                              data-testid="input-color-secondary"
-                            />
-                            <Input
-                              value={customColors.secondary}
-                              onChange={(e) => setCustomColors({ ...customColors, secondary: e.target.value })}
-                              className="flex-1 font-mono text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setCustomColors({ ...customColors, secondary: '#f3f4f6' })}
-                              title="Reset to default"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="color-accent" className="text-sm font-medium">Accent</Label>
-                          <p className="text-xs text-muted-foreground">Highlights and hover states</p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="color-accent"
-                              type="color"
-                              value={customColors.accent}
-                              onChange={(e) => setCustomColors({ ...customColors, accent: e.target.value })}
-                              className="h-10 w-20 rounded cursor-pointer border"
-                              data-testid="input-color-accent"
-                            />
-                            <Input
-                              value={customColors.accent}
-                              onChange={(e) => setCustomColors({ ...customColors, accent: e.target.value })}
-                              className="flex-1 font-mono text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setCustomColors({ ...customColors, accent: '#8b5cf6' })}
-                              title="Reset to default"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-secondary">
+                                <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.secondary }} />
+                                <span className="font-mono text-sm">{customColors.secondary}</span>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80" align="start">
+                              <div className="space-y-4">
+                                <HslColorPicker
+                                  color={hexToHsl(customColors.secondary)}
+                                  onChange={(color) => {
+                                    const hexColor = hslToHex(color.h, color.s, color.l);
+                                    setCustomColors({ ...customColors, secondary: hexColor });
+                                  }}
+                                />
+                                <Input
+                                  value={customColors.secondary}
+                                  onChange={(e) => setCustomColors({ ...customColors, secondary: e.target.value })}
+                                  className="font-mono text-sm"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => setCustomColors({ ...customColors, secondary: '#f3f4f6' })}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Reset to Default
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
 
                         <div className="space-y-2">
                           <Label htmlFor="color-border" className="text-sm font-medium">Border</Label>
                           <p className="text-xs text-muted-foreground">Lines between table rows and card edges</p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="color-border"
-                              type="color"
-                              value={customColors.border}
-                              onChange={(e) => setCustomColors({ ...customColors, border: e.target.value })}
-                              className="h-10 w-20 rounded cursor-pointer border"
-                              data-testid="input-color-border"
-                            />
-                            <Input
-                              value={customColors.border}
-                              onChange={(e) => setCustomColors({ ...customColors, border: e.target.value })}
-                              className="flex-1 font-mono text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setCustomColors({ ...customColors, border: '#e5e7eb' })}
-                              title="Reset to default"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-border">
+                                <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.border }} />
+                                <span className="font-mono text-sm">{customColors.border}</span>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80" align="start">
+                              <div className="space-y-4">
+                                <HslColorPicker
+                                  color={hexToHsl(customColors.border)}
+                                  onChange={(color) => {
+                                    const hexColor = hslToHex(color.h, color.s, color.l);
+                                    setCustomColors({ ...customColors, border: hexColor });
+                                  }}
+                                />
+                                <Input
+                                  value={customColors.border}
+                                  onChange={(e) => setCustomColors({ ...customColors, border: e.target.value })}
+                                  className="font-mono text-sm"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => setCustomColors({ ...customColors, border: '#e5e7eb' })}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Reset to Default
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
 
                         <Separator className="my-4" />
@@ -1620,57 +1713,79 @@ export default function SalesDashboard() {
                         <div className="space-y-2">
                           <Label htmlFor="color-body-bg" className="text-sm font-medium">Page Background</Label>
                           <p className="text-xs text-muted-foreground">Main page body background (leave empty for theme default)</p>
-                          <div className="space-y-2">
-                            <HslColorPicker
-                              color={customColors.bodyBackground || '#f9fafb'}
-                              onChange={(color) => setCustomColors({ ...customColors, bodyBackground: color })}
-                              style={{ width: '100%', height: '150px' }}
-                            />
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={customColors.bodyBackground}
-                                onChange={(e) => setCustomColors({ ...customColors, bodyBackground: e.target.value })}
-                                placeholder="Empty = theme default"
-                                className="flex-1 font-mono text-sm"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
-                                title="Reset to default"
-                              >
-                                <RotateCcw className="h-4 w-4" />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-body-bg">
+                                <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.bodyBackground || '#f9fafb' }} />
+                                <span className="font-mono text-sm">{customColors.bodyBackground || '(Theme Default)'}</span>
                               </Button>
-                            </div>
-                          </div>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80" align="start">
+                              <div className="space-y-4">
+                                <HslColorPicker
+                                  color={hexToHsl(customColors.bodyBackground || '#f9fafb')}
+                                  onChange={(color) => {
+                                    const hexColor = hslToHex(color.h, color.s, color.l);
+                                    setCustomColors({ ...customColors, bodyBackground: hexColor });
+                                  }}
+                                />
+                                <Input
+                                  value={customColors.bodyBackground}
+                                  onChange={(e) => setCustomColors({ ...customColors, bodyBackground: e.target.value })}
+                                  placeholder="Empty = theme default"
+                                  className="font-mono text-sm"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Reset to Theme Default
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
 
                         <div className="space-y-2">
                           <Label htmlFor="color-header-bg" className="text-sm font-medium">Header Background</Label>
                           <p className="text-xs text-muted-foreground">Top header background (leave empty for theme default)</p>
-                          <div className="space-y-2">
-                            <HslColorPicker
-                              color={customColors.headerBackground || '#ffffff'}
-                              onChange={(color) => setCustomColors({ ...customColors, headerBackground: color })}
-                              style={{ width: '100%', height: '150px' }}
-                            />
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={customColors.headerBackground}
-                                onChange={(e) => setCustomColors({ ...customColors, headerBackground: e.target.value })}
-                                placeholder="Empty = theme default"
-                                className="flex-1 font-mono text-sm"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setCustomColors({ ...customColors, headerBackground: '' })}
-                                title="Reset to default"
-                              >
-                                <RotateCcw className="h-4 w-4" />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-header-bg">
+                                <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.headerBackground || '#ffffff' }} />
+                                <span className="font-mono text-sm">{customColors.headerBackground || '(Theme Default)'}</span>
                               </Button>
-                            </div>
-                          </div>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80" align="start">
+                              <div className="space-y-4">
+                                <HslColorPicker
+                                  color={hexToHsl(customColors.headerBackground || '#ffffff')}
+                                  onChange={(color) => {
+                                    const hexColor = hslToHex(color.h, color.s, color.l);
+                                    setCustomColors({ ...customColors, headerBackground: hexColor });
+                                  }}
+                                />
+                                <Input
+                                  value={customColors.headerBackground}
+                                  onChange={(e) => setCustomColors({ ...customColors, headerBackground: e.target.value })}
+                                  placeholder="Empty = theme default"
+                                  className="font-mono text-sm"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => setCustomColors({ ...customColors, headerBackground: '' })}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Reset to Theme Default
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
 
                         <Separator className="my-4" />
@@ -1688,45 +1803,96 @@ export default function SalesDashboard() {
                                   <div className="grid grid-cols-2 gap-2">
                                     <div>
                                       <Label className="text-xs text-muted-foreground">Background</Label>
-                                      <input
-                                        type="color"
-                                        value={statusColor.background}
-                                        onChange={(e) => {
-                                          setCustomColors({
-                                            ...customColors,
-                                            statusColors: {
-                                              ...customColors.statusColors,
-                                              [status]: {
-                                                ...statusColor,
-                                                background: e.target.value,
-                                              }
-                                            }
-                                          });
-                                        }}
-                                        className="h-8 w-full rounded cursor-pointer border mt-1"
-                                      />
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <Button variant="outline" size="sm" className="w-full justify-start gap-2 mt-1 h-8">
+                                            <div className="h-4 w-4 rounded border" style={{ backgroundColor: statusColor.background }} />
+                                            <span className="font-mono text-xs">{statusColor.background}</span>
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-72" align="start">
+                                          <div className="space-y-3">
+                                            <HslColorPicker
+                                              color={hexToHsl(statusColor.background)}
+                                              onChange={(color) => {
+                                                const hexColor = hslToHex(color.h, color.s, color.l);
+                                                setCustomColors({
+                                                  ...customColors,
+                                                  statusColors: {
+                                                    ...customColors.statusColors,
+                                                    [status]: { ...statusColor, background: hexColor }
+                                                  }
+                                                });
+                                              }}
+                                            />
+                                            <Input
+                                              value={statusColor.background}
+                                              onChange={(e) => {
+                                                setCustomColors({
+                                                  ...customColors,
+                                                  statusColors: {
+                                                    ...customColors.statusColors,
+                                                    [status]: { ...statusColor, background: e.target.value }
+                                                  }
+                                                });
+                                              }}
+                                              className="font-mono text-xs"
+                                            />
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
                                     </div>
                                     <div>
                                       <Label className="text-xs text-muted-foreground">Text</Label>
-                                      <input
-                                        type="color"
-                                        value={statusColor.text}
-                                        onChange={(e) => {
-                                          setCustomColors({
-                                            ...customColors,
-                                            statusColors: {
-                                              ...customColors.statusColors,
-                                              [status]: {
-                                                ...statusColor,
-                                                text: e.target.value,
-                                              }
-                                            }
-                                          });
-                                        }}
-                                        className="h-8 w-full rounded cursor-pointer border mt-1"
-                                      />
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <Button variant="outline" size="sm" className="w-full justify-start gap-2 mt-1 h-8">
+                                            <div className="h-4 w-4 rounded border" style={{ backgroundColor: statusColor.text }} />
+                                            <span className="font-mono text-xs">{statusColor.text}</span>
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-72" align="start">
+                                          <div className="space-y-3">
+                                            <HslColorPicker
+                                              color={hexToHsl(statusColor.text)}
+                                              onChange={(color) => {
+                                                const hexColor = hslToHex(color.h, color.s, color.l);
+                                                setCustomColors({
+                                                  ...customColors,
+                                                  statusColors: {
+                                                    ...customColors.statusColors,
+                                                    [status]: { ...statusColor, text: hexColor }
+                                                  }
+                                                });
+                                              }}
+                                            />
+                                            <Input
+                                              value={statusColor.text}
+                                              onChange={(e) => {
+                                                setCustomColors({
+                                                  ...customColors,
+                                                  statusColors: {
+                                                    ...customColors.statusColors,
+                                                    [status]: { ...statusColor, text: e.target.value }
+                                                  }
+                                                });
+                                              }}
+                                              className="font-mono text-xs"
+                                            />
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
                                     </div>
                                   </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full mt-1"
+                                    onClick={() => setCustomColors({ ...customColors, statusColors: { ...customColors.statusColors, [status]: { background: '', text: '' } } })}
+                                    title="Reset to theme default"
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                  </Button>
                                 </div>
                               );
                             })}
@@ -2195,6 +2361,8 @@ export default function SalesDashboard() {
 
                       // Helper function to darken a hex color (for buttons - makes them stand out more than rows)
                       const darkenColor = (hex: string, percent: number = 30) => {
+                        // Handle cases where statusColor.background might be empty string
+                        if (!hex) return '';
                         const r = parseInt(hex.slice(1, 3), 16);
                         const g = parseInt(hex.slice(3, 5), 16);
                         const b = parseInt(hex.slice(5, 7), 16);
