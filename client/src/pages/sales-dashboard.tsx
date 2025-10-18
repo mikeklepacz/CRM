@@ -502,6 +502,9 @@ export default function SalesDashboard() {
   useEffect(() => {
     if (!resizingColumn) return;
 
+    // Set cursor style during resize
+    document.body.style.cursor = 'col-resize';
+
     const handleMouseMove = (e: MouseEvent) => {
       e.preventDefault();
       const diff = e.clientX - resizingColumn.startX;
@@ -513,6 +516,9 @@ export default function SalesDashboard() {
     };
 
     const handleMouseUp = () => {
+      // Restore cursor and user selection
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       setResizingColumn(null);
     };
 
@@ -522,6 +528,9 @@ export default function SalesDashboard() {
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      // Cleanup in case component unmounts during resize
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
   }, [resizingColumn]);
 
@@ -1066,6 +1075,8 @@ export default function SalesDashboard() {
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                // Prevent text selection during drag
+                                document.body.style.userSelect = 'none';
                                 setResizingColumn({
                                   column: header,
                                   startX: e.clientX,
