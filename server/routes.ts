@@ -1337,6 +1337,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Claim a store by creating a new tracker row
+  app.post('/api/sheets/:id/claim-store', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { id } = req.params;
+      const { linkValue, column, value, joinColumn } = req.body;
+
+      if (!linkValue || !column || !joinColumn) {
+        return res.status(400).json({ message: "Link value, column, and join column are required" });
+      }
+
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(404).json({ message: "Google Sheet not found" });
+      }
+
+      const { spreadsheetId, sheetName } = sheet;
+      
+      // Read all data to find headers and next empty row
+      const dataRange = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(userId, spreadsheetId, dataRange);
+      const headers = rows[0] || [];
+      
+      // Create a new row with empty values for all columns
+      const newRow = headers.map(() => '');
+      
+      // Set the join column (link)
+      const linkColumnIndex = headers.indexOf(joinColumn);
+      if (linkColumnIndex !== -1) {
+        newRow[linkColumnIndex] = linkValue;
+      }
+      
+      // Set the Agent column to current user's email
+      const agentColumnIndex = headers.indexOf('Agent');
+      if (agentColumnIndex !== -1 && user?.email) {
+        newRow[agentColumnIndex] = user.email;
+      }
+      
+      // Set the column being edited
+      const editColumnIndex = headers.indexOf(column);
+      if (editColumnIndex !== -1) {
+        newRow[editColumnIndex] = value;
+      }
+      
+      // Append the row to the sheet
+      const appendRange = `${sheetName}!A:ZZ`;
+      await googleSheets.appendSheetData(userId, spreadsheetId, appendRange, [newRow]);
+
+      res.json({ message: "Store claimed successfully" });
+    } catch (error: any) {
+      console.error("Error claiming store:", error);
+      res.status(500).json({ message: error.message || "Failed to claim store" });
+    }
+  });
+
   // Disconnect a specific Google Sheet
   app.post('/api/sheets/:id/disconnect', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {

@@ -123,6 +123,44 @@ export default function SalesDashboard() {
     },
   });
 
+  // Mutation to claim a store (create new tracker row)
+  const claimStoreMutation = useMutation({
+    mutationFn: async ({
+      trackerSheetId,
+      storeRow,
+      column,
+      value,
+      joinColumn,
+    }: {
+      trackerSheetId: string;
+      storeRow: MergedDataRow;
+      column: string;
+      value: any;
+      joinColumn: string;
+    }) => {
+      return await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
+        linkValue: storeRow[joinColumn],
+        column,
+        value,
+        joinColumn,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+      toast({
+        title: "Store Claimed",
+        description: "Store claimed successfully and value updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCellUpdate = (row: MergedDataRow, column: string, value: any) => {
     // Determine which sheet to update based on which headers contain this column
     const isStoreColumn = mergedData?.storeHeaders?.includes(column);
@@ -132,25 +170,31 @@ export default function SalesDashboard() {
     let rowIndex: number | undefined;
 
     if (isTrackerColumn && row._trackerSheetId && row._trackerRowIndex) {
-      // Update tracker sheet
+      // Update existing tracker row
       sheetId = row._trackerSheetId;
       rowIndex = row._trackerRowIndex;
+      updateCellMutation.mutate({ sheetId, rowIndex, column, value });
+    } else if (isTrackerColumn && trackerSheetId && !row._trackerRowIndex) {
+      // Need to create a new tracker row for this unclaimed store (auto-claim)
+      claimStoreMutation.mutate({ 
+        trackerSheetId, 
+        storeRow: row, 
+        column, 
+        value,
+        joinColumn 
+      });
     } else if (isStoreColumn && row._storeSheetId && row._storeRowIndex) {
       // Update store sheet
       sheetId = row._storeSheetId;
       rowIndex = row._storeRowIndex;
-    }
-
-    if (!sheetId || !rowIndex) {
+      updateCellMutation.mutate({ sheetId, rowIndex, column, value });
+    } else {
       toast({
         title: "Error",
-        description: "Cannot determine which sheet to update",
+        description: `Cannot determine which sheet to update. Column "${column}" not found in sheet headers.`,
         variant: "destructive",
       });
-      return;
     }
-
-    updateCellMutation.mutate({ sheetId, rowIndex, column, value });
   };
 
   // Fetch user preferences
