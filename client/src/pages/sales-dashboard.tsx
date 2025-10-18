@@ -10,8 +10,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -108,7 +106,7 @@ export default function SalesDashboard() {
   // New state variables for text alignment and vertical alignment
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
-  
+
   // Contact action dialog state
   const [contactActionDialog, setContactActionDialog] = useState<{
     open: boolean;
@@ -150,7 +148,7 @@ export default function SalesDashboard() {
   const [darkModeColors, setDarkModeColors] = useState(defaultDarkColors);
 
   // Get the active colors based on current theme (resolving 'auto' to actual theme)
-  const resolvedTheme = currentTheme === 'auto' 
+  const resolvedTheme = currentTheme === 'auto'
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : currentTheme;
   const customColors = resolvedTheme === 'dark' ? darkModeColors : lightModeColors;
@@ -244,12 +242,12 @@ export default function SalesDashboard() {
       updateCellMutation.mutate({ sheetId, rowIndex, column, value });
     } else if (isTrackerColumn && trackerSheetId && !row._trackerRowIndex) {
       // Need to create a new tracker row for this unclaimed store (auto-claim)
-      claimStoreMutation.mutate({ 
-        trackerSheetId, 
-        storeRow: row, 
-        column, 
+      claimStoreMutation.mutate({
+        trackerSheetId,
+        storeRow: row,
+        column,
         value,
-        joinColumn 
+        joinColumn
       });
     } else if (isStoreColumn && row._storeSheetId && row._storeRowIndex) {
       // Update store sheet
@@ -284,6 +282,7 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground?: string;
       headerBackground?: string;
+      statusColors?: { [status: string]: { background: string; text: string } };
     };
     lightModeColors?: {
       background: string;
@@ -294,6 +293,7 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground: string;
       headerBackground: string;
+      statusColors?: { [status: string]: { background: string; text: string } };
     };
     darkModeColors?: {
       background: string;
@@ -304,10 +304,14 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground: string;
       headerBackground: string;
+      statusColors?: { [status: string]: { background: string; text: string } };
     };
     // Add alignment preferences
     textAlign?: 'left' | 'center' | 'right' | 'justify';
     verticalAlign?: 'top' | 'middle' | 'bottom';
+    // Add new preferences
+    statusOptions?: string[];
+    colorRowByStatus?: boolean;
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
@@ -432,6 +436,14 @@ export default function SalesDashboard() {
           setVerticalAlign(userPreferences.verticalAlign);
         }
 
+        // Load status options and row coloring preference
+        if (userPreferences.statusOptions) {
+          setStatusOptions(userPreferences.statusOptions);
+        }
+        if (userPreferences.colorRowByStatus !== undefined) {
+          setColorRowByStatus(userPreferences.colorRowByStatus);
+        }
+
         setPreferencesLoaded(true);
       } else {
         // No saved preferences, use defaults
@@ -446,6 +458,7 @@ export default function SalesDashboard() {
         setRowHeight(48);
         setTextAlign('left');
         setVerticalAlign('middle');
+        setColorRowByStatus(false); // Default to false
         setPreferencesLoaded(true);
       }
     }
@@ -636,8 +649,8 @@ export default function SalesDashboard() {
   // Get all unique keywords/phrases from the data
   const allKeywords = (() => {
     const keywords = new Set<string>();
-    const keywordColumns = headers.filter((h: string) => 
-      h.toLowerCase().includes('keyword') || 
+    const keywordColumns = headers.filter((h: string) =>
+      h.toLowerCase().includes('keyword') ||
       h.toLowerCase().includes('phrase')
     );
     data.forEach((row: any) => {
@@ -782,6 +795,8 @@ export default function SalesDashboard() {
           darkModeColors,
           textAlign, // Save alignment preferences
           verticalAlign, // Save alignment preferences
+          statusOptions, // Save status options
+          colorRowByStatus, // Save row coloring preference
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -789,7 +804,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -914,10 +929,10 @@ export default function SalesDashboard() {
       setEditedCells({});
       refetch();
     } catch (error: any) {
-      toast({ 
-        title: "Error", 
-        description: error.message || "Failed to save some changes. Please try again.", 
-        variant: "destructive" 
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save some changes. Please try again.",
+        variant: "destructive"
       });
     }
   };
@@ -957,8 +972,8 @@ export default function SalesDashboard() {
 
     // Then filter by keywords/phrases
     if (selectedKeywords.size > 0 && selectedKeywords.size < allKeywords.length) {
-      const keywordColumns = headers.filter((h: string) => 
-        h.toLowerCase().includes('keyword') || 
+      const keywordColumns = headers.filter((h: string) =>
+        h.toLowerCase().includes('keyword') ||
         h.toLowerCase().includes('phrase')
       );
       filtered = filtered.filter((row: any) => {
@@ -1036,14 +1051,37 @@ export default function SalesDashboard() {
   const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
   const hasUnsavedChanges = Object.keys(editedCells).length > 0;
 
+  // Identify status columns (assuming there's only one)
+  const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
+
+  // Helper function to lighten a color by a percentage
+  const lightenColor = (color: string, percent: number): string => {
+    // Parse hex color
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    // Lighten by moving towards white
+    const newR = Math.min(255, Math.round(r + (255 - r) * (percent / 100)));
+    const newG = Math.min(255, Math.round(g + (255 - g) * (percent / 100)));
+    const newB = Math.min(255, Math.round(b + (255 - b) * (percent / 100)));
+
+    return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+  };
+
+  const getCompanyName = (row: any) => {
+    return row['Company'] || row['company'] || row['Business Name'] || row['name'] || 'Unknown';
+  };
+
   return (
-    <div 
+    <div
       className="min-h-screen"
       style={customColors.bodyBackground ? {
         backgroundColor: customColors.bodyBackground,
       } : {}}
     >
-      <div 
+      <div
         className="container mx-auto p-6 space-y-6"
         style={{
           backgroundColor: customColors.background,
@@ -1159,8 +1197,8 @@ export default function SalesDashboard() {
                         )}
 
                         {/* Reset All Filters */}
-                        {(selectedTags.size < allTags.length || 
-                          selectedKeywords.size < allKeywords.length || 
+                        {(selectedTags.size < allTags.length ||
+                          selectedKeywords.size < allKeywords.length ||
                           selectedStates.size < allStates.length ||
                           searchTerm !== '') && (
                           <Button
@@ -1190,8 +1228,8 @@ export default function SalesDashboard() {
                       {/* Font Size Dropdown */}
                       <div className="flex items-center gap-2">
                   <Type className="h-4 w-4 text-muted-foreground" />
-                  <Select 
-                    value={fontSize.toString()} 
+                  <Select
+                    value={fontSize.toString()}
                     onValueChange={(value) => setFontSize(parseInt(value))}
                   >
                     <SelectTrigger className="w-20" data-testid="select-font-size">
@@ -1758,6 +1796,23 @@ export default function SalesDashboard() {
 
                         <Separator className="my-4" />
 
+                        {/* Row Coloring Toggle */}
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="color-row-by-status"
+                              checked={colorRowByStatus}
+                              onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
+                            />
+                            <Label htmlFor="color-row-by-status" className="text-sm font-medium">Color entire row by status</Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            If enabled, rows will be colored 50% lighter than their status background color.
+                          </p>
+                        </div>
+
+                        <Separator className="my-4" />
+
                         {/* Reset All Colors Button - Inside Colors Popover */}
                         <Button
                           variant="destructive"
@@ -1833,7 +1888,7 @@ export default function SalesDashboard() {
                         <ScrollArea className="h-64">
                           <div className="space-y-2">
                             {allTags
-                              .filter((tag: string) => 
+                              .filter((tag: string) =>
                                 tag.toLowerCase().includes(tagSearchTerm.toLowerCase())
                               )
                               .map((tag: string) => (
@@ -1844,8 +1899,8 @@ export default function SalesDashboard() {
                                   onCheckedChange={() => toggleTag(tag)}
                                   data-testid={`checkbox-tag-${tag}`}
                                 />
-                                <Label 
-                                  htmlFor={`tag-${tag}`} 
+                                <Label
+                                  htmlFor={`tag-${tag}`}
                                   className="text-sm cursor-pointer flex-1"
                                 >
                                   {tag}
@@ -1903,7 +1958,7 @@ export default function SalesDashboard() {
                         <ScrollArea className="h-64">
                           <div className="space-y-2">
                             {allKeywords
-                              .filter((keyword: string) => 
+                              .filter((keyword: string) =>
                                 keyword.toLowerCase().includes(keywordSearchTerm.toLowerCase())
                               )
                               .map((keyword: string) => (
@@ -1914,8 +1969,8 @@ export default function SalesDashboard() {
                                   onCheckedChange={() => toggleKeyword(keyword)}
                                   data-testid={`checkbox-keyword-${keyword}`}
                                 />
-                                <Label 
-                                  htmlFor={`keyword-${keyword}`} 
+                                <Label
+                                  htmlFor={`keyword-${keyword}`}
                                   className="text-sm cursor-pointer flex-1"
                                 >
                                   {keyword}
@@ -1973,8 +2028,8 @@ export default function SalesDashboard() {
                                   onCheckedChange={() => toggleState(state)}
                                   data-testid={`checkbox-state-${state}`}
                                 />
-                                <Label 
-                                  htmlFor={`state-${state}`} 
+                                <Label
+                                  htmlFor={`state-${state}`}
                                   className="text-sm cursor-pointer flex-1"
                                 >
                                   {state}
@@ -2012,8 +2067,8 @@ export default function SalesDashboard() {
                                 onCheckedChange={() => toggleColumn(header)}
                                 data-testid={`checkbox-column-${header}`}
                               />
-                              <Label 
-                                htmlFor={`col-${header}`} 
+                              <Label
+                                htmlFor={`col-${header}`}
                                 className="text-sm cursor-pointer flex-1"
                               >
                                 {header}
@@ -2055,7 +2110,7 @@ export default function SalesDashboard() {
             </>
           )}
 
-          
+
 
           {/* Data Table */}
           {isLoading ? (
@@ -2070,8 +2125,8 @@ export default function SalesDashboard() {
                   <TableHeader>
                     <TableRow>
                       {visibleHeaders.map((header: string) => (
-                        <TableHead 
-                          key={header} 
+                        <TableHead
+                          key={header}
                           className="whitespace-nowrap relative group"
                           style={{ width: columnWidths[header] || 200 }}
                         >
@@ -2195,12 +2250,20 @@ export default function SalesDashboard() {
                       const effectiveHeight = Math.max(rowHeight, minRequiredHeight);
 
                       return (
-                        <TableRow 
-                          key={rowKey} 
+                        <TableRow
+                          key={rowKey}
                           data-testid={`row-data-${rowIdx}`}
                           className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
                           title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
-                          style={{ fontSize: `${fontSize}px`, height: `${effectiveHeight}px` }}
+                          style={{
+                            fontSize: `${fontSize}px`,
+                            height: `${effectiveHeight}px`,
+                            ...(colorRowByStatus && statusColumns.length > 0 && row[statusColumns[0]] && customColors.statusColors?.[row[statusColumns[0]]]
+                              ? {
+                                  backgroundColor: lightenColor(customColors.statusColors[row[statusColumns[0]]].background, 50),
+                                }
+                              : {}),
+                          }}
                         >
                           {visibleHeaders.map((header: string) => {
                             const isEditable = editableColumns.some((col: string) => col.toLowerCase() === header.toLowerCase());
@@ -2220,8 +2283,8 @@ export default function SalesDashboard() {
                             const isTagColumn = header.toLowerCase().includes('tag');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
-                            const isAddressColumn = header.toLowerCase().includes('address') || 
-                                                   header.toLowerCase().includes('city') || 
+                            const isAddressColumn = header.toLowerCase().includes('address') ||
+                                                   header.toLowerCase().includes('city') ||
                                                    (header.toLowerCase().includes('state') && header.toLowerCase().includes('city')) ||
                                                    header.toLowerCase().includes('point of contact');
 
@@ -2262,8 +2325,8 @@ export default function SalesDashboard() {
                             const uniqueStates = isStateColumn ? getUniqueColumnValues(header) : [];
 
                             return (
-                              <TableCell 
-                                key={header} 
+                              <TableCell
+                                key={header}
                                 style={cellStyle}
                               >
                                 {isEditable ? (
@@ -2303,46 +2366,35 @@ export default function SalesDashboard() {
                                         </PopoverContent>
                                       </Popover>
                                     ) : isStatusColumn ? (
-                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={openCombobox === comboboxKey}
-                                            className="w-full justify-between"
-                                            data-testid={`button-status-${rowKey}-${header}`}
-                                          >
-                                            {cellValue || "Select status..."}
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[200px] p-0">
-                                          <Command>
-                                            <CommandInput placeholder="Search status..." />
-                                            <CommandList>
-                                              <CommandEmpty>No status found.</CommandEmpty>
-                                              <CommandGroup>
-                                                {statusOptions.map((status) => (
-                                                  <CommandItem
-                                                    key={status}
-                                                    value={status}
-                                                    onSelect={(currentValue) => {
-                                                      handleCellUpdate(row, header, status);
-                                                      setOpenCombobox(null);
-                                                    }}
-                                                    data-testid={`option-status-${status}`}
-                                                  >
-                                                    <Check
-                                                      className={`mr-2 h-4 w-4 ${cellValue === status ? "opacity-100" : "opacity-0"}`}
-                                                    />
-                                                    {status}
-                                                  </CommandItem>
-                                                ))}
-                                              </CommandGroup>
-                                            </CommandList>
-                                          </Command>
-                                        </PopoverContent>
-                                      </Popover>
+                                      <Select
+                                        value={cellValue || ""}
+                                        onValueChange={(value) => handleCellUpdate(row, header, value)}
+                                      >
+                                        <SelectTrigger
+                                          className="w-full"
+                                          data-testid={`button-status-${rowKey}-${header}`}
+                                        >
+                                          <SelectValue placeholder="Select status..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {statusOptions.map((status) => {
+                                            const statusColor = customColors.statusColors?.[status];
+                                            return (
+                                              <SelectItem
+                                                key={status}
+                                                value={status}
+                                                data-testid={`option-status-${status}`}
+                                                style={statusColor ? {
+                                                  backgroundColor: statusColor.background,
+                                                  color: statusColor.text,
+                                                } : undefined}
+                                              >
+                                                {status}
+                                              </SelectItem>
+                                            );
+                                          })}
+                                        </SelectContent>
+                                      </Select>
                                     ) : isStateColumn ? (
                                       <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
@@ -2388,7 +2440,7 @@ export default function SalesDashboard() {
                                       <div className="flex items-center gap-2">
                                         {isAddressColumn ? (
                                           <>
-                                            <span 
+                                            <span
                                               className="cursor-pointer hover:text-primary"
                                               data-testid={`text-cell-${rowKey}-${header}`}
                                             >
@@ -2439,7 +2491,7 @@ export default function SalesDashboard() {
                                             <span>{displayValue}</span>
                                           </button>
                                         ) : isWebsiteColumn ? (
-                                          <a 
+                                          <a
                                             href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
@@ -2451,7 +2503,7 @@ export default function SalesDashboard() {
                                             <span>{extractDomain(cellValue)}</span>
                                           </a>
                                         ) : isLinkColumn ? (
-                                          <a 
+                                          <a
                                             href={cellValue}
                                             target="_blank"
                                             rel="noopener noreferrer"
@@ -2462,7 +2514,7 @@ export default function SalesDashboard() {
                                             {isLeaflyLink ? '🍁' : '🔗'}
                                           </a>
                                         ) : (
-                                          <span 
+                                          <span
                                             className="cursor-pointer hover:text-primary"
                                             data-testid={`text-cell-${rowKey}-${header}`}
                                           >
@@ -2512,46 +2564,35 @@ export default function SalesDashboard() {
                                         </PopoverContent>
                                       </Popover>
                                     ) : isStatusColumn ? (
-                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={openCombobox === comboboxKey}
-                                            className="w-full justify-between"
-                                            data-testid={`button-status-${rowKey}-${header}`}
-                                          >
-                                            {cellValue || "Select status..."}
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[200px] p-0">
-                                          <Command>
-                                            <CommandInput placeholder="Search status..." />
-                                            <CommandList>
-                                              <CommandEmpty>No status found.</CommandEmpty>
-                                              <CommandGroup>
-                                                {statusOptions.map((status) => (
-                                                  <CommandItem
-                                                    key={status}
-                                                    value={status}
-                                                    onSelect={(currentValue) => {
-                                                      handleCellUpdate(row, header, status);
-                                                      setOpenCombobox(null);
-                                                    }}
-                                                    data-testid={`option-status-${status}`}
-                                                  >
-                                                    <Check
-                                                      className={`mr-2 h-4 w-4 ${cellValue === status ? "opacity-100" : "opacity-0"}`}
-                                                    />
-                                                    {status}
-                                                  </CommandItem>
-                                                ))}
-                                              </CommandGroup>
-                                            </CommandList>
-                                          </Command>
-                                        </PopoverContent>
-                                      </Popover>
+                                      <Select
+                                        value={cellValue || ""}
+                                        onValueChange={(value) => handleCellUpdate(row, header, value)}
+                                      >
+                                        <SelectTrigger
+                                          className="w-full"
+                                          data-testid={`button-status-${rowKey}-${header}`}
+                                        >
+                                          <SelectValue placeholder="Select status..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {statusOptions.map((status) => {
+                                            const statusColor = customColors.statusColors?.[status];
+                                            return (
+                                              <SelectItem
+                                                key={status}
+                                                value={status}
+                                                data-testid={`option-status-${status}`}
+                                                style={statusColor ? {
+                                                  backgroundColor: statusColor.background,
+                                                  color: statusColor.text,
+                                                } : undefined}
+                                              >
+                                                {status}
+                                              </SelectItem>
+                                            );
+                                          })}
+                                        </SelectContent>
+                                      </Select>
                                     ) : isStateColumn ? (
                                       <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
@@ -2621,7 +2662,7 @@ export default function SalesDashboard() {
                                         <span>{displayValue}</span>
                                       </button>
                                     ) : isWebsiteColumn && cellValue ? (
-                                      <a 
+                                      <a
                                         href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -2633,7 +2674,7 @@ export default function SalesDashboard() {
                                         <span>{extractDomain(cellValue)}</span>
                                       </a>
                                     ) : isLinkColumn && cellValue ? (
-                                      <a 
+                                      <a
                                         href={cellValue}
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -2644,7 +2685,7 @@ export default function SalesDashboard() {
                                         {isLeaflyLink ? '🍁' : '🔗'}
                                       </a>
                                     ) : (
-                                      <span 
+                                      <span
                                         data-testid={`text-cell-${rowKey}-${header}`}
                                         className={isLongText ? "cursor-pointer hover:text-primary" : ""}
                                         onClick={() => isLongText && openExpandedView(row, header, cellValue, false)}
