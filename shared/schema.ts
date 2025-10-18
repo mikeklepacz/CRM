@@ -168,6 +168,8 @@ export const userPreferences = pgTable("user_preferences", {
     secondary: string;
     accent: string;
     border: string;
+    bodyBackground?: string;
+    headerBackground?: string;
   }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

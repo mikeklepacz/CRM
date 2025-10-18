@@ -17,6 +17,7 @@ import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
@@ -97,6 +98,8 @@ export default function SalesDashboard() {
     secondary: '#f3f4f6',
     accent: '#8b5cf6',
     border: '#e5e7eb',
+    bodyBackground: '',
+    headerBackground: '',
   });
 
   // Mutation to update a cell in Google Sheets
@@ -225,6 +228,8 @@ export default function SalesDashboard() {
       secondary: string;
       accent: string;
       border: string;
+      bodyBackground?: string;
+      headerBackground?: string;
     };
   } | null>({
     queryKey: ['/api/user/preferences'],
@@ -928,12 +933,18 @@ export default function SalesDashboard() {
 
   return (
     <div 
-      className="container mx-auto p-6 space-y-6"
-      style={{
-        backgroundColor: customColors.background,
-        color: customColors.text,
-      }}
+      className="min-h-screen"
+      style={customColors.bodyBackground ? {
+        backgroundColor: customColors.bodyBackground,
+      } : {}}
     >
+      <div 
+        className="container mx-auto p-6 space-y-6"
+        style={{
+          backgroundColor: customColors.background,
+          color: customColors.text,
+        }}
+      >
       <Card style={{ backgroundColor: customColors.secondary, borderColor: customColors.border }}>
         <CardHeader style={{ color: customColors.text }}>
           <CardTitle>Sales Dashboard</CardTitle>
@@ -1042,43 +1053,8 @@ export default function SalesDashboard() {
                   </PopoverContent>
                 </Popover>
 
-                {/* Reset to Default Button */}
-                {(fontSize !== 14 || rowHeight !== 48) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setFontSize(14);
-                      setRowHeight(48);
-                    }}
-                    data-testid="button-reset-display"
-                  >
-                    Reset Display
-                  </Button>
-                )}
-
-                {/* Reset Columns Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const hiddenColumns = ['title', 'error'];
-                    const newVisibleColumns: Record<string, boolean> = {};
-                    headers.forEach((header: string) => {
-                      newVisibleColumns[header] = !hiddenColumns.includes(header.toLowerCase());
-                    });
-                    setVisibleColumns(newVisibleColumns);
-                    setColumnOrder(headers);
-                    toast({
-                      title: "Columns Reset",
-                      description: "All columns are now visible in their original order",
-                    });
-                  }}
-                  data-testid="button-reset-columns"
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Reset Columns
-                </Button>
+                {/* Theme Toggle */}
+                <ThemeToggle />
 
                 <Popover>
                   <PopoverTrigger asChild>
@@ -1089,37 +1065,14 @@ export default function SalesDashboard() {
                   </PopoverTrigger>
                   <PopoverContent className="w-96 max-h-[600px] overflow-y-auto">
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium">Customize Colors</h4>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setCustomColors({
-                              background: '#ffffff',
-                              text: '#000000',
-                              primary: '#3b82f6',
-                              secondary: '#f3f4f6',
-                              accent: '#8b5cf6',
-                              border: '#e5e7eb',
-                            });
-                            toast({
-                              title: "Colors Reset",
-                              description: "Dashboard colors have been reset to defaults",
-                            });
-                          }}
-                          data-testid="button-reset-colors"
-                        >
-                          Reset
-                        </Button>
-                      </div>
+                      <h4 className="font-medium">Customize Colors</h4>
                       <p className="text-xs text-muted-foreground">
-                        Personalize your dashboard appearance
+                        Personalize your dashboard appearance (use "Reset All Colors" button to restore defaults)
                       </p>
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <Label htmlFor="color-background" className="text-sm font-medium">Background</Label>
-                          <p className="text-xs text-muted-foreground">Main page background color</p>
+                          <Label htmlFor="color-background" className="text-sm font-medium">Table Background</Label>
+                          <p className="text-xs text-muted-foreground">Data table background color</p>
                           <div className="flex items-center gap-2">
                             <input
                               id="color-background"
@@ -1134,6 +1087,14 @@ export default function SalesDashboard() {
                               onChange={(e) => setCustomColors({ ...customColors, background: e.target.value })}
                               className="flex-1 font-mono text-sm"
                             />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomColors({ ...customColors, background: '#ffffff' })}
+                              title="Reset to default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                         
@@ -1154,8 +1115,17 @@ export default function SalesDashboard() {
                               onChange={(e) => setCustomColors({ ...customColors, text: e.target.value })}
                               className="flex-1 font-mono text-sm"
                             />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomColors({ ...customColors, text: '#000000' })}
+                              title="Reset to default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
+                        
                         <div className="space-y-2">
                           <Label htmlFor="color-primary" className="text-sm font-medium">Primary</Label>
                           <p className="text-xs text-muted-foreground">Button colors and key action elements</p>
@@ -1173,6 +1143,14 @@ export default function SalesDashboard() {
                               onChange={(e) => setCustomColors({ ...customColors, primary: e.target.value })}
                               className="flex-1 font-mono text-sm"
                             />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomColors({ ...customColors, primary: '#3b82f6' })}
+                              title="Reset to default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                         
@@ -1193,6 +1171,14 @@ export default function SalesDashboard() {
                               onChange={(e) => setCustomColors({ ...customColors, secondary: e.target.value })}
                               className="flex-1 font-mono text-sm"
                             />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomColors({ ...customColors, secondary: '#f3f4f6' })}
+                              title="Reset to default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                         
@@ -1213,6 +1199,14 @@ export default function SalesDashboard() {
                               onChange={(e) => setCustomColors({ ...customColors, accent: e.target.value })}
                               className="flex-1 font-mono text-sm"
                             />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomColors({ ...customColors, accent: '#8b5cf6' })}
+                              title="Reset to default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                         
@@ -1233,6 +1227,74 @@ export default function SalesDashboard() {
                               onChange={(e) => setCustomColors({ ...customColors, border: e.target.value })}
                               className="flex-1 font-mono text-sm"
                             />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomColors({ ...customColors, border: '#e5e7eb' })}
+                              title="Reset to default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <Separator className="my-4" />
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="color-body-bg" className="text-sm font-medium">Page Background</Label>
+                          <p className="text-xs text-muted-foreground">Main page body background (leave empty for theme default)</p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="color-body-bg"
+                              type="color"
+                              value={customColors.bodyBackground || '#f9fafb'}
+                              onChange={(e) => setCustomColors({ ...customColors, bodyBackground: e.target.value })}
+                              className="h-10 w-20 rounded cursor-pointer border"
+                              data-testid="input-color-body-bg"
+                            />
+                            <Input
+                              value={customColors.bodyBackground}
+                              onChange={(e) => setCustomColors({ ...customColors, bodyBackground: e.target.value })}
+                              placeholder="Empty = theme default"
+                              className="flex-1 font-mono text-sm"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
+                              title="Reset to theme default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="color-header-bg" className="text-sm font-medium">Header Background</Label>
+                          <p className="text-xs text-muted-foreground">Top header background (leave empty for theme default)</p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="color-header-bg"
+                              type="color"
+                              value={customColors.headerBackground || '#ffffff'}
+                              onChange={(e) => setCustomColors({ ...customColors, headerBackground: e.target.value })}
+                              className="h-10 w-20 rounded cursor-pointer border"
+                              data-testid="input-color-header-bg"
+                            />
+                            <Input
+                              value={customColors.headerBackground}
+                              onChange={(e) => setCustomColors({ ...customColors, headerBackground: e.target.value })}
+                              placeholder="Empty = theme default"
+                              className="flex-1 font-mono text-sm"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setCustomColors({ ...customColors, headerBackground: '' })}
+                              title="Reset to theme default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                         
@@ -1645,6 +1707,111 @@ export default function SalesDashboard() {
                 </Popover>
               </div>
             </div>
+          )}
+
+          {/* Reset Options Card */}
+          {storeSheetId && trackerSheetId && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Reset Options</CardTitle>
+                <CardDescription>
+                  Restore default settings for columns, colors, and display preferences
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-3">
+                  {/* Reset Columns */}
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const hiddenColumns = ['title', 'error'];
+                      const newVisibleColumns: Record<string, boolean> = {};
+                      headers.forEach((header: string) => {
+                        newVisibleColumns[header] = !hiddenColumns.includes(header.toLowerCase());
+                      });
+                      setVisibleColumns(newVisibleColumns);
+                      setColumnOrder(headers);
+                      toast({
+                        title: "Columns Reset",
+                        description: "All columns are now visible in their original order",
+                      });
+                    }}
+                    data-testid="button-reset-columns"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reset Columns
+                  </Button>
+
+                  {/* Reset Colors */}
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCustomColors({
+                        background: '#ffffff',
+                        text: '#000000',
+                        primary: '#3b82f6',
+                        secondary: '#f3f4f6',
+                        accent: '#8b5cf6',
+                        border: '#e5e7eb',
+                        bodyBackground: '',
+                        headerBackground: '',
+                      });
+                      toast({
+                        title: "Colors Reset",
+                        description: "All colors have been reset to defaults",
+                      });
+                    }}
+                    data-testid="button-reset-all-colors"
+                  >
+                    <Palette className="mr-2 h-4 w-4" />
+                    Reset All Colors
+                  </Button>
+
+                  {/* Reset Display (Font & Row Height) */}
+                  {(fontSize !== 14 || rowHeight !== 48) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setFontSize(14);
+                        setRowHeight(48);
+                        toast({
+                          title: "Display Reset",
+                          description: "Font size and row height reset to defaults",
+                        });
+                      }}
+                      data-testid="button-reset-display"
+                    >
+                      <Type className="mr-2 h-4 w-4" />
+                      Reset Display
+                    </Button>
+                  )}
+
+                  {/* Reset All Filters */}
+                  {(selectedTags.size < allTags.length || 
+                    selectedKeywords.size < allKeywords.length || 
+                    selectedStates.size < allStates.length ||
+                    searchTerm !== '') && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedTags(new Set(allTags));
+                        setSelectedKeywords(new Set(allKeywords));
+                        setSelectedStates(new Set(allStates));
+                        setSearchTerm('');
+                        toast({
+                          title: "Filters Reset",
+                          description: "All filters cleared and search reset",
+                        });
+                      }}
+                      data-testid="button-reset-filters"
+                    >
+                      <EyeOff className="mr-2 h-4 w-4" />
+                      Reset Filters
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Data Table */}
@@ -2292,6 +2459,7 @@ export default function SalesDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
