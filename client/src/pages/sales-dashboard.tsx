@@ -15,6 +15,8 @@ import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -50,16 +52,6 @@ const getStateName = (state: string): string => {
   const upperState = state.toUpperCase().trim();
   return REGIONS[upperState] || state;
 };
-
-// Status options for the Status column
-const statusOptions = [
-  '1 – Contacted',
-  '2 – Interested',
-  '3 – Sample Sent',
-  '4 – Follow-Up',
-  '5 – Closed Won',
-  '6 – Closed Lost',
-];
 
 interface GoogleSheet {
   id: string;
@@ -106,6 +98,19 @@ export default function SalesDashboard() {
   // New state variables for text alignment and vertical alignment
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
+  
+  // Status options state (customizable)
+  const [statusOptions, setStatusOptions] = useState<string[]>([
+    '1 – Contacted',
+    '2 – Interested',
+    '3 – Sample Sent',
+    '4 – Follow-Up',
+    '5 – Closed Won',
+    '6 – Closed Lost',
+  ]);
+  
+  // Color row by status state
+  const [colorRowByStatus, setColorRowByStatus] = useState<boolean>(false);
 
   // Contact action dialog state
   const [contactActionDialog, setContactActionDialog] = useState<{
@@ -282,7 +287,6 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground?: string;
       headerBackground?: string;
-      statusColors?: { [status: string]: { background: string; text: string } };
     };
     lightModeColors?: {
       background: string;
@@ -293,7 +297,6 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground: string;
       headerBackground: string;
-      statusColors?: { [status: string]: { background: string; text: string } };
     };
     darkModeColors?: {
       background: string;
@@ -304,7 +307,6 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground: string;
       headerBackground: string;
-      statusColors?: { [status: string]: { background: string; text: string } };
     };
     // Add alignment preferences
     textAlign?: 'left' | 'center' | 'right' | 'justify';
@@ -2258,11 +2260,6 @@ export default function SalesDashboard() {
                           style={{
                             fontSize: `${fontSize}px`,
                             height: `${effectiveHeight}px`,
-                            ...(colorRowByStatus && statusColumns.length > 0 && row[statusColumns[0]] && customColors.statusColors?.[row[statusColumns[0]]]
-                              ? {
-                                  backgroundColor: lightenColor(customColors.statusColors[row[statusColumns[0]]].background, 50),
-                                }
-                              : {}),
                           }}
                         >
                           {visibleHeaders.map((header: string) => {
@@ -2377,22 +2374,15 @@ export default function SalesDashboard() {
                                           <SelectValue placeholder="Select status..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          {statusOptions.map((status) => {
-                                            const statusColor = customColors.statusColors?.[status];
-                                            return (
-                                              <SelectItem
-                                                key={status}
-                                                value={status}
-                                                data-testid={`option-status-${status}`}
-                                                style={statusColor ? {
-                                                  backgroundColor: statusColor.background,
-                                                  color: statusColor.text,
-                                                } : undefined}
-                                              >
-                                                {status}
-                                              </SelectItem>
-                                            );
-                                          })}
+                                          {statusOptions.map((status) => (
+                                            <SelectItem
+                                              key={status}
+                                              value={status}
+                                              data-testid={`option-status-${status}`}
+                                            >
+                                              {status}
+                                            </SelectItem>
+                                          ))}
                                         </SelectContent>
                                       </Select>
                                     ) : isStateColumn ? (
@@ -2575,22 +2565,15 @@ export default function SalesDashboard() {
                                           <SelectValue placeholder="Select status..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          {statusOptions.map((status) => {
-                                            const statusColor = customColors.statusColors?.[status];
-                                            return (
-                                              <SelectItem
-                                                key={status}
-                                                value={status}
-                                                data-testid={`option-status-${status}`}
-                                                style={statusColor ? {
-                                                  backgroundColor: statusColor.background,
-                                                  color: statusColor.text,
-                                                } : undefined}
-                                              >
-                                                {status}
-                                              </SelectItem>
-                                            );
-                                          })}
+                                          {statusOptions.map((status) => (
+                                            <SelectItem
+                                              key={status}
+                                              value={status}
+                                              data-testid={`option-status-${status}`}
+                                            >
+                                              {status}
+                                            </SelectItem>
+                                          ))}
                                         </SelectContent>
                                       </Select>
                                     ) : isStateColumn ? (
