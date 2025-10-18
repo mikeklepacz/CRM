@@ -2022,14 +2022,13 @@ export default function SalesDashboard() {
 
               {/* Filter Buttons Row */}
               <div className="flex flex-wrap items-center gap-2">
-                {allTags.length > 0 && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" data-testid="button-tags-filter">
-                        <Settings2 className="mr-2 h-4 w-4" />
-                        Tags ({selectedTags.size}/{allTags.length})
-                      </Button>
-                    </PopoverTrigger>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-tags-filter">
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      Tags ({selectedTags.size}/{allTags.length})
+                    </Button>
+                  </PopoverTrigger>
                     <PopoverContent className="w-80">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -2090,16 +2089,14 @@ export default function SalesDashboard() {
                       </div>
                     </PopoverContent>
                   </Popover>
-                )}
 
-                {allKeywords.length > 0 && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" data-testid="button-keywords-filter">
-                        <Settings2 className="mr-2 h-4 w-4" />
-                        Keywords/Phrases ({selectedKeywords.size}/{allKeywords.length})
-                      </Button>
-                    </PopoverTrigger>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-keywords-filter">
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      Keywords/Phrases ({selectedKeywords.size}/{allKeywords.length})
+                    </Button>
+                  </PopoverTrigger>
                     <PopoverContent className="w-80">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -2160,16 +2157,14 @@ export default function SalesDashboard() {
                       </div>
                     </PopoverContent>
                   </Popover>
-                )}
 
-                {allStates.length > 0 && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" data-testid="button-states-filter">
-                        <Settings2 className="mr-2 h-4 w-4" />
-                        States ({selectedStates.size}/{allStates.length})
-                      </Button>
-                    </PopoverTrigger>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-states-filter">
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      States ({selectedStates.size}/{allStates.length})
+                    </Button>
+                  </PopoverTrigger>
                     <PopoverContent className="w-80">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -2219,7 +2214,6 @@ export default function SalesDashboard() {
                       </div>
                     </PopoverContent>
                   </Popover>
-                )}
 
                 <Popover>
                   <PopoverTrigger asChild>
