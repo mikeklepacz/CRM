@@ -314,6 +314,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     headerBackground: z.string(),
   });
 
+  const statusColorSchema = z.record(z.object({
+    background: z.string(),
+    text: z.string()
+  })).optional();
+
+  const colorSchemaWithStatus = z.object({
+    background: z.string(),
+    text: z.string(),
+    primary: z.string(),
+    secondary: z.string(),
+    accent: z.string(),
+    border: z.string(),
+    bodyBackground: z.string().optional(),
+    headerBackground: z.string().optional(),
+    statusColors: statusColorSchema,
+  }).optional();
+
   const userPreferencesSchema = z.object({
     visibleColumns: z.record(z.boolean()).optional(),
     columnOrder: z.array(z.string()).optional(),
@@ -323,8 +340,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     selectedStates: z.array(z.string()).optional(),
     fontSize: z.number().optional(),
     rowHeight: z.number().optional(),
-    lightModeColors: colorSchema.optional(),
-    darkModeColors: colorSchema.optional(),
+    lightModeColors: colorSchemaWithStatus,
+    darkModeColors: colorSchemaWithStatus,
     textAlign: z.enum(['left', 'center', 'right', 'justify']).optional(),
     verticalAlign: z.enum(['top', 'middle', 'bottom']).optional(),
     colorRowByStatus: z.boolean().optional(),
