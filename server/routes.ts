@@ -1387,12 +1387,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Merge data by join column - include rows from BOTH sheets
       const mergedDataMap = new Map();
 
-      // First, add all store rows
-      storeData.forEach(storeRow => {
+      // First, add all store rows (use row index as key to avoid overwriting duplicates)
+      storeData.forEach((storeRow, index) => {
         const joinValue = storeRow[joinColumn];
-        const trackerRow = filteredTrackerData.find(tr => tr[joinColumn] === joinValue) || {};
+        const trackerRow = filteredTrackerData.find(tr => tr[joinColumn] === joinValue && joinValue) || {};
 
-        mergedDataMap.set(joinValue, {
+        // Use row index as unique key so stores with empty/duplicate link values don't overwrite each other
+        mergedDataMap.set(`store-${index}`, {
           ...storeRow,
           ...trackerRow,
           _hasTrackerData: Object.keys(trackerRow).length > 0,
@@ -1403,9 +1404,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Then, add tracker rows that don't exist in store (deleted orders)
       filteredTrackerData.forEach(trackerRow => {
         const joinValue = trackerRow[joinColumn];
-        if (!mergedDataMap.has(joinValue)) {
+        // Check if this tracker row already matched a store row
+        const alreadyMerged = storeData.some(sr => sr[joinColumn] === joinValue && joinValue);
+        if (!alreadyMerged) {
           // This row only exists in tracker - it was deleted from store
-          mergedDataMap.set(joinValue, {
+          mergedDataMap.set(`tracker-${trackerRow._trackerRowIndex}`, {
             ...trackerRow,
             _hasTrackerData: true,
             _deletedFromStore: true,
