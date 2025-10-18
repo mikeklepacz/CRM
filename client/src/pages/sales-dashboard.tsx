@@ -12,7 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Textarea } from "@/components/ui/textarea";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
@@ -69,6 +71,8 @@ export default function SalesDashboard() {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
   const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
+  const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
+  const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
@@ -80,6 +84,8 @@ export default function SalesDashboard() {
     selectedTags?: string[];
     selectedKeywords?: string[];
     selectedStates?: string[];
+    fontSize?: number;
+    rowHeight?: number;
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
@@ -168,6 +174,15 @@ export default function SalesDashboard() {
 
         setVisibleColumns(initialVisible);
         setColumnWidths(initialWidths);
+        
+        // Load font size and row height preferences
+        if (userPreferences.fontSize) {
+          setFontSize(userPreferences.fontSize);
+        }
+        if (userPreferences.rowHeight) {
+          setRowHeight(userPreferences.rowHeight);
+        }
+        
         setPreferencesLoaded(true);
       } else {
         // No saved preferences, use defaults
@@ -178,6 +193,8 @@ export default function SalesDashboard() {
         setVisibleColumns(initialVisible);
         setColumnOrder(headers);
         setColumnWidths(initialWidths);
+        setFontSize(14);
+        setRowHeight(48);
         setPreferencesLoaded(true);
       }
     }
@@ -489,6 +506,8 @@ export default function SalesDashboard() {
           selectedTags: Array.from(selectedTags),
           selectedKeywords: Array.from(selectedKeywords),
           selectedStates: Array.from(selectedStates),
+          fontSize,
+          rowHeight,
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -496,7 +515,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, preferencesLoaded]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, preferencesLoaded]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -789,6 +808,60 @@ export default function SalesDashboard() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Refresh
                 </Button>
+
+                {/* Font Size Dropdown */}
+                <div className="flex items-center gap-2">
+                  <Type className="h-4 w-4 text-muted-foreground" />
+                  <Select 
+                    value={fontSize.toString()} 
+                    onValueChange={(value) => setFontSize(parseInt(value))}
+                  >
+                    <SelectTrigger className="w-20" data-testid="select-font-size">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="11">11</SelectItem>
+                      <SelectItem value="12">12</SelectItem>
+                      <SelectItem value="13">13</SelectItem>
+                      <SelectItem value="14">14</SelectItem>
+                      <SelectItem value="16">16</SelectItem>
+                      <SelectItem value="18">18</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="22">22</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Row Height Slider */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="icon" data-testid="button-row-height">
+                      <AlignJustify className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Row Height</Label>
+                        <span className="text-sm text-muted-foreground">{rowHeight}px</span>
+                      </div>
+                      <Slider
+                        value={[rowHeight]}
+                        onValueChange={(value) => setRowHeight(value[0])}
+                        min={32}
+                        max={120}
+                        step={4}
+                        className="w-full"
+                        data-testid="slider-row-height"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Compact</span>
+                        <span>Comfortable</span>
+                        <span>Spacious</span>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
                 {allTags.length > 0 && (
                   <Popover>
@@ -1101,6 +1174,7 @@ export default function SalesDashboard() {
                           data-testid={`row-data-${rowIdx}`}
                           className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
                           title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
+                          style={{ fontSize: `${fontSize}px`, minHeight: `${rowHeight}px` }}
                         >
                           {visibleHeaders.map((header: string) => {
                             const isEditable = editableColumns.includes(header);
@@ -1120,6 +1194,11 @@ export default function SalesDashboard() {
                             const isTagColumn = header.toLowerCase().includes('tag');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
+                            
+                            // Determine if this column should allow text wrapping
+                            const isAddressColumn = header.toLowerCase().includes('address') || header.toLowerCase().includes('street');
+                            const isNotesColumn = header.toLowerCase().includes('note') || header.toLowerCase().includes('comment');
+                            const shouldWrap = isAddressColumn || isNotesColumn || isHoursColumn || isKeywordColumn || isTagColumn;
 
                             const statusOptions = [
                               '1 – Contacted',
@@ -1151,8 +1230,11 @@ export default function SalesDashboard() {
                             return (
                               <TableCell 
                                 key={header} 
-                                className="whitespace-nowrap"
-                                style={{ width: columnWidths[header] || 200 }}
+                                className={shouldWrap ? "align-top" : "whitespace-nowrap align-middle"}
+                                style={{ 
+                                  width: columnWidths[header] || 200,
+                                  ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const } : {})
+                                }}
                               >
                                 {isEditable ? (
                                   hasData ? (

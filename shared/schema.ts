@@ -159,6 +159,8 @@ export const userPreferences = pgTable("user_preferences", {
   selectedTags: jsonb("selected_tags").$type<string[]>(),
   selectedKeywords: jsonb("selected_keywords").$type<string[]>(),
   selectedStates: jsonb("selected_states").$type<string[]>(),
+  fontSize: integer("font_size").default(14), // Font size in pixels (12, 14, 16, 18, 20, etc.)
+  rowHeight: integer("row_height").default(48), // Row height in pixels
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
