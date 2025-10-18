@@ -184,6 +184,7 @@ export const userPreferences = pgTable("user_preferences", {
     statusColors?: { [status: string]: { background: string; text: string } };
   }>(),
   textAlign: varchar("text_align", { length: 20 }),
+  freezeFirstColumn: boolean("freeze_first_column").default(true),
   verticalAlign: varchar("vertical_align", { length: 20 }),
   colorRowByStatus: boolean("color_row_by_status").default(false),
   statusOptions: jsonb("status_options").$type<string[]>(),

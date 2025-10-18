@@ -101,6 +101,7 @@ export default function SalesDashboard() {
   // New state variables for text alignment and vertical alignment
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
+  const [freezeFirstColumn, setFreezeFirstColumn] = useState<boolean>(true);
 
   // Status options state (customizable)
   const [statusOptions, setStatusOptions] = useState<string[]>([
@@ -548,6 +549,9 @@ export default function SalesDashboard() {
         if (userPreferences.colorPresets) {
           setColorPresets(userPreferences.colorPresets);
         }
+        if (userPreferences.freezeFirstColumn !== undefined) {
+          setFreezeFirstColumn(userPreferences.freezeFirstColumn);
+        }
 
         setPreferencesLoaded(true);
       } else {
@@ -903,6 +907,7 @@ export default function SalesDashboard() {
           statusOptions, // Save status options
           colorRowByStatus, // Save row coloring preference
           colorPresets, // Save color presets
+          freezeFirstColumn, // Save freeze column preference
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -910,7 +915,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -1510,6 +1515,17 @@ export default function SalesDashboard() {
                     </div>
                   </PopoverContent>
                 </Popover>
+
+                {/* Freeze First Column Checkbox */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="freeze-first-column"
+                    checked={freezeFirstColumn}
+                    onCheckedChange={(checked) => setFreezeFirstColumn(!!checked)}
+                    data-testid="checkbox-freeze-column"
+                  />
+                  <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
+                </div>
 
                       {/* Theme Toggle with Label */}
                       <ThemeToggle showLabel={true} variant="outline" />
@@ -2539,7 +2555,7 @@ export default function SalesDashboard() {
                           className="whitespace-nowrap relative group text-center"
                           style={{ 
                             width: columnWidths[header] || 200,
-                            ...(isFirstColumn ? {
+                            ...(isFirstColumn && freezeFirstColumn ? {
                               position: 'sticky',
                               left: 0,
                               zIndex: 20,
@@ -2783,10 +2799,20 @@ export default function SalesDashboard() {
                             const comboboxKey = `${rowKey}-${header}`;
                             const uniqueStates = isStateColumn ? getUniqueColumnValues(header) : [];
 
+                            const isFirstColumn = visibleHeaders.indexOf(header) === 0;
+
                             return (
                               <TableCell
                                 key={header}
-                                style={cellStyle}
+                                style={{
+                                  ...cellStyle,
+                                  ...(isFirstColumn && freezeFirstColumn ? {
+                                    position: 'sticky',
+                                    left: 0,
+                                    zIndex: 10,
+                                    backgroundColor: rowStatusColor ? rowStatusColor.background : (colorRowByStatus ? '#ffffff' : customColors.background)
+                                  } : {})
+                                }}
                               >
                                 {isEditable ? (
                                   hasData ? (
