@@ -1230,9 +1230,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Filter tracker data by agent (if user is not admin)
       let filteredTrackerData = trackerData;
-      if (user?.role !== 'admin' && trackerHeaders.includes('Agent')) {
+      const agentColumnName = trackerHeaders.find(h => h.toLowerCase() === 'agent');
+      if (user?.role !== 'admin' && agentColumnName) {
         const userEmail = user?.email || '';
-        filteredTrackerData = trackerData.filter(row => row['Agent'] === userEmail);
+        filteredTrackerData = trackerData.filter(row => row[agentColumnName] === userEmail);
       }
 
       // Merge data by join column - include rows from BOTH sheets
@@ -1269,16 +1270,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Combine headers (store headers + tracker headers, avoiding duplicates)
       const allHeaders = [...storeHeaders];
       trackerHeaders.forEach(header => {
-        if (!allHeaders.includes(header)) {
+        if (!allHeaders.some(h => h.toLowerCase() === header.toLowerCase())) {
           allHeaders.push(header);
         }
       });
 
-      // Define editable columns
+      // Define editable columns (case-insensitive)
+      const agentCol = trackerHeaders.find(h => h.toLowerCase() === 'agent');
+      const excludedCols = [agentCol, joinColumn].filter(Boolean).map(c => c?.toLowerCase());
       const editableColumns = [
-        ...trackerHeaders.filter(h => !['Agent', joinColumn].includes(h)), // All tracker columns except Agent and join column
+        ...trackerHeaders.filter(h => !excludedCols.includes(h.toLowerCase())), // All tracker columns except agent and join column
         'phone', 'email', 'additional phone', 'additional email', // Editable store columns
-      ].filter(col => allHeaders.includes(col)); // Only include if they exist
+      ].filter(col => allHeaders.some(h => h.toLowerCase() === col.toLowerCase())); // Only include if they exist
 
       res.json({
         headers: allHeaders,
@@ -1313,11 +1316,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { spreadsheetId, sheetName } = sheet;
       
-      // Read headers to find column index
+      // Read headers to find column index (case-insensitive)
       const headerRange = `${sheetName}!1:1`;
       const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
       const headers = headerRows[0] || [];
-      const columnIndex = headers.indexOf(column);
+      const columnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
 
       if (columnIndex === -1) {
         return res.status(400).json({ message: `Column "${column}" not found in sheet` });
@@ -1364,20 +1367,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create a new row with empty values for all columns
       const newRow = headers.map(() => '');
       
-      // Set the join column (link)
-      const linkColumnIndex = headers.indexOf(joinColumn);
+      // Set the join column (case-insensitive)
+      const linkColumnIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
       if (linkColumnIndex !== -1) {
         newRow[linkColumnIndex] = linkValue;
       }
       
-      // Set the Agent column to current user's email
-      const agentColumnIndex = headers.indexOf('Agent');
+      // Set the agent column to current user's email (case-insensitive)
+      const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
       if (agentColumnIndex !== -1 && user?.email) {
         newRow[agentColumnIndex] = user.email;
       }
       
-      // Set the column being edited
-      const editColumnIndex = headers.indexOf(column);
+      // Set the column being edited (case-insensitive)
+      const editColumnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
       if (editColumnIndex !== -1) {
         newRow[editColumnIndex] = value;
       }

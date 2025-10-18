@@ -162,9 +162,9 @@ export default function SalesDashboard() {
   });
 
   const handleCellUpdate = (row: MergedDataRow, column: string, value: any) => {
-    // Determine which sheet to update based on which headers contain this column
-    const isStoreColumn = mergedData?.storeHeaders?.includes(column);
-    const isTrackerColumn = mergedData?.trackerHeaders?.includes(column);
+    // Determine which sheet to update based on which headers contain this column (case-insensitive)
+    const isStoreColumn = mergedData?.storeHeaders?.some((h: string) => h.toLowerCase() === column.toLowerCase());
+    const isTrackerColumn = mergedData?.trackerHeaders?.some((h: string) => h.toLowerCase() === column.toLowerCase());
 
     let sheetId: string | undefined;
     let rowIndex: number | undefined;
@@ -748,8 +748,8 @@ export default function SalesDashboard() {
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
-    // Determine which sheet this column belongs to
-    const isTrackerColumn = trackerHeaders.includes(column);
+    // Determine which sheet this column belongs to (case-insensitive)
+    const isTrackerColumn = trackerHeaders.some((h: string) => h.toLowerCase() === column.toLowerCase());
     const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
     const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
 
@@ -1396,8 +1396,8 @@ export default function SalesDashboard() {
                           style={{ fontSize: `${fontSize}px`, height: `${effectiveHeight}px` }}
                         >
                           {visibleHeaders.map((header: string) => {
-                            const isEditable = editableColumns.includes(header);
-                            const isTrackerColumn = trackerHeaders.includes(header);
+                            const isEditable = editableColumns.some((col: string) => col.toLowerCase() === header.toLowerCase());
+                            const isTrackerColumn = trackerHeaders.some((h: string) => h.toLowerCase() === header.toLowerCase());
                             const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
                             const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
                             const cellKey = JSON.stringify({ rowIndex, column: header, sheetId });
