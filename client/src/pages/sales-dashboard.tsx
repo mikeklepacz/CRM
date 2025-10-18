@@ -156,7 +156,7 @@ export default function SalesDashboard() {
     tableTextColor: '#ffffff',
     primary: '#60a5fa',
     secondary: '#2a2a2a',
-    accent: '#a78bfa',
+    accent: '#a7bfa',
     border: '#404040',
     bodyBackground: '',
     headerBackground: '',
@@ -2525,18 +2525,27 @@ export default function SalesDashboard() {
             <div className="border rounded-md overflow-auto" style={{ borderColor: customColors.border }}>
               <div className="h-[600px] w-full overflow-auto" style={{ backgroundColor: colorRowByStatus ? '#ffffff' : customColors.background }}>
                 <Table className="min-w-full" style={{ tableLayout: 'fixed' }}>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10" style={{ backgroundColor: customColors.headerBackground || customColors.background }}>
                     <TableRow>
-                      {visibleHeaders.map((header: string) => {
+                      {visibleHeaders.map((header: string, index: number) => {
                         const isNameColumn = header.toLowerCase() === 'name' || header.toLowerCase() === 'company';
                         const isCityColumn = header.toLowerCase() === 'city';
                         const hasInlineSearch = isNameColumn || isCityColumn;
-                        
+                        const isFirstColumn = index === 0;
+
                         return (
                         <TableHead
                           key={header}
-                          className="whitespace-nowrap relative group"
-                          style={{ width: columnWidths[header] || 200 }}
+                          className="whitespace-nowrap relative group text-center"
+                          style={{ 
+                            width: columnWidths[header] || 200,
+                            ...(isFirstColumn ? {
+                              position: 'sticky',
+                              left: 0,
+                              zIndex: 20,
+                              backgroundColor: customColors.headerBackground || customColors.background
+                            } : {})
+                          }}
                         >
                           <div className="flex flex-col gap-1 pr-4">
                             <div className="flex items-center justify-between">
@@ -2628,7 +2637,7 @@ export default function SalesDashboard() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                             </div>
-                            
+
                             {/* Inline search box for Name and City columns */}
                             {hasInlineSearch && (
                               <Input
@@ -2647,7 +2656,7 @@ export default function SalesDashboard() {
                                 data-testid={`input-filter-${header.toLowerCase()}`}
                               />
                             )}
-                            
+
                             <div
                               className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize hover:bg-primary/50 transition-colors z-20 flex items-center justify-center"
                               onMouseDown={(e) => {
