@@ -1691,7 +1691,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (updates.length > 0) {
-        await googleSheets.batchUpdateSheetData(userId, spreadsheetId, updates);
+        for (const update of updates) {
+          await googleSheets.writeSheetData(userId, spreadsheetId, update.range, update.values);
+        }
       }
 
       res.json({ message: "Address updated successfully" });
@@ -1948,9 +1950,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      // Execute batch update
+      // Execute batch update - write each cell individually
       if (batchUpdates.length > 0) {
-        await googleSheets.batchUpdateSheetData(userId, storeSheet.spreadsheetId, batchUpdates);
+        for (const update of batchUpdates) {
+          await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, update.range, update.values);
+        }
       }
 
       res.json({ success: true, message: 'Store updated successfully' });
