@@ -193,6 +193,15 @@ export const userPreferences = pgTable("user_preferences", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Banned words table - words to exclude from keyword/tag filters
+export const bannedWords = pgTable("banned_words", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  word: varchar("word").notNull().unique(),
+  type: varchar("type", { length: 20 }).notNull(), // 'keyword' or 'tag'
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
@@ -285,6 +294,11 @@ export const insertUserPreferencesSchema = createInsertSchema(userPreferences).o
   updatedAt: true,
 });
 
+export const insertBannedWordSchema = createInsertSchema(bannedWords).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -304,3 +318,5 @@ export type DashboardCard = typeof dashboardCards.$inferSelect;
 export type InsertDashboardCard = z.infer<typeof insertDashboardCardSchema>;
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;
+export type BannedWord = typeof bannedWords.$inferSelect;
+export type InsertBannedWord = z.infer<typeof insertBannedWordSchema>;
