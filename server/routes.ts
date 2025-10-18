@@ -303,6 +303,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const colorSchema = z.object({
+    background: z.string(),
+    text: z.string(),
+    primary: z.string(),
+    secondary: z.string(),
+    accent: z.string(),
+    border: z.string(),
+    bodyBackground: z.string(),
+    headerBackground: z.string(),
+  });
+
   const userPreferencesSchema = z.object({
     visibleColumns: z.record(z.boolean()).optional(),
     columnOrder: z.array(z.string()).optional(),
@@ -310,6 +321,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     selectedTags: z.array(z.string()).optional(),
     selectedKeywords: z.array(z.string()).optional(),
     selectedStates: z.array(z.string()).optional(),
+    fontSize: z.number().optional(),
+    rowHeight: z.number().optional(),
+    lightModeColors: colorSchema.optional(),
+    darkModeColors: colorSchema.optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {

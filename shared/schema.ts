@@ -161,15 +161,25 @@ export const userPreferences = pgTable("user_preferences", {
   selectedStates: jsonb("selected_states").$type<string[]>(),
   fontSize: integer("font_size").default(14), // Font size in pixels (12, 14, 16, 18, 20, etc.)
   rowHeight: integer("row_height").default(48), // Row height in pixels
-  customColors: jsonb("custom_colors").$type<{
+  lightModeColors: jsonb("light_mode_colors").$type<{
     background: string;
     text: string;
     primary: string;
     secondary: string;
     accent: string;
     border: string;
-    bodyBackground?: string;
-    headerBackground?: string;
+    bodyBackground: string;
+    headerBackground: string;
+  }>(),
+  darkModeColors: jsonb("dark_mode_colors").$type<{
+    background: string;
+    text: string;
+    primary: string;
+    secondary: string;
+    accent: string;
+    border: string;
+    bodyBackground: string;
+    headerBackground: string;
   }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

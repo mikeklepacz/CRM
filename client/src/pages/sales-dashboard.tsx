@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Separator } from "@/components/ui/separator";
 import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
@@ -91,7 +92,10 @@ export default function SalesDashboard() {
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [keywordSearchTerm, setKeywordSearchTerm] = useState("");
   const [contextMenuColumn, setContextMenuColumn] = useState<string | null>(null);
-  const [customColors, setCustomColors] = useState({
+  const { theme: currentTheme } = useTheme();
+  
+  // Default colors for light and dark modes
+  const defaultLightColors = {
     background: '#ffffff',
     text: '#000000',
     primary: '#3b82f6',
@@ -100,7 +104,28 @@ export default function SalesDashboard() {
     border: '#e5e7eb',
     bodyBackground: '',
     headerBackground: '',
-  });
+  };
+  
+  const defaultDarkColors = {
+    background: '#1a1a1a',
+    text: '#ffffff',
+    primary: '#60a5fa',
+    secondary: '#2a2a2a',
+    accent: '#a78bfa',
+    border: '#404040',
+    bodyBackground: '',
+    headerBackground: '',
+  };
+  
+  const [lightModeColors, setLightModeColors] = useState(defaultLightColors);
+  const [darkModeColors, setDarkModeColors] = useState(defaultDarkColors);
+  
+  // Get the active colors based on current theme (resolving 'auto' to actual theme)
+  const resolvedTheme = currentTheme === 'auto' 
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : currentTheme;
+  const customColors = resolvedTheme === 'dark' ? darkModeColors : lightModeColors;
+  const setCustomColors = resolvedTheme === 'dark' ? setDarkModeColors : setLightModeColors;
 
   // Mutation to update a cell in Google Sheets
   const updateCellMutation = useMutation({
@@ -328,11 +353,17 @@ export default function SalesDashboard() {
           setRowHeight(userPreferences.rowHeight);
         }
 
-        if (userPreferences.customColors) {
-          setCustomColors({
-            ...userPreferences.customColors,
-            bodyBackground: userPreferences.customColors.bodyBackground || '',
-            headerBackground: userPreferences.customColors.headerBackground || '',
+        // Load theme-specific colors
+        if (userPreferences.lightModeColors) {
+          setLightModeColors({
+            ...defaultLightColors,
+            ...userPreferences.lightModeColors,
+          });
+        }
+        if (userPreferences.darkModeColors) {
+          setDarkModeColors({
+            ...defaultDarkColors,
+            ...userPreferences.darkModeColors,
           });
         }
 
@@ -680,7 +711,8 @@ export default function SalesDashboard() {
           selectedStates: Array.from(selectedStates),
           fontSize,
           rowHeight,
-          customColors,
+          lightModeColors,
+          darkModeColors,
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -688,7 +720,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, customColors, preferencesLoaded]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -1079,9 +1111,14 @@ export default function SalesDashboard() {
                   </PopoverTrigger>
                   <PopoverContent className="w-96 max-h-[600px] overflow-y-auto">
                     <div className="space-y-4">
-                      <h4 className="font-medium">Customize Colors</h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Customize Colors</h4>
+                        <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted text-xs font-medium">
+                          {resolvedTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+                        </div>
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        Personalize your dashboard appearance
+                        Currently editing colors for {resolvedTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
                       </p>
                       <div className="space-y-4">
                         <div className="space-y-2">
@@ -1460,25 +1497,20 @@ export default function SalesDashboard() {
                           variant="destructive"
                           className="w-full"
                           onClick={() => {
-                            setCustomColors({
-                              background: '#ffffff',
-                              text: '#000000',
-                              primary: '#3b82f6',
-                              secondary: '#f3f4f6',
-                              accent: '#8b5cf6',
-                              border: '#e5e7eb',
-                              bodyBackground: '',
-                              headerBackground: '',
-                            });
+                            if (resolvedTheme === 'dark') {
+                              setDarkModeColors(defaultDarkColors);
+                            } else {
+                              setLightModeColors(defaultLightColors);
+                            }
                             toast({
                               title: "Colors Reset",
-                              description: "All colors have been reset to defaults",
+                              description: `${resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode colors have been reset to defaults`,
                             });
                           }}
                           data-testid="button-reset-all-colors-inline"
                         >
                           <RotateCcw className="mr-2 h-4 w-4" />
-                          Reset All Colors to Defaults
+                          Reset {resolvedTheme === 'dark' ? 'Dark' : 'Light'} Mode Colors
                         </Button>
                       </div>
                     </div>

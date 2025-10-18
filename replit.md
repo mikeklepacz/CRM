@@ -64,11 +64,20 @@ Your dashboard view preferences are automatically saved to the database and sync
 - Selected states filter
 - Font size (8-30px for table text)
 - Row height (24-200px for table spacing)
+- Theme-specific colors (separate color sets for light and dark mode)
 
 **How It Works:**
 - Preferences save automatically 1 second after you make changes
 - Login from any device (phone, computer, tablet) and see your custom view
 - No setup required - works automatically
+
+**Theme-Specific Color Customization:**
+- Customize colors independently for light and dark themes
+- Each theme remembers its own color scheme (table background, text, primary, accent, borders, etc.)
+- Switch between light and dark mode to see which theme's colors you're editing
+- Color customizer shows indicator (☀️ Light Mode or 🌙 Dark Mode) showing active theme
+- Reset button resets only the active theme's colors to defaults
+- Your custom colors automatically load when switching themes
 
 ### 5. Sales Dashboard Workflow
 The Sales Dashboard automatically loads both sheets:
