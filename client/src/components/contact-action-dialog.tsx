@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -46,17 +45,31 @@ export function ContactActionDialog({
 }: ContactActionDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [status, setStatus] = useState(row.Status || row.status || '');
   const [followUpDate, setFollowUpDate] = useState<Date | undefined>(undefined);
   const [nextAction, setNextAction] = useState('');
   const [notes, setNotes] = useState('');
   const [pointOfContact, setPointOfContact] = useState('');
+  const [email, setEmail] = useState(contactType === 'email' ? contactValue : (row.Email || row.email || ''));
+  const [phone, setPhone] = useState(contactType === 'phone' ? contactValue : (row.Phone || row.phone || ''));
+
+  // Trigger phone call or email when dialog opens
+  useEffect(() => {
+    if (open) {
+      if (contactType === 'phone') {
+        window.location.href = `tel:${contactValue}`;
+      } else {
+        window.location.href = `mailto:${contactValue}`;
+      }
+    }
+  }, [open, contactType, contactValue]);
+
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       const linkValue = row[joinColumn];
-      
+
       // If row doesn't have tracker data, claim it first
       if (!row._trackerRowIndex) {
         return await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store-with-contact`, {
@@ -88,13 +101,13 @@ export function ContactActionDialog({
       });
       queryClient.invalidateQueries({ queryKey: ["merged-data"] });
       onOpenChange(false);
-      
+
       // Trigger the contact method after dialog closes
       setTimeout(() => {
         if (contactType === 'phone') {
-          window.location.href = `tel:${contactValue}`;
+          window.location.href = `tel:${phone}`;
         } else {
-          window.location.href = `mailto:${contactValue}`;
+          window.location.href = `mailto:${email}`;
         }
       }, 100);
     },
@@ -183,6 +196,30 @@ export function ContactActionDialog({
               placeholder="Who did you speak with?"
             />
           </div>
+
+          {contactType === 'email' && (
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email address"
+              />
+            </div>
+          )}
+
+          {contactType === 'phone' && (
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone number"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
