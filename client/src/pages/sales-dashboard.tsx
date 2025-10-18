@@ -1452,36 +1452,38 @@ export default function SalesDashboard() {
                             </div>
                           </div>
                         </div>
+                        
+                        <Separator className="my-4" />
+                        
+                        {/* Reset All Colors Button - Inside Colors Popover */}
+                        <Button
+                          variant="destructive"
+                          className="w-full"
+                          onClick={() => {
+                            setCustomColors({
+                              background: '#ffffff',
+                              text: '#000000',
+                              primary: '#3b82f6',
+                              secondary: '#f3f4f6',
+                              accent: '#8b5cf6',
+                              border: '#e5e7eb',
+                              bodyBackground: '',
+                              headerBackground: '',
+                            });
+                            toast({
+                              title: "Colors Reset",
+                              description: "All colors have been reset to defaults",
+                            });
+                          }}
+                          data-testid="button-reset-all-colors-inline"
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Reset All Colors to Defaults
+                        </Button>
                       </div>
                     </div>
                   </PopoverContent>
                 </Popover>
-
-                      {/* Reset All Colors Button - Inside Colors Menu */}
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => {
-                          setCustomColors({
-                            background: '#ffffff',
-                            text: '#000000',
-                            primary: '#3b82f6',
-                            secondary: '#f3f4f6',
-                            accent: '#8b5cf6',
-                            border: '#e5e7eb',
-                            bodyBackground: '',
-                            headerBackground: '',
-                          });
-                          toast({
-                            title: "Colors Reset",
-                            description: "All colors have been reset to defaults",
-                          });
-                        }}
-                        data-testid="button-reset-all-colors-inline"
-                      >
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                        Reset All Colors
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
