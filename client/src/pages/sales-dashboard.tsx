@@ -51,6 +51,16 @@ const getStateName = (state: string): string => {
   return REGIONS[upperState] || state;
 };
 
+// Status options for the Status column
+const statusOptions = [
+  '1 – Contacted',
+  '2 – Interested',
+  '3 – Sample Sent',
+  '4 – Follow-Up',
+  '5 – Closed Won',
+  '6 – Closed Lost',
+];
+
 interface GoogleSheet {
   id: string;
   spreadsheetName: string;
@@ -258,6 +268,26 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground?: string;
       headerBackground?: string;
+    };
+    lightModeColors?: {
+      background: string;
+      text: string;
+      primary: string;
+      secondary: string;
+      accent: string;
+      border: string;
+      bodyBackground: string;
+      headerBackground: string;
+    };
+    darkModeColors?: {
+      background: string;
+      text: string;
+      primary: string;
+      secondary: string;
+      accent: string;
+      border: string;
+      bodyBackground: string;
+      headerBackground: string;
     };
     // Add alignment preferences
     textAlign?: 'left' | 'center' | 'right' | 'justify';
