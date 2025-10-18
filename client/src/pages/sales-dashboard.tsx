@@ -815,12 +815,15 @@ export default function SalesDashboard() {
             }
           }
 
-          // Only accept 2-letter state codes
+          // Try to convert 2-letter codes to full names
           if (stateAbbrev.length === 2) {
             const stateName = getStateName(stateAbbrev);
             if (stateName) {
               states.add(stateName);
             }
+          } else {
+            // Accept any non-empty value (full state names, provinces, etc.)
+            states.add(stateAbbrev);
           }
         }
       });
