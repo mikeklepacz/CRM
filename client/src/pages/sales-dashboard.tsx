@@ -2193,9 +2193,6 @@ export default function SalesDashboard() {
                             />
                             <Label htmlFor="color-row-by-status" className="text-sm font-medium">Color entire row by status</Label>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            If enabled, rows will be colored 50% lighter than their status background color.
-                          </p>
                         </div>
 
                         <Separator className="my-4" />
@@ -2780,7 +2777,7 @@ export default function SalesDashboard() {
                                           className="w-full"
                                           data-testid={`button-status-${rowKey}-${header}`}
                                           style={cellValue && (customColors.statusColors as any)?.[cellValue] ? {
-                                            backgroundColor: darkenColor((customColors.statusColors as any)[cellValue].background, 30),
+                                            backgroundColor: (customColors.statusColors as any)[cellValue].background,
                                             color: (customColors.statusColors as any)[cellValue].text,
                                           } : undefined}
                                         >
