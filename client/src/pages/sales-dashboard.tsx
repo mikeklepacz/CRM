@@ -911,7 +911,7 @@ export default function SalesDashboard() {
                     setColumnOrder(headers);
                     toast({
                       title: "Columns Reset",
-                      description: "All columns are now visible except 'title' and 'error'",
+                      description: "All columns are now visible in their original order",
                     });
                   }}
                   data-testid="button-reset-columns"
@@ -1110,7 +1110,10 @@ export default function SalesDashboard() {
                       <p className="text-xs text-muted-foreground">Show/hide and reorder columns (doesn't affect Google Sheets)</p>
                       <ScrollArea className="h-72">
                         <div className="space-y-2">
-                          {columnOrder.map((header: string, index: number) => (
+                          {columnOrder.filter((h: string) => !['error', 'title'].includes(h.toLowerCase())).map((header: string) => {
+                            const filteredOrder = columnOrder.filter((h: string) => !['error', 'title'].includes(h.toLowerCase()));
+                            const filteredIndex = filteredOrder.indexOf(header);
+                            return (
                             <div key={header} className="flex items-center gap-2 group">
                               <Checkbox
                                 id={`col-${header}`}
@@ -1133,7 +1136,7 @@ export default function SalesDashboard() {
                                   size="icon"
                                   className="h-6 w-6"
                                   onClick={() => moveColumnLeft(header)}
-                                  disabled={index === 0}
+                                  disabled={filteredIndex === 0}
                                   data-testid={`button-move-left-${header}`}
                                 >
                                   <ChevronLeft className="h-3 w-3" />
@@ -1143,14 +1146,15 @@ export default function SalesDashboard() {
                                   size="icon"
                                   className="h-6 w-6"
                                   onClick={() => moveColumnRight(header)}
-                                  disabled={index === columnOrder.length - 1}
+                                  disabled={filteredIndex === filteredOrder.length - 1}
                                   data-testid={`button-move-right-${header}`}
                                 >
                                   <ChevronRight className="h-3 w-3" />
                                 </Button>
                               </div>
                             </div>
-                          ))}
+                          );
+                          })}
                         </div>
                       </ScrollArea>
                     </div>
