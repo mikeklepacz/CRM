@@ -243,14 +243,13 @@ export default function SalesDashboard() {
     return `hsl(${h}, ${s}%, ${l}%)`;
   };
 
-
   // Helper function to lighten a color by a percentage
-      const lightenColor = (color: string, percent: number): string => {
-        const hsl = parseHsl(color);
-        // Increase lightness
-        const newL = Math.min(100, hsl.l + (100 - hsl.l) * (percent / 100));
-        return hslToString(hsl.h, hsl.s, newL);
-      };
+  const lightenColor = (color: string, percent: number): string => {
+    const hsl = parseHsl(color);
+    // Increase lightness
+    const newL = Math.min(100, hsl.l + (100 - hsl.l) * (percent / 100));
+    return hslToString(hsl.h, hsl.s, newL);
+  };
 
   // Mutation to update a cell in Google Sheets
   const updateCellMutation = useMutation({
@@ -1156,14 +1155,6 @@ export default function SalesDashboard() {
 
   // Identify status columns (assuming there's only one)
   const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
-
-  // Helper function to lighten a color by a percentage
-  const lightenColor = (color: string, percent: number): string => {
-    const hsl = parseHsl(color);
-    // Increase lightness
-    const newL = Math.min(100, hsl.l + (100 - hsl.l) * (percent / 100));
-    return hslToString(hsl.h, hsl.s, newL);
-  };
 
   const getCompanyName = (row: any) => {
     return row['Company'] || row['company'] || row['Business Name'] || row['name'] || 'Unknown';
