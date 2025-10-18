@@ -1511,30 +1511,23 @@ export default function SalesDashboard() {
                         Currently editing colors for {resolvedTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
                       </p>
                       <div className="space-y-4">
-                        {(['background', 'text', 'primary', 'accent'] as const).map((field) => {
+                        {(['background', 'text', 'primary', 'secondary', 'accent', 'border'] as const).map((field) => {
                           const fieldLabels = {
                             background: 'Table Background',
-                            text: 'Text',
-                            primary: 'Primary',
-                            secondary: 'Secondary',
+                            text: 'Text Color',
+                            primary: 'Primary Button',
+                            secondary: 'Secondary Button',
                             accent: 'Accent',
-                            border: 'Border'
+                            border: 'Border',
                           };
+
                           const fieldDescriptions = {
-                            background: 'Data table background color',
-                            text: 'Main text color in tables and content',
-                            primary: 'Button colors and key action elements',
-                            secondary: 'Card backgrounds and secondary buttons',
-                            accent: 'Highlights and hover states',
-                            border: 'Lines between table rows and card edges'
-                          };
-                          const defaultColors = {
-                            background: '#ffffff',
-                            text: '#000000',
-                            primary: '#3b82f6',
-                            secondary: '#f3f4f6',
-                            accent: '#8b5cf6',
-                            border: '#e5e7eb'
+                            background: 'Main table background color',
+                            text: 'Default text color throughout the interface',
+                            primary: 'Primary action buttons and highlights',
+                            secondary: 'Secondary buttons and card backgrounds',
+                            accent: 'Accent elements and secondary highlights',
+                            border: 'Border lines between rows and card edges',
                           };
 
                           const currentColor = customColors[field];
@@ -1674,7 +1667,7 @@ export default function SalesDashboard() {
                                       variant="ghost"
                                       size="sm"
                                       className="w-full"
-                                      onClick={() => setCustomColors({ ...customColors, [field]: defaultColors[field] })}
+                                      onClick={() => setCustomColors({ ...customColors, [field]: defaultLightColors[field] })}
                                     >
                                       <RotateCcw className="h-4 w-4 mr-2" />
                                       Reset to Default
@@ -1716,7 +1709,7 @@ export default function SalesDashboard() {
                                   variant="ghost"
                                   size="sm"
                                   className="w-full"
-                                  onClick={() => setCustomColors({ ...customColors, secondary: '#f3f4f6' })}
+                                  onClick={() => setCustomColors({ ...customColors, secondary: defaultLightColors.secondary })}
                                 >
                                   <RotateCcw className="h-4 w-4 mr-2" />
                                   Reset to Default
@@ -1754,7 +1747,7 @@ export default function SalesDashboard() {
                                   variant="ghost"
                                   size="sm"
                                   className="w-full"
-                                  onClick={() => setCustomColors({ ...customColors, border: '#e5e7eb' })}
+                                  onClick={() => setCustomColors({ ...customColors, border: defaultLightColors.border })}
                                 >
                                   <RotateCcw className="h-4 w-4 mr-2" />
                                   Reset to Default
@@ -1843,384 +1836,382 @@ export default function SalesDashboard() {
                                         </div>
                                       </div>
                                     </div>
-                                  );
-                                })()}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full"
-                                  onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
-                                >
-                                  <RotateCcw className="h-4 w-4 mr-2" />
-                                  Reset to Theme Default
-                                </Button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="w-full"
+                                      onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
+                                    >
+                                      <RotateCcw className="h-4 w-4 mr-2" />
+                                      Reset to Theme Default
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="color-header-bg" className="text-sm font-medium">Header Background</Label>
-                          <p className="text-xs text-muted-foreground">Top header background (leave empty for theme default)</p>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-header-bg">
-                                <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.headerBackground || '#ffffff' }} />
-                                <span className="font-mono text-sm">
-                                  {customColors.headerBackground ? (() => {
-                                    const hsl = hexToHsl(customColors.headerBackground);
-                                    return `${Math.round(hsl.h)}° ${Math.round(hsl.s)}% ${Math.round(hsl.l)}%`;
-                                  })() : '(Theme Default)'}
-                                </span>
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80" align="start">
-                              <div className="space-y-4">
-                                <HslColorPicker
-                                  color={hexToHsl(customColors.headerBackground || '#ffffff')}
-                                  onChange={(color) => {
-                                    const hexColor = hslToHex(color.h, color.s, color.l);
-                                    setCustomColors({ ...customColors, headerBackground: hexColor });
-                                  }}
-                                />
-                                {customColors.headerBackground && (() => {
-                                  const hsl = hexToHsl(customColors.headerBackground);
+                            <div className="space-y-2">
+                              <Label htmlFor="color-header-bg" className="text-sm font-medium">Header Background</Label>
+                              <p className="text-xs text-muted-foreground">Top header background (leave empty for theme default)</p>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-header-bg">
+                                    <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.headerBackground || '#ffffff' }} />
+                                    <span className="font-mono text-sm">
+                                      {customColors.headerBackground ? (() => {
+                                        const hsl = hexToHsl(customColors.headerBackground);
+                                        return `${Math.round(hsl.h)}° ${Math.round(hsl.s)}% ${Math.round(hsl.l)}%`;
+                                      })() : '(Theme Default)'}
+                                    </span>
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80" align="start">
+                                  <div className="space-y-4">
+                                    <HslColorPicker
+                                      color={hexToHsl(customColors.headerBackground || '#ffffff')}
+                                      onChange={(color) => {
+                                        const hexColor = hslToHex(color.h, color.s, color.l);
+                                        setCustomColors({ ...customColors, headerBackground: hexColor });
+                                      }}
+                                    />
+                                    {customColors.headerBackground && (() => {
+                                      const hsl = hexToHsl(customColors.headerBackground);
+                                      return (
+                                        <div className="space-y-2">
+                                          <Label className="text-xs">HSL Values</Label>
+                                          <div className="grid grid-cols-3 gap-2">
+                                            <div>
+                                              <Label className="text-xs text-muted-foreground">H</Label>
+                                              <Input
+                                                type="number"
+                                                min="0"
+                                                max="360"
+                                                value={Math.round(hsl.h)}
+                                                onChange={(e) => {
+                                                  const h = parseInt(e.target.value) || 0;
+                                                  const hexColor = hslToHex(h, hsl.s, hsl.l);
+                                                  setCustomColors({ ...customColors, headerBackground: hexColor });
+                                                }}
+                                                className="font-mono text-xs"
+                                              />
+                                            </div>
+                                            <div>
+                                              <Label className="text-xs text-muted-foreground">S%</Label>
+                                              <Input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={Math.round(hsl.s)}
+                                                onChange={(e) => {
+                                                  const s = parseInt(e.target.value) || 0;
+                                                  const hexColor = hslToHex(hsl.h, s, hsl.l);
+                                                  setCustomColors({ ...customColors, headerBackground: hexColor });
+                                                }}
+                                                className="font-mono text-xs"
+                                              />
+                                            </div>
+                                            <div>
+                                              <Label className="text-xs text-muted-foreground">L%</Label>
+                                              <Input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={Math.round(hsl.l)}
+                                                onChange={(e) => {
+                                                  const l = parseInt(e.target.value) || 0;
+                                                  const hexColor = hslToHex(hsl.h, hsl.s, l);
+                                                  setCustomColors({ ...customColors, headerBackground: hexColor });
+                                                }}
+                                                className="font-mono text-xs"
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="w-full"
+                                      onClick={() => setCustomColors({ ...customColors, headerBackground: '' })}
+                                    >
+                                      <RotateCcw className="h-4 w-4 mr-2" />
+                                      Reset to Theme Default
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+
+                            <Separator className="my-4" />
+
+                            <div className="space-y-3">
+                              <h5 className="font-medium text-sm">Status Colors</h5>
+                              <p className="text-xs text-muted-foreground">Customize status dropdown colors (background and text)</p>
+
+                              <div className="space-y-3">
+                                {statusOptions.map((status) => {
+                                  const statusColor = (customColors.statusColors as any)?.[status] || { background: '#e5e7eb', text: '#1f2937' };
+                                  const bgHsl = hexToHsl(statusColor.background);
+                                  const textHsl = hexToHsl(statusColor.text);
+                                  const bgHslString = `${Math.round(bgHsl.h)}° ${Math.round(bgHsl.s)}% ${Math.round(bgHsl.l)}%`;
+                                  const textHslString = `${Math.round(textHsl.h)}° ${Math.round(textHsl.s)}% ${Math.round(textHsl.l)}%`;
+
                                   return (
-                                    <div className="space-y-2">
-                                      <Label className="text-xs">HSL Values</Label>
-                                      <div className="grid grid-cols-3 gap-2">
+                                    <div key={status} className="space-y-2">
+                                      <Label className="text-sm font-medium">{status}</Label>
+                                      <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                          <Label className="text-xs text-muted-foreground">H</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="360"
-                                            value={Math.round(hsl.h)}
-                                            onChange={(e) => {
-                                              const h = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(h, hsl.s, hsl.l);
-                                              setCustomColors({ ...customColors, headerBackground: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
+                                          <Label className="text-xs text-muted-foreground">Background (Row Color)</Label>
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <Button variant="outline" size="sm" className="w-full justify-start gap-2 mt-1 h-8">
+                                                <div className="h-4 w-4 rounded border" style={{ backgroundColor: statusColor.background }} />
+                                                <span className="font-mono text-xs">{bgHslString}</span>
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-72" align="start">
+                                              <div className="space-y-3">
+                                                <HslColorPicker
+                                                  color={bgHsl}
+                                                  onChange={(color) => {
+                                                    const hexColor = hslToHex(color.h, color.s, color.l);
+                                                    setCustomColors({
+                                                      ...customColors,
+                                                      statusColors: {
+                                                        ...customColors.statusColors,
+                                                        [status]: { ...statusColor, background: hexColor }
+                                                      }
+                                                    });
+                                                  }}
+                                                />
+                                                <div className="space-y-2">
+                                                  <Label className="text-xs">HSL Values</Label>
+                                                  <div className="grid grid-cols-3 gap-2">
+                                                    <div>
+                                                      <Label className="text-xs text-muted-foreground">H</Label>
+                                                      <Input
+                                                        type="number"
+                                                        min="0"
+                                                        max="360"
+                                                        value={Math.round(bgHsl.h)}
+                                                        onChange={(e) => {
+                                                          const h = parseInt(e.target.value) || 0;
+                                                          const hexColor = hslToHex(h, bgHsl.s, bgHsl.l);
+                                                          setCustomColors({
+                                                            ...customColors,
+                                                            statusColors: {
+                                                              ...customColors.statusColors,
+                                                              [status]: { ...statusColor, background: hexColor }
+                                                            }
+                                                          });
+                                                        }}
+                                                        className="font-mono text-xs"
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <Label className="text-xs text-muted-foreground">S%</Label>
+                                                      <Input
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        value={Math.round(bgHsl.s)}
+                                                        onChange={(e) => {
+                                                          const s = parseInt(e.target.value) || 0;
+                                                          const hexColor = hslToHex(bgHsl.h, s, bgHsl.l);
+                                                          setCustomColors({
+                                                            ...customColors,
+                                                            statusColors: {
+                                                              ...customColors.statusColors,
+                                                              [status]: { ...statusColor, background: hexColor }
+                                                            }
+                                                          });
+                                                        }}
+                                                        className="font-mono text-xs"
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <Label className="text-xs text-muted-foreground">L%</Label>
+                                                      <Input
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        value={Math.round(bgHsl.l)}
+                                                        onChange={(e) => {
+                                                          const l = parseInt(e.target.value) || 0;
+                                                          const hexColor = hslToHex(bgHsl.h, bgHsl.s, l);
+                                                          setCustomColors({
+                                                            ...customColors,
+                                                            statusColors: {
+                                                              ...customColors.statusColors,
+                                                              [status]: { ...statusColor, background: hexColor }
+                                                            }
+                                                          });
+                                                        }}
+                                                        className="font-mono text-xs"
+                                                      />
+                                                    </div>
+                                                  </div>
+                                                  <p className="text-xs text-muted-foreground mt-2">
+                                                    Button/dropdown colors auto-darken by 30% L
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            </PopoverContent>
+                                          </Popover>
                                         </div>
                                         <div>
-                                          <Label className="text-xs text-muted-foreground">S%</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={Math.round(hsl.s)}
-                                            onChange={(e) => {
-                                              const s = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(hsl.h, s, hsl.l);
-                                              setCustomColors({ ...customColors, headerBackground: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">L%</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={Math.round(hsl.l)}
-                                            onChange={(e) => {
-                                              const l = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(hsl.h, hsl.s, l);
-                                              setCustomColors({ ...customColors, headerBackground: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
+                                          <Label className="text-xs text-muted-foreground">Text</Label>
+                                          <Popover>
+                                            <PopoverTrigger asChild>
+                                              <Button variant="outline" size="sm" className="w-full justify-start gap-2 mt-1 h-8">
+                                                <div className="h-4 w-4 rounded border" style={{ backgroundColor: statusColor.text }} />
+                                                <span className="font-mono text-xs">{textHslString}</span>
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-72" align="start">
+                                              <div className="space-y-3">
+                                                <HslColorPicker
+                                                  color={textHsl}
+                                                  onChange={(color) => {
+                                                    const hexColor = hslToHex(color.h, color.s, color.l);
+                                                    setCustomColors({
+                                                      ...customColors,
+                                                      statusColors: {
+                                                        ...customColors.statusColors,
+                                                        [status]: { ...statusColor, text: hexColor }
+                                                      }
+                                                    });
+                                                  }}
+                                                />
+                                                <div className="space-y-2">
+                                                  <Label className="text-xs">HSL Values</Label>
+                                                  <div className="grid grid-cols-3 gap-2">
+                                                    <div>
+                                                      <Label className="text-xs text-muted-foreground">H</Label>
+                                                      <Input
+                                                        type="number"
+                                                        min="0"
+                                                        max="360"
+                                                        value={Math.round(textHsl.h)}
+                                                        onChange={(e) => {
+                                                          const h = parseInt(e.target.value) || 0;
+                                                          const hexColor = hslToHex(h, textHsl.s, textHsl.l);
+                                                          setCustomColors({
+                                                            ...customColors,
+                                                            statusColors: {
+                                                              ...customColors.statusColors,
+                                                              [status]: { ...statusColor, text: hexColor }
+                                                            }
+                                                          });
+                                                        }}
+                                                        className="font-mono text-xs"
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <Label className="text-xs text-muted-foreground">S%</Label>
+                                                      <Input
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        value={Math.round(textHsl.s)}
+                                                        onChange={(e) => {
+                                                          const s = parseInt(e.target.value) || 0;
+                                                          const hexColor = hslToHex(textHsl.h, s, textHsl.l);
+                                                          setCustomColors({
+                                                            ...customColors,
+                                                            statusColors: {
+                                                              ...customColors.statusColors,
+                                                              [status]: { ...statusColor, text: hexColor }
+                                                            }
+                                                          });
+                                                        }}
+                                                        className="font-mono text-xs"
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <Label className="text-xs text-muted-foreground">L%</Label>
+                                                      <Input
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        value={Math.round(textHsl.l)}
+                                                        onChange={(e) => {
+                                                          const l = parseInt(e.target.value) || 0;
+                                                          const hexColor = hslToHex(textHsl.h, textHsl.s, l);
+                                                          setCustomColors({
+                                                            ...customColors,
+                                                            statusColors: {
+                                                              ...customColors.statusColors,
+                                                              [status]: { ...statusColor, text: hexColor }
+                                                            }
+                                                          });
+                                                        }}
+                                                        className="font-mono text-xs"
+                                                      />
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </PopoverContent>
+                                          </Popover>
                                         </div>
                                       </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full mt-1"
+                                        onClick={() => setCustomColors({ ...customColors, statusColors: { ...customColors.statusColors, [status]: { background: '', text: '' } } })}
+                                        title="Reset to theme default"
+                                      >
+                                        <RotateCcw className="h-4 w-4" />
+                                      </Button>
                                     </div>
                                   );
-                                })()}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full"
-                                  onClick={() => setCustomColors({ ...customColors, headerBackground: '' })}
-                                >
-                                  <RotateCcw className="h-4 w-4 mr-2" />
-                                  Reset to Theme Default
-                                </Button>
+                                })}
                               </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                            </div>
 
-                        <Separator className="my-4" />
+                            <Separator className="my-4" />
 
-                        <div className="space-y-3">
-                          <h5 className="font-medium text-sm">Status Colors</h5>
-                          <p className="text-xs text-muted-foreground">Customize status dropdown colors (background and text)</p>
+                            {/* Row Coloring Toggle */}
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="color-row-by-status"
+                                  checked={colorRowByStatus}
+                                  onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
+                                />
+                                <Label htmlFor="color-row-by-status" className="text-sm font-medium">Color entire row by status</Label>
+                              </div>
+                            </div>
 
-                          <div className="space-y-3">
-                            {statusOptions.map((status) => {
-                              const statusColor = (customColors.statusColors as any)?.[status] || { background: '#e5e7eb', text: '#1f2937' };
-                              const bgHsl = hexToHsl(statusColor.background);
-                              const textHsl = hexToHsl(statusColor.text);
-                              const bgHslString = `${Math.round(bgHsl.h)}° ${Math.round(bgHsl.s)}% ${Math.round(bgHsl.l)}%`;
-                              const textHslString = `${Math.round(textHsl.h)}° ${Math.round(textHsl.s)}% ${Math.round(textHsl.l)}%`;
-                              
-                              return (
-                                <div key={status} className="space-y-2">
-                                  <Label className="text-sm font-medium">{status}</Label>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <Label className="text-xs text-muted-foreground">Background (Row Color)</Label>
-                                      <Popover>
-                                        <PopoverTrigger asChild>
-                                          <Button variant="outline" size="sm" className="w-full justify-start gap-2 mt-1 h-8">
-                                            <div className="h-4 w-4 rounded border" style={{ backgroundColor: statusColor.background }} />
-                                            <span className="font-mono text-xs">{bgHslString}</span>
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-72" align="start">
-                                          <div className="space-y-3">
-                                            <HslColorPicker
-                                              color={bgHsl}
-                                              onChange={(color) => {
-                                                const hexColor = hslToHex(color.h, color.s, color.l);
-                                                setCustomColors({
-                                                  ...customColors,
-                                                  statusColors: {
-                                                    ...customColors.statusColors,
-                                                    [status]: { ...statusColor, background: hexColor }
-                                                  }
-                                                });
-                                              }}
-                                            />
-                                            <div className="space-y-2">
-                                              <Label className="text-xs">HSL Values</Label>
-                                              <div className="grid grid-cols-3 gap-2">
-                                                <div>
-                                                  <Label className="text-xs text-muted-foreground">H</Label>
-                                                  <Input
-                                                    type="number"
-                                                    min="0"
-                                                    max="360"
-                                                    value={Math.round(bgHsl.h)}
-                                                    onChange={(e) => {
-                                                      const h = parseInt(e.target.value) || 0;
-                                                      const hexColor = hslToHex(h, bgHsl.s, bgHsl.l);
-                                                      setCustomColors({
-                                                        ...customColors,
-                                                        statusColors: {
-                                                          ...customColors.statusColors,
-                                                          [status]: { ...statusColor, background: hexColor }
-                                                        }
-                                                      });
-                                                    }}
-                                                    className="font-mono text-xs"
-                                                  />
-                                                </div>
-                                                <div>
-                                                  <Label className="text-xs text-muted-foreground">S%</Label>
-                                                  <Input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    value={Math.round(bgHsl.s)}
-                                                    onChange={(e) => {
-                                                      const s = parseInt(e.target.value) || 0;
-                                                      const hexColor = hslToHex(bgHsl.h, s, bgHsl.l);
-                                                      setCustomColors({
-                                                        ...customColors,
-                                                        statusColors: {
-                                                          ...customColors.statusColors,
-                                                          [status]: { ...statusColor, background: hexColor }
-                                                        }
-                                                      });
-                                                    }}
-                                                    className="font-mono text-xs"
-                                                  />
-                                                </div>
-                                                <div>
-                                                  <Label className="text-xs text-muted-foreground">L%</Label>
-                                                  <Input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    value={Math.round(bgHsl.l)}
-                                                    onChange={(e) => {
-                                                      const l = parseInt(e.target.value) || 0;
-                                                      const hexColor = hslToHex(bgHsl.h, bgHsl.s, l);
-                                                      setCustomColors({
-                                                        ...customColors,
-                                                        statusColors: {
-                                                          ...customColors.statusColors,
-                                                          [status]: { ...statusColor, background: hexColor }
-                                                        }
-                                                      });
-                                                    }}
-                                                    className="font-mono text-xs"
-                                                  />
-                                                </div>
-                                              </div>
-                                              <p className="text-xs text-muted-foreground mt-2">
-                                                Button/dropdown colors auto-darken by 30% L
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </PopoverContent>
-                                      </Popover>
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs text-muted-foreground">Text</Label>
-                                      <Popover>
-                                        <PopoverTrigger asChild>
-                                          <Button variant="outline" size="sm" className="w-full justify-start gap-2 mt-1 h-8">
-                                            <div className="h-4 w-4 rounded border" style={{ backgroundColor: statusColor.text }} />
-                                            <span className="font-mono text-xs">{textHslString}</span>
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-72" align="start">
-                                          <div className="space-y-3">
-                                            <HslColorPicker
-                                              color={textHsl}
-                                              onChange={(color) => {
-                                                const hexColor = hslToHex(color.h, color.s, color.l);
-                                                setCustomColors({
-                                                  ...customColors,
-                                                  statusColors: {
-                                                    ...customColors.statusColors,
-                                                    [status]: { ...statusColor, text: hexColor }
-                                                  }
-                                                });
-                                              }}
-                                            />
-                                            <div className="space-y-2">
-                                              <Label className="text-xs">HSL Values</Label>
-                                              <div className="grid grid-cols-3 gap-2">
-                                                <div>
-                                                  <Label className="text-xs text-muted-foreground">H</Label>
-                                                  <Input
-                                                    type="number"
-                                                    min="0"
-                                                    max="360"
-                                                    value={Math.round(textHsl.h)}
-                                                    onChange={(e) => {
-                                                      const h = parseInt(e.target.value) || 0;
-                                                      const hexColor = hslToHex(h, textHsl.s, textHsl.l);
-                                                      setCustomColors({
-                                                        ...customColors,
-                                                        statusColors: {
-                                                          ...customColors.statusColors,
-                                                          [status]: { ...statusColor, text: hexColor }
-                                                        }
-                                                      });
-                                                    }}
-                                                    className="font-mono text-xs"
-                                                  />
-                                                </div>
-                                                <div>
-                                                  <Label className="text-xs text-muted-foreground">S%</Label>
-                                                  <Input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    value={Math.round(textHsl.s)}
-                                                    onChange={(e) => {
-                                                      const s = parseInt(e.target.value) || 0;
-                                                      const hexColor = hslToHex(textHsl.h, s, textHsl.l);
-                                                      setCustomColors({
-                                                        ...customColors,
-                                                        statusColors: {
-                                                          ...customColors.statusColors,
-                                                          [status]: { ...statusColor, text: hexColor }
-                                                        }
-                                                      });
-                                                    }}
-                                                    className="font-mono text-xs"
-                                                  />
-                                                </div>
-                                                <div>
-                                                  <Label className="text-xs text-muted-foreground">L%</Label>
-                                                  <Input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    value={Math.round(textHsl.l)}
-                                                    onChange={(e) => {
-                                                      const l = parseInt(e.target.value) || 0;
-                                                      const hexColor = hslToHex(textHsl.h, textHsl.s, l);
-                                                      setCustomColors({
-                                                        ...customColors,
-                                                        statusColors: {
-                                                          ...customColors.statusColors,
-                                                          [status]: { ...statusColor, text: hexColor }
-                                                        }
-                                                      });
-                                                    }}
-                                                    className="font-mono text-xs"
-                                                  />
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </PopoverContent>
-                                      </Popover>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="w-full mt-1"
-                                    onClick={() => setCustomColors({ ...customColors, statusColors: { ...customColors.statusColors, [status]: { background: '', text: '' } } })}
-                                    title="Reset to theme default"
-                                  >
-                                    <RotateCcw className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              );
-                            })}
+                            <Separator className="my-4" />
+
+                            {/* Reset All Colors Button - Inside Colors Popover */}
+                            <Button
+                              variant="destructive"
+                              className="w-full"
+                              onClick={() => {
+                                if (resolvedTheme === 'dark') {
+                                  setDarkModeColors(defaultDarkColors);
+                                } else {
+                                  setLightModeColors(defaultLightColors);
+                                }
+                                toast({
+                                  title: "Colors Reset",
+                                  description: `${resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode colors have been reset to defaults`,
+                                });
+                              }}
+                              data-testid="button-reset-all-colors-inline"
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Reset {resolvedTheme === 'dark' ? 'Dark' : 'Light'} Mode Colors
+                            </Button>
                           </div>
                         </div>
-
-                        <Separator className="my-4" />
-
-                        {/* Row Coloring Toggle */}
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="color-row-by-status"
-                              checked={colorRowByStatus}
-                              onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
-                            />
-                            <Label htmlFor="color-row-by-status" className="text-sm font-medium">Color entire row by status</Label>
-                          </div>
-                        </div>
-
-                        <Separator className="my-4" />
-
-                        {/* Reset All Colors Button - Inside Colors Popover */}
-                        <Button
-                          variant="destructive"
-                          className="w-full"
-                          onClick={() => {
-                            if (resolvedTheme === 'dark') {
-                              setDarkModeColors(defaultDarkColors);
-                            } else {
-                              setLightModeColors(defaultLightColors);
-                            }
-                            toast({
-                              title: "Colors Reset",
-                              description: `${resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode colors have been reset to defaults`,
-                            });
-                          }}
-                          data-testid="button-reset-all-colors-inline"
-                        >
-                          <RotateCcw className="mr-2 h-4 w-4" />
-                          Reset {resolvedTheme === 'dark' ? 'Dark' : 'Light'} Mode Colors
-                        </Button>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                      </PopoverContent>
+                    </Popover>
                     </div>
                   </CardContent>
                 </Card>
