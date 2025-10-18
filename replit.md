@@ -59,8 +59,6 @@ Your dashboard view preferences are automatically saved to the database and sync
 - Column visibility (which columns are shown/hidden)
 - Column order (custom arrangement)
 - Column widths (resized widths)
-- Selected tags filter
-- Selected keywords/phrases filter
 - Selected states filter
 - Font size (8-30px for table text)
 - Row height (24-200px for table spacing)
@@ -106,12 +104,10 @@ The Sales Dashboard automatically loads both sheets:
 **Display Controls:**
 - **Font Size**: Dropdown selector with 19 options (8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 26, 28, 30px) - affects all table text, from tiny to extra large
 - **Row Height**: Precision slider control (24-200px with 1px increments) - ultra-compact to extra spacious vertical spacing
-- **Text Wrapping**: Enabled automatically on verbose columns (address, notes, hours, tags, keywords) while terse columns (dates, status, IDs, phone) remain single-line to prevent layout jitter
+- **Text Wrapping**: Enabled automatically on verbose columns (address, notes, hours) while terse columns (dates, status, IDs, phone) remain single-line to prevent layout jitter
 
 **Filtering:**
 - **Search**: Search across all columns using the search box
-- **Tags Filter**: Click "Tags" button to filter by tags - all tags selected by default, uncheck to hide rows with those tags. Works with columns containing "tag" in the name.
-- **Keywords/Phrases Filter**: Click "Keywords/Phrases" button to filter by keywords and phrases - all selected by default, uncheck to hide rows with those items. Works with columns containing "keyword" or "phrase" in the name.
 - **States Filter**: Click "States" button to filter by state/province - all regions selected by default, uncheck to hide rows from those locations. Displays full names (e.g., "Montana" instead of "MT", "Alberta" instead of "AB") for both US states and Canadian provinces. To focus on US-only locations, simply uncheck the Canadian provinces.
 
 **Editing Features:**
@@ -121,7 +117,6 @@ The Sales Dashboard automatically loads both sheets:
 - **State Column**: Searchable dropdown showing only states in your current data - type to filter or scroll to select
 - **Status Column**: Dropdown with predefined statuses (1 – Contacted, 2 – Interested, 3 – Sample Sent, 4 – Follow-Up, 5 – Closed Won, 6 – Closed Lost)
 - **Date/Follow-up Columns**: Calendar date picker for easy date selection - saves in M/d/yyyy format
-- **Tags/Keywords/Phrases Columns**: Auto-cleans quotes and brackets, comma-separated display, filters via Tags button. Any column with "tag", "keyword", or "phrase" in the name gets this treatment.
 - **Hours Column**: Smart formatting that compresses consecutive days (e.g., "Mon-Fri: 9am - 5pm")
 - **Existing Data**: Click the edit icon (⛶) to open popup editor (prevents accidental data loss)
 - **Empty Cells**: Inline editing for new data entry

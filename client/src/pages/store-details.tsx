@@ -112,7 +112,7 @@ export default function StoreDetails() {
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={() => setLocation('/sales-dashboard')}>
+          <Button variant="outline" onClick={() => setLocation('/sales')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Dashboard
           </Button>
