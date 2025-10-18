@@ -1073,6 +1073,13 @@ export default function SalesDashboard() {
 
   // Filter and sort data
   const filteredData = (() => {
+    // CRITICAL: If any filter has 0 selections, show NOTHING (not everything)
+    if ((allTags.length > 0 && selectedTags.size === 0) ||
+        (allKeywords.length > 0 && selectedKeywords.size === 0) ||
+        (allStates.length > 0 && selectedStates.size === 0)) {
+      return []; // Show 0 rows when nothing is selected
+    }
+
     // First filter by search
     let filtered = data.filter((row: any) => {
       const searchLower = searchTerm.toLowerCase();
