@@ -874,6 +874,21 @@ export default function SalesDashboard() {
                   </PopoverContent>
                 </Popover>
 
+                {/* Reset to Default Button */}
+                {(fontSize !== 14 || rowHeight !== 48) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFontSize(14);
+                      setRowHeight(48);
+                    }}
+                    data-testid="button-reset-display"
+                  >
+                    Reset Display
+                  </Button>
+                )}
+
                 {allTags.length > 0 && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1185,7 +1200,7 @@ export default function SalesDashboard() {
                           data-testid={`row-data-${rowIdx}`}
                           className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
                           title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
-                          style={{ fontSize: `${fontSize}px`, minHeight: `${rowHeight}px` }}
+                          style={{ fontSize: `${fontSize}px`, height: `${rowHeight}px` }}
                         >
                           {visibleHeaders.map((header: string) => {
                             const isEditable = editableColumns.includes(header);
@@ -1244,6 +1259,8 @@ export default function SalesDashboard() {
                                 className={shouldWrap ? "align-top" : "whitespace-nowrap align-middle"}
                                 style={{ 
                                   width: columnWidths[header] || 200,
+                                  padding: `${Math.max(8, fontSize * 0.5)}px 16px`,
+                                  lineHeight: `${fontSize * 1.4}px`,
                                   ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const } : {})
                                 }}
                               >
