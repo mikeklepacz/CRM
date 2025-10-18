@@ -84,17 +84,19 @@ export function ContactActionDialog({
     onSuccess: () => {
       toast({
         title: "Contact action saved",
-        description: `${contactType === 'phone' ? 'Call' : 'Email'} logged successfully`,
+        description: "Contact information logged successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["merged-data"] });
       onOpenChange(false);
       
-      // Open the contact method
-      if (contactType === 'phone') {
-        window.location.href = `tel:${contactValue}`;
-      } else {
-        window.location.href = `mailto:${contactValue}`;
-      }
+      // Trigger the contact method after dialog closes
+      setTimeout(() => {
+        if (contactType === 'phone') {
+          window.location.href = `tel:${contactValue}`;
+        } else {
+          window.location.href = `mailto:${contactValue}`;
+        }
+      }, 100);
     },
     onError: (error: Error) => {
       toast({
@@ -205,7 +207,7 @@ export function ContactActionDialog({
                 Saving...
               </>
             ) : (
-              `Save & ${contactType === 'phone' ? 'Call' : 'Email'}`
+              'Save'
             )}
           </Button>
         </DialogFooter>
