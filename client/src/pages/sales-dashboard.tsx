@@ -117,6 +117,12 @@ export default function SalesDashboard() {
     row: any;
   } | null>(null);
 
+  // Address edit dialog state
+  const [addressEditDialog, setAddressEditDialog] = useState<{
+    open: boolean;
+    row: any;
+  } | null>(null);
+
   // Default colors for light and dark modes
   const defaultLightColors = {
     background: '#ffffff',
