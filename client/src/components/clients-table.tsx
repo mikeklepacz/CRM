@@ -155,7 +155,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
 
                 return (
                   <TableRow key={client.id} className="hover-elevate">
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium align-middle">
                       <div className="space-y-1">
                         <div data-testid={`text-company-${client.id}`}>{getCompanyName(client)}</div>
                         {client.assignedAgent && (
@@ -166,7 +166,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="align-middle">
                       <div className="space-y-1 text-sm">
                         {email && (
                           <a 
@@ -190,12 +190,12 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="align-middle">
                       <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
                         {client.status || 'unassigned'}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="align-middle">
                       {client.lastOrderDate ? (
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-sm">
@@ -212,10 +212,10 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                         <span className="text-muted-foreground text-sm">No orders</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-medium" data-testid={`text-sales-${client.id}`}>
+                    <TableCell className="text-right font-medium align-middle" data-testid={`text-sales-${client.id}`}>
                       ${parseFloat(client.totalSales || '0').toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right align-middle">
                       <div className="space-y-1">
                         <div className="font-medium" data-testid={`text-commission-${client.id}`}>
                           ${parseFloat(client.commissionTotal || '0').toFixed(2)}
@@ -227,7 +227,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right align-middle">
                       <div className="flex items-center justify-end gap-2">
                         <Button
                           variant="outline"
