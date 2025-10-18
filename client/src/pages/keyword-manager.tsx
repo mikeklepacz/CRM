@@ -26,6 +26,7 @@ export default function KeywordManager() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [keywordPage, setKeywordPage] = useState(0);
   const [tagPage, setTagPage] = useState(0);
+  const [bannedSearchTerm, setBannedSearchTerm] = useState("");
   const itemsPerPage = 100;
 
   // Fetch current user
@@ -64,6 +65,12 @@ export default function KeywordManager() {
     },
   });
 
+  // Fetch banned words
+  const { data: bannedWords, refetch: refetchBannedWords } = useQuery({
+    queryKey: ["/api/banned-words"],
+    enabled: currentUser?.role === 'admin',
+  });
+
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async ({ keywordsToDelete, tagsToDelete }: { keywordsToDelete?: string[], tagsToDelete?: string[] }) => {
@@ -87,6 +94,48 @@ export default function KeywordManager() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete items",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Add banned words mutation
+  const addBannedMutation = useMutation({
+    mutationFn: async ({ words, type }: { words: string[], type: string }) => {
+      return await apiRequest('/api/banned-words', 'POST', { words, type });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `Added ${data.added} words to banned list`,
+      });
+      refetchBannedWords();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add banned words",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete banned word mutation
+  const deleteBannedMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/banned-words/${id}`, 'DELETE');
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Removed word from banned list",
+      });
+      refetchBannedWords();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove banned word",
         variant: "destructive",
       });
     },
@@ -243,6 +292,62 @@ export default function KeywordManager() {
     }
   };
 
+  const handleMarkAsBanned = (type: 'keywords' | 'tags') => {
+    const wordsToAdd = type === 'keywords' ? Array.from(selectedKeywords) : Array.from(selectedTags);
+    
+    if (wordsToAdd.length === 0) {
+      toast({
+        title: `No ${type} Selected`,
+        description: `Please select ${type} to mark as banned`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (confirm(`Mark ${wordsToAdd.length} ${type} as banned? They will be excluded from future filtering.`)) {
+      addBannedMutation.mutate({ words: wordsToAdd, type: type === 'keywords' ? 'keyword' : 'tag' });
+      if (type === 'keywords') {
+        setSelectedKeywords(new Set());
+      } else {
+        setSelectedTags(new Set());
+      }
+    }
+  };
+
+  // Filter banned words
+  const filteredBannedWords = useMemo(() => {
+    if (!bannedWords) return [];
+    
+    return bannedWords.filter((bw: any) => 
+      bw.word.toLowerCase().includes(bannedSearchTerm.toLowerCase())
+    );
+  }, [bannedWords, bannedSearchTerm]);
+
+  const copyBannedWords = () => {
+    if (!bannedWords || bannedWords.length === 0) {
+      toast({
+        title: "No Banned Words",
+        description: "There are no banned words to copy",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const bannedList = bannedWords.map((bw: any) => bw.word).join('\n');
+    navigator.clipboard.writeText(bannedList).then(() => {
+      toast({
+        title: "Success",
+        description: `Copied ${bannedWords.length} banned words to clipboard`,
+      });
+    }).catch(() => {
+      toast({
+        title: "Error",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      });
+    });
+  };
+
   // Show loading state while checking user
   if (userLoading || sheetsLoading) {
     return (
@@ -313,6 +418,9 @@ export default function KeywordManager() {
               </TabsTrigger>
               <TabsTrigger value="tags" data-testid="tab-tags">
                 Tags ({stats?.tags?.length || 0})
+              </TabsTrigger>
+              <TabsTrigger value="banned" data-testid="tab-banned">
+                Banned Words ({bannedWords?.length || 0})
               </TabsTrigger>
             </TabsList>
 
@@ -388,6 +496,19 @@ export default function KeywordManager() {
                   data-testid="button-clear-selection"
                 >
                   Clear Selection
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => handleMarkAsBanned('keywords')}
+                  disabled={selectedKeywords.size === 0 || addBannedMutation.isPending}
+                  data-testid="button-mark-banned"
+                >
+                  {addBannedMutation.isPending ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Marking...</>
+                  ) : (
+                    <>Mark as Banned ({selectedKeywords.size})</>
+                  )}
                 </Button>
                 <Button
                   variant="destructive"
@@ -553,6 +674,18 @@ export default function KeywordManager() {
                   Clear Selection
                 </Button>
                 <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => handleMarkAsBanned('tags')}
+                  disabled={selectedTags.size === 0 || addBannedMutation.isPending}
+                >
+                  {addBannedMutation.isPending ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Marking...</>
+                  ) : (
+                    <>Mark as Banned ({selectedTags.size})</>
+                  )}
+                </Button>
+                <Button
                   variant="destructive"
                   size="sm"
                   onClick={() => handleDelete('tags')}
@@ -642,6 +775,84 @@ export default function KeywordManager() {
                   </div>
                 )}
               </div>
+            </TabsContent>
+
+            <TabsContent value="banned" className="space-y-4">
+              {/* Description */}
+              <p className="text-sm text-muted-foreground">
+                Words marked as banned are excluded from filtering and can be exported for use in CSV cleaning software.
+              </p>
+
+              {/* Controls */}
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[200px]">
+                  <Label>Search Banned Words</Label>
+                  <Input
+                    placeholder="Search..."
+                    value={bannedSearchTerm}
+                    onChange={(e) => setBannedSearchTerm(e.target.value)}
+                    data-testid="input-search-banned"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={copyBannedWords}
+                  disabled={!bannedWords || bannedWords.length === 0}
+                  data-testid="button-copy-banned"
+                >
+                  Copy to Clipboard
+                </Button>
+              </div>
+
+              {/* Table */}
+              <div className="border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Word</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="w-24">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {!bannedWords || bannedWords.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground">
+                          No banned words. Use the "Mark as Banned" button in Keywords or Tags tabs to add words.
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredBannedWords.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground">
+                          No banned words match your search
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredBannedWords.map((bw: any) => (
+                        <TableRow key={bw.id} data-testid={`row-banned-${bw.word}`}>
+                          <TableCell>{bw.word}</TableCell>
+                          <TableCell className="capitalize">{bw.type}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteBannedMutation.mutate(bw.id)}
+                              disabled={deleteBannedMutation.isPending}
+                              data-testid={`button-remove-${bw.word}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Total banned words: {bannedWords?.length || 0}
+              </p>
             </TabsContent>
           </Tabs>
         </CardContent>
