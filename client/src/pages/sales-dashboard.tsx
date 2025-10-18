@@ -440,13 +440,13 @@ export default function SalesDashboard() {
           setLightModeColors({
             ...defaultLightColors,
             ...userPreferences.lightModeColors,
-          });
+          } as any);
         }
         if (userPreferences.darkModeColors) {
           setDarkModeColors({
             ...defaultDarkColors,
             ...userPreferences.darkModeColors,
-          });
+          } as any);
         }
 
         // Load alignment preferences
@@ -1682,7 +1682,7 @@ export default function SalesDashboard() {
 
                           <div className="space-y-3">
                             {statusOptions.map((status) => {
-                              const statusColor = customColors.statusColors?.[status] || { background: '#e5e7eb', text: '#1f2937' };
+                              const statusColor = (customColors.statusColors as any)?.[status] || { background: '#e5e7eb', text: '#1f2937' };
                               return (
                                 <div key={status} className="space-y-2">
                                   <Label className="text-sm font-medium">{status}</Label>
@@ -2192,14 +2192,21 @@ export default function SalesDashboard() {
                       // Get row's status value for coloring
                       const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
                       const rowStatus = statusColumns.length > 0 ? row[statusColumns[0]] : null;
-                      const rowStatusColor = colorRowByStatus && rowStatus && customColors.statusColors?.[rowStatus];
+                      const rowStatusColor = colorRowByStatus && rowStatus && (customColors.statusColors as any)?.[rowStatus];
 
-                      // Helper function to convert hex to rgba with opacity
-                      const hexToRgba = (hex: string, opacity: number) => {
+                      // Helper function to darken a hex color (for buttons - makes them stand out more than rows)
+                      const darkenColor = (hex: string, percent: number = 30) => {
                         const r = parseInt(hex.slice(1, 3), 16);
                         const g = parseInt(hex.slice(3, 5), 16);
                         const b = parseInt(hex.slice(5, 7), 16);
-                        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                        
+                        const darkenValue = (val: number) => Math.max(0, Math.floor(val * (1 - percent / 100)));
+                        
+                        const newR = darkenValue(r).toString(16).padStart(2, '0');
+                        const newG = darkenValue(g).toString(16).padStart(2, '0');
+                        const newB = darkenValue(b).toString(16).padStart(2, '0');
+                        
+                        return `#${newR}${newG}${newB}`;
                       };
 
                       return (
@@ -2211,7 +2218,7 @@ export default function SalesDashboard() {
                           style={{
                             fontSize: `${fontSize}px`,
                             height: `${effectiveHeight}px`,
-                            backgroundColor: rowStatusColor ? hexToRgba(rowStatusColor.background, 0.5) : undefined,
+                            backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
                             color: rowStatusColor ? rowStatusColor.text : undefined,
                           }}
                         >
@@ -2323,23 +2330,23 @@ export default function SalesDashboard() {
                                         <SelectTrigger
                                           className="w-full"
                                           data-testid={`button-status-${rowKey}-${header}`}
-                                          style={cellValue && customColors.statusColors?.[cellValue] ? {
-                                            backgroundColor: customColors.statusColors[cellValue].background,
-                                            color: customColors.statusColors[cellValue].text,
+                                          style={cellValue && (customColors.statusColors as any)?.[cellValue] ? {
+                                            backgroundColor: darkenColor((customColors.statusColors as any)[cellValue].background, 30),
+                                            color: (customColors.statusColors as any)[cellValue].text,
                                           } : undefined}
                                         >
                                           <SelectValue placeholder="Select status..." />
                                         </SelectTrigger>
                                         <SelectContent>
                                           {statusOptions.map((status) => {
-                                            const statusColor = customColors.statusColors?.[status];
+                                            const statusColor = (customColors.statusColors as any)?.[status];
                                             return (
                                               <SelectItem
                                                 key={status}
                                                 value={status}
                                                 data-testid={`option-status-${status}`}
                                                 style={statusColor ? {
-                                                  backgroundColor: statusColor.background,
+                                                  backgroundColor: darkenColor(statusColor.background, 30),
                                                   color: statusColor.text,
                                                 } : undefined}
                                               >
@@ -2530,14 +2537,14 @@ export default function SalesDashboard() {
                                         </SelectTrigger>
                                         <SelectContent>
                                           {statusOptions.map((status) => {
-                                            const statusColor = customColors.statusColors?.[status];
+                                            const statusColor = (customColors.statusColors as any)?.[status];
                                             return (
                                               <SelectItem
                                                 key={status}
                                                 value={status}
                                                 data-testid={`option-status-${status}`}
                                                 style={statusColor ? {
-                                                  backgroundColor: statusColor.background,
+                                                  backgroundColor: darkenColor(statusColor.background, 30),
                                                   color: statusColor.text,
                                                 } : undefined}
                                               >
