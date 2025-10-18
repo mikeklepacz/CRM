@@ -228,6 +228,30 @@ export default function SalesDashboard() {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   };
 
+  // Helper function to parse HSL string (e.g., "hsl(120, 100%, 50%)")
+  const parseHsl = (hslString: string): { h: number; s: number; l: number } => {
+    const match = hslString.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+    if (match) {
+      return { h: parseInt(match[1]), s: parseInt(match[2]), l: parseInt(match[3]) };
+    }
+    // Fallback to hex conversion if input is not HSL string
+    return hexToHsl(hslString);
+  };
+
+  // Helper function to convert HSL values to a string format (e.g., "hsl(120, 100%, 50%)")
+  const hslToString = (h: number, s: number, l: number): string => {
+    return `hsl(${h}, ${s}%, ${l}%)`;
+  };
+
+
+  // Helper function to lighten a color by a percentage
+      const lightenColor = (color: string, percent: number): string => {
+        const hsl = parseHsl(color);
+        // Increase lightness
+        const newL = Math.min(100, hsl.l + (100 - hsl.l) * (percent / 100));
+        return hslToString(hsl.h, hsl.s, newL);
+      };
+
   // Mutation to update a cell in Google Sheets
   const updateCellMutation = useMutation({
     mutationFn: async ({
@@ -1135,18 +1159,10 @@ export default function SalesDashboard() {
 
   // Helper function to lighten a color by a percentage
   const lightenColor = (color: string, percent: number): string => {
-    // Parse hex color
-    const hex = color.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16) / 255;
-    const g = parseInt(hex.substring(2, 4), 16) / 255;
-    const b = parseInt(hex.substring(4, 6), 16) / 255;
-
-    // Lighten by moving towards white
-    const newR = Math.min(255, Math.round(r * 255 + (255 - r * 255) * (percent / 100)));
-    const newG = Math.min(255, Math.round(g * 255 + (255 - g * 255) * (percent / 100)));
-    const newB = Math.min(255, Math.round(b * 255 + (255 - b * 255) * (percent / 100)));
-
-    return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+    const hsl = parseHsl(color);
+    // Increase lightness
+    const newL = Math.min(100, hsl.l + (100 - hsl.l) * (percent / 100));
+    return hslToString(hsl.h, hsl.s, newL);
   };
 
   const getCompanyName = (row: any) => {
@@ -1509,19 +1525,25 @@ export default function SalesDashboard() {
                             background: 'Table Background',
                             text: 'Text',
                             primary: 'Primary',
-                            accent: 'Accent'
+                            secondary: 'Secondary',
+                            accent: 'Accent',
+                            border: 'Border'
                           };
                           const fieldDescriptions = {
                             background: 'Data table background color',
                             text: 'Main text color in tables and content',
                             primary: 'Button colors and key action elements',
-                            accent: 'Highlights and hover states'
+                            secondary: 'Card backgrounds and secondary buttons',
+                            accent: 'Highlights and hover states',
+                            border: 'Lines between table rows and card edges'
                           };
                           const defaultColors = {
                             background: '#ffffff',
                             text: '#000000',
                             primary: '#3b82f6',
-                            accent: '#8b5cf6'
+                            secondary: '#f3f4f6',
+                            accent: '#8b5cf6',
+                            border: '#e5e7eb'
                           };
 
                           const currentColor = customColors[field];
@@ -2565,104 +2587,130 @@ export default function SalesDashboard() {
                                         </PopoverContent>
                                       </Popover>
                                     ) : (
-                                      <div className="flex items-center gap-2">
-                                        {isAddressColumn ? (
-                                          <>
-                                            <span
-                                              className="cursor-pointer hover:text-primary"
-                                              data-testid={`text-cell-${rowKey}-${header}`}
-                                            >
-                                              {displayValue}
-                                            </span>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-8 w-8 flex-shrink-0"
-                                              onClick={() => setAddressEditDialog({
-                                                open: true,
-                                                row: row,
-                                              })}
-                                              data-testid={`button-edit-address-${rowKey}-${header}`}
-                                              title="Edit Address"
-                                            >
-                                              <Maximize2 className="h-4 w-4" />
-                                            </Button>
-                                          </>
-                                        ) : isPhoneColumn ? (
-                                          <button
-                                            onClick={() => setContactActionDialog({
-                                              open: true,
-                                              contactType: 'phone',
-                                              contactValue: cellValue,
-                                              row: row,
-                                            })}
-                                            className="flex items-center gap-1 hover:underline"
-                                            style={{ color: customColors.primary }}
-                                            data-testid={`link-phone-${rowKey}-${header}`}
-                                          >
-                                            <Phone className="h-4 w-4" />
-                                            <span>{displayValue}</span>
-                                          </button>
-                                        ) : isEmailColumn ? (
-                                          <button
-                                            onClick={() => setContactActionDialog({
-                                              open: true,
-                                              contactType: 'email',
-                                              contactValue: cellValue,
-                                              row: row,
-                                            })}
-                                            className="flex items-center gap-1 hover:underline"
-                                            style={{ color: customColors.primary }}
-                                            data-testid={`link-email-${rowKey}-${header}`}
-                                          >
-                                            <Mail className="h-4 w-4" />
-                                            <span>{displayValue}</span>
-                                          </button>
-                                        ) : isWebsiteColumn ? (
-                                          <a
-                                            href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-1 hover:underline"
-                                            style={{ color: customColors.primary }}
-                                            data-testid={`link-website-${rowKey}-${header}`}
-                                          >
-                                            <ExternalLink className="h-4 w-4" />
-                                            <span>{extractDomain(cellValue)}</span>
-                                          </a>
-                                        ) : isLinkColumn ? (
-                                          <a
-                                            href={cellValue}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-2xl hover:scale-110 transition-transform"
-                                            data-testid={`link-leafly-${rowKey}-${header}`}
-                                            title={cellValue}
-                                          >
-                                            {isLeaflyLink ? '🍁' : '🔗'}
-                                          </a>
-                                        ) : (
-                                          <span
-                                            className="cursor-pointer hover:text-primary"
-                                            data-testid={`text-cell-${rowKey}-${header}`}
-                                          >
-                                            {displayValue}
-                                          </span>
-                                        )}
-                                        {!isLinkColumn && (
+                                      <Input
+                                        value={cellValue}
+                                        onChange={(e) => handleCellEdit(row, header, e.target.value)}
+                                        className="w-full"
+                                        data-testid={`input-cell-${rowKey}-${header}`}
+                                      />
+                                    )
+                                  ) : (
+                                    // Has data: Show value with edit controls - always allow editing
+                                    isDateColumn ? (
+                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                        <PopoverTrigger asChild>
                                           <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 flex-shrink-0"
-                                            onDoubleClick={() => openExpandedView(row, header, cellValue, true)}
-                                            onClick={() => openExpandedView(row, header, cellValue, true)}
-                                            data-testid={`button-edit-${rowKey}-${header}`}
-                                            title="Click to edit"
+                                            variant="outline"
+                                            className="w-full justify-start text-left font-normal"
+                                            data-testid={`button-date-${rowKey}-${header}`}
                                           >
-                                            <Maximize2 className="h-4 w-4" />
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {cellValue || "Pick a date"}
                                           </Button>
-                                        )}
-                                      </div>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                          <Calendar
+                                            mode="single"
+                                            selected={cellValue ? (() => {
+                                              try {
+                                                const parsed = parse(cellValue, 'M/d/yyyy', new Date());
+                                                return isValid(parsed) ? parsed : undefined;
+                                              } catch {
+                                                return undefined;
+                                              }
+                                            })() : undefined}
+                                            onSelect={(date) => {
+                                              if (date) {
+                                                handleCellUpdate(row, header, format(date, 'M/d/yyyy'));
+                                              }
+                                              setOpenCombobox(null);
+                                            }}
+                                            initialFocus
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : isStatusColumn ? (
+                                      <Select
+                                        value={cellValue || ""}
+                                        onValueChange={(value) => handleCellUpdate(row, header, value)}
+                                      >
+                                        <SelectTrigger
+                                          className="w-full"
+                                          data-testid={`button-status-${rowKey}-${header}`}
+                                          style={cellValue && (customColors.statusColors as any)?.[cellValue] ? {
+                                            backgroundColor: darkenColor((customColors.statusColors as any)[cellValue].background, 30),
+                                            color: (customColors.statusColors as any)[cellValue].text,
+                                          } : undefined}
+                                        >
+                                          <SelectValue placeholder="Select status..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {statusOptions.map((status) => {
+                                            const statusColor = (customColors.statusColors as any)?.[status];
+                                            return (
+                                              <SelectItem
+                                                key={status}
+                                                value={status}
+                                                data-testid={`option-status-${status}`}
+                                                style={statusColor ? {
+                                                  backgroundColor: darkenColor(statusColor.background, 30),
+                                                  color: statusColor.text,
+                                                } : undefined}
+                                              >
+                                                {status}
+                                              </SelectItem>
+                                            );
+                                          })}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : isStateColumn ? (
+                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                        <PopoverTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox === comboboxKey}
+                                            className="w-full justify-between"
+                                            data-testid={`button-state-${rowKey}-${header}`}
+                                          >
+                                            {cellValue || "Select state..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                          </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[200px] p-0">
+                                          <Command>
+                                            <CommandInput placeholder="Search state..." />
+                                            <CommandList>
+                                              <CommandEmpty>No state found.</CommandEmpty>
+                                              <CommandGroup>
+                                                {uniqueStates.map((state) => (
+                                                  <CommandItem
+                                                    key={state}
+                                                    value={state}
+                                                    onSelect={(currentValue) => {
+                                                      handleCellUpdate(row, header, state);
+                                                      setOpenCombobox(null);
+                                                    }}
+                                                    data-testid={`option-state-${state}`}
+                                                  >
+                                                    <Check
+                                                      className={`mr-2 h-4 w-4 ${cellValue === state ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    {state}
+                                                  </CommandItem>
+                                                ))}
+                                              </CommandGroup>
+                                            </CommandList>
+                                          </Command>
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : (
+                                      <Input
+                                        value={cellValue}
+                                        onChange={(e) => handleCellEdit(row, header, e.target.value)}
+                                        className="w-full"
+                                        data-testid={`input-cell-${rowKey}-${header}`}
+                                      />
                                     )
                                   ) : (
                                     // Empty cell: Allow inline editing for new data
