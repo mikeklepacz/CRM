@@ -90,15 +90,11 @@ export default function SalesDashboard() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
   const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
   const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
   const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-  const [tagSearchTerm, setTagSearchTerm] = useState("");
-  const [keywordSearchTerm, setKeywordSearchTerm] = useState("");
   const [contextMenuColumn, setContextMenuColumn] = useState<string | null>(null);
   const { theme: currentTheme, resolvedTheme = 'light' } = useTheme() as any;
   // New state variables for text alignment and vertical alignment
@@ -379,8 +375,6 @@ export default function SalesDashboard() {
     visibleColumns?: Record<string, boolean>;
     columnOrder?: string[];
     columnWidths?: Record<string, number>;
-    selectedTags?: string[];
-    selectedKeywords?: string[];
     selectedStates?: string[];
     fontSize?: number;
     rowHeight?: number;
@@ -647,30 +641,6 @@ export default function SalesDashboard() {
     }
   };
 
-  const cleanTagDisplay = (value: string, filterBySelected: boolean = false, selectedSet?: Set<string>): string => {
-    if (!value) return '';
-    const setToUse = selectedSet || selectedTags;
-    // Split by comma, clean each tag, filter out empty ones, and rejoin
-    return String(value)
-      .split(',')
-      .map((tag: string) => {
-        let cleaned = tag.trim();
-        // Remove brackets and quotes
-        cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
-        cleaned = cleaned.replace(/^["']+|["']+$/g, '');
-        return cleaned;
-      })
-      .filter((tag: string) => {
-        if (!tag || tag === '""' || tag === "''") return false;
-        // If filtering by selected tags, only show selected ones
-        if (filterBySelected) {
-          return setToUse.has(tag);
-        }
-        return true;
-      })
-      .join(', ');
-  };
-
   const formatHours = (value: string): string => {
     if (!value) return '';
     try {
@@ -746,60 +716,6 @@ export default function SalesDashboard() {
     return Array.from(values).sort();
   };
 
-  // Get all unique tags from the data
-  const allTags = (() => {
-    const tags = new Set<string>();
-    const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
-    console.log('Tag columns found:', tagColumns);
-    console.log('Sample data (first 3 rows):', data.slice(0, 3));
-    data.forEach((row: any) => {
-      tagColumns.forEach((col: string) => {
-        const value = row[col];
-        if (value && String(value).trim()) {
-          // Split by comma if multiple tags in one cell
-          String(value).split(',').forEach((tag: string) => {
-            let cleaned = tag.trim();
-            // Remove quotes and brackets
-            cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
-            cleaned = cleaned.replace(/^["']+|["']+$/g, '');
-            if (cleaned && cleaned !== '""' && cleaned !== "''") {
-              tags.add(cleaned);
-            }
-          });
-        }
-      });
-    });
-    console.log('Total tags extracted:', tags.size, Array.from(tags).slice(0, 10));
-    return Array.from(tags).sort();
-  })();
-
-  // Get all unique keywords/phrases from the data
-  const allKeywords = (() => {
-    const keywords = new Set<string>();
-    const keywordColumns = headers.filter((h: string) =>
-      h.toLowerCase().includes('keyword') ||
-      h.toLowerCase().includes('phrase')
-    );
-    data.forEach((row: any) => {
-      keywordColumns.forEach((col: string) => {
-        const value = row[col];
-        if (value && String(value).trim()) {
-          // Split by comma if multiple keywords in one cell
-          String(value).split(',').forEach((keyword: string) => {
-            let cleaned = keyword.trim();
-            // Remove quotes and brackets
-            cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
-            cleaned = cleaned.replace(/^["']+|["']+$/g, '');
-            if (cleaned && cleaned !== '""' && cleaned !== "''") {
-              keywords.add(cleaned);
-            }
-          });
-        }
-      });
-    });
-    return Array.from(keywords).sort();
-  })();
-
   // Get all unique states from the data (with full names)
   const allStates = (() => {
     const states = new Set<string>();
@@ -839,34 +755,6 @@ export default function SalesDashboard() {
     });
     return Array.from(states).sort();
   })();
-
-  // Initialize selected tags when data loads (or from saved preferences)
-  useEffect(() => {
-    if (allTags.length > 0 && selectedTags.size === 0) {
-      if (userPreferences?.selectedTags && userPreferences.selectedTags.length > 0) {
-        // Filter saved tags to only include ones that still exist in the data
-        const validTags = userPreferences.selectedTags.filter((tag: string) => allTags.includes(tag));
-        setSelectedTags(new Set(validTags));
-      } else {
-        // Default: no tags selected (show nothing until user selects)
-        setSelectedTags(new Set());
-      }
-    }
-  }, [allTags.length, userPreferences]);
-
-  // Initialize selected keywords when data loads (or from saved preferences)
-  useEffect(() => {
-    if (allKeywords.length > 0 && selectedKeywords.size === 0) {
-      if (userPreferences?.selectedKeywords && userPreferences.selectedKeywords.length > 0) {
-        // Filter saved keywords to only include ones that still exist in the data
-        const validKeywords = userPreferences.selectedKeywords.filter((kw: string) => allKeywords.includes(kw));
-        setSelectedKeywords(new Set(validKeywords));
-      } else {
-        // Default: no keywords selected (show nothing until user selects)
-        setSelectedKeywords(new Set());
-      }
-    }
-  }, [allKeywords.length, userPreferences]);
 
   // Initialize selected states when data loads (or from saved preferences)
   useEffect(() => {
@@ -919,8 +807,6 @@ export default function SalesDashboard() {
           visibleColumns,
           columnOrder,
           columnWidths,
-          selectedTags: Array.from(selectedTags),
-          selectedKeywords: Array.from(selectedKeywords),
           selectedStates: Array.from(selectedStates),
           fontSize,
           rowHeight,
@@ -939,7 +825,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -976,42 +862,6 @@ export default function SalesDashboard() {
       document.body.style.userSelect = '';
     };
   }, [resizingColumn]);
-
-  const toggleTag = (tag: string) => {
-    const newSelected = new Set(selectedTags);
-    if (newSelected.has(tag)) {
-      newSelected.delete(tag);
-    } else {
-      newSelected.add(tag);
-    }
-    setSelectedTags(newSelected);
-  };
-
-  const selectAllTags = () => {
-    setSelectedTags(new Set(allTags));
-  };
-
-  const clearAllTags = () => {
-    setSelectedTags(new Set());
-  };
-
-  const toggleKeyword = (keyword: string) => {
-    const newSelected = new Set(selectedKeywords);
-    if (newSelected.has(keyword)) {
-      newSelected.delete(keyword);
-    } else {
-      newSelected.add(keyword);
-    }
-    setSelectedKeywords(newSelected);
-  };
-
-  const selectAllKeywords = () => {
-    setSelectedKeywords(new Set(allKeywords));
-  };
-
-  const clearAllKeywords = () => {
-    setSelectedKeywords(new Set());
-  };
 
   const toggleState = (state: string) => {
     const newSelected = new Set(selectedStates);
@@ -1076,9 +926,7 @@ export default function SalesDashboard() {
   // Filter and sort data (memoized for performance)
   const filteredData = useMemo(() => {
     // CRITICAL: If any filter has 0 selections, show NOTHING (not everything)
-    if ((allTags.length > 0 && selectedTags.size === 0) ||
-        (allKeywords.length > 0 && selectedKeywords.size === 0) ||
-        (allStates.length > 0 && selectedStates.size === 0)) {
+    if (allStates.length > 0 && selectedStates.size === 0) {
       return []; // Show 0 rows when nothing is selected
     }
 
@@ -1106,53 +954,6 @@ export default function SalesDashboard() {
       filtered = filtered.filter((row: any) => {
         const cityValue = (row['city'] || row['City'] || '').toString().toLowerCase();
         return cityValue.includes(cityLower);
-      });
-    }
-
-    // Then filter by tags
-    if (selectedTags.size > 0 && selectedTags.size < allTags.length) {
-      const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
-      filtered = filtered.filter((row: any) => {
-        // Check if row has at least one selected tag
-        return tagColumns.some((col: string) => {
-          const value = row[col];
-          if (value && String(value).trim()) {
-            const rowTags = String(value).split(',').map((t: string) => {
-              let cleaned = t.trim();
-              // Remove quotes and brackets
-              cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
-              cleaned = cleaned.replace(/^["']+|["']+$/g, '');
-              return cleaned;
-            });
-            return rowTags.some((tag: string) => tag && tag !== '""' && tag !== "''" && selectedTags.has(tag));
-          }
-          return false;
-        });
-      });
-    }
-
-    // Then filter by keywords/phrases
-    if (selectedKeywords.size > 0 && selectedKeywords.size < allKeywords.length) {
-      const keywordColumns = headers.filter((h: string) =>
-        h.toLowerCase().includes('keyword') ||
-        h.toLowerCase().includes('phrase')
-      );
-      filtered = filtered.filter((row: any) => {
-        // Check if row has at least one selected keyword
-        return keywordColumns.some((col: string) => {
-          const value = row[col];
-          if (value && String(value).trim()) {
-            const rowKeywords = String(value).split(',').map((k: string) => {
-              let cleaned = k.trim();
-              // Remove quotes and brackets
-              cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
-              cleaned = cleaned.replace(/^["']+|["']+$/g, '');
-              return cleaned;
-            });
-            return rowKeywords.some((keyword: string) => keyword && keyword !== '""' && keyword !== "''" && selectedKeywords.has(keyword));
-          }
-          return false;
-        });
       });
     }
 
@@ -1212,11 +1013,7 @@ export default function SalesDashboard() {
     searchTerm,
     nameFilter,
     cityFilter,
-    selectedTags,
-    selectedKeywords,
     selectedStates,
-    allTags.length,
-    allKeywords.length,
     allStates.length,
     headers,
     sortColumn,
@@ -2068,142 +1865,6 @@ export default function SalesDashboard() {
               <div className="flex flex-wrap items-center gap-2">
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" data-testid="button-tags-filter">
-                      <Settings2 className="mr-2 h-4 w-4" />
-                      Tags ({selectedTags.size}/{allTags.length})
-                    </Button>
-                  </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium">Filter by Tags</h4>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={selectAllTags}
-                              data-testid="button-select-all-tags"
-                            >
-                              All
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={clearAllTags}
-                              data-testid="button-clear-all-tags"
-                            >
-                              None
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Uncheck tags to hide rows with those tags
-                        </p>
-                        <Input
-                          placeholder="Search tags..."
-                          value={tagSearchTerm}
-                          onChange={(e) => setTagSearchTerm(e.target.value)}
-                          className="mb-2"
-                          data-testid="input-search-tags"
-                        />
-                        <ScrollArea className="h-64">
-                          <div className="space-y-2">
-                            {allTags
-                              .filter((tag: string) =>
-                                tag.toLowerCase().includes(tagSearchTerm.toLowerCase())
-                              )
-                              .map((tag: string) => (
-                              <div key={tag} className="flex items-center gap-2">
-                                <Checkbox
-                                  id={`tag-${tag}`}
-                                  checked={selectedTags.has(tag)}
-                                  onCheckedChange={() => toggleTag(tag)}
-                                  data-testid={`checkbox-tag-${tag}`}
-                                />
-                                <Label
-                                  htmlFor={`tag-${tag}`}
-                                  className="text-sm cursor-pointer flex-1"
-                                >
-                                  {tag}
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" data-testid="button-keywords-filter">
-                      <Settings2 className="mr-2 h-4 w-4" />
-                      Keywords/Phrases ({selectedKeywords.size}/{allKeywords.length})
-                    </Button>
-                  </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium">Filter by Keywords/Phrases</h4>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={selectAllKeywords}
-                              data-testid="button-select-all-keywords"
-                            >
-                              All
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={clearAllKeywords}
-                              data-testid="button-clear-all-keywords"
-                            >
-                              None
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Uncheck items to hide rows with those keywords/phrases
-                        </p>
-                        <Input
-                          placeholder="Search keywords..."
-                          value={keywordSearchTerm}
-                          onChange={(e) => setKeywordSearchTerm(e.target.value)}
-                          className="mb-2"
-                          data-testid="input-search-keywords"
-                        />
-                        <ScrollArea className="h-64">
-                          <div className="space-y-2">
-                            {allKeywords
-                              .filter((keyword: string) =>
-                                keyword.toLowerCase().includes(keywordSearchTerm.toLowerCase())
-                              )
-                              .map((keyword: string) => (
-                              <div key={keyword} className="flex items-center gap-2">
-                                <Checkbox
-                                  id={`keyword-${keyword}`}
-                                  checked={selectedKeywords.has(keyword)}
-                                  onCheckedChange={() => toggleKeyword(keyword)}
-                                  data-testid={`checkbox-keyword-${keyword}`}
-                                />
-                                <Label
-                                  htmlFor={`keyword-${keyword}`}
-                                  className="text-sm cursor-pointer flex-1"
-                                >
-                                  {keyword}
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                <Popover>
-                  <PopoverTrigger asChild>
                     <Button variant="outline" data-testid="button-states-filter">
                       <Settings2 className="mr-2 h-4 w-4" />
                       States ({selectedStates.size}/{allStates.length})
@@ -2596,11 +2257,7 @@ export default function SalesDashboard() {
 
                             // Clean display based on column type
                             let cleanedValue = cellValue;
-                            if (isKeywordColumn) {
-                              cleanedValue = cleanTagDisplay(cellValue, true, selectedKeywords);
-                            } else if (isTagColumn) {
-                              cleanedValue = cleanTagDisplay(cellValue, true, selectedTags);
-                            } else if (isHoursColumn) {
+                            if (isHoursColumn) {
                               cleanedValue = formatHours(cellValue);
                             }
 
@@ -3075,9 +2732,7 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
     website: "",
     email: "",
     followers: "",
-    tags: "",
     hours: "",
-    keywords: "",
     vibe_score: "",
     sales_ready_summary: "",
   });
@@ -3108,9 +2763,7 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
         website: storeData.website || storeData.Website || "",
         email: storeData.email || storeData.Email || "",
         followers: storeData.followers || storeData.Followers || "",
-        tags: storeData.tags || storeData.Tags || "",
         hours: storeData.hours || storeData.Hours || "",
-        keywords: storeData["Keywords / Phrases Found"] || "",
         vibe_score: storeData["Vibe Score"] || "",
         sales_ready_summary: storeData["Sales-ready Summary"] || "",
       });
@@ -3309,27 +2962,6 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
                   value={formData.hours}
                   onChange={(e) => handleInputChange('hours', e.target.value)}
                   placeholder="Business hours..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="tags">Tags</Label>
-                <Input
-                  id="tags"
-                  value={formData.tags}
-                  onChange={(e) => handleInputChange('tags', e.target.value)}
-                  placeholder="Comma-separated tags"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="keywords">Keywords / Phrases Found</Label>
-                <Textarea
-                  id="keywords"
-                  value={formData.keywords}
-                  onChange={(e) => handleInputChange('keywords', e.target.value)}
-                  placeholder="Keywords and phrases..."
                   rows={3}
                 />
               </div>
