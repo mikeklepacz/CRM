@@ -502,6 +502,8 @@ export default function SalesDashboard() {
   useEffect(() => {
     if (!resizingColumn) return;
 
+    console.log('🔧 Resize started:', resizingColumn);
+
     // Set cursor style during resize
     document.body.style.cursor = 'col-resize';
 
@@ -509,6 +511,7 @@ export default function SalesDashboard() {
       e.preventDefault();
       const diff = e.clientX - resizingColumn.startX;
       const newWidth = Math.max(100, resizingColumn.startWidth + diff);
+      console.log('📏 Resizing:', { column: resizingColumn.column, diff, newWidth });
       setColumnWidths(prev => ({
         ...prev,
         [resizingColumn.column]: newWidth,
@@ -516,6 +519,7 @@ export default function SalesDashboard() {
     };
 
     const handleMouseUp = () => {
+      console.log('✅ Resize ended');
       // Restore cursor and user selection
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -1073,14 +1077,17 @@ export default function SalesDashboard() {
                             <div
                               className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize hover:bg-primary/50 transition-colors z-20 flex items-center justify-center"
                               onMouseDown={(e) => {
+                                console.log('🖱️ Mouse down on resize handle:', header);
                                 e.preventDefault();
                                 e.stopPropagation();
                                 document.body.style.userSelect = 'none';
-                                setResizingColumn({
+                                const newState = {
                                   column: header,
                                   startX: e.clientX,
                                   startWidth: columnWidths[header] || 200,
-                                });
+                                };
+                                console.log('📊 Setting resizing state:', newState);
+                                setResizingColumn(newState);
                               }}
                               title="Drag to resize column"
                             >
