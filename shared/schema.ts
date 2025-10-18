@@ -181,6 +181,8 @@ export const userPreferences = pgTable("user_preferences", {
     bodyBackground: string;
     headerBackground: string;
   }>(),
+  textAlign: varchar("text_align", { length: 20 }),
+  verticalAlign: varchar("vertical_align", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

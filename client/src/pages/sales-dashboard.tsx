@@ -22,6 +22,7 @@ import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
+import { ContactActionDialog } from "@/components/contact-action-dialog";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -106,6 +107,14 @@ export default function SalesDashboard() {
   // New state variables for text alignment and vertical alignment
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
+  
+  // Contact action dialog state
+  const [contactActionDialog, setContactActionDialog] = useState<{
+    open: boolean;
+    contactType: 'phone' | 'email';
+    contactValue: string;
+    row: any;
+  } | null>(null);
 
   // Default colors for light and dark modes
   const defaultLightColors = {
@@ -316,6 +325,11 @@ export default function SalesDashboard() {
   }, [sheets.length]);
 
   // Fetch merged data
+  // Get current user
+  const { data: currentUser } = useQuery({
+    queryKey: ['/api/auth/user'],
+  });
+
   const { data: mergedData, isLoading, refetch } = useQuery({
     queryKey: ['merged-data', storeSheetId, trackerSheetId, joinColumn],
     queryFn: async () => {
@@ -2363,25 +2377,35 @@ export default function SalesDashboard() {
                                     ) : (
                                       <div className="flex items-center gap-2">
                                         {isPhoneColumn ? (
-                                          <a 
-                                            href={`tel:${cellValue}`}
+                                          <button
+                                            onClick={() => setContactActionDialog({
+                                              open: true,
+                                              contactType: 'phone',
+                                              contactValue: cellValue,
+                                              row: row,
+                                            })}
                                             className="flex items-center gap-1 hover:underline"
                                             style={{ color: customColors.primary }}
                                             data-testid={`link-phone-${rowKey}-${header}`}
                                           >
                                             <Phone className="h-4 w-4" />
                                             <span>{displayValue}</span>
-                                          </a>
+                                          </button>
                                         ) : isEmailColumn ? (
-                                          <a 
-                                            href={`mailto:${cellValue}`}
+                                          <button
+                                            onClick={() => setContactActionDialog({
+                                              open: true,
+                                              contactType: 'email',
+                                              contactValue: cellValue,
+                                              row: row,
+                                            })}
                                             className="flex items-center gap-1 hover:underline"
                                             style={{ color: customColors.primary }}
                                             data-testid={`link-email-${rowKey}-${header}`}
                                           >
                                             <Mail className="h-4 w-4" />
                                             <span>{displayValue}</span>
-                                          </a>
+                                          </button>
                                         ) : isWebsiteColumn ? (
                                           <a 
                                             href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
@@ -2550,15 +2574,20 @@ export default function SalesDashboard() {
                                 ) : (
                                   <div className="flex items-center gap-2">
                                     {isPhoneColumn && cellValue ? (
-                                      <a 
-                                        href={`tel:${cellValue}`}
+                                      <button
+                                        onClick={() => setContactActionDialog({
+                                          open: true,
+                                          contactType: 'phone',
+                                          contactValue: cellValue,
+                                          row: row,
+                                        })}
                                         className="flex items-center gap-1 hover:underline"
                                         style={{ color: customColors.primary }}
                                         data-testid={`link-phone-${rowKey}-${header}`}
                                       >
                                         <Phone className="h-4 w-4" />
                                         <span>{displayValue}</span>
-                                      </a>
+                                      </button>
                                     ) : isWebsiteColumn && cellValue ? (
                                       <a 
                                         href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
@@ -2676,6 +2705,20 @@ export default function SalesDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Contact Action Dialog */}
+      {contactActionDialog && (
+        <ContactActionDialog
+          open={contactActionDialog.open}
+          onOpenChange={(open) => !open && setContactActionDialog(null)}
+          contactType={contactActionDialog.contactType}
+          contactValue={contactActionDialog.contactValue}
+          row={contactActionDialog.row}
+          trackerSheetId={trackerSheetId}
+          joinColumn={joinColumn}
+          userEmail={currentUser?.email || ''}
+        />
+      )}
       </div>
     </div>
   );

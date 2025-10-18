@@ -1411,6 +1411,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Claim a store with contact action (includes Point of Contact)
+  app.post('/api/sheets/:id/claim-store-with-contact', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      const { linkValue, joinColumn, agent, status, followUpDate, nextAction, notes, pointOfContact } = req.body;
+
+      if (!linkValue || !joinColumn) {
+        return res.status(400).json({ message: "Link value and join column are required" });
+      }
+
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(404).json({ message: "Google Sheet not found" });
+      }
+
+      const { spreadsheetId, sheetName } = sheet;
+      
+      // Read headers
+      const dataRange = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(userId, spreadsheetId, dataRange);
+      const headers = rows[0] || [];
+      
+      // Create a new row with empty values
+      const newRow = headers.map(() => '');
+      
+      // Set values based on header names (case-insensitive)
+      const setCell = (columnName: string, value: string) => {
+        const index = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+        if (index !== -1) {
+          newRow[index] = value;
+        }
+      };
+      
+      setCell(joinColumn, linkValue);
+      setCell('agent', agent);
+      setCell('status', status);
+      setCell('follow-up date', followUpDate);
+      setCell('followup', followUpDate);
+      setCell('next action', nextAction);
+      setCell('notes', notes);
+      setCell('point of contact', pointOfContact);
+      
+      // Append the row
+      const appendRange = `${sheetName}!A:ZZ`;
+      await googleSheets.appendSheetData(userId, spreadsheetId, appendRange, [newRow]);
+
+      res.json({ message: "Contact action saved and store claimed" });
+    } catch (error: any) {
+      console.error("Error saving contact action:", error);
+      res.status(500).json({ message: error.message || "Failed to save contact action" });
+    }
+  });
+
+  // Update contact action on existing tracker row
+  app.put('/api/sheets/:id/update-contact-action', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      const { rowIndex, status, followUpDate, nextAction, notes, pointOfContact } = req.body;
+
+      if (!rowIndex) {
+        return res.status(400).json({ message: "Row index is required" });
+      }
+
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(404).json({ message: "Google Sheet not found" });
+      }
+
+      const { spreadsheetId, sheetName } = sheet;
+      
+      // Read headers
+      const headerRange = `${sheetName}!1:1`;
+      const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+      const headers = headerRows[0] || [];
+      
+      // Update each field
+      const updateCell = async (columnName: string, value: string) => {
+        const columnIndex = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+        if (columnIndex !== -1 && value) {
+          const columnLetter = String.fromCharCode(65 + columnIndex);
+          const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
+          await googleSheets.writeSheetData(userId, spreadsheetId, cellRange, [[value]]);
+        }
+      };
+      
+      await updateCell('status', status);
+      await updateCell('follow-up date', followUpDate);
+      await updateCell('followup', followUpDate);
+      await updateCell('next action', nextAction);
+      await updateCell('notes', notes);
+      await updateCell('point of contact', pointOfContact);
+
+      res.json({ message: "Contact action updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating contact action:", error);
+      res.status(500).json({ message: error.message || "Failed to update contact action" });
+    }
+  });
+
   // Disconnect a specific Google Sheet
   app.post('/api/sheets/:id/disconnect', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
