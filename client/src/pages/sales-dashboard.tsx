@@ -1072,8 +1072,53 @@ export default function SalesDashboard() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between gap-4">
                       <CardTitle className="text-sm font-medium">Display Settings</CardTitle>
-                      {(textAlign !== 'left' || verticalAlign !== 'middle') && (
-                        <div className="flex items-center gap-2">
+                      {/* Quick Reset Options in header */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Reset Columns */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const hiddenColumns = ['title', 'error'];
+                            const newVisibleColumns: Record<string, boolean> = {};
+                            headers.forEach((header: string) => {
+                              newVisibleColumns[header] = !hiddenColumns.includes(header.toLowerCase());
+                            });
+                            setVisibleColumns(newVisibleColumns);
+                            setColumnOrder(headers);
+                            toast({
+                              title: "Columns Reset",
+                              description: "All columns are now visible in their original order",
+                            });
+                          }}
+                          data-testid="button-reset-columns-header"
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Reset Columns
+                        </Button>
+
+                        {/* Reset Display (Font & Row Height) */}
+                        {(fontSize !== 14 || rowHeight !== 48) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setFontSize(14);
+                              setRowHeight(48);
+                              toast({
+                                title: "Display Reset",
+                                description: "Font size and row height reset to defaults",
+                              });
+                            }}
+                            data-testid="button-reset-display-header"
+                          >
+                            <Type className="mr-2 h-4 w-4" />
+                            Reset Display
+                          </Button>
+                        )}
+
+                        {/* Reset Alignment */}
+                        {(textAlign !== 'left' || verticalAlign !== 'middle') && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -1090,8 +1135,33 @@ export default function SalesDashboard() {
                             <AlignLeft className="mr-2 h-4 w-4" />
                             Reset Alignment
                           </Button>
-                        </div>
-                      )}
+                        )}
+
+                        {/* Reset All Filters */}
+                        {(selectedTags.size < allTags.length || 
+                          selectedKeywords.size < allKeywords.length || 
+                          selectedStates.size < allStates.length ||
+                          searchTerm !== '') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedTags(new Set(allTags));
+                              setSelectedKeywords(new Set(allKeywords));
+                              setSelectedStates(new Set(allStates));
+                              setSearchTerm('');
+                              toast({
+                                title: "Filters Reset",
+                                description: "All filters cleared and search reset",
+                              });
+                            }}
+                            data-testid="button-reset-filters-header"
+                          >
+                            <EyeOff className="mr-2 h-4 w-4" />
+                            Reset Filters
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -1964,113 +2034,7 @@ export default function SalesDashboard() {
             </>
           )}
 
-          {/* Reset Options Card - Only show when there are options to reset */}
-          {storeSheetId && trackerSheetId && (
-            fontSize !== 14 || 
-            rowHeight !== 48 || 
-            selectedTags.size < allTags.length || 
-            selectedKeywords.size < allKeywords.length || 
-            selectedStates.size < allStates.length ||
-            searchTerm !== '' ||
-            textAlign !== 'left' || // Check alignment resets
-            verticalAlign !== 'middle'
-          ) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Reset Options</CardTitle>
-                <CardDescription>
-                  Restore default settings for display and filters
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-3">
-                  {/* Reset Columns */}
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      const hiddenColumns = ['title', 'error'];
-                      const newVisibleColumns: Record<string, boolean> = {};
-                      headers.forEach((header: string) => {
-                        newVisibleColumns[header] = !hiddenColumns.includes(header.toLowerCase());
-                      });
-                      setVisibleColumns(newVisibleColumns);
-                      setColumnOrder(headers);
-                      toast({
-                        title: "Columns Reset",
-                        description: "All columns are now visible in their original order",
-                      });
-                    }}
-                    data-testid="button-reset-columns"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Reset Columns
-                  </Button>
-
-                  {/* Reset Display (Font & Row Height) */}
-                  {(fontSize !== 14 || rowHeight !== 48) && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setFontSize(14);
-                        setRowHeight(48);
-                        toast({
-                          title: "Display Reset",
-                          description: "Font size and row height reset to defaults",
-                        });
-                      }}
-                      data-testid="button-reset-display"
-                    >
-                      <Type className="mr-2 h-4 w-4" />
-                      Reset Display
-                    </Button>
-                  )}
-
-                  {/* Reset Alignment */}
-                  {(textAlign !== 'left' || verticalAlign !== 'middle') && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setTextAlign('left');
-                        setVerticalAlign('middle');
-                        toast({
-                          title: "Alignment Reset",
-                          description: "Text and vertical alignment reset to defaults",
-                        });
-                      }}
-                      data-testid="button-reset-alignment"
-                    >
-                      <AlignLeft className="mr-2 h-4 w-4" />
-                      Reset Alignment
-                    </Button>
-                  )}
-
-                  {/* Reset All Filters */}
-                  {(selectedTags.size < allTags.length || 
-                    selectedKeywords.size < allKeywords.length || 
-                    selectedStates.size < allStates.length ||
-                    searchTerm !== '') && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedTags(new Set(allTags));
-                        setSelectedKeywords(new Set(allKeywords));
-                        setSelectedStates(new Set(allStates));
-                        setSearchTerm('');
-                        toast({
-                          title: "Filters Reset",
-                          description: "All filters cleared and search reset",
-                        });
-                      }}
-                      data-testid="button-reset-filters"
-                    >
-                      <EyeOff className="mr-2 h-4 w-4" />
-                      Reset Filters
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          
 
           {/* Data Table */}
           {isLoading ? (
