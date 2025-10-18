@@ -131,6 +131,7 @@ export default function SalesDashboard() {
   const defaultLightColors = {
     background: '#ffffff',
     text: '#000000',
+    tableTextColor: '#000000',
     primary: '#3b82f6',
     secondary: '#f3f4f6',
     accent: '#8b5cf6',
@@ -150,6 +151,7 @@ export default function SalesDashboard() {
   const defaultDarkColors = {
     background: '#1a1a1a',
     text: '#ffffff',
+    tableTextColor: '#ffffff',
     primary: '#60a5fa',
     secondary: '#2a2a2a',
     accent: '#a78bfa',
@@ -1511,10 +1513,11 @@ export default function SalesDashboard() {
                         Currently editing colors for {resolvedTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
                       </p>
                       <div className="space-y-4">
-                        {(['background', 'text', 'primary', 'secondary', 'accent', 'border'] as const).map((field) => {
+                        {(['background', 'tableTextColor', 'text', 'primary', 'secondary', 'accent', 'border'] as const).map((field) => {
                           const fieldLabels = {
                             background: 'Table Background',
-                            text: 'Table Text Color',
+                            tableTextColor: 'Table Text Color',
+                            text: 'Interface Text Color',
                             primary: 'Primary Button',
                             secondary: 'Secondary Button',
                             accent: 'Accent',
@@ -1523,7 +1526,8 @@ export default function SalesDashboard() {
 
                           const fieldDescriptions = {
                             background: 'Main table background color',
-                            text: 'Color of text in table cells and throughout the interface',
+                            tableTextColor: 'Color of text in table cells',
+                            text: 'Color of headings and interface text',
                             primary: 'Primary action buttons and highlights',
                             secondary: 'Secondary buttons and card backgrounds',
                             accent: 'Accent elements and secondary highlights',
@@ -2660,7 +2664,7 @@ export default function SalesDashboard() {
                             fontSize: `${fontSize}px`,
                             height: `${effectiveHeight}px`,
                             backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
-                            color: rowStatusColor ? rowStatusColor.text : undefined,
+                            color: rowStatusColor ? rowStatusColor.text : customColors.tableTextColor,
                           }}
                         >
                           {visibleHeaders.map((header: string) => {
