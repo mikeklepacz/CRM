@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "light" | "dark";
+type Theme = "light" | "dark" | "auto";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -11,10 +11,12 @@ type ThemeProviderProps = {
 type ThemeProviderState = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  actualTheme: "light" | "dark";
 };
 
 const initialState: ThemeProviderState = {
-  theme: "light",
+  theme: "auto",
+  actualTheme: "light",
   setTheme: () => null,
 };
 
@@ -22,7 +24,7 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
 export function ThemeProvider({
   children,
-  defaultTheme = "light",
+  defaultTheme = "auto",
   storageKey = "crm-theme",
   ...props
 }: ThemeProviderProps) {
@@ -30,14 +32,49 @@ export function ThemeProvider({
     () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
   );
 
+  const [actualTheme, setActualTheme] = useState<"light" | "dark">("light");
+
   useEffect(() => {
     const root = window.document.documentElement;
+    
+    // Determine the actual theme to apply
+    let resolvedTheme: "light" | "dark";
+    
+    if (theme === "auto") {
+      // Use system preference
+      resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+    } else {
+      resolvedTheme = theme;
+    }
+
+    setActualTheme(resolvedTheme);
     root.classList.remove("light", "dark");
-    root.classList.add(theme);
+    root.classList.add(resolvedTheme);
+  }, [theme]);
+
+  // Listen for system theme changes when in auto mode
+  useEffect(() => {
+    if (theme !== "auto") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    
+    const handleChange = (e: MediaQueryListEvent) => {
+      const root = window.document.documentElement;
+      const newTheme = e.matches ? "dark" : "light";
+      setActualTheme(newTheme);
+      root.classList.remove("light", "dark");
+      root.classList.add(newTheme);
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme]);
 
   const value = {
     theme,
+    actualTheme,
     setTheme: (theme: Theme) => {
       localStorage.setItem(storageKey, theme);
       setTheme(theme);
