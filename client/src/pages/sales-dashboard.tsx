@@ -1514,7 +1514,7 @@ export default function SalesDashboard() {
                         {(['background', 'text', 'primary', 'secondary', 'accent', 'border'] as const).map((field) => {
                           const fieldLabels = {
                             background: 'Table Background',
-                            text: 'Text Color',
+                            text: 'Table Text Color',
                             primary: 'Primary Button',
                             secondary: 'Secondary Button',
                             accent: 'Accent',
@@ -1523,7 +1523,7 @@ export default function SalesDashboard() {
 
                           const fieldDescriptions = {
                             background: 'Main table background color',
-                            text: 'Default text color throughout the interface',
+                            text: 'Color of text in table cells and throughout the interface',
                             primary: 'Primary action buttons and highlights',
                             secondary: 'Secondary buttons and card backgrounds',
                             accent: 'Accent elements and secondary highlights',
