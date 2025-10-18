@@ -62,8 +62,8 @@ Your dashboard view preferences are automatically saved to the database and sync
 - Selected tags filter
 - Selected keywords/phrases filter
 - Selected states filter
-- Font size (11-22px for table text)
-- Row height (32-120px for table spacing)
+- Font size (8-30px for table text)
+- Row height (24-200px for table spacing)
 
 **How It Works:**
 - Preferences save automatically 1 second after you make changes
@@ -95,8 +95,8 @@ The Sales Dashboard automatically loads both sheets:
 - Editable columns marked with ✏️
 
 **Display Controls:**
-- **Font Size**: Dropdown selector (11, 12, 13, 14, 16, 18, 20, 22px) - affects all table text
-- **Row Height**: Slider control (32-120px) - adjusts vertical spacing for comfortable viewing
+- **Font Size**: Dropdown selector with 19 options (8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 26, 28, 30px) - affects all table text, from tiny to extra large
+- **Row Height**: Precision slider control (24-200px with 1px increments) - ultra-compact to extra spacious vertical spacing
 - **Text Wrapping**: Enabled automatically on verbose columns (address, notes, hours, tags, keywords) while terse columns (dates, status, IDs, phone) remain single-line to prevent layout jitter
 
 **Filtering:**

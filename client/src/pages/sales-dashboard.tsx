@@ -820,14 +820,25 @@ export default function SalesDashboard() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="8">8</SelectItem>
+                      <SelectItem value="9">9</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
                       <SelectItem value="11">11</SelectItem>
                       <SelectItem value="12">12</SelectItem>
                       <SelectItem value="13">13</SelectItem>
                       <SelectItem value="14">14</SelectItem>
+                      <SelectItem value="15">15</SelectItem>
                       <SelectItem value="16">16</SelectItem>
+                      <SelectItem value="17">17</SelectItem>
                       <SelectItem value="18">18</SelectItem>
+                      <SelectItem value="19">19</SelectItem>
                       <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="21">21</SelectItem>
                       <SelectItem value="22">22</SelectItem>
+                      <SelectItem value="24">24</SelectItem>
+                      <SelectItem value="26">26</SelectItem>
+                      <SelectItem value="28">28</SelectItem>
+                      <SelectItem value="30">30</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -848,9 +859,9 @@ export default function SalesDashboard() {
                       <Slider
                         value={[rowHeight]}
                         onValueChange={(value) => setRowHeight(value[0])}
-                        min={32}
-                        max={120}
-                        step={4}
+                        min={24}
+                        max={200}
+                        step={1}
                         className="w-full"
                         data-testid="slider-row-height"
                       />
