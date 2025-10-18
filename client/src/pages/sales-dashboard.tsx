@@ -870,6 +870,14 @@ export default function SalesDashboard() {
                         <span>Comfortable</span>
                         <span>Spacious</span>
                       </div>
+                      {(() => {
+                        const minRequired = Math.ceil(fontSize * 1.4 + Math.max(8, fontSize * 0.5) * 2);
+                        return rowHeight < minRequired ? (
+                          <p className="text-xs text-muted-foreground">
+                            Note: Minimum {minRequired}px needed for {fontSize}px font
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -1194,13 +1202,19 @@ export default function SalesDashboard() {
                     {filteredData.map((row: any, rowIdx: number) => {
                       const rowKey = row._storeRowIndex || row._trackerRowIndex || rowIdx;
                       const isDeletedRow = row._deletedFromStore;
+                      // Calculate minimum required height based on font size
+                      const verticalPadding = Math.max(8, fontSize * 0.5) * 2;
+                      const lineHeight = fontSize * 1.4;
+                      const minRequiredHeight = lineHeight + verticalPadding;
+                      const effectiveHeight = Math.max(rowHeight, minRequiredHeight);
+                      
                       return (
                         <TableRow 
                           key={rowKey} 
                           data-testid={`row-data-${rowIdx}`}
                           className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
                           title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
-                          style={{ fontSize: `${fontSize}px`, height: `${rowHeight}px` }}
+                          style={{ fontSize: `${fontSize}px`, minHeight: `${effectiveHeight}px` }}
                         >
                           {visibleHeaders.map((header: string) => {
                             const isEditable = editableColumns.includes(header);
