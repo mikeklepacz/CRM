@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,8 +54,18 @@ interface GoogleSheet {
   sheetPurpose: string;
 }
 
+interface MergedDataRow {
+  [key: string]: any;
+  _storeRowIndex?: number;
+  _trackerRowIndex?: number;
+  _storeSheetId?: string;
+  _trackerSheetId?: string;
+  _deletedFromStore?: boolean;
+}
+
 export default function SalesDashboard() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [storeSheetId, setStoreSheetId] = useState<string>("");
   const [trackerSheetId, setTrackerSheetId] = useState<string>("");
   const joinColumn = "link"; // Hardcoded to "link"
@@ -77,6 +87,71 @@ export default function SalesDashboard() {
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [keywordSearchTerm, setKeywordSearchTerm] = useState("");
+
+  // Mutation to update a cell in Google Sheets
+  const updateCellMutation = useMutation({
+    mutationFn: async ({
+      sheetId,
+      rowIndex,
+      column,
+      value,
+    }: {
+      sheetId: string;
+      rowIndex: number;
+      column: string;
+      value: any;
+    }) => {
+      return await apiRequest("PUT", `/api/sheets/${sheetId}/update`, {
+        rowIndex,
+        column,
+        value,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+      toast({
+        title: "Success",
+        description: "Cell updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCellUpdate = (row: MergedDataRow, column: string, value: any) => {
+    // Determine which sheet to update based on which headers contain this column
+    const isStoreColumn = mergedData?.storeHeaders?.includes(column);
+    const isTrackerColumn = mergedData?.trackerHeaders?.includes(column);
+
+    let sheetId: string | undefined;
+    let rowIndex: number | undefined;
+
+    if (isTrackerColumn && row._trackerSheetId && row._trackerRowIndex) {
+      // Update tracker sheet
+      sheetId = row._trackerSheetId;
+      rowIndex = row._trackerRowIndex;
+    } else if (isStoreColumn && row._storeSheetId && row._storeRowIndex) {
+      // Update store sheet
+      sheetId = row._storeSheetId;
+      rowIndex = row._storeRowIndex;
+    }
+
+    if (!sheetId || !rowIndex) {
+      toast({
+        title: "Error",
+        description: "Cannot determine which sheet to update",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateCellMutation.mutate({ sheetId, rowIndex, column, value });
+  };
 
   // Fetch user preferences
   const { data: userPreferences, isFetched: preferencesQueryFetched } = useQuery<{
@@ -243,7 +318,7 @@ export default function SalesDashboard() {
 
   const saveExpandedCell = () => {
     if (!expandedCell) return;
-    handleCellEdit(expandedCell.row, expandedCell.column, expandedCell.value);
+    handleCellUpdate(expandedCell.row, expandedCell.column, expandedCell.value);
     setExpandedCell(null);
   };
 
@@ -419,10 +494,6 @@ export default function SalesDashboard() {
       const lower = h.toLowerCase();
       return lower === 'state' || lower.includes(', state');
     });
-    console.log('=== STATE FILTER DEBUG ===');
-    console.log('Headers:', headers);
-    console.log('State columns found:', stateColumns);
-    console.log('Number of data rows:', data.length);
     data.forEach((row: any) => {
       stateColumns.forEach((col: string) => {
         const value = row[col];
@@ -449,11 +520,7 @@ export default function SalesDashboard() {
         }
       });
     });
-    const statesArray = Array.from(states).sort();
-    console.log('All states extracted:', statesArray);
-    console.log('States count:', statesArray.length);
-    console.log('=== END STATE FILTER DEBUG ===');
-    return statesArray;
+    return Array.from(states).sort();
   })();
 
   // Initialize selected tags when data loads (or from saved preferences)
@@ -1250,7 +1317,7 @@ export default function SalesDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredData.map((row: any, rowIdx: number) => {
+                    {filteredData.map((row: MergedDataRow, rowIdx: number) => {
                       const rowKey = row._storeRowIndex || row._trackerRowIndex || rowIdx;
                       const isDeletedRow = row._deletedFromStore;
                       // Calculate minimum required height based on font size
@@ -1361,7 +1428,7 @@ export default function SalesDashboard() {
                                             })() : undefined}
                                             onSelect={(date) => {
                                               if (date) {
-                                                handleCellEdit(row, header, format(date, 'M/d/yyyy'));
+                                                handleCellUpdate(row, header, format(date, 'M/d/yyyy'));
                                               }
                                               setOpenCombobox(null);
                                             }}
@@ -1394,7 +1461,7 @@ export default function SalesDashboard() {
                                                     key={status}
                                                     value={status}
                                                     onSelect={(currentValue) => {
-                                                      handleCellEdit(row, header, status);
+                                                      handleCellUpdate(row, header, status);
                                                       setOpenCombobox(null);
                                                     }}
                                                     data-testid={`option-status-${status}`}
@@ -1435,7 +1502,7 @@ export default function SalesDashboard() {
                                                     key={state}
                                                     value={state}
                                                     onSelect={(currentValue) => {
-                                                      handleCellEdit(row, header, state);
+                                                      handleCellUpdate(row, header, state);
                                                       setOpenCombobox(null);
                                                     }}
                                                     data-testid={`option-state-${state}`}
@@ -1535,7 +1602,7 @@ export default function SalesDashboard() {
                                             mode="single"
                                             onSelect={(date) => {
                                               if (date) {
-                                                handleCellEdit(row, header, format(date, 'M/d/yyyy'));
+                                                handleCellUpdate(row, header, format(date, 'M/d/yyyy'));
                                               }
                                               setOpenCombobox(null);
                                             }}
@@ -1568,7 +1635,7 @@ export default function SalesDashboard() {
                                                     key={status}
                                                     value={status}
                                                     onSelect={(currentValue) => {
-                                                      handleCellEdit(row, header, status);
+                                                      handleCellUpdate(row, header, status);
                                                       setOpenCombobox(null);
                                                     }}
                                                     data-testid={`option-status-${status}`}
@@ -1609,7 +1676,7 @@ export default function SalesDashboard() {
                                                     key={state}
                                                     value={state}
                                                     onSelect={(currentValue) => {
-                                                      handleCellEdit(row, header, state);
+                                                      handleCellUpdate(row, header, state);
                                                       setOpenCombobox(null);
                                                     }}
                                                     data-testid={`option-state-${state}`}
