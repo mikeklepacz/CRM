@@ -744,6 +744,8 @@ export default function SalesDashboard() {
   const allTags = (() => {
     const tags = new Set<string>();
     const tagColumns = headers.filter((h: string) => h.toLowerCase().includes('tag'));
+    console.log('Tag columns found:', tagColumns);
+    console.log('Sample data (first 3 rows):', data.slice(0, 3));
     data.forEach((row: any) => {
       tagColumns.forEach((col: string) => {
         const value = row[col];
@@ -761,6 +763,7 @@ export default function SalesDashboard() {
         }
       });
     });
+    console.log('Total tags extracted:', tags.size, Array.from(tags).slice(0, 10));
     return Array.from(tags).sort();
   })();
 
