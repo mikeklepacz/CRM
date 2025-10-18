@@ -569,15 +569,13 @@ export default function SalesDashboard() {
     const saveChanges = async () => {
       try {
         // Save each cell individually
-        const edits = Object.values(editedCells);
-        await Promise.all(
-          edits.map(({ sheetId, rowIndex, column, value }) =>
-            apiRequest('PUT', `/api/sheets/${sheetId}/update`, { rowIndex, column, value })
-          )
-        );
+        const updates = Object.values(editedCells);
+        
+        for (const { sheetId, rowIndex, column, value } of updates) {
+          await updateCellMutation.mutateAsync({ sheetId, rowIndex, column, value });
+        }
         
         setEditedCells({});
-        refetch();
       } catch (error: any) {
         toast({
           title: "Auto-save failed",
