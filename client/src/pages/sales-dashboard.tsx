@@ -333,7 +333,7 @@ export default function SalesDashboard() {
 
   // Fetch merged data
   // Get current user
-  const { data: currentUser } = useQuery({
+  const { data: currentUser } = useQuery<{ id: string; email?: string; role?: string }>({
     queryKey: ['/api/auth/user'],
   });
 
@@ -2238,7 +2238,7 @@ export default function SalesDashboard() {
                               height: 'inherit',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              textAlign: shouldWrap ? 'left' : textAlign, // Apply textAlign to non-wrapping cells
+                              textAlign: textAlign, // Apply textAlign to ALL cells
                               verticalAlign: verticalAlign,
                               ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const, overflow: 'visible' } : {})
                             };
