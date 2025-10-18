@@ -1076,7 +1076,7 @@ export default function SalesDashboard() {
                       Colors
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80">
+                  <PopoverContent className="w-96 max-h-[600px] overflow-y-auto">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <h4 className="font-medium">Customize Colors</h4>
@@ -1103,11 +1103,12 @@ export default function SalesDashboard() {
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Customize the dashboard color scheme
+                        Personalize your dashboard appearance
                       </p>
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         <div className="space-y-2">
-                          <Label htmlFor="color-background" className="text-sm">Background</Label>
+                          <Label htmlFor="color-background" className="text-sm font-medium">Background</Label>
+                          <p className="text-xs text-muted-foreground">Main page background color</p>
                           <div className="flex items-center gap-2">
                             <input
                               id="color-background"
@@ -1124,8 +1125,10 @@ export default function SalesDashboard() {
                             />
                           </div>
                         </div>
+                        
                         <div className="space-y-2">
-                          <Label htmlFor="color-text" className="text-sm">Text</Label>
+                          <Label htmlFor="color-text" className="text-sm font-medium">Text</Label>
+                          <p className="text-xs text-muted-foreground">Main text color in tables and content</p>
                           <div className="flex items-center gap-2">
                             <input
                               id="color-text"
@@ -1143,7 +1146,8 @@ export default function SalesDashboard() {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="color-primary" className="text-sm">Primary</Label>
+                          <Label htmlFor="color-primary" className="text-sm font-medium">Primary</Label>
+                          <p className="text-xs text-muted-foreground">Button colors and key action elements</p>
                           <div className="flex items-center gap-2">
                             <input
                               id="color-primary"
@@ -1160,8 +1164,10 @@ export default function SalesDashboard() {
                             />
                           </div>
                         </div>
+                        
                         <div className="space-y-2">
-                          <Label htmlFor="color-secondary" className="text-sm">Secondary/Card</Label>
+                          <Label htmlFor="color-secondary" className="text-sm font-medium">Secondary/Card</Label>
+                          <p className="text-xs text-muted-foreground">Card backgrounds and secondary buttons</p>
                           <div className="flex items-center gap-2">
                             <input
                               id="color-secondary"
@@ -1178,8 +1184,10 @@ export default function SalesDashboard() {
                             />
                           </div>
                         </div>
+                        
                         <div className="space-y-2">
-                          <Label htmlFor="color-accent" className="text-sm">Accent</Label>
+                          <Label htmlFor="color-accent" className="text-sm font-medium">Accent</Label>
+                          <p className="text-xs text-muted-foreground">Highlights and hover states</p>
                           <div className="flex items-center gap-2">
                             <input
                               id="color-accent"
@@ -1196,8 +1204,10 @@ export default function SalesDashboard() {
                             />
                           </div>
                         </div>
+                        
                         <div className="space-y-2">
-                          <Label htmlFor="color-border" className="text-sm">Border</Label>
+                          <Label htmlFor="color-border" className="text-sm font-medium">Border</Label>
+                          <p className="text-xs text-muted-foreground">Lines between table rows and card edges</p>
                           <div className="flex items-center gap-2">
                             <input
                               id="color-border"
@@ -1212,6 +1222,147 @@ export default function SalesDashboard() {
                               onChange={(e) => setCustomColors({ ...customColors, border: e.target.value })}
                               className="flex-1 font-mono text-sm"
                             />
+                          </div>
+                        </div>
+                        
+                        <Separator className="my-4" />
+                        
+                        <div className="space-y-3">
+                          <h5 className="font-medium text-sm">Status Colors</h5>
+                          <p className="text-xs text-muted-foreground">Customize status dropdown colors (background and text)</p>
+                          
+                          <div className="space-y-3">
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">1 - Contacted</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Background</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#e5e7eb"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Text</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#1f2937"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">2 - Interested</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Background</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#dbeafe"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Text</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#1e40af"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">3 - Sample Sent</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Background</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#fef3c7"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Text</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#92400e"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">4 - Follow-Up</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Background</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#fed7aa"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Text</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#7c2d12"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">5 - Closed Won</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Background</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#bbf7d0"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Text</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#14532d"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">6 - Closed Lost</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Background</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#fecaca"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Text</Label>
+                                  <input
+                                    type="color"
+                                    defaultValue="#7f1d1d"
+                                    className="h-8 w-full rounded cursor-pointer border mt-1"
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
