@@ -474,6 +474,11 @@ export default function SalesDashboard() {
   const editableColumns = mergedData?.editableColumns || [];
   const storeHeaders = mergedData?.storeHeaders || [];
   const trackerHeaders = mergedData?.trackerHeaders || [];
+  
+  console.log('=== DEBUGGING FILTERS ===');
+  console.log('Headers received:', headers);
+  console.log('Total rows:', data.length);
+  console.log('Sample first row:', data[0]);
 
   // Initialize visible columns, column order, and widths (or load from saved preferences)
   useEffect(() => {
