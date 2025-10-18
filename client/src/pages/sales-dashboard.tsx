@@ -1214,7 +1214,7 @@ export default function SalesDashboard() {
                           data-testid={`row-data-${rowIdx}`}
                           className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
                           title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
-                          style={{ fontSize: `${fontSize}px`, minHeight: `${effectiveHeight}px` }}
+                          style={{ fontSize: `${fontSize}px`, height: `${effectiveHeight}px` }}
                         >
                           {visibleHeaders.map((header: string) => {
                             const isEditable = editableColumns.includes(header);
@@ -1275,6 +1275,7 @@ export default function SalesDashboard() {
                                   width: columnWidths[header] || 200,
                                   padding: `${Math.max(8, fontSize * 0.5)}px 16px`,
                                   lineHeight: `${fontSize * 1.4}px`,
+                                  height: 'inherit',
                                   ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const } : {})
                                 }}
                               >
