@@ -1393,7 +1393,7 @@ export default function SalesDashboard() {
                                                   <CommandItem
                                                     key={status}
                                                     value={status}
-                                                    onSelect={() => {
+                                                    onSelect={(currentValue) => {
                                                       handleCellEdit(row, header, status);
                                                       setOpenCombobox(null);
                                                     }}
@@ -1434,7 +1434,7 @@ export default function SalesDashboard() {
                                                   <CommandItem
                                                     key={state}
                                                     value={state}
-                                                    onSelect={() => {
+                                                    onSelect={(currentValue) => {
                                                       handleCellEdit(row, header, state);
                                                       setOpenCombobox(null);
                                                     }}
@@ -1567,7 +1567,7 @@ export default function SalesDashboard() {
                                                   <CommandItem
                                                     key={status}
                                                     value={status}
-                                                    onSelect={() => {
+                                                    onSelect={(currentValue) => {
                                                       handleCellEdit(row, header, status);
                                                       setOpenCombobox(null);
                                                     }}
@@ -1608,7 +1608,7 @@ export default function SalesDashboard() {
                                                   <CommandItem
                                                     key={state}
                                                     value={state}
-                                                    onSelect={() => {
+                                                    onSelect={(currentValue) => {
                                                       handleCellEdit(row, header, state);
                                                       setOpenCombobox(null);
                                                     }}
