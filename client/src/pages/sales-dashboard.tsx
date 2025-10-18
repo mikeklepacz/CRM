@@ -1071,7 +1071,7 @@ export default function SalesDashboard() {
                               )}
                             </button>
                             <div
-                              className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/30 transition-colors z-20"
+                              className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize hover:bg-primary/50 transition-colors z-20 flex items-center justify-center"
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -1084,7 +1084,7 @@ export default function SalesDashboard() {
                               }}
                               title="Drag to resize column"
                             >
-                              <div className="w-full h-full bg-transparent hover:bg-primary/20" />
+                              <div className="w-0.5 h-8 bg-border group-hover:bg-primary/50 transition-colors" />
                             </div>
                           </div>
                         </TableHead>
