@@ -329,7 +329,11 @@ export default function SalesDashboard() {
         }
 
         if (userPreferences.customColors) {
-          setCustomColors(userPreferences.customColors);
+          setCustomColors({
+            ...userPreferences.customColors,
+            bodyBackground: userPreferences.customColors.bodyBackground || '',
+            headerBackground: userPreferences.customColors.headerBackground || '',
+          });
         }
 
         setPreferencesLoaded(true);
