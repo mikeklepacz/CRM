@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -93,7 +93,10 @@ export default function SalesDashboard() {
   const [keywordSearchTerm, setKeywordSearchTerm] = useState("");
   const [contextMenuColumn, setContextMenuColumn] = useState<string | null>(null);
   const { theme: currentTheme } = useTheme();
-  
+  // New state variables for text alignment and vertical alignment
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
+  const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
+
   // Default colors for light and dark modes
   const defaultLightColors = {
     background: '#ffffff',
@@ -105,7 +108,7 @@ export default function SalesDashboard() {
     bodyBackground: '',
     headerBackground: '',
   };
-  
+
   const defaultDarkColors = {
     background: '#1a1a1a',
     text: '#ffffff',
@@ -116,10 +119,10 @@ export default function SalesDashboard() {
     bodyBackground: '',
     headerBackground: '',
   };
-  
+
   const [lightModeColors, setLightModeColors] = useState(defaultLightColors);
   const [darkModeColors, setDarkModeColors] = useState(defaultDarkColors);
-  
+
   // Get the active colors based on current theme (resolving 'auto' to actual theme)
   const resolvedTheme = currentTheme === 'auto' 
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -256,6 +259,9 @@ export default function SalesDashboard() {
       bodyBackground?: string;
       headerBackground?: string;
     };
+    // Add alignment preferences
+    textAlign?: 'left' | 'center' | 'right' | 'justify';
+    verticalAlign?: 'top' | 'middle' | 'bottom';
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
@@ -367,6 +373,14 @@ export default function SalesDashboard() {
           });
         }
 
+        // Load alignment preferences
+        if (userPreferences.textAlign) {
+          setTextAlign(userPreferences.textAlign);
+        }
+        if (userPreferences.verticalAlign) {
+          setVerticalAlign(userPreferences.verticalAlign);
+        }
+
         setPreferencesLoaded(true);
       } else {
         // No saved preferences, use defaults
@@ -379,6 +393,8 @@ export default function SalesDashboard() {
         setColumnWidths(initialWidths);
         setFontSize(14);
         setRowHeight(48);
+        setTextAlign('left');
+        setVerticalAlign('middle');
         setPreferencesLoaded(true);
       }
     }
@@ -677,11 +693,11 @@ export default function SalesDashboard() {
       try {
         // Save each cell individually
         const updates = Object.values(editedCells);
-        
+
         for (const { sheetId, rowIndex, column, value } of updates) {
           await updateCellMutation.mutateAsync({ sheetId, rowIndex, column, value });
         }
-        
+
         setEditedCells({});
       } catch (error: any) {
         toast({
@@ -713,6 +729,8 @@ export default function SalesDashboard() {
           rowHeight,
           lightModeColors,
           darkModeColors,
+          textAlign, // Save alignment preferences
+          verticalAlign, // Save alignment preferences
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -720,7 +738,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -1099,6 +1117,111 @@ export default function SalesDashboard() {
                   </PopoverContent>
                 </Popover>
 
+                {/* Text Alignment Buttons */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="icon" data-testid="button-text-align">
+                      {textAlign === 'left' && <AlignLeft className="h-4 w-4" />}
+                      {textAlign === 'center' && <AlignCenter className="h-4 w-4" />}
+                      {textAlign === 'right' && <AlignRight className="h-4 w-4" />}
+                      {textAlign === 'justify' && <AlignJustify className="h-4 w-4" />}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant={textAlign === 'left' ? 'default' : 'outline'}
+                        size="icon"
+                        onClick={() => setTextAlign('left')}
+                        data-testid="button-align-left"
+                      >
+                        <AlignLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={textAlign === 'center' ? 'default' : 'outline'}
+                        size="icon"
+                        onClick={() => setTextAlign('center')}
+                        data-testid="button-align-center"
+                      >
+                        <AlignCenter className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={textAlign === 'right' ? 'default' : 'outline'}
+                        size="icon"
+                        onClick={() => setTextAlign('right')}
+                        data-testid="button-align-right"
+                      >
+                        <AlignRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={textAlign === 'justify' ? 'default' : 'outline'}
+                        size="icon"
+                        onClick={() => setTextAlign('justify')}
+                        data-testid="button-align-justify"
+                      >
+                        <AlignJustify className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Vertical Alignment Buttons */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="icon" data-testid="button-vertical-align">
+                      {verticalAlign === 'top' && (
+                        <div className="flex flex-col justify-start h-4 w-4">
+                          <div className="w-1 h-1 bg-current rounded-full"></div>
+                        </div>
+                      )}
+                      {verticalAlign === 'middle' && (
+                        <div className="flex flex-col justify-center h-4 w-4">
+                          <div className="w-1 h-1 bg-current rounded-full"></div>
+                        </div>
+                      )}
+                      {verticalAlign === 'bottom' && (
+                        <div className="flex flex-col justify-end h-4 w-4">
+                          <div className="w-1 h-1 bg-current rounded-full"></div>
+                        </div>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48">
+                    <div className="grid grid-cols-1 gap-2">
+                      <Button
+                        variant={verticalAlign === 'top' ? 'default' : 'outline'}
+                        size="icon"
+                        onClick={() => setVerticalAlign('top')}
+                        data-testid="button-valign-top"
+                      >
+                        <div className="flex flex-col justify-start h-4 w-4">
+                          <div className="w-1 h-1 bg-current rounded-full"></div>
+                        </div>
+                      </Button>
+                      <Button
+                        variant={verticalAlign === 'middle' ? 'default' : 'outline'}
+                        size="icon"
+                        onClick={() => setVerticalAlign('middle')}
+                        data-testid="button-valign-middle"
+                      >
+                        <div className="flex flex-col justify-center h-4 w-4">
+                          <div className="w-1 h-1 bg-current rounded-full"></div>
+                        </div>
+                      </Button>
+                      <Button
+                        variant={verticalAlign === 'bottom' ? 'default' : 'outline'}
+                        size="icon"
+                        onClick={() => setVerticalAlign('bottom')}
+                        data-testid="button-valign-bottom"
+                      >
+                        <div className="flex flex-col justify-end h-4 w-4">
+                          <div className="w-1 h-1 bg-current rounded-full"></div>
+                        </div>
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
                       {/* Theme Toggle with Label */}
                       <ThemeToggle showLabel={true} variant="outline" />
 
@@ -1148,7 +1271,7 @@ export default function SalesDashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor="color-text" className="text-sm font-medium">Text</Label>
                           <p className="text-xs text-muted-foreground">Main text color in tables and content</p>
@@ -1176,7 +1299,7 @@ export default function SalesDashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor="color-primary" className="text-sm font-medium">Primary</Label>
                           <p className="text-xs text-muted-foreground">Button colors and key action elements</p>
@@ -1204,7 +1327,7 @@ export default function SalesDashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor="color-secondary" className="text-sm font-medium">Secondary/Card</Label>
                           <p className="text-xs text-muted-foreground">Card backgrounds and secondary buttons</p>
@@ -1232,7 +1355,7 @@ export default function SalesDashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor="color-accent" className="text-sm font-medium">Accent</Label>
                           <p className="text-xs text-muted-foreground">Highlights and hover states</p>
@@ -1260,7 +1383,7 @@ export default function SalesDashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor="color-border" className="text-sm font-medium">Border</Label>
                           <p className="text-xs text-muted-foreground">Lines between table rows and card edges</p>
@@ -1288,9 +1411,9 @@ export default function SalesDashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <Separator className="my-4" />
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor="color-body-bg" className="text-sm font-medium">Page Background</Label>
                           <p className="text-xs text-muted-foreground">Main page body background (leave empty for theme default)</p>
@@ -1319,7 +1442,7 @@ export default function SalesDashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label htmlFor="color-header-bg" className="text-sm font-medium">Header Background</Label>
                           <p className="text-xs text-muted-foreground">Top header background (leave empty for theme default)</p>
@@ -1348,13 +1471,13 @@ export default function SalesDashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <Separator className="my-4" />
-                        
+
                         <div className="space-y-3">
                           <h5 className="font-medium text-sm">Status Colors</h5>
                           <p className="text-xs text-muted-foreground">Customize status dropdown colors (background and text)</p>
-                          
+
                           <div className="space-y-3">
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">1 - Contacted</Label>
@@ -1377,7 +1500,7 @@ export default function SalesDashboard() {
                                 </div>
                               </div>
                             </div>
-                            
+
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">2 - Interested</Label>
                               <div className="grid grid-cols-2 gap-2">
@@ -1399,7 +1522,7 @@ export default function SalesDashboard() {
                                 </div>
                               </div>
                             </div>
-                            
+
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">3 - Sample Sent</Label>
                               <div className="grid grid-cols-2 gap-2">
@@ -1421,7 +1544,7 @@ export default function SalesDashboard() {
                                 </div>
                               </div>
                             </div>
-                            
+
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">4 - Follow-Up</Label>
                               <div className="grid grid-cols-2 gap-2">
@@ -1443,7 +1566,7 @@ export default function SalesDashboard() {
                                 </div>
                               </div>
                             </div>
-                            
+
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">5 - Closed Won</Label>
                               <div className="grid grid-cols-2 gap-2">
@@ -1465,7 +1588,7 @@ export default function SalesDashboard() {
                                 </div>
                               </div>
                             </div>
-                            
+
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">6 - Closed Lost</Label>
                               <div className="grid grid-cols-2 gap-2">
@@ -1489,9 +1612,9 @@ export default function SalesDashboard() {
                             </div>
                           </div>
                         </div>
-                        
+
                         <Separator className="my-4" />
-                        
+
                         {/* Reset All Colors Button - Inside Colors Popover */}
                         <Button
                           variant="destructive"
@@ -1796,7 +1919,9 @@ export default function SalesDashboard() {
             selectedTags.size < allTags.length || 
             selectedKeywords.size < allKeywords.length || 
             selectedStates.size < allStates.length ||
-            searchTerm !== ''
+            searchTerm !== '' ||
+            textAlign !== 'left' || // Check alignment resets
+            verticalAlign !== 'middle'
           ) && (
             <Card>
               <CardHeader>
@@ -1845,6 +1970,25 @@ export default function SalesDashboard() {
                     >
                       <Type className="mr-2 h-4 w-4" />
                       Reset Display
+                    </Button>
+                  )}
+
+                  {/* Reset Alignment */}
+                  {(textAlign !== 'left' || verticalAlign !== 'middle') && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setTextAlign('left');
+                        setVerticalAlign('middle');
+                        toast({
+                          title: "Alignment Reset",
+                          description: "Text and vertical alignment reset to defaults",
+                        });
+                      }}
+                      data-testid="button-reset-alignment"
+                    >
+                      <AlignLeft className="mr-2 h-4 w-4" />
+                      Reset Alignment
                     </Button>
                   )}
 
@@ -2045,14 +2189,19 @@ export default function SalesDashboard() {
                             const isNotesColumn = header.toLowerCase().includes('note') || header.toLowerCase().includes('comment');
                             const shouldWrap = isAddressColumn || isNotesColumn || isHoursColumn || isKeywordColumn || isTagColumn;
 
-                            const statusOptions = [
-                              '1 – Contacted',
-                              '2 – Interested',
-                              '3 – Sample Sent',
-                              '4 – Follow-Up',
-                              '5 – Closed Won',
-                              '6 – Closed Lost'
-                            ];
+                            // Apply alignment styles
+                            const cellStyle: React.CSSProperties = {
+                              width: columnWidths[header] || 200,
+                              maxWidth: columnWidths[header] || 200,
+                              padding: `${Math.max(8, fontSize * 0.5)}px 16px`,
+                              lineHeight: `${fontSize * 1.4}px`,
+                              height: 'inherit',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              textAlign: shouldWrap ? 'left' : textAlign, // Apply textAlign to non-wrapping cells
+                              verticalAlign: verticalAlign,
+                              ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const, overflow: 'visible' } : {})
+                            };
 
                             // Clean display based on column type
                             let cleanedValue = cellValue;
@@ -2075,17 +2224,7 @@ export default function SalesDashboard() {
                             return (
                               <TableCell 
                                 key={header} 
-                                className={shouldWrap ? "align-top" : "whitespace-nowrap align-middle"}
-                                style={{ 
-                                  width: columnWidths[header] || 200,
-                                  maxWidth: columnWidths[header] || 200,
-                                  padding: `${Math.max(8, fontSize * 0.5)}px 16px`,
-                                  lineHeight: `${fontSize * 1.4}px`,
-                                  height: 'inherit',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const, overflow: 'visible' } : {})
-                                }}
+                                style={cellStyle}
                               >
                                 {isEditable ? (
                                   hasData ? (
