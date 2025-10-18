@@ -846,6 +846,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // WooCommerce Webhook Endpoint (no auth required - validated by webhook secret)
+  app.post('/api/woocommerce/webhook', async (req: any, res) => {
+    try {
+      const webhookData = req.body;
+      const webhookSource = req.headers['x-wc-webhook-source'];
+      const webhookTopic = req.headers['x-wc-webhook-topic'];
+      const webhookSignature = req.headers['x-wc-webhook-signature'];
+
+      console.log('WooCommerce webhook received:', {
+        topic: webhookTopic,
+        source: webhookSource,
+        orderId: webhookData.id
+      });
+
+      // Verify webhook is for order events
+      if (!webhookTopic || !webhookTopic.toString().startsWith('order.')) {
+        console.log('Ignoring non-order webhook:', webhookTopic);
+        return res.status(200).json({ message: 'Webhook received but not an order event' });
+      }
+
+      // Only process completed and processing orders
+      if (webhookData.status !== 'completed' && webhookData.status !== 'processing') {
+        console.log('Ignoring order with status:', webhookData.status);
+        return res.status(200).json({ message: 'Order status not tracked' });
+      }
+
+      // Extract order data
+      const order = webhookData;
+      const email = order.billing?.email;
+      const company = order.billing?.company;
+      const salesAgentMeta = order.meta_data?.find((m: any) => m.key === '_sales_agent');
+      const salesAgentName = salesAgentMeta?.value || null;
+
+      console.log(`Processing webhook for order ${order.id}:`, {
+        email,
+        company,
+        salesAgentName,
+        total: order.total,
+        status: order.status,
+        date: order.date_created
+      });
+
+      // Find matching client
+      let client = null;
+      if (email) {
+        client = await storage.findClientByUniqueKey('Email', email) ||
+                 await storage.findClientByUniqueKey('email', email);
+      }
+      if (!client && company) {
+        client = await storage.findClientByUniqueKey('Company', company) ||
+                 await storage.findClientByUniqueKey('company', company);
+      }
+
+      // Create or update order
+      const existingOrder = await storage.getOrderById(order.id.toString());
+
+      if (existingOrder) {
+        await storage.updateOrder(order.id.toString(), {
+          clientId: client?.id || null,
+          orderNumber: order.number || order.id.toString(),
+          billingEmail: email,
+          billingCompany: company,
+          salesAgentName: salesAgentName,
+          total: order.total,
+          status: order.status,
+          orderDate: new Date(order.date_created),
+        });
+      } else {
+        await storage.createOrder({
+          id: order.id.toString(),
+          clientId: client?.id || null,
+          orderNumber: order.number || order.id.toString(),
+          billingEmail: email,
+          billingCompany: company,
+          salesAgentName: salesAgentName,
+          total: order.total,
+          status: order.status,
+          orderDate: new Date(order.date_created),
+        });
+      }
+
+      // Update client if matched
+      if (client) {
+        const orderDate = new Date(order.date_created);
+        const orderTotal = parseFloat(order.total);
+
+        const updates: any = {
+          lastOrderDate: orderDate,
+          totalSales: (parseFloat(client.totalSales || '0') + orderTotal).toString(),
+        };
+
+        if (!client.firstOrderDate || new Date(client.firstOrderDate) > orderDate) {
+          updates.firstOrderDate = orderDate;
+        }
+
+        // Calculate commission if client is claimed
+        if (client.assignedAgent && client.claimDate) {
+          const monthsSinceClaim = differenceInMonths(orderDate, new Date(client.claimDate));
+          const rate = monthsSinceClaim < 6 ? 0.25 : 0.10;
+          const commission = orderTotal * rate;
+          updates.commissionTotal = (parseFloat(client.commissionTotal || '0') + commission).toString();
+        }
+
+        await storage.updateClient(client.id, updates);
+      }
+
+      console.log('Webhook processed successfully:', { orderId: order.id, matched: !!client });
+      res.status(200).json({ message: 'Webhook processed', matched: !!client });
+    } catch (error: any) {
+      console.error("Webhook processing error:", error);
+      // Always return 200 to WooCommerce to prevent retries
+      res.status(200).json({ message: 'Webhook received but processing failed' });
+    }
+  });
+
   // Sync WooCommerce orders
   app.post('/api/woocommerce/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
