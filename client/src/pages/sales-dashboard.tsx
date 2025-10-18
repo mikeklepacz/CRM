@@ -834,9 +834,10 @@ export default function SalesDashboard() {
       if (userPreferences?.selectedTags && userPreferences.selectedTags.length > 0) {
         // Filter saved tags to only include ones that still exist in the data
         const validTags = userPreferences.selectedTags.filter((tag: string) => allTags.includes(tag));
-        setSelectedTags(new Set(validTags.length > 0 ? validTags : allTags));
+        setSelectedTags(new Set(validTags));
       } else {
-        setSelectedTags(new Set(allTags));
+        // Default: no tags selected (show nothing until user selects)
+        setSelectedTags(new Set());
       }
     }
   }, [allTags.length, userPreferences]);
@@ -847,9 +848,10 @@ export default function SalesDashboard() {
       if (userPreferences?.selectedKeywords && userPreferences.selectedKeywords.length > 0) {
         // Filter saved keywords to only include ones that still exist in the data
         const validKeywords = userPreferences.selectedKeywords.filter((kw: string) => allKeywords.includes(kw));
-        setSelectedKeywords(new Set(validKeywords.length > 0 ? validKeywords : allKeywords));
+        setSelectedKeywords(new Set(validKeywords));
       } else {
-        setSelectedKeywords(new Set(allKeywords));
+        // Default: no keywords selected (show nothing until user selects)
+        setSelectedKeywords(new Set());
       }
     }
   }, [allKeywords.length, userPreferences]);
@@ -860,9 +862,10 @@ export default function SalesDashboard() {
       if (userPreferences?.selectedStates && userPreferences.selectedStates.length > 0) {
         // Filter saved states to only include ones that still exist in the data
         const validStates = userPreferences.selectedStates.filter((state: string) => allStates.includes(state));
-        setSelectedStates(new Set(validStates.length > 0 ? validStates : allStates));
+        setSelectedStates(new Set(validStates));
       } else {
-        setSelectedStates(new Set(allStates));
+        // Default: no states selected (show nothing until user selects)
+        setSelectedStates(new Set());
       }
     }
   }, [allStates.length, userPreferences]);
