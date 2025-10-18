@@ -12,28 +12,28 @@ import { z } from "zod";
 // Helper function for fuzzy string matching (Levenshtein distance)
 function stringSimilarity(str1: string, str2: string): number {
   if (!str1 || !str2) return 0;
-  
+
   const s1 = str1.toLowerCase().trim();
   const s2 = str2.toLowerCase().trim();
-  
+
   if (s1 === s2) return 1;
-  
+
   const len1 = s1.length;
   const len2 = s2.length;
-  
+
   if (len1 === 0) return len2 === 0 ? 1 : 0;
   if (len2 === 0) return 0;
-  
+
   const matrix: number[][] = [];
-  
+
   for (let i = 0; i <= len2; i++) {
     matrix[i] = [i];
   }
-  
+
   for (let j = 0; j <= len1; j++) {
     matrix[0][j] = j;
   }
-  
+
   for (let i = 1; i <= len2; i++) {
     for (let j = 1; j <= len1; j++) {
       const cost = s1[j - 1] === s2[i - 1] ? 0 : 1;
@@ -44,7 +44,7 @@ function stringSimilarity(str1: string, str2: string): number {
       );
     }
   }
-  
+
   const distance = matrix[len2][len1];
   const maxLen = Math.max(len1, len2);
   return 1 - (distance / maxLen);
@@ -79,7 +79,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session creation error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
-        
+
         // Explicitly save session before responding
         req.session.save((saveErr: any) => {
           if (saveErr) {
@@ -132,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log("Auth check - isAuthenticated:", req.isAuthenticated());
     console.log("Auth check - session:", req.session);
     console.log("Auth check - user:", req.user);
-    
+
     // Check if user is authenticated at all
     if (!req.isAuthenticated()) {
       console.log("Auth failed: not authenticated");
@@ -146,7 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Auth success: password auth user");
       return next();
     }
-    
+
     // Using Replit Auth - check token expiry
     if (!user || !user.expires_at) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -166,12 +166,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const config = await getOidcConfig();
       const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-      
+
       user.claims = tokenResponse.claims();
       user.access_token = tokenResponse.access_token;
       user.refresh_token = tokenResponse.refresh_token;
       user.expires_at = user.claims?.exp;
-      
+
       return next();
     } catch (error) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -253,7 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { firstName, lastName, email } = validation.data;
-      
+
       const updated = await storage.updateUser(userId, { firstName, lastName, email });
       res.json(updated);
     } catch (error: any) {
@@ -271,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { currentPassword, newPassword } = validation.data;
-      
+
       const user = await storage.getUser(userId);
       if (!user?.passwordHash) {
         return res.status(400).json({ message: "Password auth not enabled for this user" });
@@ -303,17 +303,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const colorSchema = z.object({
-    background: z.string(),
-    text: z.string(),
-    primary: z.string(),
-    secondary: z.string(),
-    accent: z.string(),
-    border: z.string(),
-    bodyBackground: z.string(),
-    headerBackground: z.string(),
-  });
-
   const statusColorSchema = z.record(z.object({
     background: z.string(),
     text: z.string()
@@ -326,8 +315,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     secondary: z.string(),
     accent: z.string(),
     border: z.string(),
-    bodyBackground: z.string().optional(),
-    headerBackground: z.string().optional(),
+    bodyBackground: z.string(),
+    headerBackground: z.string(),
     statusColors: statusColorSchema,
   }).optional();
 
@@ -361,7 +350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const preferences = await storage.saveUserPreferences(userId, validation.data);
-      
+
       res.json(preferences);
     } catch (error: any) {
       console.error("Error saving user preferences:", error);
@@ -373,7 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const integration = await storage.getUserIntegration(userId);
-      
+
       res.json({
         url: integration?.wooUrl || "",
         consumerKey: integration?.wooConsumerKey || "",
@@ -395,13 +384,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { url, consumerKey, consumerSecret } = validation.data;
-      
+
       await storage.updateUserIntegration(userId, {
         wooUrl: url,
         wooConsumerKey: consumerKey,
         wooConsumerSecret: consumerSecret
       });
-      
+
       res.json({ message: "WooCommerce settings updated successfully" });
     } catch (error: any) {
       console.error("Error updating WooCommerce settings:", error);
@@ -413,7 +402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const integration = await storage.getUserIntegration(userId);
-      
+
       res.json({
         clientId: integration?.googleClientId || "",
         clientSecret: integration?.googleClientSecret || "",
@@ -434,12 +423,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { clientId, clientSecret } = validation.data;
-      
+
       await storage.updateUserIntegration(userId, {
         googleClientId: clientId,
         googleClientSecret: clientSecret
       });
-      
+
       res.json({ message: "Google OAuth settings updated successfully" });
     } catch (error: any) {
       console.error("Error updating Google OAuth settings:", error);
@@ -451,18 +440,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const integration = await storage.getUserIntegration(userId);
-      
+
       console.log('OAuth URL request - userId:', userId);
       console.log('Integration found:', !!integration);
       console.log('Client ID:', integration?.googleClientId ? 'present' : 'missing');
-      
+
       if (!integration?.googleClientId) {
         return res.status(400).json({ message: "Please configure Google OAuth credentials first" });
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/google/callback`;
       const scope = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly';
-      
+
       const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       oauthUrl.searchParams.set('client_id', integration.googleClientId);
       oauthUrl.searchParams.set('redirect_uri', redirectUri);
@@ -471,7 +460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       oauthUrl.searchParams.set('access_type', 'offline');
       oauthUrl.searchParams.set('prompt', 'consent');
       oauthUrl.searchParams.set('state', userId); // Pass userId as state
-      
+
       const response = { url: oauthUrl.toString() };
       console.log('Sending OAuth URL response:', response);
       return res.json(response);
@@ -484,7 +473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/google/callback', async (req: any, res) => {
     try {
       const { code, state: userId } = req.query;
-      
+
       if (!code || !userId) {
         return res.send('<script>window.close();</script>');
       }
@@ -515,7 +504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const tokens = await tokenResponse.json();
-      
+
       // Get user email from Google
       const userinfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
         headers: { Authorization: `Bearer ${tokens.access_token}` }
@@ -623,13 +612,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/clients/:id/claim', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const { id } = req.params;
-      
+
       // Check if client exists and is not already claimed
       const client = await storage.getClient(id);
       if (!client) {
         return res.status(404).json({ message: "Client not found" });
       }
-      
+
       if (client.assignedAgent) {
         return res.status(400).json({ message: "Client already claimed" });
       }
@@ -719,7 +708,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/orders/:orderId/match-suggestions', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const { orderId } = req.params;
-      
+
       const order = await storage.getOrderById(orderId);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
@@ -830,7 +819,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update client sales data
       const orderDate = new Date(order.orderDate);
       const orderTotal = parseFloat(order.total);
-      
+
       const updates: any = {
         lastOrderDate: orderDate,
         totalSales: (parseFloat(client.totalSales || '0') + orderTotal).toString(),
@@ -861,7 +850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/woocommerce/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       // Get WooCommerce credentials from database
       const integration = await storage.getUserIntegration(userId);
       const wooUrl = integration?.wooUrl;
@@ -880,7 +869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fetch ALL orders from WooCommerce with pagination
       const apiUrl = `${wooUrl}/wp-json/wc/v3/orders`;
       console.log('Fetching from:', apiUrl);
-      
+
       let allOrders: any[] = [];
       let page = 1;
       let hasMore = true;
@@ -901,7 +890,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         console.log(`Fetched page ${page}: ${response.data.length} orders`);
-        
+
         if (response.data.length === 0) {
           hasMore = false;
         } else {
@@ -918,7 +907,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('WooCommerce total orders fetched:', allOrders.length);
       const orders = allOrders;
-      
+
       if (!Array.isArray(orders)) {
         console.error('Expected array of orders but got:', typeof orders);
         return res.status(500).json({ 
@@ -947,7 +936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Try to find matching client by email or company
         const email = order.billing?.email;
         const company = order.billing?.company;
-        
+
         // Extract sales agent from WooCommerce custom field _sales_agent
         const salesAgentMeta = order.meta_data?.find((m: any) => m.key === '_sales_agent');
         const salesAgentName = salesAgentMeta?.value || null;
@@ -962,13 +951,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         let client = null;
-        
+
         if (email) {
           client = await storage.findClientByUniqueKey('Email', email) ||
                    await storage.findClientByUniqueKey('email', email);
           console.log(`Client lookup by email '${email}':`, client ? 'FOUND' : 'NOT FOUND');
         }
-        
+
         if (!client && company) {
           client = await storage.findClientByUniqueKey('Company', company) ||
                    await storage.findClientByUniqueKey('company', company);
@@ -977,7 +966,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create or update order
         const existingOrder = await storage.getOrderById(order.id.toString());
-        
+
         if (existingOrder) {
           await storage.updateOrder(order.id.toString(), {
             clientId: client?.id || null,
@@ -1010,7 +999,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           matched++;
           const orderDate = new Date(order.date_created);
           const orderTotal = parseFloat(order.total);
-          
+
           // Update order dates and totals
           const updates: any = {
             lastOrderDate: orderDate,
@@ -1128,7 +1117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Verify sheet exists and has the identifier column
       const range = `${sheetName}!A1:ZZ1`;
       const headers = await googleSheets.readSheetData(userId, spreadsheetId, range);
-      
+
       if (!headers || headers.length === 0) {
         return res.status(400).json({ message: "Sheet is empty or not found" });
       }
@@ -1179,7 +1168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       const sheet = await storage.getGoogleSheetById(id);
       if (!sheet) {
         return res.status(404).json({ message: "Google Sheet not found" });
@@ -1240,7 +1229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Read data from both sheets
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-      
+
       const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
       const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
 
@@ -1278,12 +1267,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Merge data by join column - include rows from BOTH sheets
       const mergedDataMap = new Map();
-      
+
       // First, add all store rows
       storeData.forEach(storeRow => {
         const joinValue = storeRow[joinColumn];
         const trackerRow = filteredTrackerData.find(tr => tr[joinColumn] === joinValue) || {};
-        
+
         mergedDataMap.set(joinValue, {
           ...storeRow,
           ...trackerRow,
@@ -1291,7 +1280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           _deletedFromStore: false,
         });
       });
-      
+
       // Then, add tracker rows that don't exist in store (deleted orders)
       filteredTrackerData.forEach(trackerRow => {
         const joinValue = trackerRow[joinColumn];
@@ -1304,7 +1293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       });
-      
+
       const mergedData = Array.from(mergedDataMap.values());
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)
@@ -1355,7 +1344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { spreadsheetId, sheetName } = sheet;
-      
+
       // Read headers to find column index (case-insensitive)
       const headerRange = `${sheetName}!1:1`;
       const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
@@ -1398,33 +1387,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { spreadsheetId, sheetName } = sheet;
-      
+
       // Read all data to find headers and next empty row
       const dataRange = `${sheetName}!A:ZZ`;
       const rows = await googleSheets.readSheetData(userId, spreadsheetId, dataRange);
       const headers = rows[0] || [];
-      
+
       // Create a new row with empty values for all columns
       const newRow = headers.map(() => '');
-      
+
       // Set the join column (case-insensitive)
       const linkColumnIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
       if (linkColumnIndex !== -1) {
         newRow[linkColumnIndex] = linkValue;
       }
-      
+
       // Set the agent column to current user's email (case-insensitive)
       const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
       if (agentColumnIndex !== -1 && user?.email) {
         newRow[agentColumnIndex] = user.email;
       }
-      
+
       // Set the column being edited (case-insensitive)
       const editColumnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
       if (editColumnIndex !== -1) {
         newRow[editColumnIndex] = value;
       }
-      
+
       // Append the row to the sheet
       const appendRange = `${sheetName}!A:ZZ`;
       await googleSheets.appendSheetData(userId, spreadsheetId, appendRange, [newRow]);
@@ -1453,15 +1442,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { spreadsheetId, sheetName } = sheet;
-      
+
       // Read headers
       const dataRange = `${sheetName}!A:ZZ`;
       const rows = await googleSheets.readSheetData(userId, spreadsheetId, dataRange);
       const headers = rows[0] || [];
-      
+
       // Create a new row with empty values
       const newRow = headers.map(() => '');
-      
+
       // Set values based on header names (case-insensitive)
       const setCell = (columnName: string, value: string) => {
         const index = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
@@ -1469,7 +1458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           newRow[index] = value;
         }
       };
-      
+
       setCell(joinColumn, linkValue);
       setCell('agent', agent);
       setCell('status', status);
@@ -1478,7 +1467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setCell('next action', nextAction);
       setCell('notes', notes);
       setCell('point of contact', pointOfContact);
-      
+
       // Append the row
       const appendRange = `${sheetName}!A:ZZ`;
       await googleSheets.appendSheetData(userId, spreadsheetId, appendRange, [newRow]);
@@ -1507,12 +1496,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { spreadsheetId, sheetName } = sheet;
-      
+
       // Read headers
       const headerRange = `${sheetName}!1:1`;
       const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
       const headers = headerRows[0] || [];
-      
+
       // Update each field
       const updateCell = async (columnName: string, value: string) => {
         const columnIndex = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
@@ -1522,7 +1511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await googleSheets.writeSheetData(userId, spreadsheetId, cellRange, [[value]]);
         }
       };
-      
+
       await updateCell('status', status);
       await updateCell('follow-up date', followUpDate);
       await updateCell('followup', followUpDate);
@@ -1554,7 +1543,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       const sheet = await storage.getGoogleSheetById(id);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
@@ -1626,11 +1615,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { spreadsheetId, sheetName } = sheet;
-      
+
       // Read the current sheet to find the header row
       const range = `${sheetName}!1:1`;
       const headerData = await googleSheets.readSheetData(userId, spreadsheetId, range);
-      
+
       if (headerData.length === 0) {
         return res.status(400).json({ message: "Could not read sheet headers" });
       }
@@ -1717,18 +1706,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       const sheet = await storage.getGoogleSheetById(id);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
       }
 
       const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
-      
+
       // Get headers from sheet
       const headerRange = `${sheetName}!A1:ZZ1`;
       const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
-      
+
       if (!headerRows || headerRows.length === 0) {
         return res.status(400).json({ message: "Cannot read sheet headers" });
       }
@@ -1765,14 +1754,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       const sheet = await storage.getGoogleSheetById(id);
       if (!sheet) {
         return res.status(400).json({ message: "Google Sheet not found" });
       }
 
       const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
-      
+
       // STEP 1: Import from sheet
       const range = `${sheetName}!A:ZZ`;
       const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
