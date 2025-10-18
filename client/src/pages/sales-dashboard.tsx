@@ -1273,10 +1273,13 @@ export default function SalesDashboard() {
                                 className={shouldWrap ? "align-top" : "whitespace-nowrap align-middle"}
                                 style={{ 
                                   width: columnWidths[header] || 200,
+                                  maxWidth: columnWidths[header] || 200,
                                   padding: `${Math.max(8, fontSize * 0.5)}px 16px`,
                                   lineHeight: `${fontSize * 1.4}px`,
                                   height: 'inherit',
-                                  ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const } : {})
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const, overflow: 'visible' } : {})
                                 }}
                               >
                                 {isEditable ? (
