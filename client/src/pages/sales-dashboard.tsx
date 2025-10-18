@@ -95,7 +95,7 @@ export default function SalesDashboard() {
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [keywordSearchTerm, setKeywordSearchTerm] = useState("");
   const [contextMenuColumn, setContextMenuColumn] = useState<string | null>(null);
-  const { theme: currentTheme } = useTheme();
+  const { theme: currentTheme, resolvedTheme } = useTheme();
   // New state variables for text alignment and vertical alignment
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
