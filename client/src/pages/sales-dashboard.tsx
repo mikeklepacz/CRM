@@ -1335,7 +1335,7 @@ export default function SalesDashboard() {
                               >
                                 {isEditable ? (
                                   hasData ? (
-                                    // Has data: Show value with edit on double-click
+                                    // Has data: Show value with edit controls - always allow editing
                                     isDateColumn ? (
                                       <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
@@ -1351,7 +1351,14 @@ export default function SalesDashboard() {
                                         <PopoverContent className="w-auto p-0" align="start">
                                           <Calendar
                                             mode="single"
-                                            selected={cellValue ? parse(cellValue, 'M/d/yyyy', new Date()) : undefined}
+                                            selected={cellValue ? (() => {
+                                              try {
+                                                const parsed = parse(cellValue, 'M/d/yyyy', new Date());
+                                                return isValid(parsed) ? parsed : undefined;
+                                              } catch {
+                                                return undefined;
+                                              }
+                                            })() : undefined}
                                             onSelect={(date) => {
                                               if (date) {
                                                 handleCellEdit(row, header, format(date, 'M/d/yyyy'));
