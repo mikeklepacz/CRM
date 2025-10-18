@@ -1070,7 +1070,29 @@ export default function SalesDashboard() {
                 {/* Right side: Display Settings Card */}
                 <Card className="w-auto">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium">Display Settings</CardTitle>
+                    <div className="flex items-center justify-between gap-4">
+                      <CardTitle className="text-sm font-medium">Display Settings</CardTitle>
+                      {(textAlign !== 'left' || verticalAlign !== 'middle') && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setTextAlign('left');
+                              setVerticalAlign('middle');
+                              toast({
+                                title: "Alignment Reset",
+                                description: "Text and vertical alignment reset to defaults",
+                              });
+                            }}
+                            data-testid="button-reset-alignment-header"
+                          >
+                            <AlignLeft className="mr-2 h-4 w-4" />
+                            Reset Alignment
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-2 flex-wrap">
