@@ -568,13 +568,13 @@ export default function SalesDashboard() {
 
     const saveChanges = async () => {
       try {
-        const updates = Object.entries(editedCells).map(([key, value]) => {
-          const [rowIndexStr, columnName] = key.split(':::');
-          const rowIndex = parseInt(rowIndexStr, 10);
-          return { rowIndex, columnName, value };
-        });
-
-        await apiRequest('POST', '/api/sheets/update-cells', { updates });
+        // Save each cell individually
+        const edits = Object.values(editedCells);
+        await Promise.all(
+          edits.map(({ sheetId, rowIndex, column, value }) =>
+            apiRequest('PUT', `/api/sheets/${sheetId}/update`, { rowIndex, column, value })
+          )
+        );
         
         setEditedCells({});
         refetch();
