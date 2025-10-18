@@ -75,6 +75,8 @@ export default function SalesDashboard() {
   const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [tagSearchTerm, setTagSearchTerm] = useState("");
+  const [keywordSearchTerm, setKeywordSearchTerm] = useState("");
 
   // Fetch user preferences
   const { data: userPreferences, isFetched: preferencesQueryFetched } = useQuery<{
@@ -954,9 +956,20 @@ export default function SalesDashboard() {
                         <p className="text-xs text-muted-foreground">
                           Uncheck tags to hide rows with those tags
                         </p>
+                        <Input
+                          placeholder="Search tags..."
+                          value={tagSearchTerm}
+                          onChange={(e) => setTagSearchTerm(e.target.value)}
+                          className="mb-2"
+                          data-testid="input-search-tags"
+                        />
                         <ScrollArea className="h-64">
                           <div className="space-y-2">
-                            {allTags.map((tag: string) => (
+                            {allTags
+                              .filter((tag: string) => 
+                                tag.toLowerCase().includes(tagSearchTerm.toLowerCase())
+                              )
+                              .map((tag: string) => (
                               <div key={tag} className="flex items-center gap-2">
                                 <Checkbox
                                   id={`tag-${tag}`}
@@ -1013,9 +1026,20 @@ export default function SalesDashboard() {
                         <p className="text-xs text-muted-foreground">
                           Uncheck items to hide rows with those keywords/phrases
                         </p>
+                        <Input
+                          placeholder="Search keywords..."
+                          value={keywordSearchTerm}
+                          onChange={(e) => setKeywordSearchTerm(e.target.value)}
+                          className="mb-2"
+                          data-testid="input-search-keywords"
+                        />
                         <ScrollArea className="h-64">
                           <div className="space-y-2">
-                            {allKeywords.map((keyword: string) => (
+                            {allKeywords
+                              .filter((keyword: string) => 
+                                keyword.toLowerCase().includes(keywordSearchTerm.toLowerCase())
+                              )
+                              .map((keyword: string) => (
                               <div key={keyword} className="flex items-center gap-2">
                                 <Checkbox
                                   id={`keyword-${keyword}`}
