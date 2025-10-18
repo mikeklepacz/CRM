@@ -1048,7 +1048,7 @@ export default function SalesDashboard() {
                           className="whitespace-nowrap relative group"
                           style={{ width: columnWidths[header] || 200 }}
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between pr-4">
                             <button
                               onClick={() => handleSort(header)}
                               className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer flex-1"
@@ -1071,11 +1071,10 @@ export default function SalesDashboard() {
                               )}
                             </button>
                             <div
-                              className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize bg-border/30 hover:bg-primary/70 transition-colors z-10 flex items-center justify-center"
+                              className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/30 transition-colors z-20"
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                // Prevent text selection during drag
                                 document.body.style.userSelect = 'none';
                                 setResizingColumn({
                                   column: header,
@@ -1085,7 +1084,7 @@ export default function SalesDashboard() {
                               }}
                               title="Drag to resize column"
                             >
-                              <div className="w-px h-full bg-border group-hover:bg-primary/50" />
+                              <div className="w-full h-full bg-transparent hover:bg-primary/20" />
                             </div>
                           </div>
                         </TableHead>
