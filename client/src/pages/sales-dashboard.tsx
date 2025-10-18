@@ -174,7 +174,7 @@ export default function SalesDashboard() {
 
         setVisibleColumns(initialVisible);
         setColumnWidths(initialWidths);
-        
+
         // Load font size and row height preferences
         if (userPreferences.fontSize) {
           setFontSize(userPreferences.fontSize);
@@ -182,7 +182,7 @@ export default function SalesDashboard() {
         if (userPreferences.rowHeight) {
           setRowHeight(userPreferences.rowHeight);
         }
-        
+
         setPreferencesLoaded(true);
       } else {
         // No saved preferences, use defaults
@@ -428,7 +428,7 @@ export default function SalesDashboard() {
           // Extract just the state part if it's "City, State" format
           const valueStr = String(value).trim();
           let stateAbbrev = valueStr;
-          
+
           // If format is "City, ST", extract just the state abbreviation
           if (valueStr.includes(',')) {
             const parts = valueStr.split(',');
@@ -436,7 +436,7 @@ export default function SalesDashboard() {
               stateAbbrev = parts[parts.length - 1].trim();
             }
           }
-          
+
           // Only accept 2-letter state codes
           if (stateAbbrev.length === 2) {
             const stateName = getStateName(stateAbbrev);
@@ -719,7 +719,7 @@ export default function SalesDashboard() {
           if (value && String(value).trim()) {
             const valueStr = String(value).trim();
             let stateAbbrev = valueStr;
-            
+
             // If format is "City, ST", extract just the state abbreviation
             if (valueStr.includes(',')) {
               const parts = valueStr.split(',');
@@ -727,7 +727,7 @@ export default function SalesDashboard() {
                 stateAbbrev = parts[parts.length - 1].trim();
               }
             }
-            
+
             const stateName = getStateName(stateAbbrev);
             return stateName && selectedStates.has(stateName);
           }
@@ -1234,7 +1234,7 @@ export default function SalesDashboard() {
                       const lineHeight = fontSize * 1.4;
                       const minRequiredHeight = lineHeight + verticalPadding;
                       const effectiveHeight = Math.max(rowHeight, minRequiredHeight);
-                      
+
                       return (
                         <TableRow 
                           key={rowKey} 
@@ -1261,7 +1261,7 @@ export default function SalesDashboard() {
                             const isTagColumn = header.toLowerCase().includes('tag');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
-                            
+
                             // Determine if this column should allow text wrapping
                             const isAddressColumn = header.toLowerCase().includes('address') || header.toLowerCase().includes('street');
                             const isNotesColumn = header.toLowerCase().includes('note') || header.toLowerCase().includes('comment');
