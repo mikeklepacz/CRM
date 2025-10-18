@@ -85,7 +85,7 @@ export default function SalesDashboard() {
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const [editedCells, setEditedCells] = useState<Record<string, { rowIndex: number; column: string; value: string; sheetId: string }>>({});
+  const [editedCells, setEditedCells] = useState<Record<string, { link: string; rowIndex: number; column: string; value: string; sheetId: string }>>({});
   const [expandedCell, setExpandedCell] = useState<{ row: any; column: string; value: string; isEditable: boolean } | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -1036,14 +1036,15 @@ export default function SalesDashboard() {
     const isTrackerColumn = trackerHeaders.some((h: string) => h.toLowerCase() === column.toLowerCase());
     const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
     const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
+    const rowLink = row.link || row.Link || `row-${rowIndex}`;
 
     if (!sheetId || !rowIndex) return;
 
-    // Use a unique key that doesn't break on hyphens in column names
-    const key = JSON.stringify({ rowIndex, column, sheetId });
+    // Use a stable unique key based on row link (not index) for virtual scrolling
+    const key = `${rowLink}-${column}-${sheetId}`;
     setEditedCells(prev => ({
       ...prev,
-      [key]: { rowIndex, column, value, sheetId },
+      [key]: { link: rowLink, rowIndex, column, value, sheetId },
     }));
   };
 
@@ -2542,7 +2543,8 @@ export default function SalesDashboard() {
                             const isTrackerColumn = trackerHeaders.some((h: string) => h.toLowerCase() === header.toLowerCase());
                             const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
                             const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
-                            const cellKey = JSON.stringify({ rowIndex, column: header, sheetId });
+                            const rowLink = row.link || row.Link || `row-${rowKey}`;
+                            const cellKey = `${rowLink}-${header}-${sheetId}`;
                             const cellValue = editedCells[cellKey]?.value ?? row[header] ?? '';
 
                             const isPhoneColumn = header.toLowerCase().includes('phone');
