@@ -98,7 +98,7 @@ export default function SalesDashboard() {
   // New state variables for text alignment and vertical alignment
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
-  
+
   // Status options state (customizable)
   const [statusOptions, setStatusOptions] = useState<string[]>([
     '1 – Contacted',
@@ -108,7 +108,7 @@ export default function SalesDashboard() {
     '5 – Closed Won',
     '6 – Closed Lost',
   ]);
-  
+
   // Color row by status state
   const [colorRowByStatus, setColorRowByStatus] = useState<boolean>(false);
 
@@ -2315,6 +2315,10 @@ export default function SalesDashboard() {
                                         <SelectTrigger
                                           className="w-full"
                                           data-testid={`button-status-${rowKey}-${header}`}
+                                          style={cellValue && customColors.statusColors?.[cellValue] ? {
+                                            backgroundColor: customColors.statusColors[cellValue].background,
+                                            color: customColors.statusColors[cellValue].text,
+                                          } : undefined}
                                         >
                                           <SelectValue placeholder="Select status..." />
                                         </SelectTrigger>
