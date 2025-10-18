@@ -2194,6 +2194,14 @@ export default function SalesDashboard() {
                       const rowStatus = statusColumns.length > 0 ? row[statusColumns[0]] : null;
                       const rowStatusColor = colorRowByStatus && rowStatus && customColors.statusColors?.[rowStatus];
 
+                      // Helper function to convert hex to rgba with opacity
+                      const hexToRgba = (hex: string, opacity: number) => {
+                        const r = parseInt(hex.slice(1, 3), 16);
+                        const g = parseInt(hex.slice(3, 5), 16);
+                        const b = parseInt(hex.slice(5, 7), 16);
+                        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                      };
+
                       return (
                         <TableRow
                           key={rowKey}
@@ -2203,7 +2211,7 @@ export default function SalesDashboard() {
                           style={{
                             fontSize: `${fontSize}px`,
                             height: `${effectiveHeight}px`,
-                            backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
+                            backgroundColor: rowStatusColor ? hexToRgba(rowStatusColor.background, 0.5) : undefined,
                             color: rowStatusColor ? rowStatusColor.text : undefined,
                           }}
                         >
