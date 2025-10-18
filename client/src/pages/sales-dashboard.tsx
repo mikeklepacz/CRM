@@ -77,6 +77,8 @@ export default function SalesDashboard() {
   const [trackerSheetId, setTrackerSheetId] = useState<string>("");
   const joinColumn = "link"; // Hardcoded to "link"
   const [searchTerm, setSearchTerm] = useState("");
+  const [nameFilter, setNameFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
@@ -1051,6 +1053,24 @@ export default function SalesDashboard() {
         return value.includes(searchLower);
       });
     });
+
+    // Filter by name if nameFilter is set
+    if (nameFilter.trim()) {
+      const nameLower = nameFilter.toLowerCase();
+      filtered = filtered.filter((row: any) => {
+        const nameValue = (row['name'] || row['Name'] || row['Company'] || row['company'] || '').toString().toLowerCase();
+        return nameValue.includes(nameLower);
+      });
+    }
+
+    // Filter by city if cityFilter is set
+    if (cityFilter.trim()) {
+      const cityLower = cityFilter.toLowerCase();
+      filtered = filtered.filter((row: any) => {
+        const cityValue = (row['city'] || row['City'] || '').toString().toLowerCase();
+        return cityValue.includes(cityLower);
+      });
+    }
 
     // Then filter by tags
     if (selectedTags.size > 0 && selectedTags.size < allTags.length) {
@@ -2507,13 +2527,19 @@ export default function SalesDashboard() {
                 <Table className="min-w-full" style={{ tableLayout: 'fixed' }}>
                   <TableHeader>
                     <TableRow>
-                      {visibleHeaders.map((header: string) => (
+                      {visibleHeaders.map((header: string) => {
+                        const isNameColumn = header.toLowerCase() === 'name' || header.toLowerCase() === 'company';
+                        const isCityColumn = header.toLowerCase() === 'city';
+                        const hasInlineSearch = isNameColumn || isCityColumn;
+                        
+                        return (
                         <TableHead
                           key={header}
                           className="whitespace-nowrap relative group"
                           style={{ width: columnWidths[header] || 200 }}
                         >
-                          <div className="flex items-center justify-between pr-4">
+                          <div className="flex flex-col gap-1 pr-4">
+                            <div className="flex items-center justify-between">
                             <DropdownMenu open={contextMenuColumn === header} onOpenChange={(open) => setContextMenuColumn(open ? header : null)}>
                               <DropdownMenuTrigger asChild>
                                 <button
@@ -2601,6 +2627,27 @@ export default function SalesDashboard() {
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
+                            </div>
+                            
+                            {/* Inline search box for Name and City columns */}
+                            {hasInlineSearch && (
+                              <Input
+                                placeholder={`Filter ${header}...`}
+                                value={isNameColumn ? nameFilter : cityFilter}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (isNameColumn) {
+                                    setNameFilter(e.target.value);
+                                  } else {
+                                    setCityFilter(e.target.value);
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-7 text-xs"
+                                data-testid={`input-filter-${header.toLowerCase()}`}
+                              />
+                            )}
+                            
                             <div
                               className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize hover:bg-primary/50 transition-colors z-20 flex items-center justify-center"
                               onMouseDown={(e) => {
@@ -2619,7 +2666,8 @@ export default function SalesDashboard() {
                             </div>
                           </div>
                         </TableHead>
-                      ))}
+                      );
+                      })}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
