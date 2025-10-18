@@ -1454,6 +1454,285 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get keyword statistics (frequency counts) from merged data
+  app.post('/api/sheets/keyword-stats', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { storeSheetId, trackerSheetId, joinColumn } = req.body;
+
+      // Admin only
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      if (!storeSheetId || !trackerSheetId || !joinColumn) {
+        return res.status(400).json({ message: "Store sheet ID, tracker sheet ID, and join column are required" });
+      }
+
+      // Fetch both sheets
+      const storeSheet = await storage.getGoogleSheetById(storeSheetId);
+      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
+
+      if (!storeSheet || !trackerSheet) {
+        return res.status(404).json({ message: "One or both sheets not found" });
+      }
+
+      // Read data from both sheets
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+
+      if (storeRows.length === 0) {
+        return res.json({ keywords: [], tags: [] });
+      }
+
+      // Parse headers and data
+      const storeHeaders = storeRows[0];
+      const storeData = storeRows.slice(1);
+      const trackerHeaders = trackerRows.length > 0 ? trackerRows[0] : [];
+      const trackerData = trackerRows.length > 1 ? trackerRows.slice(1) : [];
+      
+      // Combine all data
+      const allHeaders = [...storeHeaders];
+      trackerHeaders.forEach(h => {
+        if (!allHeaders.some(ah => ah.toLowerCase() === h.toLowerCase())) {
+          allHeaders.push(h);
+        }
+      });
+      
+      // Count keyword frequencies
+      const keywordFreq = new Map<string, number>();
+      const keywordColumns = allHeaders.filter(h => 
+        h.toLowerCase().includes('keyword') || h.toLowerCase().includes('phrase')
+      );
+      
+      const allData = [
+        ...storeData.map((row, idx) => {
+          const obj: any = {};
+          storeHeaders.forEach((h, i) => { obj[h] = row[i] || ''; });
+          return obj;
+        }),
+        ...trackerData.map((row, idx) => {
+          const obj: any = {};
+          trackerHeaders.forEach((h, i) => { obj[h] = row[i] || ''; });
+          return obj;
+        })
+      ];
+      
+      allData.forEach(row => {
+        keywordColumns.forEach(col => {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            String(value).split(',').forEach((kw: string) => {
+              let cleaned = kw.trim();
+              cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
+              cleaned = cleaned.replace(/^["']+|["']+$/g, '');
+              if (cleaned && cleaned !== '""' && cleaned !== "''") {
+                keywordFreq.set(cleaned, (keywordFreq.get(cleaned) || 0) + 1);
+              }
+            });
+          }
+        });
+      });
+      
+      // Count tag frequencies
+      const tagFreq = new Map<string, number>();
+      const tagColumns = allHeaders.filter(h => h.toLowerCase().includes('tag'));
+      
+      allData.forEach(row => {
+        tagColumns.forEach(col => {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            String(value).split(',').forEach((tag: string) => {
+              let cleaned = tag.trim();
+              cleaned = cleaned.replace(/^["'\[\]]+|["'\[\]]+$/g, '');
+              cleaned = cleaned.replace(/^["']+|["']+$/g, '');
+              if (cleaned && cleaned !== '""' && cleaned !== "''") {
+                tagFreq.set(cleaned, (tagFreq.get(cleaned) || 0) + 1);
+              }
+            });
+          }
+        });
+      });
+      
+      // Convert to arrays and sort by frequency (descending)
+      const keywords = Array.from(keywordFreq.entries())
+        .map(([keyword, count]) => ({ keyword, count }))
+        .sort((a, b) => b.count - a.count);
+        
+      const tags = Array.from(tagFreq.entries())
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count);
+      
+      res.json({ keywords, tags, keywordColumns, tagColumns });
+    } catch (error: any) {
+      console.error("Error fetching keyword stats:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch keyword stats" });
+    }
+  });
+
+  // Bulk delete keywords/tags from Google Sheets
+  app.post('/api/sheets/delete-keywords', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { storeSheetId, trackerSheetId, keywordsToDelete, tagsToDelete } = req.body;
+
+      // Admin only
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      if (!storeSheetId || (!keywordsToDelete && !tagsToDelete)) {
+        return res.status(400).json({ message: "Sheet ID and items to delete are required" });
+      }
+
+      const keywordsSet = new Set(keywordsToDelete || []);
+      const tagsSet = new Set(tagsToDelete || []);
+      let totalUpdates = 0;
+
+      // Process store sheet
+      const storeSheet = await storage.getGoogleSheetById(storeSheetId);
+      if (storeSheet) {
+        const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+        const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+        
+        if (storeRows.length > 0) {
+          const headers = storeRows[0];
+          const keywordCols = headers.map((h, i) => ({ h, i })).filter(({ h }) => 
+            h.toLowerCase().includes('keyword') || h.toLowerCase().includes('phrase')
+          );
+          const tagCols = headers.map((h, i) => ({ h, i })).filter(({ h }) => 
+            h.toLowerCase().includes('tag')
+          );
+          
+          // Update each row
+          for (let rowIdx = 1; rowIdx < storeRows.length; rowIdx++) {
+            const row = storeRows[rowIdx];
+            
+            // Process keyword columns
+            for (const { h, i } of keywordCols) {
+              const cellValue = row[i];
+              if (cellValue && String(cellValue).trim()) {
+                const items = String(cellValue).split(',').map(kw => kw.trim());
+                const filtered = items.filter(item => {
+                  let cleaned = item.replace(/^["'\[\]]+|["'\[\]]+$/g, '').replace(/^["']+|["']+$/g, '');
+                  return cleaned && !keywordsSet.has(cleaned);
+                });
+                
+                if (filtered.length !== items.length) {
+                  const newValue = filtered.join(', ');
+                  // Find column index for this header
+                  const colIdx = headers.indexOf(h);
+                  const cellAddress = `${storeSheet.sheetName}!${String.fromCharCode(65 + colIdx)}${rowIdx + 1}`;
+                  await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellAddress, [[newValue]]);
+                  totalUpdates++;
+                }
+              }
+            }
+            
+            // Process tag columns
+            for (const { h, i } of tagCols) {
+              const cellValue = row[i];
+              if (cellValue && String(cellValue).trim()) {
+                const items = String(cellValue).split(',').map(tag => tag.trim());
+                const filtered = items.filter(item => {
+                  let cleaned = item.replace(/^["'\[\]]+|["'\[\]]+$/g, '').replace(/^["']+|["']+$/g, '');
+                  return cleaned && !tagsSet.has(cleaned);
+                });
+                
+                if (filtered.length !== items.length) {
+                  const newValue = filtered.join(', ');
+                  // Find column index for this header
+                  const colIdx = headers.indexOf(h);
+                  const cellAddress = `${storeSheet.sheetName}!${String.fromCharCode(65 + colIdx)}${rowIdx + 1}`;
+                  await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellAddress, [[newValue]]);
+                  totalUpdates++;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Process tracker sheet if provided
+      if (trackerSheetId) {
+        const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
+        if (trackerSheet) {
+          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+          
+          if (trackerRows.length > 0) {
+            const headers = trackerRows[0];
+            const keywordCols = headers.map((h, i) => ({ h, i })).filter(({ h }) => 
+              h.toLowerCase().includes('keyword') || h.toLowerCase().includes('phrase')
+            );
+            const tagCols = headers.map((h, i) => ({ h, i })).filter(({ h }) => 
+              h.toLowerCase().includes('tag')
+            );
+            
+            for (let rowIdx = 1; rowIdx < trackerRows.length; rowIdx++) {
+              const row = trackerRows[rowIdx];
+              
+              for (const { h, i } of keywordCols) {
+                const cellValue = row[i];
+                if (cellValue && String(cellValue).trim()) {
+                  const items = String(cellValue).split(',').map(kw => kw.trim());
+                  const filtered = items.filter(item => {
+                    let cleaned = item.replace(/^["'\[\]]+|["'\[\]]+$/g, '').replace(/^["']+|["']+$/g, '');
+                    return cleaned && !keywordsSet.has(cleaned);
+                  });
+                  
+                  if (filtered.length !== items.length) {
+                    const newValue = filtered.join(', ');
+                    // Find column index for this header
+                    const colIdx = headers.indexOf(h);
+                    const cellAddress = `${trackerSheet.sheetName}!${String.fromCharCode(65 + colIdx)}${rowIdx + 1}`;
+                    await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, cellAddress, [[newValue]]);
+                    totalUpdates++;
+                  }
+                }
+              }
+              
+              for (const { h, i } of tagCols) {
+                const cellValue = row[i];
+                if (cellValue && String(cellValue).trim()) {
+                  const items = String(cellValue).split(',').map(tag => tag.trim());
+                  const filtered = items.filter(item => {
+                    let cleaned = item.replace(/^["'\[\]]+|["'\[\]]+$/g, '').replace(/^["']+|["']+$/g, '');
+                    return cleaned && !tagsSet.has(cleaned);
+                  });
+                  
+                  if (filtered.length !== items.length) {
+                    const newValue = filtered.join(', ');
+                    // Find column index for this header
+                    const colIdx = headers.indexOf(h);
+                    const cellAddress = `${trackerSheet.sheetName}!${String.fromCharCode(65 + colIdx)}${rowIdx + 1}`;
+                    await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, cellAddress, [[newValue]]);
+                    totalUpdates++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      res.json({ 
+        message: "Keywords/tags deleted successfully", 
+        updatedCells: totalUpdates,
+        deletedKeywords: keywordsToDelete?.length || 0,
+        deletedTags: tagsToDelete?.length || 0
+      });
+    } catch (error: any) {
+      console.error("Error deleting keywords/tags:", error);
+      res.status(500).json({ message: error.message || "Failed to delete keywords/tags" });
+    }
+  });
+
   // Update a cell in a Google Sheet
   app.put('/api/sheets/:id/update', isAuthenticatedCustom, async (req: any, res) => {
     try {
