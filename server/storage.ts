@@ -9,6 +9,7 @@ import {
   userIntegrations,
   dashboardCards,
   userPreferences,
+  bannedWords,
   type User,
   type UpsertUser,
   type Client,
@@ -85,6 +86,11 @@ export interface IStorage {
   // Dashboard operations
   getDashboardCardsByRole(role: string): Promise<any[]>;
   getDashboardStats(userId: string, role: string): Promise<any>;
+
+  // Banned words operations
+  getAllBannedWords(): Promise<any[]>;
+  addBannedWords(words: string[], type: string, createdBy: string): Promise<number>;
+  deleteBannedWord(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -426,6 +432,35 @@ export class DatabaseStorage implements IStorage {
     }
     
     return {};
+  }
+
+  // Banned words operations
+  async getAllBannedWords(): Promise<any[]> {
+    return await db.select().from(bannedWords).orderBy(bannedWords.word);
+  }
+
+  async addBannedWords(words: string[], type: string, createdBy: string): Promise<number> {
+    let added = 0;
+    for (const word of words) {
+      try {
+        await db.insert(bannedWords).values({
+          word: word.trim(),
+          type,
+          createdBy,
+        });
+        added++;
+      } catch (error: any) {
+        // Ignore duplicates (unique constraint violation)
+        if (!error.message?.includes('duplicate') && !error.message?.includes('unique')) {
+          console.error(`Error adding banned word "${word}":`, error);
+        }
+      }
+    }
+    return added;
+  }
+
+  async deleteBannedWord(id: string): Promise<void> {
+    await db.delete(bannedWords).where(eq(bannedWords.id, id));
   }
 }
 
