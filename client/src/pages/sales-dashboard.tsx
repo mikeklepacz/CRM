@@ -136,6 +136,14 @@ export default function SalesDashboard() {
     border: '#e5e7eb',
     bodyBackground: '',
     headerBackground: '',
+    statusColors: {
+      '1 – Contacted': { background: '#dbeafe', text: '#1e40af' },
+      '2 – Interested': { background: '#fef3c7', text: '#92400e' },
+      '3 – Sample Sent': { background: '#e0e7ff', text: '#3730a3' },
+      '4 – Follow-Up': { background: '#fed7aa', text: '#9a3412' },
+      '5 – Closed Won': { background: '#d1fae5', text: '#065f46' },
+      '6 – Closed Lost': { background: '#fee2e2', text: '#991b1b' },
+    },
   };
 
   const defaultDarkColors = {
@@ -147,6 +155,14 @@ export default function SalesDashboard() {
     border: '#404040',
     bodyBackground: '',
     headerBackground: '',
+    statusColors: {
+      '1 – Contacted': { background: '#1e3a8a', text: '#bfdbfe' },
+      '2 – Interested': { background: '#78350f', text: '#fef3c7' },
+      '3 – Sample Sent': { background: '#312e81', text: '#c7d2fe' },
+      '4 – Follow-Up': { background: '#7c2d12', text: '#fed7aa' },
+      '5 – Closed Won': { background: '#064e3b', text: '#a7f3d0' },
+      '6 – Closed Lost': { background: '#7f1d1d', text: '#fecaca' },
+    },
   };
 
   const [lightModeColors, setLightModeColors] = useState(defaultLightColors);
@@ -287,6 +303,7 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground?: string;
       headerBackground?: string;
+      statusColors?: { [status: string]: { background: string; text: string } };
     };
     lightModeColors?: {
       background: string;
@@ -297,6 +314,7 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground: string;
       headerBackground: string;
+      statusColors?: { [status: string]: { background: string; text: string } };
     };
     darkModeColors?: {
       background: string;
@@ -307,6 +325,7 @@ export default function SalesDashboard() {
       border: string;
       bodyBackground: string;
       headerBackground: string;
+      statusColors?: { [status: string]: { background: string; text: string } };
     };
     // Add alignment preferences
     textAlign?: 'left' | 'center' | 'right' | 'justify';
@@ -1662,137 +1681,56 @@ export default function SalesDashboard() {
                           <p className="text-xs text-muted-foreground">Customize status dropdown colors (background and text)</p>
 
                           <div className="space-y-3">
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">1 - Contacted</Label>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Background</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#e5e7eb"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
+                            {statusOptions.map((status) => {
+                              const statusColor = customColors.statusColors?.[status] || { background: '#e5e7eb', text: '#1f2937' };
+                              return (
+                                <div key={status} className="space-y-2">
+                                  <Label className="text-sm font-medium">{status}</Label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Background</Label>
+                                      <input
+                                        type="color"
+                                        value={statusColor.background}
+                                        onChange={(e) => {
+                                          setCustomColors({
+                                            ...customColors,
+                                            statusColors: {
+                                              ...customColors.statusColors,
+                                              [status]: {
+                                                ...statusColor,
+                                                background: e.target.value,
+                                              }
+                                            }
+                                          });
+                                        }}
+                                        className="h-8 w-full rounded cursor-pointer border mt-1"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Text</Label>
+                                      <input
+                                        type="color"
+                                        value={statusColor.text}
+                                        onChange={(e) => {
+                                          setCustomColors({
+                                            ...customColors,
+                                            statusColors: {
+                                              ...customColors.statusColors,
+                                              [status]: {
+                                                ...statusColor,
+                                                text: e.target.value,
+                                              }
+                                            }
+                                          });
+                                        }}
+                                        className="h-8 w-full rounded cursor-pointer border mt-1"
+                                      />
+                                    </div>
+                                  </div>
                                 </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Text</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#1f2937"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">2 - Interested</Label>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Background</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#dbeafe"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Text</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#1e40af"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">3 - Sample Sent</Label>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Background</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#fef3c7"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Text</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#92400e"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">4 - Follow-Up</Label>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Background</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#fed7aa"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Text</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#7c2d12"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">5 - Closed Won</Label>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Background</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#bbf7d0"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Text</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#14532d"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">6 - Closed Lost</Label>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Background</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#fecaca"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Text</Label>
-                                  <input
-                                    type="color"
-                                    defaultValue="#7f1d1d"
-                                    className="h-8 w-full rounded cursor-pointer border mt-1"
-                                  />
-                                </div>
-                              </div>
-                            </div>
+                              );
+                            })}
                           </div>
                         </div>
 
@@ -2251,6 +2189,11 @@ export default function SalesDashboard() {
                       const minRequiredHeight = lineHeight + verticalPadding;
                       const effectiveHeight = Math.max(rowHeight, minRequiredHeight);
 
+                      // Get row's status value for coloring
+                      const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
+                      const rowStatus = statusColumns.length > 0 ? row[statusColumns[0]] : null;
+                      const rowStatusColor = colorRowByStatus && rowStatus && customColors.statusColors?.[rowStatus];
+
                       return (
                         <TableRow
                           key={rowKey}
@@ -2260,6 +2203,8 @@ export default function SalesDashboard() {
                           style={{
                             fontSize: `${fontSize}px`,
                             height: `${effectiveHeight}px`,
+                            backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
+                            color: rowStatusColor ? rowStatusColor.text : undefined,
                           }}
                         >
                           {visibleHeaders.map((header: string) => {
@@ -2374,15 +2319,22 @@ export default function SalesDashboard() {
                                           <SelectValue placeholder="Select status..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          {statusOptions.map((status) => (
-                                            <SelectItem
-                                              key={status}
-                                              value={status}
-                                              data-testid={`option-status-${status}`}
-                                            >
-                                              {status}
-                                            </SelectItem>
-                                          ))}
+                                          {statusOptions.map((status) => {
+                                            const statusColor = customColors.statusColors?.[status];
+                                            return (
+                                              <SelectItem
+                                                key={status}
+                                                value={status}
+                                                data-testid={`option-status-${status}`}
+                                                style={statusColor ? {
+                                                  backgroundColor: statusColor.background,
+                                                  color: statusColor.text,
+                                                } : undefined}
+                                              >
+                                                {status}
+                                              </SelectItem>
+                                            );
+                                          })}
                                         </SelectContent>
                                       </Select>
                                     ) : isStateColumn ? (
@@ -2565,15 +2517,22 @@ export default function SalesDashboard() {
                                           <SelectValue placeholder="Select status..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          {statusOptions.map((status) => (
-                                            <SelectItem
-                                              key={status}
-                                              value={status}
-                                              data-testid={`option-status-${status}`}
-                                            >
-                                              {status}
-                                            </SelectItem>
-                                          ))}
+                                          {statusOptions.map((status) => {
+                                            const statusColor = customColors.statusColors?.[status];
+                                            return (
+                                              <SelectItem
+                                                key={status}
+                                                value={status}
+                                                data-testid={`option-status-${status}`}
+                                                style={statusColor ? {
+                                                  backgroundColor: statusColor.background,
+                                                  color: statusColor.text,
+                                                } : undefined}
+                                              >
+                                                {status}
+                                              </SelectItem>
+                                            );
+                                          })}
                                         </SelectContent>
                                       </Select>
                                     ) : isStateColumn ? (

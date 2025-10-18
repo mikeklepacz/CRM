@@ -170,6 +170,7 @@ export const userPreferences = pgTable("user_preferences", {
     border: string;
     bodyBackground: string;
     headerBackground: string;
+    statusColors?: { [status: string]: { background: string; text: string } };
   }>(),
   darkModeColors: jsonb("dark_mode_colors").$type<{
     background: string;
@@ -180,6 +181,7 @@ export const userPreferences = pgTable("user_preferences", {
     border: string;
     bodyBackground: string;
     headerBackground: string;
+    statusColors?: { [status: string]: { background: string; text: string } };
   }>(),
   textAlign: varchar("text_align", { length: 20 }),
   verticalAlign: varchar("vertical_align", { length: 20 }),
