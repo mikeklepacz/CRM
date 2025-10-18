@@ -1558,7 +1558,7 @@ export default function SalesDashboard() {
                         Currently editing colors for {resolvedTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
                       </p>
                       <div className="space-y-4">
-                        {(['background', 'tableTextColor', 'text', 'primary', 'secondary', 'accent', 'border'] as const).map((field) => {
+                        {(['background', 'tableTextColor', 'text', 'primary', 'secondary', 'accent', 'border', 'bodyBackground', 'headerBackground'] as const).map((field) => {
                           const fieldLabels = {
                             background: 'Table Background',
                             tableTextColor: 'Table Text Color',
@@ -1567,6 +1567,8 @@ export default function SalesDashboard() {
                             secondary: 'Secondary Button',
                             accent: 'Accent',
                             border: 'Border',
+                            bodyBackground: 'Page Background',
+                            headerBackground: 'Header Background',
                           };
 
                           const fieldDescriptions = {
@@ -1577,11 +1579,13 @@ export default function SalesDashboard() {
                             secondary: 'Secondary buttons and card backgrounds',
                             accent: 'Accent elements and secondary highlights',
                             border: 'Border lines between rows and card edges',
+                            bodyBackground: 'Main page body background (leave empty for theme default)',
+                            headerBackground: 'Top header background (leave empty for theme default)',
                           };
 
-                          const currentColor = customColors[field];
+                          const currentColor = customColors[field] || (field === 'bodyBackground' ? '#f9fafb' : field === 'headerBackground' ? '#ffffff' : '#000000');
                           const hslColor = hexToHsl(currentColor);
-                          const hslString = `${Math.round(hslColor.h)}° ${Math.round(hslColor.s)}% ${Math.round(hslColor.l)}%`;
+                          const hslString = customColors[field] ? `${Math.round(hslColor.h)}° ${Math.round(hslColor.s)}% ${Math.round(hslColor.l)}%` : '(Theme Default)';
 
                           return (
                             <div key={field} className="space-y-2">
@@ -1700,7 +1704,9 @@ export default function SalesDashboard() {
                                           size="sm"
                                           onClick={() => {
                                             if (presetName.trim()) {
-                                              setColorPresets([...colorPresets, { name: presetName, color: currentColor }]);
+                                              const colorValue = customColors[field as keyof typeof customColors];
+                                              const colorString = typeof colorValue === 'string' ? colorValue : JSON.stringify(colorValue);
+                                              setColorPresets([...colorPresets, { name: presetName, color: colorString }]);
                                               setPresetName("");
                                               toast({ title: "Preset saved", description: `"${presetName}" added to presets` });
                                             }
@@ -1716,10 +1722,16 @@ export default function SalesDashboard() {
                                       variant="ghost"
                                       size="sm"
                                       className="w-full"
-                                      onClick={() => setCustomColors({ ...customColors, [field]: defaultLightColors[field] })}
+                                      onClick={() => {
+                                        if (field === 'bodyBackground' || field === 'headerBackground') {
+                                          setCustomColors({ ...customColors, [field]: '' });
+                                        } else {
+                                          setCustomColors({ ...customColors, [field]: defaultLightColors[field] });
+                                        }
+                                      }}
                                     >
                                       <RotateCcw className="h-4 w-4 mr-2" />
-                                      Reset to Default
+                                      {field === 'bodyBackground' || field === 'headerBackground' ? 'Reset to Theme Default' : 'Reset to Default'}
                                     </Button>
                                   </div>
                                 </PopoverContent>
@@ -1729,274 +1741,6 @@ export default function SalesDashboard() {
                         })}
 
                         <Separator className="my-4" />
-
-                        <div className="space-y-2">
-                          <Label htmlFor="color-secondary" className="text-sm font-medium">Secondary/Card</Label>
-                          <p className="text-xs text-muted-foreground">Card backgrounds and secondary buttons</p>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-secondary">
-                                <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.secondary }} />
-                                <span className="font-mono text-sm">{customColors.secondary}</span>
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80" align="start">
-                              <div className="space-y-4">
-                                <HslColorPicker
-                                  color={hexToHsl(customColors.secondary)}
-                                  onChange={(color) => {
-                                    const hexColor = hslToHex(color.h, color.s, color.l);
-                                    setCustomColors({ ...customColors, secondary: hexColor });
-                                  }}
-                                />
-                                <Input
-                                  value={customColors.secondary}
-                                  onChange={(e) => setCustomColors({ ...customColors, secondary: e.target.value })}
-                                  className="font-mono text-sm"
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full"
-                                  onClick={() => setCustomColors({ ...customColors, secondary: defaultLightColors.secondary })}
-                                >
-                                  <RotateCcw className="h-4 w-4 mr-2" />
-                                  Reset to Default
-                                </Button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="color-border" className="text-sm font-medium">Border</Label>
-                          <p className="text-xs text-muted-foreground">Lines between table rows and card edges</p>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-border">
-                                <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.border }} />
-                                <span className="font-mono text-sm">{customColors.border}</span>
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80" align="start">
-                              <div className="space-y-4">
-                                <HslColorPicker
-                                  color={hexToHsl(customColors.border)}
-                                  onChange={(color) => {
-                                    const hexColor = hslToHex(color.h, color.s, color.l);
-                                    setCustomColors({ ...customColors, border: hexColor });
-                                  }}
-                                />
-                                <Input
-                                  value={customColors.border}
-                                  onChange={(e) => setCustomColors({ ...customColors, border: e.target.value })}
-                                  className="font-mono text-sm"
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="w-full"
-                                  onClick={() => setCustomColors({ ...customColors, border: defaultLightColors.border })}
-                                >
-                                  <RotateCcw className="h-4 w-4 mr-2" />
-                                  Reset to Default
-                                </Button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-
-                        <Separator className="my-4" />
-
-                        <div className="space-y-2">
-                          <Label htmlFor="color-body-bg" className="text-sm font-medium">Page Background</Label>
-                          <p className="text-xs text-muted-foreground">Main page body background (leave empty for theme default)</p>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-body-bg">
-                                <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.bodyBackground || '#f9fafb' }} />
-                                <span className="font-mono text-sm">
-                                  {customColors.bodyBackground ? (() => {
-                                    const hsl = hexToHsl(customColors.bodyBackground);
-                                    return `${Math.round(hsl.h)}° ${Math.round(hsl.s)}% ${Math.round(hsl.l)}%`;
-                                  })() : '(Theme Default)'}
-                                </span>
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80" align="start">
-                              <div className="space-y-4">
-                                <HslColorPicker
-                                  color={hexToHsl(customColors.bodyBackground || '#f9fafb')}
-                                  onChange={(color) => {
-                                    const hexColor = hslToHex(color.h, color.s, color.l);
-                                    setCustomColors({ ...customColors, bodyBackground: hexColor });
-                                  }}
-                                />
-                                {customColors.bodyBackground && (() => {
-                                  const hsl = hexToHsl(customColors.bodyBackground);
-                                  return (
-                                    <>
-                                      <div className="space-y-2">
-                                        <Label className="text-xs">HSL Values</Label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                          <div>
-                                            <Label className="text-xs text-muted-foreground">H</Label>
-                                            <Input
-                                              type="number"
-                                              min="0"
-                                              max="360"
-                                              value={Math.round(hsl.h)}
-                                              onChange={(e) => {
-                                                const h = parseInt(e.target.value) || 0;
-                                                const hexColor = hslToHex(h, hsl.s, hsl.l);
-                                                setCustomColors({ ...customColors, bodyBackground: hexColor });
-                                              }}
-                                              className="font-mono text-xs"
-                                            />
-                                          </div>
-                                          <div>
-                                            <Label className="text-xs text-muted-foreground">S%</Label>
-                                            <Input
-                                              type="number"
-                                              min="0"
-                                              max="100"
-                                              value={Math.round(hsl.s)}
-                                              onChange={(e) => {
-                                                const s = parseInt(e.target.value) || 0;
-                                                const hexColor = hslToHex(hsl.h, s, hsl.l);
-                                                setCustomColors({ ...customColors, bodyBackground: hexColor });
-                                              }}
-                                              className="font-mono text-xs"
-                                            />
-                                          </div>
-                                          <div>
-                                            <Label className="text-xs text-muted-foreground">L%</Label>
-                                            <Input
-                                              type="number"
-                                              min="0"
-                                              max="100"
-                                              value={Math.round(hsl.l)}
-                                              onChange={(e) => {
-                                                const l = parseInt(e.target.value) || 0;
-                                                const hexColor = hslToHex(hsl.h, hsl.s, l);
-                                                setCustomColors({ ...customColors, bodyBackground: hexColor });
-                                              }}
-                                              className="font-mono text-xs"
-                                            />
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="w-full"
-                                        onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
-                                      >
-                                        <RotateCcw className="h-4 w-4 mr-2" />
-                                        Reset to Theme Default
-                                      </Button>
-                                    </>
-                                  );
-                                })()}
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="color-header-bg" className="text-sm font-medium">Header Background</Label>
-                              <p className="text-xs text-muted-foreground">Top header background (leave empty for theme default)</p>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-color-header-bg">
-                                    <div className="h-6 w-6 rounded border" style={{ backgroundColor: customColors.headerBackground || '#ffffff' }} />
-                                    <span className="font-mono text-sm">
-                                      {customColors.headerBackground ? (() => {
-                                        const hsl = hexToHsl(customColors.headerBackground);
-                                        return `${Math.round(hsl.h)}° ${Math.round(hsl.s)}% ${Math.round(hsl.l)}%`;
-                                      })() : '(Theme Default)'}
-                                    </span>
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80" align="start">
-                                  <div className="space-y-4">
-                                    <HslColorPicker
-                                      color={hexToHsl(customColors.headerBackground || '#ffffff')}
-                                      onChange={(color) => {
-                                        const hexColor = hslToHex(color.h, color.s, color.l);
-                                        setCustomColors({ ...customColors, headerBackground: hexColor });
-                                      }}
-                                    />
-                                    {customColors.headerBackground && (() => {
-                                      const hsl = hexToHsl(customColors.headerBackground);
-                                      return (
-                                        <div className="space-y-2">
-                                          <Label className="text-xs">HSL Values</Label>
-                                          <div className="grid grid-cols-3 gap-2">
-                                            <div>
-                                              <Label className="text-xs text-muted-foreground">H</Label>
-                                              <Input
-                                                type="number"
-                                                min="0"
-                                                max="360"
-                                                value={Math.round(hsl.h)}
-                                                onChange={(e) => {
-                                                  const h = parseInt(e.target.value) || 0;
-                                                  const hexColor = hslToHex(h, hsl.s, hsl.l);
-                                                  setCustomColors({ ...customColors, headerBackground: hexColor });
-                                                }}
-                                                className="font-mono text-xs"
-                                              />
-                                            </div>
-                                            <div>
-                                              <Label className="text-xs text-muted-foreground">S%</Label>
-                                              <Input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                value={Math.round(hsl.s)}
-                                                onChange={(e) => {
-                                                  const s = parseInt(e.target.value) || 0;
-                                                  const hexColor = hslToHex(hsl.h, s, hsl.l);
-                                                  setCustomColors({ ...customColors, headerBackground: hexColor });
-                                                }}
-                                                className="font-mono text-xs"
-                                              />
-                                            </div>
-                                            <div>
-                                              <Label className="text-xs text-muted-foreground">L%</Label>
-                                              <Input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                value={Math.round(hsl.l)}
-                                                onChange={(e) => {
-                                                  const l = parseInt(e.target.value) || 0;
-                                                  const hexColor = hslToHex(hsl.h, hsl.s, l);
-                                                  setCustomColors({ ...customColors, headerBackground: hexColor });
-                                                }}
-                                                className="font-mono text-xs"
-                                              />
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="w-full"
-                                      onClick={() => setCustomColors({ ...customColors, headerBackground: '' })}
-                                    >
-                                      <RotateCcw className="h-4 w-4 mr-2" />
-                                      Reset to Theme Default
-                                    </Button>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-
-                            <Separator className="my-4" />
 
                             <div className="space-y-3">
                               <h5 className="font-medium text-sm">Status Colors</h5>
