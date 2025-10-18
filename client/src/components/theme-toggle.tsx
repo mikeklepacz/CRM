@@ -20,9 +20,9 @@ export function ThemeToggle({ showLabel = false, variant = "ghost" }: ThemeToggl
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant={variant} size={showLabel ? "default" : "icon"} data-testid="button-theme-toggle">
-          <Sun className="h-4 w-4 scale-100 transition-all dark:scale-0" />
-          <MoonStar className="absolute h-4 w-4 scale-0 transition-all dark:scale-100" />
-          {showLabel && <span className="ml-2">Theme</span>}
+          <Sun className="h-4 w-4 dark:hidden" />
+          <MoonStar className="h-4 w-4 hidden dark:block" />
+          {showLabel && <span>Theme</span>}
           {!showLabel && <span className="sr-only">Toggle theme</span>}
         </Button>
       </DropdownMenuTrigger>
