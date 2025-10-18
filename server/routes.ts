@@ -1504,10 +1504,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Count keyword frequencies
+      console.log('=== KEYWORD STATS DEBUG ===');
+      console.log('All headers:', allHeaders);
       const keywordFreq = new Map<string, number>();
       const keywordColumns = allHeaders.filter(h => 
         h.toLowerCase().includes('keyword') || h.toLowerCase().includes('phrase')
       );
+      console.log('Keyword columns found:', keywordColumns);
       
       const allData = [
         ...storeData.map((row, idx) => {
@@ -1541,6 +1544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Count tag frequencies
       const tagFreq = new Map<string, number>();
       const tagColumns = allHeaders.filter(h => h.toLowerCase().includes('tag'));
+      console.log('Tag columns found:', tagColumns);
       
       allData.forEach(row => {
         tagColumns.forEach(col => {
@@ -1566,6 +1570,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tags = Array.from(tagFreq.entries())
         .map(([tag, count]) => ({ tag, count }))
         .sort((a, b) => b.count - a.count);
+      
+      console.log('Total keywords found:', keywords.length);
+      console.log('Total tags found:', tags.length);
+      console.log('=== END KEYWORD STATS DEBUG ===');
       
       res.json({ keywords, tags, keywordColumns, tagColumns });
     } catch (error: any) {
