@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
 import { ContactActionDialog } from "@/components/contact-action-dialog";
+import { AddressEditDialog } from "@/components/address-edit-dialog";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -2213,9 +2214,12 @@ export default function SalesDashboard() {
                             const isTagColumn = header.toLowerCase().includes('tag');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
+                            const isAddressColumn = header.toLowerCase().includes('address') || 
+                                                   header.toLowerCase().includes('city') || 
+                                                   (header.toLowerCase().includes('state') && header.toLowerCase().includes('city')) ||
+                                                   header.toLowerCase().includes('point of contact');
 
                             // Determine if this column should allow text wrapping
-                            const isAddressColumn = header.toLowerCase().includes('address') || header.toLowerCase().includes('street');
                             const isNotesColumn = header.toLowerCase().includes('note') || header.toLowerCase().includes('comment');
                             const shouldWrap = isAddressColumn || isNotesColumn || isHoursColumn || isKeywordColumn || isTagColumn;
 
@@ -2376,7 +2380,29 @@ export default function SalesDashboard() {
                                       </Popover>
                                     ) : (
                                       <div className="flex items-center gap-2">
-                                        {isPhoneColumn ? (
+                                        {isAddressColumn ? (
+                                          <>
+                                            <span 
+                                              className="cursor-pointer hover:text-primary"
+                                              data-testid={`text-cell-${rowKey}-${header}`}
+                                            >
+                                              {displayValue}
+                                            </span>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-8 w-8 flex-shrink-0"
+                                              onClick={() => setAddressEditDialog({
+                                                open: true,
+                                                row: row,
+                                              })}
+                                              data-testid={`button-edit-address-${rowKey}-${header}`}
+                                              title="Edit Address"
+                                            >
+                                              <Maximize2 className="h-4 w-4" />
+                                            </Button>
+                                          </>
+                                        ) : isPhoneColumn ? (
                                           <button
                                             onClick={() => setContactActionDialog({
                                               open: true,
@@ -2717,6 +2743,17 @@ export default function SalesDashboard() {
           trackerSheetId={trackerSheetId}
           joinColumn={joinColumn}
           userEmail={currentUser?.email || ''}
+        />
+      )}
+
+      {/* Address Edit Dialog */}
+      {addressEditDialog && (
+        <AddressEditDialog
+          open={addressEditDialog.open}
+          onOpenChange={(open) => !open && setAddressEditDialog(null)}
+          row={addressEditDialog.row}
+          trackerSheetId={trackerSheetId}
+          joinColumn={joinColumn}
         />
       )}
       </div>
