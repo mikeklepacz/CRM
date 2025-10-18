@@ -14,7 +14,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
@@ -87,6 +88,7 @@ export default function SalesDashboard() {
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [keywordSearchTerm, setKeywordSearchTerm] = useState("");
+  const [contextMenuColumn, setContextMenuColumn] = useState<string | null>(null);
   const [customColors, setCustomColors] = useState({
     background: '#ffffff',
     text: '#000000',
@@ -1655,27 +1657,93 @@ export default function SalesDashboard() {
                           style={{ width: columnWidths[header] || 200 }}
                         >
                           <div className="flex items-center justify-between pr-4">
-                            <button
-                              onClick={() => handleSort(header)}
-                              className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer flex-1"
-                              data-testid={`button-sort-${header}`}
-                            >
-                              <span>
-                                {header}
-                                {editableColumns.includes(header) && (
-                                  <span className="ml-1 text-xs text-muted-foreground">✏️</span>
-                                )}
-                              </span>
-                              {sortColumn === header ? (
-                                sortDirection === 'asc' ? (
-                                  <ArrowUp className="h-4 w-4" />
-                                ) : (
-                                  <ArrowDown className="h-4 w-4" />
-                                )
-                              ) : (
-                                <ArrowUpDown className="h-4 w-4 opacity-30" />
-                              )}
-                            </button>
+                            <DropdownMenu open={contextMenuColumn === header} onOpenChange={(open) => setContextMenuColumn(open ? header : null)}>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  onClick={() => handleSort(header)}
+                                  onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setContextMenuColumn(header);
+                                  }}
+                                  className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer flex-1"
+                                  data-testid={`button-sort-${header}`}
+                                >
+                                  <span>
+                                    {header}
+                                    {editableColumns.includes(header) && (
+                                      <span className="ml-1 text-xs text-muted-foreground">✏️</span>
+                                    )}
+                                  </span>
+                                  {sortColumn === header ? (
+                                    sortDirection === 'asc' ? (
+                                      <ArrowUp className="h-4 w-4" />
+                                    ) : (
+                                      <ArrowDown className="h-4 w-4" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="h-4 w-4 opacity-30" />
+                                  )}
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start" className="w-48">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSortColumn(header);
+                                    setSortDirection('asc');
+                                    setContextMenuColumn(null);
+                                  }}
+                                  data-testid={`menu-sort-asc-${header}`}
+                                >
+                                  <SortAsc className="mr-2 h-4 w-4" />
+                                  Sort A → Z
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSortColumn(header);
+                                    setSortDirection('desc');
+                                    setContextMenuColumn(null);
+                                  }}
+                                  data-testid={`menu-sort-desc-${header}`}
+                                >
+                                  <SortDesc className="mr-2 h-4 w-4" />
+                                  Sort Z → A
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    toggleColumn(header);
+                                    setContextMenuColumn(null);
+                                  }}
+                                  data-testid={`menu-hide-${header}`}
+                                >
+                                  <EyeOff className="mr-2 h-4 w-4" />
+                                  Hide Column
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    moveColumnLeft(header);
+                                    setContextMenuColumn(null);
+                                  }}
+                                  disabled={columnOrder.filter((h: string) => !['error', 'title'].includes(h.toLowerCase())).indexOf(header) === 0}
+                                  data-testid={`menu-move-left-${header}`}
+                                >
+                                  <ChevronLeft className="mr-2 h-4 w-4" />
+                                  Move Left
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    moveColumnRight(header);
+                                    setContextMenuColumn(null);
+                                  }}
+                                  disabled={columnOrder.filter((h: string) => !['error', 'title'].includes(h.toLowerCase())).indexOf(header) === columnOrder.filter((h: string) => !['error', 'title'].includes(h.toLowerCase())).length - 1}
+                                  data-testid={`menu-move-right-${header}`}
+                                >
+                                  <ChevronRight className="mr-2 h-4 w-4" />
+                                  Move Right
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <div
                               className="absolute right-0 top-0 bottom-0 w-4 cursor-col-resize hover:bg-primary/50 transition-colors z-20 flex items-center justify-center"
                               onMouseDown={(e) => {
