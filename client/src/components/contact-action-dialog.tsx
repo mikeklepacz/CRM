@@ -65,7 +65,6 @@ export function ContactActionDialog({
     }
   }, [open, contactType, contactValue]);
 
-
   const saveMutation = useMutation({
     mutationFn: async () => {
       const linkValue = row[joinColumn];

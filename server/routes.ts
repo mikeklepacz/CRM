@@ -1811,6 +1811,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // === Store Details Endpoints ===
+  app.get('/api/store/:storeId', isAuthenticatedCustom, async (req: any, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+
+      const { storeId } = req.params;
+
+      // Decode the storeId (it could be a link or row index)
+      const decodedId = decodeURIComponent(storeId);
+
+      // Find the relevant store sheet and get merged data
+      const sheets = await storage.getAllGoogleSheets();
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
+
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store sheet not found' });
+      }
+
+      // Fetch merged data. Assuming joinColumn is 'link' for store lookup.
+      // If 'link' is not the join column, this part might need adjustment.
+      const mergedData = await storage.getMergedData(storeSheet.id, '', 'link'); 
+
+      // Find the store by link or row index
+      const store = mergedData.data.find((row: any) => 
+        row.link === decodedId || 
+        String(row._storeRowIndex) === decodedId
+      );
+
+      if (!store) {
+        return res.status(404).json({ message: 'Store not found' });
+      }
+
+      res.json(store);
+    } catch (error) {
+      console.error("Error fetching store details:", error);
+      next(error);
+    }
+  });
+
+  app.put('/api/store/:storeId', isAuthenticatedCustom, async (req: any, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+
+      const { storeId } = req.params;
+      const updates = req.body;
+
+      // Find the relevant store sheet
+      const sheets = await storage.getAllGoogleSheets();
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
+
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store sheet not found' });
+      }
+
+      // Get merged data to find row index. Assuming 'link' is the join column for lookup.
+      const mergedData = await storage.getMergedData(storeSheet.id, '', 'link'); 
+      const decodedId = decodeURIComponent(storeId);
+      const store = mergedData.data.find((row: any) => 
+        row.link === decodedId || 
+        String(row._storeRowIndex) === decodedId
+      );
+
+      if (!store || !store._storeRowIndex) {
+        return res.status(404).json({ message: 'Store not found or has no row index' });
+      }
+
+      // Map form fields to column names in the Google Sheet
+      const columnMapping: Record<string, string> = {
+        name: 'name',
+        type: 'type',
+        link: 'link',
+        about: 'about',
+        member_since: 'member_since',
+        address: 'address',
+        city: 'city',
+        state: 'state',
+        phone: 'phone',
+        website: 'website',
+        email: 'email',
+        followers: 'followers',
+        tags: 'tags',
+        hours: 'hours',
+        keywords: 'Keywords / Phrases Found',
+        vibe_score: 'Vibe Score',
+        sales_ready_summary: 'Sales-ready Summary',
+      };
+
+      // Prepare promises for updating each field
+      const updatePromises = Object.entries(updates).map(async ([field, value]) => {
+        const columnName = columnMapping[field];
+        if (columnName) {
+          // Use the imported sheetsService which should contain the updateCell function
+          // Assuming sheetsService is globally available or imported elsewhere
+          // If not, it needs to be passed or imported here.
+          // For now, assuming googleSheets module has the necessary function.
+          try {
+            await googleSheets.writeSheetData(
+              req.user.isPasswordAuth ? req.user.id : req.user.claims.sub, // userId
+              storeSheet.spreadsheetId,
+              `${storeSheet.sheetName}!${columnName}${store._storeRowIndex}`, // Range format: SheetName!ColumnRow
+              [[value]] // Value to write
+            );
+          } catch (error) {
+            console.error(`Error updating ${columnName} for store ${storeId}:`, error);
+            throw error; // Re-throw to be caught by Promise.all
+          }
+        }
+      });
+
+      await Promise.all(updatePromises);
+
+      res.json({ success: true, message: 'Store updated successfully' });
+    } catch (error) {
+      console.error("Error updating store details:", error);
+      next(error);
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

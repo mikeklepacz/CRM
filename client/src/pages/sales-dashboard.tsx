@@ -415,6 +415,7 @@ export default function SalesDashboard() {
     statusOptions?: string[];
     colorRowByStatus?: boolean;
     colorPresets?: Array<{name: string, color: string}>;
+    freezeFirstColumn?: boolean;
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
@@ -3058,6 +3059,30 @@ export default function SalesDashboard() {
                                         <Phone className="h-4 w-4" />
                                         <span>{displayValue}</span>
                                       </button>
+                                    ) : isEmailColumn && cellValue ? (
+                                      <button
+                                        onClick={() => setContactActionDialog({
+                                          open: true,
+                                          contactType: 'email',
+                                          contactValue: cellValue,
+                                          row: row,
+                                        })}
+                                        className="flex items-center gap-1 hover:underline"
+                                        style={{ color: customColors.primary }}
+                                        data-testid={`link-email-${rowKey}-${header}`}
+                                      >
+                                        <Mail className="h-4 w-4" />
+                                        <span>{displayValue}</span>
+                                      </button>
+                                    ) : (header.toLowerCase() === 'name' || header.toLowerCase() === 'company') && cellValue ? (
+                                      <a
+                                        href={`/store/${encodeURIComponent(row.link || rowKey)}`}
+                                        className="hover:underline font-medium"
+                                        style={{ color: customColors.primary }}
+                                        data-testid={`link-store-${rowKey}-${header}`}
+                                      >
+                                        {displayValue}
+                                      </a>
                                     ) : isWebsiteColumn && cellValue ? (
                                       <a
                                         href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}

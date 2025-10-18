@@ -12,6 +12,7 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import AgentDashboard from "@/pages/agent-dashboard";
 import Settings from "@/pages/settings";
 import SalesDashboard from "@/pages/sales-dashboard";
+import StoreDetails from "@/pages/store-details"; // Import StoreDetails component
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -42,6 +43,7 @@ function Router() {
       <Switch>
         <Route path="/settings" component={Settings} />
         <Route path="/sales" component={SalesDashboard} />
+        <Route path="/store/:storeId" component={StoreDetails} /> {/* New route for store details */}
         <Route path="/admin">
           {user?.role === 'admin' ? <AdminDashboard /> : <NotFound />}
         </Route>
