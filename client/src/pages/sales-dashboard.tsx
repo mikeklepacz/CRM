@@ -1786,69 +1786,73 @@ export default function SalesDashboard() {
                                 {customColors.bodyBackground && (() => {
                                   const hsl = hexToHsl(customColors.bodyBackground);
                                   return (
-                                    <div className="space-y-2">
-                                      <Label className="text-xs">HSL Values</Label>
-                                      <div className="grid grid-cols-3 gap-2">
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">H</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="360"
-                                            value={Math.round(hsl.h)}
-                                            onChange={(e) => {
-                                              const h = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(h, hsl.s, hsl.l);
-                                              setCustomColors({ ...customColors, bodyBackground: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">S%</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={Math.round(hsl.s)}
-                                            onChange={(e) => {
-                                              const s = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(hsl.h, s, hsl.l);
-                                              setCustomColors({ ...customColors, bodyBackground: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">L%</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={Math.round(hsl.l)}
-                                            onChange={(e) => {
-                                              const l = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(hsl.h, hsl.s, l);
-                                              setCustomColors({ ...customColors, bodyBackground: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
+                                    <>
+                                      <div className="space-y-2">
+                                        <Label className="text-xs">HSL Values</Label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          <div>
+                                            <Label className="text-xs text-muted-foreground">H</Label>
+                                            <Input
+                                              type="number"
+                                              min="0"
+                                              max="360"
+                                              value={Math.round(hsl.h)}
+                                              onChange={(e) => {
+                                                const h = parseInt(e.target.value) || 0;
+                                                const hexColor = hslToHex(h, hsl.s, hsl.l);
+                                                setCustomColors({ ...customColors, bodyBackground: hexColor });
+                                              }}
+                                              className="font-mono text-xs"
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-xs text-muted-foreground">S%</Label>
+                                            <Input
+                                              type="number"
+                                              min="0"
+                                              max="100"
+                                              value={Math.round(hsl.s)}
+                                              onChange={(e) => {
+                                                const s = parseInt(e.target.value) || 0;
+                                                const hexColor = hslToHex(hsl.h, s, hsl.l);
+                                                setCustomColors({ ...customColors, bodyBackground: hexColor });
+                                              }}
+                                              className="font-mono text-xs"
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-xs text-muted-foreground">L%</Label>
+                                            <Input
+                                              type="number"
+                                              min="0"
+                                              max="100"
+                                              value={Math.round(hsl.l)}
+                                              onChange={(e) => {
+                                                const l = parseInt(e.target.value) || 0;
+                                                const hexColor = hslToHex(hsl.h, hsl.s, l);
+                                                setCustomColors({ ...customColors, bodyBackground: hexColor });
+                                              }}
+                                              className="font-mono text-xs"
+                                            />
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="w-full"
-                                      onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
-                                    >
-                                      <RotateCcw className="h-4 w-4 mr-2" />
-                                      Reset to Theme Default
-                                    </Button>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full"
+                                        onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
+                                      >
+                                        <RotateCcw className="h-4 w-4 mr-2" />
+                                        Reset to Theme Default
+                                      </Button>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
 
                             <div className="space-y-2">
                               <Label htmlFor="color-header-bg" className="text-sm font-medium">Header Background</Label>
