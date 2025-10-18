@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLocation } from "wouter";
@@ -1073,8 +1073,8 @@ export default function SalesDashboard() {
     }
   };
 
-  // Filter and sort data
-  const filteredData = (() => {
+  // Filter and sort data (memoized for performance)
+  const filteredData = useMemo(() => {
     // CRITICAL: If any filter has 0 selections, show NOTHING (not everything)
     if ((allTags.length > 0 && selectedTags.size === 0) ||
         (allKeywords.length > 0 && selectedKeywords.size === 0) ||
@@ -1207,7 +1207,21 @@ export default function SalesDashboard() {
     }
 
     return filtered;
-  })();
+  }, [
+    data,
+    searchTerm,
+    nameFilter,
+    cityFilter,
+    selectedTags,
+    selectedKeywords,
+    selectedStates,
+    allTags.length,
+    allKeywords.length,
+    allStates.length,
+    headers,
+    sortColumn,
+    sortDirection
+  ]);
 
   const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
   const hasUnsavedChanges = Object.keys(editedCells).length > 0;
