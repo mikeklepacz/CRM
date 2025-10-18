@@ -9,6 +9,7 @@ import {
   userIntegrations,
   dashboardCards,
   userPreferences,
+  bannedWords,
   type User,
   type UpsertUser,
   type Client,
