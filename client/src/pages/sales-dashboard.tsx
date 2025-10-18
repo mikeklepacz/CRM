@@ -964,28 +964,38 @@ export default function SalesDashboard() {
 
           {/* Controls */}
           {storeSheetId && trackerSheetId && (
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <Input
-                placeholder="Search all columns..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-                data-testid="input-search"
-              />
+            <>
+              {/* Top Row: Search/Refresh + Display Settings Card */}
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                {/* Left side: Search and Refresh */}
+                <div className="flex items-center gap-2 flex-1 min-w-[300px]">
+                  <Input
+                    placeholder="Search all columns..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="flex-1 max-w-md"
+                    data-testid="input-search"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => refetch()}
+                    disabled={isLoading}
+                    data-testid="button-refresh"
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Refresh
+                  </Button>
+                </div>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => refetch()}
-                  disabled={isLoading}
-                  data-testid="button-refresh"
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Refresh
-                </Button>
-
-                {/* Font Size Dropdown */}
-                <div className="flex items-center gap-2">
+                {/* Right side: Display Settings Card */}
+                <Card className="w-auto">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Display Settings</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Font Size Dropdown */}
+                      <div className="flex items-center gap-2">
                   <Type className="h-4 w-4 text-muted-foreground" />
                   <Select 
                     value={fontSize.toString()} 
@@ -1057,8 +1067,8 @@ export default function SalesDashboard() {
                   </PopoverContent>
                 </Popover>
 
-                {/* Theme Toggle */}
-                <ThemeToggle />
+                      {/* Theme Toggle with Label */}
+                      <ThemeToggle showLabel={true} variant="outline" />
 
                 <Popover>
                   <PopoverTrigger asChild>
@@ -1071,7 +1081,7 @@ export default function SalesDashboard() {
                     <div className="space-y-4">
                       <h4 className="font-medium">Customize Colors</h4>
                       <p className="text-xs text-muted-foreground">
-                        Personalize your dashboard appearance (use "Reset All Colors" button to restore defaults)
+                        Personalize your dashboard appearance
                       </p>
                       <div className="space-y-4">
                         <div className="space-y-2">
@@ -1447,6 +1457,38 @@ export default function SalesDashboard() {
                   </PopoverContent>
                 </Popover>
 
+                      {/* Reset All Colors Button - Inside Colors Menu */}
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setCustomColors({
+                            background: '#ffffff',
+                            text: '#000000',
+                            primary: '#3b82f6',
+                            secondary: '#f3f4f6',
+                            accent: '#8b5cf6',
+                            border: '#e5e7eb',
+                            bodyBackground: '',
+                            headerBackground: '',
+                          });
+                          toast({
+                            title: "Colors Reset",
+                            description: "All colors have been reset to defaults",
+                          });
+                        }}
+                        data-testid="button-reset-all-colors-inline"
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Reset All Colors
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Filter Buttons Row */}
+              <div className="flex flex-wrap items-center gap-2">
                 {allTags.length > 0 && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1710,16 +1752,23 @@ export default function SalesDashboard() {
                   </PopoverContent>
                 </Popover>
               </div>
-            </div>
+            </>
           )}
 
-          {/* Reset Options Card */}
+          {/* Reset Options Card - Only show when there are options to reset */}
           {storeSheetId && trackerSheetId && (
+            fontSize !== 14 || 
+            rowHeight !== 48 || 
+            selectedTags.size < allTags.length || 
+            selectedKeywords.size < allKeywords.length || 
+            selectedStates.size < allStates.length ||
+            searchTerm !== ''
+          ) && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Reset Options</CardTitle>
+                <CardTitle className="text-lg">Quick Reset Options</CardTitle>
                 <CardDescription>
-                  Restore default settings for columns, colors, and display preferences
+                  Restore default settings for display and filters
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1744,31 +1793,6 @@ export default function SalesDashboard() {
                   >
                     <RotateCcw className="mr-2 h-4 w-4" />
                     Reset Columns
-                  </Button>
-
-                  {/* Reset Colors */}
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setCustomColors({
-                        background: '#ffffff',
-                        text: '#000000',
-                        primary: '#3b82f6',
-                        secondary: '#f3f4f6',
-                        accent: '#8b5cf6',
-                        border: '#e5e7eb',
-                        bodyBackground: '',
-                        headerBackground: '',
-                      });
-                      toast({
-                        title: "Colors Reset",
-                        description: "All colors have been reset to defaults",
-                      });
-                    }}
-                    data-testid="button-reset-all-colors"
-                  >
-                    <Palette className="mr-2 h-4 w-4" />
-                    Reset All Colors
                   </Button>
 
                   {/* Reset Display (Font & Row Height) */}
