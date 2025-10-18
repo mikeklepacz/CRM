@@ -1818,12 +1818,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'Not authenticated' });
       }
 
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { storeId } = req.params;
 
       // Decode the storeId (it could be a link or row index)
       const decodedId = decodeURIComponent(storeId);
 
-      // Find the relevant store sheet and get merged data
+      // Find the relevant store sheet
       const sheets = await storage.getAllActiveGoogleSheets();
       const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
 
@@ -1831,15 +1832,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Store sheet not found' });
       }
 
-      // Fetch merged data. Assuming joinColumn is 'link' for store lookup.
-      // If 'link' is not the join column, this part might need adjustment.
-      const mergedData = await storage.getMergedData(storeSheet.id, '', 'link'); 
+      // Read data from store sheet
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
 
-      // Find the store by link or row index
-      const store = mergedData.data.find((row: any) => 
-        row.link === decodedId || 
-        String(row._storeRowIndex) === decodedId
-      );
+      if (storeRows.length === 0) {
+        return res.status(404).json({ message: 'Store sheet is empty' });
+      }
+
+      // Parse store data
+      const storeHeaders = storeRows[0];
+      const storeData = storeRows.slice(1).map((row, index) => {
+        const obj: any = { _storeRowIndex: index + 2 };
+        storeHeaders.forEach((header, i) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      });
+
+      // Find the store by link
+      const store = storeData.find((row: any) => row.link === decodedId);
 
       if (!store) {
         return res.status(404).json({ message: 'Store not found' });
@@ -1858,6 +1870,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'Not authenticated' });
       }
 
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { storeId } = req.params;
       const updates = req.body;
 
@@ -1869,13 +1882,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Store sheet not found' });
       }
 
-      // Get merged data to find row index. Assuming 'link' is the join column for lookup.
-      const mergedData = await storage.getMergedData(storeSheet.id, '', 'link'); 
       const decodedId = decodeURIComponent(storeId);
-      const store = mergedData.data.find((row: any) => 
-        row.link === decodedId || 
-        String(row._storeRowIndex) === decodedId
-      );
+
+      // Read data from store sheet to find the row
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+
+      if (storeRows.length === 0) {
+        return res.status(404).json({ message: 'Store sheet is empty' });
+      }
+
+      // Parse store data
+      const storeHeaders = storeRows[0];
+      const storeData = storeRows.slice(1).map((row, index) => {
+        const obj: any = { _storeRowIndex: index + 2 };
+        storeHeaders.forEach((header, i) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      });
+
+      // Find the store by link
+      const store = storeData.find((row: any) => row.link === decodedId);
 
       if (!store || !store._storeRowIndex) {
         return res.status(404).json({ message: 'Store not found or has no row index' });
@@ -1887,44 +1915,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: 'type',
         link: 'link',
         about: 'about',
-        member_since: 'member_since',
-        address: 'address',
-        city: 'city',
-        state: 'state',
-        phone: 'phone',
-        website: 'website',
-        email: 'email',
-        followers: 'followers',
-        tags: 'tags',
-        hours: 'hours',
+        member_since: 'Member Since',
+        address: 'Address',
+        city: 'City',
+        state: 'State',
+        phone: 'Phone',
+        website: 'Website',
+        email: 'Email',
+        followers: 'Followers',
+        tags: 'Tags',
+        hours: 'Hours',
         keywords: 'Keywords / Phrases Found',
         vibe_score: 'Vibe Score',
         sales_ready_summary: 'Sales-ready Summary',
       };
 
-      // Prepare promises for updating each field
-      const updatePromises = Object.entries(updates).map(async ([field, value]) => {
+      // Prepare batch updates
+      const batchUpdates: { range: string; values: any[][] }[] = [];
+
+      Object.entries(updates).forEach(([field, value]) => {
         const columnName = columnMapping[field];
         if (columnName) {
-          // Use the imported sheetsService which should contain the updateCell function
-          // Assuming sheetsService is globally available or imported elsewhere
-          // If not, it needs to be passed or imported here.
-          // For now, assuming googleSheets module has the necessary function.
-          try {
-            await googleSheets.writeSheetData(
-              req.user.isPasswordAuth ? req.user.id : req.user.claims.sub, // userId
-              storeSheet.spreadsheetId,
-              `${storeSheet.sheetName}!${columnName}${store._storeRowIndex}`, // Range format: SheetName!ColumnRow
-              [[value]] // Value to write
-            );
-          } catch (error) {
-            console.error(`Error updating ${columnName} for store ${storeId}:`, error);
-            throw error; // Re-throw to be caught by Promise.all
+          // Find column index (case-insensitive)
+          const columnIndex = storeHeaders.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+          if (columnIndex !== -1) {
+            const columnLetter = String.fromCharCode(65 + columnIndex);
+            batchUpdates.push({
+              range: `${storeSheet.sheetName}!${columnLetter}${store._storeRowIndex}`,
+              values: [[value]]
+            });
           }
         }
       });
 
-      await Promise.all(updatePromises);
+      // Execute batch update
+      if (batchUpdates.length > 0) {
+        await googleSheets.batchUpdateSheetData(userId, storeSheet.spreadsheetId, batchUpdates);
+      }
 
       res.json({ success: true, message: 'Store updated successfully' });
     } catch (error) {
