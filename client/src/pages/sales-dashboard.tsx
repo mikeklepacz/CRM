@@ -14,7 +14,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
@@ -87,6 +87,14 @@ export default function SalesDashboard() {
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [keywordSearchTerm, setKeywordSearchTerm] = useState("");
+  const [customColors, setCustomColors] = useState({
+    background: '#ffffff',
+    text: '#000000',
+    primary: '#3b82f6',
+    secondary: '#f3f4f6',
+    accent: '#8b5cf6',
+    border: '#e5e7eb',
+  });
 
   // Mutation to update a cell in Google Sheets
   const updateCellMutation = useMutation({
@@ -302,6 +310,10 @@ export default function SalesDashboard() {
         }
         if (userPreferences.rowHeight) {
           setRowHeight(userPreferences.rowHeight);
+        }
+
+        if (userPreferences.customColors) {
+          setCustomColors(userPreferences.customColors);
         }
 
         setPreferencesLoaded(true);
@@ -648,6 +660,7 @@ export default function SalesDashboard() {
           selectedStates: Array.from(selectedStates),
           fontSize,
           rowHeight,
+          customColors,
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -655,7 +668,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, preferencesLoaded]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedTags, selectedKeywords, selectedStates, fontSize, rowHeight, customColors, preferencesLoaded]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -903,9 +916,15 @@ export default function SalesDashboard() {
   const hasUnsavedChanges = Object.keys(editedCells).length > 0;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <Card>
-        <CardHeader>
+    <div 
+      className="container mx-auto p-6 space-y-6"
+      style={{
+        backgroundColor: customColors.background,
+        color: customColors.text,
+      }}
+    >
+      <Card style={{ backgroundColor: customColors.secondary, borderColor: customColors.border }}>
+        <CardHeader style={{ color: customColors.text }}>
           <CardTitle>Sales Dashboard</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1049,6 +1068,156 @@ export default function SalesDashboard() {
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Reset Columns
                 </Button>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-theme-customizer">
+                      <Palette className="mr-2 h-4 w-4" />
+                      Colors
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Customize Colors</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setCustomColors({
+                              background: '#ffffff',
+                              text: '#000000',
+                              primary: '#3b82f6',
+                              secondary: '#f3f4f6',
+                              accent: '#8b5cf6',
+                              border: '#e5e7eb',
+                            });
+                            toast({
+                              title: "Colors Reset",
+                              description: "Dashboard colors have been reset to defaults",
+                            });
+                          }}
+                          data-testid="button-reset-colors"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Customize the dashboard color scheme
+                      </p>
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="color-background" className="text-sm">Background</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="color-background"
+                              type="color"
+                              value={customColors.background}
+                              onChange={(e) => setCustomColors({ ...customColors, background: e.target.value })}
+                              className="h-10 w-20 rounded cursor-pointer border"
+                              data-testid="input-color-background"
+                            />
+                            <Input
+                              value={customColors.background}
+                              onChange={(e) => setCustomColors({ ...customColors, background: e.target.value })}
+                              className="flex-1 font-mono text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="color-text" className="text-sm">Text</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="color-text"
+                              type="color"
+                              value={customColors.text}
+                              onChange={(e) => setCustomColors({ ...customColors, text: e.target.value })}
+                              className="h-10 w-20 rounded cursor-pointer border"
+                              data-testid="input-color-text"
+                            />
+                            <Input
+                              value={customColors.text}
+                              onChange={(e) => setCustomColors({ ...customColors, text: e.target.value })}
+                              className="flex-1 font-mono text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="color-primary" className="text-sm">Primary</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="color-primary"
+                              type="color"
+                              value={customColors.primary}
+                              onChange={(e) => setCustomColors({ ...customColors, primary: e.target.value })}
+                              className="h-10 w-20 rounded cursor-pointer border"
+                              data-testid="input-color-primary"
+                            />
+                            <Input
+                              value={customColors.primary}
+                              onChange={(e) => setCustomColors({ ...customColors, primary: e.target.value })}
+                              className="flex-1 font-mono text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="color-secondary" className="text-sm">Secondary/Card</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="color-secondary"
+                              type="color"
+                              value={customColors.secondary}
+                              onChange={(e) => setCustomColors({ ...customColors, secondary: e.target.value })}
+                              className="h-10 w-20 rounded cursor-pointer border"
+                              data-testid="input-color-secondary"
+                            />
+                            <Input
+                              value={customColors.secondary}
+                              onChange={(e) => setCustomColors({ ...customColors, secondary: e.target.value })}
+                              className="flex-1 font-mono text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="color-accent" className="text-sm">Accent</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="color-accent"
+                              type="color"
+                              value={customColors.accent}
+                              onChange={(e) => setCustomColors({ ...customColors, accent: e.target.value })}
+                              className="h-10 w-20 rounded cursor-pointer border"
+                              data-testid="input-color-accent"
+                            />
+                            <Input
+                              value={customColors.accent}
+                              onChange={(e) => setCustomColors({ ...customColors, accent: e.target.value })}
+                              className="flex-1 font-mono text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="color-border" className="text-sm">Border</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="color-border"
+                              type="color"
+                              value={customColors.border}
+                              onChange={(e) => setCustomColors({ ...customColors, border: e.target.value })}
+                              className="h-10 w-20 rounded cursor-pointer border"
+                              data-testid="input-color-border"
+                            />
+                            <Input
+                              value={customColors.border}
+                              onChange={(e) => setCustomColors({ ...customColors, border: e.target.value })}
+                              className="flex-1 font-mono text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
                 {allTags.length > 0 && (
                   <Popover>
@@ -1323,8 +1492,8 @@ export default function SalesDashboard() {
               <p className="mt-2 text-muted-foreground">Loading data...</p>
             </div>
           ) : storeSheetId && trackerSheetId && data.length > 0 ? (
-            <div className="border rounded-md overflow-auto">
-              <div className="h-[600px] w-full overflow-auto">
+            <div className="border rounded-md overflow-auto" style={{ borderColor: customColors.border }}>
+              <div className="h-[600px] w-full overflow-auto" style={{ backgroundColor: customColors.background }}>
                 <Table className="min-w-full" style={{ tableLayout: 'fixed' }}>
                   <TableHeader>
                     <TableRow>
@@ -1584,7 +1753,8 @@ export default function SalesDashboard() {
                                         {isPhoneColumn ? (
                                           <a 
                                             href={`tel:${cellValue}`}
-                                            className="flex items-center gap-1 text-primary hover:underline"
+                                            className="flex items-center gap-1 hover:underline"
+                                            style={{ color: customColors.primary }}
                                             data-testid={`link-phone-${rowKey}-${header}`}
                                           >
                                             <Phone className="h-4 w-4" />
@@ -1593,7 +1763,8 @@ export default function SalesDashboard() {
                                         ) : isEmailColumn ? (
                                           <a 
                                             href={`mailto:${cellValue}`}
-                                            className="flex items-center gap-1 text-primary hover:underline"
+                                            className="flex items-center gap-1 hover:underline"
+                                            style={{ color: customColors.primary }}
                                             data-testid={`link-email-${rowKey}-${header}`}
                                           >
                                             <Mail className="h-4 w-4" />
@@ -1604,7 +1775,8 @@ export default function SalesDashboard() {
                                             href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center gap-1 text-primary hover:underline"
+                                            className="flex items-center gap-1 hover:underline"
+                                            style={{ color: customColors.primary }}
                                             data-testid={`link-website-${rowKey}-${header}`}
                                           >
                                             <ExternalLink className="h-4 w-4" />
@@ -1768,7 +1940,8 @@ export default function SalesDashboard() {
                                     {isPhoneColumn && cellValue ? (
                                       <a 
                                         href={`tel:${cellValue}`}
-                                        className="flex items-center gap-1 text-primary hover:underline"
+                                        className="flex items-center gap-1 hover:underline"
+                                        style={{ color: customColors.primary }}
                                         data-testid={`link-phone-${rowKey}-${header}`}
                                       >
                                         <Phone className="h-4 w-4" />
@@ -1779,7 +1952,8 @@ export default function SalesDashboard() {
                                         href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-1 text-primary hover:underline"
+                                        className="flex items-center gap-1 hover:underline"
+                                        style={{ color: customColors.primary }}
                                         data-testid={`link-website-${rowKey}-${header}`}
                                       >
                                         <ExternalLink className="h-4 w-4" />
