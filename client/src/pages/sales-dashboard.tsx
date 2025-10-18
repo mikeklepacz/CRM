@@ -24,6 +24,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
 import { ContactActionDialog } from "@/components/contact-action-dialog";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
+import { HslColorPicker } from "react-colorful";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -1619,58 +1620,56 @@ export default function SalesDashboard() {
                         <div className="space-y-2">
                           <Label htmlFor="color-body-bg" className="text-sm font-medium">Page Background</Label>
                           <p className="text-xs text-muted-foreground">Main page body background (leave empty for theme default)</p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="color-body-bg"
-                              type="color"
-                              value={customColors.bodyBackground || '#f9fafb'}
-                              onChange={(e) => setCustomColors({ ...customColors, bodyBackground: e.target.value })}
-                              className="h-10 w-20 rounded cursor-pointer border"
-                              data-testid="input-color-body-bg"
+                          <div className="space-y-2">
+                            <HslColorPicker
+                              color={customColors.bodyBackground || '#f9fafb'}
+                              onChange={(color) => setCustomColors({ ...customColors, bodyBackground: color })}
+                              style={{ width: '100%', height: '150px' }}
                             />
-                            <Input
-                              value={customColors.bodyBackground}
-                              onChange={(e) => setCustomColors({ ...customColors, bodyBackground: e.target.value })}
-                              placeholder="Empty = theme default"
-                              className="flex-1 font-mono text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
-                              title="Reset to theme default"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={customColors.bodyBackground}
+                                onChange={(e) => setCustomColors({ ...customColors, bodyBackground: e.target.value })}
+                                placeholder="Empty = theme default"
+                                className="flex-1 font-mono text-sm"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setCustomColors({ ...customColors, bodyBackground: '' })}
+                                title="Reset to default"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
 
                         <div className="space-y-2">
                           <Label htmlFor="color-header-bg" className="text-sm font-medium">Header Background</Label>
                           <p className="text-xs text-muted-foreground">Top header background (leave empty for theme default)</p>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="color-header-bg"
-                              type="color"
-                              value={customColors.headerBackground || '#ffffff'}
-                              onChange={(e) => setCustomColors({ ...customColors, headerBackground: e.target.value })}
-                              className="h-10 w-20 rounded cursor-pointer border"
-                              data-testid="input-color-header-bg"
+                          <div className="space-y-2">
+                            <HslColorPicker
+                              color={customColors.headerBackground || '#ffffff'}
+                              onChange={(color) => setCustomColors({ ...customColors, headerBackground: color })}
+                              style={{ width: '100%', height: '150px' }}
                             />
-                            <Input
-                              value={customColors.headerBackground}
-                              onChange={(e) => setCustomColors({ ...customColors, headerBackground: e.target.value })}
-                              placeholder="Empty = theme default"
-                              className="flex-1 font-mono text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setCustomColors({ ...customColors, headerBackground: '' })}
-                              title="Reset to theme default"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={customColors.headerBackground}
+                                onChange={(e) => setCustomColors({ ...customColors, headerBackground: e.target.value })}
+                                placeholder="Empty = theme default"
+                                className="flex-1 font-mono text-sm"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setCustomColors({ ...customColors, headerBackground: '' })}
+                                title="Reset to default"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
 
@@ -2199,13 +2198,13 @@ export default function SalesDashboard() {
                         const r = parseInt(hex.slice(1, 3), 16);
                         const g = parseInt(hex.slice(3, 5), 16);
                         const b = parseInt(hex.slice(5, 7), 16);
-                        
+
                         const darkenValue = (val: number) => Math.max(0, Math.floor(val * (1 - percent / 100)));
-                        
+
                         const newR = darkenValue(r).toString(16).padStart(2, '0');
                         const newG = darkenValue(g).toString(16).padStart(2, '0');
                         const newB = darkenValue(b).toString(16).padStart(2, '0');
-                        
+
                         return `#${newR}${newG}${newB}`;
                       };
 
