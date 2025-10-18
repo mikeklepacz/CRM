@@ -24,14 +24,17 @@ export default function KeywordManager() {
   const [maxFrequency, setMaxFrequency] = useState(Infinity);
   const [sortBy, setSortBy] = useState<'keyword' | 'frequency'>('frequency');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [keywordPage, setKeywordPage] = useState(0);
+  const [tagPage, setTagPage] = useState(0);
+  const itemsPerPage = 100;
 
   // Fetch current user
-  const { data: currentUser } = useQuery({
+  const { data: currentUser, isLoading: userLoading } = useQuery({
     queryKey: ["/api/auth/user"],
   });
 
   // Fetch sheets
-  const { data: sheets } = useQuery<any>({
+  const { data: sheets, isLoading: sheetsLoading } = useQuery<any>({
     queryKey: ["/api/sheets"],
   });
 
@@ -39,9 +42,9 @@ export default function KeywordManager() {
   const trackerSheetId = sheets?.sheets?.find((s: any) => s.sheetPurpose === "Commission Tracker")?.id;
 
   // Fetch keyword statistics
-  const { data: stats, isLoading, refetch } = useQuery({
+  const { data: stats, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["/api/sheets/keyword-stats", storeSheetId, trackerSheetId],
-    enabled: !!storeSheetId && !!trackerSheetId,
+    enabled: !!storeSheetId && !!trackerSheetId && currentUser?.role === 'admin',
     queryFn: async () => {
       const response = await fetch('/api/sheets/keyword-stats', {
         method: 'POST',
@@ -53,7 +56,10 @@ export default function KeywordManager() {
         }),
         credentials: 'include',
       });
-      if (!response.ok) throw new Error('Failed to fetch keyword stats');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to fetch keyword stats');
+      }
       return response.json();
     },
   });
@@ -138,6 +144,22 @@ export default function KeywordManager() {
     return filtered;
   }, [stats?.tags, searchTerm, minFrequency, maxFrequency, sortBy, sortDirection]);
 
+  // Paginated keywords
+  const paginatedKeywords = useMemo(() => {
+    const start = keywordPage * itemsPerPage;
+    return filteredKeywords.slice(start, start + itemsPerPage);
+  }, [filteredKeywords, keywordPage, itemsPerPage]);
+
+  const totalKeywordPages = Math.ceil(filteredKeywords.length / itemsPerPage);
+
+  // Paginated tags
+  const paginatedTags = useMemo(() => {
+    const start = tagPage * itemsPerPage;
+    return filteredTags.slice(start, start + itemsPerPage);
+  }, [filteredTags, tagPage, itemsPerPage]);
+
+  const totalTagPages = Math.ceil(filteredTags.length / itemsPerPage);
+
   const toggleKeyword = (keyword: string) => {
     const newSelected = new Set(selectedKeywords);
     if (newSelected.has(keyword)) {
@@ -199,6 +221,23 @@ export default function KeywordManager() {
     }
   };
 
+  // Show loading state while checking user
+  if (userLoading || sheetsLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+              <p className="mt-4 text-muted-foreground">Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Check admin access
   if (!currentUser || currentUser.role !== 'admin') {
     return (
       <div className="container mx-auto p-6">
@@ -209,6 +248,27 @@ export default function KeywordManager() {
               Only administrators can access the Keyword Manager.
             </CardDescription>
           </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error if stats failed to load
+  if (isError) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Error Loading Data</CardTitle>
+            <CardDescription>
+              {(error as Error)?.message || 'Failed to load keyword statistics'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => refetch()} data-testid="button-retry">
+              Retry
+            </Button>
+          </CardContent>
         </Card>
       </div>
     );
@@ -352,7 +412,7 @@ export default function KeywordManager() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredKeywords.map((kw: any) => (
+                        paginatedKeywords.map((kw: any) => (
                           <TableRow key={kw.keyword} data-testid={`row-keyword-${kw.keyword}`}>
                             <TableCell>
                               <Checkbox
@@ -371,9 +431,36 @@ export default function KeywordManager() {
                 </div>
               )}
 
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredKeywords.length} of {stats?.keywords?.length || 0} keywords
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Showing {Math.min(keywordPage * itemsPerPage + 1, filteredKeywords.length)}-{Math.min((keywordPage + 1) * itemsPerPage, filteredKeywords.length)} of {filteredKeywords.length} filtered ({stats?.keywords?.length || 0} total)
+                </p>
+                {totalKeywordPages > 1 && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setKeywordPage(Math.max(0, keywordPage - 1))}
+                      disabled={keywordPage === 0}
+                      data-testid="button-prev-page"
+                    >
+                      Previous
+                    </Button>
+                    <span className="flex items-center px-3 text-sm text-muted-foreground">
+                      Page {keywordPage + 1} of {totalKeywordPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setKeywordPage(Math.min(totalKeywordPages - 1, keywordPage + 1))}
+                      disabled={keywordPage >= totalKeywordPages - 1}
+                      data-testid="button-next-page"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="tags" className="space-y-4">
@@ -487,7 +574,7 @@ export default function KeywordManager() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredTags.map((tag: any) => (
+                        paginatedTags.map((tag: any) => (
                           <TableRow key={tag.tag} data-testid={`row-tag-${tag.tag}`}>
                             <TableCell>
                               <Checkbox
@@ -505,9 +592,34 @@ export default function KeywordManager() {
                 </div>
               )}
 
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredTags.length} of {stats?.tags?.length || 0} tags
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Showing {Math.min(tagPage * itemsPerPage + 1, filteredTags.length)}-{Math.min((tagPage + 1) * itemsPerPage, filteredTags.length)} of {filteredTags.length} filtered ({stats?.tags?.length || 0} total)
+                </p>
+                {totalTagPages > 1 && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTagPage(Math.max(0, tagPage - 1))}
+                      disabled={tagPage === 0}
+                    >
+                      Previous
+                    </Button>
+                    <span className="flex items-center px-3 text-sm text-muted-foreground">
+                      Page {tagPage + 1} of {totalTagPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTagPage(Math.min(totalTagPages - 1, tagPage + 1))}
+                      disabled={tagPage >= totalTagPages - 1}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>
