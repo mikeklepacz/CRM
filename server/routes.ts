@@ -1348,6 +1348,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
       const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
 
+      console.log('=== MERGED DATA DEBUG ===');
+      console.log('Store rows read from Google Sheets:', storeRows.length);
+      console.log('Tracker rows read from Google Sheets:', trackerRows.length);
+
       if (storeRows.length === 0) {
         return res.json({ headers: [], data: [], editableColumns: [] });
       }
@@ -1410,6 +1414,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const mergedData = Array.from(mergedDataMap.values());
+
+      console.log('Store data parsed:', storeData.length, 'rows');
+      console.log('Tracker data parsed:', trackerData.length, 'rows');
+      console.log('Filtered tracker data (for agent):', filteredTrackerData.length, 'rows');
+      console.log('Final merged data:', mergedData.length, 'rows');
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)
       const allHeaders = [...storeHeaders];
