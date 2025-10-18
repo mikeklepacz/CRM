@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -159,6 +159,28 @@ export default function KeywordManager() {
   }, [filteredTags, tagPage, itemsPerPage]);
 
   const totalTagPages = Math.ceil(filteredTags.length / itemsPerPage);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setKeywordPage(0);
+  }, [searchTerm, minFrequency, maxFrequency, sortBy, sortDirection]);
+
+  useEffect(() => {
+    setTagPage(0);
+  }, [searchTerm, minFrequency, maxFrequency, sortBy, sortDirection]);
+
+  // Clamp page indices when filtered results shrink
+  useEffect(() => {
+    if (keywordPage >= totalKeywordPages && totalKeywordPages > 0) {
+      setKeywordPage(Math.max(0, totalKeywordPages - 1));
+    }
+  }, [keywordPage, totalKeywordPages]);
+
+  useEffect(() => {
+    if (tagPage >= totalTagPages && totalTagPages > 0) {
+      setTagPage(Math.max(0, totalTagPages - 1));
+    }
+  }, [tagPage, totalTagPages]);
 
   const toggleKeyword = (keyword: string) => {
     const newSelected = new Set(selectedKeywords);
