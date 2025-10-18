@@ -14,7 +14,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
@@ -896,6 +896,29 @@ export default function SalesDashboard() {
                     Reset Display
                   </Button>
                 )}
+
+                {/* Reset Columns Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const hiddenColumns = ['title', 'error'];
+                    const newVisibleColumns: Record<string, boolean> = {};
+                    headers.forEach((header: string) => {
+                      newVisibleColumns[header] = !hiddenColumns.includes(header.toLowerCase());
+                    });
+                    setVisibleColumns(newVisibleColumns);
+                    setColumnOrder(headers);
+                    toast({
+                      title: "Columns Reset",
+                      description: "All columns are now visible except 'title' and 'error'",
+                    });
+                  }}
+                  data-testid="button-reset-columns"
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reset Columns
+                </Button>
 
                 {allTags.length > 0 && (
                   <Popover>
