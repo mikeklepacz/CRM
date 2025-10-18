@@ -2060,7 +2060,7 @@ export default function SalesDashboard() {
             </div>
           ) : storeSheetId && trackerSheetId && data.length > 0 ? (
             <div className="border rounded-md overflow-auto" style={{ borderColor: customColors.border }}>
-              <div className="h-[600px] w-full overflow-auto" style={{ backgroundColor: customColors.background }}>
+              <div className="h-[600px] w-full overflow-auto" style={{ backgroundColor: colorRowByStatus ? '#ffffff' : customColors.background }}>
                 <Table className="min-w-full" style={{ tableLayout: 'fixed' }}>
                   <TableHeader>
                     <TableRow>
