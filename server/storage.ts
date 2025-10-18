@@ -9,7 +9,6 @@ import {
   userIntegrations,
   dashboardCards,
   userPreferences,
-  bannedWords,
   type User,
   type UpsertUser,
   type Client,
@@ -186,8 +185,6 @@ export class DatabaseStorage implements IStorage {
     // Ensure arrays are properly formatted for PostgreSQL
     const formattedPreferences = {
       ...preferences,
-      selectedTags: preferences.selectedTags || existing?.selectedTags || [],
-      selectedKeywords: preferences.selectedKeywords || existing?.selectedKeywords || [],
       selectedStates: preferences.selectedStates || existing?.selectedStates || [],
     };
 

@@ -30,9 +30,7 @@ export default function StoreDetails() {
     website: "",
     email: "",
     followers: "",
-    tags: "",
     hours: "",
-    keywords: "",
     vibe_score: "",
     sales_ready_summary: "",
   });
@@ -63,9 +61,7 @@ export default function StoreDetails() {
         website: storeData.website || "",
         email: storeData.email || "",
         followers: storeData.followers || "",
-        tags: storeData.tags || "",
         hours: storeData.hours || "",
-        keywords: storeData["Keywords / Phrases Found"] || "",
         vibe_score: storeData["Vibe Score"] || "",
         sales_ready_summary: storeData["Sales-ready Summary"] || "",
       });
@@ -317,27 +313,6 @@ export default function StoreDetails() {
                 value={formData.hours}
                 onChange={(e) => handleInputChange('hours', e.target.value)}
                 placeholder="Business hours..."
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="tags">Tags</Label>
-              <Input
-                id="tags"
-                value={formData.tags}
-                onChange={(e) => handleInputChange('tags', e.target.value)}
-                placeholder="Comma-separated tags"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="keywords">Keywords / Phrases Found</Label>
-              <Textarea
-                id="keywords"
-                value={formData.keywords}
-                onChange={(e) => handleInputChange('keywords', e.target.value)}
-                placeholder="Keywords and phrases..."
                 rows={3}
               />
             </div>

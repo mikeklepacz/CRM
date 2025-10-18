@@ -324,8 +324,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     visibleColumns: z.record(z.boolean()).optional(),
     columnOrder: z.array(z.string()).optional(),
     columnWidths: z.record(z.number()).optional(),
-    selectedTags: z.array(z.string()).optional(),
-    selectedKeywords: z.array(z.string()).optional(),
     selectedStates: z.array(z.string()).optional(),
     fontSize: z.number().optional(),
     rowHeight: z.number().optional(),
@@ -2054,9 +2052,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         website: 'Website',
         email: 'Email',
         followers: 'Followers',
-        tags: 'Tags',
         hours: 'Hours',
-        keywords: 'Keywords / Phrases Found',
         vibe_score: 'Vibe Score',
         sales_ready_summary: 'Sales-ready Summary',
       };

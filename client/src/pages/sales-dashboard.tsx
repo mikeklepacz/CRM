@@ -1166,16 +1166,12 @@ export default function SalesDashboard() {
                         )}
 
                         {/* Reset All Filters */}
-                        {(selectedTags.size < allTags.length ||
-                          selectedKeywords.size < allKeywords.length ||
-                          selectedStates.size < allStates.length ||
+                        {(selectedStates.size < allStates.length ||
                           searchTerm !== '') && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              setSelectedTags(new Set(allTags));
-                              setSelectedKeywords(new Set(allKeywords));
                               setSelectedStates(new Set(allStates));
                               setSearchTerm('');
                               toast({
@@ -2228,8 +2224,6 @@ export default function SalesDashboard() {
                             const isLinkColumn = header.toLowerCase() === 'link';
                             const isStateColumn = header.toLowerCase() === 'state';
                             const isStatusColumn = header.toLowerCase().includes('status');
-                            const isKeywordColumn = header.toLowerCase().includes('keyword') || header.toLowerCase().includes('phrase');
-                            const isTagColumn = header.toLowerCase().includes('tag');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
                             const isAddressColumn = header.toLowerCase().includes('address') ||
@@ -2239,7 +2233,7 @@ export default function SalesDashboard() {
 
                             // Determine if this column should allow text wrapping
                             const isNotesColumn = header.toLowerCase().includes('note') || header.toLowerCase().includes('comment');
-                            const shouldWrap = isAddressColumn || isNotesColumn || isHoursColumn || isKeywordColumn || isTagColumn;
+                            const shouldWrap = isAddressColumn || isNotesColumn || isHoursColumn;
 
                             // Apply alignment styles
                             const cellStyle: React.CSSProperties = {

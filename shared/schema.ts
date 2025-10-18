@@ -156,8 +156,6 @@ export const userPreferences = pgTable("user_preferences", {
   visibleColumns: jsonb("visible_columns").$type<Record<string, boolean>>(),
   columnOrder: jsonb("column_order").$type<string[]>(),
   columnWidths: jsonb("column_widths").$type<Record<string, number>>(),
-  selectedTags: jsonb("selected_tags").$type<string[]>(),
-  selectedKeywords: jsonb("selected_keywords").$type<string[]>(),
   selectedStates: jsonb("selected_states").$type<string[]>(),
   fontSize: integer("font_size").default(14), // Font size in pixels (12, 14, 16, 18, 20, etc.)
   rowHeight: integer("row_height").default(48), // Row height in pixels
@@ -191,15 +189,6 @@ export const userPreferences = pgTable("user_preferences", {
   colorPresets: jsonb("color_presets").$type<Array<{name: string, color: string}>>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Banned words table - words to exclude from keyword/tag filters
-export const bannedWords = pgTable("banned_words", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  word: varchar("word").notNull().unique(),
-  type: varchar("type", { length: 20 }).notNull(), // 'keyword' or 'tag'
-  createdBy: varchar("created_by").notNull().references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Relations
@@ -294,11 +283,6 @@ export const insertUserPreferencesSchema = createInsertSchema(userPreferences).o
   updatedAt: true,
 });
 
-export const insertBannedWordSchema = createInsertSchema(bannedWords).omit({
-  id: true,
-  createdAt: true,
-});
-
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -318,5 +302,3 @@ export type DashboardCard = typeof dashboardCards.$inferSelect;
 export type InsertDashboardCard = z.infer<typeof insertDashboardCardSchema>;
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;
-export type BannedWord = typeof bannedWords.$inferSelect;
-export type InsertBannedWord = z.infer<typeof insertBannedWordSchema>;
