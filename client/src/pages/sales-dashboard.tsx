@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import { format, parse, isValid } from "date-fns";
 import { ContactActionDialog } from "@/components/contact-action-dialog";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
 import { HslColorPicker } from "react-colorful";
+import { Loader2 } from "lucide-react";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -128,6 +130,12 @@ export default function SalesDashboard() {
   const [addressEditDialog, setAddressEditDialog] = useState<{
     open: boolean;
     row: any;
+  } | null>(null);
+
+  // Store details dialog state
+  const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
+    open: boolean;
+    storeId: string;
   } | null>(null);
 
   // Default colors for light and dark modes
@@ -3075,14 +3083,17 @@ export default function SalesDashboard() {
                                         <span>{displayValue}</span>
                                       </button>
                                     ) : (header.toLowerCase() === 'name' || header.toLowerCase() === 'company') && cellValue ? (
-                                      <a
-                                        href={`/store/${encodeURIComponent(row.link || rowKey)}`}
-                                        className="hover:underline font-medium"
+                                      <button
+                                        onClick={() => setStoreDetailsDialog({
+                                          open: true,
+                                          storeId: row.link || String(rowKey)
+                                        })}
+                                        className="hover:underline font-medium text-left"
                                         style={{ color: customColors.primary }}
                                         data-testid={`link-store-${rowKey}-${header}`}
                                       >
                                         {displayValue}
-                                      </a>
+                                      </button>
                                     ) : isWebsiteColumn && cellValue ? (
                                       <a
                                         href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
@@ -3225,7 +3236,351 @@ export default function SalesDashboard() {
           joinColumn={joinColumn}
         />
       )}
+
+      {/* Store Details Dialog */}
+      {storeDetailsDialog && (
+        <StoreDetailsDialog
+          open={storeDetailsDialog.open}
+          onOpenChange={(open) => !open && setStoreDetailsDialog(null)}
+          storeId={storeDetailsDialog.storeId}
+        />
+      )}
       </div>
     </div>
+  );
+}
+
+// Store Details Dialog Component
+function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; onOpenChange: (open: boolean) => void; storeId: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "",
+    link: "",
+    about: "",
+    member_since: "",
+    address: "",
+    city: "",
+    state: "",
+    phone: "",
+    website: "",
+    email: "",
+    followers: "",
+    tags: "",
+    hours: "",
+    keywords: "",
+    vibe_score: "",
+    sales_ready_summary: "",
+  });
+
+  // Fetch store data
+  const { data: storeData, isLoading } = useQuery({
+    queryKey: ['store-details', storeId],
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/store/${encodeURIComponent(storeId)}`);
+      return response;
+    },
+    enabled: !!storeId && open,
+  });
+
+  // Populate form when data loads
+  useEffect(() => {
+    if (storeData) {
+      setFormData({
+        name: storeData.name || "",
+        type: storeData.type || "",
+        link: storeData.link || "",
+        about: storeData.about || "",
+        member_since: storeData.member_since || storeData["Member Since"] || "",
+        address: storeData.address || storeData.Address || "",
+        city: storeData.city || storeData.City || "",
+        state: storeData.state || storeData.State || "",
+        phone: storeData.phone || storeData.Phone || "",
+        website: storeData.website || storeData.Website || "",
+        email: storeData.email || storeData.Email || "",
+        followers: storeData.followers || storeData.Followers || "",
+        tags: storeData.tags || storeData.Tags || "",
+        hours: storeData.hours || storeData.Hours || "",
+        keywords: storeData["Keywords / Phrases Found"] || "",
+        vibe_score: storeData["Vibe Score"] || "",
+        sales_ready_summary: storeData["Sales-ready Summary"] || "",
+      });
+    }
+  }, [storeData]);
+
+  // Save mutation
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('PUT', `/api/store/${encodeURIComponent(storeId)}`, formData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Store information updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['store-details', storeId] });
+      queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = () => {
+    saveMutation.mutate();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{formData.name || "Store Details"}</DialogTitle>
+          <DialogDescription>{formData.type}</DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : (
+          <div className="grid gap-6 py-4">
+            {/* Basic Information */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg">Basic Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Store Name</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    placeholder="Enter store name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="type">Type</Label>
+                  <Input
+                    id="type"
+                    value={formData.type}
+                    onChange={(e) => handleInputChange('type', e.target.value)}
+                    placeholder="e.g., Dispensary, Headshop"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="link">Profile Link</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="link"
+                    value={formData.link}
+                    onChange={(e) => handleInputChange('link', e.target.value)}
+                    placeholder="https://..."
+                    className="flex-1"
+                  />
+                  {formData.link && (
+                    <Button variant="outline" size="icon" asChild>
+                      <a href={formData.link} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="about">About</Label>
+                <Textarea
+                  id="about"
+                  value={formData.about}
+                  onChange={(e) => handleInputChange('about', e.target.value)}
+                  placeholder="Store description..."
+                  rows={4}
+                />
+              </div>
+            </div>
+
+            {/* Contact Information */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg">Contact Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    placeholder="contact@store.com"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="website">Website</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="website"
+                    value={formData.website}
+                    onChange={(e) => handleInputChange('website', e.target.value)}
+                    placeholder="https://www.store.com"
+                    className="flex-1"
+                  />
+                  {formData.website && (
+                    <Button variant="outline" size="icon" asChild>
+                      <a href={formData.website.startsWith('http') ? formData.website : `https://${formData.website}`} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg">Location</h3>
+              <div className="space-y-2">
+                <Label htmlFor="address">Street Address</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => handleInputChange('address', e.target.value)}
+                  placeholder="123 Main St"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={formData.city}
+                    onChange={(e) => handleInputChange('city', e.target.value)}
+                    placeholder="City"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state">State</Label>
+                  <Input
+                    id="state"
+                    value={formData.state}
+                    onChange={(e) => handleInputChange('state', e.target.value)}
+                    placeholder="State"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Additional Details */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg">Additional Details</h3>
+              <div className="space-y-2">
+                <Label htmlFor="hours">Hours</Label>
+                <Textarea
+                  id="hours"
+                  value={formData.hours}
+                  onChange={(e) => handleInputChange('hours', e.target.value)}
+                  placeholder="Business hours..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tags">Tags</Label>
+                <Input
+                  id="tags"
+                  value={formData.tags}
+                  onChange={(e) => handleInputChange('tags', e.target.value)}
+                  placeholder="Comma-separated tags"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="keywords">Keywords / Phrases Found</Label>
+                <Textarea
+                  id="keywords"
+                  value={formData.keywords}
+                  onChange={(e) => handleInputChange('keywords', e.target.value)}
+                  placeholder="Keywords and phrases..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="followers">Followers</Label>
+                  <Input
+                    id="followers"
+                    value={formData.followers}
+                    onChange={(e) => handleInputChange('followers', e.target.value)}
+                    placeholder="Number of followers"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vibe_score">Vibe Score</Label>
+                  <Input
+                    id="vibe_score"
+                    value={formData.vibe_score}
+                    onChange={(e) => handleInputChange('vibe_score', e.target.value)}
+                    placeholder="Score"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sales_ready_summary">Sales-ready Summary</Label>
+                <Textarea
+                  id="sales_ready_summary"
+                  value={formData.sales_ready_summary}
+                  onChange={(e) => handleInputChange('sales_ready_summary', e.target.value)}
+                  placeholder="Summary for sales team..."
+                  rows={4}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saveMutation.isPending}>
+            {saveMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

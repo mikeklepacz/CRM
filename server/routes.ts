@@ -1824,7 +1824,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const decodedId = decodeURIComponent(storeId);
 
       // Find the relevant store sheet and get merged data
-      const sheets = await storage.getAllGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets();
       const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
 
       if (!storeSheet) {
@@ -1862,7 +1862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = req.body;
 
       // Find the relevant store sheet
-      const sheets = await storage.getAllGoogleSheets();
+      const sheets = await storage.getAllActiveGoogleSheets();
       const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
 
       if (!storeSheet) {
