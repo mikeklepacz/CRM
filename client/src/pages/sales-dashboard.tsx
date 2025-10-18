@@ -562,6 +562,35 @@ export default function SalesDashboard() {
     }
   }, [allStates.length, userPreferences]);
 
+  // Auto-save cell changes immediately
+  useEffect(() => {
+    if (Object.keys(editedCells).length === 0) return;
+
+    const saveChanges = async () => {
+      try {
+        const updates = Object.entries(editedCells).map(([key, value]) => {
+          const [rowIndexStr, columnName] = key.split(':::');
+          const rowIndex = parseInt(rowIndexStr, 10);
+          return { rowIndex, columnName, value };
+        });
+
+        await apiRequest('POST', '/api/sheets/update-cells', { updates });
+        
+        setEditedCells({});
+        refetch();
+      } catch (error: any) {
+        toast({
+          title: "Auto-save failed",
+          description: error.message || "Failed to save changes",
+          variant: "destructive",
+        });
+      }
+    };
+
+    const timeoutId = setTimeout(saveChanges, 500);
+    return () => clearTimeout(timeoutId);
+  }, [editedCells]);
+
   // Auto-save user preferences when they change (debounced)
   useEffect(() => {
     if (!preferencesLoaded) return; // Don't save until we've loaded initial preferences
@@ -858,16 +887,6 @@ export default function SalesDashboard() {
               />
 
               <div className="flex items-center gap-2">
-                {hasUnsavedChanges && (
-                  <Button
-                    onClick={handleSave}
-                    data-testid="button-save-changes"
-                  >
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes ({Object.keys(editedCells).length})
-                  </Button>
-                )}
-
                 <Button
                   variant="outline"
                   onClick={() => refetch()}
