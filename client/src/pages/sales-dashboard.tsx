@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1210,6 +1211,19 @@ export default function SalesDashboard() {
   const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
   const hasUnsavedChanges = Object.keys(editedCells).length > 0;
 
+  // Virtual scrolling setup
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Calculate row height based on user settings
+  const estimatedRowHeight = rowHeight;
+  
+  const rowVirtualizer = useVirtualizer({
+    count: filteredData.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => estimatedRowHeight,
+    overscan: 10, // Render 10 extra rows above/below viewport for smooth scrolling
+  });
+
   // Identify status columns (assuming there's only one)
   const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
 
@@ -2306,8 +2320,12 @@ export default function SalesDashboard() {
               <p className="mt-2 text-muted-foreground">Loading data...</p>
             </div>
           ) : storeSheetId && trackerSheetId && data.length > 0 ? (
-            <div className="border rounded-md overflow-auto" style={{ borderColor: customColors.border }}>
-              <div className="h-[600px] w-full overflow-auto" style={{ backgroundColor: colorRowByStatus ? '#ffffff' : customColors.background }}>
+            <div className="border rounded-md overflow-hidden" style={{ borderColor: customColors.border }}>
+              <div 
+                ref={tableContainerRef}
+                className="h-[600px] w-full overflow-auto" 
+                style={{ backgroundColor: colorRowByStatus ? '#ffffff' : customColors.background }}
+              >
                 <Table className="min-w-full" style={{ tableLayout: 'fixed' }}>
                   <TableHeader className="sticky top-0 z-10" style={{ backgroundColor: customColors.headerBackground || customColors.background }}>
                     <TableRow>
@@ -2464,7 +2482,12 @@ export default function SalesDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredData.map((row: MergedDataRow, rowIdx: number) => {
+                    <tr style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                      <td colSpan={visibleHeaders.length} style={{ padding: 0, border: 'none' }}>
+                        <div style={{ position: 'relative', height: `${rowVirtualizer.getTotalSize()}px` }}>
+                          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            const rowIdx = virtualRow.index;
+                            const row = filteredData[rowIdx];
                       const rowKey = row._storeRowIndex || row._trackerRowIndex || rowIdx;
                       const isDeletedRow = row._deletedFromStore;
                       // Calculate minimum required height based on font size
@@ -2496,16 +2519,22 @@ export default function SalesDashboard() {
                       };
 
                       return (
-                        <TableRow
-                          key={rowKey}
+                        <div
+                          key={virtualRow.key}
                           data-testid={`row-data-${rowIdx}`}
                           className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
                           title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
                           style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: `${virtualRow.size}px`,
+                            transform: `translateY(${virtualRow.start}px)`,
                             fontSize: `${fontSize}px`,
-                            height: `${effectiveHeight}px`,
                             backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
                             color: rowStatusColor ? rowStatusColor.text : customColors.tableTextColor,
+                            display: 'flex',
                           }}
                         >
                           {visibleHeaders.map((header: string) => {
@@ -2570,7 +2599,7 @@ export default function SalesDashboard() {
                             const isFirstColumn = visibleHeaders.indexOf(header) === 0;
 
                             return (
-                              <TableCell
+                              <div
                                 key={header}
                                 style={{
                                   ...cellStyle,
@@ -2898,12 +2927,15 @@ export default function SalesDashboard() {
                                     )}
                                   </div>
                                 )}
-                              </TableCell>
+                              </div>
                             );
                           })}
-                        </TableRow>
+                        </div>
                       );
                     })}
+                        </div>
+                      </td>
+                    </tr>
                   </TableBody>
                 </Table>
               </div>
