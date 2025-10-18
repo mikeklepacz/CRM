@@ -185,7 +185,9 @@ export const userPreferences = pgTable("user_preferences", {
   }>(),
   textAlign: varchar("text_align", { length: 20 }),
   verticalAlign: varchar("vertical_align", { length: 20 }),
-  colorRowByStatus: boolean("color_row_by_status").default(false), // New preference to color rows by status
+  colorRowByStatus: boolean("color_row_by_status").default(false),
+  statusOptions: jsonb("status_options").$type<string[]>(),
+  colorPresets: jsonb("color_presets").$type<Array<{name: string, color: string}>>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

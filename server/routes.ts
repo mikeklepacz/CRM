@@ -325,6 +325,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     rowHeight: z.number().optional(),
     lightModeColors: colorSchema.optional(),
     darkModeColors: colorSchema.optional(),
+    textAlign: z.enum(['left', 'center', 'right', 'justify']).optional(),
+    verticalAlign: z.enum(['top', 'middle', 'bottom']).optional(),
+    colorRowByStatus: z.boolean().optional(),
+    statusOptions: z.array(z.string()).optional(),
+    colorPresets: z.array(z.object({
+      name: z.string(),
+      color: z.string()
+    })).optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
