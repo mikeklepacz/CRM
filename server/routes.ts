@@ -1588,6 +1588,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update address information in tracker sheet
+  app.put('/api/sheets/:id/update-address', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      const { linkValue, joinColumn, rowIndex, address, city, state, phone, email, pointOfContact } = req.body;
+
+      const sheet = await storage.getGoogleSheetById(id);
+      if (!sheet) {
+        return res.status(400).json({ message: "Google Sheet not found" });
+      }
+
+      const { spreadsheetId, sheetName } = sheet;
+      
+      // Read the current sheet to find the header row
+      const range = `${sheetName}!1:1`;
+      const headerData = await googleSheets.readSheetData(userId, spreadsheetId, range);
+      
+      if (headerData.length === 0) {
+        return res.status(400).json({ message: "Could not read sheet headers" });
+      }
+
+      const headers = headerData[0];
+      const updates: { range: string; values: any[][] }[] = [];
+
+      // Map field names to their column indices
+      const columnMap: Record<string, number> = {};
+      headers.forEach((header: string, index: number) => {
+        const lowerHeader = header.toLowerCase();
+        if (lowerHeader === 'address') columnMap.address = index;
+        if (lowerHeader === 'city') columnMap.city = index;
+        if (lowerHeader === 'state') columnMap.state = index;
+        if (lowerHeader === 'phone') columnMap.phone = index;
+        if (lowerHeader === 'email') columnMap.email = index;
+        if (lowerHeader === 'point of contact') columnMap.pointOfContact = index;
+      });
+
+      // Prepare batch updates
+      const actualRowNumber = rowIndex + 1; // Convert 0-based to 1-based
+
+      if (columnMap.address !== undefined && address !== undefined) {
+        const colLetter = String.fromCharCode(65 + columnMap.address);
+        updates.push({
+          range: `${sheetName}!${colLetter}${actualRowNumber}`,
+          values: [[address]]
+        });
+      }
+
+      if (columnMap.city !== undefined && city !== undefined) {
+        const colLetter = String.fromCharCode(65 + columnMap.city);
+        updates.push({
+          range: `${sheetName}!${colLetter}${actualRowNumber}`,
+          values: [[city]]
+        });
+      }
+
+      if (columnMap.state !== undefined && state !== undefined) {
+        const colLetter = String.fromCharCode(65 + columnMap.state);
+        updates.push({
+          range: `${sheetName}!${colLetter}${actualRowNumber}`,
+          values: [[state]]
+        });
+      }
+
+      if (columnMap.phone !== undefined && phone !== undefined) {
+        const colLetter = String.fromCharCode(65 + columnMap.phone);
+        updates.push({
+          range: `${sheetName}!${colLetter}${actualRowNumber}`,
+          values: [[phone]]
+        });
+      }
+
+      if (columnMap.email !== undefined && email !== undefined) {
+        const colLetter = String.fromCharCode(65 + columnMap.email);
+        updates.push({
+          range: `${sheetName}!${colLetter}${actualRowNumber}`,
+          values: [[email]]
+        });
+      }
+
+      if (columnMap.pointOfContact !== undefined && pointOfContact !== undefined) {
+        const colLetter = String.fromCharCode(65 + columnMap.pointOfContact);
+        updates.push({
+          range: `${sheetName}!${colLetter}${actualRowNumber}`,
+          values: [[pointOfContact]]
+        });
+      }
+
+      if (updates.length > 0) {
+        await googleSheets.batchUpdateSheetData(userId, spreadsheetId, updates);
+      }
+
+      res.json({ message: "Address updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating address:", error);
+      res.status(500).json({ message: error.message || "Failed to update address" });
+    }
+  });
+
   // Sync FROM CRM TO Google Sheets (export)
   app.post('/api/sheets/:id/sync/export', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
