@@ -3067,11 +3067,20 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   const [selectedStores, setSelectedStores] = useState<Array<{ link: string; name: string }>>([]);
   const [storeSearchDialog, setStoreSearchDialog] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
+  
+  // Track the current row's link to prevent race conditions
+  const [activeRowLink, setActiveRowLink] = useState<string | null>(null);
 
   // Query all stores for multi-location picker - LAZY LOAD (only when search has 2+ chars)
   const { data: allStores, isLoading: isLoadingStores } = useQuery<any[]>({
     queryKey: [`/api/stores/all/${storeSheetId}`],
     enabled: !!storeSheetId && multiLocationMode && storeSearch.length >= 2,
+  });
+
+  // Query stores by DBA - auto-load DBA group when opening a store with existing DBA
+  const { data: dbaStores } = useQuery<any[]>({
+    queryKey: [`/api/stores/by-dba/${storeSheetId}/${dbaName}`],
+    enabled: !!storeSheetId && !!dbaName && open && activeRowLink !== null,
   });
 
   // Filtered stores for search
@@ -3131,8 +3140,40 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       };
       setFormData(populatedData);
       setInitialData(populatedData);
+
+      // Track the active row to prevent race conditions
+      const currentLink = getValue(['Link', 'link']);
+      setActiveRowLink(currentLink);
+
+      // Check if this store has a DBA - if yes, auto-enable Multiple Locations mode
+      const existingDba = getValue(['DBA', 'dba']);
+      console.log('[StoreDetails] Checking for existing DBA:', existingDba);
+      if (existingDba && existingDba.trim()) {
+        console.log('[StoreDetails] Store has DBA, enabling Multiple Locations mode');
+        setMultiLocationMode(true);
+        setDbaName(existingDba.trim());
+        // Clear selectedStores immediately to prevent stale data from previous store
+        setSelectedStores([]);
+        // Let the dbaStores query populate selectedStores when it completes
+      } else {
+        console.log('[StoreDetails] No DBA found, disabling Multiple Locations mode');
+        setMultiLocationMode(false);
+        setDbaName("");
+        setSelectedStores([]);
+      }
+    } else if (!open) {
+      // Reset state when dialog closes
+      setActiveRowLink(null);
     }
-  }, [row, open]);
+  }, [row, open, storeSheetId]);
+
+  // Auto-populate selectedStores when dbaStores query completes
+  useEffect(() => {
+    if (dbaStores && Array.isArray(dbaStores) && multiLocationMode && activeRowLink && dbaName) {
+      console.log('[StoreDetails] Auto-populating selected stores from DBA query:', dbaStores);
+      setSelectedStores(dbaStores.map((s: any) => ({ link: s.link, name: s.name })));
+    }
+  }, [dbaStores, multiLocationMode, activeRowLink, dbaName]);
 
   // Auto-detect emails and phone numbers from Notes field
   // Only auto-populate if the POC field hasn't been manually edited
