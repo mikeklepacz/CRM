@@ -132,6 +132,23 @@ The Sales Dashboard automatically loads both sheets:
 - **Long Text (>100 chars)**: Auto-truncated with expand icon for full view/edit in popup
 - **Double-Click Protection**: All existing data edited via popup modal with Save button
 
+**Store Details Popup:**
+The Store Details popup provides comprehensive store information organized in collapsible accordion sections:
+
+1. **Sales Info (Expanded by Default)**:
+   - Sales-ready Summary: AI-generated insights about the store
+   - Notes (Column K): Main notes field for call/contact information
+   - Point of Contact, POC Email (Column M), POC Phone (Column N)
+   - **Auto-Detection**: When you type contact info in Notes, the system automatically:
+     - Detects email addresses using regex pattern matching
+     - Detects phone numbers in various formats (xxx-xxx-xxxx, (xxx) xxx-xxxx, etc.)
+     - Auto-populates POC Email and POC Phone fields if they're empty
+     - Protects manually-entered data: once you edit a POC field, auto-detection won't overwrite it
+   - **Unsaved Changes Warning**: If you try to close the popup with unsaved changes, you'll get a confirmation dialog
+
+2. **Contact Information**: Store address, phone, email, hours
+3. **Additional Details**: Website, type, CBD info, other store-specific data
+
 **Call/Email Logging:**
 When you click a phone number or email address, the system:
 1. Opens a logging popup that displays the Sales-ready Summary at the top (if available)
