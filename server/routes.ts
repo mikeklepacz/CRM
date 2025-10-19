@@ -740,88 +740,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get smart match suggestions for an order
-  app.get('/api/orders/:orderId/match-suggestions', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  // Get smart match suggestions for an order (searches Google Sheets Store Database)
+  // Supports manual search via ?search=term query parameter
+  app.get('/api/orders/:orderId/match-suggestions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { orderId } = req.params;
+      const manualSearch = req.query.search || ''; // Manual search term from query param
 
       const order = await storage.getOrderById(orderId);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      const allClients = await storage.getAllClients();
-      const suggestions: any[] = [];
+      // Find Store Database sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store Database sheet not found' });
+      }
+
+      // Read all store data
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+
+      if (storeRows.length === 0) {
+        return res.json({ order, suggestions: [] });
+      }
+
+      // Parse store data
+      const storeHeaders = storeRows[0];
+      const nameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'name');
+      const dbaIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'dba');
+      const linkIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'link');
+      const emailIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'email');
+      const cityIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'city');
+      const stateIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'state');
+
+      const suggestions: any[] = [];
       const orderCompany = order.billingCompany || '';
       const orderEmail = order.billingEmail || '';
+      const isManualSearch = manualSearch.trim().length > 0;
+      const searchLower = manualSearch.toLowerCase().trim();
 
-      for (const client of allClients) {
+      // Process each store row
+      storeRows.slice(1).forEach((row, index) => {
         let score = 0;
         const reasons: string[] = [];
 
-        // Get client fields
-        const clientName = client.data?.['name'] || client.data?.['Name'] || '';
-        const clientCompany = client.data?.['company'] || client.data?.['Company'] || '';
-        const clientEmail = client.data?.['email'] || client.data?.['Email'] || client.data?.['Contact Email'] || '';
-        const clientAddress = client.data?.['address'] || client.data?.['Address'] || '';
-        const clientCity = client.data?.['city'] || client.data?.['City'] || '';
-        const clientState = client.data?.['state'] || client.data?.['State'] || '';
+        const storeName = nameIndex !== -1 ? (row[nameIndex] || '') : '';
+        const storeDba = dbaIndex !== -1 ? (row[dbaIndex] || '') : '';
+        const storeLink = linkIndex !== -1 ? (row[linkIndex] || '') : '';
+        const storeEmail = emailIndex !== -1 ? (row[emailIndex] || '') : '';
+        const storeCity = cityIndex !== -1 ? (row[cityIndex] || '') : '';
+        const storeState = stateIndex !== -1 ? (row[stateIndex] || '') : '';
 
-        // Company name similarity (weighted heavily)
-        if (orderCompany && (clientCompany || clientName)) {
-          const companySimilarity = Math.max(
-            stringSimilarity(orderCompany, clientCompany),
-            stringSimilarity(orderCompany, clientName)
-          );
-          if (companySimilarity > 0.6) {
-            score += companySimilarity * 50;
-            reasons.push(`Company name ${Math.round(companySimilarity * 100)}% similar`);
+        // MANUAL SEARCH MODE: Simple substring matching
+        if (isManualSearch) {
+          const nameMatch = storeName.toLowerCase().includes(searchLower);
+          const dbaMatch = storeDba.toLowerCase().includes(searchLower);
+          const emailMatch = storeEmail.toLowerCase().includes(searchLower);
+          
+          if (nameMatch || dbaMatch || emailMatch) {
+            score = 50; // Base score for manual matches
+            if (nameMatch) reasons.push('Name match');
+            if (dbaMatch) reasons.push('DBA match');
+            if (emailMatch) reasons.push('Email match');
           }
-        }
-
-        // Email similarity
-        if (orderEmail && clientEmail) {
-          const emailSimilarity = stringSimilarity(orderEmail, clientEmail);
-          if (emailSimilarity > 0.8) {
-            score += emailSimilarity * 30;
-            reasons.push(`Email ${Math.round(emailSimilarity * 100)}% similar`);
+        } 
+        // AI SMART MATCHING MODE: Fuzzy matching based on order data
+        else {
+          // Company name similarity (check both Name and DBA fields)
+          if (orderCompany && (storeName || storeDba)) {
+            const nameSimilarity = stringSimilarity(orderCompany, storeName);
+            const dbaSimilarity = storeDba ? stringSimilarity(orderCompany, storeDba) : 0;
+            const companySimilarity = Math.max(nameSimilarity, dbaSimilarity);
+            
+            if (companySimilarity > 0.6) {
+              score += companySimilarity * 50;
+              reasons.push(`Company name ${Math.round(companySimilarity * 100)}% similar`);
+            }
           }
-        }
 
-        // Exact email match (highest priority)
-        if (orderEmail && clientEmail && orderEmail.toLowerCase() === clientEmail.toLowerCase()) {
-          score += 100;
-          reasons.push('Exact email match');
-        }
+          // Email similarity
+          if (orderEmail && storeEmail) {
+            const emailSimilarity = stringSimilarity(orderEmail, storeEmail);
+            if (emailSimilarity > 0.8) {
+              score += emailSimilarity * 30;
+              reasons.push(`Email ${Math.round(emailSimilarity * 100)}% similar`);
+            }
+          }
 
-        // Exact company match
-        if (orderCompany && (clientCompany || clientName)) {
-          if (orderCompany.toLowerCase() === clientCompany.toLowerCase() ||
-              orderCompany.toLowerCase() === clientName.toLowerCase()) {
+          // Exact email match (highest priority)
+          if (orderEmail && storeEmail && orderEmail.toLowerCase() === storeEmail.toLowerCase()) {
             score += 100;
-            reasons.push('Exact company name match');
+            reasons.push('Exact email match');
+          }
+
+          // Exact company match (check both Name and DBA)
+          if (orderCompany) {
+            const exactNameMatch = storeName && orderCompany.toLowerCase() === storeName.toLowerCase();
+            const exactDbaMatch = storeDba && orderCompany.toLowerCase() === storeDba.toLowerCase();
+            
+            if (exactNameMatch || exactDbaMatch) {
+              score += 100;
+              reasons.push('Exact company name match');
+            }
           }
         }
 
+        // Add to suggestions if score is high enough
         if (score > 10) {
           suggestions.push({
-            client,
+            rowIndex: index + 2,
+            link: storeLink,
+            name: storeName,
+            dba: storeDba,
+            email: storeEmail,
             score: Math.min(score, 100),
             reasons,
-            displayName: clientName || clientCompany || clientEmail,
-            displayInfo: `${clientCity ? clientCity + ', ' : ''}${clientState || ''}`.trim(),
+            displayName: storeName || storeDba || storeEmail,
+            displayInfo: `${storeCity ? storeCity + ', ' : ''}${storeState || ''}`.trim(),
           });
         }
-      }
+      });
 
-      // Sort by score descending and return top 5
+      // Sort by score descending and return top results
       suggestions.sort((a, b) => b.score - a.score);
-      const topSuggestions = suggestions.slice(0, 5);
+      const limit = isManualSearch ? 100 : 20; // More results for manual search
+      const topSuggestions = suggestions.slice(0, limit);
 
       res.json({
         order,
         suggestions: topSuggestions,
+        isManualSearch,
       });
     } catch (error: any) {
       console.error("Error getting match suggestions:", error);

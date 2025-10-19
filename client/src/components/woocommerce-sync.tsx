@@ -107,11 +107,13 @@ export function WooCommerceSync() {
   });
 
   // Fetch smart match suggestions for the order being matched
+  // Includes manual search support via clientSearch state
   const { data: matchSuggestions } = useQuery({
-    queryKey: ["/api/orders", matchingOrderId, "match-suggestions"],
+    queryKey: ["/api/orders", matchingOrderId, "match-suggestions", clientSearch],
     queryFn: async () => {
       if (!matchingOrderId) return null;
-      return await apiRequest("GET", `/api/orders/${matchingOrderId}/match-suggestions`);
+      const searchParam = clientSearch.trim() ? `?search=${encodeURIComponent(clientSearch)}` : '';
+      return await apiRequest("GET", `/api/orders/${matchingOrderId}/match-suggestions${searchParam}`);
     },
     enabled: !!matchingOrderId,
   });
