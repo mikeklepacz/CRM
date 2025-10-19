@@ -428,32 +428,31 @@ export function WooCommerceSync() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {order.clientId ? (
-                          <Badge variant="default">Matched</Badge>
-                        ) : (
-                          <Dialog open={matchingOrderId === order.id} onOpenChange={(open) => {
-                            if (!open) {
-                              setMatchingOrderId(null);
-                              setSelectedClientId("");
-                              setShowAllClients(false);
-                              setClientSearch("");
-                            } else {
-                              // Reset state when opening dialog
-                              setSelectedClientId("");
-                              setShowAllClients(false);
-                              setClientSearch("");
-                            }
-                          }}>
-                            <DialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => setMatchingOrderId(order.id)}
-                              >
-                                <Link2 className="h-4 w-4 mr-1" />
-                                Match
-                              </Button>
-                            </DialogTrigger>
+                        <Dialog open={matchingOrderId === order.id} onOpenChange={(open) => {
+                          if (!open) {
+                            setMatchingOrderId(null);
+                            setSelectedClientId("");
+                            setShowAllClients(false);
+                            setClientSearch("");
+                          } else {
+                            // Reset state when opening dialog
+                            setSelectedClientId("");
+                            setShowAllClients(false);
+                            setClientSearch("");
+                          }
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant={order.clientId ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setMatchingOrderId(order.id)}
+                              className={order.clientId ? "bg-green-600 hover:bg-green-700 border-green-700" : ""}
+                              data-testid={`button-match-${order.id}`}
+                            >
+                              <Link2 className="h-4 w-4 mr-1" />
+                              {order.clientId ? "Matched ✓" : "Match"}
+                            </Button>
+                          </DialogTrigger>
                             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                               <DialogHeader>
                                 <DialogTitle>Match Order to Client</DialogTitle>
@@ -591,7 +590,6 @@ export function WooCommerceSync() {
                               </div>
                             </DialogContent>
                           </Dialog>
-                        )}
                       </TableCell>
                     </TableRow>
                   ))}
