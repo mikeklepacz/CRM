@@ -3087,15 +3087,17 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
       let emailToSet = '';
       let phoneToSet = '';
       
-      // Auto-populate POC Email if found, field is empty, and hasn't been manually edited
-      if (emails && emails.length > 0 && !formData.poc_email && !pocFieldsManuallyEdited.email) {
+      // Auto-populate POC Email if found and hasn't been manually edited
+      if (emails && emails.length > 0 && !pocFieldsManuallyEdited.email) {
         emailToSet = emails[0];
-        setFormData(prev => ({ ...prev, poc_email: emailToSet }));
-        updated = true;
+        if (emailToSet !== formData.poc_email) {
+          setFormData(prev => ({ ...prev, poc_email: emailToSet }));
+          updated = true;
+        }
       }
       
-      // Auto-populate POC Phone if found, field is empty, and hasn't been manually edited
-      if (phones && phones.length > 0 && !formData.poc_phone && !pocFieldsManuallyEdited.phone) {
+      // Auto-populate POC Phone if found and hasn't been manually edited
+      if (phones && phones.length > 0 && !pocFieldsManuallyEdited.phone) {
         // Format phone number to international format: +1 (xxx) xxx-xxxx
         const rawPhone = phones[0].replace(/\D/g, ''); // Remove all non-digits
         let formatted = rawPhone;
@@ -3110,8 +3112,10 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
         }
         
         phoneToSet = formatted;
-        setFormData(prev => ({ ...prev, poc_phone: phoneToSet }));
-        updated = true;
+        if (phoneToSet !== formData.poc_phone) {
+          setFormData(prev => ({ ...prev, poc_phone: phoneToSet }));
+          updated = true;
+        }
       }
       
       // Update initialData after auto-fill so hasUnsavedChanges doesn't trigger on auto-filled values
@@ -3122,8 +3126,18 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
           poc_phone: phoneToSet || prev.poc_phone
         }));
       }
+    } else {
+      // If notes are cleared, clear POC fields if they haven't been manually edited
+      if (!pocFieldsManuallyEdited.email && formData.poc_email) {
+        setFormData(prev => ({ ...prev, poc_email: '' }));
+        setInitialData(prev => ({ ...prev, poc_email: '' }));
+      }
+      if (!pocFieldsManuallyEdited.phone && formData.poc_phone) {
+        setFormData(prev => ({ ...prev, poc_phone: '' }));
+        setInitialData(prev => ({ ...prev, poc_phone: '' }));
+      }
     }
-  }, [formData.notes, formData.poc_email, formData.poc_phone, pocFieldsManuallyEdited]);
+  }, [formData.notes, pocFieldsManuallyEdited]);
 
   // Save mutation - only send changed fields
   const saveMutation = useMutation({
