@@ -1084,18 +1084,26 @@ export default function SalesDashboard() {
       });
     }
 
-    // Filter by cities if we have states selected and not all cities are selected
-    if (selectedStates.size > 0 && citiesInSelectedStates.length > 0 && selectedCities.size > 0 && selectedCities.size < citiesInSelectedStates.length) {
-      const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
-      filtered = filtered.filter((row: any) => {
-        return cityColumns.some((col: string) => {
-          const value = row[col];
-          if (value && String(value).trim()) {
-            return selectedCities.has(String(value).trim());
-          }
-          return false;
+    // Filter by cities if we have cities available in selected states
+    // CRITICAL: If 0 cities are selected, show NOTHING. If some but not all are selected, filter.
+    if (selectedStates.size > 0 && citiesInSelectedStates.length > 0) {
+      if (selectedCities.size === 0) {
+        // NO cities selected = show NOTHING
+        return [];
+      } else if (selectedCities.size < citiesInSelectedStates.length) {
+        // Some cities selected but not all = filter to show only selected cities
+        const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
+        filtered = filtered.filter((row: any) => {
+          return cityColumns.some((col: string) => {
+            const value = row[col];
+            if (value && String(value).trim()) {
+              return selectedCities.has(String(value).trim());
+            }
+            return false;
+          });
         });
-      });
+      }
+      // If all cities are selected, don't filter (show everything)
     }
 
     // Then sort
