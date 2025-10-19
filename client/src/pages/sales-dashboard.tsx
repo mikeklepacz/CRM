@@ -3467,14 +3467,30 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                         Follow-Up Date
                         <span className="text-destructive">*</span>
                       </Label>
-                      <Input
-                        id="follow_up_date"
-                        data-testid="input-follow-up-date"
-                        type="date"
-                        value={formData.follow_up_date}
-                        onChange={(e) => handleInputChange('follow_up_date', e.target.value)}
-                        required
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                            data-testid="button-follow-up-date"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.follow_up_date ? (
+                              format(parse(formData.follow_up_date, 'M/d/yyyy', new Date()), 'PPP')
+                            ) : (
+                              <span className="text-muted-foreground">Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" data-testid="popover-follow-up-date">
+                          <Calendar
+                            mode="single"
+                            selected={formData.follow_up_date ? parse(formData.follow_up_date, 'M/d/yyyy', new Date()) : undefined}
+                            onSelect={(date) => handleInputChange('follow_up_date', date ? format(date, 'M/d/yyyy') : '')}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="next_action">Next Action</Label>
