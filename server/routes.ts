@@ -699,16 +699,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check Commission Tracker to see which orders have tracker rows
       const sheets = await storage.getAllActiveGoogleSheets();
+      console.log('[GET /api/orders] All sheets:', sheets.map(s => ({ purpose: s.sheetPurpose, name: s.spreadsheetName })));
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      console.log('[GET /api/orders] Tracker sheet found:', trackerSheet ? trackerSheet.spreadsheetName : 'NONE');
       
       if (trackerSheet) {
         try {
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
           const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+          console.log('[GET /api/orders] Tracker rows read:', trackerRows.length);
           
           if (trackerRows.length > 0) {
             const trackerHeaders = trackerRows[0];
+            console.log('[GET /api/orders] Tracker headers:', trackerHeaders);
             const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+            console.log('[GET /api/orders] Transaction ID column index:', transactionIdIndex);
             
             // Build set of order IDs that have tracker rows
             const ordersWithTrackerRows = new Set<string>();
@@ -718,6 +723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 ordersWithTrackerRows.add(transactionId);
               }
             }
+            console.log('[GET /api/orders] Orders with tracker rows:', Array.from(ordersWithTrackerRows));
             
             // Add hasTrackerRows field to each order
             const ordersWithStatus = orders.map((order: any) => ({
