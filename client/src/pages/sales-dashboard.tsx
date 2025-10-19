@@ -3075,8 +3075,8 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
 
   useEffect(() => {
     if (formData.notes && formData.notes.trim()) {
-      // Email regex - matches most common email formats
-      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+      // Email regex - matches most common email formats (fixed character class)
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
       // Phone regex - matches various formats: (555) 123-4567, 555-123-4567, 555.123.4567, 5551234567
       const phoneRegex = /\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
       
@@ -3096,7 +3096,20 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
       
       // Auto-populate POC Phone if found, field is empty, and hasn't been manually edited
       if (phones && phones.length > 0 && !formData.poc_phone && !pocFieldsManuallyEdited.phone) {
-        phoneToSet = phones[0];
+        // Format phone number to international format: +1 (xxx) xxx-xxxx
+        const rawPhone = phones[0].replace(/\D/g, ''); // Remove all non-digits
+        let formatted = rawPhone;
+        
+        // If it's a 10-digit number, format it
+        if (rawPhone.length === 10) {
+          formatted = `+1 (${rawPhone.slice(0, 3)}) ${rawPhone.slice(3, 6)}-${rawPhone.slice(6)}`;
+        } 
+        // If it's 11 digits starting with 1, format it
+        else if (rawPhone.length === 11 && rawPhone.startsWith('1')) {
+          formatted = `+1 (${rawPhone.slice(1, 4)}) ${rawPhone.slice(4, 7)}-${rawPhone.slice(7)}`;
+        }
+        
+        phoneToSet = formatted;
         setFormData(prev => ({ ...prev, poc_phone: phoneToSet }));
         updated = true;
       }

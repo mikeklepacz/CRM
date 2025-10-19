@@ -1953,8 +1953,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Find both sheets
       const sheets = await storage.getAllActiveGoogleSheets();
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commission_tracker');
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store sheet not found' });
@@ -2050,7 +2050,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Find the relevant store sheet
       const sheets = await storage.getAllActiveGoogleSheets();
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store sheet not found' });
@@ -2141,7 +2141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (hasTrackerUpdates) {
         // Find Commission Tracker sheet
-        const trackerSheet = sheets.find(s => s.sheetPurpose === 'commission_tracker');
+        const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
 
         if (trackerSheet) {
           // Read Commission Tracker data
