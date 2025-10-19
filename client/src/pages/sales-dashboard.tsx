@@ -158,7 +158,7 @@ export default function SalesDashboard() {
   // Store details dialog state
   const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
     open: boolean;
-    storeId: string;
+    row: any;
   } | null>(null);
 
   // Default colors for light and dark modes
@@ -2819,7 +2819,7 @@ export default function SalesDashboard() {
                                       <button
                                         onClick={() => setStoreDetailsDialog({
                                           open: true,
-                                          storeId: row.link || row.Link || String(rowKey)
+                                          row: row
                                         })}
                                         className="hover:underline font-medium text-left"
                                         style={{ color: customColors.primary }}
@@ -2978,7 +2978,9 @@ export default function SalesDashboard() {
         <StoreDetailsDialog
           open={storeDetailsDialog.open}
           onOpenChange={(open) => !open && setStoreDetailsDialog(null)}
-          storeId={storeDetailsDialog.storeId}
+          row={storeDetailsDialog.row}
+          trackerSheetId={trackerSheetId}
+          storeSheetId={storeSheetId}
         />
       )}
       </div>
@@ -2987,7 +2989,13 @@ export default function SalesDashboard() {
 }
 
 // Store Details Dialog Component
-function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; onOpenChange: (open: boolean) => void; storeId: string }) {
+function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId }: { 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void; 
+  row: any;
+  trackerSheetId: string | undefined;
+  storeSheetId: string | undefined;
+}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -3019,28 +3027,18 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
     });
   }, [formData, initialData]);
 
-  // Fetch store data
-  const { data: storeData, isLoading } = useQuery({
-    queryKey: ['store-details', storeId],
-    queryFn: async () => {
-      const response = await apiRequest('GET', `/api/store/${encodeURIComponent(storeId)}`);
-      return response;
-    },
-    enabled: !!storeId && open,
-  });
-
-  // Populate form when data loads
+  // Populate form directly from row data when dialog opens
   useEffect(() => {
-    if (storeData) {
+    if (row && open) {
       // Helper function to get value from various possible field names (case-insensitive)
       const getValue = (fieldNames: string[]) => {
         for (const fieldName of fieldNames) {
           // Try exact match first
-          if (storeData[fieldName]) return storeData[fieldName];
+          if (row[fieldName]) return row[fieldName];
           
           // Try case-insensitive match
-          const key = Object.keys(storeData).find(k => k.toLowerCase() === fieldName.toLowerCase());
-          if (key && storeData[key]) return storeData[key];
+          const key = Object.keys(row).find(k => k.toLowerCase() === fieldName.toLowerCase());
+          if (key && row[key]) return row[key];
         }
         return "";
       };
@@ -3064,7 +3062,7 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
       setFormData(populatedData);
       setInitialData(populatedData);
     }
-  }, [storeData]);
+  }, [row, open]);
 
   // Auto-detect emails and phone numbers from Notes field
   // Only auto-populate if the POC field hasn't been manually edited
@@ -3155,6 +3153,11 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
         throw new Error("No changes to save");
       }
 
+      const storeId = formData.link || row.link || row.Link;
+      if (!storeId) {
+        throw new Error("Cannot save: Store link is missing");
+      }
+
       return await apiRequest('PUT', `/api/store/${encodeURIComponent(storeId)}`, changedFields);
     },
     onSuccess: () => {
@@ -3162,7 +3165,6 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
         title: "Success",
         description: "Store information updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['store-details', storeId] });
       queryClient.invalidateQueries({ queryKey: ['merged-data'] });
       onOpenChange(false);
     },
@@ -3268,9 +3270,9 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
           <DialogDescription>{formData.type}</DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
+        {!row ? (
           <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
+            <p>No store data available</p>
           </div>
         ) : (
           <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
