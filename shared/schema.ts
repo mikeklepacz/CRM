@@ -127,7 +127,7 @@ export const userIntegrations = pgTable("user_integrations", {
   wooConsumerKey: text("woo_consumer_key"),
   wooConsumerSecret: text("woo_consumer_secret"),
   wooLastSyncedAt: timestamp("woo_last_synced_at"),
-  // Google OAuth credentials
+  // Google OAuth credentials (for Google Sheets)
   googleClientId: varchar("google_client_id"),
   googleClientSecret: varchar("google_client_secret"),
   googleAccessToken: text("google_access_token"),
@@ -135,6 +135,12 @@ export const userIntegrations = pgTable("user_integrations", {
   googleTokenExpiry: bigint("google_token_expiry", { mode: "number" }),
   googleEmail: varchar("google_email"),
   googleConnectedAt: timestamp("google_connected_at"),
+  // Google Calendar/Gmail OAuth credentials (separate account)
+  googleCalendarAccessToken: text("google_calendar_access_token"),
+  googleCalendarRefreshToken: text("google_calendar_refresh_token"),
+  googleCalendarTokenExpiry: bigint("google_calendar_token_expiry", { mode: "number" }),
+  googleCalendarEmail: varchar("google_calendar_email"),
+  googleCalendarConnectedAt: timestamp("google_calendar_connected_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

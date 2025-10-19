@@ -4570,7 +4570,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integration = await storage.getUserIntegration(userId);
       
       res.json({
-        googleConnected: !!(integration?.googleAccessToken && integration?.googleRefreshToken)
+        googleSheetsConnected: !!(integration?.googleAccessToken && integration?.googleRefreshToken),
+        googleCalendarConnected: !!(integration?.googleCalendarAccessToken && integration?.googleCalendarRefreshToken),
+        googleSheetsEmail: integration?.googleEmail || null,
+        googleCalendarEmail: integration?.googleCalendarEmail || null
       });
     } catch (error: any) {
       console.error('Error fetching integration status:', error);
@@ -4578,8 +4581,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Connect Google (Calendar + Gmail) - initiate OAuth flow
-  app.post('/api/integrations/google/connect', isAuthenticatedCustom, async (req, res) => {
+  // Connect Google Calendar/Gmail - initiate OAuth flow
+  app.post('/api/integrations/google-calendar/connect', isAuthenticatedCustom, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
@@ -4590,17 +4593,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, return a message that integration setup is coming soon
       // In Phase 2-3, we'll implement the full OAuth flow using Replit's Google Calendar connector
       res.json({
-        message: 'Google integration setup is coming soon! This will use Replit\'s secure OAuth connector.',
+        message: 'Google Calendar integration setup is coming soon! This will use Replit\'s secure OAuth connector for a separate account.',
         authUrl: null
       });
     } catch (error: any) {
-      console.error('Error connecting Google:', error);
-      res.status(500).json({ message: error.message || 'Failed to connect Google' });
+      console.error('Error connecting Google Calendar:', error);
+      res.status(500).json({ message: error.message || 'Failed to connect Google Calendar' });
     }
   });
 
-  // Disconnect Google integration
-  app.post('/api/integrations/google/disconnect', isAuthenticatedCustom, async (req, res) => {
+  // Disconnect Google Sheets integration
+  app.post('/api/integrations/google-sheets/disconnect', isAuthenticatedCustom, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
@@ -4608,7 +4611,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       
-      // Clear Google tokens from user integration
+      // Clear Google Sheets tokens from user integration
       await storage.updateUserIntegration(userId, {
         googleAccessToken: null,
         googleRefreshToken: null,
@@ -4619,8 +4622,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ success: true });
     } catch (error: any) {
-      console.error('Error disconnecting Google:', error);
-      res.status(500).json({ message: error.message || 'Failed to disconnect Google' });
+      console.error('Error disconnecting Google Sheets:', error);
+      res.status(500).json({ message: error.message || 'Failed to disconnect Google Sheets' });
+    }
+  });
+
+  // Disconnect Google Calendar integration
+  app.post('/api/integrations/google-calendar/disconnect', isAuthenticatedCustom, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // Clear Google Calendar tokens from user integration
+      await storage.updateUserIntegration(userId, {
+        googleCalendarAccessToken: null,
+        googleCalendarRefreshToken: null,
+        googleCalendarTokenExpiry: null,
+        googleCalendarEmail: null,
+        googleCalendarConnectedAt: null
+      });
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error disconnecting Google Calendar:', error);
+      res.status(500).json({ message: error.message || 'Failed to disconnect Google Calendar' });
     }
   });
 
