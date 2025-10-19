@@ -799,9 +799,15 @@ export default function SalesDashboard() {
         // Filter saved states to only include ones that still exist in the data
         const validStates = userPreferences.selectedStates.filter((state: string) => allStates.includes(state));
         setSelectedStates(new Set(validStates));
+        // Set showCanadaOnly based on whether saved states are Canadian
+        const hasCanadian = validStates.some(isCanadianProvince);
+        const hasUSA = validStates.some(s => !isCanadianProvince(s));
+        setShowCanadaOnly(hasCanadian && !hasUSA);
       } else {
-        // Default: no states selected (show nothing until user selects)
-        setSelectedStates(new Set());
+        // Default: show USA states only (Canada unchecked)
+        const usaStates = allStates.filter(s => !isCanadianProvince(s));
+        setSelectedStates(new Set(usaStates));
+        setShowCanadaOnly(false);
       }
     }
   }, [allStates.length, userPreferences]);
@@ -1935,7 +1941,7 @@ export default function SalesDashboard() {
                           Uncheck states to hide rows from those states
                         </p>
                         
-                        {/* Canada/USA Toggle Checkbox */}
+                        {/* Canada Toggle Checkbox */}
                         <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
                           <Checkbox
                             id="canada-toggle"
@@ -1946,11 +1952,11 @@ export default function SalesDashboard() {
                               const newSelected = new Set<string>();
                               
                               if (checked) {
-                                // Show Canada only - hide USA states
+                                // Checked: Show Canada only - hide USA states
                                 canadianStates.forEach(state => newSelected.add(state));
                                 setShowCanadaOnly(true);
                               } else {
-                                // Show USA only - hide Canada states
+                                // Unchecked: Show USA only - hide Canada states
                                 usaStates.forEach(state => newSelected.add(state));
                                 setShowCanadaOnly(false);
                               }
@@ -1962,7 +1968,7 @@ export default function SalesDashboard() {
                             htmlFor="canada-toggle"
                             className="text-sm cursor-pointer flex-1 font-medium"
                           >
-                            {showCanadaOnly ? 'Canada Only' : 'USA Only'}
+                            Canada
                           </Label>
                           <span className="text-xs text-muted-foreground">
                             ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
