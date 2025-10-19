@@ -1944,7 +1944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get merged data from multiple sheets (for Sales Dashboard)
+  // Get merged data from multiple sheets (for Client Dashboard)
   app.post('/api/sheets/merged-data', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
