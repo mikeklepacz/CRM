@@ -157,6 +157,7 @@ export const userPreferences = pgTable("user_preferences", {
   columnOrder: jsonb("column_order").$type<string[]>(),
   columnWidths: jsonb("column_widths").$type<Record<string, number>>(),
   selectedStates: jsonb("selected_states").$type<string[]>(),
+  selectedCities: jsonb("selected_cities").$type<string[]>(),
   fontSize: integer("font_size").default(14), // Font size in pixels (12, 14, 16, 18, 20, etc.)
   rowHeight: integer("row_height").default(48), // Row height in pixels
   lightModeColors: jsonb("light_mode_colors").$type<{

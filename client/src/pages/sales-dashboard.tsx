@@ -850,7 +850,7 @@ export default function SalesDashboard() {
 
   // Initialize selected states when data loads (or from saved preferences)
   useEffect(() => {
-    if (allStates.length > 0 && selectedStates.size === 0) {
+    if (allStates.length > 0 && selectedStates.size === 0 && preferencesLoaded) {
       if (userPreferences?.selectedStates && userPreferences.selectedStates.length > 0) {
         // Filter saved states to only include ones that still exist in the data
         const validStates = userPreferences.selectedStates.filter((state: string) => allStates.includes(state));
@@ -859,22 +859,23 @@ export default function SalesDashboard() {
         const hasCanadian = validStates.some(isCanadianProvince);
         const hasUSA = validStates.some(s => !isCanadianProvince(s));
         setShowCanadaOnly(hasCanadian && !hasUSA);
-      } else {
-        // Default: show USA states only (Canada unchecked)
-        const usaStates = allStates.filter(s => !isCanadianProvince(s));
-        setSelectedStates(new Set(usaStates));
-        setShowCanadaOnly(false);
       }
+      // If no saved preferences, do NOT auto-select anything - user must manually choose
     }
-  }, [allStates.length, userPreferences]);
+  }, [allStates.length, userPreferences, preferencesLoaded]);
 
   // Initialize selected cities when states change or cities load
   useEffect(() => {
-    if (citiesInSelectedStates.length > 0 && selectedCities.size === 0) {
-      // Default: select all cities when states are first selected
-      setSelectedCities(new Set(citiesInSelectedStates));
+    if (citiesInSelectedStates.length > 0 && selectedCities.size === 0 && preferencesLoaded) {
+      // Check if we have saved city preferences
+      if (userPreferences?.selectedCities && userPreferences.selectedCities.length > 0) {
+        // Filter saved cities to only include ones that exist in current selected states
+        const validCities = userPreferences.selectedCities.filter((city: string) => citiesInSelectedStates.includes(city));
+        setSelectedCities(new Set(validCities));
+      }
+      // If no saved preferences, do NOT auto-select anything - user must manually choose
     }
-  }, [citiesInSelectedStates.length]);
+  }, [citiesInSelectedStates.length, userPreferences, preferencesLoaded]);
 
   // Auto-save cell changes immediately
   useEffect(() => {
@@ -914,6 +915,7 @@ export default function SalesDashboard() {
           columnOrder,
           columnWidths,
           selectedStates: Array.from(selectedStates),
+          selectedCities: Array.from(selectedCities),
           fontSize,
           rowHeight,
           lightModeColors,
@@ -932,7 +934,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedStates, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn, showCanadaOnly]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {

@@ -325,6 +325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     columnOrder: z.array(z.string()).optional(),
     columnWidths: z.record(z.number()).optional(),
     selectedStates: z.array(z.string()).optional(),
+    selectedCities: z.array(z.string()).optional(),
     fontSize: z.number().optional(),
     rowHeight: z.number().optional(),
     lightModeColors: colorSchemaWithStatus,
