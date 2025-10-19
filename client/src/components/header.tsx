@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 
@@ -44,6 +44,12 @@ export function Header() {
                 <Button variant="ghost" size="sm" data-testid="nav-clients">
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Clients
+                </Button>
+              </Link>
+              <Link href="/sales">
+                <Button variant="ghost" size="sm" data-testid="nav-sales">
+                  <TrendingUp className="mr-2 h-4 w-4" />
+                  Sales Analytics
                 </Button>
               </Link>
             </nav>
