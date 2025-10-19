@@ -3149,6 +3149,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all stores (for multi-location picker)
+  app.get('/api/stores/all/:sheetId', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { sheetId } = req.params;
+
+      const sheet = await storage.getGoogleSheetById(sheetId);
+      if (!sheet) {
+        return res.status(404).json({ message: 'Sheet not found' });
+      }
+
+      // Read all store data
+      const range = `${sheet.sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(userId, sheet.spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return res.json([]);
+      }
+
+      // Parse store data
+      const headers = rows[0];
+      const nameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'name');
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
+      const cityIndex = headers.findIndex((h: string) => h.toLowerCase() === 'city');
+      const stateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'state');
+      const addressIndex = headers.findIndex((h: string) => h.toLowerCase() === 'address');
+
+      const stores = rows.slice(1)
+        .map((row: any[]) => ({
+          name: nameIndex !== -1 ? (row[nameIndex] || '') : '',
+          link: linkIndex !== -1 ? (row[linkIndex] || '') : '',
+          city: cityIndex !== -1 ? (row[cityIndex] || '') : '',
+          state: stateIndex !== -1 ? (row[stateIndex] || '') : '',
+          address: addressIndex !== -1 ? (row[addressIndex] || '') : '',
+        }))
+        .filter((store: any) => store.link); // Only include stores with a link
+
+      res.json(stores);
+    } catch (error: any) {
+      console.error("Error fetching all stores:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch stores" });
+    }
+  });
+
+  // Claim multiple stores with DBA
+  app.post('/api/stores/claim-multiple', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const userEmail = req.user.claims?.email || req.user.email;
+      const { storeLinks, dbaName, storeSheetId, trackerSheetId } = req.body;
+
+      if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
+        return res.status(400).json({ message: "Store links array is required" });
+      }
+
+      if (!dbaName || dbaName.trim().length === 0) {
+        return res.status(400).json({ message: "DBA name is required" });
+      }
+
+      if (!storeSheetId || !trackerSheetId) {
+        return res.status(400).json({ message: "Both Store Database and Commission Tracker sheet IDs are required" });
+      }
+
+      // Get both sheets
+      const storeSheet = await storage.getGoogleSheetById(storeSheetId);
+      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
+
+      if (!storeSheet || !trackerSheet) {
+        return res.status(404).json({ message: 'One or both sheets not found' });
+      }
+
+      // Read Store Database to find stores
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+
+      if (storeRows.length === 0) {
+        return res.status(404).json({ message: 'Store Database is empty' });
+      }
+
+      const storeHeaders = storeRows[0];
+      const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const storeDbaIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'dba');
+
+      if (storeLinkIndex === -1) {
+        return res.status(404).json({ message: 'Link column not found in Store Database' });
+      }
+
+      // Read Commission Tracker to check for existing rows
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+
+      const trackerHeaders = trackerRows.length > 0 ? trackerRows[0] : [];
+      const trackerLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const trackerDbaIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'dba');
+      const trackerAgentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent' || h.toLowerCase() === 'agent name');
+
+      if (trackerLinkIndex === -1) {
+        return res.status(404).json({ message: 'Link column not found in Commission Tracker' });
+      }
+
+      // Find existing tracker links to avoid duplicates (normalize all links)
+      const existingTrackerLinks = new Set(
+        trackerRows.slice(1).map((row: any[]) => normalizeLink(row[trackerLinkIndex] || ''))
+      );
+
+      let updatedStoreCount = 0;
+      let createdTrackerCount = 0;
+      let skippedCount = 0;
+      const newTrackerRows: any[][] = [];
+
+      // Update Store Database and prepare Commission Tracker rows
+      for (const storeLink of storeLinks) {
+        const normalizedLink = normalizeLink(storeLink);
+
+        // Find store row in Store Database
+        const storeRowIndex = storeRows.findIndex((row: any[], i: number) => 
+          i > 0 && normalizeLink(row[storeLinkIndex] || '') === normalizedLink
+        );
+
+        if (storeRowIndex === -1) {
+          console.warn(`Store not found in Store Database: ${storeLink}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Update DBA in Store Database (if column exists)
+        if (storeDbaIndex !== -1) {
+          const columnLetter = String.fromCharCode(65 + storeDbaIndex);
+          const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex + 1}`;
+          await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[dbaName]]);
+          updatedStoreCount++;
+        }
+
+        // Check if tracker row already exists
+        if (existingTrackerLinks.has(normalizedLink)) {
+          console.warn(`Tracker row already exists for: ${storeLink}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Create new tracker row
+        const newTrackerRow = new Array(trackerHeaders.length).fill('');
+        newTrackerRow[trackerLinkIndex] = storeLink;
+        if (trackerDbaIndex !== -1) {
+          newTrackerRow[trackerDbaIndex] = dbaName;
+        }
+        if (trackerAgentIndex !== -1) {
+          newTrackerRow[trackerAgentIndex] = userEmail;
+        }
+
+        newTrackerRows.push(newTrackerRow);
+        createdTrackerCount++;
+      }
+
+      // Batch append all new tracker rows at once
+      if (newTrackerRows.length > 0) {
+        const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+        await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, newTrackerRows);
+      }
+
+      res.json({
+        message: "Successfully claimed multiple locations",
+        updatedStoreCount,
+        createdTrackerCount,
+        skippedCount,
+        total: storeLinks.length,
+        warnings: storeDbaIndex === -1 ? ["DBA column not found in Store Database - DBA not updated"] : []
+      });
+    } catch (error: any) {
+      console.error("Error claiming multiple stores:", error);
+      res.status(500).json({ message: error.message || "Failed to claim stores" });
+    }
+  });
+
   // Search stores by DBA or Name (for multi-location assignment)
   app.post('/api/stores/search', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

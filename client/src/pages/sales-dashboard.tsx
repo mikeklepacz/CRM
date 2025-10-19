@@ -18,7 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -3036,6 +3036,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: currentUser } = useQuery<{ email: string; role: string }>({ queryKey: ['/api/auth/user'] });
 
   const [formData, setFormData] = useState({
     name: "",
@@ -3059,6 +3060,31 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
   // Track initial data to determine what changed
   const [initialData, setInitialData] = useState(formData);
+
+  // Multiple Locations feature state
+  const [multiLocationMode, setMultiLocationMode] = useState(false);
+  const [dbaName, setDbaName] = useState("");
+  const [selectedStores, setSelectedStores] = useState<Array<{ link: string; name: string }>>([]);
+  const [storeSearchDialog, setStoreSearchDialog] = useState(false);
+  const [storeSearch, setStoreSearch] = useState("");
+
+  // Query all stores for multi-location picker
+  const { data: allStores } = useQuery<any[]>({
+    queryKey: [`/api/stores/all/${storeSheetId}`],
+    enabled: !!storeSheetId && multiLocationMode,
+  });
+
+  // Filtered stores for search
+  const filteredStores = useMemo(() => {
+    if (!allStores || !Array.isArray(allStores)) return [];
+    const searchLower = storeSearch.toLowerCase();
+    return allStores.filter((store: any) => 
+      store.name?.toLowerCase().includes(searchLower) ||
+      store.city?.toLowerCase().includes(searchLower) ||
+      store.state?.toLowerCase().includes(searchLower) ||
+      store.address?.toLowerCase().includes(searchLower)
+    );
+  }, [allStores, storeSearch]);
   
   // Check if there are unsaved changes
   const hasUnsavedChanges = useMemo(() => {
@@ -3442,6 +3468,138 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                       rows={4}
                     />
                   </div>
+
+                  {/* Multiple Locations Feature */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="multiple_locations"
+                        checked={multiLocationMode}
+                        onCheckedChange={(checked) => {
+                          setMultiLocationMode(checked as boolean);
+                          if (!checked) {
+                            setSelectedStores([]);
+                            setDbaName("");
+                            setStoreSearch("");
+                          }
+                        }}
+                        data-testid="checkbox-multiple-locations"
+                      />
+                      <Label htmlFor="multiple_locations" className="cursor-pointer font-medium">
+                        Multiple Locations (claim DBA with multiple stores)
+                      </Label>
+                    </div>
+
+                    {multiLocationMode && (
+                      <div className="space-y-4 pl-6 border-l-2 border-primary/20">
+                        <div className="space-y-2">
+                          <Label htmlFor="dba_name">DBA / Company Name</Label>
+                          <Input
+                            id="dba_name"
+                            data-testid="input-dba-name"
+                            value={dbaName}
+                            onChange={(e) => setDbaName(e.target.value)}
+                            placeholder="e.g., Lift Cannabis, Green Thumb Industries"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label>Selected Locations ({selectedStores.length})</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setStoreSearchDialog(true)}
+                              data-testid="button-add-locations"
+                            >
+                              <Search className="h-4 w-4 mr-2" />
+                              Add Locations
+                            </Button>
+                          </div>
+
+                          {selectedStores.length > 0 && (
+                            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
+                              {selectedStores.map((store) => (
+                                <div
+                                  key={store.link}
+                                  className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
+                                  data-testid={`selected-store-${store.link}`}
+                                >
+                                  <span className="text-sm">{store.name}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedStores(prev => prev.filter(s => s.link !== store.link))}
+                                    data-testid={`button-remove-store-${store.link}`}
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="default"
+                          onClick={async () => {
+                            try {
+                              const storeLinks = selectedStores.map(s => s.link);
+                              const response = await apiRequest('POST', '/api/stores/claim-multiple', {
+                                storeLinks,
+                                dbaName,
+                                storeSheetId,
+                                trackerSheetId
+                              });
+
+                              const successMessage = `Claimed ${response.createdTrackerCount} location${response.createdTrackerCount !== 1 ? 's' : ''} with DBA "${dbaName}"`;
+                              const warningMessage = response.skippedCount > 0 ? ` (${response.skippedCount} skipped - already claimed)` : '';
+                              
+                              toast({
+                                title: "Success",
+                                description: successMessage + warningMessage,
+                              });
+
+                              // Show warnings if any
+                              if (response.warnings && response.warnings.length > 0) {
+                                response.warnings.forEach((warning: string) => {
+                                  toast({
+                                    title: "Warning",
+                                    description: warning,
+                                    variant: "destructive",
+                                  });
+                                });
+                              }
+
+                              // Reset state
+                              setMultiLocationMode(false);
+                              setSelectedStores([]);
+                              setDbaName("");
+
+                              // Refresh the dashboard
+                              await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+                              await refetch();
+                            } catch (error: any) {
+                              toast({
+                                title: "Error",
+                                description: error.message || "Failed to claim locations",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                          disabled={!dbaName || selectedStores.length === 0}
+                          data-testid="button-claim-multiple"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Claim {selectedStores.length} Location{selectedStores.length !== 1 ? 's' : ''} with DBA
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="point_of_contact">Point of Contact</Label>
@@ -3695,6 +3853,92 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                 Save Changes
               </>
             )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Store Search Dialog for Multi-Location Selection */}
+    <Dialog open={storeSearchDialog} onOpenChange={setStoreSearchDialog}>
+      <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle>Select Multiple Locations</DialogTitle>
+          <DialogDescription>
+            Search and select multiple stores to claim with the DBA name
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="store_search">Search Stores</Label>
+            <Input
+              id="store_search"
+              data-testid="input-store-search"
+              value={storeSearch}
+              onChange={(e) => setStoreSearch(e.target.value)}
+              placeholder="Search by name, city, state, or address..."
+            />
+          </div>
+
+          <div className="text-sm text-muted-foreground">
+            {selectedStores.length} location{selectedStores.length !== 1 ? 's' : ''} selected
+          </div>
+
+          <ScrollArea className="h-96 border rounded-md">
+            <div className="p-4 space-y-2">
+              {filteredStores.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  {storeSearch ? 'No stores found matching your search' : 'Loading stores...'}
+                </p>
+              ) : (
+                filteredStores.map((store: any) => {
+                  const isSelected = selectedStores.some(s => s.link === store.link);
+                  return (
+                    <div
+                      key={store.link}
+                      className={`flex items-start space-x-3 p-3 rounded-md border cursor-pointer hover-elevate ${
+                        isSelected ? 'bg-primary/10 border-primary' : ''
+                      }`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedStores(prev => prev.filter(s => s.link !== store.link));
+                        } else {
+                          setSelectedStores(prev => [...prev, { link: store.link, name: store.name }]);
+                        }
+                      }}
+                      data-testid={`store-option-${store.link}`}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedStores(prev => [...prev, { link: store.link, name: store.name }]);
+                          } else {
+                            setSelectedStores(prev => prev.filter(s => s.link !== store.link));
+                          }
+                        }}
+                        data-testid={`checkbox-store-${store.link}`}
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">{store.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {store.city && store.state ? `${store.city}, ${store.state}` : store.city || store.state || ''}
+                        </div>
+                        {store.address && (
+                          <div className="text-xs text-muted-foreground">{store.address}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setStoreSearchDialog(false)} data-testid="button-cancel-search">
+            Done
           </Button>
         </DialogFooter>
       </DialogContent>
