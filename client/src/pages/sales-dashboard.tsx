@@ -125,7 +125,6 @@ export default function SalesDashboard() {
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
   const [freezeFirstColumn, setFreezeFirstColumn] = useState<boolean>(true);
-  const [showCanadaOnly, setShowCanadaOnly] = useState<boolean>(false);
 
   // Status options state (customizable)
   const [statusOptions, setStatusOptions] = useState<string[]>([
@@ -587,10 +586,6 @@ export default function SalesDashboard() {
           setFreezeFirstColumn(userPreferences.freezeFirstColumn);
         }
 
-        if (userPreferences.showCanadaOnly !== undefined) {
-          setShowCanadaOnly(userPreferences.showCanadaOnly);
-        }
-
         setPreferencesLoaded(true);
       } else {
         // No saved preferences, use defaults
@@ -606,7 +601,6 @@ export default function SalesDashboard() {
         setTextAlign('left');
         setVerticalAlign('middle');
         setColorRowByStatus(false); // Default to false
-        setShowCanadaOnly(false); // Default to false
         setPreferencesLoaded(true);
       }
     }
@@ -855,10 +849,6 @@ export default function SalesDashboard() {
         // Filter saved states to only include ones that still exist in the data
         const validStates = userPreferences.selectedStates.filter((state: string) => allStates.includes(state));
         setSelectedStates(new Set(validStates));
-        // Set showCanadaOnly based on whether saved states are Canadian
-        const hasCanadian = validStates.some(isCanadianProvince);
-        const hasUSA = validStates.some(s => !isCanadianProvince(s));
-        setShowCanadaOnly(hasCanadian && !hasUSA);
       }
       // If no saved preferences, do NOT auto-select anything - user must manually choose
     }
@@ -866,18 +856,15 @@ export default function SalesDashboard() {
 
   // Initialize selected cities when states change or cities load
   useEffect(() => {
-    if (citiesInSelectedStates.length > 0 && preferencesLoaded) {
-      // Check if we have saved city preferences
-      if (userPreferences?.selectedCities && userPreferences.selectedCities.length > 0) {
-        // Filter saved cities to only include ones that exist in current selected states
-        const validCities = userPreferences.selectedCities.filter((city: string) => citiesInSelectedStates.includes(city));
-        setSelectedCities(new Set(validCities));
-      } else if (selectedCities.size === 0) {
-        // No saved preferences - auto-select all cities in the selected states
-        setSelectedCities(new Set(citiesInSelectedStates));
-      }
+    if (citiesInSelectedStates.length > 0) {
+      // Always auto-select all cities when the list of available cities changes
+      // This ensures that when states are selected, all their cities are checked
+      setSelectedCities(new Set(citiesInSelectedStates));
+    } else if (citiesInSelectedStates.length === 0) {
+      // Clear cities if no states are selected
+      setSelectedCities(new Set());
     }
-  }, [citiesInSelectedStates.length, userPreferences, preferencesLoaded]);
+  }, [citiesInSelectedStates.join(',')]);
 
   // Auto-save cell changes immediately
   useEffect(() => {
@@ -928,7 +915,6 @@ export default function SalesDashboard() {
           colorRowByStatus, // Save row coloring preference
           colorPresets, // Save color presets
           freezeFirstColumn, // Save freeze column preference
-          showCanadaOnly, // Save Canada/USA toggle preference
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -936,7 +922,7 @@ export default function SalesDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn, showCanadaOnly]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -2025,16 +2011,20 @@ export default function SalesDashboard() {
                           Uncheck states to hide rows from those states
                         </p>
                         
-                        {/* Canada Toggle Checkbox */}
+                        {/* Canada Checkbox */}
                         <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
                           <Checkbox
                             id="canada-toggle"
-                            checked={showCanadaOnly}
+                            checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state))}
                             onCheckedChange={(checked) => {
-                              // When toggling Canada checkbox, clear all selections
-                              // User must manually select states they want to see
-                              setSelectedStates(new Set<string>());
-                              setShowCanadaOnly(!!checked);
+                              const canadianStates = allStates.filter(isCanadianProvince);
+                              const newSelected = new Set(selectedStates);
+                              if (checked) {
+                                canadianStates.forEach(state => newSelected.add(state));
+                              } else {
+                                canadianStates.forEach(state => newSelected.delete(state));
+                              }
+                              setSelectedStates(newSelected);
                             }}
                             data-testid="checkbox-canada-toggle"
                           />
@@ -2051,13 +2041,7 @@ export default function SalesDashboard() {
                         
                         <ScrollArea className="h-64">
                           <div className="space-y-2">
-                            {allStates
-                              .filter((state: string) => {
-                                // Show Canadian provinces only if Canada is checked
-                                // Show US states only if Canada is unchecked
-                                return showCanadaOnly ? isCanadianProvince(state) : !isCanadianProvince(state);
-                              })
-                              .map((state: string) => (
+                            {allStates.map((state: string) => (
                               <div key={state} className="flex items-center gap-2">
                                 <Checkbox
                                   id={`state-${state}`}
