@@ -388,6 +388,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getGoogleSheetByPurpose(purpose: string): Promise<GoogleSheet | null> {
+    console.log(`[Storage] Looking for sheet with purpose: "${purpose}"`);
+    const allSheets = await db.select().from(googleSheets);
+    console.log(`[Storage] All sheets:`, allSheets.map(s => ({
+      id: s.id,
+      purpose: s.sheetPurpose,
+      status: s.syncStatus
+    })));
+    
     const [sheet] = await db
       .select()
       .from(googleSheets)
@@ -396,6 +404,7 @@ export class DatabaseStorage implements IStorage {
         eq(googleSheets.syncStatus, 'active')
       ))
       .limit(1);
+    console.log(`[Storage] Found sheet:`, sheet ? `${sheet.spreadsheetName} / ${sheet.sheetName}` : 'NONE');
     return sheet || null;
   }
 
