@@ -1320,10 +1320,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Extract Link from client data (case-insensitive search)
-        const linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
+        let linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
+        
+        // If no link exists, generate unique 10-digit code and create Store Database entry
         if (!linkValue) {
-          console.log(`Skipping order ${orderId}: no Link found for client`);
-          continue;
+          console.log(`No Link found for order ${orderId}, generating unique code...`);
+          
+          // Generate unique 10-digit code: WC + 8 random digits
+          const generateUniqueCode = () => {
+            const randomDigits = Math.floor(10000000 + Math.random() * 90000000); // 8 random digits
+            return `WC${randomDigits}`;
+          };
+          
+          linkValue = generateUniqueCode();
+          
+          // Get Store Database sheet
+          const storeSheet = await storage.getGoogleSheetByPurpose('store_database');
+          if (storeSheet) {
+            // Read Store Database headers
+            const storeHeaderRange = `${storeSheet.sheetName}!1:1`;
+            const storeHeaderData = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeHeaderRange);
+            
+            if (storeHeaderData.length > 0) {
+              const storeHeaders = storeHeaderData[0];
+              
+              // Build column map
+              const storeColumnMap: Record<string, number> = {};
+              storeHeaders.forEach((header: string, index: number) => {
+                storeColumnMap[header.toLowerCase().trim()] = index;
+              });
+              
+              // Prepare new store row with minimal data
+              const newStoreRow = new Array(storeHeaders.length).fill('');
+              if ('link' in storeColumnMap) newStoreRow[storeColumnMap['link']] = linkValue;
+              if ('name' in storeColumnMap) newStoreRow[storeColumnMap['name']] = order.billingCompany || 'Unknown Company';
+              if ('email' in storeColumnMap) newStoreRow[storeColumnMap['email']] = order.billingEmail || '';
+              if ('dba' in storeColumnMap) newStoreRow[storeColumnMap['dba']] = order.billingCompany || '';
+              
+              // Append to Store Database
+              await googleSheets.appendSheetData(userId, storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:A`, [newStoreRow]);
+              console.log(`Created new store in Store Database with Link: ${linkValue}`);
+            }
+          }
+          
+          // Update client record with the new Link
+          await storage.updateClient(client.id, {
+            ...client,
+            uniqueIdentifier: linkValue,
+            data: {
+              ...client.data,
+              Link: linkValue,
+              link: linkValue,
+            }
+          });
+          console.log(`Updated client ${client.id} with Link: ${linkValue}`);
         }
 
         const salesAgentName = order.salesAgentName;
@@ -1655,9 +1705,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Implements row-level security so agents only see their own claimed stores
       //
       // Security Model:
-      // - Admins: See ALL tracker rows (no filtering)
-      // - Agents: See ONLY tracker rows where "Agent Name" matches their name
-      // - No agent name: See NOTHING from tracker (empty array)
+      // - Admins: See ALL rows from both sheets (no filtering)
+      // - Agents: See ONLY their assigned stores from Store Database + matching tracker rows
+      //   - Unclaimed stores (no Agent Name in Store Database) = visible to all agents
+      //   - Assigned stores (Agent Name in Store Database) = visible only to that agent
+      //   - Tracker rows filtered to match agent's name
       //
       // Agent Name Source (WooCommerce Convention):
       // 1. Prefer user.agentName field (stored from profile/WooCommerce integration)
@@ -1678,30 +1730,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // - Agents could see competitors' commission data
       // - Row-level security completely bypassed
       // ============================================================================
-      let filteredTrackerData = trackerData;
-      // Look for "Agent Name" column (case-insensitive, handles spaces)
-      const agentColumnName = trackerHeaders.find(h => 
+      
+      // Get user agent name for filtering
+      const userAgentName = user?.agentName || 
+        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null);
+      
+      // Filter Store Database by Agent Name (for non-admin users)
+      let filteredStoreData = storeData;
+      const storeAgentColumnName = storeHeaders.find(h => 
         h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
       );
       
-      if (user?.role !== 'admin' && agentColumnName) {
-        // Match by agent name string (WooCommerce convention)
-        // Try user.agentName first, then construct from firstName + lastName
-        const userAgentName = user?.agentName || 
-          (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null);
-        
-        if (userAgentName) {
-          filteredTrackerData = trackerData.filter(row => {
-            const rowAgentName = row[agentColumnName];
-            // Case-insensitive match
-            return rowAgentName && rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
-          });
-          console.log(`Filtered tracker data for agent "${userAgentName}": ${filteredTrackerData.length} rows`);
-        } else {
-          // No agent name available, filter to empty (agent sees nothing)
-          filteredTrackerData = [];
-          console.log('No agent name found for user, filtering all tracker rows');
-        }
+      if (user?.role !== 'admin' && storeAgentColumnName && userAgentName) {
+        filteredStoreData = storeData.filter(row => {
+          const rowAgentName = row[storeAgentColumnName];
+          // Show unclaimed stores (empty Agent Name) OR stores assigned to this agent
+          return !rowAgentName || rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
+        });
+        console.log(`Filtered store data for agent "${userAgentName}": ${filteredStoreData.length} rows (includes unclaimed stores)`);
+      }
+      
+      // Filter Tracker Data by Agent Name (for non-admin users)
+      let filteredTrackerData = trackerData;
+      const trackerAgentColumnName = trackerHeaders.find(h => 
+        h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
+      );
+      
+      if (user?.role !== 'admin' && trackerAgentColumnName && userAgentName) {
+        filteredTrackerData = trackerData.filter(row => {
+          const rowAgentName = row[trackerAgentColumnName];
+          // Case-insensitive match
+          return rowAgentName && rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
+        });
+        console.log(`Filtered tracker data for agent "${userAgentName}": ${filteredTrackerData.length} rows`);
+      } else if (user?.role !== 'admin' && !userAgentName) {
+        // No agent name available, filter both to empty (agent sees nothing)
+        filteredTrackerData = [];
+        filteredStoreData = [];
+        console.log('No agent name found for user, filtering all rows');
       }
 
       // === COMPREHENSIVE MERGE DEBUGGING ===
@@ -1716,7 +1782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Show a few sample store links
         console.log('\nSample store links (first 5):');
-        storeData.slice(0, 5).forEach((sr, i) => {
+        filteredStoreData.slice(0, 5).forEach((sr, i) => {
           const storeLink = sr[actualStoreJoinColumn];
           const normalizedStoreLink = normalizeLink(storeLink);
           console.log(`  Store ${i}: (raw) "${storeLink}" -> (normalized) "${normalizedStoreLink}"`);
@@ -1724,7 +1790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Check if ANY store link matches
-        const matchingStore = storeData.find(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedTrackerLink);
+        const matchingStore = filteredStoreData.find(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedTrackerLink);
         console.log('\nMatching store found?', !!matchingStore);
         if (matchingStore) {
           console.log('Matching store link (raw):', JSON.stringify(matchingStore[actualStoreJoinColumn]));
@@ -1766,8 +1832,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ============================================================================
       const mergedDataMap = new Map();
 
-      // First, add all store rows (use row index as key to avoid overwriting duplicates)
-      storeData.forEach((storeRow, index) => {
+      // First, add all FILTERED store rows (use row index as key to avoid overwriting duplicates)
+      filteredStoreData.forEach((storeRow, index) => {
         const joinValue = storeRow[actualStoreJoinColumn];
         const normalizedJoinValue = normalizeLink(joinValue);
         const trackerRow = filteredTrackerData.find(tr => normalizeLink(tr[actualTrackerJoinColumn]) === normalizedJoinValue && normalizedJoinValue) || {};
@@ -1781,12 +1847,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       });
 
-      // Then, add tracker rows that don't exist in store (deleted orders)
+      // Then, add tracker rows that don't exist in FILTERED store (deleted orders)
       filteredTrackerData.forEach(trackerRow => {
         const joinValue = trackerRow[actualTrackerJoinColumn];
         const normalizedJoinValue = normalizeLink(joinValue);
-        // Check if this tracker row already matched a store row
-        const alreadyMerged = storeData.some(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedJoinValue && normalizedJoinValue);
+        // Check if this tracker row already matched a FILTERED store row
+        const alreadyMerged = filteredStoreData.some(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedJoinValue && normalizedJoinValue);
         if (!alreadyMerged) {
           // This row only exists in tracker - it was deleted from store
           mergedDataMap.set(`tracker-${trackerRow._trackerRowIndex}`, {
@@ -1836,6 +1902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const editableColumns = [
         ...trackerHeaders.filter(h => !excludedCols.includes(h.toLowerCase())), // All tracker columns except agent and join column
         'phone', 'email', 'additional phone', 'additional email', // Editable store columns
+        'dba', 'agent name', // Corporate name and agent assignment for multi-location tracking
       ].filter(col => allHeaders.some(h => h.toLowerCase() === col.toLowerCase())); // Only include if they exist
 
       res.json({
@@ -2607,6 +2674,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hours: 'Hours',
         vibe_score: 'Vibe Score',
         sales_ready_summary: 'Sales-ready Summary',
+        dba: 'DBA',  // Company/corporate name (renamed from Error column)
+        agent_name: 'Agent Name',  // Agent assignment for multi-location tracking (column Q)
       };
 
       // Map form fields to Commission Tracker column names (K, M, N columns)
@@ -2729,6 +2798,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating store details:", error);
       next(error);
+    }
+  });
+
+  // Search stores by DBA or Name (for multi-location assignment)
+  app.post('/api/stores/search', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { searchTerm } = req.body;
+
+      if (!searchTerm || searchTerm.trim().length === 0) {
+        return res.status(400).json({ message: "Search term is required" });
+      }
+
+      // Find Store Database sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store Database sheet not found' });
+      }
+
+      // Read all store data
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+
+      if (storeRows.length === 0) {
+        return res.json({ stores: [] });
+      }
+
+      // Parse store data
+      const storeHeaders = storeRows[0];
+      const nameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'name');
+      const dbaIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'dba');
+      const linkIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'link');
+      const agentIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+      const addressIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'address');
+      const cityIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'city');
+      const stateIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'state');
+
+      const searchLower = searchTerm.toLowerCase().trim();
+      
+      const matchingStores = storeRows.slice(1)
+        .map((row, index) => {
+          const name = nameIndex !== -1 ? (row[nameIndex] || '') : '';
+          const dba = dbaIndex !== -1 ? (row[dbaIndex] || '') : '';
+          const link = linkIndex !== -1 ? (row[linkIndex] || '') : '';
+          const agentName = agentIndex !== -1 ? (row[agentIndex] || '') : '';
+          const address = addressIndex !== -1 ? (row[addressIndex] || '') : '';
+          const city = cityIndex !== -1 ? (row[cityIndex] || '') : '';
+          const state = stateIndex !== -1 ? (row[stateIndex] || '') : '';
+          
+          // Search in Name or DBA columns
+          const nameMatch = name.toLowerCase().includes(searchLower);
+          const dbaMatch = dba.toLowerCase().includes(searchLower);
+          
+          if (nameMatch || dbaMatch) {
+            // Normalize keys to lowercase for frontend consistency
+            return {
+              rowIndex: index + 2, // +2 because row 1 is header, array is 0-indexed
+              name: name,
+              dba: dba,
+              link: link, // CRITICAL: lowercase 'link' so frontend can access it
+              agentName: agentName,
+              address: address,
+              city: city,
+              state: state,
+              isAssigned: !!agentName,
+            };
+          }
+          return null;
+        })
+        .filter(store => store !== null);
+
+      res.json({ 
+        stores: matchingStores,
+        storeSheetId: storeSheet.id,
+      });
+    } catch (error: any) {
+      console.error("Error searching stores:", error);
+      res.status(500).json({ message: error.message || "Failed to search stores" });
+    }
+  });
+
+  // Bulk assign agent to multiple stores
+  app.post('/api/stores/bulk-assign', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { storeLinks, agentName } = req.body;
+
+      if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
+        return res.status(400).json({ message: "Store links array is required" });
+      }
+
+      if (!agentName || agentName.trim().length === 0) {
+        return res.status(400).json({ message: "Agent name is required" });
+      }
+
+      // Find Store Database sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store Database sheet not found' });
+      }
+
+      // Read all store data
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+
+      if (storeRows.length === 0) {
+        return res.status(404).json({ message: 'Store sheet is empty' });
+      }
+
+      // Find Agent Name column
+      const storeHeaders = storeRows[0];
+      const agentNameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+      const linkIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'link');
+
+      if (agentNameIndex === -1) {
+        return res.status(404).json({ message: 'Agent Name column not found in Store Database' });
+      }
+
+      if (linkIndex === -1) {
+        return res.status(404).json({ message: 'Link column not found in Store Database' });
+      }
+
+      // Build batch updates for all matching stores
+      const agentColumnLetter = String.fromCharCode(65 + agentNameIndex);
+      const batchUpdates: { range: string; values: any[][] }[] = [];
+      let updatedCount = 0;
+
+      storeRows.slice(1).forEach((row, index) => {
+        const rowLink = row[linkIndex] || '';
+        const rowIndex = index + 2; // +2 because row 1 is header, array is 0-indexed
+        
+        if (storeLinks.includes(rowLink)) {
+          batchUpdates.push({
+            range: `${storeSheet.sheetName}!${agentColumnLetter}${rowIndex}`,
+            values: [[agentName]]
+          });
+          updatedCount++;
+        }
+      });
+
+      // Execute all updates
+      if (batchUpdates.length > 0) {
+        for (const update of batchUpdates) {
+          await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, update.range, update.values);
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        message: `Successfully assigned ${agentName} to ${updatedCount} store(s)`,
+        updatedCount
+      });
+    } catch (error: any) {
+      console.error("Error bulk assigning agent:", error);
+      res.status(500).json({ message: error.message || "Failed to bulk assign agent" });
     }
   });
 

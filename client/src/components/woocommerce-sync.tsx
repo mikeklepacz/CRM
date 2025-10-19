@@ -9,6 +9,8 @@ import { RefreshCw, Loader2, Package, Link2, Search, Sparkles } from "lucide-rea
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -198,6 +200,107 @@ export function WooCommerceSync() {
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [showConflicts, setShowConflicts] = useState(false);
 
+  // Multi-location search and bulk-assign state
+  const [showMultiLocationDialog, setShowMultiLocationDialog] = useState(false);
+  const [multiLocationSearch, setMultiLocationSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [selectedStores, setSelectedStores] = useState<Set<string>>(new Set());
+  const [bulkAgentName, setBulkAgentName] = useState("");
+
+  const searchStoresMutation = useMutation({
+    mutationFn: async (searchTerm: string) => {
+      return await apiRequest("POST", "/api/stores/search", { searchTerm });
+    },
+    onSuccess: (data) => {
+      setSearchResults(data.stores || []);
+      if (data.stores.length === 0) {
+        toast({
+          title: "No Results",
+          description: "No stores found matching your search",
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkAssignMutation = useMutation({
+    mutationFn: async ({ storeLinks, agentName }: { storeLinks: string[]; agentName: string }) => {
+      return await apiRequest("POST", "/api/stores/bulk-assign", { storeLinks, agentName });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: data.message,
+      });
+      setShowMultiLocationDialog(false);
+      setSearchResults([]);
+      setSelectedStores(new Set());
+      setBulkAgentName("");
+      setMultiLocationSearch("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleMultiLocationSearch = () => {
+    if (multiLocationSearch.trim().length > 0) {
+      searchStoresMutation.mutate(multiLocationSearch.trim());
+    }
+  };
+
+  const handleBulkAssign = () => {
+    if (selectedStores.size === 0) {
+      toast({
+        title: "No Stores Selected",
+        description: "Please select at least one store to assign",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!bulkAgentName.trim()) {
+      toast({
+        title: "Agent Name Required",
+        description: "Please enter an agent name",
+        variant: "destructive",
+      });
+      return;
+    }
+    bulkAssignMutation.mutate({
+      storeLinks: Array.from(selectedStores),
+      agentName: bulkAgentName.trim(),
+    });
+  };
+
+  const toggleStoreSelection = (link: string) => {
+    const newSelected = new Set(selectedStores);
+    if (newSelected.has(link)) {
+      newSelected.delete(link);
+    } else {
+      newSelected.add(link);
+    }
+    setSelectedStores(newSelected);
+  };
+
+  const selectAllStores = () => {
+    const allLinks = searchResults.map(s => s.link);
+    setSelectedStores(new Set(allLinks));
+  };
+
+  const deselectAllStores = () => {
+    setSelectedStores(new Set());
+  };
+
   const writeToTrackerMutation = useMutation({
     mutationFn: async () => {
       // Get matched orders with commission data
@@ -306,6 +409,15 @@ export function WooCommerceSync() {
                 Write to Tracker ({orders.filter((o: any) => o.clientId).length})
               </>
             )}
+          </Button>
+          
+          <Button
+            onClick={() => setShowMultiLocationDialog(true)}
+            variant="outline"
+            data-testid="button-multi-location-assign"
+          >
+            <Search className="h-4 w-4 mr-2" />
+            Multi-Location Assign
           </Button>
         </div>
 
@@ -638,6 +750,175 @@ export function WooCommerceSync() {
               <Button variant="outline" onClick={() => setShowConflicts(false)}>
                 Close
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Multi-Location Search and Assign Dialog */}
+        <Dialog open={showMultiLocationDialog} onOpenChange={setShowMultiLocationDialog}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Multi-Location Store Assignment</DialogTitle>
+              <DialogDescription>
+                Search for stores by name or DBA (company name), then assign an agent to all matching locations at once.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              {/* Search Input */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Search by store name or DBA (e.g., 'Bud Mart')"
+                  value={multiLocationSearch}
+                  onChange={(e) => setMultiLocationSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleMultiLocationSearch();
+                    }
+                  }}
+                  data-testid="input-multi-location-search"
+                />
+                <Button
+                  onClick={handleMultiLocationSearch}
+                  disabled={searchStoresMutation.isPending || !multiLocationSearch.trim()}
+                  data-testid="button-search-stores"
+                >
+                  {searchStoresMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="h-4 w-4 mr-2" />
+                      Search
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Found {searchResults.length} store(s)
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={selectAllStores}
+                        data-testid="button-select-all-stores"
+                      >
+                        Select All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={deselectAllStores}
+                        data-testid="button-deselect-all-stores"
+                      >
+                        Deselect All
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Store List */}
+                  <div className="border rounded-md max-h-96 overflow-y-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background">
+                        <TableRow>
+                          <TableHead className="w-12">Select</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>DBA</TableHead>
+                          <TableHead>Location</TableHead>
+                          <TableHead>Current Agent</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {searchResults.map((store) => (
+                          <TableRow key={store.link}>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedStores.has(store.link)}
+                                onCheckedChange={() => toggleStoreSelection(store.link)}
+                                data-testid={`checkbox-store-${store.link}`}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">{store.name}</TableCell>
+                            <TableCell>{store.dba || '-'}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {store.city && store.state ? `${store.city}, ${store.state}` : store.address || '-'}
+                            </TableCell>
+                            <TableCell>
+                              {store.agentName ? (
+                                <Badge variant="default">{store.agentName}</Badge>
+                              ) : (
+                                <Badge variant="outline">Unassigned</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Agent Assignment */}
+                  <div className="space-y-2">
+                    <Label htmlFor="bulk-agent-name">Agent Name</Label>
+                    <Input
+                      id="bulk-agent-name"
+                      placeholder="Enter agent name (e.g., 'John Smith')"
+                      value={bulkAgentName}
+                      onChange={(e) => setBulkAgentName(e.target.value)}
+                      data-testid="input-bulk-agent-name"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {selectedStores.size} store(s)
+                    </p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowMultiLocationDialog(false);
+                        setSearchResults([]);
+                        setSelectedStores(new Set());
+                        setBulkAgentName("");
+                        setMultiLocationSearch("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleBulkAssign}
+                      disabled={bulkAssignMutation.isPending || selectedStores.size === 0 || !bulkAgentName.trim()}
+                      data-testid="button-execute-bulk-assign"
+                    >
+                      {bulkAssignMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Assigning...
+                        </>
+                      ) : (
+                        `Assign to ${selectedStores.size} Store(s)`
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* No Results Message */}
+              {searchResults.length === 0 && multiLocationSearch && !searchStoresMutation.isPending && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No stores found matching "{multiLocationSearch}"</p>
+                  <p className="text-sm mt-1">Try a different search term</p>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
