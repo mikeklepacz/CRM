@@ -27,10 +27,7 @@ export function Integrations() {
 
   const connectGoogleMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/integrations/google/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return await apiRequest('POST', '/api/integrations/google/connect');
     },
     onSuccess: (data: any) => {
       if (data.authUrl) {
@@ -55,10 +52,7 @@ export function Integrations() {
 
   const disconnectGoogleMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/integrations/google/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return await apiRequest('POST', '/api/integrations/google/disconnect');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/integrations/status'] });
