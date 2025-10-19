@@ -3755,7 +3755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== SALES ANALYTICS ENDPOINTS =====
   
-  // Get dashboard summary with key sales metrics
+  // Get dashboard summary with key sales metrics (from Google Sheets)
   app.get('/api/analytics/dashboard-summary', async (req, res) => {
     try {
       if (!req.user) {
@@ -3763,33 +3763,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+      
+      // Get Commission Tracker sheet
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      if (!trackerSheet) {
+        return res.json({
+          totalEarnings: "0.00",
+          monthlyAverage: "0.00",
+          thisMonthEarnings: "0.00",
+          lastMonthEarnings: "0.00",
+          projectedEarnings: "0.00",
+          bestMonth: { month: '', earnings: "0.00" },
+          commissionBreakdown: { commission25: "0.00", commission10: "0.00" }
+        });
       }
 
-      // Get all clients for this agent
-      const clients = user.role === 'admin' 
-        ? await storage.getAllClients()
-        : await storage.getClientsByAgent(userId);
+      // Read Commission Tracker data
+      const trackerRange = `${trackerSheet.sheetName}!A:G`;
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      
+      if (trackerRows.length <= 1) {
+        return res.json({
+          totalEarnings: "0.00",
+          monthlyAverage: "0.00",
+          thisMonthEarnings: "0.00",
+          lastMonthEarnings: "0.00",
+          projectedEarnings: "0.00",
+          bestMonth: { month: '', earnings: "0.00" },
+          commissionBreakdown: { commission25: "0.00", commission10: "0.00" }
+        });
+      }
 
-      // Get all orders for these clients
-      const clientIds = clients.map(c => c.id);
-      const allOrders = user.role === 'admin'
-        ? await storage.getAllOrders()
-        : (await Promise.all(clientIds.map(id => storage.getOrdersByClient(id)))).flat();
-
-      // Helper function to calculate commission based on first order date
-      const calculateCommission = (order: any, client: any) => {
-        if (!client.firstOrderDate || !order.orderDate) return 0;
-        
-        const orderDate = new Date(order.orderDate);
-        const firstOrderDate = new Date(client.firstOrderDate);
-        const monthsDiff = (orderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
-        
-        const rate = monthsDiff <= 6 ? 0.25 : 0.10;
-        return parseFloat(order.total) * rate;
-      };
+      // Parse headers to find column indices
+      const headers = trackerRows[0];
+      const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
+      const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+      const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
 
       // Calculate metrics
       const now = new Date();
@@ -3804,36 +3813,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let commission10Earnings = 0;
       const monthlyEarnings: { [key: string]: number } = {};
 
-      // Build client lookup map
-      const clientMap = new Map(clients.map(c => [c.id, c]));
+      // Process each tracker row
+      for (let i = 1; i < trackerRows.length; i++) {
+        const row = trackerRows[i];
+        const dateStr = row[dateIndex] || '';
+        const amountStr = row[amountIndex] || '0';
+        const commissionType = row[commissionTypeIndex] || '';
 
-      for (const order of allOrders) {
-        const client = clientMap.get(order.clientId || '');
-        if (!client) continue;
+        // Parse amount
+        const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
+        if (amount === 0) continue;
 
-        const commission = calculateCommission(order, client);
-        totalEarnings += commission;
+        totalEarnings += amount;
 
-        const orderDate = new Date(order.orderDate);
-        const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
-        monthlyEarnings[monthKey] = (monthlyEarnings[monthKey] || 0) + commission;
-
-        if (orderDate >= thisMonthStart) {
-          thisMonthEarnings += commission;
+        // Parse date (handle formats: MM/DD/YYYY, M/D/YYYY, etc.)
+        let orderDate: Date | null = null;
+        if (dateStr) {
+          const parsed = new Date(dateStr);
+          if (!isNaN(parsed.getTime())) {
+            orderDate = parsed;
+          }
         }
-        if (orderDate >= lastMonthStart && orderDate <= lastMonthEnd) {
-          lastMonthEarnings += commission;
+
+        if (orderDate) {
+          // Monthly tracking
+          const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+          monthlyEarnings[monthKey] = (monthlyEarnings[monthKey] || 0) + amount;
+
+          // This month vs last month
+          if (orderDate >= thisMonthStart) {
+            thisMonthEarnings += amount;
+          }
+          if (orderDate >= lastMonthStart && orderDate <= lastMonthEnd) {
+            lastMonthEarnings += amount;
+          }
         }
 
-        // Track 25% vs 10% earnings
-        if (!client.firstOrderDate) continue;
-        const firstOrderDate = new Date(client.firstOrderDate);
-        const monthsDiff = (orderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
-        
-        if (monthsDiff <= 6) {
-          commission25Earnings += commission;
-        } else {
-          commission10Earnings += commission;
+        // Track by commission type
+        if (commissionType.includes('25')) {
+          commission25Earnings += amount;
+        } else if (commissionType.includes('10')) {
+          commission10Earnings += amount;
         }
       }
 
@@ -3881,7 +3901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get commission breakdown details
+  // Get commission breakdown details (from Google Sheets)
   app.get('/api/analytics/commission-breakdown', async (req, res) => {
     try {
       if (!req.user) {
@@ -3889,62 +3909,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+      
+      // Get Commission Tracker sheet
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      if (!trackerSheet) {
+        return res.json({
+          breakdown: {
+            tier25Percent: { clients: 0, earnings: 0 },
+            tier10Percent: { clients: 0, earnings: 0 }
+          }
+        });
       }
 
-      const clients = user.role === 'admin' 
-        ? await storage.getAllClients()
-        : await storage.getClientsByAgent(userId);
-
-      // Categorize clients by commission tier
-      const now = new Date();
-      const clientsAt25: any[] = [];
-      const clientsAt10: any[] = [];
-      const clientsNearing10: any[] = []; // Within 30 days of tier change
-
-      for (const client of clients) {
-        if (!client.firstOrderDate) continue;
-
-        const firstOrderDate = new Date(client.firstOrderDate);
-        const monthsSinceFirst = (now.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
-        const daysUntilTierChange = Math.max(0, Math.ceil((6 - monthsSinceFirst) * 30.44));
-
-        const clientOrders = await storage.getOrdersByClient(client.id);
-        const totalRevenue = clientOrders.reduce((sum, order) => sum + parseFloat(order.total), 0);
-
-        const clientData = {
-          id: client.id,
-          name: (client.data as any)?.name || (client.data as any)?.company || 'Unknown',
-          firstOrderDate: client.firstOrderDate,
-          totalRevenue: totalRevenue.toFixed(2),
-          daysUntilTierChange
-        };
-
-        if (monthsSinceFirst <= 6) {
-          clientsAt25.push(clientData);
-          if (daysUntilTierChange <= 30) {
-            clientsNearing10.push({
-              ...clientData,
-              revenueAtRisk: (totalRevenue * 0.15).toFixed(2) // 15% revenue reduction
-            });
+      // Read Commission Tracker data
+      const trackerRange = `${trackerSheet.sheetName}!A:G`;
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      
+      if (trackerRows.length <= 1) {
+        return res.json({
+          breakdown: {
+            tier25Percent: { clients: 0, earnings: 0 },
+            tier10Percent: { clients: 0, earnings: 0 }
           }
-        } else {
-          clientsAt10.push(clientData);
+        });
+      }
+
+      // Parse headers
+      const headers = trackerRows[0];
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
+      const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+      const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
+
+      // Track unique stores and earnings by tier
+      const tier25Stores = new Set<string>();
+      const tier10Stores = new Set<string>();
+      let tier25Earnings = 0;
+      let tier10Earnings = 0;
+
+      for (let i = 1; i < trackerRows.length; i++) {
+        const row = trackerRows[i];
+        const link = row[linkIndex] || '';
+        const amountStr = row[amountIndex] || '0';
+        const commissionType = row[commissionTypeIndex] || '';
+
+        const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
+        if (amount === 0) continue;
+
+        if (commissionType.includes('25')) {
+          tier25Earnings += amount;
+          if (link) tier25Stores.add(link);
+        } else if (commissionType.includes('10')) {
+          tier10Earnings += amount;
+          if (link) tier10Stores.add(link);
         }
       }
 
       res.json({
-        clientsAt25: clientsAt25.length,
-        clientsAt10: clientsAt10.length,
-        clientsNearing10: clientsNearing10.length,
-        nearingTierChange: clientsNearing10.map(c => ({
-          clientId: c.id,
-          clientName: c.name,
-          daysRemaining: c.daysUntilTierChange,
-          revenueAtRisk: c.revenueAtRisk
-        }))
+        breakdown: {
+          tier25Percent: {
+            clients: tier25Stores.size,
+            earnings: tier25Earnings
+          },
+          tier10Percent: {
+            clients: tier10Stores.size,
+            earnings: tier10Earnings
+          }
+        }
       });
     } catch (error: any) {
       console.error('Error fetching commission breakdown:', error);
@@ -4000,7 +4030,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get revenue trends over time
+  // Get revenue trends over time (from Google Sheets)
   app.get('/api/analytics/revenue-trends', async (req, res) => {
     try {
       if (!req.user) {
@@ -4010,49 +4040,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { range = 'last6months' } = req.query;
 
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+      // Get Commission Tracker sheet
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      if (!trackerSheet) {
+        return res.json({ trends: [] });
       }
 
-      const clients = user.role === 'admin' 
-        ? await storage.getAllClients()
-        : await storage.getClientsByAgent(userId);
+      // Read Commission Tracker data
+      const trackerRange = `${trackerSheet.sheetName}!A:G`;
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      
+      if (trackerRows.length <= 1) {
+        return res.json({ trends: [] });
+      }
 
-      const clientIds = clients.map(c => c.id);
-      const allOrders = user.role === 'admin'
-        ? await storage.getAllOrders()
-        : (await Promise.all(clientIds.map(id => storage.getOrdersByClient(id)))).flat();
+      // Parse headers
+      const headers = trackerRows[0];
+      const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
+      const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
 
-      // Calculate commission for each order
-      const calculateCommission = (order: any, client: any) => {
-        if (!client.firstOrderDate || !order.orderDate) return 0;
-        
-        const orderDate = new Date(order.orderDate);
-        const firstOrderDate = new Date(client.firstOrderDate);
-        const monthsDiff = (orderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
-        
-        const rate = monthsDiff <= 6 ? 0.25 : 0.10;
-        return parseFloat(order.total) * rate;
-      };
+      const monthlyData: { [key: string]: { commission: number; transactions: number } } = {};
 
-      const clientMap = new Map(clients.map(c => [c.id, c]));
-      const monthlyData: { [key: string]: { revenue: number; commission: number; orders: number } } = {};
+      // Process each tracker row
+      for (let i = 1; i < trackerRows.length; i++) {
+        const row = trackerRows[i];
+        const dateStr = row[dateIndex] || '';
+        const amountStr = row[amountIndex] || '0';
 
-      for (const order of allOrders) {
-        const client = clientMap.get(order.clientId || '');
-        if (!client) continue;
+        const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
+        if (amount === 0) continue;
 
-        const orderDate = new Date(order.orderDate);
-        const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
-        
-        if (!monthlyData[monthKey]) {
-          monthlyData[monthKey] = { revenue: 0, commission: 0, orders: 0 };
+        // Parse date
+        let transactionDate: Date | null = null;
+        if (dateStr) {
+          const parsed = new Date(dateStr);
+          if (!isNaN(parsed.getTime())) {
+            transactionDate = parsed;
+          }
         }
 
-        monthlyData[monthKey].revenue += parseFloat(order.total);
-        monthlyData[monthKey].commission += calculateCommission(order, client);
-        monthlyData[monthKey].orders += 1;
+        if (transactionDate) {
+          const monthKey = `${transactionDate.getFullYear()}-${String(transactionDate.getMonth() + 1).padStart(2, '0')}`;
+          
+          if (!monthlyData[monthKey]) {
+            monthlyData[monthKey] = { commission: 0, transactions: 0 };
+          }
+
+          monthlyData[monthKey].commission += amount;
+          monthlyData[monthKey].transactions += 1;
+        }
       }
 
       // Filter by range
@@ -4069,9 +4105,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const trends = filteredMonths.map(month => ({
         month,
-        revenue: monthlyData[month].revenue.toFixed(2),
+        revenue: "0.00", // We don't track order totals in Commission Tracker, only commission amounts
         commission: monthlyData[month].commission.toFixed(2),
-        orders: monthlyData[month].orders
+        orders: monthlyData[month].transactions
       }));
 
       res.json({ trends });
@@ -4081,7 +4117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get top clients by revenue
+  // Get top clients by commission earnings (from Google Sheets)
   app.get('/api/analytics/top-clients', async (req, res) => {
     try {
       if (!req.user) {
@@ -4092,48 +4128,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { limit = '10' } = req.query;
       const topN = parseInt(limit as string);
 
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+      // Get both Commission Tracker and Store Database sheets
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+
+      if (!trackerSheet) {
+        return res.json({ topClients: [] });
       }
 
-      const clients = user.role === 'admin' 
-        ? await storage.getAllClients()
-        : await storage.getClientsByAgent(userId);
+      // Read Commission Tracker data
+      const trackerRange = `${trackerSheet.sheetName}!A:G`;
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      
+      if (trackerRows.length <= 1) {
+        return res.json({ topClients: [] });
+      }
 
-      // Calculate total revenue and commission for each client
-      const clientStats = await Promise.all(
-        clients.map(async (client) => {
-          const orders = await storage.getOrdersByClient(client.id);
-          const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
+      // Parse tracker headers
+      const trackerHeaders = trackerRows[0];
+      const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const amountIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'amount');
+
+      // Aggregate commissions by store Link
+      const storeCommissions: { [link: string]: { totalCommission: number; transactionCount: number } } = {};
+      
+      for (let i = 1; i < trackerRows.length; i++) {
+        const row = trackerRows[i];
+        const link = row[linkIndex] || '';
+        const amountStr = row[amountIndex] || '0';
+
+        const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
+        if (amount === 0 || !link) continue;
+
+        if (!storeCommissions[link]) {
+          storeCommissions[link] = { totalCommission: 0, transactionCount: 0 };
+        }
+
+        storeCommissions[link].totalCommission += amount;
+        storeCommissions[link].transactionCount += 1;
+      }
+
+      // Read Store Database to get store names
+      let storeNames: { [link: string]: string } = {};
+      if (storeSheet) {
+        try {
+          const storeRange = `${storeSheet.sheetName}!A:D`;
+          const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
           
-          let totalCommission = 0;
-          for (const order of orders) {
-            if (!client.firstOrderDate || !order.orderDate) continue;
-            
-            const orderDate = new Date(order.orderDate);
-            const firstOrderDate = new Date(client.firstOrderDate);
-            const monthsDiff = (orderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
-            
-            const rate = monthsDiff <= 6 ? 0.25 : 0.10;
-            totalCommission += parseFloat(order.total) * rate;
+          if (storeRows.length > 0) {
+            const storeHeaders = storeRows[0];
+            const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+            const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
+
+            for (let i = 1; i < storeRows.length; i++) {
+              const row = storeRows[i];
+              const link = row[storeLinkIndex] || '';
+              const name = row[storeNameIndex] || '';
+              if (link) {
+                storeNames[link] = name || 'Unknown Store';
+              }
+            }
           }
+        } catch (err) {
+          console.error('Error reading Store Database:', err);
+        }
+      }
 
-          return {
-            id: client.id,
-            name: (client.data as any)?.name || (client.data as any)?.company || 'Unknown',
-            totalRevenue: totalRevenue.toFixed(2),
-            totalCommission: totalCommission.toFixed(2),
-            orderCount: orders.length,
-            firstOrderDate: client.firstOrderDate,
-            lastOrderDate: client.lastOrderDate
-          };
-        })
-      );
+      // Build top clients list
+      const clientStats = Object.entries(storeCommissions).map(([link, stats]) => ({
+        id: link,
+        name: storeNames[link] || 'Unknown Store',
+        totalRevenue: "0.00", // We don't track order totals, only commissions
+        totalCommission: stats.totalCommission.toFixed(2),
+        orderCount: stats.transactionCount,
+        firstOrderDate: null,
+        lastOrderDate: null
+      }));
 
-      // Sort by revenue and take top N
+      // Sort by commission and take top N
       const topClients = clientStats
-        .sort((a, b) => parseFloat(b.totalRevenue) - parseFloat(a.totalRevenue))
+        .sort((a, b) => parseFloat(b.totalCommission) - parseFloat(a.totalCommission))
         .slice(0, topN);
 
       res.json({ topClients });
