@@ -3515,6 +3515,17 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                             setSelectedStores([]);
                             setDbaName("");
                             setStoreSearch("");
+                          } else {
+                            // When enabling Multiple Locations mode, auto-add the current store to selectedStores
+                            const currentStore = { link: formData.link, name: formData.name };
+                            // Only add if not already in the list (preserve existing selections)
+                            if (currentStore.link) {
+                              setSelectedStores(prev => 
+                                prev.some(s => s.link === currentStore.link) 
+                                  ? prev 
+                                  : [...prev, currentStore]
+                              );
+                            }
                           }
                         }}
                         data-testid="checkbox-multiple-locations"
