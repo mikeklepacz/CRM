@@ -3321,12 +3321,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const storeLink of storeLinks) {
         const normalizedLink = normalizeLink(storeLink);
 
-        // Find store row in Store Database
-        const storeRowIndex = storeRows.findIndex((row: any[], i: number) => 
-          i > 0 && normalizeLink(row[storeLinkIndex] || '') === normalizedLink
-        );
+        // Find store row in Store Database (using manual loop like WooCommerce match)
+        let storeRowIndex = -1;
+        for (let i = 1; i < storeRows.length; i++) {
+          if (normalizeLink(storeRows[i][storeLinkIndex] || '') === normalizedLink) {
+            storeRowIndex = i + 1; // +1 for 1-indexed Google Sheets
+            break;
+          }
+        }
 
-        if (storeRowIndex === -1) {
+        if (storeRowIndex === -1 || storeRowIndex < 2) {
           console.warn(`Store not found in Store Database: ${storeLink}`);
           skippedCount++;
           continue;
@@ -3334,11 +3338,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Update DBA and Agent Name in Store Database (if columns exist)
         console.log(`[CLAIM-MULTIPLE] Processing store: ${storeLink}`);
-        console.log(`[CLAIM-MULTIPLE] Found at row index: ${storeRowIndex} (Sheet row: ${storeRowIndex + 1})`);
+        console.log(`[CLAIM-MULTIPLE] Found at Google Sheets row: ${storeRowIndex}`);
         
         if (storeDbaIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeDbaIndex);
-          const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex + 1}`;
+          const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
           console.log(`[CLAIM-MULTIPLE] Writing DBA "${dbaName}" to Store Database cell: ${cellRange}`);
           try {
             await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[dbaName]]);
@@ -3353,7 +3357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (storeAgentIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeAgentIndex);
-          const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex + 1}`;
+          const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
           console.log(`[CLAIM-MULTIPLE] Writing Agent "${userEmail}" to Store Database cell: ${cellRange}`);
           try {
             await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[userEmail]]);
