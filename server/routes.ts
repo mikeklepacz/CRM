@@ -2036,8 +2036,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Store not found or has no row index' });
       }
 
-      // Map form fields to column names in the Google Sheet
-      const columnMapping: Record<string, string> = {
+      // Map form fields to Store Database column names
+      const storeColumnMapping: Record<string, string> = {
         name: 'name',
         type: 'type',
         link: 'link',
@@ -2055,17 +2055,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sales_ready_summary: 'Sales-ready Summary',
       };
 
-      // Prepare batch updates
-      const batchUpdates: { range: string; values: any[][] }[] = [];
+      // Map form fields to Commission Tracker column names (K, M, N columns)
+      const trackerColumnMapping: Record<string, string> = {
+        notes: 'Notes',
+        point_of_contact: 'Point of Contact',
+        poc_email: 'POC Email',
+        poc_phone: 'POC Phone',
+      };
+
+      // Prepare batch updates for Store Database
+      const storeBatchUpdates: { range: string; values: any[][] }[] = [];
 
       Object.entries(updates).forEach(([field, value]) => {
-        const columnName = columnMapping[field];
+        const columnName = storeColumnMapping[field];
         if (columnName) {
           // Find column index (case-insensitive)
           const columnIndex = storeHeaders.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
           if (columnIndex !== -1) {
             const columnLetter = String.fromCharCode(65 + columnIndex);
-            batchUpdates.push({
+            storeBatchUpdates.push({
               range: `${storeSheet.sheetName}!${columnLetter}${store._storeRowIndex}`,
               values: [[value]]
             });
@@ -2073,10 +2081,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      // Execute batch update - write each cell individually
-      if (batchUpdates.length > 0) {
-        for (const update of batchUpdates) {
+      // Execute batch update for Store Database
+      if (storeBatchUpdates.length > 0) {
+        for (const update of storeBatchUpdates) {
           await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, update.range, update.values);
+        }
+      }
+
+      // Now handle Commission Tracker fields (notes, point_of_contact, poc_email, poc_phone)
+      const trackerFields = Object.keys(trackerColumnMapping);
+      const hasTrackerUpdates = trackerFields.some(field => field in updates);
+
+      if (hasTrackerUpdates) {
+        // Find Commission Tracker sheet
+        const trackerSheet = sheets.find(s => s.sheetPurpose === 'commission_tracker');
+
+        if (trackerSheet) {
+          // Read Commission Tracker data
+          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+
+          if (trackerRows.length > 0) {
+            const trackerHeaders = trackerRows[0];
+            const trackerData = trackerRows.slice(1).map((row, index) => {
+              const obj: any = { _trackerRowIndex: index + 2 };
+              trackerHeaders.forEach((header, i) => {
+                obj[header] = row[i] || '';
+              });
+              return obj;
+            });
+
+            // Find matching row by link (case-insensitive)
+            const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+            const trackerRow = trackerData.find((row: any) => {
+              if (linkIndex !== -1) {
+                const rowLink = row[trackerHeaders[linkIndex]];
+                return rowLink && rowLink === decodedId;
+              }
+              return row.link === decodedId || row.Link === decodedId;
+            });
+
+            let rowIndex = trackerRow?._trackerRowIndex;
+            
+            // If no tracker row exists, create one
+            if (!trackerRow) {
+              // Append new row with link
+              const newRowIndex = trackerRows.length + 1;
+              const newRow = new Array(trackerHeaders.length).fill('');
+              
+              // Set link value
+              if (linkIndex !== -1) {
+                newRow[linkIndex] = decodedId;
+              }
+              
+              // Append the new row
+              const appendRange = `${trackerSheet.sheetName}!A${newRowIndex}`;
+              await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newRow]);
+              
+              rowIndex = newRowIndex;
+            }
+
+            if (rowIndex) {
+              // Prepare batch updates for Commission Tracker
+              const trackerBatchUpdates: { range: string; values: any[][] }[] = [];
+
+              Object.entries(updates).forEach(([field, value]) => {
+                const columnName = trackerColumnMapping[field];
+                if (columnName) {
+                  // Find column index (case-insensitive)
+                  const columnIndex = trackerHeaders.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+                  if (columnIndex !== -1) {
+                    const columnLetter = String.fromCharCode(65 + columnIndex);
+                    trackerBatchUpdates.push({
+                      range: `${trackerSheet.sheetName}!${columnLetter}${rowIndex}`,
+                      values: [[value]]
+                    });
+                  }
+                }
+              });
+
+              // Execute batch update for Commission Tracker
+              if (trackerBatchUpdates.length > 0) {
+                for (const update of trackerBatchUpdates) {
+                  await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, update.range, update.values);
+                }
+              }
+            }
+          }
         }
       }
 

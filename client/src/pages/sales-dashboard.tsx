@@ -3054,8 +3054,14 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
   }, [storeData]);
 
   // Auto-detect emails and phone numbers from Notes field
+  // Only auto-populate if the POC field hasn't been manually edited
+  const [pocFieldsManuallyEdited, setPocFieldsManuallyEdited] = useState({
+    email: false,
+    phone: false
+  });
+
   useEffect(() => {
-    if (formData.notes) {
+    if (formData.notes && formData.notes.trim()) {
       // Email regex - matches most common email formats
       const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
       // Phone regex - matches various formats: (555) 123-4567, 555-123-4567, 555.123.4567, 5551234567
@@ -3064,17 +3070,34 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
       const emails = formData.notes.match(emailRegex);
       const phones = formData.notes.match(phoneRegex);
       
-      // Auto-populate POC Email if found and field is currently empty
-      if (emails && emails.length > 0 && !formData.poc_email) {
-        setFormData(prev => ({ ...prev, poc_email: emails[0] }));
+      let updated = false;
+      let emailToSet = '';
+      let phoneToSet = '';
+      
+      // Auto-populate POC Email if found, field is empty, and hasn't been manually edited
+      if (emails && emails.length > 0 && !formData.poc_email && !pocFieldsManuallyEdited.email) {
+        emailToSet = emails[0];
+        setFormData(prev => ({ ...prev, poc_email: emailToSet }));
+        updated = true;
       }
       
-      // Auto-populate POC Phone if found and field is currently empty
-      if (phones && phones.length > 0 && !formData.poc_phone) {
-        setFormData(prev => ({ ...prev, poc_phone: phones[0] }));
+      // Auto-populate POC Phone if found, field is empty, and hasn't been manually edited
+      if (phones && phones.length > 0 && !formData.poc_phone && !pocFieldsManuallyEdited.phone) {
+        phoneToSet = phones[0];
+        setFormData(prev => ({ ...prev, poc_phone: phoneToSet }));
+        updated = true;
+      }
+      
+      // Update initialData after auto-fill so hasUnsavedChanges doesn't trigger on auto-filled values
+      if (updated) {
+        setInitialData(prev => ({
+          ...prev,
+          poc_email: emailToSet || prev.poc_email,
+          poc_phone: phoneToSet || prev.poc_phone
+        }));
       }
     }
-  }, [formData.notes]);
+  }, [formData.notes, formData.poc_email, formData.poc_phone, pocFieldsManuallyEdited]);
 
   // Save mutation - only send changed fields
   const saveMutation = useMutation({
@@ -3114,6 +3137,13 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Mark POC fields as manually edited when user changes them
+    if (field === 'poc_email') {
+      setPocFieldsManuallyEdited(prev => ({ ...prev, email: true }));
+    } else if (field === 'poc_phone') {
+      setPocFieldsManuallyEdited(prev => ({ ...prev, phone: true }));
+    }
   };
 
   const handleSave = () => {
