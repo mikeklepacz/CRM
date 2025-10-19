@@ -3930,30 +3930,29 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
               ) : (
                 filteredStores.map((store: any) => {
                   const isSelected = selectedStores.some(s => s.link === store.link);
+                  
+                  const toggleStore = () => {
+                    setSelectedStores(prev => {
+                      const alreadySelected = prev.some(s => s.link === store.link);
+                      if (alreadySelected) {
+                        return prev.filter(s => s.link !== store.link);
+                      } else {
+                        return [...prev, { link: store.link, name: store.name }];
+                      }
+                    });
+                  };
+                  
                   return (
                     <div
                       key={store.link}
                       className={`flex items-start space-x-3 p-3 rounded-md border cursor-pointer hover-elevate ${
                         isSelected ? 'bg-primary/10 border-primary' : ''
                       }`}
-                      onClick={() => {
-                        if (isSelected) {
-                          setSelectedStores(prev => prev.filter(s => s.link !== store.link));
-                        } else {
-                          setSelectedStores(prev => [...prev, { link: store.link, name: store.name }]);
-                        }
-                      }}
+                      onClick={toggleStore}
                       data-testid={`store-option-${store.link}`}
                     >
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedStores(prev => [...prev, { link: store.link, name: store.name }]);
-                          } else {
-                            setSelectedStores(prev => prev.filter(s => s.link !== store.link));
-                          }
-                        }}
                         data-testid={`checkbox-store-${store.link}`}
                       />
                       <div className="flex-1">
