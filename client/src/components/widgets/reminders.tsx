@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Bell, Clock, Plus, Check } from "lucide-react";
+import { Settings2, Bell, Clock, Plus, Check, Download } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,39 @@ export function RemindersWidget() {
       });
     }
   });
+
+  const handleExportCalendar = async () => {
+    try {
+      const response = await fetch('/api/reminders/export/calendar', {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to export calendar');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'reminders.ics';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Calendar exported",
+        description: "Your reminders have been exported to a calendar file."
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to export calendar. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -111,7 +144,19 @@ export function RemindersWidget() {
               </Badge>
             )}
           </div>
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleExportCalendar}
+              className="h-7 w-7"
+              data-testid="button-export-calendar"
+              title="Export to calendar (.ics)"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
+          </div>
         </CardTitle>
         <CardDescription>Custom alerts and notifications</CardDescription>
       </CardHeader>
