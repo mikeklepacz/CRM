@@ -1117,16 +1117,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Save commission settings for multiple orders
-  app.post('/api/orders/save-commissions', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  // Save commission settings for multiple orders (database + Google Sheets)
+  app.post('/api/orders/save-commissions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { orders: orderUpdates } = req.body;
 
       if (!orderUpdates || !Array.isArray(orderUpdates)) {
         return res.status(400).json({ message: "Orders array is required" });
       }
 
-      let updated = 0;
+      // Step 1: Update database
+      let dbUpdated = 0;
       for (const update of orderUpdates) {
         const { orderId, commissionType, commissionAmount } = update;
         
@@ -1138,11 +1140,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (Object.keys(updates).length > 0) {
           await storage.updateOrder(orderId, updates);
-          updated++;
+          dbUpdated++;
         }
       }
 
-      res.json({ message: `Saved commission settings for ${updated} orders`, updated });
+      // Step 2: Write to Google Sheets Commission Tracker
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commission_tracker');
+      let sheetsWritten = 0;
+      
+      if (trackerSheet) {
+        const { spreadsheetId, sheetName } = trackerSheet;
+        
+        // Read tracker headers
+        const headerRange = `${sheetName}!1:1`;
+        const headerData = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+        
+        if (headerData.length > 0) {
+          const headers = headerData[0];
+          const columnMap: Record<string, number> = {};
+          headers.forEach((header: string, index: number) => {
+            columnMap[header.toLowerCase().trim()] = index;
+          });
+
+          // Read all existing rows
+          const allDataRange = `${sheetName}!A:ZZ`;
+          const allRows = await googleSheets.readSheetData(userId, spreadsheetId, allDataRange);
+          const existingRows = allRows.slice(1);
+
+          for (const orderReq of orderUpdates) {
+            const { orderId, commissionType, commissionAmount } = orderReq;
+            
+            // Get order from database
+            const order = await storage.getOrderById(orderId);
+            if (!order || !order.clientId) continue;
+
+            // Get client
+            const client = await storage.getClient(order.clientId);
+            if (!client) continue;
+
+            let linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
+            if (!linkValue) continue;
+
+            // Find existing row by Link
+            const linkIndex = columnMap['link'];
+            if (linkIndex === undefined) continue;
+
+            let existingRowIndex = -1;
+            for (let i = 0; i < existingRows.length; i++) {
+              if (existingRows[i][linkIndex] === linkValue) {
+                existingRowIndex = i + 2; // +2 for header and 1-indexed
+                break;
+              }
+            }
+
+            // Calculate commission amount
+            const orderTotal = parseFloat(order.total);
+            let amount: number;
+
+            if (commissionType === 'flat' && commissionAmount) {
+              amount = parseFloat(commissionAmount);
+            } else if (commissionType === '25') {
+              amount = orderTotal * 0.25;
+            } else if (commissionType === '10') {
+              amount = orderTotal * 0.10;
+            } else {
+              // Auto: determine based on 6-month rule
+              const firstOrderDate = client.firstOrderDate ? new Date(client.firstOrderDate) : new Date(order.orderDate);
+              const orderDate = new Date(order.orderDate);
+              const monthsSinceFirst = differenceInMonths(orderDate, firstOrderDate);
+              const rate = monthsSinceFirst <= 6 ? 0.25 : 0.10;
+              amount = orderTotal * rate;
+            }
+
+            // Determine commission type label
+            let commissionTypeLabel = 'Auto';
+            if (commissionType === 'flat') commissionTypeLabel = 'Flat';
+            else if (commissionType === '25') commissionTypeLabel = '25%';
+            else if (commissionType === '10') commissionTypeLabel = '10%';
+
+            if (existingRowIndex > 0) {
+              // Update existing row
+              const updates: Array<{range: string, values: any[][]}> = [];
+              
+              if ('commission type' in columnMap) {
+                const col = String.fromCharCode(65 + columnMap['commission type']);
+                updates.push({
+                  range: `${sheetName}!${col}${existingRowIndex}`,
+                  values: [[commissionTypeLabel]]
+                });
+              }
+              
+              if ('amount' in columnMap) {
+                const col = String.fromCharCode(65 + columnMap['amount']);
+                updates.push({
+                  range: `${sheetName}!${col}${existingRowIndex}`,
+                  values: [[amount.toFixed(2)]]
+                });
+              }
+
+              for (const update of updates) {
+                await googleSheets.writeSheetData(userId, spreadsheetId, update.range, update.values);
+              }
+              
+              sheetsWritten++;
+            }
+          }
+        }
+      }
+
+      res.json({ 
+        message: `Saved ${dbUpdated} commission settings to database` + (sheetsWritten > 0 ? ` and wrote ${sheetsWritten} to Google Sheets` : ''),
+        dbUpdated,
+        sheetsWritten
+      });
     } catch (error: any) {
       console.error("Error saving commission settings:", error);
       res.status(500).json({ message: error.message || "Failed to save commission settings" });

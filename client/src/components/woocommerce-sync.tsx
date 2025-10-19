@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Loader2, Package, Link2, Search, Sparkles } from "lucide-react";
+import { RefreshCw, Loader2, Link2, Search, Sparkles, Save, Package } from "lucide-react";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -180,20 +180,33 @@ export function WooCommerceSync() {
 
   const saveCommissionsMutation = useMutation({
     mutationFn: async () => {
-      const orderUpdates = Array.from(modifiedOrders).map(orderId => ({
-        orderId,
-        commissionType: commissionTypes[orderId] || 'auto',
-        commissionAmount: commissionAmounts[orderId] || null,
-      }));
+      // Include ALL matched orders (for Google Sheets), not just modified ones
+      const orderUpdates = orders
+        .filter((order: any) => order.clientId)
+        .map((order: any) => ({
+          orderId: order.id,
+          commissionType: commissionTypes[order.id] || 'auto',
+          commissionAmount: commissionAmounts[order.id] || null,
+        }));
       
       return await apiRequest("POST", "/api/orders/save-commissions", { orders: orderUpdates });
     },
     onSuccess: (data) => {
       setModifiedOrders(new Set());
-      toast({
-        title: "Saved",
-        description: data.message,
-      });
+      if (data.conflicts && data.conflicts.length > 0) {
+        setConflicts(data.conflicts);
+        setShowConflicts(true);
+        toast({
+          title: "Partial Success",
+          description: `${data.dbUpdated} saved to database, ${data.sheetsWritten} written to Google Sheets. ${data.conflicts.length} conflicts need resolution.`,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: data.message,
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -308,44 +321,6 @@ export function WooCommerceSync() {
     setBulkSelectedStores(new Set());
   };
 
-  const writeToTrackerMutation = useMutation({
-    mutationFn: async () => {
-      // Get matched orders with commission data
-      const matchedOrders = orders
-        .filter((order: any) => order.clientId)
-        .map((order: any) => ({
-          orderId: order.id,
-          commissionType: commissionTypes[order.id] || 'auto',
-          commissionAmount: commissionAmounts[order.id] || null,
-        }));
-      
-      return await apiRequest("POST", "/api/woocommerce/write-to-tracker", { orders: matchedOrders });
-    },
-    onSuccess: (data) => {
-      if (data.conflicts && data.conflicts.length > 0) {
-        setConflicts(data.conflicts);
-        setShowConflicts(true);
-        toast({
-          title: "Partial Success",
-          description: `${data.written} orders written. ${data.conflicts.length} conflicts need resolution.`,
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: `${data.written} orders written to Commission Tracker`,
-        });
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleMatchOrder = () => {
     if (matchingOrderId && selectedStores.length > 0) {
       matchOrderMutation.mutate({ 
@@ -420,7 +395,7 @@ export function WooCommerceSync() {
           
           <Button
             onClick={() => saveCommissionsMutation.mutate()}
-            disabled={saveCommissionsMutation.isPending || modifiedOrders.size === 0}
+            disabled={saveCommissionsMutation.isPending || !orders.some((o: any) => o.clientId)}
             variant="default"
             data-testid="button-save-all-commissions"
           >
@@ -430,25 +405,9 @@ export function WooCommerceSync() {
                 Saving...
               </>
             ) : (
-              `Save All (${modifiedOrders.size})`
-            )}
-          </Button>
-          
-          <Button
-            onClick={() => writeToTrackerMutation.mutate()}
-            disabled={writeToTrackerMutation.isPending || !orders.some((o: any) => o.clientId)}
-            variant="secondary"
-            data-testid="button-write-to-tracker"
-          >
-            {writeToTrackerMutation.isPending ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Writing...
-              </>
-            ) : (
-              <>
-                <Package className="h-4 w-4 mr-2" />
-                Write to Tracker ({orders.filter((o: any) => o.clientId).length})
+                <Save className="h-4 w-4 mr-2" />
+                Save Commissions ({orders.filter((o: any) => o.clientId).length})
               </>
             )}
           </Button>
