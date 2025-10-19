@@ -898,12 +898,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      // Find Commission Tracker sheet
+      // Find both Store Database and Commission Tracker sheets
       const sheets = await storage.getAllActiveGoogleSheets();
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
+      const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
+      }
+      
+      if (!storeDbSheet) {
+        return res.status(404).json({ message: 'Store Database sheet not found' });
+      }
+
+      // Read Store Database to find stores and update DBA
+      const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
+      const storeDbRows = await googleSheets.readSheetData(userId, storeDbSheet.spreadsheetId, storeDbRange);
+      
+      if (storeDbRows.length === 0) {
+        return res.status(400).json({ message: 'Store Database sheet is empty' });
+      }
+      
+      const storeDbHeaders = storeDbRows[0];
+      const storeDbLinkIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'link');
+      const storeDbDbaIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'dba');
+      
+      if (storeDbLinkIndex === -1) {
+        return res.status(400).json({ message: 'Store Database must have a "Link" column' });
       }
 
       // Read tracker data to check if stores already have rows
@@ -918,11 +939,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
       const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
       const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
-      const dbaIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'dba');
+      const trackerDbaIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'dba');
+      const agentNameIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
 
       if (linkIndex === -1) {
         return res.status(400).json({ message: 'Commission Tracker must have a "Link" column' });
       }
+      
+      // Get agent name from order metadata
+      const agentName = order.metaData?.find((m: any) => m.key === '_wc_order_attribution_utm_source')?.value 
+        || order.metaData?.find((m: any) => m.key === 'agent_name')?.value
+        || '';
 
       let rowsProcessed = 0;
       const results: Array<{link: string, name: string, action: string}> = [];
@@ -931,46 +958,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const store of storeLinks) {
         const { link: storeLink, name: storeName } = store;
         
-        // Find existing row for this store
-        let existingRowIndex = -1;
+        // 1. Update DBA in Store Database if DBA is provided
+        if (dba && storeDbDbaIndex !== -1) {
+          // Find the store in Store Database
+          let storeDbRowIndex = -1;
+          for (let i = 1; i < storeDbRows.length; i++) {
+            if (normalizeLink(storeDbRows[i][storeDbLinkIndex]) === normalizeLink(storeLink)) {
+              storeDbRowIndex = i + 1; // +1 for 1-indexed Google Sheets
+              break;
+            }
+          }
+          
+          if (storeDbRowIndex > 0) {
+            const dbaColumn = String.fromCharCode(65 + storeDbDbaIndex);
+            const dbaRange = `${storeDbSheet.sheetName}!${dbaColumn}${storeDbRowIndex}`;
+            await googleSheets.writeSheetData(userId, storeDbSheet.spreadsheetId, dbaRange, [[dba]]);
+          }
+        }
+        
+        // 2. Update or create row in Commission Tracker
+        let existingTrackerRowIndex = -1;
         for (let i = 1; i < trackerRows.length; i++) {
           if (normalizeLink(trackerRows[i][linkIndex]) === normalizeLink(storeLink)) {
-            existingRowIndex = i + 1; // +1 for 1-indexed Google Sheets
+            existingTrackerRowIndex = i + 1; // +1 for 1-indexed Google Sheets
             break;
           }
         }
 
-        // If row exists in Commission Tracker, update Order ID, Transaction ID, and optionally DBA
-        if (existingRowIndex > 0) {
-          const updates: any[] = [];
-          
-          // Update Order ID if column exists
+        if (existingTrackerRowIndex > 0) {
+          // Update existing tracker row
           if (orderIdIndex !== -1) {
             const orderIdColumn = String.fromCharCode(65 + orderIdIndex);
-            const updateRange = `${trackerSheet.sheetName}!${orderIdColumn}${existingRowIndex}`;
+            const updateRange = `${trackerSheet.sheetName}!${orderIdColumn}${existingTrackerRowIndex}`;
             await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, updateRange, [[order.orderNumber]]);
           }
           
-          // Update Transaction ID if column exists
           if (transactionIdIndex !== -1) {
             const txIdColumn = String.fromCharCode(65 + transactionIdIndex);
-            const txRange = `${trackerSheet.sheetName}!${txIdColumn}${existingRowIndex}`;
+            const txRange = `${trackerSheet.sheetName}!${txIdColumn}${existingTrackerRowIndex}`;
             await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, txRange, [[order.id]]);
           }
           
-          // Update DBA if column exists and DBA is provided
-          if (dbaIndex !== -1 && dba) {
-            const dbaColumn = String.fromCharCode(65 + dbaIndex);
-            const dbaRange = `${trackerSheet.sheetName}!${dbaColumn}${existingRowIndex}`;
+          if (trackerDbaIndex !== -1 && dba) {
+            const dbaColumn = String.fromCharCode(65 + trackerDbaIndex);
+            const dbaRange = `${trackerSheet.sheetName}!${dbaColumn}${existingTrackerRowIndex}`;
             await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, dbaRange, [[dba]]);
+          }
+          
+          if (agentNameIndex !== -1 && agentName) {
+            const agentColumn = String.fromCharCode(65 + agentNameIndex);
+            const agentRange = `${trackerSheet.sheetName}!${agentColumn}${existingTrackerRowIndex}`;
+            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, agentRange, [[agentName]]);
           }
           
           rowsProcessed++;
           results.push({ link: storeLink, name: storeName, action: 'updated' });
         } else {
-          // Row doesn't exist - log for now, will be created when they first log activity
-          console.log(`Store ${storeLink} matched to order ${order.orderNumber} but no tracker row exists yet`);
-          results.push({ link: storeLink, name: storeName, action: 'pending_creation' });
+          // Create new row in Commission Tracker
+          const newRow: any[] = new Array(trackerHeaders.length).fill('');
+          
+          // Set Link
+          if (linkIndex !== -1) newRow[linkIndex] = storeLink;
+          
+          // Set Order ID
+          if (orderIdIndex !== -1) newRow[orderIdIndex] = order.orderNumber;
+          
+          // Set Transaction ID
+          if (transactionIdIndex !== -1) newRow[transactionIdIndex] = order.id;
+          
+          // Set DBA
+          if (trackerDbaIndex !== -1 && dba) newRow[trackerDbaIndex] = dba;
+          
+          // Set Agent Name
+          if (agentNameIndex !== -1 && agentName) newRow[agentNameIndex] = agentName;
+          
+          // Append new row to Commission Tracker
+          const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+          await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newRow]);
+          
+          rowsProcessed++;
+          results.push({ link: storeLink, name: storeName, action: 'created' });
         }
       }
 
