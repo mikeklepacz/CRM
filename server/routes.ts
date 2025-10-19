@@ -974,11 +974,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Update order in database with first store link (for backwards compatibility)
-      await storage.updateOrder(orderId, { 
-        clientId: storeLinks[0].link
-      });
-
+      // Success! All data is now in Google Sheets Commission Tracker
       res.json({ 
         message: `Order ${order.orderNumber} matched to ${storeLinks.length} store(s)`,
         rowsProcessed,
