@@ -50,7 +50,34 @@ function stringSimilarity(str1: string, str2: string): number {
   return 1 - (distance / maxLen);
 }
 
-// Normalize link/URL for matching (removes protocol, www, trailing slash, trims, lowercase)
+// ============================================================================
+// CRITICAL: Link Normalization Function
+// ============================================================================
+// DO NOT MODIFY without understanding the full context!
+//
+// Purpose:
+// Ensures two different URL formats match correctly during merge operations:
+// - "https://www.leafly.com/dispensary-info/10-collective/"
+// - "leafly.com/dispensary-info/10-collective"
+// Both normalize to: "leafly.com/dispensary-info/10-collective"
+//
+// Why This Matters:
+// - Store Database may have URLs with http://, https://, www., trailing slashes
+// - Commission Tracker may have clean URLs without protocols
+// - Without normalization, identical stores won't merge (shown as orphaned)
+//
+// Normalization Steps:
+// 1. Trim whitespace
+// 2. Convert to lowercase (case-insensitive matching)
+// 3. Remove http:// or https:// protocol
+// 4. Remove www. prefix
+// 5. Remove trailing slashes
+//
+// Impact if broken:
+// - Stores won't match between sheets even when they're the same
+// - Tracker data appears orphaned (_deletedFromStore: true)
+// - CRM shows duplicate rows instead of merged data
+// ============================================================================
 function normalizeLink(link: string): string {
   if (!link || typeof link !== 'string') return '';
   
@@ -1385,8 +1412,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return obj;
       }) : [];
 
-      // Find actual join column name (case-insensitive)
-      // Frontend sends "link" but Google Sheets might have "Link"
+      // ============================================================================
+      // CRITICAL: Case-Insensitive Column Lookup
+      // ============================================================================
+      // DO NOT MODIFY without understanding the full context!
+      //
+      // Problem Solved:
+      // - Frontend sends joinColumn: "link" (lowercase)
+      // - Google Sheets returns headers as-is: "Link" (capitalized)
+      // - Direct lookup row["link"] returns undefined (case mismatch)
+      // - This caused merge failures: tracker rows marked _deletedFromStore: true
+      //
+      // Solution:
+      // - Find the actual header name from Google Sheets (case-insensitive search)
+      // - Use actualStoreJoinColumn and actualTrackerJoinColumn throughout merge
+      // - This ensures row["Link"] works correctly even when frontend sends "link"
+      //
+      // Impact if broken:
+      // - Tracker data won't merge with store data
+      // - Rows will show as orphaned/deleted
+      // - CRM won't display commission tracking information
+      // ============================================================================
       const actualStoreJoinColumn = storeHeaders.find(h => 
         h.toLowerCase() === joinColumn.toLowerCase()
       ) || joinColumn;
@@ -1400,7 +1446,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('  Store actual:', actualStoreJoinColumn);
       console.log('  Tracker actual:', actualTrackerJoinColumn);
 
-      // Filter tracker data by agent (if user is not admin)
+      // ============================================================================
+      // CRITICAL: Agent-Based Row-Level Security
+      // ============================================================================
+      // DO NOT MODIFY without understanding the full context!
+      //
+      // Purpose:
+      // Implements row-level security so agents only see their own claimed stores
+      //
+      // Security Model:
+      // - Admins: See ALL tracker rows (no filtering)
+      // - Agents: See ONLY tracker rows where "Agent Name" matches their name
+      // - No agent name: See NOTHING from tracker (empty array)
+      //
+      // Agent Name Source (WooCommerce Convention):
+      // 1. Prefer user.agentName field (stored from profile/WooCommerce integration)
+      // 2. Fallback to "firstName lastName" concatenation
+      // 3. Case-insensitive matching with trimmed whitespace
+      //
+      // Column Lookup:
+      // - Searches for "Agent Name" column (case-insensitive)
+      // - Normalizes spaces (handles "Agent  Name" with extra spaces)
+      //
+      // Why This Matters:
+      // - Prevents agents from seeing each other's claimed stores
+      // - Maintains data privacy and sales territory boundaries
+      // - Ensures commission tracking is agent-specific
+      //
+      // Impact if broken:
+      // - Agents could see ALL stores (data leak)
+      // - Agents could see competitors' commission data
+      // - Row-level security completely bypassed
+      // ============================================================================
       let filteredTrackerData = trackerData;
       // Look for "Agent Name" column (case-insensitive, handles spaces)
       const agentColumnName = trackerHeaders.find(h => 
@@ -1458,7 +1535,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.log('=== END LINK NORMALIZATION DEBUG ===\n');
 
-      // Merge data by join column - include rows from BOTH sheets
+      // ============================================================================
+      // CRITICAL: Two-Sheet Merge Logic
+      // ============================================================================
+      // DO NOT MODIFY without understanding the full context!
+      //
+      // Purpose:
+      // Merges Store Database rows with Commission Tracker rows using Link as join key
+      //
+      // MUST USE: actualStoreJoinColumn and actualTrackerJoinColumn
+      // - These are case-insensitive matches from headers (see above)
+      // - Using raw joinColumn causes undefined lookups (case mismatch)
+      //
+      // Merge Strategy:
+      // 1. Start with ALL store rows (baseline data from Store Database sheet)
+      // 2. For each store row, find matching tracker row by normalized Link
+      // 3. Merge tracker data into store row if match found
+      // 4. Mark merged rows with _hasTrackerData: true, _deletedFromStore: false
+      // 5. Add orphaned tracker rows (no matching store) as separate rows
+      // 6. Mark orphaned rows with _hasTrackerData: true, _deletedFromStore: true
+      //
+      // Why Row Index Keys:
+      // - Map keys use index to prevent overwriting duplicate/empty Link values
+      // - Stores with same Link URL stay as separate rows (common for chains)
+      //
+      // Impact if broken:
+      // - Tracker data won't merge with store data
+      // - CRM shows empty Amount/Status/Follow-Up columns
+      // - Agent sees orphaned tracker rows instead of merged data
+      // ============================================================================
       const mergedDataMap = new Map();
 
       // First, add all store rows (use row index as key to avoid overwriting duplicates)
