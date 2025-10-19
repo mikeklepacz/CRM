@@ -191,11 +191,86 @@ export const userPreferences = pgTable("user_preferences", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Custom reminders for client follow-ups
+export const reminders = pgTable("reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: 'cascade' }),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description"),
+  reminderType: varchar("reminder_type", { length: 50 }).notNull(), // 'one_time', 'recurring', '6_month_warning', 're_order'
+  triggerDate: timestamp("trigger_date"),
+  intervalDays: integer("interval_days"), // For recurring reminders
+  lastTriggered: timestamp("last_triggered"),
+  nextTrigger: timestamp("next_trigger"),
+  isActive: boolean("is_active").default(true),
+  sendEmail: boolean("send_email").default(true),
+  addToCalendar: boolean("add_to_calendar").default(false),
+  emailTemplate: varchar("email_template", { length: 50 }).default('default'), // 'default', 'follow_up', 'check_in', 'custom'
+  customEmailSubject: varchar("custom_email_subject", { length: 200 }),
+  customEmailBody: text("custom_email_body"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Notifications for alerts and reminders
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: 'cascade' }),
+  reminderId: varchar("reminder_id").references(() => reminders.id, { onDelete: 'cascade' }),
+  orderId: varchar("order_id").references(() => orders.id),
+  notificationType: varchar("notification_type", { length: 50 }).notNull(), // 're_order', 'reminder', 'commission_warning', 'tier_change'
+  title: varchar("title", { length: 200 }).notNull(),
+  message: text("message").notNull(),
+  priority: varchar("priority", { length: 20 }).default('normal'), // 'low', 'normal', 'high', 'urgent'
+  isRead: boolean("is_read").default(false),
+  isResolved: boolean("is_resolved").default(false),
+  resolvedAt: timestamp("resolved_at"),
+  emailSent: boolean("email_sent").default(false),
+  emailSentAt: timestamp("email_sent_at"),
+  actionUrl: varchar("action_url", { length: 500 }),
+  metadata: jsonb("metadata").$type<{
+    commissionTier?: '25%' | '10%';
+    daysUntilTierChange?: number;
+    revenueAtRisk?: string;
+    [key: string]: any;
+  }>(), // Flexible metadata for commission warnings and other context
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Dashboard widget layouts - save drag-and-drop positions
+export const widgetLayouts = pgTable("widget_layouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  dashboardType: varchar("dashboard_type", { length: 50 }).notNull().default('sales'), // 'sales', 'analytics', 'custom'
+  layoutName: varchar("layout_name", { length: 100 }),
+  layoutConfig: jsonb("layout_config").notNull().$type<{
+    widgets: Array<{
+      id: string;
+      type: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      minW?: number;
+      minH?: number;
+      maxW?: number;
+      maxH?: number;
+    }>;
+  }>(),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
   assignedClients: many(clients),
   notes: many(notes),
+  reminders: many(reminders),
+  notifications: many(notifications),
 }));
 
 export const clientsRelations = relations(clients, ({ one, many }) => ({
@@ -205,6 +280,8 @@ export const clientsRelations = relations(clients, ({ one, many }) => ({
   }),
   notes: many(notes),
   orders: many(orders),
+  reminders: many(reminders),
+  notifications: many(notifications),
 }));
 
 export const notesRelations = relations(notes, ({ one }) => ({
@@ -236,6 +313,36 @@ export const googleSheetsRelations = relations(googleSheets, ({ one }) => ({
   connector: one(users, {
     fields: [googleSheets.connectedBy],
     references: [users.id],
+  }),
+}));
+
+export const remindersRelations = relations(reminders, ({ one }) => ({
+  user: one(users, {
+    fields: [reminders.userId],
+    references: [users.id],
+  }),
+  client: one(clients, {
+    fields: [reminders.clientId],
+    references: [clients.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  client: one(clients, {
+    fields: [notifications.clientId],
+    references: [clients.id],
+  }),
+  reminder: one(reminders, {
+    fields: [notifications.reminderId],
+    references: [reminders.id],
+  }),
+  order: one(orders, {
+    fields: [notifications.orderId],
+    references: [orders.id],
   }),
 }));
 
@@ -283,6 +390,23 @@ export const insertUserPreferencesSchema = createInsertSchema(userPreferences).o
   updatedAt: true,
 });
 
+export const insertReminderSchema = createInsertSchema(reminders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertWidgetLayoutSchema = createInsertSchema(widgetLayouts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -302,3 +426,9 @@ export type DashboardCard = typeof dashboardCards.$inferSelect;
 export type InsertDashboardCard = z.infer<typeof insertDashboardCardSchema>;
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;
+export type Reminder = typeof reminders.$inferSelect;
+export type InsertReminder = z.infer<typeof insertReminderSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type WidgetLayout = typeof widgetLayouts.$inferSelect;
+export type InsertWidgetLayout = z.infer<typeof insertWidgetLayoutSchema>;
