@@ -3243,7 +3243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const agentName = user?.agentName || 
         (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email) || 
         'Unknown Agent';
-      const { storeLinks, dbaName, storeSheetId, trackerSheetId } = req.body;
+      const { storeLinks, dbaName, storeSheetId, trackerSheetId, isUpdatingExisting } = req.body;
 
       if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
         return res.status(400).json({ message: "Store links array is required" });
@@ -3365,31 +3365,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create ONE single Commission Tracker row using the first store's link
+      // ONLY if this is a NEW DBA claim (not updating an existing one)
       const firstStoreLink = storeLinks[0];
       const normalizedFirstLink = normalizeLink(firstStoreLink);
       let createdTrackerCount = 0;
 
-      // Check if tracker row already exists for first store
-      if (!existingTrackerLinks.has(normalizedFirstLink)) {
-        console.log(`[CLAIM-MULTIPLE] Creating single tracker row for DBA group using link: ${firstStoreLink}`);
-        const newTrackerRow = new Array(trackerHeaders.length).fill('');
-        newTrackerRow[trackerLinkIndex] = firstStoreLink;
-        if (trackerAgentIndex !== -1) {
-          newTrackerRow[trackerAgentIndex] = agentName;
-          console.log(`[CLAIM-MULTIPLE] Setting tracker Agent at index ${trackerAgentIndex}: "${agentName}"`);
-        }
+      if (!isUpdatingExisting) {
+        // Check if tracker row already exists for first store
+        if (!existingTrackerLinks.has(normalizedFirstLink)) {
+          console.log(`[CLAIM-MULTIPLE] Creating single tracker row for NEW DBA group using link: ${firstStoreLink}`);
+          const newTrackerRow = new Array(trackerHeaders.length).fill('');
+          newTrackerRow[trackerLinkIndex] = firstStoreLink;
+          if (trackerAgentIndex !== -1) {
+            newTrackerRow[trackerAgentIndex] = agentName;
+            console.log(`[CLAIM-MULTIPLE] Setting tracker Agent at index ${trackerAgentIndex}: "${agentName}"`);
+          }
 
-        console.log(`[CLAIM-MULTIPLE] Tracker row prepared:`, newTrackerRow);
-        
-        const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
-        console.log(`[CLAIM-MULTIPLE] Appending 1 tracker row to Commission Tracker`);
-        console.log(`[CLAIM-MULTIPLE] Append range: ${appendRange}`);
-        console.log(`[CLAIM-MULTIPLE] Tracker headers:`, trackerHeaders);
-        await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newTrackerRow]);
-        console.log(`[CLAIM-MULTIPLE] ✓ Commission Tracker append successful`);
-        createdTrackerCount = 1;
+          console.log(`[CLAIM-MULTIPLE] Tracker row prepared:`, newTrackerRow);
+          
+          const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+          console.log(`[CLAIM-MULTIPLE] Appending 1 tracker row to Commission Tracker`);
+          console.log(`[CLAIM-MULTIPLE] Append range: ${appendRange}`);
+          console.log(`[CLAIM-MULTIPLE] Tracker headers:`, trackerHeaders);
+          await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newTrackerRow]);
+          console.log(`[CLAIM-MULTIPLE] ✓ Commission Tracker append successful`);
+          createdTrackerCount = 1;
+        } else {
+          console.log(`[CLAIM-MULTIPLE] Tracker row already exists for first store link, skipping tracker creation`);
+        }
       } else {
-        console.log(`[CLAIM-MULTIPLE] Tracker row already exists for first store link, skipping tracker creation`);
+        console.log(`[CLAIM-MULTIPLE] Updating existing DBA - skipping tracker creation (isUpdatingExisting=true)`);
       }
 
       console.log(`[CLAIM-MULTIPLE] FINAL SUMMARY:`);

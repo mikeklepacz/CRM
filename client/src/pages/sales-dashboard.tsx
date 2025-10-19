@@ -18,6 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -3064,6 +3065,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   // Multiple Locations feature state
   const [multiLocationMode, setMultiLocationMode] = useState(false);
   const [dbaName, setDbaName] = useState("");
+  const [currentDbaStores, setCurrentDbaStores] = useState<Array<{ link: string; name: string }>>([]);
   const [selectedStores, setSelectedStores] = useState<Array<{ link: string; name: string }>>([]);
   const [storeSearchDialog, setStoreSearchDialog] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
@@ -3079,21 +3081,33 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
   // Query stores by DBA - auto-load DBA group when opening a store with existing DBA
   const { data: dbaStores } = useQuery<any[]>({
-    queryKey: [`/api/stores/by-dba/${storeSheetId}/${dbaName}`],
+    queryKey: [`/api/stores/by-dba`, storeSheetId, dbaName],
+    queryFn: async () => {
+      if (!storeSheetId || !dbaName) return [];
+      return await apiRequest('GET', `/api/stores/by-dba/${storeSheetId}/${encodeURIComponent(dbaName)}`);
+    },
     enabled: !!storeSheetId && !!dbaName && open && activeRowLink !== null,
   });
 
-  // Filtered stores for search
+  // Filtered stores for search - exclude current DBA stores AND already selected stores
   const filteredStores = useMemo(() => {
     if (!allStores || !Array.isArray(allStores)) return [];
     const searchLower = storeSearch.toLowerCase();
+    
+    // Create set of links to exclude (current DBA stores + selected stores)
+    const excludedLinks = new Set([
+      ...currentDbaStores.map(s => s.link),
+      ...selectedStores.map(s => s.link)
+    ]);
+    
     return allStores.filter((store: any) => 
-      store.name?.toLowerCase().includes(searchLower) ||
+      !excludedLinks.has(store.link) &&
+      (store.name?.toLowerCase().includes(searchLower) ||
       store.city?.toLowerCase().includes(searchLower) ||
       store.state?.toLowerCase().includes(searchLower) ||
-      store.address?.toLowerCase().includes(searchLower)
+      store.address?.toLowerCase().includes(searchLower))
     );
-  }, [allStores, storeSearch]);
+  }, [allStores, storeSearch, currentDbaStores, selectedStores]);
   
   // Check if there are unsaved changes
   const hasUnsavedChanges = useMemo(() => {
@@ -3152,13 +3166,15 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         console.log('[StoreDetails] Store has DBA, enabling Multiple Locations mode');
         setMultiLocationMode(true);
         setDbaName(existingDba.trim());
-        // Clear selectedStores immediately to prevent stale data from previous store
+        // Clear both current and selected stores
+        setCurrentDbaStores([]);
         setSelectedStores([]);
-        // Let the dbaStores query populate selectedStores when it completes
+        // Let the dbaStores query populate currentDbaStores when it completes
       } else {
         console.log('[StoreDetails] No DBA found, disabling Multiple Locations mode');
         setMultiLocationMode(false);
         setDbaName("");
+        setCurrentDbaStores([]);
         setSelectedStores([]);
       }
     } else if (!open) {
@@ -3167,11 +3183,13 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     }
   }, [row, open, storeSheetId]);
 
-  // Auto-populate selectedStores when dbaStores query completes
+  // Auto-populate currentDbaStores when dbaStores query completes
   useEffect(() => {
     if (dbaStores && Array.isArray(dbaStores) && multiLocationMode && activeRowLink && dbaName) {
-      console.log('[StoreDetails] Auto-populating selected stores from DBA query:', dbaStores);
-      setSelectedStores(dbaStores.map((s: any) => ({ link: s.link, name: s.name })));
+      console.log('[StoreDetails] Auto-populating current DBA stores from query:', dbaStores);
+      setCurrentDbaStores(dbaStores.map((s: any) => ({ link: s.link, name: s.name })));
+      // Clear selectedStores since we're showing existing DBA stores
+      setSelectedStores([]);
     }
   }, [dbaStores, multiLocationMode, activeRowLink, dbaName]);
 
@@ -3537,19 +3555,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                           setMultiLocationMode(checked as boolean);
                           if (!checked) {
                             setSelectedStores([]);
+                            setCurrentDbaStores([]);
                             setDbaName("");
                             setStoreSearch("");
-                          } else {
-                            // When enabling Multiple Locations mode, auto-add the current store to selectedStores
-                            const currentStore = { link: formData.link, name: formData.name };
-                            // Only add if not already in the list (preserve existing selections)
-                            if (currentStore.link) {
-                              setSelectedStores(prev => 
-                                prev.some(s => s.link === currentStore.link) 
-                                  ? prev 
-                                  : [...prev, currentStore]
-                              );
-                            }
                           }
                         }}
                         data-testid="checkbox-multiple-locations"
@@ -3572,6 +3580,26 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                           />
                         </div>
 
+                        {/* Current stores in DBA (read-only) */}
+                        {currentDbaStores.length > 0 && (
+                          <div className="space-y-2">
+                            <Label>Current Stores in this DBA ({currentDbaStores.length})</Label>
+                            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2 bg-muted/30">
+                              {currentDbaStores.map((store) => (
+                                <div
+                                  key={store.link}
+                                  className="flex items-center justify-between p-2 bg-background rounded-md"
+                                  data-testid={`current-store-${store.link}`}
+                                >
+                                  <span className="text-sm">{store.name}</span>
+                                  <Badge variant="secondary" className="text-xs">Current</Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* New stores being added to DBA */}
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <Label>Selected Locations ({selectedStores.length})</Label>
@@ -3587,7 +3615,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                             </Button>
                           </div>
 
-                          {selectedStores.length > 0 && (
+                          {selectedStores.length > 0 ? (
                             <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
                               {selectedStores.map((store) => (
                                 <div
@@ -3608,6 +3636,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                                 </div>
                               ))}
                             </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/30">
+                              No new locations selected. Click "Add Locations" to add stores to this DBA.
+                            </p>
                           )}
                         </div>
 
@@ -3615,26 +3647,39 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                           type="button"
                           variant="default"
                           onClick={async () => {
+                            if (selectedStores.length === 0) {
+                              toast({
+                                title: "No stores selected",
+                                description: "Please select at least one store to add to this DBA",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+                            
                             try {
                               const storeLinks = selectedStores.map(s => s.link);
-                              console.log('[CLAIM-DBA] Claiming locations:', { storeLinks, dbaName, storeSheetId, trackerSheetId });
+                              const isUpdatingExisting = currentDbaStores.length > 0;
+                              
+                              console.log('[CLAIM-DBA] Claiming locations:', { storeLinks, dbaName, storeSheetId, trackerSheetId, isUpdatingExisting });
                               
                               const response = await apiRequest('POST', '/api/stores/claim-multiple', {
                                 storeLinks,
                                 dbaName: dbaName.trim(),
                                 storeSheetId,
-                                trackerSheetId
+                                trackerSheetId,
+                                isUpdatingExisting
                               });
 
                               console.log('[CLAIM-DBA] Response:', response);
 
-                              const successMessage = `Claimed ${response.createdTrackerCount} location${response.createdTrackerCount !== 1 ? 's' : ''} with DBA "${dbaName}"`;
-                              const storeUpdateMessage = response.updatedStoreCount > 0 ? ` Updated ${response.updatedStoreCount} store record${response.updatedStoreCount !== 1 ? 's' : ''}.` : '';
-                              const warningMessage = response.skippedCount > 0 ? ` (${response.skippedCount} skipped - already claimed)` : '';
+                              const successMessage = isUpdatingExisting 
+                                ? `Added ${response.updatedStoreCount} new store${response.updatedStoreCount !== 1 ? 's' : ''} to DBA "${dbaName}"`
+                                : `Claimed ${response.createdTrackerCount} location${response.createdTrackerCount !== 1 ? 's' : ''} with DBA "${dbaName}"`;
+                              const warningMessage = response.skippedCount > 0 ? ` (${response.skippedCount} skipped - already in DBA)` : '';
                               
                               toast({
                                 title: "Success",
-                                description: successMessage + storeUpdateMessage + warningMessage,
+                                description: successMessage + warningMessage,
                               });
 
                               // Show warnings if any
@@ -3651,6 +3696,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               // Reset state
                               setMultiLocationMode(false);
                               setSelectedStores([]);
+                              setCurrentDbaStores([]);
                               setDbaName("");
 
                               // Refresh the dashboard
@@ -3672,7 +3718,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                           data-testid="button-claim-multiple"
                         >
                           <Sparkles className="h-4 w-4 mr-2" />
-                          Claim {selectedStores.length} Location{selectedStores.length !== 1 ? 's' : ''} with DBA
+                          {currentDbaStores.length > 0 
+                            ? `Add ${selectedStores.length} Location${selectedStores.length !== 1 ? 's' : ''} to DBA`
+                            : `Claim ${selectedStores.length} Location${selectedStores.length !== 1 ? 's' : ''} with DBA`
+                          }
                         </Button>
                       </div>
                     )}
