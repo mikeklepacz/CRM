@@ -923,6 +923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeDbLinkIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'link');
       const storeDbDbaIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'dba');
       const storeDbAgentNameIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+      const storeDbEmailIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'email');
       
       if (storeDbLinkIndex === -1) {
         return res.status(400).json({ message: 'Store Database must have a "Link" column' });
@@ -942,6 +943,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
       const trackerDbaIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'dba');
       const agentNameIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+      const trackerDateIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'date');
+      const trackerPocEmailIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'poc email');
 
       if (linkIndex === -1) {
         return res.status(400).json({ message: 'Commission Tracker must have a "Link" column' });
@@ -981,6 +984,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const agentRange = `${storeDbSheet.sheetName}!${agentColumn}${storeDbRowIndex}`;
             await googleSheets.writeSheetData(userId, storeDbSheet.spreadsheetId, agentRange, [[agentName]]);
           }
+          
+          // Update Email if provided
+          if (order.billingEmail && storeDbEmailIndex !== -1) {
+            const emailColumn = String.fromCharCode(65 + storeDbEmailIndex);
+            const emailRange = `${storeDbSheet.sheetName}!${emailColumn}${storeDbRowIndex}`;
+            await googleSheets.writeSheetData(userId, storeDbSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
+          }
         }
         
         // 2. Update or create row in Commission Tracker
@@ -1018,6 +1028,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, agentRange, [[agentName]]);
           }
           
+          if (trackerDateIndex !== -1 && order.orderDate) {
+            const dateColumn = String.fromCharCode(65 + trackerDateIndex);
+            const dateRange = `${trackerSheet.sheetName}!${dateColumn}${existingTrackerRowIndex}`;
+            const formattedDate = new Date(order.orderDate).toLocaleDateString('en-US');
+            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, dateRange, [[formattedDate]]);
+          }
+          
+          if (trackerPocEmailIndex !== -1 && order.billingEmail) {
+            const emailColumn = String.fromCharCode(65 + trackerPocEmailIndex);
+            const emailRange = `${trackerSheet.sheetName}!${emailColumn}${existingTrackerRowIndex}`;
+            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
+          }
+          
           rowsProcessed++;
           results.push({ link: storeLink, name: storeName, action: 'updated' });
         } else {
@@ -1038,6 +1061,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Set Agent Name
           if (agentNameIndex !== -1 && agentName) newRow[agentNameIndex] = agentName;
+          
+          // Set Date
+          if (trackerDateIndex !== -1 && order.orderDate) {
+            const formattedDate = new Date(order.orderDate).toLocaleDateString('en-US');
+            newRow[trackerDateIndex] = formattedDate;
+          }
+          
+          // Set POC Email
+          if (trackerPocEmailIndex !== -1 && order.billingEmail) {
+            newRow[trackerPocEmailIndex] = order.billingEmail;
+          }
           
           // Append new row to Commission Tracker
           const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -1401,15 +1435,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Sync completed:', { total: orders.length, synced, matched, deleted });
 
+      // AUTO-MATCHING: Match orders to stores in Google Sheets based on billing email
+      console.log('Starting auto-matching for claimed stores...');
+      let autoMatched = 0;
+      
+      try {
+        const sheets = await storage.getAllActiveGoogleSheets();
+        const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
+        const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+
+        if (trackerSheet && storeDbSheet) {
+          // Read Store Database to find claimed stores
+          const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
+          const storeDbRows = await googleSheets.readSheetData(userId, storeDbSheet.spreadsheetId, storeDbRange);
+          
+          if (storeDbRows.length > 0) {
+            const storeDbHeaders = storeDbRows[0];
+            const storeDbLinkIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'link');
+            const storeDbEmailIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'email');
+            const storeDbAgentNameIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+            const storeDbDbaIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'dba');
+
+            // Read Commission Tracker
+            const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+            const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+            
+            if (trackerRows.length > 0) {
+              const trackerHeaders = trackerRows[0];
+              const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+              const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
+              const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+              const trackerDateIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'date');
+              const trackerPocEmailIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'poc email');
+              const agentNameIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+              const trackerDbaIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'dba');
+
+              // For each order with billing email
+              for (const order of orders) {
+                if (!order.billing?.email) continue;
+
+                const orderEmail = order.billing.email.toLowerCase().trim();
+                const salesAgentMeta = order.meta_data?.find((m: any) => m.key === '_sales_agent');
+                const salesAgentName = salesAgentMeta?.value || '';
+
+                // Find matching store in Store Database by email AND agent name (claimed stores only)
+                for (let i = 1; i < storeDbRows.length; i++) {
+                  const storeEmail = storeDbRows[i][storeDbEmailIndex]?.toLowerCase().trim();
+                  const storeAgentName = storeDbRows[i][storeDbAgentNameIndex]?.trim();
+                  const storeLink = storeDbRows[i][storeDbLinkIndex];
+                  const storeDba = storeDbRows[i][storeDbDbaIndex];
+
+                  // Match only if email matches AND store is claimed (has agent name)
+                  if (storeEmail === orderEmail && storeAgentName) {
+                    // Check if this order already has a tracker row for this store
+                    const normalizedStoreLink = normalizeLink(storeLink);
+                    const currentOrderId = order.id.toString();
+                    let alreadyTracked = false;
+                    
+                    for (let j = 1; j < trackerRows.length; j++) {
+                      const trackerLink = normalizeLink(trackerRows[j][linkIndex] || '');
+                      const trackerTransactionId = trackerRows[j][transactionIdIndex] || '';
+                      
+                      // Duplicate if BOTH Link and Transaction ID match
+                      if (trackerLink === normalizedStoreLink && trackerTransactionId === currentOrderId) {
+                        alreadyTracked = true;
+                        break;
+                      }
+                    }
+
+                    if (!alreadyTracked) {
+                      // Create new tracker row for this order
+                      const newRow: any[] = new Array(trackerHeaders.length).fill('');
+                      
+                      if (linkIndex !== -1) newRow[linkIndex] = storeLink;
+                      if (orderIdIndex !== -1) newRow[orderIdIndex] = order.number || order.id.toString();
+                      if (transactionIdIndex !== -1) newRow[transactionIdIndex] = order.id.toString();
+                      if (trackerDateIndex !== -1) {
+                        const formattedDate = new Date(order.date_created).toLocaleDateString('en-US');
+                        newRow[trackerDateIndex] = formattedDate;
+                      }
+                      if (trackerPocEmailIndex !== -1) newRow[trackerPocEmailIndex] = order.billing.email;
+                      if (agentNameIndex !== -1 && salesAgentName) newRow[agentNameIndex] = salesAgentName;
+                      if (trackerDbaIndex !== -1 && storeDba) newRow[trackerDbaIndex] = storeDba;
+
+                      const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+                      await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newRow]);
+                      
+                      autoMatched++;
+                      console.log(`Auto-matched order ${order.id} to store ${storeLink}`);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (autoMatchError: any) {
+        console.error('Auto-matching error:', autoMatchError);
+        // Don't fail the entire sync if auto-matching fails
+      }
+
+      console.log('Auto-matching completed:', { autoMatched });
+
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
         wooLastSyncedAt: new Date()
       });
 
       res.json({
-        message: `WooCommerce sync completed. ${deleted > 0 ? `Removed ${deleted} deleted/cancelled orders.` : ''}`,
+        message: `WooCommerce sync completed. ${deleted > 0 ? `Removed ${deleted} deleted/cancelled orders. ` : ''}${autoMatched > 0 ? `Auto-matched ${autoMatched} orders.` : ''}`,
         synced,
         matched,
+        autoMatched,
         total: orders.length,
       });
     } catch (error: any) {
