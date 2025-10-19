@@ -1123,6 +1123,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { orders: orderUpdates } = req.body;
 
+      console.log('=== SAVE COMMISSIONS DEBUG ===');
+      console.log('Received order updates:', JSON.stringify(orderUpdates, null, 2));
+
       if (!orderUpdates || !Array.isArray(orderUpdates)) {
         return res.status(400).json({ message: "Orders array is required" });
       }
@@ -1141,11 +1144,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (Object.keys(updates).length > 0) {
           await storage.updateOrder(orderId, updates);
           dbUpdated++;
+          console.log(`DB: Updated order ${orderId} with:`, updates);
         }
       }
 
       // Step 2: Write to Google Sheets Commission Tracker
       const trackerSheet = await storage.getGoogleSheetByPurpose('commission_tracker');
+      console.log('Tracker sheet found:', trackerSheet ? `${trackerSheet.spreadsheetName} / ${trackerSheet.sheetName}` : 'NONE');
       let sheetsWritten = 0;
       
       if (trackerSheet) {
@@ -1162,31 +1167,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
             columnMap[header.toLowerCase().trim()] = index;
           });
 
+          console.log('Headers:', headers);
+          console.log('Column map:', columnMap);
+
           // Read all existing rows
           const allDataRange = `${sheetName}!A:ZZ`;
           const allRows = await googleSheets.readSheetData(userId, spreadsheetId, allDataRange);
           const existingRows = allRows.slice(1);
+          console.log(`Read ${existingRows.length} data rows from sheet`);
 
           for (const orderReq of orderUpdates) {
             const { orderId, commissionType, commissionAmount } = orderReq;
+            console.log(`\n--- Processing order ${orderId} ---`);
             
             // Get order from database
             const order = await storage.getOrderById(orderId);
-            if (!order) continue;
+            if (!order) {
+              console.log(`Order ${orderId} not found in database`);
+              continue;
+            }
+            console.log(`Order found: total=${order.total}`);
 
             // Find existing row(s) by Transaction ID in Commission Tracker
             const transactionIdIndex = columnMap['transaction id'];
-            if (transactionIdIndex === undefined) continue;
+            console.log(`Transaction ID column index: ${transactionIdIndex}`);
+            if (transactionIdIndex === undefined) {
+              console.log('ERROR: Transaction ID column not found in headers');
+              continue;
+            }
 
             // Find all rows matching this order ID (could be multiple stores)
             const matchingRowIndices: number[] = [];
             for (let i = 0; i < existingRows.length; i++) {
-              if (existingRows[i][transactionIdIndex] === orderId) {
+              const rowTransactionId = existingRows[i][transactionIdIndex];
+              if (rowTransactionId === orderId) {
                 matchingRowIndices.push(i + 2); // +2 for header and 1-indexed
+                console.log(`Found match at row ${i + 2}: Transaction ID = ${rowTransactionId}`);
               }
             }
 
-            if (matchingRowIndices.length === 0) continue;
+            console.log(`Found ${matchingRowIndices.length} matching rows for order ${orderId}`);
+            if (matchingRowIndices.length === 0) {
+              console.log('No matching rows found - skipping');
+              continue;
+            }
 
             // Calculate commission amount
             const orderTotal = parseFloat(order.total);
@@ -1210,27 +1234,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
             else if (commissionType === '10') commissionTypeLabel = '10%';
 
             // Update all matching rows
+            console.log(`Calculated amount: $${amount.toFixed(2)}, type: ${commissionTypeLabel}`);
+            
             for (const rowIndex of matchingRowIndices) {
               const updates: Array<{range: string, values: any[][]}> = [];
               
               if ('commission type' in columnMap) {
                 const col = String.fromCharCode(65 + columnMap['commission type']);
+                const range = `${sheetName}!${col}${rowIndex}`;
                 updates.push({
-                  range: `${sheetName}!${col}${rowIndex}`,
+                  range,
                   values: [[commissionTypeLabel]]
                 });
+                console.log(`Will update Commission Type: ${range} = ${commissionTypeLabel}`);
+              } else {
+                console.log('WARNING: "commission type" column not found');
               }
               
               if ('amount' in columnMap) {
                 const col = String.fromCharCode(65 + columnMap['amount']);
+                const range = `${sheetName}!${col}${rowIndex}`;
                 updates.push({
-                  range: `${sheetName}!${col}${rowIndex}`,
+                  range,
                   values: [[amount.toFixed(2)]]
                 });
+                console.log(`Will update Amount: ${range} = $${amount.toFixed(2)}`);
+              } else {
+                console.log('WARNING: "amount" column not found');
               }
 
               for (const update of updates) {
+                console.log(`Writing to Google Sheets: ${update.range}`, update.values);
                 await googleSheets.writeSheetData(userId, spreadsheetId, update.range, update.values);
+                console.log(`Successfully wrote: ${update.range}`);
               }
               
               sheetsWritten++;
@@ -1239,6 +1275,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      console.log('=== SAVE COMMISSIONS COMPLETE ===');
+      console.log(`DB Updated: ${dbUpdated}, Sheets Written: ${sheetsWritten}`);
+      
       res.json({ 
         message: `Saved ${dbUpdated} commission settings to database` + (sheetsWritten > 0 ? ` and wrote ${sheetsWritten} to Google Sheets` : ''),
         dbUpdated,
