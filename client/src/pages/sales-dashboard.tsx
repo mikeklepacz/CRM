@@ -1977,7 +1977,13 @@ export default function SalesDashboard() {
                         
                         <ScrollArea className="h-64">
                           <div className="space-y-2">
-                            {allStates.map((state: string) => (
+                            {allStates
+                              .filter((state: string) => {
+                                // Show Canadian provinces only if Canada is checked
+                                // Show US states only if Canada is unchecked
+                                return showCanadaOnly ? isCanadianProvince(state) : !isCanadianProvince(state);
+                              })
+                              .map((state: string) => (
                               <div key={state} className="flex items-center gap-2">
                                 <Checkbox
                                   id={`state-${state}`}
