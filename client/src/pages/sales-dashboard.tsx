@@ -3295,6 +3295,30 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         }
       });
 
+      // MULTIPLE LOCATIONS MODE: Write DBA and Agent Name to Store Database
+      if (multiLocationMode && dbaName && dbaName.trim()) {
+        const sheetId = storeSheetId;
+        const rowIndex = row._storeRowIndex;
+        
+        if (sheetId && rowIndex && currentUser?.email) {
+          // Add DBA change
+          storeChanges.push({
+            sheetId,
+            rowIndex,
+            column: 'DBA',
+            value: dbaName.trim()
+          });
+          
+          // Add Agent Name change
+          storeChanges.push({
+            sheetId,
+            rowIndex,
+            column: 'Agent Name',
+            value: currentUser.email
+          });
+        }
+      }
+
       if (storeChanges.length === 0 && Object.keys(trackerChanges).length === 0) {
         throw new Error("No changes to save");
       }
@@ -3635,7 +3659,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               });
                             }
                           }}
-                          disabled={!dbaName || selectedStores.length === 0}
+                          disabled={!dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
                           data-testid="button-claim-multiple"
                         >
                           <Sparkles className="h-4 w-4 mr-2" />
