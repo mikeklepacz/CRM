@@ -1384,6 +1384,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create or update order
         const existingOrder = await storage.getOrderById(order.id.toString());
+        
+        // RE-ORDER DETECTION: Check if this is a repeat order from an existing client
+        let isReOrder = false;
+        if (!existingOrder && client) {
+          // This is a new order, check if client has previous orders
+          const clientOrders = await storage.getOrdersByClient(client.id);
+          if (clientOrders.length > 0) {
+            isReOrder = true;
+            console.log(`Re-order detected for client ${client.id} (${clientOrders.length} previous orders)`);
+          }
+        }
 
         if (existingOrder) {
           await storage.updateOrder(order.id.toString(), {
@@ -1408,6 +1419,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: order.status,
             orderDate: new Date(order.date_created),
           });
+          
+          // Create notification for re-order
+          if (isReOrder && client.assignedAgent) {
+            const clientName = (client.data as any)?.name || (client.data as any)?.company || 'Unknown Client';
+            await storage.createNotification({
+              userId: client.assignedAgent,
+              clientId: client.id,
+              type: 're_order',
+              priority: 'medium',
+              title: 'Re-Order Alert',
+              message: `${clientName} has placed a new order! Order #${order.number || order.id} for $${order.total}`,
+              metadata: {
+                orderId: order.id.toString(),
+                orderNumber: order.number || order.id.toString(),
+                orderTotal: order.total,
+                orderDate: order.date_created
+              }
+            });
+            console.log(`Created re-order notification for agent ${client.assignedAgent}`);
+          }
         }
 
         synced++;
