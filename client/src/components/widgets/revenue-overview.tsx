@@ -4,25 +4,23 @@ import { Settings2, TrendingUp, TrendingDown, DollarSign, Calendar } from "lucid
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface DashboardSummary {
-  totalEarnings: number;
-  monthlyAverage: number;
-  thisMonthEarnings: number;
-  lastMonthEarnings: number;
-  projectedEarnings: number;
+  totalEarnings: string;
+  monthlyAverage: string;
+  thisMonthEarnings: string;
+  lastMonthEarnings: string;
+  projectedEarnings: string;
   bestMonth: {
     month: string;
-    earnings: number;
+    earnings: string;
   };
-  earningsBreakdown: {
-    tier25Percent: number;
-    tier10Percent: number;
+  commissionBreakdown: {
+    commission25: string;
+    commission10: string;
   };
-  activeClients: number;
-  totalClients: number;
 }
 
 export function RevenueOverviewWidget() {
-  const { data, isLoading, error } = useQuery<{ summary: DashboardSummary }>({
+  const { data, isLoading, error } = useQuery<DashboardSummary>({
     queryKey: ['/api/analytics/dashboard-summary'],
   });
 
@@ -66,9 +64,8 @@ export function RevenueOverviewWidget() {
     );
   }
 
-  const { summary } = data;
-  const monthOverMonthChange = summary.lastMonthEarnings > 0
-    ? ((summary.thisMonthEarnings - summary.lastMonthEarnings) / summary.lastMonthEarnings) * 100
+  const monthOverMonthChange = parseFloat(data.lastMonthEarnings) > 0
+    ? ((parseFloat(data.thisMonthEarnings) - parseFloat(data.lastMonthEarnings)) / parseFloat(data.lastMonthEarnings)) * 100
     : 0;
   const isPositiveChange = monthOverMonthChange >= 0;
 
@@ -87,7 +84,7 @@ export function RevenueOverviewWidget() {
           <div className="flex items-baseline gap-2">
             <DollarSign className="h-5 w-5 text-muted-foreground" />
             <span className="text-3xl font-bold" data-testid="text-total-earnings">
-              ${summary.totalEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${parseFloat(data.totalEarnings || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
           <p className="text-sm text-muted-foreground">Total Earnings</p>
@@ -98,7 +95,7 @@ export function RevenueOverviewWidget() {
           {/* Monthly Average */}
           <div className="space-y-1">
             <div className="text-xl font-semibold" data-testid="text-monthly-average">
-              ${summary.monthlyAverage.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${parseFloat(data.monthlyAverage || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">Monthly Avg</p>
           </div>
@@ -107,7 +104,7 @@ export function RevenueOverviewWidget() {
           <div className="space-y-1">
             <div className="flex items-center gap-1">
               <span className="text-xl font-semibold" data-testid="text-this-month">
-                ${summary.thisMonthEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${parseFloat(data.thisMonthEarnings || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               {isPositiveChange ? (
                 <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -126,7 +123,7 @@ export function RevenueOverviewWidget() {
           {/* Projected Earnings */}
           <div className="space-y-1">
             <div className="text-xl font-semibold" data-testid="text-projected-earnings">
-              ${summary.projectedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${parseFloat(data.projectedEarnings || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">Projected (EOY)</p>
           </div>
@@ -136,11 +133,11 @@ export function RevenueOverviewWidget() {
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3 text-muted-foreground" />
               <span className="text-xl font-semibold" data-testid="text-best-month-amount">
-                ${summary.bestMonth.earnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${parseFloat(data.bestMonth?.earnings || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
             <p className="text-xs text-muted-foreground" data-testid="text-best-month-name">
-              Best: {summary.bestMonth.month}
+              Best: {data.bestMonth?.month || 'N/A'}
             </p>
           </div>
         </div>
