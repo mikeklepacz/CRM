@@ -152,16 +152,18 @@ export function WooCommerceSync() {
   });
 
   const matchOrderMutation = useMutation({
-    mutationFn: async ({ orderId, clientId }: { orderId: string; clientId: string }) => {
-      return await apiRequest("POST", `/api/orders/${orderId}/match`, { clientId });
+    mutationFn: async ({ orderId, storeLink, storeName }: { orderId: string; storeLink: string; storeName?: string }) => {
+      return await apiRequest("POST", `/api/orders/${orderId}/match`, { storeLink, storeName });
     },
     onSuccess: () => {
       refetchOrders();
       setMatchingOrderId(null);
       setSelectedClientId("");
+      setShowAllClients(false);
+      setClientSearch("");
       toast({
         title: "Success",
-        description: "Order matched to client successfully",
+        description: "Order matched to store successfully",
       });
     },
     onError: (error: Error) => {
@@ -343,7 +345,12 @@ export function WooCommerceSync() {
 
   const handleMatchOrder = () => {
     if (matchingOrderId && selectedClientId) {
-      matchOrderMutation.mutate({ orderId: matchingOrderId, clientId: selectedClientId });
+      const storeName = (window as any).__selectedStoreName || '';
+      matchOrderMutation.mutate({ 
+        orderId: matchingOrderId, 
+        storeLink: selectedClientId,
+        storeName 
+      });
     }
   };
 
@@ -591,14 +598,18 @@ export function WooCommerceSync() {
                                     <div className="space-y-2">
                                       {matchSuggestions.suggestions.map((suggestion: any) => (
                                         <button
-                                          key={suggestion.client.id}
-                                          onClick={() => setSelectedClientId(suggestion.client.id)}
+                                          key={suggestion.link}
+                                          onClick={() => {
+                                            setSelectedClientId(suggestion.link);
+                                            // Store the store name for the mutation
+                                            (window as any).__selectedStoreName = suggestion.displayName;
+                                          }}
                                           className={`w-full text-left p-3 rounded-md border-2 transition-all hover-elevate ${
-                                            selectedClientId === suggestion.client.id
+                                            selectedClientId === suggestion.link
                                               ? 'border-primary bg-primary/10'
                                               : 'border-border'
                                           }`}
-                                          data-testid={`suggestion-${suggestion.client.id}`}
+                                          data-testid={`suggestion-${suggestion.link}`}
                                         >
                                           <div className="flex items-start justify-between">
                                             <div className="flex-1">

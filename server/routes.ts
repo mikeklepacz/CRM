@@ -882,14 +882,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Manually match an order to a client
-  app.post('/api/orders/:orderId/match', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  // Manually match an order to a store (Google Sheets-based)
+  app.post('/api/orders/:orderId/match', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { orderId } = req.params;
-      const { clientId } = req.body;
+      const { storeLink, storeName } = req.body; // Changed from clientId to storeLink
 
-      if (!clientId) {
-        return res.status(400).json({ message: "Client ID is required" });
+      if (!storeLink) {
+        return res.status(400).json({ message: "Store link is required" });
       }
 
       const order = await storage.getOrderById(orderId);
@@ -897,38 +898,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      const client = await storage.getClient(clientId);
-      if (!client) {
-        return res.status(404).json({ message: "Client not found" });
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
       }
 
-      // Update order with client ID
-      await storage.updateOrder(orderId, { clientId });
+      // Read tracker data to check if this store already has a row
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
 
-      // Update client sales data
-      const orderDate = new Date(order.orderDate);
-      const orderTotal = parseFloat(order.total);
-
-      const updates: any = {
-        lastOrderDate: orderDate,
-        totalSales: (parseFloat(client.totalSales || '0') + orderTotal).toString(),
-      };
-
-      if (!client.firstOrderDate || new Date(client.firstOrderDate) > orderDate) {
-        updates.firstOrderDate = orderDate;
+      if (trackerRows.length === 0) {
+        return res.status(400).json({ message: 'Commission Tracker sheet is empty' });
       }
 
-      // Calculate commission if client is claimed
-      if (client.assignedAgent && client.claimDate) {
-        const monthsSinceClaim = differenceInMonths(orderDate, new Date(client.claimDate));
-        const rate = monthsSinceClaim < 6 ? 0.25 : 0.10;
-        const commission = orderTotal * rate;
-        updates.commissionTotal = (parseFloat(client.commissionTotal || '0') + commission).toString();
+      const trackerHeaders = trackerRows[0];
+      const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+      const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
+      const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+
+      if (linkIndex === -1) {
+        return res.status(400).json({ message: 'Commission Tracker must have a "Link" column' });
       }
 
-      await storage.updateClient(client.id, updates);
+      // Find existing row for this store or create new one
+      let existingRowIndex = -1;
+      for (let i = 1; i < trackerRows.length; i++) {
+        if (normalizeLink(trackerRows[i][linkIndex]) === normalizeLink(storeLink)) {
+          existingRowIndex = i + 1; // +1 for 1-indexed Google Sheets
+          break;
+        }
+      }
 
-      res.json({ message: "Order matched successfully", order: { ...order, clientId } });
+      // Update order in database with store link
+      await storage.updateOrder(orderId, { 
+        clientId: storeLink // Store the link as clientId for now
+      });
+
+      // If row exists in Commission Tracker, update the Order ID and Transaction ID columns
+      if (existingRowIndex > 0 && orderIdIndex !== -1) {
+        // Convert column index to letter (A=0, B=1, etc.)
+        const orderIdColumn = String.fromCharCode(65 + orderIdIndex);
+        const updateRange = `${trackerSheet.sheetName}!${orderIdColumn}${existingRowIndex}`;
+        await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, updateRange, [[order.orderNumber]]);
+        
+        // Also update Transaction ID if column exists
+        if (transactionIdIndex !== -1) {
+          const txIdColumn = String.fromCharCode(65 + transactionIdIndex);
+          const txRange = `${trackerSheet.sheetName}!${txIdColumn}${existingRowIndex}`;
+          await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, txRange, [[order.id]]);
+        }
+      } else {
+        // Row doesn't exist - we'll create it when they first log activity
+        console.log(`Store ${storeLink} matched to order ${order.orderNumber} but no tracker row exists yet`);
+      }
+
+      res.json({ 
+        message: "Order matched successfully", 
+        order: { ...order, clientId: storeLink, storeName } 
+      });
     } catch (error: any) {
       console.error("Error matching order:", error);
       res.status(500).json({ message: error.message || "Failed to match order" });
