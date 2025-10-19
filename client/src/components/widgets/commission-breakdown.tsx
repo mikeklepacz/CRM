@@ -40,7 +40,7 @@ export function CommissionBreakdownWidget() {
     );
   }
 
-  if (error || !data) {
+  if (error || !data || !data.breakdown || !data.breakdown.tier25Percent || !data.breakdown.tier10Percent) {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
@@ -60,7 +60,7 @@ export function CommissionBreakdownWidget() {
   }
 
   const { breakdown } = data;
-  const totalEarnings = breakdown.tier25Percent.earnings + breakdown.tier10Percent.earnings;
+  const totalEarnings = (breakdown.tier25Percent?.earnings || 0) + (breakdown.tier10Percent?.earnings || 0);
   const tier25Percentage = totalEarnings > 0 ? (breakdown.tier25Percent.earnings / totalEarnings) * 100 : 0;
 
   return (
