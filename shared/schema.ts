@@ -184,7 +184,7 @@ export const userPreferences = pgTable("user_preferences", {
     statusColors?: { [status: string]: { background: string; text: string } };
   }>(),
   textAlign: varchar("text_align", { length: 20 }),
-  freezeFirstColumn: boolean("freeze_first_column").default(true),
+  freezeFirstColumn: boolean("freeze_first_column").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

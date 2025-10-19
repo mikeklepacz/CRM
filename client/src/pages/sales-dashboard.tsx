@@ -126,7 +126,7 @@ export default function SalesDashboard() {
   // New state variables for text alignment and vertical alignment
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
-  const [freezeFirstColumn, setFreezeFirstColumn] = useState<boolean>(true);
+  const [freezeFirstColumn, setFreezeFirstColumn] = useState<boolean>(false);
 
   // Status options state (customizable)
   const [statusOptions, setStatusOptions] = useState<string[]>([
@@ -616,6 +616,7 @@ export default function SalesDashboard() {
         setTextAlign('left');
         setVerticalAlign('middle');
         setColorRowByStatus(false); // Default to false
+        setFreezeFirstColumn(false); // Default to false
         setPreferencesLoaded(true);
       } else {
         // Preferences already loaded - check for new headers
