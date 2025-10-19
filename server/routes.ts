@@ -4557,6 +4557,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== INTEGRATION ENDPOINTS =====
+  
+  // Get integration status for the current user
+  app.get('/api/integrations/status', isAuthenticatedCustom, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const integration = await storage.getUserIntegration(userId);
+      
+      res.json({
+        googleConnected: !!(integration?.googleAccessToken && integration?.googleRefreshToken)
+      });
+    } catch (error: any) {
+      console.error('Error fetching integration status:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch integration status' });
+    }
+  });
+
+  // Connect Google (Calendar + Gmail) - initiate OAuth flow
+  app.post('/api/integrations/google/connect', isAuthenticatedCustom, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // For now, return a message that integration setup is coming soon
+      // In Phase 2-3, we'll implement the full OAuth flow using Replit's Google Calendar connector
+      res.json({
+        message: 'Google integration setup is coming soon! This will use Replit\'s secure OAuth connector.',
+        authUrl: null
+      });
+    } catch (error: any) {
+      console.error('Error connecting Google:', error);
+      res.status(500).json({ message: error.message || 'Failed to connect Google' });
+    }
+  });
+
+  // Disconnect Google integration
+  app.post('/api/integrations/google/disconnect', isAuthenticatedCustom, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // Clear Google tokens from user integration
+      await storage.updateUserIntegration(userId, {
+        googleAccessToken: null,
+        googleRefreshToken: null,
+        googleTokenExpiry: null,
+        googleEmail: null,
+        googleConnectedAt: null
+      });
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error disconnecting Google:', error);
+      res.status(500).json({ message: error.message || 'Failed to disconnect Google' });
+    }
+  });
+
   // ===== WIDGET LAYOUT ENDPOINTS =====
   
   // Get widget layout for the current user
