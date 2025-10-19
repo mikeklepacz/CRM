@@ -1729,7 +1729,9 @@ export default function ClientDashboard() {
                                         if (field === 'bodyBackground' || field === 'headerBackground') {
                                           setCustomColors({ ...customColors, [field]: '' });
                                         } else {
-                                          setCustomColors({ ...customColors, [field]: defaultLightColors[field] });
+                                          // Use the correct defaults based on current theme
+                                          const defaultColors = resolvedTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+                                          setCustomColors({ ...customColors, [field]: defaultColors[field] });
                                         }
                                       }}
                                     >

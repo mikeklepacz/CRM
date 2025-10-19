@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useAuth } from "@/hooks/useAuth";
+import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { Header } from "@/components/header";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
@@ -16,6 +17,10 @@ import StoreDetails from "@/pages/store-details";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  
+  // Apply global theme customization
+  // Hook is always called (Rules of Hooks), but only applies colors when authenticated
+  useCustomTheme();
 
   if (isLoading) {
     return (
