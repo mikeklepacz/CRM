@@ -3231,6 +3231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeHeaders = storeRows[0];
       const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const storeDbaIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'dba');
+      const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name' || h.toLowerCase() === 'agent');
 
       if (storeLinkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found in Store Database' });
@@ -3274,12 +3275,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           continue;
         }
 
-        // Update DBA in Store Database (if column exists)
+        // Update DBA and Agent Name in Store Database (if columns exist)
         if (storeDbaIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeDbaIndex);
           const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex + 1}`;
           await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[dbaName]]);
           updatedStoreCount++;
+        }
+        
+        if (storeAgentIndex !== -1) {
+          const columnLetter = String.fromCharCode(65 + storeAgentIndex);
+          const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex + 1}`;
+          await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[userEmail]]);
         }
 
         // Check if tracker row already exists
