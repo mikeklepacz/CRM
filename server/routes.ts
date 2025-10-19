@@ -1149,7 +1149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Step 2: Write to Google Sheets Commission Tracker
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commission_tracker');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('Commission Tracker');
       console.log('Tracker sheet found:', trackerSheet ? `${trackerSheet.spreadsheetName} / ${trackerSheet.sheetName}` : 'NONE');
       let sheetsWritten = 0;
       
