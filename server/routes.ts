@@ -8,6 +8,7 @@ import bcrypt from "bcrypt";
 import * as client from "openid-client";
 import * as googleSheets from "./googleSheets";
 import { z } from "zod";
+import { normalizeLink } from "../shared/linkUtils";
 
 // Helper function for fuzzy string matching (Levenshtein distance)
 function stringSimilarity(str1: string, str2: string): number {
@@ -48,45 +49,6 @@ function stringSimilarity(str1: string, str2: string): number {
   const distance = matrix[len2][len1];
   const maxLen = Math.max(len1, len2);
   return 1 - (distance / maxLen);
-}
-
-// ============================================================================
-// CRITICAL: Link Normalization Function
-// ============================================================================
-// DO NOT MODIFY without understanding the full context!
-//
-// Purpose:
-// Ensures two different URL formats match correctly during merge operations:
-// - "https://www.leafly.com/dispensary-info/10-collective/"
-// - "leafly.com/dispensary-info/10-collective"
-// Both normalize to: "leafly.com/dispensary-info/10-collective"
-//
-// Why This Matters:
-// - Store Database may have URLs with http://, https://, www., trailing slashes
-// - Commission Tracker may have clean URLs without protocols
-// - Without normalization, identical stores won't merge (shown as orphaned)
-//
-// Normalization Steps:
-// 1. Trim whitespace
-// 2. Convert to lowercase (case-insensitive matching)
-// 3. Remove http:// or https:// protocol
-// 4. Remove www. prefix
-// 5. Remove trailing slashes
-//
-// Impact if broken:
-// - Stores won't match between sheets even when they're the same
-// - Tracker data appears orphaned (_deletedFromStore: true)
-// - CRM shows duplicate rows instead of merged data
-// ============================================================================
-function normalizeLink(link: string): string {
-  if (!link || typeof link !== 'string') return '';
-  
-  return link
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '') // Remove http:// or https://
-    .replace(/^www\./, '')        // Remove www.
-    .replace(/\/+$/, '');          // Remove trailing slashes
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -730,9 +692,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 
   // Get all orders
-  app.get('/api/orders', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.get('/api/orders', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const orders = await storage.getAllOrders();
+      
+      // Check Commission Tracker to see which orders have tracker rows
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
+      
+      if (trackerSheet) {
+        try {
+          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+          
+          if (trackerRows.length > 0) {
+            const trackerHeaders = trackerRows[0];
+            const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+            
+            // Build set of order IDs that have tracker rows
+            const ordersWithTrackerRows = new Set<string>();
+            for (let i = 1; i < trackerRows.length; i++) {
+              const transactionId = trackerRows[i][transactionIdIndex] || '';
+              if (transactionId) {
+                ordersWithTrackerRows.add(transactionId);
+              }
+            }
+            
+            // Add hasTrackerRows field to each order
+            const ordersWithStatus = orders.map((order: any) => ({
+              ...order,
+              hasTrackerRows: ordersWithTrackerRows.has(order.id)
+            }));
+            
+            return res.json(ordersWithStatus);
+          }
+        } catch (trackerError) {
+          console.error('Error checking Commission Tracker:', trackerError);
+          // Continue without tracker status if error
+        }
+      }
+      
+      // If no tracker sheet or error, return orders without hasTrackerRows field
       res.json(orders);
     } catch (error: any) {
       console.error("Error fetching orders:", error);
@@ -753,12 +754,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      // Find Store Database sheet
+      // Find Store Database and Commission Tracker sheets
       const sheets = await storage.getAllActiveGoogleSheets();
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store Database sheet not found' });
+      }
+
+      // Check Commission Tracker for already-matched stores
+      const matchedStoreLinks: string[] = [];
+      if (trackerSheet) {
+        try {
+          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+          
+          if (trackerRows.length > 0) {
+            const trackerHeaders = trackerRows[0];
+            const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+            const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+            
+            // Find all stores matched to this order
+            for (let i = 1; i < trackerRows.length; i++) {
+              const trackerTransactionId = trackerRows[i][transactionIdIndex] || '';
+              if (trackerTransactionId === orderId) {
+                const storeLink = trackerRows[i][linkIndex] || '';
+                if (storeLink) {
+                  matchedStoreLinks.push(normalizeLink(storeLink));
+                }
+              }
+            }
+          }
+        } catch (trackerError) {
+          console.error('Error checking Commission Tracker:', trackerError);
+          // Continue even if tracker check fails
+        }
       }
 
       // Read all store data
@@ -766,7 +797,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
 
       if (storeRows.length === 0) {
-        return res.json({ order, suggestions: [] });
+        return res.json({ order, suggestions: [], matchedStoreLinks });
       }
 
       // Parse store data
@@ -874,6 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         order,
         suggestions: topSuggestions,
+        matchedStoreLinks, // Array of normalized links for already-matched stores
         isManualSearch,
       });
     } catch (error: any) {

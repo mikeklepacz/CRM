@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { normalizeLink } from "@shared/linkUtils";
 import {
   Select,
   SelectContent,
@@ -370,6 +371,22 @@ export function WooCommerceSync() {
     return selectedStores.some(s => s.link === link);
   };
 
+  // Pre-select matched stores when dialog opens and suggestions load
+  useEffect(() => {
+    if (matchingOrderId && matchSuggestions?.matchedStoreLinks && matchSuggestions.matchedStoreLinks.length > 0) {
+      const matchedLinks = new Set(matchSuggestions.matchedStoreLinks.map(normalizeLink));
+      
+      // Find matching stores from suggestions
+      const matchedStores = matchSuggestions.suggestions
+        ?.filter((s: any) => matchedLinks.has(normalizeLink(s.link)))
+        .map((s: any) => ({ link: s.link, name: s.displayName })) || [];
+      
+      if (matchedStores.length > 0) {
+        setSelectedStores(matchedStores);
+      }
+    }
+  }, [matchingOrderId, matchSuggestions]);
+
   return (
     <Card>
       <CardHeader>
@@ -573,7 +590,7 @@ export function WooCommerceSync() {
                             setShowAllClients(false);
                             setClientSearch("");
                           } else {
-                            // Reset state when opening dialog
+                            // Reset state when opening dialog (useEffect will pre-select matched stores)
                             setSelectedStores([]);
                             setDbaName("");
                             setShowAllClients(false);
@@ -582,14 +599,14 @@ export function WooCommerceSync() {
                         }}>
                           <DialogTrigger asChild>
                             <Button 
-                              variant={order.clientId ? "default" : "outline"}
+                              variant={order.hasTrackerRows ? "default" : "outline"}
                               size="sm"
                               onClick={() => setMatchingOrderId(order.id)}
-                              className={order.clientId ? "bg-green-600 hover:bg-green-700 border-green-700" : ""}
+                              className={order.hasTrackerRows ? "bg-green-600 hover:bg-green-700 border-green-700" : ""}
                               data-testid={`button-match-${order.id}`}
                             >
                               <Link2 className="h-4 w-4 mr-1" />
-                              {order.clientId ? "Matched ✓" : "Match"}
+                              {order.hasTrackerRows ? "Matched ✓" : "Match"}
                             </Button>
                           </DialogTrigger>
                             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
