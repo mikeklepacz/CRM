@@ -1494,6 +1494,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create or update row in Commission Tracker by Link
+  app.post('/api/sheets/tracker/upsert', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { link, updates } = req.body;
+
+      if (!link || !updates) {
+        return res.status(400).json({ message: "Link and updates are required" });
+      }
+
+      // Get user info to populate Agent Name
+      const currentUser = await storage.getUser(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: "Commission Tracker sheet not found" });
+      }
+
+      const { spreadsheetId, sheetName } = trackerSheet;
+
+      // Read entire tracker sheet
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: "Tracker sheet is empty (no headers)" });
+      }
+
+      const headers = rows[0];
+      const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+      const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
+
+      if (linkIndex === -1) {
+        return res.status(400).json({ message: "Link column not found in tracker sheet" });
+      }
+
+      // Check if row exists with this link
+      let existingRowIndex = -1;
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][linkIndex] === link) {
+          existingRowIndex = i + 1; // +1 because sheets are 1-indexed
+          break;
+        }
+      }
+
+      if (existingRowIndex !== -1) {
+        // Row exists - update it
+        for (const [column, value] of Object.entries(updates)) {
+          const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
+          if (colIndex !== -1) {
+            const columnLetter = String.fromCharCode(65 + colIndex);
+            const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
+            await googleSheets.writeSheetData(userId, spreadsheetId, cellRange, [[value]]);
+          }
+        }
+
+        res.json({ message: "Tracker row updated successfully", rowIndex: existingRowIndex });
+      } else {
+        // Row doesn't exist - create new row
+        const newRow = new Array(headers.length).fill('');
+        
+        // Set Link
+        newRow[linkIndex] = link;
+        
+        // Set Agent Name to claim the store
+        if (agentNameIndex !== -1) {
+          const agentName = currentUser.firstName && currentUser.lastName 
+            ? `${currentUser.firstName} ${currentUser.lastName}`
+            : currentUser.email || 'Unknown Agent';
+          newRow[agentNameIndex] = agentName;
+        }
+        
+        // Set updated fields
+        for (const [column, value] of Object.entries(updates)) {
+          const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
+          if (colIndex !== -1) {
+            newRow[colIndex] = value as string;
+          }
+        }
+
+        // Append new row
+        await googleSheets.appendSheetData(userId, spreadsheetId, `${sheetName}!A:ZZ`, [newRow]);
+
+        res.json({ message: "Tracker row created successfully", claimed: true });
+      }
+    } catch (error: any) {
+      console.error("Error upserting tracker row:", error);
+      res.status(500).json({ message: error.message || "Failed to upsert tracker row" });
+    }
+  });
+
   // Claim a store by creating a new tracker row
   app.post('/api/sheets/:id/claim-store', isAuthenticatedCustom, async (req: any, res) => {
     try {

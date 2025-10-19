@@ -3158,39 +3158,64 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   // Save mutation - update cells directly
   const saveMutation = useMutation({
     mutationFn: async () => {
-      // Calculate changed fields only
-      const changedFields: Array<{ sheetId: string; rowIndex: number; column: string; value: string }> = [];
+      // Separate Store Database fields from Commission Tracker fields
+      const storeChanges: Array<{ sheetId: string; rowIndex: number; column: string; value: string }> = [];
+      const trackerChanges: Record<string, string> = {};
       
       Object.keys(formData).forEach((key) => {
         const typedKey = key as keyof typeof formData;
         if (formData[typedKey] !== initialData[typedKey]) {
           const mapping = fieldToSheetMapping[key];
           if (mapping) {
-            const sheetId = mapping.sheet === 'store' ? storeSheetId : trackerSheetId;
-            const rowIndex = mapping.sheet === 'store' ? row._storeRowIndex : row._trackerRowIndex;
-            
-            if (sheetId && rowIndex) {
-              changedFields.push({
-                sheetId,
-                rowIndex,
-                column: mapping.column,
-                value: formData[typedKey]
-              });
+            if (mapping.sheet === 'store') {
+              // Store Database - direct update
+              const sheetId = storeSheetId;
+              const rowIndex = row._storeRowIndex;
+              
+              if (sheetId && rowIndex) {
+                storeChanges.push({
+                  sheetId,
+                  rowIndex,
+                  column: mapping.column,
+                  value: formData[typedKey]
+                });
+              }
+            } else {
+              // Commission Tracker - use upsert (create row if doesn't exist)
+              trackerChanges[mapping.column] = formData[typedKey];
             }
           }
         }
       });
 
-      if (changedFields.length === 0) {
+      if (storeChanges.length === 0 && Object.keys(trackerChanges).length === 0) {
         throw new Error("No changes to save");
       }
 
-      // Save all changes in parallel
-      await Promise.all(
-        changedFields.map(({ sheetId, rowIndex, column, value }) =>
-          apiRequest('PUT', `/api/sheets/${sheetId}/update`, { rowIndex, column, value })
-        )
-      );
+      const promises = [];
+
+      // Save store changes
+      if (storeChanges.length > 0) {
+        promises.push(
+          ...storeChanges.map(({ sheetId, rowIndex, column, value }) =>
+            apiRequest('PUT', `/api/sheets/${sheetId}/update`, { rowIndex, column, value })
+          )
+        );
+      }
+
+      // Save tracker changes (create row if needed)
+      if (Object.keys(trackerChanges).length > 0) {
+        const link = formData.link || row.link || row.Link;
+        if (!link) {
+          throw new Error("Cannot save tracker fields: Store link is missing");
+        }
+        
+        promises.push(
+          apiRequest('POST', '/api/sheets/tracker/upsert', { link, updates: trackerChanges })
+        );
+      }
+
+      await Promise.all(promises);
     },
     onSuccess: () => {
       toast({
