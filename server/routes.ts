@@ -333,11 +333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     textAlign: z.enum(['left', 'center', 'right', 'justify']).optional(),
     verticalAlign: z.enum(['top', 'middle', 'bottom']).optional(),
     colorRowByStatus: z.boolean().optional(),
-    statusOptions: z.array(z.string()).optional(),
-    colorPresets: z.array(z.object({
-      name: z.string(),
-      color: z.string()
-    })).optional(),
+    colorPresets: z.array(z.object({ name: z.string(), color: z.string() })).optional(),
     showCanadaOnly: z.boolean().optional(),
   });
 
@@ -761,7 +757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Exact company match
         if (orderCompany && (clientCompany || clientName)) {
-          if (orderCompany.toLowerCase() === clientCompany.toLowerCase() || 
+          if (orderCompany.toLowerCase() === clientCompany.toLowerCase() ||
               orderCompany.toLowerCase() === clientName.toLowerCase()) {
             score += 100;
             reasons.push('Exact company name match');
@@ -1025,7 +1021,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!Array.isArray(orders)) {
         console.error('Expected array of orders but got:', typeof orders);
-        return res.status(500).json({ 
+        return res.status(500).json({
           message: "Invalid response from WooCommerce API",
           total: 0,
           synced: 0,
@@ -1172,7 +1168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         response: error.response?.data,
         status: error.response?.status
       });
-      res.status(500).json({ 
+      res.status(500).json({
         message: error.response?.data?.message || error.message || "Sync failed",
         total: 0,
         synced: 0,
@@ -1238,13 +1234,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const headerRow = headers[0];
-      const hasIdentifier = headerRow.some((h: string) => 
+      const hasIdentifier = headerRow.some((h: string) =>
         h.toLowerCase() === uniqueIdentifierColumn.toLowerCase()
       );
 
       if (!hasIdentifier) {
-        return res.status(400).json({ 
-          message: `Column "${uniqueIdentifierColumn}" not found in sheet. Available columns: ${headerRow.join(', ')}` 
+        return res.status(400).json({
+          message: `Column "${uniqueIdentifierColumn}" not found in sheet. Available columns: ${headerRow.join(', ')}`
         });
       }
 
@@ -1306,7 +1302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return obj;
       });
 
-      res.json({ 
+      res.json({
         headers,
         data,
         sheetInfo: {

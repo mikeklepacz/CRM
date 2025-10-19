@@ -866,14 +866,16 @@ export default function SalesDashboard() {
 
   // Initialize selected cities when states change or cities load
   useEffect(() => {
-    if (citiesInSelectedStates.length > 0 && selectedCities.size === 0 && preferencesLoaded) {
+    if (citiesInSelectedStates.length > 0 && preferencesLoaded) {
       // Check if we have saved city preferences
       if (userPreferences?.selectedCities && userPreferences.selectedCities.length > 0) {
         // Filter saved cities to only include ones that exist in current selected states
         const validCities = userPreferences.selectedCities.filter((city: string) => citiesInSelectedStates.includes(city));
         setSelectedCities(new Set(validCities));
+      } else if (selectedCities.size === 0) {
+        // No saved preferences - auto-select all cities in the selected states
+        setSelectedCities(new Set(citiesInSelectedStates));
       }
-      // If no saved preferences, do NOT auto-select anything - user must manually choose
     }
   }, [citiesInSelectedStates.length, userPreferences, preferencesLoaded]);
 
@@ -1096,8 +1098,8 @@ export default function SalesDashboard() {
       });
     }
 
-    // Filter by cities if any are selected
-    if (selectedCities.size > 0 && selectedCities.size < citiesInSelectedStates.length) {
+    // Filter by cities if we have states selected and not all cities are selected
+    if (selectedStates.size > 0 && citiesInSelectedStates.length > 0 && selectedCities.size > 0 && selectedCities.size < citiesInSelectedStates.length) {
       const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
       filtered = filtered.filter((row: any) => {
         return cityColumns.some((col: string) => {
@@ -1137,6 +1139,8 @@ export default function SalesDashboard() {
     nameFilter,
     cityFilter,
     selectedStates,
+    selectedCities,
+    citiesInSelectedStates.length,
     allStates.length,
     headers,
     sortColumn,
