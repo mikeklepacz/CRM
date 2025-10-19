@@ -2981,6 +2981,7 @@ export default function SalesDashboard() {
           row={storeDetailsDialog.row}
           trackerSheetId={trackerSheetId}
           storeSheetId={storeSheetId}
+          refetch={refetch}
         />
       )}
       </div>
@@ -2989,12 +2990,13 @@ export default function SalesDashboard() {
 }
 
 // Store Details Dialog Component
-function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId }: { 
+function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
   row: any;
   trackerSheetId: string | undefined;
   storeSheetId: string | undefined;
+  refetch: () => Promise<any>;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -3014,6 +3016,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     point_of_contact: "",
     poc_email: "",
     poc_phone: "",
+    status: "",
+    follow_up_date: "",
+    next_action: "",
   });
 
   // Track initial data to determine what changed
@@ -3058,6 +3063,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         point_of_contact: getValue(['Point of Contact', 'point_of_contact', 'POC']),
         poc_email: getValue(['POC Email', 'poc_email']),
         poc_phone: getValue(['POC Phone', 'poc_phone']),
+        status: getValue(['Status', 'status']),
+        follow_up_date: getValue(['Follow-Up Date', 'follow_up_date']),
+        next_action: getValue(['Next Action', 'next_action']),
       };
       setFormData(populatedData);
       setInitialData(populatedData);
@@ -3153,6 +3161,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     point_of_contact: { sheet: 'tracker', column: 'Point of Contact' },
     poc_email: { sheet: 'tracker', column: 'POC Email' },
     poc_phone: { sheet: 'tracker', column: 'POC Phone' },
+    status: { sheet: 'tracker', column: 'Status' },
+    follow_up_date: { sheet: 'tracker', column: 'Follow-Up Date' },
+    next_action: { sheet: 'tracker', column: 'Next Action' },
   };
 
   // Save mutation - update cells directly
@@ -3217,12 +3228,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
       await Promise.all(promises);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Success",
         description: "Store information updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+      // Invalidate and refetch to update the table immediately
+      await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+      await refetch();
       setInitialData(formData); // Update initial data so changes are no longer "unsaved"
       onOpenChange(false);
     },
@@ -3407,6 +3420,53 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                         value={formData.poc_phone}
                         onChange={(e) => handleInputChange('poc_phone', e.target.value)}
                         placeholder="(555) 123-4567"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Status, Follow-Up Date, Next Action */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Status</Label>
+                      <Select
+                        value={formData.status}
+                        onValueChange={(value) => handleInputChange('status', value)}
+                      >
+                        <SelectTrigger id="status" data-testid="select-status">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1 – Contacted" data-testid="status-option-contacted">1 – Contacted</SelectItem>
+                          <SelectItem value="2 – Interested" data-testid="status-option-interested">2 – Interested</SelectItem>
+                          <SelectItem value="3 – Sample Sent" data-testid="status-option-sample-sent">3 – Sample Sent</SelectItem>
+                          <SelectItem value="4 – Follow-Up" data-testid="status-option-follow-up">4 – Follow-Up</SelectItem>
+                          <SelectItem value="5 – Closed Won" data-testid="status-option-closed-won">5 – Closed Won</SelectItem>
+                          <SelectItem value="6 – Closed Lost" data-testid="status-option-closed-lost">6 – Closed Lost</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="follow_up_date" className="flex items-center gap-1">
+                        Follow-Up Date
+                        <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="follow_up_date"
+                        data-testid="input-follow-up-date"
+                        type="date"
+                        value={formData.follow_up_date}
+                        onChange={(e) => handleInputChange('follow_up_date', e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="next_action">Next Action</Label>
+                      <Input
+                        id="next_action"
+                        data-testid="input-next-action"
+                        value={formData.next_action}
+                        onChange={(e) => handleInputChange('next_action', e.target.value)}
+                        placeholder="e.g., Call back next week"
                       />
                     </div>
                   </div>
