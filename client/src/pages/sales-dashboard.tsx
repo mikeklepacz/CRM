@@ -3617,19 +3617,24 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                           onClick={async () => {
                             try {
                               const storeLinks = selectedStores.map(s => s.link);
+                              console.log('[CLAIM-DBA] Claiming locations:', { storeLinks, dbaName, storeSheetId, trackerSheetId });
+                              
                               const response = await apiRequest('POST', '/api/stores/claim-multiple', {
                                 storeLinks,
-                                dbaName,
+                                dbaName: dbaName.trim(),
                                 storeSheetId,
                                 trackerSheetId
                               });
 
+                              console.log('[CLAIM-DBA] Response:', response);
+
                               const successMessage = `Claimed ${response.createdTrackerCount} location${response.createdTrackerCount !== 1 ? 's' : ''} with DBA "${dbaName}"`;
+                              const storeUpdateMessage = response.updatedStoreCount > 0 ? ` Updated ${response.updatedStoreCount} store record${response.updatedStoreCount !== 1 ? 's' : ''}.` : '';
                               const warningMessage = response.skippedCount > 0 ? ` (${response.skippedCount} skipped - already claimed)` : '';
                               
                               toast({
                                 title: "Success",
-                                description: successMessage + warningMessage,
+                                description: successMessage + storeUpdateMessage + warningMessage,
                               });
 
                               // Show warnings if any
@@ -3651,7 +3656,11 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               // Refresh the dashboard
                               await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
                               await refetch();
+                              
+                              // Close the dialog
+                              onOpenChange(false);
                             } catch (error: any) {
+                              console.error('[CLAIM-DBA] Error:', error);
                               toast({
                                 title: "Error",
                                 description: error.message || "Failed to claim locations",

@@ -3339,17 +3339,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update DBA and Agent Name in Store Database (if columns exist)
         console.log(`[CLAIM-MULTIPLE] Processing store: ${storeLink}`);
         console.log(`[CLAIM-MULTIPLE] Found at Google Sheets row: ${storeRowIndex}`);
+        console.log(`[CLAIM-MULTIPLE] Store headers:`, storeHeaders);
+        console.log(`[CLAIM-MULTIPLE] DBA column index: ${storeDbaIndex}, Agent column index: ${storeAgentIndex}`);
         
         if (storeDbaIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeDbaIndex);
           const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
           console.log(`[CLAIM-MULTIPLE] Writing DBA "${dbaName}" to Store Database cell: ${cellRange}`);
+          console.log(`[CLAIM-MULTIPLE] Spreadsheet ID: ${storeSheet.spreadsheetId}`);
           try {
             await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[dbaName]]);
             console.log(`[CLAIM-MULTIPLE] ✓ DBA write successful`);
             updatedStoreCount++;
           } catch (error: any) {
             console.error(`[CLAIM-MULTIPLE] ✗ DBA write failed:`, error.message);
+            console.error(`[CLAIM-MULTIPLE] Full error:`, error);
           }
         } else {
           console.log(`[CLAIM-MULTIPLE] ✗ DBA column not found - skipping DBA update`);
@@ -3359,9 +3363,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const columnLetter = String.fromCharCode(65 + storeAgentIndex);
           const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
           console.log(`[CLAIM-MULTIPLE] Writing Agent "${userEmail}" to Store Database cell: ${cellRange}`);
+          console.log(`[CLAIM-MULTIPLE] Spreadsheet ID: ${storeSheet.spreadsheetId}`);
           try {
             await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[userEmail]]);
             console.log(`[CLAIM-MULTIPLE] ✓ Agent write successful`);
+          } catch (error: any) {
+            console.error(`[CLAIM-MULTIPLE] ✗ Agent write failed:`, error.message);
+            console.error(`[CLAIM-MULTIPLE] Full error:`, error);
+          }
+        } else {
+          console.log(`[CLAIM-MULTIPLE] ✗ Agent Name column not found - skipping Agent update`);ssful`);
           } catch (error: any) {
             console.error(`[CLAIM-MULTIPLE] ✗ Agent write failed:`, error.message);
           }
