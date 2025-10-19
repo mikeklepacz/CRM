@@ -9,6 +9,9 @@ import {
   userIntegrations,
   dashboardCards,
   userPreferences,
+  reminders,
+  notifications,
+  widgetLayouts,
   type User,
   type UpsertUser,
   type Client,
@@ -26,6 +29,12 @@ import {
   type DashboardCard,
   type UserPreferences,
   type InsertUserPreferences,
+  type Reminder,
+  type InsertReminder,
+  type Notification,
+  type InsertNotification,
+  type WidgetLayout,
+  type InsertWidgetLayout,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -86,6 +95,29 @@ export interface IStorage {
   // Dashboard operations
   getDashboardCardsByRole(role: string): Promise<any[]>;
   getDashboardStats(userId: string, role: string): Promise<any>;
+
+  // Helper methods
+  getUserById(id: string): Promise<User | undefined>;
+  getOrdersByClient(clientId: string): Promise<Order[]>;
+
+  // Reminder operations
+  getRemindersByUser(userId: string): Promise<Reminder[]>;
+  getRemindersByClient(clientId: string): Promise<Reminder[]>;
+  getReminderById(id: string): Promise<Reminder | undefined>;
+  createReminder(reminder: InsertReminder): Promise<Reminder>;
+  updateReminder(id: string, updates: Partial<InsertReminder>): Promise<Reminder>;
+  deleteReminder(id: string): Promise<void>;
+
+  // Notification operations
+  getNotificationsByUser(userId: string): Promise<Notification[]>;
+  getNotificationById(id: string): Promise<Notification | undefined>;
+  markNotificationAsRead(id: string): Promise<Notification>;
+  markNotificationAsResolved(id: string): Promise<Notification>;
+  deleteNotification(id: string): Promise<void>;
+
+  // Widget layout operations
+  getWidgetLayout(userId: string, dashboardType: string): Promise<WidgetLayout | undefined>;
+  saveWidgetLayout(layout: InsertWidgetLayout): Promise<WidgetLayout>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -437,6 +469,163 @@ export class DatabaseStorage implements IStorage {
     }
     
     return {};
+  }
+
+  // Helper methods
+  async getUserById(id: string): Promise<User | undefined> {
+    return this.getUser(id);
+  }
+
+  async getOrdersByClient(clientId: string): Promise<Order[]> {
+    return await db
+      .select()
+      .from(orders)
+      .where(eq(orders.clientId, clientId))
+      .orderBy(desc(orders.orderDate));
+  }
+
+  // Reminder operations
+  async getRemindersByUser(userId: string): Promise<Reminder[]> {
+    return await db
+      .select()
+      .from(reminders)
+      .where(eq(reminders.userId, userId))
+      .orderBy(desc(reminders.nextTrigger));
+  }
+
+  async getRemindersByClient(clientId: string): Promise<Reminder[]> {
+    return await db
+      .select()
+      .from(reminders)
+      .where(eq(reminders.clientId, clientId))
+      .orderBy(desc(reminders.nextTrigger));
+  }
+
+  async getReminderById(id: string): Promise<Reminder | undefined> {
+    const [reminder] = await db
+      .select()
+      .from(reminders)
+      .where(eq(reminders.id, id));
+    return reminder;
+  }
+
+  async createReminder(reminder: InsertReminder): Promise<Reminder> {
+    const [newReminder] = await db
+      .insert(reminders)
+      .values(reminder)
+      .returning();
+    return newReminder;
+  }
+
+  async updateReminder(id: string, updates: Partial<InsertReminder>): Promise<Reminder> {
+    const [updated] = await db
+      .update(reminders)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(reminders.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    await db
+      .delete(reminders)
+      .where(eq(reminders.id, id));
+  }
+
+  // Notification operations
+  async getNotificationsByUser(userId: string): Promise<Notification[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getNotificationById(id: string): Promise<Notification | undefined> {
+    const [notification] = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.id, id));
+    return notification;
+  }
+
+  async markNotificationAsRead(id: string): Promise<Notification> {
+    const [updated] = await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markNotificationAsResolved(id: string): Promise<Notification> {
+    const [updated] = await db
+      .update(notifications)
+      .set({ isResolved: true, resolvedAt: new Date() })
+      .where(eq(notifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    await db
+      .delete(notifications)
+      .where(eq(notifications.id, id));
+  }
+
+  // Widget layout operations
+  async getWidgetLayout(userId: string, dashboardType: string): Promise<WidgetLayout | undefined> {
+    const [layout] = await db
+      .select()
+      .from(widgetLayouts)
+      .where(and(
+        eq(widgetLayouts.userId, userId),
+        eq(widgetLayouts.dashboardType, dashboardType),
+        eq(widgetLayouts.isDefault, true)
+      ))
+      .limit(1);
+    return layout;
+  }
+
+  async saveWidgetLayout(layout: InsertWidgetLayout): Promise<WidgetLayout> {
+    // If this is set as default, unset other defaults for this user/dashboard type
+    if (layout.isDefault) {
+      await db
+        .update(widgetLayouts)
+        .set({ isDefault: false })
+        .where(and(
+          eq(widgetLayouts.userId, layout.userId),
+          eq(widgetLayouts.dashboardType, layout.dashboardType || 'sales')
+        ));
+    }
+
+    // Check if a layout already exists for this user/dashboard type
+    const [existing] = await db
+      .select()
+      .from(widgetLayouts)
+      .where(and(
+        eq(widgetLayouts.userId, layout.userId),
+        eq(widgetLayouts.dashboardType, layout.dashboardType || 'sales'),
+        eq(widgetLayouts.isDefault, true)
+      ))
+      .limit(1);
+
+    if (existing) {
+      // Update existing layout
+      const [updated] = await db
+        .update(widgetLayouts)
+        .set({ ...layout, updatedAt: new Date() })
+        .where(eq(widgetLayouts.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new layout
+      const [newLayout] = await db
+        .insert(widgetLayouts)
+        .values(layout)
+        .returning();
+      return newLayout;
+    }
   }
 }
 

@@ -3576,6 +3576,631 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== SALES ANALYTICS ENDPOINTS =====
+  
+  // Get dashboard summary with key sales metrics
+  app.get('/api/analytics/dashboard-summary', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Get all clients for this agent
+      const clients = user.role === 'admin' 
+        ? await storage.getAllClients()
+        : await storage.getClientsByAgent(userId);
+
+      // Get all orders for these clients
+      const clientIds = clients.map(c => c.id);
+      const allOrders = user.role === 'admin'
+        ? await storage.getAllOrders()
+        : (await Promise.all(clientIds.map(id => storage.getOrdersByClient(id)))).flat();
+
+      // Helper function to calculate commission based on first order date
+      const calculateCommission = (order: any, client: any) => {
+        if (!client.firstOrderDate || !order.orderDate) return 0;
+        
+        const orderDate = new Date(order.orderDate);
+        const firstOrderDate = new Date(client.firstOrderDate);
+        const monthsDiff = (orderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+        
+        const rate = monthsDiff <= 6 ? 0.25 : 0.10;
+        return parseFloat(order.total) * rate;
+      };
+
+      // Calculate metrics
+      const now = new Date();
+      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+      let totalEarnings = 0;
+      let thisMonthEarnings = 0;
+      let lastMonthEarnings = 0;
+      let commission25Earnings = 0;
+      let commission10Earnings = 0;
+      const monthlyEarnings: { [key: string]: number } = {};
+
+      // Build client lookup map
+      const clientMap = new Map(clients.map(c => [c.id, c]));
+
+      for (const order of allOrders) {
+        const client = clientMap.get(order.clientId || '');
+        if (!client) continue;
+
+        const commission = calculateCommission(order, client);
+        totalEarnings += commission;
+
+        const orderDate = new Date(order.orderDate);
+        const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+        monthlyEarnings[monthKey] = (monthlyEarnings[monthKey] || 0) + commission;
+
+        if (orderDate >= thisMonthStart) {
+          thisMonthEarnings += commission;
+        }
+        if (orderDate >= lastMonthStart && orderDate <= lastMonthEnd) {
+          lastMonthEarnings += commission;
+        }
+
+        // Track 25% vs 10% earnings
+        if (!client.firstOrderDate) continue;
+        const firstOrderDate = new Date(client.firstOrderDate);
+        const monthsDiff = (orderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+        
+        if (monthsDiff <= 6) {
+          commission25Earnings += commission;
+        } else {
+          commission10Earnings += commission;
+        }
+      }
+
+      // Find best month
+      let bestMonth = { month: '', earnings: 0 };
+      for (const [month, earnings] of Object.entries(monthlyEarnings)) {
+        if (earnings > bestMonth.earnings) {
+          bestMonth = { month, earnings };
+        }
+      }
+
+      // Calculate monthly average (last 6 months)
+      const last6Months = Object.entries(monthlyEarnings)
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .slice(0, 6);
+      const monthlyAverage = last6Months.length > 0
+        ? last6Months.reduce((sum, [_, val]) => sum + val, 0) / last6Months.length
+        : 0;
+
+      // Calculate projected earnings (based on this month's daily average)
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const currentDay = now.getDate();
+      const projectedEarnings = currentDay > 0 
+        ? (thisMonthEarnings / currentDay) * daysInMonth
+        : 0;
+
+      res.json({
+        totalEarnings: totalEarnings.toFixed(2),
+        monthlyAverage: monthlyAverage.toFixed(2),
+        thisMonthEarnings: thisMonthEarnings.toFixed(2),
+        lastMonthEarnings: lastMonthEarnings.toFixed(2),
+        projectedEarnings: projectedEarnings.toFixed(2),
+        bestMonth: {
+          month: bestMonth.month,
+          earnings: bestMonth.earnings.toFixed(2)
+        },
+        commissionBreakdown: {
+          commission25: commission25Earnings.toFixed(2),
+          commission10: commission10Earnings.toFixed(2)
+        }
+      });
+    } catch (error: any) {
+      console.error('Error fetching dashboard summary:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch dashboard summary' });
+    }
+  });
+
+  // Get commission breakdown details
+  app.get('/api/analytics/commission-breakdown', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const clients = user.role === 'admin' 
+        ? await storage.getAllClients()
+        : await storage.getClientsByAgent(userId);
+
+      // Categorize clients by commission tier
+      const now = new Date();
+      const clientsAt25: any[] = [];
+      const clientsAt10: any[] = [];
+      const clientsNearing10: any[] = []; // Within 30 days of tier change
+
+      for (const client of clients) {
+        if (!client.firstOrderDate) continue;
+
+        const firstOrderDate = new Date(client.firstOrderDate);
+        const monthsSinceFirst = (now.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+        const daysUntilTierChange = Math.max(0, Math.ceil((6 - monthsSinceFirst) * 30.44));
+
+        const clientOrders = await storage.getOrdersByClient(client.id);
+        const totalRevenue = clientOrders.reduce((sum, order) => sum + parseFloat(order.total), 0);
+
+        const clientData = {
+          id: client.id,
+          name: (client.data as any)?.name || (client.data as any)?.company || 'Unknown',
+          firstOrderDate: client.firstOrderDate,
+          totalRevenue: totalRevenue.toFixed(2),
+          daysUntilTierChange
+        };
+
+        if (monthsSinceFirst <= 6) {
+          clientsAt25.push(clientData);
+          if (daysUntilTierChange <= 30) {
+            clientsNearing10.push({
+              ...clientData,
+              revenueAtRisk: (totalRevenue * 0.15).toFixed(2) // 15% revenue reduction
+            });
+          }
+        } else {
+          clientsAt10.push(clientData);
+        }
+      }
+
+      res.json({
+        clientsAt25: clientsAt25.length,
+        clientsAt10: clientsAt10.length,
+        clientsNearing10: clientsNearing10.length,
+        nearingTierChange: clientsNearing10.map(c => ({
+          clientId: c.id,
+          clientName: c.name,
+          daysRemaining: c.daysUntilTierChange,
+          revenueAtRisk: c.revenueAtRisk
+        }))
+      });
+    } catch (error: any) {
+      console.error('Error fetching commission breakdown:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch commission breakdown' });
+    }
+  });
+
+  // Get client portfolio metrics
+  app.get('/api/analytics/portfolio-metrics', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const clients = user.role === 'admin' 
+        ? await storage.getAllClients()
+        : await storage.getClientsByAgent(userId);
+
+      const totalClients = clients.length;
+      const activeClients = clients.filter(c => c.status === 'active').length;
+
+      let totalRevenue = 0;
+      let clientsWithMultipleOrders = 0;
+
+      for (const client of clients) {
+        const orders = await storage.getOrdersByClient(client.id);
+        const revenue = orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
+        totalRevenue += revenue;
+
+        if (orders.length > 1) {
+          clientsWithMultipleOrders++;
+        }
+      }
+
+      const avgRevenuePerClient = totalClients > 0 ? totalRevenue / totalClients : 0;
+      const repeatOrderRate = totalClients > 0 ? (clientsWithMultipleOrders / totalClients) * 100 : 0;
+
+      res.json({
+        totalClients,
+        activeClients,
+        avgRevenuePerClient: avgRevenuePerClient.toFixed(2),
+        repeatOrderRate: repeatOrderRate.toFixed(1)
+      });
+    } catch (error: any) {
+      console.error('Error fetching portfolio metrics:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch portfolio metrics' });
+    }
+  });
+
+  // Get revenue trends over time
+  app.get('/api/analytics/revenue-trends', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { range = 'last6months' } = req.query;
+
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const clients = user.role === 'admin' 
+        ? await storage.getAllClients()
+        : await storage.getClientsByAgent(userId);
+
+      const clientIds = clients.map(c => c.id);
+      const allOrders = user.role === 'admin'
+        ? await storage.getAllOrders()
+        : (await Promise.all(clientIds.map(id => storage.getOrdersByClient(id)))).flat();
+
+      // Calculate commission for each order
+      const calculateCommission = (order: any, client: any) => {
+        if (!client.firstOrderDate || !order.orderDate) return 0;
+        
+        const orderDate = new Date(order.orderDate);
+        const firstOrderDate = new Date(client.firstOrderDate);
+        const monthsDiff = (orderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+        
+        const rate = monthsDiff <= 6 ? 0.25 : 0.10;
+        return parseFloat(order.total) * rate;
+      };
+
+      const clientMap = new Map(clients.map(c => [c.id, c]));
+      const monthlyData: { [key: string]: { revenue: number; commission: number; orders: number } } = {};
+
+      for (const order of allOrders) {
+        const client = clientMap.get(order.clientId || '');
+        if (!client) continue;
+
+        const orderDate = new Date(order.orderDate);
+        const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = { revenue: 0, commission: 0, orders: 0 };
+        }
+
+        monthlyData[monthKey].revenue += parseFloat(order.total);
+        monthlyData[monthKey].commission += calculateCommission(order, client);
+        monthlyData[monthKey].orders += 1;
+      }
+
+      // Filter by range
+      const sortedMonths = Object.keys(monthlyData).sort();
+      let filteredMonths = sortedMonths;
+      
+      if (range === 'last3months') {
+        filteredMonths = sortedMonths.slice(-3);
+      } else if (range === 'last6months') {
+        filteredMonths = sortedMonths.slice(-6);
+      } else if (range === 'last12months') {
+        filteredMonths = sortedMonths.slice(-12);
+      }
+
+      const trends = filteredMonths.map(month => ({
+        month,
+        revenue: monthlyData[month].revenue.toFixed(2),
+        commission: monthlyData[month].commission.toFixed(2),
+        orders: monthlyData[month].orders
+      }));
+
+      res.json({ trends });
+    } catch (error: any) {
+      console.error('Error fetching revenue trends:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch revenue trends' });
+    }
+  });
+
+  // Get top clients by revenue
+  app.get('/api/analytics/top-clients', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { limit = '10' } = req.query;
+      const topN = parseInt(limit as string);
+
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const clients = user.role === 'admin' 
+        ? await storage.getAllClients()
+        : await storage.getClientsByAgent(userId);
+
+      // Calculate total revenue and commission for each client
+      const clientStats = await Promise.all(
+        clients.map(async (client) => {
+          const orders = await storage.getOrdersByClient(client.id);
+          const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
+          
+          let totalCommission = 0;
+          for (const order of orders) {
+            if (!client.firstOrderDate || !order.orderDate) continue;
+            
+            const orderDate = new Date(order.orderDate);
+            const firstOrderDate = new Date(client.firstOrderDate);
+            const monthsDiff = (orderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+            
+            const rate = monthsDiff <= 6 ? 0.25 : 0.10;
+            totalCommission += parseFloat(order.total) * rate;
+          }
+
+          return {
+            id: client.id,
+            name: (client.data as any)?.name || (client.data as any)?.company || 'Unknown',
+            totalRevenue: totalRevenue.toFixed(2),
+            totalCommission: totalCommission.toFixed(2),
+            orderCount: orders.length,
+            firstOrderDate: client.firstOrderDate,
+            lastOrderDate: client.lastOrderDate
+          };
+        })
+      );
+
+      // Sort by revenue and take top N
+      const topClients = clientStats
+        .sort((a, b) => parseFloat(b.totalRevenue) - parseFloat(a.totalRevenue))
+        .slice(0, topN);
+
+      res.json({ topClients });
+    } catch (error: any) {
+      console.error('Error fetching top clients:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch top clients' });
+    }
+  });
+
+  // ===== REMINDER MANAGEMENT ENDPOINTS =====
+  
+  // Get all reminders for the current user
+  app.get('/api/reminders', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const reminders = await storage.getRemindersByUser(userId);
+      res.json({ reminders });
+    } catch (error: any) {
+      console.error('Error fetching reminders:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch reminders' });
+    }
+  });
+
+  // Get reminders for a specific client
+  app.get('/api/reminders/client/:clientId', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { clientId } = req.params;
+      const reminders = await storage.getRemindersByClient(clientId);
+      
+      // Filter by user (security check)
+      const userReminders = reminders.filter(r => r.userId === userId);
+      res.json({ reminders: userReminders });
+    } catch (error: any) {
+      console.error('Error fetching client reminders:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch client reminders' });
+    }
+  });
+
+  // Create a new reminder
+  app.post('/api/reminders', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const reminderData = { ...req.body, userId };
+      const reminder = await storage.createReminder(reminderData);
+      res.json({ reminder });
+    } catch (error: any) {
+      console.error('Error creating reminder:', error);
+      res.status(500).json({ message: error.message || 'Failed to create reminder' });
+    }
+  });
+
+  // Update a reminder
+  app.put('/api/reminders/:id', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const existing = await storage.getReminderById(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: 'Reminder not found' });
+      }
+
+      const reminder = await storage.updateReminder(id, req.body);
+      res.json({ reminder });
+    } catch (error: any) {
+      console.error('Error updating reminder:', error);
+      res.status(500).json({ message: error.message || 'Failed to update reminder' });
+    }
+  });
+
+  // Delete a reminder
+  app.delete('/api/reminders/:id', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const existing = await storage.getReminderById(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: 'Reminder not found' });
+      }
+
+      await storage.deleteReminder(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting reminder:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete reminder' });
+    }
+  });
+
+  // ===== NOTIFICATION ENDPOINTS =====
+  
+  // Get all notifications for the current user
+  app.get('/api/notifications', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { unreadOnly = 'false' } = req.query;
+      const notifications = await storage.getNotificationsByUser(userId);
+      
+      const filtered = unreadOnly === 'true'
+        ? notifications.filter(n => !n.isRead)
+        : notifications;
+
+      res.json({ notifications: filtered });
+    } catch (error: any) {
+      console.error('Error fetching notifications:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch notifications' });
+    }
+  });
+
+  // Mark notification as read
+  app.put('/api/notifications/:id/read', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const existing = await storage.getNotificationById(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
+
+      const notification = await storage.markNotificationAsRead(id);
+      res.json({ notification });
+    } catch (error: any) {
+      console.error('Error marking notification as read:', error);
+      res.status(500).json({ message: error.message || 'Failed to mark notification as read' });
+    }
+  });
+
+  // Mark notification as resolved
+  app.put('/api/notifications/:id/resolve', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const existing = await storage.getNotificationById(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
+
+      const notification = await storage.markNotificationAsResolved(id);
+      res.json({ notification });
+    } catch (error: any) {
+      console.error('Error resolving notification:', error);
+      res.status(500).json({ message: error.message || 'Failed to resolve notification' });
+    }
+  });
+
+  // Delete a notification
+  app.delete('/api/notifications/:id', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const existing = await storage.getNotificationById(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
+
+      await storage.deleteNotification(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting notification:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete notification' });
+    }
+  });
+
+  // ===== WIDGET LAYOUT ENDPOINTS =====
+  
+  // Get widget layout for the current user
+  app.get('/api/widget-layout', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { dashboardType = 'sales' } = req.query;
+      const layout = await storage.getWidgetLayout(userId, dashboardType as string);
+      res.json({ layout });
+    } catch (error: any) {
+      console.error('Error fetching widget layout:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch widget layout' });
+    }
+  });
+
+  // Save widget layout for the current user
+  app.post('/api/widget-layout', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const layoutData = { ...req.body, userId };
+      const layout = await storage.saveWidgetLayout(layoutData);
+      res.json({ layout });
+    } catch (error: any) {
+      console.error('Error saving widget layout:', error);
+      res.status(500).json({ message: error.message || 'Failed to save widget layout' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
