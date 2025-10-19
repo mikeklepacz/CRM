@@ -434,8 +434,8 @@ export default function SalesDashboard() {
   // Auto-detect sheets by purpose
   useEffect(() => {
     if (sheets.length > 0) {
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
 
       if (storeSheet) setStoreSheetId(storeSheet.id);
       if (trackerSheet) setTrackerSheetId(trackerSheet.id);
