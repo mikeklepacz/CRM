@@ -1375,10 +1375,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Filter tracker data by agent (if user is not admin)
       let filteredTrackerData = trackerData;
-      const agentColumnName = trackerHeaders.find(h => h.toLowerCase() === 'agent');
+      // Look for "Agent Name" column (case-insensitive, handles spaces)
+      const agentColumnName = trackerHeaders.find(h => 
+        h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
+      );
+      
       if (user?.role !== 'admin' && agentColumnName) {
-        const userEmail = user?.email || '';
-        filteredTrackerData = trackerData.filter(row => row[agentColumnName] === userEmail);
+        // Match by agent name string (WooCommerce convention)
+        // Try user.agentName first, then construct from firstName + lastName
+        const userAgentName = user?.agentName || 
+          (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null);
+        
+        if (userAgentName) {
+          filteredTrackerData = trackerData.filter(row => {
+            const rowAgentName = row[agentColumnName];
+            // Case-insensitive match
+            return rowAgentName && rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
+          });
+          console.log(`Filtered tracker data for agent "${userAgentName}": ${filteredTrackerData.length} rows`);
+        } else {
+          // No agent name available, filter to empty (agent sees nothing)
+          filteredTrackerData = [];
+          console.log('No agent name found for user, filtering all tracker rows');
+        }
       }
 
       // Merge data by join column - include rows from BOTH sheets
