@@ -1947,20 +1947,10 @@ export default function SalesDashboard() {
                             id="canada-toggle"
                             checked={showCanadaOnly}
                             onCheckedChange={(checked) => {
-                              const canadianStates = allStates.filter(isCanadianProvince);
-                              const usaStates = allStates.filter(s => !isCanadianProvince(s));
-                              const newSelected = new Set<string>();
-                              
-                              if (checked) {
-                                // Checked: Show Canada only - hide USA states
-                                canadianStates.forEach(state => newSelected.add(state));
-                                setShowCanadaOnly(true);
-                              } else {
-                                // Unchecked: Show USA only - hide Canada states
-                                usaStates.forEach(state => newSelected.add(state));
-                                setShowCanadaOnly(false);
-                              }
-                              setSelectedStates(newSelected);
+                              // When toggling Canada checkbox, clear all selections
+                              // User must manually select states they want to see
+                              setSelectedStates(new Set<string>());
+                              setShowCanadaOnly(!!checked);
                             }}
                             data-testid="checkbox-canada-toggle"
                           />
