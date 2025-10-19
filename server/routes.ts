@@ -337,6 +337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       name: z.string(),
       color: z.string()
     })).optional(),
+    showCanadaOnly: z.boolean().optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {

@@ -123,6 +123,7 @@ export default function SalesDashboard() {
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
   const [freezeFirstColumn, setFreezeFirstColumn] = useState<boolean>(true);
+  const [showCanadaOnly, setShowCanadaOnly] = useState<boolean>(false);
 
   // Status options state (customizable)
   const [statusOptions, setStatusOptions] = useState<string[]>([
@@ -584,6 +585,10 @@ export default function SalesDashboard() {
           setFreezeFirstColumn(userPreferences.freezeFirstColumn);
         }
 
+        if (userPreferences.showCanadaOnly !== undefined) {
+          setShowCanadaOnly(userPreferences.showCanadaOnly);
+        }
+
         setPreferencesLoaded(true);
       } else {
         // No saved preferences, use defaults
@@ -599,6 +604,7 @@ export default function SalesDashboard() {
         setTextAlign('left');
         setVerticalAlign('middle');
         setColorRowByStatus(false); // Default to false
+        setShowCanadaOnly(false); // Default to false
         setPreferencesLoaded(true);
       }
     }
@@ -848,6 +854,7 @@ export default function SalesDashboard() {
           colorRowByStatus, // Save row coloring preference
           colorPresets, // Save color presets
           freezeFirstColumn, // Save freeze column preference
+          showCanadaOnly, // Save Canada/USA toggle preference
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -1928,18 +1935,24 @@ export default function SalesDashboard() {
                           Uncheck states to hide rows from those states
                         </p>
                         
-                        {/* Canada Checkbox */}
+                        {/* Canada/USA Toggle Checkbox */}
                         <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
                           <Checkbox
                             id="canada-toggle"
-                            checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state))}
+                            checked={showCanadaOnly}
                             onCheckedChange={(checked) => {
                               const canadianStates = allStates.filter(isCanadianProvince);
-                              const newSelected = new Set(selectedStates);
+                              const usaStates = allStates.filter(s => !isCanadianProvince(s));
+                              const newSelected = new Set<string>();
+                              
                               if (checked) {
+                                // Show Canada only - hide USA states
                                 canadianStates.forEach(state => newSelected.add(state));
+                                setShowCanadaOnly(true);
                               } else {
-                                canadianStates.forEach(state => newSelected.delete(state));
+                                // Show USA only - hide Canada states
+                                usaStates.forEach(state => newSelected.add(state));
+                                setShowCanadaOnly(false);
                               }
                               setSelectedStates(newSelected);
                             }}
@@ -1949,7 +1962,7 @@ export default function SalesDashboard() {
                             htmlFor="canada-toggle"
                             className="text-sm cursor-pointer flex-1 font-medium"
                           >
-                            Canada
+                            {showCanadaOnly ? 'Canada Only' : 'USA Only'}
                           </Label>
                           <span className="text-xs text-muted-foreground">
                             ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)

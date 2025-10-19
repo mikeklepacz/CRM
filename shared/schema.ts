@@ -187,6 +187,7 @@ export const userPreferences = pgTable("user_preferences", {
   colorRowByStatus: boolean("color_row_by_status").default(false),
   statusOptions: jsonb("status_options").$type<string[]>(),
   colorPresets: jsonb("color_presets").$type<Array<{name: string, color: string}>>(),
+  showCanadaOnly: boolean("show_canada_only").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
