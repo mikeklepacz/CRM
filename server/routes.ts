@@ -3372,12 +3372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error(`[CLAIM-MULTIPLE] Full error:`, error);
           }
         } else {
-          console.log(`[CLAIM-MULTIPLE] ✗ Agent Name column not found - skipping Agent update`);ssful`);
-          } catch (error: any) {
-            console.error(`[CLAIM-MULTIPLE] ✗ Agent write failed:`, error.message);
-          }
-        } else {
-          console.log(`[CLAIM-MULTIPLE] ✗ Agent column not found - skipping Agent update`);
+          console.log(`[CLAIM-MULTIPLE] ✗ Agent Name column not found - skipping Agent update`);
         }
 
         // Check if tracker row already exists
