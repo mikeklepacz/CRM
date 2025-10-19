@@ -882,15 +882,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Manually match an order to a store (Google Sheets-based)
+  // Manually match an order to multiple stores (Google Sheets-based multi-select)
   app.post('/api/orders/:orderId/match', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { orderId } = req.params;
-      const { storeLink, storeName } = req.body; // Changed from clientId to storeLink
+      const { storeLinks, dba } = req.body; // Array of {link, name} objects and optional DBA
 
-      if (!storeLink) {
-        return res.status(400).json({ message: "Store link is required" });
+      if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
+        return res.status(400).json({ message: "At least one store must be selected" });
       }
 
       const order = await storage.getOrderById(orderId);
@@ -906,7 +906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
       }
 
-      // Read tracker data to check if this store already has a row
+      // Read tracker data to check if stores already have rows
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
       const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
 
@@ -918,46 +918,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
       const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
       const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+      const dbaIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'dba');
 
       if (linkIndex === -1) {
         return res.status(400).json({ message: 'Commission Tracker must have a "Link" column' });
       }
 
-      // Find existing row for this store or create new one
-      let existingRowIndex = -1;
-      for (let i = 1; i < trackerRows.length; i++) {
-        if (normalizeLink(trackerRows[i][linkIndex]) === normalizeLink(storeLink)) {
-          existingRowIndex = i + 1; // +1 for 1-indexed Google Sheets
-          break;
+      let rowsProcessed = 0;
+      const results: Array<{link: string, name: string, action: string}> = [];
+
+      // Process each selected store
+      for (const store of storeLinks) {
+        const { link: storeLink, name: storeName } = store;
+        
+        // Find existing row for this store
+        let existingRowIndex = -1;
+        for (let i = 1; i < trackerRows.length; i++) {
+          if (normalizeLink(trackerRows[i][linkIndex]) === normalizeLink(storeLink)) {
+            existingRowIndex = i + 1; // +1 for 1-indexed Google Sheets
+            break;
+          }
+        }
+
+        // If row exists in Commission Tracker, update Order ID, Transaction ID, and optionally DBA
+        if (existingRowIndex > 0) {
+          const updates: any[] = [];
+          
+          // Update Order ID if column exists
+          if (orderIdIndex !== -1) {
+            const orderIdColumn = String.fromCharCode(65 + orderIdIndex);
+            const updateRange = `${trackerSheet.sheetName}!${orderIdColumn}${existingRowIndex}`;
+            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, updateRange, [[order.orderNumber]]);
+          }
+          
+          // Update Transaction ID if column exists
+          if (transactionIdIndex !== -1) {
+            const txIdColumn = String.fromCharCode(65 + transactionIdIndex);
+            const txRange = `${trackerSheet.sheetName}!${txIdColumn}${existingRowIndex}`;
+            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, txRange, [[order.id]]);
+          }
+          
+          // Update DBA if column exists and DBA is provided
+          if (dbaIndex !== -1 && dba) {
+            const dbaColumn = String.fromCharCode(65 + dbaIndex);
+            const dbaRange = `${trackerSheet.sheetName}!${dbaColumn}${existingRowIndex}`;
+            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, dbaRange, [[dba]]);
+          }
+          
+          rowsProcessed++;
+          results.push({ link: storeLink, name: storeName, action: 'updated' });
+        } else {
+          // Row doesn't exist - log for now, will be created when they first log activity
+          console.log(`Store ${storeLink} matched to order ${order.orderNumber} but no tracker row exists yet`);
+          results.push({ link: storeLink, name: storeName, action: 'pending_creation' });
         }
       }
 
-      // Update order in database with store link
+      // Update order in database with first store link (for backwards compatibility)
       await storage.updateOrder(orderId, { 
-        clientId: storeLink // Store the link as clientId for now
+        clientId: storeLinks[0].link
       });
 
-      // If row exists in Commission Tracker, update the Order ID and Transaction ID columns
-      if (existingRowIndex > 0 && orderIdIndex !== -1) {
-        // Convert column index to letter (A=0, B=1, etc.)
-        const orderIdColumn = String.fromCharCode(65 + orderIdIndex);
-        const updateRange = `${trackerSheet.sheetName}!${orderIdColumn}${existingRowIndex}`;
-        await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, updateRange, [[order.orderNumber]]);
-        
-        // Also update Transaction ID if column exists
-        if (transactionIdIndex !== -1) {
-          const txIdColumn = String.fromCharCode(65 + transactionIdIndex);
-          const txRange = `${trackerSheet.sheetName}!${txIdColumn}${existingRowIndex}`;
-          await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, txRange, [[order.id]]);
-        }
-      } else {
-        // Row doesn't exist - we'll create it when they first log activity
-        console.log(`Store ${storeLink} matched to order ${order.orderNumber} but no tracker row exists yet`);
-      }
-
       res.json({ 
-        message: "Order matched successfully", 
-        order: { ...order, clientId: storeLink, storeName } 
+        message: `Order ${order.orderNumber} matched to ${storeLinks.length} store(s)`,
+        rowsProcessed,
+        results,
+        dba: dba || null
       });
     } catch (error: any) {
       console.error("Error matching order:", error);

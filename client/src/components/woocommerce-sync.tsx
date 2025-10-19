@@ -31,7 +31,8 @@ export function WooCommerceSync() {
   const { toast } = useToast();
   const [syncResult, setSyncResult] = useState<any>(null);
   const [matchingOrderId, setMatchingOrderId] = useState<string | null>(null);
-  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [selectedStores, setSelectedStores] = useState<Array<{link: string, name: string}>>([]);
+  const [dbaName, setDbaName] = useState<string>("");
   const [clientSearch, setClientSearch] = useState<string>("");
   const [showAllClients, setShowAllClients] = useState<boolean>(false);
   
@@ -152,18 +153,19 @@ export function WooCommerceSync() {
   });
 
   const matchOrderMutation = useMutation({
-    mutationFn: async ({ orderId, storeLink, storeName }: { orderId: string; storeLink: string; storeName?: string }) => {
-      return await apiRequest("POST", `/api/orders/${orderId}/match`, { storeLink, storeName });
+    mutationFn: async ({ orderId, storeLinks, dba }: { orderId: string; storeLinks: Array<{link: string, name: string}>; dba?: string }) => {
+      return await apiRequest("POST", `/api/orders/${orderId}/match`, { storeLinks, dba });
     },
     onSuccess: () => {
       refetchOrders();
       setMatchingOrderId(null);
-      setSelectedClientId("");
+      setSelectedStores([]);
+      setDbaName("");
       setShowAllClients(false);
       setClientSearch("");
       toast({
         title: "Success",
-        description: "Order matched to store successfully",
+        description: `Order matched to ${selectedStores.length} store(s) successfully`,
       });
     },
     onError: (error: Error) => {
@@ -208,7 +210,7 @@ export function WooCommerceSync() {
   const [showMultiLocationDialog, setShowMultiLocationDialog] = useState(false);
   const [multiLocationSearch, setMultiLocationSearch] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [selectedStores, setSelectedStores] = useState<Set<string>>(new Set());
+  const [bulkSelectedStores, setBulkSelectedStores] = useState<Set<string>>(new Set());
   const [bulkAgentName, setBulkAgentName] = useState("");
 
   const searchStoresMutation = useMutation({
@@ -244,7 +246,7 @@ export function WooCommerceSync() {
       });
       setShowMultiLocationDialog(false);
       setSearchResults([]);
-      setSelectedStores(new Set());
+      setBulkSelectedStores(new Set());
       setBulkAgentName("");
       setMultiLocationSearch("");
     },
@@ -264,7 +266,7 @@ export function WooCommerceSync() {
   };
 
   const handleBulkAssign = () => {
-    if (selectedStores.size === 0) {
+    if (bulkSelectedStores.size === 0) {
       toast({
         title: "No Stores Selected",
         description: "Please select at least one store to assign",
@@ -281,28 +283,28 @@ export function WooCommerceSync() {
       return;
     }
     bulkAssignMutation.mutate({
-      storeLinks: Array.from(selectedStores),
+      storeLinks: Array.from(bulkSelectedStores),
       agentName: bulkAgentName.trim(),
     });
   };
 
-  const toggleStoreSelection = (link: string) => {
-    const newSelected = new Set(selectedStores);
+  const toggleBulkStoreSelection = (link: string) => {
+    const newSelected = new Set(bulkSelectedStores);
     if (newSelected.has(link)) {
       newSelected.delete(link);
     } else {
       newSelected.add(link);
     }
-    setSelectedStores(newSelected);
+    setBulkSelectedStores(newSelected);
   };
 
   const selectAllStores = () => {
     const allLinks = searchResults.map(s => s.link);
-    setSelectedStores(new Set(allLinks));
+    setBulkSelectedStores(new Set(allLinks));
   };
 
   const deselectAllStores = () => {
-    setSelectedStores(new Set());
+    setBulkSelectedStores(new Set());
   };
 
   const writeToTrackerMutation = useMutation({
@@ -344,14 +346,28 @@ export function WooCommerceSync() {
   });
 
   const handleMatchOrder = () => {
-    if (matchingOrderId && selectedClientId) {
-      const storeName = (window as any).__selectedStoreName || '';
+    if (matchingOrderId && selectedStores.length > 0) {
       matchOrderMutation.mutate({ 
         orderId: matchingOrderId, 
-        storeLink: selectedClientId,
-        storeName 
+        storeLinks: selectedStores,
+        dba: dbaName || undefined
       });
     }
+  };
+  
+  const toggleStoreSelection = (link: string, name: string) => {
+    setSelectedStores(prev => {
+      const exists = prev.find(s => s.link === link);
+      if (exists) {
+        return prev.filter(s => s.link !== link);
+      } else {
+        return [...prev, { link, name }];
+      }
+    });
+  };
+  
+  const isStoreSelected = (link: string) => {
+    return selectedStores.some(s => s.link === link);
   };
 
   return (
@@ -552,12 +568,14 @@ export function WooCommerceSync() {
                         <Dialog open={matchingOrderId === order.id} onOpenChange={(open) => {
                           if (!open) {
                             setMatchingOrderId(null);
-                            setSelectedClientId("");
+                            setSelectedStores([]);
+                            setDbaName("");
                             setShowAllClients(false);
                             setClientSearch("");
                           } else {
                             // Reset state when opening dialog
-                            setSelectedClientId("");
+                            setSelectedStores([]);
+                            setDbaName("");
                             setShowAllClients(false);
                             setClientSearch("");
                           }
@@ -588,6 +606,48 @@ export function WooCommerceSync() {
                                   <p className="text-sm"><strong>Total:</strong> ${parseFloat(order.total).toFixed(2)}</p>
                                 </div>
 
+                                {/* Selected Stores Panel */}
+                                {selectedStores.length > 0 && (
+                                  <div className="p-3 bg-primary/10 border-2 border-primary rounded-md space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="font-semibold text-sm">Selected Stores ({selectedStores.length})</h4>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={() => setSelectedStores([])}
+                                        data-testid="button-clear-selections"
+                                      >
+                                        Clear All
+                                      </Button>
+                                    </div>
+                                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                                      {selectedStores.map(store => (
+                                        <div key={store.link} className="text-sm flex items-center gap-2">
+                                          <span className="text-primary">✓</span>
+                                          <span className="flex-1">{store.name}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* DBA Input Field */}
+                                {selectedStores.length > 0 && (
+                                  <div className="space-y-2">
+                                    <Label htmlFor="dba-name">DBA / Umbrella Company Name (Optional)</Label>
+                                    <Input
+                                      id="dba-name"
+                                      placeholder="e.g., Lift Cannabis Co"
+                                      value={dbaName}
+                                      onChange={(e) => setDbaName(e.target.value)}
+                                      data-testid="input-dba-name"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                      This DBA will be assigned to all {selectedStores.length} selected store(s)
+                                    </p>
+                                  </div>
+                                )}
+
                                 {/* Smart Suggestions */}
                                 {matchSuggestions?.suggestions && matchSuggestions.suggestions.length > 0 && !showAllClients && (
                                   <div className="space-y-3">
@@ -597,21 +657,21 @@ export function WooCommerceSync() {
                                     </div>
                                     <div className="space-y-2">
                                       {matchSuggestions.suggestions.map((suggestion: any) => (
-                                        <button
+                                        <div
                                           key={suggestion.link}
-                                          onClick={() => {
-                                            setSelectedClientId(suggestion.link);
-                                            // Store the store name for the mutation
-                                            (window as any).__selectedStoreName = suggestion.displayName;
-                                          }}
-                                          className={`w-full text-left p-3 rounded-md border-2 transition-all hover-elevate ${
-                                            selectedClientId === suggestion.link
+                                          className={`p-3 rounded-md border-2 transition-all hover-elevate ${
+                                            isStoreSelected(suggestion.link)
                                               ? 'border-primary bg-primary/10'
                                               : 'border-border'
                                           }`}
                                           data-testid={`suggestion-${suggestion.link}`}
                                         >
-                                          <div className="flex items-start justify-between">
+                                          <div className="flex items-start gap-3">
+                                            <Checkbox
+                                              checked={isStoreSelected(suggestion.link)}
+                                              onCheckedChange={() => toggleStoreSelection(suggestion.link, suggestion.displayName)}
+                                              data-testid={`checkbox-${suggestion.link}`}
+                                            />
                                             <div className="flex-1">
                                               <p className="font-medium">{suggestion.displayName}</p>
                                               {suggestion.displayInfo && (
@@ -632,7 +692,7 @@ export function WooCommerceSync() {
                                               {Math.round(suggestion.score)}% match
                                             </Badge>
                                           </div>
-                                        </button>
+                                        </div>
                                       ))}
                                     </div>
                                     <Button
@@ -643,7 +703,7 @@ export function WooCommerceSync() {
                                       data-testid="button-show-all-clients"
                                     >
                                       <Search className="h-4 w-4 mr-2" />
-                                      Search All Clients
+                                      Search More Stores
                                     </Button>
                                   </div>
                                 )}
@@ -854,8 +914,8 @@ export function WooCommerceSync() {
                           <TableRow key={store.link}>
                             <TableCell>
                               <Checkbox
-                                checked={selectedStores.has(store.link)}
-                                onCheckedChange={() => toggleStoreSelection(store.link)}
+                                checked={bulkSelectedStores.has(store.link)}
+                                onCheckedChange={() => toggleBulkStoreSelection(store.link)}
                                 data-testid={`checkbox-store-${store.link}`}
                               />
                             </TableCell>
@@ -888,7 +948,7 @@ export function WooCommerceSync() {
                       data-testid="input-bulk-agent-name"
                     />
                     <p className="text-sm text-muted-foreground">
-                      Selected: {selectedStores.size} store(s)
+                      Selected: {bulkSelectedStores.size} store(s)
                     </p>
                   </div>
 
@@ -899,7 +959,7 @@ export function WooCommerceSync() {
                       onClick={() => {
                         setShowMultiLocationDialog(false);
                         setSearchResults([]);
-                        setSelectedStores(new Set());
+                        setBulkSelectedStores(new Set());
                         setBulkAgentName("");
                         setMultiLocationSearch("");
                       }}
@@ -908,7 +968,7 @@ export function WooCommerceSync() {
                     </Button>
                     <Button
                       onClick={handleBulkAssign}
-                      disabled={bulkAssignMutation.isPending || selectedStores.size === 0 || !bulkAgentName.trim()}
+                      disabled={bulkAssignMutation.isPending || bulkSelectedStores.size === 0 || !bulkAgentName.trim()}
                       data-testid="button-execute-bulk-assign"
                     >
                       {bulkAssignMutation.isPending ? (
@@ -917,7 +977,7 @@ export function WooCommerceSync() {
                           Assigning...
                         </>
                       ) : (
-                        `Assign to ${selectedStores.size} Store(s)`
+                        `Assign to ${bulkSelectedStores.size} Store(s)`
                       )}
                     </Button>
                   </div>
