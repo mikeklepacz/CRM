@@ -20,8 +20,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { User, ShoppingCart, FileSpreadsheet, ArrowLeft } from "lucide-react";
+import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug } from "lucide-react";
 import { Link } from "wouter";
+import { Integrations } from "@/components/integrations";
 
 const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -268,6 +269,10 @@ export default function Settings() {
             <User className="mr-2 h-4 w-4" />
             Profile
           </TabsTrigger>
+          <TabsTrigger value="integrations" data-testid="tab-integrations">
+            <Plug className="mr-2 h-4 w-4" />
+            Integrations
+          </TabsTrigger>
           {user.role === 'admin' && (
             <>
               <TabsTrigger value="woocommerce" data-testid="tab-woocommerce">
@@ -439,6 +444,10 @@ export default function Settings() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="integrations">
+          <Integrations />
         </TabsContent>
 
         {user.role === 'admin' && (
