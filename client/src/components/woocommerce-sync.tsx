@@ -36,6 +36,10 @@ export function WooCommerceSync() {
   // Commission management state
   const [commissionTypes, setCommissionTypes] = useState<Record<string, string>>({});
   const [commissionAmounts, setCommissionAmounts] = useState<Record<string, string>>({});
+  const [modifiedOrders, setModifiedOrders] = useState<Set<string>>(new Set());
+  
+  // Sorting state - default to newest first (descending by order date)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
   // Calculate commission amount based on type and total
   const calculateCommission = (orderId: string, total: number) => {
@@ -56,8 +60,34 @@ export function WooCommerceSync() {
   const { data: orders = [], refetch: refetchOrders } = useQuery({
     queryKey: ["/api/orders"],
     queryFn: async () => {
-      return await apiRequest("GET", "/api/orders");
+      const fetchedOrders = await apiRequest("GET", "/api/orders");
+      
+      // Load saved commission settings from database
+      const types: Record<string, string> = {};
+      const amounts: Record<string, string> = {};
+      
+      fetchedOrders.forEach((order: any) => {
+        if (order.commissionType) {
+          types[order.id] = order.commissionType;
+        }
+        if (order.commissionAmount) {
+          amounts[order.id] = order.commissionAmount;
+        }
+      });
+      
+      setCommissionTypes(types);
+      setCommissionAmounts(amounts);
+      setModifiedOrders(new Set());
+      
+      return fetchedOrders;
     },
+  });
+
+  // Sort orders by order date (newest first by default)
+  const sortedOrders = [...(orders || [])].sort((a: any, b: any) => {
+    const dateA = new Date(a.orderDate).getTime();
+    const dateB = new Date(b.orderDate).getTime();
+    return sortDirection === 'desc' ? dateB - dateA : dateA - dateB;
   });
 
   const { data: clients = [] } = useQuery({
@@ -128,6 +158,32 @@ export function WooCommerceSync() {
       toast({
         title: "Success",
         description: "Order matched to client successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const saveCommissionsMutation = useMutation({
+    mutationFn: async () => {
+      const orderUpdates = Array.from(modifiedOrders).map(orderId => ({
+        orderId,
+        commissionType: commissionTypes[orderId] || 'auto',
+        commissionAmount: commissionAmounts[orderId] || null,
+      }));
+      
+      return await apiRequest("POST", "/api/orders/save-commissions", { orders: orderUpdates });
+    },
+    onSuccess: (data) => {
+      setModifiedOrders(new Set());
+      toast({
+        title: "Saved",
+        description: data.message,
       });
     },
     onError: (error: Error) => {
@@ -218,6 +274,22 @@ export function WooCommerceSync() {
           </Button>
           
           <Button
+            onClick={() => saveCommissionsMutation.mutate()}
+            disabled={saveCommissionsMutation.isPending || modifiedOrders.size === 0}
+            variant="default"
+            data-testid="button-save-all-commissions"
+          >
+            {saveCommissionsMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              `Save All (${modifiedOrders.size})`
+            )}
+          </Button>
+          
+          <Button
             onClick={() => writeToTrackerMutation.mutate()}
             disabled={writeToTrackerMutation.isPending || !orders.some((o: any) => o.clientId)}
             variant="secondary"
@@ -273,7 +345,13 @@ export function WooCommerceSync() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Order #</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover-elevate select-none"
+                      onClick={() => setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc')}
+                      data-testid="header-order-number-sort"
+                    >
+                      Order # {sortDirection === 'desc' ? '↓' : '↑'}
+                    </TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Company</TableHead>
@@ -286,7 +364,7 @@ export function WooCommerceSync() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order: any) => (
+                  {sortedOrders.map((order: any) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">#{order.orderNumber}</TableCell>
                       <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
@@ -310,6 +388,7 @@ export function WooCommerceSync() {
                           value={commissionTypes[order.id] || 'auto'}
                           onValueChange={(value) => {
                             setCommissionTypes(prev => ({ ...prev, [order.id]: value }));
+                            setModifiedOrders(prev => new Set(prev).add(order.id));
                           }}
                         >
                           <SelectTrigger className="w-[140px]" data-testid={`select-commission-type-${order.id}`}>
@@ -334,6 +413,7 @@ export function WooCommerceSync() {
                             value={commissionAmounts[order.id] || ''}
                             onChange={(e) => {
                               setCommissionAmounts(prev => ({ ...prev, [order.id]: e.target.value }));
+                              setModifiedOrders(prev => new Set(prev).add(order.id));
                             }}
                             data-testid={`input-commission-amount-${order.id}`}
                           />

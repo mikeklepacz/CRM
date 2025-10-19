@@ -113,6 +113,8 @@ export const orders = pgTable("orders", {
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
   status: varchar("status", { length: 50 }).notNull(),
   orderDate: timestamp("order_date").notNull(),
+  commissionType: varchar("commission_type", { length: 20 }).default('auto'), // 'auto', '25', '10', 'flat'
+  commissionAmount: decimal("commission_amount", { precision: 12, scale: 2 }),
   syncedAt: timestamp("synced_at").defaultNow(),
 });
 

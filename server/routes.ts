@@ -882,6 +882,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Save commission settings for multiple orders
+  app.post('/api/orders/save-commissions', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { orders: orderUpdates } = req.body;
+
+      if (!orderUpdates || !Array.isArray(orderUpdates)) {
+        return res.status(400).json({ message: "Orders array is required" });
+      }
+
+      let updated = 0;
+      for (const update of orderUpdates) {
+        const { orderId, commissionType, commissionAmount } = update;
+        
+        if (!orderId) continue;
+
+        const updates: any = {};
+        if (commissionType !== undefined) updates.commissionType = commissionType;
+        if (commissionAmount !== undefined) updates.commissionAmount = commissionAmount;
+
+        if (Object.keys(updates).length > 0) {
+          await storage.updateOrder(orderId, updates);
+          updated++;
+        }
+      }
+
+      res.json({ message: `Saved commission settings for ${updated} orders`, updated });
+    } catch (error: any) {
+      console.error("Error saving commission settings:", error);
+      res.status(500).json({ message: error.message || "Failed to save commission settings" });
+    }
+  });
+
   // WooCommerce Webhook Endpoint (no auth required - validated by webhook secret)
   app.post('/api/woocommerce/webhook', async (req: any, res) => {
     try {
