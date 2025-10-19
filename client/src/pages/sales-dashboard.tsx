@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
@@ -3009,6 +3010,14 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
 
   // Track initial data to determine what changed
   const [initialData, setInitialData] = useState(formData);
+  
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    return Object.keys(formData).some((key) => {
+      const typedKey = key as keyof typeof formData;
+      return formData[typedKey] !== initialData[typedKey];
+    });
+  }, [formData, initialData]);
 
   // Fetch store data
   const { data: storeData, isLoading } = useQuery({
@@ -3111,8 +3120,42 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
     saveMutation.mutate();
   };
 
+  // Handle close with unsaved changes warning
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedWarning(true);
+    } else {
+      onOpenChange(false);
+    }
+  };
+
+  const handleConfirmClose = () => {
+    setShowUnsavedWarning(false);
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <AlertDialog open={showUnsavedWarning} onOpenChange={setShowUnsavedWarning}>
+        <AlertDialogContent data-testid="alert-unsaved-changes">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to close without saving?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-close">Keep Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmClose} data-testid="button-confirm-close">
+              Close Without Saving
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{formData.name || "Store Details"}</DialogTitle>
@@ -3348,5 +3391,6 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
