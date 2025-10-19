@@ -3172,6 +3172,42 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
     }
   };
 
+  // Manual re-detection function
+  const handleReDetect = () => {
+    if (!formData.notes || !formData.notes.trim()) return;
+    
+    // Email regex - matches most common email formats (fixed character class)
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+    // Phone regex - matches various formats
+    const phoneRegex = /\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
+    
+    const emails = formData.notes.match(emailRegex);
+    const phones = formData.notes.match(phoneRegex);
+    
+    // Update email if found
+    if (emails && emails.length > 0) {
+      setFormData(prev => ({ ...prev, poc_email: emails[0] }));
+      setInitialData(prev => ({ ...prev, poc_email: emails[0] }));
+      setPocFieldsManuallyEdited(prev => ({ ...prev, email: false }));
+    }
+    
+    // Update phone if found
+    if (phones && phones.length > 0) {
+      const rawPhone = phones[0].replace(/\D/g, '');
+      let formatted = rawPhone;
+      
+      if (rawPhone.length === 10) {
+        formatted = `+1 (${rawPhone.slice(0, 3)}) ${rawPhone.slice(3, 6)}-${rawPhone.slice(6)}`;
+      } else if (rawPhone.length === 11 && rawPhone.startsWith('1')) {
+        formatted = `+1 (${rawPhone.slice(1, 4)}) ${rawPhone.slice(4, 7)}-${rawPhone.slice(7)}`;
+      }
+      
+      setFormData(prev => ({ ...prev, poc_phone: formatted }));
+      setInitialData(prev => ({ ...prev, poc_phone: formatted }));
+      setPocFieldsManuallyEdited(prev => ({ ...prev, phone: false }));
+    }
+  };
+
   const handleSave = () => {
     saveMutation.mutate();
   };
@@ -3243,7 +3279,20 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="notes">Notes</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="notes">Notes</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleReDetect}
+                        data-testid="button-redetect"
+                        className="h-7"
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Detect Contact Info
+                      </Button>
+                    </div>
                     <Textarea
                       id="notes"
                       data-testid="input-notes"
