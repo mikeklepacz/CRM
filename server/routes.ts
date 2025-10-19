@@ -1385,6 +1385,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return obj;
       }) : [];
 
+      // Find actual join column name (case-insensitive)
+      // Frontend sends "link" but Google Sheets might have "Link"
+      const actualStoreJoinColumn = storeHeaders.find(h => 
+        h.toLowerCase() === joinColumn.toLowerCase()
+      ) || joinColumn;
+      
+      const actualTrackerJoinColumn = trackerHeaders.find(h => 
+        h.toLowerCase() === joinColumn.toLowerCase()
+      ) || joinColumn;
+
+      console.log('Join column lookup:');
+      console.log('  Requested:', joinColumn);
+      console.log('  Store actual:', actualStoreJoinColumn);
+      console.log('  Tracker actual:', actualTrackerJoinColumn);
+
       // Filter tracker data by agent (if user is not admin)
       let filteredTrackerData = trackerData;
       // Look for "Agent Name" column (case-insensitive, handles spaces)
@@ -1415,7 +1430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // === COMPREHENSIVE MERGE DEBUGGING ===
       console.log('\n=== LINK NORMALIZATION DEBUG ===');
       if (filteredTrackerData.length > 0) {
-        const trackerLink = filteredTrackerData[0][joinColumn];
+        const trackerLink = filteredTrackerData[0][actualTrackerJoinColumn];
         const normalizedTrackerLink = normalizeLink(trackerLink);
         console.log('Tracker link (raw):', JSON.stringify(trackerLink));
         console.log('Tracker link (normalized):', JSON.stringify(normalizedTrackerLink));
@@ -1425,17 +1440,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Show a few sample store links
         console.log('\nSample store links (first 5):');
         storeData.slice(0, 5).forEach((sr, i) => {
-          const storeLink = sr[joinColumn];
+          const storeLink = sr[actualStoreJoinColumn];
           const normalizedStoreLink = normalizeLink(storeLink);
           console.log(`  Store ${i}: (raw) "${storeLink}" -> (normalized) "${normalizedStoreLink}"`);
           console.log(`    Match? ${normalizedStoreLink === normalizedTrackerLink}`);
         });
         
         // Check if ANY store link matches
-        const matchingStore = storeData.find(sr => normalizeLink(sr[joinColumn]) === normalizedTrackerLink);
+        const matchingStore = storeData.find(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedTrackerLink);
         console.log('\nMatching store found?', !!matchingStore);
         if (matchingStore) {
-          console.log('Matching store link (raw):', JSON.stringify(matchingStore[joinColumn]));
+          console.log('Matching store link (raw):', JSON.stringify(matchingStore[actualStoreJoinColumn]));
           console.log('Matching store name:', matchingStore['Name'] || matchingStore['name']);
         } else {
           console.log('NO MATCH FOUND - tracker row will be marked as deleted');
@@ -1448,9 +1463,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // First, add all store rows (use row index as key to avoid overwriting duplicates)
       storeData.forEach((storeRow, index) => {
-        const joinValue = storeRow[joinColumn];
+        const joinValue = storeRow[actualStoreJoinColumn];
         const normalizedJoinValue = normalizeLink(joinValue);
-        const trackerRow = filteredTrackerData.find(tr => normalizeLink(tr[joinColumn]) === normalizedJoinValue && normalizedJoinValue) || {};
+        const trackerRow = filteredTrackerData.find(tr => normalizeLink(tr[actualTrackerJoinColumn]) === normalizedJoinValue && normalizedJoinValue) || {};
 
         // Use row index as unique key so stores with empty/duplicate link values don't overwrite each other
         mergedDataMap.set(`store-${index}`, {
@@ -1463,10 +1478,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Then, add tracker rows that don't exist in store (deleted orders)
       filteredTrackerData.forEach(trackerRow => {
-        const joinValue = trackerRow[joinColumn];
+        const joinValue = trackerRow[actualTrackerJoinColumn];
         const normalizedJoinValue = normalizeLink(joinValue);
         // Check if this tracker row already matched a store row
-        const alreadyMerged = storeData.some(sr => normalizeLink(sr[joinColumn]) === normalizedJoinValue && normalizedJoinValue);
+        const alreadyMerged = storeData.some(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedJoinValue && normalizedJoinValue);
         if (!alreadyMerged) {
           // This row only exists in tracker - it was deleted from store
           mergedDataMap.set(`tracker-${trackerRow._trackerRowIndex}`, {
