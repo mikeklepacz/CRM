@@ -922,6 +922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeDbHeaders = storeDbRows[0];
       const storeDbLinkIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'link');
       const storeDbDbaIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'dba');
+      const storeDbAgentNameIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'agent name');
       
       if (storeDbLinkIndex === -1) {
         return res.status(400).json({ message: 'Store Database must have a "Link" column' });
@@ -946,10 +947,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Commission Tracker must have a "Link" column' });
       }
       
-      // Get agent name from order metadata
-      const agentName = order.metaData?.find((m: any) => m.key === '_wc_order_attribution_utm_source')?.value 
-        || order.metaData?.find((m: any) => m.key === 'agent_name')?.value
-        || '';
+      // Get agent name from order
+      const agentName = order.salesAgentName || '';
 
       let rowsProcessed = 0;
       const results: Array<{link: string, name: string, action: string}> = [];
@@ -958,21 +957,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const store of storeLinks) {
         const { link: storeLink, name: storeName } = store;
         
-        // 1. Update DBA in Store Database if DBA is provided
-        if (dba && storeDbDbaIndex !== -1) {
-          // Find the store in Store Database
-          let storeDbRowIndex = -1;
-          for (let i = 1; i < storeDbRows.length; i++) {
-            if (normalizeLink(storeDbRows[i][storeDbLinkIndex]) === normalizeLink(storeLink)) {
-              storeDbRowIndex = i + 1; // +1 for 1-indexed Google Sheets
-              break;
-            }
+        // 1. Update DBA and Agent Name in Store Database
+        // Find the store in Store Database
+        let storeDbRowIndex = -1;
+        for (let i = 1; i < storeDbRows.length; i++) {
+          if (normalizeLink(storeDbRows[i][storeDbLinkIndex]) === normalizeLink(storeLink)) {
+            storeDbRowIndex = i + 1; // +1 for 1-indexed Google Sheets
+            break;
           }
-          
-          if (storeDbRowIndex > 0) {
+        }
+        
+        if (storeDbRowIndex > 0) {
+          // Update DBA if provided
+          if (dba && storeDbDbaIndex !== -1) {
             const dbaColumn = String.fromCharCode(65 + storeDbDbaIndex);
             const dbaRange = `${storeDbSheet.sheetName}!${dbaColumn}${storeDbRowIndex}`;
             await googleSheets.writeSheetData(userId, storeDbSheet.spreadsheetId, dbaRange, [[dba]]);
+          }
+          
+          // Update Agent Name if provided
+          if (agentName && storeDbAgentNameIndex !== -1) {
+            const agentColumn = String.fromCharCode(65 + storeDbAgentNameIndex);
+            const agentRange = `${storeDbSheet.sheetName}!${agentColumn}${storeDbRowIndex}`;
+            await googleSheets.writeSheetData(userId, storeDbSheet.spreadsheetId, agentRange, [[agentName]]);
           }
         }
         
