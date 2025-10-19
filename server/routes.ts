@@ -1412,6 +1412,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // === COMPREHENSIVE MERGE DEBUGGING ===
+      console.log('\n=== LINK NORMALIZATION DEBUG ===');
+      if (filteredTrackerData.length > 0) {
+        const trackerLink = filteredTrackerData[0][joinColumn];
+        const normalizedTrackerLink = normalizeLink(trackerLink);
+        console.log('Tracker link (raw):', JSON.stringify(trackerLink));
+        console.log('Tracker link (normalized):', JSON.stringify(normalizedTrackerLink));
+        console.log('Tracker link length:', trackerLink?.length);
+        console.log('Normalized tracker link length:', normalizedTrackerLink?.length);
+        
+        // Show a few sample store links
+        console.log('\nSample store links (first 5):');
+        storeData.slice(0, 5).forEach((sr, i) => {
+          const storeLink = sr[joinColumn];
+          const normalizedStoreLink = normalizeLink(storeLink);
+          console.log(`  Store ${i}: (raw) "${storeLink}" -> (normalized) "${normalizedStoreLink}"`);
+          console.log(`    Match? ${normalizedStoreLink === normalizedTrackerLink}`);
+        });
+        
+        // Check if ANY store link matches
+        const matchingStore = storeData.find(sr => normalizeLink(sr[joinColumn]) === normalizedTrackerLink);
+        console.log('\nMatching store found?', !!matchingStore);
+        if (matchingStore) {
+          console.log('Matching store link (raw):', JSON.stringify(matchingStore[joinColumn]));
+          console.log('Matching store name:', matchingStore['Name'] || matchingStore['name']);
+        } else {
+          console.log('NO MATCH FOUND - tracker row will be marked as deleted');
+        }
+      }
+      console.log('=== END LINK NORMALIZATION DEBUG ===\n');
+
       // Merge data by join column - include rows from BOTH sheets
       const mergedDataMap = new Map();
 
