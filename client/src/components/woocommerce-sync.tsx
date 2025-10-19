@@ -395,7 +395,7 @@ export function WooCommerceSync() {
           
           <Button
             onClick={() => saveCommissionsMutation.mutate()}
-            disabled={saveCommissionsMutation.isPending || !orders.some((o: any) => o.clientId)}
+            disabled={saveCommissionsMutation.isPending || !orders.some((o: any) => o.clientId || o.hasTrackerRows)}
             variant="default"
             data-testid="button-save-all-commissions"
           >
@@ -407,7 +407,7 @@ export function WooCommerceSync() {
             ) : (
               <>
                 <Save className="h-4 w-4 mr-2" />
-                Save Commissions ({orders.filter((o: any) => o.clientId).length})
+                Save Commissions ({orders.filter((o: any) => o.clientId || o.hasTrackerRows).length})
               </>
             )}
           </Button>
