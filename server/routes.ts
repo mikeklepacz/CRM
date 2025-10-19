@@ -1547,6 +1547,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const headers = rows[0];
+      console.log('=== TRACKER UPSERT DEBUG ===');
+      console.log('Tracker sheet headers:', headers);
+      console.log('Updates requested:', updates);
+      
       const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
       const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
 
@@ -1595,6 +1599,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
           if (colIndex !== -1) {
             newRow[colIndex] = value as string;
+            console.log(`  Matched column "${column}" to header "${headers[colIndex]}" (index ${colIndex})`);
+          } else {
+            console.log(`  WARNING: Column "${column}" not found in tracker sheet headers`);
           }
         }
 

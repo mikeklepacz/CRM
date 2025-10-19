@@ -513,23 +513,25 @@ export default function SalesDashboard() {
   console.log('Visible columns:', visibleColumns);
 
   // Initialize visible columns, column order, and widths (or load from saved preferences)
+  // Also update when headers change (e.g., when new tracker columns are added)
   useEffect(() => {
-    if (headers.length > 0 && preferencesQueryFetched && !preferencesLoaded) {
-      const initialVisible: Record<string, boolean> = {};
-      const initialWidths: Record<string, number> = {};
+    if (headers.length > 0 && preferencesQueryFetched) {
+      const currentVisible = { ...visibleColumns };
+      const currentWidths = { ...columnWidths };
+      const currentOrder = [...columnOrder];
       const hiddenColumns = ['title', 'error']; // Columns to hide by default
 
-      // Check if we have saved preferences
-      if (userPreferences) {
+      // Check if we have saved preferences (only on first load)
+      if (userPreferences && !preferencesLoaded) {
         // Load saved preferences if available
         if (userPreferences.visibleColumns) {
           // Merge saved preferences with new headers (in case new columns were added)
           headers.forEach((header: string) => {
-            initialVisible[header] = userPreferences.visibleColumns![header] ?? !hiddenColumns.includes(header.toLowerCase());
+            currentVisible[header] = userPreferences.visibleColumns![header] ?? !hiddenColumns.includes(header.toLowerCase());
           });
         } else {
           headers.forEach((header: string) => {
-            initialVisible[header] = !hiddenColumns.includes(header.toLowerCase());
+            currentVisible[header] = !hiddenColumns.includes(header.toLowerCase());
           });
         }
 
@@ -544,16 +546,16 @@ export default function SalesDashboard() {
 
         if (userPreferences.columnWidths) {
           headers.forEach((header: string) => {
-            initialWidths[header] = userPreferences.columnWidths![header] || 200;
+            currentWidths[header] = userPreferences.columnWidths![header] || 200;
           });
         } else {
           headers.forEach((header: string) => {
-            initialWidths[header] = 200;
+            currentWidths[header] = 200;
           });
         }
 
-        setVisibleColumns(initialVisible);
-        setColumnWidths(initialWidths);
+        setVisibleColumns(currentVisible);
+        setColumnWidths(currentWidths);
 
         // Load font size and row height preferences
         if (userPreferences.fontSize) {
@@ -600,24 +602,46 @@ export default function SalesDashboard() {
         }
 
         setPreferencesLoaded(true);
-      } else {
-        // No saved preferences, use defaults
+      } else if (!preferencesLoaded) {
+        // No saved preferences, use defaults (only on first load)
         headers.forEach((header: string) => {
-          initialVisible[header] = !hiddenColumns.includes(header.toLowerCase());
-          initialWidths[header] = 200;
+          currentVisible[header] = !hiddenColumns.includes(header.toLowerCase());
+          currentWidths[header] = 200;
         });
-        setVisibleColumns(initialVisible);
+        setVisibleColumns(currentVisible);
         setColumnOrder(headers);
-        setColumnWidths(initialWidths);
+        setColumnWidths(currentWidths);
         setFontSize(14);
         setRowHeight(48);
         setTextAlign('left');
         setVerticalAlign('middle');
         setColorRowByStatus(false); // Default to false
         setPreferencesLoaded(true);
+      } else {
+        // Preferences already loaded - check for new headers
+        const newHeaders = headers.filter((h: string) => !currentOrder.includes(h));
+        if (newHeaders.length > 0) {
+          console.log('New headers detected:', newHeaders);
+          // Add new headers to column order
+          setColumnOrder([...currentOrder, ...newHeaders]);
+          
+          // Add new headers to visible columns (visible by default unless in hiddenColumns)
+          const updatedVisible = { ...currentVisible };
+          newHeaders.forEach((header: string) => {
+            updatedVisible[header] = !hiddenColumns.includes(header.toLowerCase());
+          });
+          setVisibleColumns(updatedVisible);
+          
+          // Add default widths for new headers
+          const updatedWidths = { ...currentWidths };
+          newHeaders.forEach((header: string) => {
+            updatedWidths[header] = 200;
+          });
+          setColumnWidths(updatedWidths);
+        }
       }
     }
-  }, [headers.length, userPreferences, preferencesQueryFetched, preferencesLoaded]);
+  }, [headers, userPreferences, preferencesQueryFetched, preferencesLoaded]);
 
 
   const toggleColumn = (column: string) => {
