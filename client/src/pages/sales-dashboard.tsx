@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -822,7 +823,7 @@ export default function SalesDashboard() {
           return stateName || stateAbbrev;
         }
         return null;
-      }).find((state) => state && selectedStates.has(state));
+      }).find((state: string | null) => state && selectedStates.has(state));
 
       if (rowState) {
         cityColumns.forEach((col: string) => {
@@ -2993,19 +2994,18 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
     name: "",
     type: "",
     link: "",
-    about: "",
-    member_since: "",
     address: "",
     city: "",
     state: "",
     phone: "",
     website: "",
     email: "",
-    followers: "",
-    hours: "",
-    vibe_score: "",
     sales_ready_summary: "",
+    point_of_contact: "",
   });
+
+  // Track initial data to determine what changed
+  const [initialData, setInitialData] = useState(formData);
 
   // Fetch store data
   const { data: storeData, isLoading } = useQuery({
@@ -3020,30 +3020,41 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
   // Populate form when data loads
   useEffect(() => {
     if (storeData) {
-      setFormData({
-        name: storeData.name || "",
-        type: storeData.type || "",
-        link: storeData.link || "",
-        about: storeData.about || "",
-        member_since: storeData.member_since || storeData["Member Since"] || "",
+      const populatedData = {
+        name: storeData.name || storeData.Name || "",
+        type: storeData.type || storeData.Type || "",
+        link: storeData.link || storeData.Link || "",
         address: storeData.address || storeData.Address || "",
         city: storeData.city || storeData.City || "",
         state: storeData.state || storeData.State || "",
         phone: storeData.phone || storeData.Phone || "",
         website: storeData.website || storeData.Website || "",
         email: storeData.email || storeData.Email || "",
-        followers: storeData.followers || storeData.Followers || "",
-        hours: storeData.hours || storeData.Hours || "",
-        vibe_score: storeData["Vibe Score"] || "",
-        sales_ready_summary: storeData["Sales-ready Summary"] || "",
-      });
+        sales_ready_summary: storeData["Sales-ready Summary"] || storeData.sales_ready_summary || "",
+        point_of_contact: storeData["Point of Contact"] || storeData.point_of_contact || "",
+      };
+      setFormData(populatedData);
+      setInitialData(populatedData);
     }
   }, [storeData]);
 
-  // Save mutation
+  // Save mutation - only send changed fields
   const saveMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('PUT', `/api/store/${encodeURIComponent(storeId)}`, formData);
+      // Calculate changed fields only
+      const changedFields: Record<string, string> = {};
+      Object.keys(formData).forEach((key) => {
+        const typedKey = key as keyof typeof formData;
+        if (formData[typedKey] !== initialData[typedKey]) {
+          changedFields[key] = formData[typedKey];
+        }
+      });
+
+      if (Object.keys(changedFields).length === 0) {
+        throw new Error("No changes to save");
+      }
+
+      return await apiRequest('PUT', `/api/store/${encodeURIComponent(storeId)}`, changedFields);
     },
     onSuccess: () => {
       toast({
@@ -3084,198 +3095,180 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <div className="grid gap-6 py-4">
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Basic Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Store Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
-                    placeholder="Enter store name"
-                  />
+          <Accordion type="multiple" className="w-full" data-testid="accordion-store-details">
+            {/* Sales Info - AT THE TOP */}
+            <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
+              <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-sales-info">
+                Sales Info
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="sales_ready_summary">Sales-ready Summary</Label>
+                    <Textarea
+                      id="sales_ready_summary"
+                      data-testid="input-sales-ready-summary"
+                      value={formData.sales_ready_summary}
+                      onChange={(e) => handleInputChange('sales_ready_summary', e.target.value)}
+                      placeholder="Summary for sales team..."
+                      rows={4}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="point_of_contact">Point of Contact</Label>
+                    <Input
+                      id="point_of_contact"
+                      data-testid="input-point-of-contact"
+                      value={formData.point_of_contact}
+                      onChange={(e) => handleInputChange('point_of_contact', e.target.value)}
+                      placeholder="Primary contact person"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Type</Label>
-                  <Input
-                    id="type"
-                    value={formData.type}
-                    onChange={(e) => handleInputChange('type', e.target.value)}
-                    placeholder="e.g., Dispensary, Headshop"
-                  />
-                </div>
-              </div>
+              </AccordionContent>
+            </AccordionItem>
 
-              <div className="space-y-2">
-                <Label htmlFor="link">Profile Link</Label>
-                <div className="flex gap-2">
-                  <Input
+            {/* Basic Information */}
+            <AccordionItem value="basic-info" data-testid="accordion-item-basic-info">
+              <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-basic-info">
+                Basic Information
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 pt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Store Name</Label>
+                      <Input
+                        id="name"
+                        data-testid="input-store-name"
+                        value={formData.name}
+                        onChange={(e) => handleInputChange('name', e.target.value)}
+                        placeholder="Enter store name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="type">Type</Label>
+                      <Input
+                        id="type"
+                        data-testid="input-type"
+                        value={formData.type}
+                        onChange={(e) => handleInputChange('type', e.target.value)}
+                        placeholder="e.g., Dispensary, Headshop"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Profile Link - HIDDEN */}
+                  <input
+                    type="hidden"
                     id="link"
                     value={formData.link}
                     onChange={(e) => handleInputChange('link', e.target.value)}
-                    placeholder="https://..."
-                    className="flex-1"
                   />
-                  {formData.link && (
-                    <Button variant="outline" size="icon" asChild>
-                      <a href={formData.link} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </Button>
-                  )}
                 </div>
-              </div>
+              </AccordionContent>
+            </AccordionItem>
 
-              <div className="space-y-2">
-                <Label htmlFor="about">About</Label>
-                <Textarea
-                  id="about"
-                  value={formData.about}
-                  onChange={(e) => handleInputChange('about', e.target.value)}
-                  placeholder="Store description..."
-                  rows={4}
-                />
-              </div>
-            </div>
+            {/* Contact Information - includes Street Address, City, State */}
+            <AccordionItem value="contact-info" data-testid="accordion-item-contact-info">
+              <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-contact-info">
+                Contact Information
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 pt-2">
+                  {/* Street Address, City, State */}
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Street Address</Label>
+                    <Input
+                      id="address"
+                      data-testid="input-address"
+                      value={formData.address}
+                      onChange={(e) => handleInputChange('address', e.target.value)}
+                      placeholder="123 Main St"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="city">City</Label>
+                      <Input
+                        id="city"
+                        data-testid="input-city"
+                        value={formData.city}
+                        onChange={(e) => handleInputChange('city', e.target.value)}
+                        placeholder="City"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="state">State</Label>
+                      <Input
+                        id="state"
+                        data-testid="input-state"
+                        value={formData.state}
+                        onChange={(e) => handleInputChange('state', e.target.value)}
+                        placeholder="State"
+                      />
+                    </div>
+                  </div>
 
-            {/* Contact Information */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Contact Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    placeholder="(555) 123-4567"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    placeholder="contact@store.com"
-                  />
-                </div>
-              </div>
+                  <Separator className="my-4" />
 
-              <div className="space-y-2">
-                <Label htmlFor="website">Website</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="website"
-                    value={formData.website}
-                    onChange={(e) => handleInputChange('website', e.target.value)}
-                    placeholder="https://www.store.com"
-                    className="flex-1"
-                  />
-                  {formData.website && (
-                    <Button variant="outline" size="icon" asChild>
-                      <a href={formData.website.startsWith('http') ? formData.website : `https://${formData.website}`} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
+                  {/* Phone, Email, Website */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone</Label>
+                      <Input
+                        id="phone"
+                        data-testid="input-phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => handleInputChange('phone', e.target.value)}
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        data-testid="input-email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        placeholder="contact@store.com"
+                      />
+                    </div>
+                  </div>
 
-            {/* Location */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Location</h3>
-              <div className="space-y-2">
-                <Label htmlFor="address">Street Address</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
-                  placeholder="123 Main St"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => handleInputChange('city', e.target.value)}
-                    placeholder="City"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="website">Website</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="website"
+                        data-testid="input-website"
+                        value={formData.website}
+                        onChange={(e) => handleInputChange('website', e.target.value)}
+                        placeholder="https://www.store.com"
+                        className="flex-1"
+                      />
+                      {formData.website && (
+                        <Button variant="outline" size="icon" asChild data-testid="button-open-website">
+                          <a href={formData.website.startsWith('http') ? formData.website : `https://${formData.website}`} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="state">State</Label>
-                  <Input
-                    id="state"
-                    value={formData.state}
-                    onChange={(e) => handleInputChange('state', e.target.value)}
-                    placeholder="State"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Additional Details */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Additional Details</h3>
-              <div className="space-y-2">
-                <Label htmlFor="hours">Hours</Label>
-                <Textarea
-                  id="hours"
-                  value={formData.hours}
-                  onChange={(e) => handleInputChange('hours', e.target.value)}
-                  placeholder="Business hours..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="followers">Followers</Label>
-                  <Input
-                    id="followers"
-                    value={formData.followers}
-                    onChange={(e) => handleInputChange('followers', e.target.value)}
-                    placeholder="Number of followers"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="vibe_score">Vibe Score</Label>
-                  <Input
-                    id="vibe_score"
-                    value={formData.vibe_score}
-                    onChange={(e) => handleInputChange('vibe_score', e.target.value)}
-                    placeholder="Score"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sales_ready_summary">Sales-ready Summary</Label>
-                <Textarea
-                  id="sales_ready_summary"
-                  value={formData.sales_ready_summary}
-                  onChange={(e) => handleInputChange('sales_ready_summary', e.target.value)}
-                  placeholder="Summary for sales team..."
-                  rows={4}
-                />
-              </div>
-            </div>
-          </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saveMutation.isPending}>
+          <Button onClick={handleSave} disabled={saveMutation.isPending} data-testid="button-save">
             {saveMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
