@@ -1925,7 +1925,30 @@ export default function SalesDashboard() {
                   </PopoverTrigger>
                   <PopoverContent className="w-96">
                     <div className="space-y-2">
-                      <h4 className="font-medium">Manage Columns</h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Manage Columns</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const hiddenColumns = ['title', 'error'];
+                            const newVisibleColumns: Record<string, boolean> = {};
+                            headers.forEach((header: string) => {
+                              newVisibleColumns[header] = !hiddenColumns.includes(header.toLowerCase());
+                            });
+                            setVisibleColumns(newVisibleColumns);
+                            setColumnOrder(headers);
+                            toast({
+                              title: "Columns Reset",
+                              description: "All columns are now visible in their original order",
+                            });
+                          }}
+                          data-testid="button-reset-columns"
+                        >
+                          <RotateCcw className="mr-2 h-3 w-3" />
+                          Reset
+                        </Button>
+                      </div>
                       <p className="text-xs text-muted-foreground">Show/hide and reorder columns (doesn't affect Google Sheets)</p>
                       <ScrollArea className="h-72">
                         <div className="space-y-2">
