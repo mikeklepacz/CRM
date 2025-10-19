@@ -306,53 +306,45 @@ export function WooCommerceSync() {
                       </TableCell>
                       <TableCell className="text-right">${parseFloat(order.total).toFixed(2)}</TableCell>
                       <TableCell>
-                        {order.clientId ? (
-                          <Select 
-                            value={commissionTypes[order.id] || 'auto'}
-                            onValueChange={(value) => {
-                              setCommissionTypes(prev => ({ ...prev, [order.id]: value }));
-                            }}
-                          >
-                            <SelectTrigger className="w-[140px]" data-testid={`select-commission-type-${order.id}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="auto">Auto (6mo rule)</SelectItem>
-                              <SelectItem value="25">25%</SelectItem>
-                              <SelectItem value="10">10%</SelectItem>
-                              <SelectItem value="flat">Flat Fee</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
+                        <Select 
+                          value={commissionTypes[order.id] || 'auto'}
+                          onValueChange={(value) => {
+                            setCommissionTypes(prev => ({ ...prev, [order.id]: value }));
+                          }}
+                        >
+                          <SelectTrigger className="w-[140px]" data-testid={`select-commission-type-${order.id}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">Auto (6mo rule)</SelectItem>
+                            <SelectItem value="25">25%</SelectItem>
+                            <SelectItem value="10">10%</SelectItem>
+                            <SelectItem value="flat">Flat Fee</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell className="text-right">
-                        {order.clientId ? (
-                          commissionTypes[order.id] === 'flat' ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              className="w-[120px] text-right"
-                              value={commissionAmounts[order.id] || ''}
-                              onChange={(e) => {
-                                setCommissionAmounts(prev => ({ ...prev, [order.id]: e.target.value }));
-                              }}
-                              data-testid={`input-commission-amount-${order.id}`}
-                            />
-                          ) : (
-                            <span className="font-medium">
-                              {commissionTypes[order.id] === 'auto' || !commissionTypes[order.id] ? (
-                                <span className="text-muted-foreground italic">{calculateCommission(order.id, parseFloat(order.total))}</span>
-                              ) : (
-                                `$${calculateCommission(order.id, parseFloat(order.total))}`
-                              )}
-                            </span>
-                          )
+                        {commissionTypes[order.id] === 'flat' ? (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            className="w-[120px] text-right"
+                            value={commissionAmounts[order.id] || ''}
+                            onChange={(e) => {
+                              setCommissionAmounts(prev => ({ ...prev, [order.id]: e.target.value }));
+                            }}
+                            data-testid={`input-commission-amount-${order.id}`}
+                          />
                         ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
+                          <span className="font-medium">
+                            {commissionTypes[order.id] === 'auto' || !commissionTypes[order.id] ? (
+                              <span className="text-muted-foreground italic">{calculateCommission(order.id, parseFloat(order.total))}</span>
+                            ) : (
+                              `$${calculateCommission(order.id, parseFloat(order.total))}`
+                            )}
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>
