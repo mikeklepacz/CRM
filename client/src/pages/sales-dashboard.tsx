@@ -3186,23 +3186,16 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         }
       }
       
-      // Update initialData after auto-fill so hasUnsavedChanges doesn't trigger on auto-filled values
-      if (updated) {
-        setInitialData(prev => ({
-          ...prev,
-          poc_email: emailToSet || prev.poc_email,
-          poc_phone: phoneToSet || prev.poc_phone
-        }));
-      }
+      // DO NOT update initialData - we want auto-detected values to be saved when user clicks Save
+      // They should be treated as unsaved changes so they get written to Google Sheets
     } else {
       // If notes are cleared, clear POC fields if they haven't been manually edited
+      // DO NOT update initialData - let the user save the cleared values
       if (!pocFieldsManuallyEdited.email && formData.poc_email) {
         setFormData(prev => ({ ...prev, poc_email: '' }));
-        setInitialData(prev => ({ ...prev, poc_email: '' }));
       }
       if (!pocFieldsManuallyEdited.phone && formData.poc_phone) {
         setFormData(prev => ({ ...prev, poc_phone: '' }));
-        setInitialData(prev => ({ ...prev, poc_phone: '' }));
       }
     }
   }, [formData.notes, pocFieldsManuallyEdited]);
