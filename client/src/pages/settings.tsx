@@ -27,6 +27,7 @@ const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
+  agentName: z.string().optional(),
 });
 
 const passwordSchema = z.object({
@@ -82,6 +83,7 @@ export default function Settings() {
       firstName: user?.firstName || "",
       lastName: user?.lastName || "",
       email: user?.email || "",
+      agentName: user?.agentName || "",
     },
   });
 
@@ -324,6 +326,22 @@ export default function Settings() {
                         <FormControl>
                           <Input type="email" {...field} data-testid="input-profile-email" />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="agentName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Agent Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="e.g., Michael Klepacz" data-testid="input-agent-name" />
+                        </FormControl>
+                        <FormDescription>
+                          This name must match exactly with WooCommerce and Google Sheets
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

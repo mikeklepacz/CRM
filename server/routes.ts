@@ -225,6 +225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     firstName: z.string().min(1, "First name is required"),
     lastName: z.string().min(1, "Last name is required"),
     email: z.string().email("Invalid email address"),
+    agentName: z.string().optional(),
   });
 
   const passwordSchema = z.object({
@@ -252,9 +253,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { firstName, lastName, email } = validation.data;
+      const { firstName, lastName, email, agentName } = validation.data;
 
-      const updated = await storage.updateUser(userId, { firstName, lastName, email });
+      const updated = await storage.updateUser(userId, { firstName, lastName, email, agentName });
       res.json(updated);
     } catch (error: any) {
       console.error("Error updating profile:", error);
