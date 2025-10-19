@@ -113,6 +113,8 @@ export default function SalesDashboard() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
   const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
+  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
+  const [citySearchTerm, setCitySearchTerm] = useState("");
   const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
   const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
@@ -792,6 +794,60 @@ export default function SalesDashboard() {
     };
   }, [headers, data]);
 
+  // Get cities for selected states with their counts
+  const { citiesInSelectedStates, cityCounts } = useMemo(() => {
+    if (selectedStates.size === 0) {
+      return { citiesInSelectedStates: [], cityCounts: {} };
+    }
+
+    const cities = new Set<string>();
+    const counts: Record<string, number> = {};
+    
+    const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
+    const stateColumns = headers.filter((h: string) => {
+      const lower = h.toLowerCase();
+      return lower === 'state' || lower.includes(', state');
+    });
+    
+    data.forEach((row: any) => {
+      // Check if this row's state is in selected states
+      const rowState = stateColumns.map((col: string) => {
+        const value = row[col];
+        if (value && String(value).trim()) {
+          const valueStr = String(value).trim();
+          let stateAbbrev = valueStr;
+
+          if (valueStr.includes(',')) {
+            const parts = valueStr.split(',');
+            if (parts.length >= 2) {
+              stateAbbrev = parts[parts.length - 1].trim();
+            }
+          }
+
+          const stateName = getStateName(stateAbbrev);
+          return stateName || stateAbbrev;
+        }
+        return null;
+      }).find((state) => state && selectedStates.has(state));
+
+      if (rowState) {
+        cityColumns.forEach((col: string) => {
+          const cityValue = row[col];
+          if (cityValue && String(cityValue).trim()) {
+            const city = String(cityValue).trim();
+            cities.add(city);
+            counts[city] = (counts[city] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    return {
+      citiesInSelectedStates: Array.from(cities).sort(),
+      cityCounts: counts
+    };
+  }, [headers, data, selectedStates]);
+
   // Initialize selected states when data loads (or from saved preferences)
   useEffect(() => {
     if (allStates.length > 0 && selectedStates.size === 0) {
@@ -811,6 +867,14 @@ export default function SalesDashboard() {
       }
     }
   }, [allStates.length, userPreferences]);
+
+  // Initialize selected cities when states change or cities load
+  useEffect(() => {
+    if (citiesInSelectedStates.length > 0 && selectedCities.size === 0) {
+      // Default: select all cities when states are first selected
+      setSelectedCities(new Set(citiesInSelectedStates));
+    }
+  }, [citiesInSelectedStates.length]);
 
   // Auto-save cell changes immediately
   useEffect(() => {
@@ -1024,6 +1088,20 @@ export default function SalesDashboard() {
 
             const stateName = getStateName(stateAbbrev);
             return stateName && selectedStates.has(stateName);
+          }
+          return false;
+        });
+      });
+    }
+
+    // Filter by cities if any are selected
+    if (selectedCities.size > 0 && selectedCities.size < citiesInSelectedStates.length) {
+      const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
+      filtered = filtered.filter((row: any) => {
+        return cityColumns.some((col: string) => {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            return selectedCities.has(String(value).trim());
           }
           return false;
         });
@@ -1997,6 +2075,91 @@ export default function SalesDashboard() {
                       </div>
                     </PopoverContent>
                   </Popover>
+
+                {/* Cities Filter - Only shown when states are selected */}
+                {selectedStates.size > 0 && citiesInSelectedStates.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" data-testid="button-cities-filter">
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        Cities ({selectedCities.size}/{citiesInSelectedStates.length})
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">Filter by City</h4>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedCities(new Set(citiesInSelectedStates))}
+                              data-testid="button-select-all-cities"
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedCities(new Set())}
+                              data-testid="button-clear-all-cities"
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Cities in selected states ({citiesInSelectedStates.length} total)
+                        </p>
+                        
+                        {/* City search box */}
+                        <Input
+                          placeholder="Search cities..."
+                          value={citySearchTerm}
+                          onChange={(e) => setCitySearchTerm(e.target.value)}
+                          className="h-8"
+                          data-testid="input-search-cities"
+                        />
+                        
+                        <ScrollArea className="h-64">
+                          <div className="space-y-2">
+                            {citiesInSelectedStates
+                              .filter((city: string) => 
+                                city.toLowerCase().includes(citySearchTerm.toLowerCase())
+                              )
+                              .map((city: string) => (
+                              <div key={city} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`city-${city}`}
+                                  checked={selectedCities.has(city)}
+                                  onCheckedChange={() => {
+                                    const newSelected = new Set(selectedCities);
+                                    if (newSelected.has(city)) {
+                                      newSelected.delete(city);
+                                    } else {
+                                      newSelected.add(city);
+                                    }
+                                    setSelectedCities(newSelected);
+                                  }}
+                                  data-testid={`checkbox-city-${city}`}
+                                />
+                                <Label
+                                  htmlFor={`city-${city}`}
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  {city}
+                                </Label>
+                                <span className="text-xs text-muted-foreground">
+                                  ({cityCounts[city] || 0})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
 
                 <Popover>
                   <PopoverTrigger asChild>
