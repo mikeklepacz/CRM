@@ -1418,6 +1418,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Tracker data parsed:', trackerData.length, 'rows');
       console.log('Filtered tracker data (for agent):', filteredTrackerData.length, 'rows');
       console.log('Final merged data:', mergedData.length, 'rows');
+      console.log('Tracker headers:', trackerHeaders);
+      // Log a sample merged row that has tracker data
+      const sampleRowWithTracker = mergedData.find(row => row._hasTrackerData);
+      if (sampleRowWithTracker) {
+        console.log('Sample merged row with tracker data:', JSON.stringify(sampleRowWithTracker, null, 2));
+      }
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)
       const allHeaders = [...storeHeaders];
