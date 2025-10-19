@@ -50,6 +50,18 @@ function stringSimilarity(str1: string, str2: string): number {
   return 1 - (distance / maxLen);
 }
 
+// Normalize link/URL for matching (removes protocol, www, trailing slash, trims, lowercase)
+function normalizeLink(link: string): string {
+  if (!link || typeof link !== 'string') return '';
+  
+  return link
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '') // Remove http:// or https://
+    .replace(/^www\./, '')        // Remove www.
+    .replace(/\/+$/, '');          // Remove trailing slashes
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
