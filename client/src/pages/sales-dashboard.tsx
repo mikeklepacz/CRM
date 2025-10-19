@@ -3044,6 +3044,29 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
     }
   }, [storeData]);
 
+  // Auto-detect emails and phone numbers from Notes field
+  useEffect(() => {
+    if (formData.notes) {
+      // Email regex - matches most common email formats
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+      // Phone regex - matches various formats: (555) 123-4567, 555-123-4567, 555.123.4567, 5551234567
+      const phoneRegex = /\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
+      
+      const emails = formData.notes.match(emailRegex);
+      const phones = formData.notes.match(phoneRegex);
+      
+      // Auto-populate POC Email if found and field is currently empty
+      if (emails && emails.length > 0 && !formData.poc_email) {
+        setFormData(prev => ({ ...prev, poc_email: emails[0] }));
+      }
+      
+      // Auto-populate POC Phone if found and field is currently empty
+      if (phones && phones.length > 0 && !formData.poc_phone) {
+        setFormData(prev => ({ ...prev, poc_phone: phones[0] }));
+      }
+    }
+  }, [formData.notes]);
+
   // Save mutation - only send changed fields
   const saveMutation = useMutation({
     mutationFn: async () => {
