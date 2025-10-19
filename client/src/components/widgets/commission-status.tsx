@@ -43,7 +43,7 @@ export function CommissionStatusWidget() {
     );
   }
 
-  if (error || !data) {
+  if (error || !data || !data.breakdown || !data.breakdown.tier25Percent || !data.breakdown.tier10Percent) {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
@@ -63,7 +63,7 @@ export function CommissionStatusWidget() {
   }
 
   const { breakdown } = data;
-  const totalClients = breakdown.tier25Percent.clients + breakdown.tier10Percent.clients;
+  const totalClients = (breakdown.tier25Percent?.clients || 0) + (breakdown.tier10Percent?.clients || 0);
 
   return (
     <Card className="h-full">

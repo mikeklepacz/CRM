@@ -3813,6 +3813,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let commission10Earnings = 0;
       const monthlyEarnings: { [key: string]: number } = {};
 
+      console.log('[DASHBOARD-SUMMARY] Processing', trackerRows.length - 1, 'tracker rows');
+      
       // Process each tracker row
       for (let i = 1; i < trackerRows.length; i++) {
         const row = trackerRows[i];
@@ -3820,11 +3822,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amountStr = row[amountIndex] || '0';
         const commissionType = row[commissionTypeIndex] || '';
 
+        console.log(`[DASHBOARD-SUMMARY] Row ${i}:`, { dateStr, amountStr, commissionType });
+
         // Parse amount
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
-        if (amount === 0) continue;
+        if (amount === 0) {
+          console.log(`[DASHBOARD-SUMMARY] Row ${i}: Skipping - amount is 0`);
+          continue;
+        }
 
         totalEarnings += amount;
+        console.log(`[DASHBOARD-SUMMARY] Row ${i}: Added $${amount}, total now: $${totalEarnings}`);
 
         // Parse date (handle formats: MM/DD/YYYY, M/D/YYYY, etc.)
         let orderDate: Date | null = null;
