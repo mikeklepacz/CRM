@@ -77,6 +77,7 @@ export interface IStorage {
   // Google Sheets operations
   getAllActiveGoogleSheets(): Promise<GoogleSheet[]>;
   getGoogleSheetById(id: string): Promise<GoogleSheet | null>;
+  getGoogleSheetByPurpose(purpose: string): Promise<GoogleSheet | null>;
   createGoogleSheetConnection(connection: InsertGoogleSheet): Promise<GoogleSheet>;
   disconnectGoogleSheet(id: string): Promise<void>;
   updateGoogleSheetLastSync(id: string): Promise<void>;
@@ -350,6 +351,18 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(googleSheets)
       .where(eq(googleSheets.id, id))
+      .limit(1);
+    return sheet || null;
+  }
+
+  async getGoogleSheetByPurpose(purpose: string): Promise<GoogleSheet | null> {
+    const [sheet] = await db
+      .select()
+      .from(googleSheets)
+      .where(and(
+        eq(googleSheets.sheetPurpose, purpose),
+        eq(googleSheets.syncStatus, 'active')
+      ))
       .limit(1);
     return sheet || null;
   }

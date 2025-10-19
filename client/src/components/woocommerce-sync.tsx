@@ -33,6 +33,26 @@ export function WooCommerceSync() {
   const [clientSearch, setClientSearch] = useState<string>("");
   const [showAllClients, setShowAllClients] = useState<boolean>(false);
   
+  // Commission management state
+  const [commissionTypes, setCommissionTypes] = useState<Record<string, string>>({});
+  const [commissionAmounts, setCommissionAmounts] = useState<Record<string, string>>({});
+  
+  // Calculate commission amount based on type and total
+  const calculateCommission = (orderId: string, total: number) => {
+    const type = commissionTypes[orderId] || 'auto';
+    if (type === 'flat') {
+      return commissionAmounts[orderId] || '0.00';
+    }
+    if (type === 'auto') {
+      return 'calculating...'; // Backend will determine based on 6-month rule
+    }
+    let percentage = 0.25; // Default to 25%
+    if (type === '10') percentage = 0.10;
+    else if (type === '25') percentage = 0.25;
+    const amount = (total * percentage).toFixed(2);
+    return amount;
+  };
+  
   const { data: orders = [], refetch: refetchOrders } = useQuery({
     queryKey: ["/api/orders"],
     queryFn: async () => {
@@ -119,6 +139,47 @@ export function WooCommerceSync() {
     },
   });
 
+  const [conflicts, setConflicts] = useState<any[]>([]);
+  const [showConflicts, setShowConflicts] = useState(false);
+
+  const writeToTrackerMutation = useMutation({
+    mutationFn: async () => {
+      // Get matched orders with commission data
+      const matchedOrders = orders
+        .filter((order: any) => order.clientId)
+        .map((order: any) => ({
+          orderId: order.id,
+          commissionType: commissionTypes[order.id] || 'auto',
+          commissionAmount: commissionAmounts[order.id] || null,
+        }));
+      
+      return await apiRequest("POST", "/api/woocommerce/write-to-tracker", { orders: matchedOrders });
+    },
+    onSuccess: (data) => {
+      if (data.conflicts && data.conflicts.length > 0) {
+        setConflicts(data.conflicts);
+        setShowConflicts(true);
+        toast({
+          title: "Partial Success",
+          description: `${data.written} orders written. ${data.conflicts.length} conflicts need resolution.`,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `${data.written} orders written to Commission Tracker`,
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleMatchOrder = () => {
     if (matchingOrderId && selectedClientId) {
       matchOrderMutation.mutate({ orderId: matchingOrderId, clientId: selectedClientId });
@@ -137,23 +198,44 @@ export function WooCommerceSync() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button
-          onClick={() => syncMutation.mutate()}
-          disabled={syncMutation.isPending}
-          data-testid="button-sync-woocommerce"
-        >
-          {syncMutation.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Syncing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Sync Orders
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            data-testid="button-sync-woocommerce"
+          >
+            {syncMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sync Orders
+              </>
+            )}
+          </Button>
+          
+          <Button
+            onClick={() => writeToTrackerMutation.mutate()}
+            disabled={writeToTrackerMutation.isPending || !orders.some((o: any) => o.clientId)}
+            variant="secondary"
+            data-testid="button-write-to-tracker"
+          >
+            {writeToTrackerMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Writing...
+              </>
+            ) : (
+              <>
+                <Package className="h-4 w-4 mr-2" />
+                Write to Tracker ({orders.filter((o: any) => o.clientId).length})
+              </>
+            )}
+          </Button>
+        </div>
 
         {(syncResult || wooSettings?.lastSyncedAt) && (
           <div className="text-sm space-y-1 p-3 bg-muted rounded-md">
@@ -198,6 +280,8 @@ export function WooCommerceSync() {
                     <TableHead>Sales Agent</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total</TableHead>
+                    <TableHead>Commission Type</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Matched Client</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -221,6 +305,56 @@ export function WooCommerceSync() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">${parseFloat(order.total).toFixed(2)}</TableCell>
+                      <TableCell>
+                        {order.clientId ? (
+                          <Select 
+                            value={commissionTypes[order.id] || 'auto'}
+                            onValueChange={(value) => {
+                              setCommissionTypes(prev => ({ ...prev, [order.id]: value }));
+                            }}
+                          >
+                            <SelectTrigger className="w-[140px]" data-testid={`select-commission-type-${order.id}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="auto">Auto (6mo rule)</SelectItem>
+                              <SelectItem value="25">25%</SelectItem>
+                              <SelectItem value="10">10%</SelectItem>
+                              <SelectItem value="flat">Flat Fee</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {order.clientId ? (
+                          commissionTypes[order.id] === 'flat' ? (
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              className="w-[120px] text-right"
+                              value={commissionAmounts[order.id] || ''}
+                              onChange={(e) => {
+                                setCommissionAmounts(prev => ({ ...prev, [order.id]: e.target.value }));
+                              }}
+                              data-testid={`input-commission-amount-${order.id}`}
+                            />
+                          ) : (
+                            <span className="font-medium">
+                              {commissionTypes[order.id] === 'auto' || !commissionTypes[order.id] ? (
+                                <span className="text-muted-foreground italic">{calculateCommission(order.id, parseFloat(order.total))}</span>
+                              ) : (
+                                `$${calculateCommission(order.id, parseFloat(order.total))}`
+                              )}
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {order.clientId ? (
                           <Badge variant="default">Matched</Badge>
@@ -394,6 +528,49 @@ export function WooCommerceSync() {
             </div>
           </div>
         )}
+
+        {/* Conflict Resolution Dialog */}
+        <Dialog open={showConflicts} onOpenChange={setShowConflicts}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Agent Assignment Conflicts</DialogTitle>
+              <DialogDescription>
+                The following orders have conflicting agent assignments. Please resolve them manually in Google Sheets.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {conflicts.map((conflict, idx) => (
+                <div key={idx} className="p-4 border rounded-md space-y-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium">Order #{conflict.orderNumber}</p>
+                      <p className="text-sm text-muted-foreground mt-1">Link: {conflict.link}</p>
+                    </div>
+                    <Badge variant="destructive">Conflict</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-muted-foreground">WooCommerce Agent:</p>
+                      <Badge variant="outline">{conflict.newAgent}</Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-muted-foreground">Existing Agent in Tracker:</p>
+                      <Badge variant="default">{conflict.existingAgent}</Badge>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    This store already has orders assigned to {conflict.existingAgent}, but WooCommerce shows {conflict.newAgent} for this order.
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowConflicts(false)}>
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

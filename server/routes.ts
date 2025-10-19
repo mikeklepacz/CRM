@@ -1217,6 +1217,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Write matched WooCommerce orders to Commission Tracker sheet
+  app.post('/api/woocommerce/write-to-tracker', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { orders: orderRequests } = req.body;
+
+      if (!Array.isArray(orderRequests) || orderRequests.length === 0) {
+        return res.status(400).json({ message: "No orders provided" });
+      }
+
+      // Get Commission Tracker sheet
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commission_tracker');
+      if (!trackerSheet) {
+        return res.status(400).json({ message: "Commission Tracker sheet not connected" });
+      }
+
+      const { spreadsheetId, sheetName } = trackerSheet;
+
+      // Read tracker headers to understand column structure
+      const headerRange = `${sheetName}!1:1`;
+      const headerData = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+      if (headerData.length === 0) {
+        return res.status(400).json({ message: "Commission Tracker sheet is empty" });
+      }
+
+      const headers = headerData[0];
+      console.log('Commission Tracker headers:', headers);
+
+      // Build column map (case-insensitive)
+      const columnMap: Record<string, number> = {};
+      headers.forEach((header: string, index: number) => {
+        const lowerHeader = header.toLowerCase().trim();
+        columnMap[lowerHeader] = index;
+      });
+
+      // Required columns: Link, Agent Name, Date, Order Number, Total, Amount
+      const requiredColumns = ['link', 'agent name', 'date', 'order number', 'total', 'amount'];
+      const missingColumns = requiredColumns.filter(col => !(col in columnMap));
+      if (missingColumns.length > 0) {
+        return res.status(400).json({ 
+          message: `Missing required columns in Commission Tracker: ${missingColumns.join(', ')}` 
+        });
+      }
+
+      // Read all existing tracker rows once for duplicate detection
+      const allDataRange = `${sheetName}!A:ZZ`;
+      const allRows = await googleSheets.readSheetData(userId, spreadsheetId, allDataRange);
+      const existingRows = allRows.slice(1); // Skip header
+
+      let written = 0;
+      const skipped = 0;
+      const conflicts: any[] = [];
+
+      for (const orderReq of orderRequests) {
+        const { orderId, commissionType, commissionAmount } = orderReq;
+
+        // Get order from database
+        const order = await storage.getOrderById(orderId);
+        if (!order || !order.clientId) {
+          console.log(`Skipping order ${orderId}: not matched to client`);
+          continue;
+        }
+
+        // Get client to extract Link
+        const client = await storage.getClient(order.clientId);
+        if (!client) {
+          console.log(`Skipping order ${orderId}: client not found`);
+          continue;
+        }
+
+        // Extract Link from client data (case-insensitive search)
+        const linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
+        if (!linkValue) {
+          console.log(`Skipping order ${orderId}: no Link found for client`);
+          continue;
+        }
+
+        const salesAgentName = order.salesAgentName;
+        if (!salesAgentName) {
+          console.log(`Skipping order ${orderId}: no sales agent name`);
+          continue;
+        }
+
+        // Calculate commission amount
+        const orderTotal = parseFloat(order.total);
+        let amount: number;
+
+        if (commissionType === 'flat' && commissionAmount) {
+          amount = parseFloat(commissionAmount);
+        } else if (commissionType === '25') {
+          amount = orderTotal * 0.25;
+        } else if (commissionType === '10') {
+          amount = orderTotal * 0.10;
+        } else {
+          // Auto: determine based on 6-month rule
+          // Find first order date for this client
+          const firstOrderDate = client.firstOrderDate ? new Date(client.firstOrderDate) : new Date(order.orderDate);
+          const orderDate = new Date(order.orderDate);
+          const monthsSinceFirst = differenceInMonths(orderDate, firstOrderDate);
+          const rate = monthsSinceFirst < 6 ? 0.25 : 0.10;
+          amount = orderTotal * rate;
+        }
+
+        // Format date as M/d/yyyy to match existing pattern
+        const orderDate = new Date(order.orderDate);
+        const formattedDate = `${orderDate.getMonth() + 1}/${orderDate.getDate()}/${orderDate.getFullYear()}`;
+
+        // Check for duplicates: order number already exists in tracker
+        const duplicateRow = existingRows.find(row => {
+          const existingOrderNumber = row[columnMap['order number']];
+          return existingOrderNumber && existingOrderNumber.toString() === order.orderNumber.toString();
+        });
+
+        if (duplicateRow) {
+          console.log(`Skipping order ${order.orderNumber}: already exists in Commission Tracker`);
+          continue;
+        }
+
+        // Check for conflicts: same Link with different Agent Name
+        const conflictingRow = existingRows.find(row => {
+          const existingLink = row[columnMap['link']];
+          const existingAgent = row[columnMap['agent name']];
+          return normalizeLink(existingLink) === normalizeLink(linkValue) && 
+                 existingAgent && 
+                 existingAgent.toLowerCase().trim() !== salesAgentName.toLowerCase().trim();
+        });
+
+        if (conflictingRow) {
+          conflicts.push({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            newAgent: salesAgentName,
+            existingAgent: conflictingRow[columnMap['agent name']],
+            link: linkValue,
+          });
+          console.log(`Conflict detected for order ${order.orderNumber}: existing agent ${conflictingRow[columnMap['agent name']]} vs new agent ${salesAgentName}`);
+          continue; // Skip writing this row
+        }
+
+        // Prepare row data in correct column order
+        const rowData = new Array(headers.length).fill('');
+        rowData[columnMap['link']] = linkValue;
+        rowData[columnMap['agent name']] = salesAgentName;
+        rowData[columnMap['date']] = formattedDate;
+        rowData[columnMap['order number']] = order.orderNumber;
+        rowData[columnMap['total']] = orderTotal.toFixed(2);
+        rowData[columnMap['amount']] = amount.toFixed(2);
+
+        // Append row to tracker sheet
+        await googleSheets.appendSheetData(userId, spreadsheetId, `${sheetName}!A:A`, [rowData]);
+        written++;
+        console.log(`Written order ${order.orderNumber} to tracker: ${salesAgentName} - $${amount.toFixed(2)}`);
+      }
+
+      res.json({
+        message: `Successfully written ${written} orders to Commission Tracker`,
+        written,
+        conflicts: conflicts.length > 0 ? conflicts : undefined,
+      });
+    } catch (error: any) {
+      console.error("Write to tracker error:", error);
+      res.status(500).json({
+        message: error.message || "Failed to write to tracker",
+        written: 0
+      });
+    }
+  });
+
   // ========== GOOGLE SHEETS ROUTES ==========
 
   // List user's Google Sheets
