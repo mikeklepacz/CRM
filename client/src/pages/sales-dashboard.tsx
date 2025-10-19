@@ -3068,10 +3068,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   const [storeSearchDialog, setStoreSearchDialog] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
 
-  // Query all stores for multi-location picker
-  const { data: allStores } = useQuery<any[]>({
+  // Query all stores for multi-location picker - LAZY LOAD (only when search has 2+ chars)
+  const { data: allStores, isLoading: isLoadingStores } = useQuery<any[]>({
     queryKey: [`/api/stores/all/${storeSheetId}`],
-    enabled: !!storeSheetId && multiLocationMode,
+    enabled: !!storeSheetId && multiLocationMode && storeSearch.length >= 2,
   });
 
   // Filtered stores for search
@@ -3870,7 +3870,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="store_search">Search Stores</Label>
+            <Label htmlFor="store_search">Search Stores (type 2+ letters to search)</Label>
             <Input
               id="store_search"
               data-testid="input-store-search"
@@ -3880,15 +3880,52 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             />
           </div>
 
-          <div className="text-sm text-muted-foreground">
-            {selectedStores.length} location{selectedStores.length !== 1 ? 's' : ''} selected
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {selectedStores.length} location{selectedStores.length !== 1 ? 's' : ''} selected
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (filteredStores.length > 0) {
+                    setSelectedStores(filteredStores.map((store: any) => ({ link: store.link, name: store.name })));
+                  }
+                }}
+                disabled={filteredStores.length === 0}
+                data-testid="button-select-all"
+              >
+                Select All ({filteredStores.length})
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedStores([])}
+                disabled={selectedStores.length === 0}
+                data-testid="button-select-none"
+              >
+                Clear All
+              </Button>
+            </div>
           </div>
 
           <ScrollArea className="h-96 border rounded-md">
             <div className="p-4 space-y-2">
-              {filteredStores.length === 0 ? (
+              {storeSearch.length < 2 ? (
                 <p className="text-center text-muted-foreground py-8">
-                  {storeSearch ? 'No stores found matching your search' : 'Loading stores...'}
+                  Type 2 or more letters to search for stores...
+                </p>
+              ) : isLoadingStores ? (
+                <p className="text-center text-muted-foreground py-8">
+                  <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
+                  Loading stores...
+                </p>
+              ) : filteredStores.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No stores found matching "{storeSearch}"
                 </p>
               ) : (
                 filteredStores.map((store: any) => {
