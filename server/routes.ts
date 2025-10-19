@@ -2012,16 +2012,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Merge tracker fields into store object
           if (trackerRow) {
-            // Add tracker-specific fields
-            const notesHeader = trackerHeaders.find(h => h.toLowerCase() === 'notes');
-            const pocHeader = trackerHeaders.find(h => h.toLowerCase() === 'point of contact');
-            const pocEmailHeader = trackerHeaders.find(h => h.toLowerCase() === 'poc email');
-            const pocPhoneHeader = trackerHeaders.find(h => h.toLowerCase() === 'poc phone');
-
-            if (notesHeader) store.Notes = trackerRow[notesHeader] || '';
-            if (pocHeader) store['Point of Contact'] = trackerRow[pocHeader] || '';
-            if (pocEmailHeader) store['POC Email'] = trackerRow[pocEmailHeader] || '';
-            if (pocPhoneHeader) store['POC Phone'] = trackerRow[pocPhoneHeader] || '';
+            // Merge all tracker fields - preserve both original names and standardized names
+            trackerHeaders.forEach((header) => {
+              const value = trackerRow[header];
+              if (value) {
+                // Store with original header name
+                store[header] = value;
+                
+                // Also store with lowercase version for easier access
+                const lowerHeader = header.toLowerCase();
+                if (lowerHeader === 'notes') store.Notes = value;
+                else if (lowerHeader === 'point of contact') store['Point of Contact'] = value;
+                else if (lowerHeader === 'poc email') store['POC Email'] = value;
+                else if (lowerHeader === 'poc phone') store['POC Phone'] = value;
+              }
+            });
           }
         }
       }

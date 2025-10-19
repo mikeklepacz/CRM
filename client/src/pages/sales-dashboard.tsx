@@ -3032,21 +3032,34 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
   // Populate form when data loads
   useEffect(() => {
     if (storeData) {
+      // Helper function to get value from various possible field names (case-insensitive)
+      const getValue = (fieldNames: string[]) => {
+        for (const fieldName of fieldNames) {
+          // Try exact match first
+          if (storeData[fieldName]) return storeData[fieldName];
+          
+          // Try case-insensitive match
+          const key = Object.keys(storeData).find(k => k.toLowerCase() === fieldName.toLowerCase());
+          if (key && storeData[key]) return storeData[key];
+        }
+        return "";
+      };
+
       const populatedData = {
-        name: storeData.name || storeData.Name || "",
-        type: storeData.type || storeData.Type || "",
-        link: storeData.link || storeData.Link || "",
-        address: storeData.address || storeData.Address || "",
-        city: storeData.city || storeData.City || "",
-        state: storeData.state || storeData.State || "",
-        phone: storeData.phone || storeData.Phone || "",
-        website: storeData.website || storeData.Website || "",
-        email: storeData.email || storeData.Email || "",
-        sales_ready_summary: storeData["Sales-ready Summary"] || storeData.sales_ready_summary || "",
-        notes: storeData.Notes || storeData.notes || "",
-        point_of_contact: storeData["Point of Contact"] || storeData.point_of_contact || "",
-        poc_email: storeData["POC Email"] || storeData.poc_email || "",
-        poc_phone: storeData["POC Phone"] || storeData.poc_phone || "",
+        name: getValue(['Name', 'name']),
+        type: getValue(['Type', 'type']),
+        link: getValue(['Link', 'link']),
+        address: getValue(['Address', 'address']),
+        city: getValue(['City', 'city']),
+        state: getValue(['State', 'state']),
+        phone: getValue(['Phone', 'phone']),
+        website: getValue(['Website', 'website']),
+        email: getValue(['Email', 'email']),
+        sales_ready_summary: getValue(['Sales-ready Summary', 'sales_ready_summary', 'Vibe Score']),
+        notes: getValue(['Notes', 'notes']),
+        point_of_contact: getValue(['Point of Contact', 'point_of_contact', 'POC']),
+        poc_email: getValue(['POC Email', 'poc_email']),
+        poc_phone: getValue(['POC Phone', 'poc_phone']),
       };
       setFormData(populatedData);
       setInitialData(populatedData);
