@@ -2819,7 +2819,7 @@ export default function SalesDashboard() {
                                       <button
                                         onClick={() => setStoreDetailsDialog({
                                           open: true,
-                                          storeId: row.link || String(rowKey)
+                                          storeId: row.link || row.Link || String(rowKey)
                                         })}
                                         className="hover:underline font-medium text-left"
                                         style={{ color: customColors.primary }}
