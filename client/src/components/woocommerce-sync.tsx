@@ -182,7 +182,7 @@ export function WooCommerceSync() {
     mutationFn: async () => {
       // Include ALL matched orders (for Google Sheets), not just modified ones
       const orderUpdates = orders
-        .filter((order: any) => order.clientId)
+        .filter((order: any) => order.clientId || order.hasTrackerRows)
         .map((order: any) => ({
           orderId: order.id,
           commissionType: commissionTypes[order.id] || 'auto',
