@@ -1172,26 +1172,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Get order from database
             const order = await storage.getOrderById(orderId);
-            if (!order || !order.clientId) continue;
+            if (!order) continue;
 
-            // Get client
-            const client = await storage.getClient(order.clientId);
-            if (!client) continue;
+            // Find existing row(s) by Transaction ID in Commission Tracker
+            const transactionIdIndex = columnMap['transaction id'];
+            if (transactionIdIndex === undefined) continue;
 
-            let linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
-            if (!linkValue) continue;
-
-            // Find existing row by Link
-            const linkIndex = columnMap['link'];
-            if (linkIndex === undefined) continue;
-
-            let existingRowIndex = -1;
+            // Find all rows matching this order ID (could be multiple stores)
+            const matchingRowIndices: number[] = [];
             for (let i = 0; i < existingRows.length; i++) {
-              if (existingRows[i][linkIndex] === linkValue) {
-                existingRowIndex = i + 2; // +2 for header and 1-indexed
-                break;
+              if (existingRows[i][transactionIdIndex] === orderId) {
+                matchingRowIndices.push(i + 2); // +2 for header and 1-indexed
               }
             }
+
+            if (matchingRowIndices.length === 0) continue;
 
             // Calculate commission amount
             const orderTotal = parseFloat(order.total);
@@ -1204,12 +1199,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else if (commissionType === '10') {
               amount = orderTotal * 0.10;
             } else {
-              // Auto: determine based on 6-month rule
-              const firstOrderDate = client.firstOrderDate ? new Date(client.firstOrderDate) : new Date(order.orderDate);
-              const orderDate = new Date(order.orderDate);
-              const monthsSinceFirst = differenceInMonths(orderDate, firstOrderDate);
-              const rate = monthsSinceFirst <= 6 ? 0.25 : 0.10;
-              amount = orderTotal * rate;
+              // Auto: default to 25% (proper 6-month rule requires client data)
+              amount = orderTotal * 0.25;
             }
 
             // Determine commission type label
@@ -1218,14 +1209,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             else if (commissionType === '25') commissionTypeLabel = '25%';
             else if (commissionType === '10') commissionTypeLabel = '10%';
 
-            if (existingRowIndex > 0) {
-              // Update existing row
+            // Update all matching rows
+            for (const rowIndex of matchingRowIndices) {
               const updates: Array<{range: string, values: any[][]}> = [];
               
               if ('commission type' in columnMap) {
                 const col = String.fromCharCode(65 + columnMap['commission type']);
                 updates.push({
-                  range: `${sheetName}!${col}${existingRowIndex}`,
+                  range: `${sheetName}!${col}${rowIndex}`,
                   values: [[commissionTypeLabel]]
                 });
               }
@@ -1233,7 +1224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if ('amount' in columnMap) {
                 const col = String.fromCharCode(65 + columnMap['amount']);
                 updates.push({
-                  range: `${sheetName}!${col}${existingRowIndex}`,
+                  range: `${sheetName}!${col}${rowIndex}`,
                   values: [[amount.toFixed(2)]]
                 });
               }
