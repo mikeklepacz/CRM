@@ -3,6 +3,14 @@ import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Lock, Unlock, RotateCcw, Settings2 } from "lucide-react";
+import { RevenueOverviewWidget } from "@/components/widgets/revenue-overview";
+import { CommissionBreakdownWidget } from "@/components/widgets/commission-breakdown";
+import { PortfolioMetricsWidget } from "@/components/widgets/portfolio-metrics";
+import { CommissionStatusWidget } from "@/components/widgets/commission-status";
+import { TopClientsWidget } from "@/components/widgets/top-clients";
+import { ActionAlertsWidget } from "@/components/widgets/action-alerts";
+import { RevenueTrendsWidget } from "@/components/widgets/revenue-trends";
+import { RemindersWidget } from "@/components/widgets/reminders";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -118,146 +126,42 @@ export default function SalesDashboard() {
       >
         {/* Revenue Overview Widget */}
         <div key="revenue-overview">
-          <Card className="h-full">
-            <CardHeader className="drag-handle cursor-move">
-              <CardTitle className="flex items-center justify-between">
-                Revenue Overview
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>Total earnings and monthly averages</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Widget placeholder</p>
-              </div>
-            </CardContent>
-          </Card>
+          <RevenueOverviewWidget />
         </div>
 
         {/* Commission Breakdown Widget */}
         <div key="commission-breakdown">
-          <Card className="h-full">
-            <CardHeader className="drag-handle cursor-move">
-              <CardTitle className="flex items-center justify-between">
-                Commission Breakdown
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>25% vs 10% tier earnings</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Widget placeholder</p>
-              </div>
-            </CardContent>
-          </Card>
+          <CommissionBreakdownWidget />
         </div>
 
         {/* Commission Status Widget */}
         <div key="commission-status">
-          <Card className="h-full">
-            <CardHeader className="drag-handle cursor-move">
-              <CardTitle className="flex items-center justify-between">
-                Commission Status
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>Clients by commission tier</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Widget placeholder</p>
-              </div>
-            </CardContent>
-          </Card>
+          <CommissionStatusWidget />
         </div>
 
         {/* Portfolio Metrics Widget */}
         <div key="portfolio-metrics">
-          <Card className="h-full">
-            <CardHeader className="drag-handle cursor-move">
-              <CardTitle className="flex items-center justify-between">
-                Client Portfolio
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>Active clients and performance</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Widget placeholder</p>
-              </div>
-            </CardContent>
-          </Card>
+          <PortfolioMetricsWidget />
         </div>
 
         {/* Revenue Trends Widget */}
         <div key="revenue-trends">
-          <Card className="h-full">
-            <CardHeader className="drag-handle cursor-move">
-              <CardTitle className="flex items-center justify-between">
-                Revenue Trends
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>Time-based revenue analysis</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Widget placeholder</p>
-              </div>
-            </CardContent>
-          </Card>
+          <RevenueTrendsWidget />
         </div>
 
         {/* Action Alerts Widget */}
         <div key="action-alerts">
-          <Card className="h-full">
-            <CardHeader className="drag-handle cursor-move">
-              <CardTitle className="flex items-center justify-between">
-                Action Required
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>Commission warnings and follow-ups</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Widget placeholder</p>
-              </div>
-            </CardContent>
-          </Card>
+          <ActionAlertsWidget />
         </div>
 
         {/* Reminders Widget */}
         <div key="reminders">
-          <Card className="h-full">
-            <CardHeader className="drag-handle cursor-move">
-              <CardTitle className="flex items-center justify-between">
-                Reminders
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>Custom alerts and notifications</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Widget placeholder</p>
-              </div>
-            </CardContent>
-          </Card>
+          <RemindersWidget />
         </div>
 
         {/* Top Clients Widget */}
         <div key="top-clients">
-          <Card className="h-full">
-            <CardHeader className="drag-handle cursor-move">
-              <CardTitle className="flex items-center justify-between">
-                Top Clients
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>Revenue leaders and order history</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Widget placeholder</p>
-              </div>
-            </CardContent>
-          </Card>
+          <TopClientsWidget />
         </div>
       </ResponsiveGridLayout>
     </div>
