@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ContactActionDialogProps {
   open: boolean;
@@ -123,9 +124,12 @@ export function ContactActionDialog({
     saveMutation.mutate();
   };
 
+  // Extract sales summary from row
+  const salesSummary = row['Sales-ready Summary'] || row['sales-ready summary'] || row.sales_ready_summary || '';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             Log {contactType === 'phone' ? 'Call' : 'Email'} Activity
@@ -136,6 +140,17 @@ export function ContactActionDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {salesSummary && (
+            <Card data-testid="card-sales-summary">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Sales-ready Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm whitespace-pre-wrap">{salesSummary}</p>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
             <Select value={status} onValueChange={setStatus}>

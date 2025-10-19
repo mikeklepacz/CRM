@@ -2226,6 +2226,7 @@ export default function SalesDashboard() {
                             const isStatusColumn = header.toLowerCase().includes('status');
                             const isHoursColumn = header.toLowerCase().includes('hour');
                             const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
+                            const isSalesSummaryColumn = header.toLowerCase().includes('sales-ready') || header.toLowerCase().includes('sales ready') || header.toLowerCase().includes('sales_ready');
                             const isAddressColumn = header.toLowerCase().includes('address') ||
                                                    header.toLowerCase().includes('city') ||
                                                    (header.toLowerCase().includes('state') && header.toLowerCase().includes('city')) ||
@@ -2537,6 +2538,15 @@ export default function SalesDashboard() {
                                         <Mail className="h-4 w-4" />
                                         <span>{displayValue}</span>
                                       </button>
+                                    ) : isSalesSummaryColumn && cellValue ? (
+                                      <button
+                                        onClick={() => openExpandedView(row, header, cellValue, false)}
+                                        className="hover:underline text-left"
+                                        style={{ color: customColors.primary }}
+                                        data-testid={`link-sales-summary-${rowKey}-${header}`}
+                                      >
+                                        {cellValue.length > 50 ? cellValue.substring(0, 50) + '...' : cellValue || 'View Summary'}
+                                      </button>
                                     ) : (header.toLowerCase() === 'name' || header.toLowerCase() === 'company') && cellValue ? (
                                       <button
                                         onClick={() => setStoreDetailsDialog({
@@ -2581,7 +2591,7 @@ export default function SalesDashboard() {
                                         {displayValue}
                                       </span>
                                     )}
-                                    {isLongText && !isPhoneColumn && !isWebsiteColumn && !isLinkColumn && (
+                                    {isLongText && !isPhoneColumn && !isWebsiteColumn && !isLinkColumn && !isSalesSummaryColumn && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
