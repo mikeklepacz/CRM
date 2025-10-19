@@ -3239,7 +3239,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/stores/claim-multiple', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const userEmail = req.user.claims?.email || req.user.email;
+      const user = await storage.getUser(userId);
+      const agentName = user?.agentName || 
+        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email) || 
+        'Unknown Agent';
       const { storeLinks, dbaName, storeSheetId, trackerSheetId } = req.body;
 
       if (!storeLinks || !Array.isArray(storeLinks) || storeLinks.length === 0) {
@@ -3300,11 +3303,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       let updatedStoreCount = 0;
-      let createdTrackerCount = 0;
       let skippedCount = 0;
-      const newTrackerRows: any[][] = [];
 
-      // Update Store Database and prepare Commission Tracker rows
+      // Update Store Database - update DBA and Agent Name for ALL stores
       for (const storeLink of storeLinks) {
         const normalizedLink = normalizeLink(storeLink);
 
@@ -3337,7 +3338,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[dbaName]]);
             console.log(`[CLAIM-MULTIPLE] ✓ DBA write successful`);
-            updatedStoreCount++;
           } catch (error: any) {
             console.error(`[CLAIM-MULTIPLE] ✗ DBA write failed:`, error.message);
             console.error(`[CLAIM-MULTIPLE] Full error:`, error);
@@ -3349,11 +3349,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (storeAgentIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeAgentIndex);
           const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
-          console.log(`[CLAIM-MULTIPLE] Writing Agent "${userEmail}" to Store Database cell: ${cellRange}`);
+          console.log(`[CLAIM-MULTIPLE] Writing Agent "${agentName}" to Store Database cell: ${cellRange}`);
           console.log(`[CLAIM-MULTIPLE] Spreadsheet ID: ${storeSheet.spreadsheetId}`);
           try {
-            await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[userEmail]]);
+            await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[agentName]]);
             console.log(`[CLAIM-MULTIPLE] ✓ Agent write successful`);
+            updatedStoreCount++;
           } catch (error: any) {
             console.error(`[CLAIM-MULTIPLE] ✗ Agent write failed:`, error.message);
             console.error(`[CLAIM-MULTIPLE] Full error:`, error);
@@ -3361,36 +3362,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           console.log(`[CLAIM-MULTIPLE] ✗ Agent Name column not found - skipping Agent update`);
         }
+      }
 
-        // Check if tracker row already exists
-        if (existingTrackerLinks.has(normalizedLink)) {
-          console.warn(`Tracker row already exists for: ${storeLink}`);
-          skippedCount++;
-          continue;
-        }
+      // Create ONE single Commission Tracker row using the first store's link
+      const firstStoreLink = storeLinks[0];
+      const normalizedFirstLink = normalizeLink(firstStoreLink);
+      let createdTrackerCount = 0;
 
-        // Create new tracker row
-        console.log(`[CLAIM-MULTIPLE] Creating tracker row for: ${storeLink}`);
+      // Check if tracker row already exists for first store
+      if (!existingTrackerLinks.has(normalizedFirstLink)) {
+        console.log(`[CLAIM-MULTIPLE] Creating single tracker row for DBA group using link: ${firstStoreLink}`);
         const newTrackerRow = new Array(trackerHeaders.length).fill('');
-        newTrackerRow[trackerLinkIndex] = storeLink;
+        newTrackerRow[trackerLinkIndex] = firstStoreLink;
         if (trackerAgentIndex !== -1) {
-          newTrackerRow[trackerAgentIndex] = userEmail;
-          console.log(`[CLAIM-MULTIPLE] Setting tracker Agent at index ${trackerAgentIndex}: "${userEmail}"`);
+          newTrackerRow[trackerAgentIndex] = agentName;
+          console.log(`[CLAIM-MULTIPLE] Setting tracker Agent at index ${trackerAgentIndex}: "${agentName}"`);
         }
 
         console.log(`[CLAIM-MULTIPLE] Tracker row prepared:`, newTrackerRow);
-        newTrackerRows.push(newTrackerRow);
-        createdTrackerCount++;
-      }
-
-      // Batch append all new tracker rows at once
-      if (newTrackerRows.length > 0) {
+        
         const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
-        console.log(`[CLAIM-MULTIPLE] Appending ${newTrackerRows.length} rows to Commission Tracker`);
+        console.log(`[CLAIM-MULTIPLE] Appending 1 tracker row to Commission Tracker`);
         console.log(`[CLAIM-MULTIPLE] Append range: ${appendRange}`);
         console.log(`[CLAIM-MULTIPLE] Tracker headers:`, trackerHeaders);
-        await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, newTrackerRows);
+        await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newTrackerRow]);
         console.log(`[CLAIM-MULTIPLE] ✓ Commission Tracker append successful`);
+        createdTrackerCount = 1;
+      } else {
+        console.log(`[CLAIM-MULTIPLE] Tracker row already exists for first store link, skipping tracker creation`);
       }
 
       console.log(`[CLAIM-MULTIPLE] FINAL SUMMARY:`);
