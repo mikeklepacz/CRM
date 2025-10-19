@@ -3287,6 +3287,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeDbaIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'dba');
       const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name' || h.toLowerCase() === 'agent');
 
+      console.log('[CLAIM-MULTIPLE] Store Database headers:', storeHeaders);
+      console.log('[CLAIM-MULTIPLE] Column indices - Link:', storeLinkIndex, 'DBA:', storeDbaIndex, 'Agent:', storeAgentIndex);
+
       if (storeLinkIndex === -1) {
         return res.status(404).json({ message: 'Link column not found in Store Database' });
       }
@@ -3330,17 +3333,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Update DBA and Agent Name in Store Database (if columns exist)
+        console.log(`[CLAIM-MULTIPLE] Processing store: ${storeLink}`);
+        console.log(`[CLAIM-MULTIPLE] Found at row index: ${storeRowIndex} (Sheet row: ${storeRowIndex + 1})`);
+        
         if (storeDbaIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeDbaIndex);
           const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex + 1}`;
-          await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[dbaName]]);
-          updatedStoreCount++;
+          console.log(`[CLAIM-MULTIPLE] Writing DBA "${dbaName}" to Store Database cell: ${cellRange}`);
+          try {
+            await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[dbaName]]);
+            console.log(`[CLAIM-MULTIPLE] ✓ DBA write successful`);
+            updatedStoreCount++;
+          } catch (error: any) {
+            console.error(`[CLAIM-MULTIPLE] ✗ DBA write failed:`, error.message);
+          }
+        } else {
+          console.log(`[CLAIM-MULTIPLE] ✗ DBA column not found - skipping DBA update`);
         }
         
         if (storeAgentIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeAgentIndex);
           const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex + 1}`;
-          await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[userEmail]]);
+          console.log(`[CLAIM-MULTIPLE] Writing Agent "${userEmail}" to Store Database cell: ${cellRange}`);
+          try {
+            await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[userEmail]]);
+            console.log(`[CLAIM-MULTIPLE] ✓ Agent write successful`);
+          } catch (error: any) {
+            console.error(`[CLAIM-MULTIPLE] ✗ Agent write failed:`, error.message);
+          }
+        } else {
+          console.log(`[CLAIM-MULTIPLE] ✗ Agent column not found - skipping Agent update`);
         }
 
         // Check if tracker row already exists
@@ -3351,15 +3373,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Create new tracker row
+        console.log(`[CLAIM-MULTIPLE] Creating tracker row for: ${storeLink}`);
         const newTrackerRow = new Array(trackerHeaders.length).fill('');
         newTrackerRow[trackerLinkIndex] = storeLink;
         if (trackerDbaIndex !== -1) {
           newTrackerRow[trackerDbaIndex] = dbaName;
+          console.log(`[CLAIM-MULTIPLE] Setting tracker DBA at index ${trackerDbaIndex}: "${dbaName}"`);
         }
         if (trackerAgentIndex !== -1) {
           newTrackerRow[trackerAgentIndex] = userEmail;
+          console.log(`[CLAIM-MULTIPLE] Setting tracker Agent at index ${trackerAgentIndex}: "${userEmail}"`);
         }
 
+        console.log(`[CLAIM-MULTIPLE] Tracker row prepared:`, newTrackerRow);
         newTrackerRows.push(newTrackerRow);
         createdTrackerCount++;
       }
@@ -3367,8 +3393,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Batch append all new tracker rows at once
       if (newTrackerRows.length > 0) {
         const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+        console.log(`[CLAIM-MULTIPLE] Appending ${newTrackerRows.length} rows to Commission Tracker`);
+        console.log(`[CLAIM-MULTIPLE] Append range: ${appendRange}`);
+        console.log(`[CLAIM-MULTIPLE] Tracker headers:`, trackerHeaders);
         await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, newTrackerRows);
+        console.log(`[CLAIM-MULTIPLE] ✓ Commission Tracker append successful`);
       }
+
+      console.log(`[CLAIM-MULTIPLE] FINAL SUMMARY:`);
+      console.log(`  - Updated Store Database rows: ${updatedStoreCount}`);
+      console.log(`  - Created Commission Tracker rows: ${createdTrackerCount}`);
+      console.log(`  - Skipped: ${skippedCount}`);
+      console.log(`  - Total requested: ${storeLinks.length}`);
 
       res.json({
         message: "Successfully claimed multiple locations",
