@@ -57,6 +57,28 @@ const getStateName = (state: string): string => {
   return REGIONS[upperState] || state;
 };
 
+// Canadian provinces and territories (full names)
+const CANADIAN_PROVINCES = new Set([
+  'Alberta',
+  'British Columbia',
+  'Manitoba',
+  'New Brunswick',
+  'Newfoundland and Labrador',
+  'Northwest Territories',
+  'Nova Scotia',
+  'Nunavut',
+  'Ontario',
+  'Prince Edward Island',
+  'Quebec',
+  'Saskatchewan',
+  'Yukon'
+]);
+
+// Helper function to check if a state/province is Canadian
+const isCanadianProvince = (state: string): boolean => {
+  return CANADIAN_PROVINCES.has(state);
+};
+
 interface GoogleSheet {
   id: string;
   spreadsheetName: string;
@@ -716,14 +738,17 @@ export default function SalesDashboard() {
     return Array.from(values).sort();
   };
 
-  // Get all unique states from the data (with full names)
-  const allStates = (() => {
+  // Get all unique states from the data (with full names) and their counts
+  const { allStates, stateCounts } = useMemo(() => {
     const states = new Set<string>();
+    const counts: Record<string, number> = {};
+    
     // Look for columns named "state" OR containing ", state" (like "City, State")
     const stateColumns = headers.filter((h: string) => {
       const lower = h.toLowerCase();
       return lower === 'state' || lower.includes(', state');
     });
+    
     data.forEach((row: any) => {
       stateColumns.forEach((col: string) => {
         const value = row[col];
@@ -741,20 +766,25 @@ export default function SalesDashboard() {
           }
 
           // Try to convert 2-letter codes to full names
+          let stateName = stateAbbrev;
           if (stateAbbrev.length === 2) {
-            const stateName = getStateName(stateAbbrev);
-            if (stateName) {
-              states.add(stateName);
+            const fullName = getStateName(stateAbbrev);
+            if (fullName) {
+              stateName = fullName;
             }
-          } else {
-            // Accept any non-empty value (full state names, provinces, etc.)
-            states.add(stateAbbrev);
           }
+          
+          states.add(stateName);
+          counts[stateName] = (counts[stateName] || 0) + 1;
         }
       });
     });
-    return Array.from(states).sort();
-  })();
+    
+    return {
+      allStates: Array.from(states).sort(),
+      stateCounts: counts
+    };
+  }, [headers, data]);
 
   // Initialize selected states when data loads (or from saved preferences)
   useEffect(() => {
@@ -1859,6 +1889,11 @@ export default function SalesDashboard() {
 
               {/* Filter Buttons Row */}
               <div className="flex flex-wrap items-center gap-2">
+                {/* Total and Visible Shops Counter */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground px-3 py-1 bg-muted rounded-md" data-testid="text-shops-counter">
+                  <span className="font-medium">Showing {filteredData.length} of {data.length} shops</span>
+                </div>
+
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" data-testid="button-states-filter">
@@ -1892,6 +1927,35 @@ export default function SalesDashboard() {
                         <p className="text-xs text-muted-foreground">
                           Uncheck states to hide rows from those states
                         </p>
+                        
+                        {/* Canada Checkbox */}
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                          <Checkbox
+                            id="canada-toggle"
+                            checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state))}
+                            onCheckedChange={(checked) => {
+                              const canadianStates = allStates.filter(isCanadianProvince);
+                              const newSelected = new Set(selectedStates);
+                              if (checked) {
+                                canadianStates.forEach(state => newSelected.add(state));
+                              } else {
+                                canadianStates.forEach(state => newSelected.delete(state));
+                              }
+                              setSelectedStates(newSelected);
+                            }}
+                            data-testid="checkbox-canada-toggle"
+                          />
+                          <Label
+                            htmlFor="canada-toggle"
+                            className="text-sm cursor-pointer flex-1 font-medium"
+                          >
+                            Canada
+                          </Label>
+                          <span className="text-xs text-muted-foreground">
+                            ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
+                          </span>
+                        </div>
+                        
                         <ScrollArea className="h-64">
                           <div className="space-y-2">
                             {allStates.map((state: string) => (
@@ -1908,6 +1972,9 @@ export default function SalesDashboard() {
                                 >
                                   {state}
                                 </Label>
+                                <span className="text-xs text-muted-foreground">
+                                  ({stateCounts[state] || 0})
+                                </span>
                               </div>
                             ))}
                           </div>

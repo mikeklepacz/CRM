@@ -107,8 +107,15 @@ The Sales Dashboard automatically loads both sheets:
 - **Text Wrapping**: Enabled automatically on verbose columns (address, notes, hours) while terse columns (dates, status, IDs, phone) remain single-line to prevent layout jitter
 
 **Filtering:**
+- **Shops Counter**: Displays "Showing X of Y shops" to track visible vs total shops in real-time
 - **Search**: Search across all columns using the search box
-- **States Filter**: Click "States" button to filter by state/province - all regions selected by default, uncheck to hide rows from those locations. Displays full names (e.g., "Montana" instead of "MT", "Alberta" instead of "AB") for both US states and Canadian provinces. To focus on US-only locations, simply uncheck the Canadian provinces.
+- **States Filter**: Click "States" button to filter by state/province
+  - Shows full state names (e.g., "Montana" instead of "MT", "Alberta" instead of "AB")
+  - Each state displays its shop count in parentheses (e.g., "California (45)")
+  - **Canada Toggle**: Quick checkbox at the top to show/hide all Canadian provinces at once
+    - Displays total count of Canadian shops
+    - Makes it easy to focus on US-only locations by unchecking Canada
+  - All regions selected by default, uncheck to hide rows from those locations
 
 **Editing Features:**
 - **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices - opens call/email logging popup with sales summary
