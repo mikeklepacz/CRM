@@ -3001,7 +3001,10 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
     website: "",
     email: "",
     sales_ready_summary: "",
+    notes: "",
     point_of_contact: "",
+    poc_email: "",
+    poc_phone: "",
   });
 
   // Track initial data to determine what changed
@@ -3031,7 +3034,10 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
         website: storeData.website || storeData.Website || "",
         email: storeData.email || storeData.Email || "",
         sales_ready_summary: storeData["Sales-ready Summary"] || storeData.sales_ready_summary || "",
+        notes: storeData.Notes || storeData.notes || "",
         point_of_contact: storeData["Point of Contact"] || storeData.point_of_contact || "",
+        poc_email: storeData["POC Email"] || storeData.poc_email || "",
+        poc_phone: storeData["POC Phone"] || storeData.poc_phone || "",
       };
       setFormData(populatedData);
       setInitialData(populatedData);
@@ -3095,8 +3101,8 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <Accordion type="multiple" className="w-full" data-testid="accordion-store-details">
-            {/* Sales Info - AT THE TOP */}
+          <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
+            {/* Sales Info - AT THE TOP - EXPANDED BY DEFAULT */}
             <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
               <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-sales-info">
                 Sales Info
@@ -3115,14 +3121,49 @@ function StoreDetailsDialog({ open, onOpenChange, storeId }: { open: boolean; on
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="point_of_contact">Point of Contact</Label>
-                    <Input
-                      id="point_of_contact"
-                      data-testid="input-point-of-contact"
-                      value={formData.point_of_contact}
-                      onChange={(e) => handleInputChange('point_of_contact', e.target.value)}
-                      placeholder="Primary contact person"
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      data-testid="input-notes"
+                      value={formData.notes}
+                      onChange={(e) => handleInputChange('notes', e.target.value)}
+                      placeholder="Call notes, contact info from store worker..."
+                      rows={4}
                     />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="point_of_contact">Point of Contact</Label>
+                      <Input
+                        id="point_of_contact"
+                        data-testid="input-point-of-contact"
+                        value={formData.point_of_contact}
+                        onChange={(e) => handleInputChange('point_of_contact', e.target.value)}
+                        placeholder="Primary contact person"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="poc_email">POC Email</Label>
+                      <Input
+                        id="poc_email"
+                        data-testid="input-poc-email"
+                        type="email"
+                        value={formData.poc_email}
+                        onChange={(e) => handleInputChange('poc_email', e.target.value)}
+                        placeholder="contact@email.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="poc_phone">POC Phone</Label>
+                      <Input
+                        id="poc_phone"
+                        data-testid="input-poc-phone"
+                        type="tel"
+                        value={formData.poc_phone}
+                        onChange={(e) => handleInputChange('poc_phone', e.target.value)}
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
                   </div>
                 </div>
               </AccordionContent>
