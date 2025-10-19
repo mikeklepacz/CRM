@@ -63,7 +63,9 @@ export function CommissionStatusWidget() {
   }
 
   const { breakdown } = data;
-  const totalClients = (breakdown.tier25Percent?.clients || 0) + (breakdown.tier10Percent?.clients || 0);
+  const tier25Clients = breakdown?.tier25Percent?.clients || 0;
+  const tier10Clients = breakdown?.tier10Percent?.clients || 0;
+  const totalClients = tier25Clients + tier10Clients;
 
   return (
     <Card className="h-full">
@@ -83,10 +85,10 @@ export function CommissionStatusWidget() {
               <span className="text-xs font-medium text-muted-foreground">25% Tier</span>
             </div>
             <p className="text-2xl font-bold" data-testid="text-tier-25-clients">
-              {breakdown.tier25Percent.clients}
+              {tier25Clients}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {totalClients > 0 ? ((breakdown.tier25Percent.clients / totalClients) * 100).toFixed(0) : 0}% of clients
+              {totalClients > 0 ? ((tier25Clients / totalClients) * 100).toFixed(0) : 0}% of clients
             </p>
           </div>
 
@@ -96,16 +98,16 @@ export function CommissionStatusWidget() {
               <span className="text-xs font-medium text-muted-foreground">10% Tier</span>
             </div>
             <p className="text-2xl font-bold" data-testid="text-tier-10-clients">
-              {breakdown.tier10Percent.clients}
+              {tier10Clients}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {totalClients > 0 ? ((breakdown.tier10Percent.clients / totalClients) * 100).toFixed(0) : 0}% of clients
+              {totalClients > 0 ? ((tier10Clients / totalClients) * 100).toFixed(0) : 0}% of clients
             </p>
           </div>
         </div>
 
         {/* Upcoming Tier Changes */}
-        {breakdown.clientsNearingTierChange && breakdown.clientsNearingTierChange.length > 0 && (
+        {breakdown?.clientsNearingTierChange && breakdown.clientsNearingTierChange.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
@@ -128,7 +130,7 @@ export function CommissionStatusWidget() {
           </div>
         )}
 
-        {(!breakdown.clientsNearingTierChange || breakdown.clientsNearingTierChange.length === 0) && (
+        {(!breakdown?.clientsNearingTierChange || breakdown.clientsNearingTierChange.length === 0) && (
           <div className="text-center py-4 text-sm text-muted-foreground">
             No tier changes in the next 30 days
           </div>

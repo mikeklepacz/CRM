@@ -5,10 +5,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
 interface TopClient {
+  id: string;
   name: string;
-  totalRevenue: number;
+  totalRevenue: string;
+  totalCommission: string;
   orderCount: number;
-  averageOrderValue: number;
+  firstOrderDate: string | null;
   lastOrderDate: string | null;
 }
 
@@ -110,13 +112,13 @@ export function TopClientsWidget() {
                   </div>
                 </div>
 
-                {/* Revenue */}
+                {/* Commission */}
                 <div className="text-right">
-                  <p className="text-lg font-semibold" data-testid={`client-revenue-${index}`}>
-                    ${client.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  <p className="text-lg font-semibold" data-testid={`client-commission-${index}`}>
+                    ${parseFloat(client.totalCommission).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    ${client.averageOrderValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} avg
+                    Total commission
                   </p>
                 </div>
               </div>
