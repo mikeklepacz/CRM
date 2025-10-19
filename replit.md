@@ -77,8 +77,8 @@ Your dashboard view preferences are automatically saved to the database and sync
 - Reset button resets only the active theme's colors to defaults
 - Your custom colors automatically load when switching themes
 
-### 5. Sales Dashboard Workflow
-The Sales Dashboard automatically loads both sheets:
+### 5. Client Dashboard Workflow
+The Client Dashboard automatically loads both sheets:
 
 **For Agents:**
 1. See all unclaimed stores (from Store Database)

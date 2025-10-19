@@ -1219,7 +1219,7 @@ export default function SalesDashboard() {
       >
       <Card style={{ backgroundColor: customColors.secondary, borderColor: customColors.border }}>
         <CardHeader style={{ color: customColors.text }}>
-          <CardTitle>Sales Dashboard</CardTitle>
+          <CardTitle>Client Dashboard</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {!storeSheetId && !trackerSheetId && (

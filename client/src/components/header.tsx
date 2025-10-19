@@ -43,7 +43,7 @@ export function Header() {
               <Link href="/sales">
                 <Button variant="ghost" size="sm" data-testid="nav-sales">
                   <BarChart3 className="mr-2 h-4 w-4" />
-                  Sales
+                  Clients
                 </Button>
               </Link>
             </nav>

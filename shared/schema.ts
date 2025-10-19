@@ -152,7 +152,7 @@ export const dashboardCards = pgTable("dashboard_cards", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// User preferences for Sales Dashboard view - syncs across devices
+// User preferences for Client Dashboard view - syncs across devices
 export const userPreferences = pgTable("user_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id).unique(),
