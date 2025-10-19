@@ -6,7 +6,7 @@ A Google Sheets-powered CRM and commission tracking system for hemp wick sales t
 ## Features
 - **Authentication**: Replit Auth with Admin and Agent roles
 - **Google Sheets Integration**: Direct editing of Store Database and Commission Tracker sheets
-- **Sales Dashboard**: Unified view of both sheets with column visibility controls and reordering
+- **Client Dashboard**: Unified view of both sheets with column visibility controls and reordering
 - **Inline Editing**: Edit cells directly in the dashboard, saves back to Google Sheets
 - **Row-Level Security**: Agents see all unclaimed stores + only their claimed stores
 - **Commission Tracking**: Track sales, follow-ups, and commissions per store
@@ -33,7 +33,7 @@ UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 4. Log out and log back in to see the Admin dashboard
 
 ### 3. Connect Google Sheets
-Connect your two Google Sheets to power the Sales Dashboard:
+Connect your two Google Sheets to power the Client Dashboard:
 
 1. Go to Admin Dashboard → Google Sheets tab
 2. Click to authorize access to your Google Sheets
@@ -77,8 +77,8 @@ Your dashboard view preferences are automatically saved to the database and sync
 - Reset button resets only the active theme's colors to defaults
 - Your custom colors automatically load when switching themes
 
-### 5. Sales Dashboard Workflow
-The Sales Dashboard automatically loads both sheets:
+### 5. Client Dashboard Workflow
+The Client Dashboard automatically loads both sheets:
 
 **For Agents:**
 1. See all unclaimed stores (from Store Database)
@@ -176,7 +176,7 @@ To synchronize orders and calculate commissions:
 
 ### Admin
 - Connect and manage Google Sheets (Store Database + Commission Tracker)
-- View all stores and all agent activity in Sales Dashboard
+- View all stores and all agent activity in Client Dashboard
 - Sync WooCommerce orders
 - Edit any cell in either sheet
 - Manage team assignments
