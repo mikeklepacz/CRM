@@ -1414,15 +1414,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const mergedData = Array.from(mergedDataMap.values());
 
+      console.log('=== MERGED DATA DEBUG ===');
+      console.log('Store headers:', storeHeaders);
+      console.log('Tracker headers:', trackerHeaders);
       console.log('Store data parsed:', storeData.length, 'rows');
       console.log('Tracker data parsed:', trackerData.length, 'rows');
       console.log('Filtered tracker data (for agent):', filteredTrackerData.length, 'rows');
       console.log('Final merged data:', mergedData.length, 'rows');
-      console.log('Tracker headers:', trackerHeaders);
+      
+      // Log a sample tracker row before merging
+      if (filteredTrackerData.length > 0) {
+        console.log('Sample tracker row (before merge):', JSON.stringify(filteredTrackerData[0], null, 2));
+      }
+      
       // Log a sample merged row that has tracker data
       const sampleRowWithTracker = mergedData.find(row => row._hasTrackerData);
       if (sampleRowWithTracker) {
-        console.log('Sample merged row with tracker data:', JSON.stringify(sampleRowWithTracker, null, 2));
+        console.log('Sample merged row with tracker data (all keys):', Object.keys(sampleRowWithTracker));
+        console.log('Tracker field values in merged row:');
+        trackerHeaders.forEach(header => {
+          console.log(`  ${header}: "${sampleRowWithTracker[header]}"`);
+        });
       }
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)

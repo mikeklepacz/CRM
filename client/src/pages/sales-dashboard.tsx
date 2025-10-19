@@ -496,10 +496,21 @@ export default function SalesDashboard() {
   const storeHeaders = mergedData?.storeHeaders || [];
   const trackerHeaders = mergedData?.trackerHeaders || [];
   
-  console.log('=== DEBUGGING FILTERS ===');
-  console.log('Headers received:', headers);
+  console.log('=== FRONTEND DEBUG ===');
+  console.log('All headers received:', headers);
+  console.log('Store headers:', storeHeaders);
+  console.log('Tracker headers:', trackerHeaders);
   console.log('Total rows:', data.length);
-  console.log('Sample first row:', data[0]);
+  const rowWithTracker = data.find((r: any) => r._hasTrackerData);
+  if (rowWithTracker) {
+    console.log('Sample row with tracker data:', rowWithTracker);
+    console.log('Tracker field values in frontend:');
+    trackerHeaders.forEach((header: string) => {
+      console.log(`  ${header}: "${rowWithTracker[header]}"`);
+    });
+  }
+  console.log('Column order:', columnOrder);
+  console.log('Visible columns:', visibleColumns);
 
   // Initialize visible columns, column order, and widths (or load from saved preferences)
   useEffect(() => {
