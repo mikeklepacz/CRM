@@ -606,6 +606,25 @@ export function WooCommerceSync() {
                                   <p className="text-sm"><strong>Total:</strong> ${parseFloat(order.total).toFixed(2)}</p>
                                 </div>
 
+                                {/* Match Button - Positioned at top for easy access */}
+                                <Button 
+                                  onClick={handleMatchOrder}
+                                  disabled={selectedStores.length === 0 || matchOrderMutation.isPending}
+                                  className="w-full"
+                                  data-testid="button-confirm-match"
+                                >
+                                  {matchOrderMutation.isPending ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Matching...
+                                    </>
+                                  ) : (
+                                    selectedStores.length > 0 
+                                      ? `Match Order to ${selectedStores.length} Store${selectedStores.length > 1 ? 's' : ''}`
+                                      : "Select Store(s) to Match"
+                                  )}
+                                </Button>
+
                                 {/* Selected Stores Panel */}
                                 {selectedStores.length > 0 && (
                                   <div className="p-3 bg-primary/10 border-2 border-primary rounded-md space-y-2">
@@ -773,24 +792,6 @@ export function WooCommerceSync() {
                                     )}
                                   </div>
                                 )}
-
-                                <Button 
-                                  onClick={handleMatchOrder}
-                                  disabled={selectedStores.length === 0 || matchOrderMutation.isPending}
-                                  className="w-full"
-                                  data-testid="button-confirm-match"
-                                >
-                                  {matchOrderMutation.isPending ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                      Matching...
-                                    </>
-                                  ) : (
-                                    selectedStores.length > 0 
-                                      ? `Match Order to ${selectedStores.length} Store${selectedStores.length > 1 ? 's' : ''}`
-                                      : "Select Store(s) to Match"
-                                  )}
-                                </Button>
                               </div>
                             </DialogContent>
                           </Dialog>
