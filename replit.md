@@ -111,7 +111,9 @@ The Sales Dashboard automatically loads both sheets:
 - **States Filter**: Click "States" button to filter by state/province - all regions selected by default, uncheck to hide rows from those locations. Displays full names (e.g., "Montana" instead of "MT", "Alberta" instead of "AB") for both US states and Canadian provinces. To focus on US-only locations, simply uncheck the Canadian provinces.
 
 **Editing Features:**
-- **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices
+- **Phone Numbers**: Clickable with phone icon (📞) to trigger calls on compatible devices - opens call/email logging popup with sales summary
+- **Email Addresses**: Clickable with email icon (✉️) to trigger emails on compatible devices - opens call/email logging popup with sales summary
+- **Sales-ready Summary**: Displayed as clickable link (truncated to 50 characters) - click to view full summary in popup
 - **Website URLs**: Auto-shortened to domain name (e.g., "lionheartcannabis.com") with external link icon, opens in new tab
 - **Link Column**: Shows 🍁 emoji for Leafly links, 🔗 for other links - clickable to open in new tab
 - **State Column**: Searchable dropdown showing only states in your current data - type to filter or scroll to select
@@ -122,6 +124,14 @@ The Sales Dashboard automatically loads both sheets:
 - **Empty Cells**: Inline editing for new data entry
 - **Long Text (>100 chars)**: Auto-truncated with expand icon for full view/edit in popup
 - **Double-Click Protection**: All existing data edited via popup modal with Save button
+
+**Call/Email Logging:**
+When you click a phone number or email address, the system:
+1. Opens a logging popup that displays the Sales-ready Summary at the top (if available)
+2. Provides fields to record: Status, Follow-up Date, Next Action, Point of Contact, Notes
+3. Automatically triggers the phone call or email action
+4. Saves all activity details to the Commission Tracker sheet
+5. Claims the store for you if it hasn't been claimed yet
 
 ### 5. Sync WooCommerce Orders
 To synchronize orders and calculate commissions:
