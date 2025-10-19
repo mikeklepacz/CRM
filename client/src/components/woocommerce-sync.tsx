@@ -708,39 +708,56 @@ export function WooCommerceSync() {
                                   </div>
                                 )}
 
-                                {/* Show all clients with search */}
+                                {/* Manual search results */}
                                 {(showAllClients || !matchSuggestions?.suggestions || matchSuggestions.suggestions.length === 0) && (
                                   <div className="space-y-3">
                                     <div className="flex items-center gap-2">
                                       <Search className="h-4 w-4" />
                                       <Input
-                                        placeholder="Search clients by name, company, email..."
+                                        placeholder="Search stores by name, company, email..."
                                         value={clientSearch}
                                         onChange={(e) => setClientSearch(e.target.value)}
                                         data-testid="input-search-clients"
                                       />
                                     </div>
-                                    <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                                      <SelectTrigger data-testid="select-client">
-                                        <SelectValue placeholder="Select a client" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {clients
-                                          .filter((client: any) => {
-                                            if (!clientSearch) return true;
-                                            const search = clientSearch.toLowerCase();
-                                            const name = (client.data?.name || client.data?.Name || '').toLowerCase();
-                                            const company = (client.data?.company || client.data?.Company || '').toLowerCase();
-                                            const email = (client.data?.email || client.data?.Email || '').toLowerCase();
-                                            return name.includes(search) || company.includes(search) || email.includes(search);
-                                          })
-                                          .map((client: any) => (
-                                            <SelectItem key={client.id} value={client.id}>
-                                              {client.data?.Company || client.data?.company || client.data?.Name || client.data?.name || client.data?.Email || client.data?.email || client.uniqueIdentifier || client.id}
-                                            </SelectItem>
-                                          ))}
-                                      </SelectContent>
-                                    </Select>
+                                    
+                                    {/* Show search results with checkboxes (same as suggestions) */}
+                                    {matchSuggestions?.suggestions && matchSuggestions.suggestions.length > 0 && (
+                                      <div className="space-y-2">
+                                        {matchSuggestions.suggestions.map((suggestion: any) => (
+                                          <div
+                                            key={suggestion.link}
+                                            className={`p-3 rounded-md border-2 transition-all hover-elevate ${
+                                              isStoreSelected(suggestion.link)
+                                                ? 'border-primary bg-primary/10'
+                                                : 'border-border'
+                                            }`}
+                                            data-testid={`search-result-${suggestion.link}`}
+                                          >
+                                            <div className="flex items-start gap-3">
+                                              <Checkbox
+                                                checked={isStoreSelected(suggestion.link)}
+                                                onCheckedChange={() => toggleStoreSelection(suggestion.link, suggestion.displayName)}
+                                                data-testid={`checkbox-search-${suggestion.link}`}
+                                              />
+                                              <div className="flex-1">
+                                                <p className="font-medium">{suggestion.displayName}</p>
+                                                {suggestion.displayInfo && (
+                                                  <p className="text-sm text-muted-foreground">{suggestion.displayInfo}</p>
+                                                )}
+                                              </div>
+                                              <Badge 
+                                                variant={suggestion.score >= 80 ? "default" : "secondary"}
+                                                className="ml-2"
+                                              >
+                                                {Math.round(suggestion.score)}% match
+                                              </Badge>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    
                                     {showAllClients && matchSuggestions?.suggestions && matchSuggestions.suggestions.length > 0 && (
                                       <Button
                                         variant="ghost"
@@ -759,7 +776,7 @@ export function WooCommerceSync() {
 
                                 <Button 
                                   onClick={handleMatchOrder}
-                                  disabled={!selectedClientId || matchOrderMutation.isPending}
+                                  disabled={selectedStores.length === 0 || matchOrderMutation.isPending}
                                   className="w-full"
                                   data-testid="button-confirm-match"
                                 >
@@ -769,7 +786,9 @@ export function WooCommerceSync() {
                                       Matching...
                                     </>
                                   ) : (
-                                    "Match Order"
+                                    selectedStores.length > 0 
+                                      ? `Match Order to ${selectedStores.length} Store${selectedStores.length > 1 ? 's' : ''}`
+                                      : "Select Store(s) to Match"
                                   )}
                                 </Button>
                               </div>
