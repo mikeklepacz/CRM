@@ -889,6 +889,23 @@ export function WooCommerceSync() {
                 </Button>
               </div>
 
+              {/* Agent Assignment - moved above results */}
+              {searchResults.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="bulk-agent-name">Agent Name</Label>
+                  <Input
+                    id="bulk-agent-name"
+                    placeholder="Enter agent name (e.g., 'John Smith')"
+                    value={bulkAgentName}
+                    onChange={(e) => setBulkAgentName(e.target.value)}
+                    data-testid="input-bulk-agent-name"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {bulkSelectedStores.size} store(s)
+                  </p>
+                </div>
+              )}
+
               {/* Search Results */}
               {searchResults.length > 0 && (
                 <div className="space-y-4">
@@ -954,21 +971,6 @@ export function WooCommerceSync() {
                         ))}
                       </TableBody>
                     </Table>
-                  </div>
-
-                  {/* Agent Assignment */}
-                  <div className="space-y-2">
-                    <Label htmlFor="bulk-agent-name">Agent Name</Label>
-                    <Input
-                      id="bulk-agent-name"
-                      placeholder="Enter agent name (e.g., 'John Smith')"
-                      value={bulkAgentName}
-                      onChange={(e) => setBulkAgentName(e.target.value)}
-                      data-testid="input-bulk-agent-name"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Selected: {bulkSelectedStores.size} store(s)
-                    </p>
                   </div>
 
                   {/* Action Buttons */}
