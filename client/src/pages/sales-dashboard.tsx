@@ -3296,6 +3296,23 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   };
 
   const handleSave = () => {
+    // Check if any tracker fields are being changed
+    const trackerFieldsChanged = Object.keys(formData).some((key) => {
+      const typedKey = key as keyof typeof formData;
+      const mapping = fieldToSheetMapping[key];
+      return mapping?.sheet === 'tracker' && formData[typedKey] !== initialData[typedKey];
+    });
+    
+    // If tracker fields are being changed, follow_up_date is mandatory
+    if (trackerFieldsChanged && !formData.follow_up_date) {
+      toast({
+        title: "Validation Error",
+        description: "Follow-Up Date is required when updating sales tracking information.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     saveMutation.mutate();
   };
 
