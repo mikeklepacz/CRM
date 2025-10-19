@@ -3990,7 +3990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get client portfolio metrics
+  // Get client portfolio metrics (from Google Sheets)
   app.get('/api/analytics/portfolio-metrics', async (req, res) => {
     try {
       if (!req.user) {
@@ -3998,33 +3998,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+
+      // Get both sheets
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+
+      if (!trackerSheet || !storeSheet) {
+        return res.json({
+          totalClients: 0,
+          activeClients: 0,
+          avgRevenuePerClient: "0.00",
+          repeatOrderRate: "0.0"
+        });
       }
 
-      const clients = user.role === 'admin' 
-        ? await storage.getAllClients()
-        : await storage.getClientsByAgent(userId);
+      // Read Store Database to get total unique stores
+      const storeRange = `${storeSheet.sheetName}!A:A`;
+      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const totalClients = Math.max(0, storeRows.length - 1); // Exclude header row
 
-      const totalClients = clients.length;
-      const activeClients = clients.filter(c => c.status === 'active').length;
+      // Read Commission Tracker to calculate active clients and repeat order rate
+      const trackerRange = `${trackerSheet.sheetName}!A:G`;
+      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      
+      if (trackerRows.length <= 1) {
+        return res.json({
+          totalClients,
+          activeClients: 0,
+          avgRevenuePerClient: "0.00",
+          repeatOrderRate: "0.0"
+        });
+      }
 
-      let totalRevenue = 0;
-      let clientsWithMultipleOrders = 0;
+      // Parse headers
+      const headers = trackerRows[0];
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
+      const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+      const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
 
-      for (const client of clients) {
-        const orders = await storage.getOrdersByClient(client.id);
-        const revenue = orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
-        totalRevenue += revenue;
+      // Track transactions per store
+      const storeTransactions: { [link: string]: { count: number; totalAmount: number; lastTransactionDate: Date | null } } = {};
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      for (let i = 1; i < trackerRows.length; i++) {
+        const row = trackerRows[i];
+        const link = row[linkIndex] || '';
+        const amountStr = row[amountIndex] || '0';
+        const dateStr = row[dateIndex] || '';
+        
+        const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
+        if (!link || amount === 0) continue;
 
-        if (orders.length > 1) {
-          clientsWithMultipleOrders++;
+        // Parse date
+        let transactionDate: Date | null = null;
+        if (dateStr) {
+          const parsed = new Date(dateStr);
+          if (!isNaN(parsed.getTime())) {
+            transactionDate = parsed;
+          }
+        }
+
+        if (!storeTransactions[link]) {
+          storeTransactions[link] = { count: 0, totalAmount: 0, lastTransactionDate: null };
+        }
+
+        storeTransactions[link].count += 1;
+        storeTransactions[link].totalAmount += amount;
+        
+        // Update last transaction date if this one is more recent
+        if (transactionDate && (!storeTransactions[link].lastTransactionDate || transactionDate > storeTransactions[link].lastTransactionDate)) {
+          storeTransactions[link].lastTransactionDate = transactionDate;
         }
       }
 
-      const avgRevenuePerClient = totalClients > 0 ? totalRevenue / totalClients : 0;
-      const repeatOrderRate = totalClients > 0 ? (clientsWithMultipleOrders / totalClients) * 100 : 0;
+      // Calculate metrics
+      // Active clients = stores with transactions in the last 30 days
+      const activeStores = Object.values(storeTransactions).filter(store => 
+        store.lastTransactionDate && store.lastTransactionDate >= thirtyDaysAgo
+      );
+      const activeClients = activeStores.length;
+      
+      // Calculate average revenue per client (based on all stores with transactions, not just active)
+      const allStoresWithTransactions = Object.values(storeTransactions);
+      const totalRevenue = allStoresWithTransactions.reduce((sum, store) => sum + store.totalAmount, 0);
+      const avgRevenuePerClient = allStoresWithTransactions.length > 0 ? totalRevenue / allStoresWithTransactions.length : 0;
+      
+      // Repeat order rate = percentage of stores (with transactions) that have multiple transactions
+      const storesWithMultipleTransactions = allStoresWithTransactions.filter(store => store.count > 1).length;
+      const repeatOrderRate = allStoresWithTransactions.length > 0 ? (storesWithMultipleTransactions / allStoresWithTransactions.length) * 100 : 0;
 
       res.json({
         totalClients,

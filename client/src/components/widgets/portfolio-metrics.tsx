@@ -6,12 +6,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface PortfolioMetrics {
   activeClients: number;
   totalClients: number;
-  averageRevenuePerClient: number;
-  repeatOrderRate: number;
+  avgRevenuePerClient: string;
+  repeatOrderRate: string;
 }
 
 export function PortfolioMetricsWidget() {
-  const { data, isLoading, error } = useQuery<{ metrics: PortfolioMetrics }>({
+  const { data, isLoading, error} = useQuery<PortfolioMetrics>({
     queryKey: ['/api/analytics/portfolio-metrics'],
   });
 
@@ -52,9 +52,8 @@ export function PortfolioMetricsWidget() {
     );
   }
 
-  const { metrics } = data;
-  const activePercentage = metrics.totalClients > 0 
-    ? (metrics.activeClients / metrics.totalClients) * 100 
+  const activePercentage = data.totalClients > 0 
+    ? (data.activeClients / data.totalClients) * 100 
     : 0;
 
   return (
@@ -75,8 +74,8 @@ export function PortfolioMetricsWidget() {
               <span className="text-sm font-medium">Active Clients</span>
             </div>
             <span className="text-2xl font-bold" data-testid="text-active-clients">
-              {metrics.activeClients}
-              <span className="text-sm text-muted-foreground font-normal"> / {metrics.totalClients}</span>
+              {data.activeClients}
+              <span className="text-sm text-muted-foreground font-normal"> / {data.totalClients}</span>
             </span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -98,7 +97,7 @@ export function PortfolioMetricsWidget() {
             <span className="text-sm font-medium">Avg Revenue/Client</span>
           </div>
           <span className="text-lg font-semibold" data-testid="text-avg-revenue-per-client">
-            ${metrics.averageRevenuePerClient.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${parseFloat(data.avgRevenuePerClient).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
 
@@ -109,7 +108,7 @@ export function PortfolioMetricsWidget() {
             <span className="text-sm font-medium">Repeat Order Rate</span>
           </div>
           <span className="text-lg font-semibold" data-testid="text-repeat-order-rate">
-            {metrics.repeatOrderRate.toFixed(1)}%
+            {parseFloat(data.repeatOrderRate).toFixed(1)}%
           </span>
         </div>
       </CardContent>
