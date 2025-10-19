@@ -1951,9 +1951,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Decode the storeId (it could be a link or row index)
       const decodedId = decodeURIComponent(storeId);
 
-      // Find the relevant store sheet
+      // Find both sheets
       const sheets = await storage.getAllActiveGoogleSheets();
       const storeSheet = sheets.find(s => s.sheetPurpose === 'clients');
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commission_tracker');
 
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store sheet not found' });
@@ -1982,6 +1983,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!store) {
         return res.status(404).json({ message: 'Store not found' });
+      }
+
+      // If tracker sheet exists, merge in tracker data (Notes, POC fields)
+      if (trackerSheet) {
+        const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+        const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+
+        if (trackerRows.length > 0) {
+          const trackerHeaders = trackerRows[0];
+          const trackerData = trackerRows.slice(1).map((row) => {
+            const obj: any = {};
+            trackerHeaders.forEach((header, i) => {
+              obj[header] = row[i] || '';
+            });
+            return obj;
+          });
+
+          // Find matching tracker row by link (case-insensitive)
+          const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+          const trackerRow = trackerData.find((row: any) => {
+            if (linkIndex !== -1) {
+              const rowLink = row[trackerHeaders[linkIndex]];
+              return rowLink && rowLink === decodedId;
+            }
+            return row.link === decodedId || row.Link === decodedId;
+          });
+
+          // Merge tracker fields into store object
+          if (trackerRow) {
+            // Add tracker-specific fields
+            const notesHeader = trackerHeaders.find(h => h.toLowerCase() === 'notes');
+            const pocHeader = trackerHeaders.find(h => h.toLowerCase() === 'point of contact');
+            const pocEmailHeader = trackerHeaders.find(h => h.toLowerCase() === 'poc email');
+            const pocPhoneHeader = trackerHeaders.find(h => h.toLowerCase() === 'poc phone');
+
+            if (notesHeader) store.Notes = trackerRow[notesHeader] || '';
+            if (pocHeader) store['Point of Contact'] = trackerRow[pocHeader] || '';
+            if (pocEmailHeader) store['POC Email'] = trackerRow[pocEmailHeader] || '';
+            if (pocPhoneHeader) store['POC Phone'] = trackerRow[pocPhoneHeader] || '';
+          }
+        }
       }
 
       res.json(store);
