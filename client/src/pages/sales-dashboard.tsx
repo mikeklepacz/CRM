@@ -3137,28 +3137,60 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     }
   }, [formData.notes, pocFieldsManuallyEdited]);
 
-  // Save mutation - only send changed fields
+  // Field to sheet/column mapping
+  const fieldToSheetMapping: Record<string, { sheet: 'store' | 'tracker'; column: string }> = {
+    name: { sheet: 'store', column: 'Name' },
+    type: { sheet: 'store', column: 'Type' },
+    link: { sheet: 'store', column: 'Link' },
+    address: { sheet: 'store', column: 'Address' },
+    city: { sheet: 'store', column: 'City' },
+    state: { sheet: 'store', column: 'State' },
+    phone: { sheet: 'store', column: 'Phone' },
+    website: { sheet: 'store', column: 'Website' },
+    email: { sheet: 'store', column: 'Email' },
+    sales_ready_summary: { sheet: 'store', column: 'Sales-ready Summary' },
+    notes: { sheet: 'tracker', column: 'Notes' },
+    point_of_contact: { sheet: 'tracker', column: 'Point of Contact' },
+    poc_email: { sheet: 'tracker', column: 'POC Email' },
+    poc_phone: { sheet: 'tracker', column: 'POC Phone' },
+  };
+
+  // Save mutation - update cells directly
   const saveMutation = useMutation({
     mutationFn: async () => {
       // Calculate changed fields only
-      const changedFields: Record<string, string> = {};
+      const changedFields: Array<{ sheetId: string; rowIndex: number; column: string; value: string }> = [];
+      
       Object.keys(formData).forEach((key) => {
         const typedKey = key as keyof typeof formData;
         if (formData[typedKey] !== initialData[typedKey]) {
-          changedFields[key] = formData[typedKey];
+          const mapping = fieldToSheetMapping[key];
+          if (mapping) {
+            const sheetId = mapping.sheet === 'store' ? storeSheetId : trackerSheetId;
+            const rowIndex = mapping.sheet === 'store' ? row._storeRowIndex : row._trackerRowIndex;
+            
+            if (sheetId && rowIndex) {
+              changedFields.push({
+                sheetId,
+                rowIndex,
+                column: mapping.column,
+                value: formData[typedKey]
+              });
+            }
+          }
         }
       });
 
-      if (Object.keys(changedFields).length === 0) {
+      if (changedFields.length === 0) {
         throw new Error("No changes to save");
       }
 
-      const storeId = formData.link || row.link || row.Link;
-      if (!storeId) {
-        throw new Error("Cannot save: Store link is missing");
-      }
-
-      return await apiRequest('PUT', `/api/store/${encodeURIComponent(storeId)}`, changedFields);
+      // Save all changes in parallel
+      await Promise.all(
+        changedFields.map(({ sheetId, rowIndex, column, value }) =>
+          apiRequest('PUT', `/api/sheets/${sheetId}/update`, { rowIndex, column, value })
+        )
+      );
     },
     onSuccess: () => {
       toast({
@@ -3166,6 +3198,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         description: "Store information updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+      setInitialData(formData); // Update initial data so changes are no longer "unsaved"
       onOpenChange(false);
     },
     onError: (error: Error) => {
