@@ -12,6 +12,11 @@ interface ThemeColors {
   border: string;
   bodyBackground?: string;
   headerBackground?: string;
+  statesButton?: string;
+  franchiseButton?: string;
+  statusButton?: string;
+  columnsButton?: string;
+  actionButtons?: string;
   statusColors?: { [status: string]: { background: string; text: string } };
 }
 
@@ -33,6 +38,11 @@ export const defaultLightColors: ThemeColors = {
   border: '#e5e7eb',
   bodyBackground: '',
   headerBackground: '',
+  statesButton: '',
+  franchiseButton: '',
+  statusButton: '',
+  columnsButton: '',
+  actionButtons: '',
   statusColors: {
     '1 – Contacted': { background: '#dbeafe', text: '#1e40af' },
     '2 – Interested': { background: '#fef3c7', text: '#92400e' },
@@ -53,6 +63,11 @@ export const defaultDarkColors: ThemeColors = {
   border: '#404040',
   bodyBackground: '',
   headerBackground: '',
+  statesButton: '',
+  franchiseButton: '',
+  statusButton: '',
+  columnsButton: '',
+  actionButtons: '',
   statusColors: {
     '1 – Contacted': { background: '#1e3a8a', text: '#bfdbfe' },
     '2 – Interested': { background: '#78350f', text: '#fef3c7' },

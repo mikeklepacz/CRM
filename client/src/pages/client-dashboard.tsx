@@ -1378,6 +1378,7 @@ export default function ClientDashboard() {
                       onClick={() => refetch()}
                       disabled={isLoading}
                       data-testid="button-refresh"
+                      style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Refresh
@@ -1707,29 +1708,39 @@ export default function ClientDashboard() {
                         Currently editing colors for {actualTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
                       </p>
                       <div className="space-y-4">
-                        {(['background', 'tableTextColor', 'text', 'primary', 'secondary', 'accent', 'border', 'bodyBackground', 'headerBackground'] as const).map((field) => {
+                        {(['background', 'tableTextColor', 'text', 'primary', 'secondary', 'accent', 'border', 'bodyBackground', 'headerBackground', 'statesButton', 'franchiseButton', 'statusButton', 'columnsButton', 'actionButtons'] as const).map((field) => {
                           const fieldLabels = {
                             background: 'Table Background',
                             tableTextColor: 'Table Text Color',
                             text: 'Interface Text',
-                            primary: 'Primary Buttons',
+                            primary: 'Table Links (Phone, Email, Website)',
                             secondary: 'Card & Panel Background',
                             accent: 'Accent Highlights',
                             border: 'Borders & Dividers',
                             bodyBackground: 'Page Background',
                             headerBackground: 'Header Background',
+                            statesButton: 'States Filter Button',
+                            franchiseButton: 'Find Franchise Button',
+                            statusButton: 'Status Filter Button',
+                            columnsButton: 'Columns Button',
+                            actionButtons: 'Action Buttons (Save, Export, etc)',
                           };
 
                           const fieldDescriptions = {
                             background: 'Background color of the main data table',
                             tableTextColor: 'Text color inside table cells and data rows',
                             text: 'Color of headings, labels, and interface text',
-                            primary: 'Primary action buttons (Save, Submit, etc.)',
+                            primary: 'Color for clickable phone numbers, emails, and website links in table',
                             secondary: 'Secondary buttons and card backgrounds',
                             accent: 'Accent elements and secondary highlights',
                             border: 'Border lines between rows and card edges',
                             bodyBackground: 'Main page body background (leave empty for theme default)',
                             headerBackground: 'Top header background (leave empty for theme default)',
+                            statesButton: 'Color for the States filter button',
+                            franchiseButton: 'Color for the Find Franchise button',
+                            statusButton: 'Color for the Status filter button',
+                            columnsButton: 'Color for the Columns visibility button',
+                            actionButtons: 'Color for Save, Export, and other action buttons',
                           };
 
                           const currentColor = customColors[field] || (field === 'bodyBackground' ? '#f9fafb' : field === 'headerBackground' ? '#ffffff' : '#000000');
@@ -2148,6 +2159,7 @@ export default function ClientDashboard() {
                               }}
                               disabled={saveColorsMutation.isPending}
                               data-testid="button-save-colors"
+                              style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
                             >
                               {saveColorsMutation.isPending ? (
                                 <>
@@ -2202,7 +2214,11 @@ export default function ClientDashboard() {
 
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" data-testid="button-states-filter">
+                    <Button 
+                      variant="outline" 
+                      data-testid="button-states-filter"
+                      style={currentColors.statesButton ? { backgroundColor: currentColors.statesButton, borderColor: currentColors.statesButton } : undefined}
+                    >
                       <Settings2 className="mr-2 h-4 w-4" />
                       States ({selectedStates.size}/{allStates.length})
                     </Button>
@@ -2381,6 +2397,7 @@ export default function ClientDashboard() {
                       variant="outline" 
                       onClick={() => setFranchiseFinderOpen(true)}
                       data-testid="button-franchise-finder"
+                      style={currentColors.franchiseButton ? { backgroundColor: currentColors.franchiseButton, borderColor: currentColors.franchiseButton } : undefined}
                     >
                       <Store className="mr-2 h-4 w-4" />
                       {selectedFranchise.brandName}
@@ -2402,6 +2419,7 @@ export default function ClientDashboard() {
                     variant="outline" 
                     onClick={() => setFranchiseFinderOpen(true)}
                     data-testid="button-franchise-finder"
+                    style={currentColors.franchiseButton ? { backgroundColor: currentColors.franchiseButton, borderColor: currentColors.franchiseButton } : undefined}
                   >
                     <Store className="mr-2 h-4 w-4" />
                     Find Franchises
@@ -2411,7 +2429,11 @@ export default function ClientDashboard() {
                 {/* Status Filter */}
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" data-testid="button-status-filter">
+                    <Button 
+                      variant="outline" 
+                      data-testid="button-status-filter"
+                      style={currentColors.statusButton ? { backgroundColor: currentColors.statusButton, borderColor: currentColors.statusButton } : undefined}
+                    >
                       <Settings2 className="mr-2 h-4 w-4" />
                       Status ({selectedStatuses.size > 0 ? selectedStatuses.size : 'All'})
                     </Button>
@@ -2477,7 +2499,11 @@ export default function ClientDashboard() {
 
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" data-testid="button-column-settings">
+                    <Button 
+                      variant="outline" 
+                      data-testid="button-column-settings"
+                      style={currentColors.columnsButton ? { backgroundColor: currentColors.columnsButton, borderColor: currentColors.columnsButton } : undefined}
+                    >
                       <Settings2 className="mr-2 h-4 w-4" />
                       Columns
                     </Button>
@@ -3259,7 +3285,11 @@ export default function ClientDashboard() {
           </ScrollArea>
           <DialogFooter>
             {expandedCell?.isEditable && (
-              <Button onClick={saveExpandedCell} data-testid="button-save-expanded">
+              <Button 
+                onClick={saveExpandedCell} 
+                data-testid="button-save-expanded"
+                style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
+              >
                 Save Changes
               </Button>
             )}
@@ -3291,6 +3321,7 @@ export default function ClientDashboard() {
           storeSheetId={storeSheetId}
           refetch={refetch}
           franchiseContext={storeDetailsDialog.franchiseContext}
+          currentColors={currentColors}
         />
       )}
 
@@ -3316,12 +3347,13 @@ export default function ClientDashboard() {
 }
 
 // Store Details Dialog Component
-function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext }: { 
+function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
   row: any;
   trackerSheetId: string | undefined;
   storeSheetId: string | undefined;
+  currentColors: any;
   refetch: () => Promise<any>;
   franchiseContext?: {
     brandName: string;
@@ -4320,7 +4352,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saveMutation.isPending} data-testid="button-save">
+          <Button 
+            onClick={handleSave} 
+            disabled={saveMutation.isPending} 
+            data-testid="button-save"
+            style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
+          >
             {saveMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

@@ -172,6 +172,7 @@ export const userPreferences = pgTable("user_preferences", {
   rowHeight: integer("row_height").default(48), // Row height in pixels
   lightModeColors: jsonb("light_mode_colors").$type<{
     background: string;
+    tableTextColor: string;
     text: string;
     primary: string;
     secondary: string;
@@ -179,10 +180,16 @@ export const userPreferences = pgTable("user_preferences", {
     border: string;
     bodyBackground: string;
     headerBackground: string;
+    statesButton: string;
+    franchiseButton: string;
+    statusButton: string;
+    columnsButton: string;
+    actionButtons: string;
     statusColors?: { [status: string]: { background: string; text: string } };
   }>(),
   darkModeColors: jsonb("dark_mode_colors").$type<{
     background: string;
+    tableTextColor: string;
     text: string;
     primary: string;
     secondary: string;
@@ -190,6 +197,11 @@ export const userPreferences = pgTable("user_preferences", {
     border: string;
     bodyBackground: string;
     headerBackground: string;
+    statesButton: string;
+    franchiseButton: string;
+    statusButton: string;
+    columnsButton: string;
+    actionButtons: string;
     statusColors?: { [status: string]: { background: string; text: string } };
   }>(),
   hasLightOverrides: boolean("has_light_overrides").default(false), // True when user has saved custom light colors
