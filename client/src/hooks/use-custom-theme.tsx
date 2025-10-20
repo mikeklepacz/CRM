@@ -1,6 +1,8 @@
-import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useCallback } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTheme } from "@/components/theme-provider";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface ThemeColors {
   background: string;
@@ -109,14 +111,16 @@ const hexToHsl = (hex: string): { h: number; s: number; l: number } => {
  * Hook to apply custom theme colors globally via CSS variables
  * Colors are loaded from user preferences and applied to the root element
  * Light and dark mode colors are independent
+ * 
+ * This hook is the SINGLE SOURCE OF TRUTH for color management
  */
 export function useCustomTheme() {
   const { actualTheme } = useTheme();
+  const { toast } = useToast();
 
   // Fetch user preferences (only when authenticated to avoid 401 errors)
-  const { data: userPreferences } = useQuery<UserPreferences | null>({
+  const { data: userPreferences, isLoading } = useQuery<UserPreferences | null>({
     queryKey: ['/api/user/preferences'],
-    staleTime: Infinity,
     retry: false, // Don't retry on auth failures
   });
 
@@ -201,7 +205,7 @@ export function useCustomTheme() {
     }
   }, [actualTheme, userPreferences]);
 
-  // Memoize the color objects to prevent infinite re-renders in ColorCustomizer
+  // Memoize the merged color objects to prevent infinite re-renders
   const lightColors = useMemo(
     () => ({ ...defaultLightColors, ...userPreferences?.lightModeColors }),
     [userPreferences?.lightModeColors]
@@ -217,9 +221,55 @@ export function useCustomTheme() {
     [actualTheme, darkColors, lightColors]
   );
 
+  // Mutation to save colors - centralized here to prevent state sync issues
+  const saveColorsMutation = useMutation({
+    mutationFn: async (colors: ThemeColors) => {
+      const preferences: any = userPreferences ? { ...userPreferences } : {};
+      
+      if (actualTheme === 'dark') {
+        preferences.darkModeColors = colors;
+        preferences.hasDarkOverrides = true;
+      } else {
+        preferences.lightModeColors = colors;
+        preferences.hasLightOverrides = true;
+      }
+
+      return await apiRequest('/api/user/preferences', 'PUT', preferences);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      toast({
+        title: "Colors saved",
+        description: `${actualTheme === 'dark' ? 'Dark' : 'Light'} mode colors updated successfully.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save color preferences",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Callback to save colors
+  const saveColors = useCallback((colors: ThemeColors) => {
+    saveColorsMutation.mutate(colors);
+  }, [saveColorsMutation]);
+
+  // Callback to reset colors to defaults
+  const resetColors = useCallback(() => {
+    const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+    saveColorsMutation.mutate(defaultColors);
+  }, [actualTheme, saveColorsMutation]);
+
   return {
     lightColors,
     darkColors,
     currentColors,
+    saveColors,
+    resetColors,
+    isLoading,
+    isSaving: saveColorsMutation.isPending,
   };
 }
