@@ -71,11 +71,20 @@ Your dashboard view preferences are automatically saved to the database and sync
 
 **Theme-Specific Color Customization:**
 - Customize colors independently for light and dark themes
-- Each theme remembers its own color scheme (table background, text, primary, accent, borders, etc.)
+- Each theme remembers its own color scheme (table background, text, links, buttons, borders, etc.)
 - Switch between light and dark mode to see which theme's colors you're editing
 - Color customizer shows indicator (☀️ Light Mode or 🌙 Dark Mode) showing active theme
 - Reset button resets only the active theme's colors to defaults
 - Your custom colors automatically load when switching themes
+
+**Independent Button Color Controls:**
+Each button type can be customized independently with its own color:
+- **Table Links** - Phone numbers, email addresses, and website links in the table
+- **States Filter Button** - Button to open states/provinces filter
+- **Find Franchise Button** - Button to open franchise finder
+- **Status Filter Button** - Button to filter by status
+- **Columns Button** - Button to show/hide columns
+- **Action Buttons** - Save, Export, and Refresh buttons throughout the app
 
 ### 5. Client Dashboard Workflow
 The Client Dashboard automatically loads both sheets:
