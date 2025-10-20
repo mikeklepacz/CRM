@@ -460,7 +460,7 @@ export default function ClientDashboard() {
   });
 
   // Fetch available sheets and auto-detect by purpose
-  const { data: sheetsData } = useQuery<{ sheets: GoogleSheet[] }>({
+  const { data: sheetsData, isLoading: isLoadingSheets } = useQuery<{ sheets: GoogleSheet[] }>({
     queryKey: ['/api/sheets'],
   });
 
@@ -1345,7 +1345,20 @@ export default function ClientDashboard() {
           <CardTitle>Client Dashboard</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!storeSheetId && !trackerSheetId && (
+          {/* Loading State */}
+          {(isLoadingSheets || isLoading) && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <img 
+                src="/attached_assets/loading image_1760961223145.png" 
+                alt="Loading..." 
+                className="w-32 h-32 mb-4 animate-pulse"
+              />
+              <p className="text-muted-foreground">Loading your data...</p>
+            </div>
+          )}
+          
+          {/* No Sheets Found - Only show when loading is complete */}
+          {!isLoadingSheets && !isLoading && !storeSheetId && !trackerSheetId && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
                 No sheets found. Please connect your sheets in Admin Dashboard → Google Sheets tab with purposes "clients" (Store Database) and "commissions" (Commission Tracker).
@@ -2367,11 +2380,7 @@ export default function ClientDashboard() {
                 ) : (
                   <Button 
                     variant="outline" 
-                    onClick={() => {
-                      console.debug('[Find Franchises Button] clicked, opening dialog');
-                      console.debug('[Find Franchises Button] current franchiseFinderOpen state:', franchiseFinderOpen);
-                      setFranchiseFinderOpen(true);
-                    }}
+                    onClick={() => setFranchiseFinderOpen(true)}
                     data-testid="button-franchise-finder"
                   >
                     <Store className="mr-2 h-4 w-4" />
@@ -3269,7 +3278,6 @@ export default function ClientDashboard() {
       <FranchiseFinderDialog
         open={franchiseFinderOpen}
         onOpenChange={(open) => {
-          console.debug('[FranchiseFinderDialog] onOpenChange called with:', open);
           setFranchiseFinderOpen(open);
           if (!open) {
             // Don't clear selected franchise when dialog closes - let user manage it via toolbar
@@ -3277,7 +3285,6 @@ export default function ClientDashboard() {
         }}
         stores={data}
         onSelectFranchise={(franchise) => {
-          console.debug('[FranchiseFinderDialog] onSelectFranchise called with:', franchise);
           setSelectedFranchise(franchise);
           // Also clear other filters to show only franchise stores
           setShowMyStoresOnly(false);
