@@ -9,6 +9,7 @@ This project is a Google Sheets-powered CRM and commission tracking system speci
 - Theme-specific colors can be customized independently for light and dark modes, with an indicator showing the active theme (☀️ Light Mode or 🌙 Dark Mode).
 - A reset button is available to reset only the active theme's colors to defaults.
 - Independent color controls are available for various UI elements: Table Links, States Filter Button, Find Franchise Button, Status Filter Button, Columns Button, and Action Buttons.
+- **Status Colors**: The status dropdown and table row coloring now read from the same source (useCustomTheme hook), ensuring visual consistency across the interface. The "Color Rows by Status" toggle is located in Display Settings.
 
 ## System Architecture
 The application is built around a client dashboard that unifies data from two Google Sheets: a "Store Database" and a "Commission Tracker."
@@ -29,6 +30,8 @@ The application is built around a client dashboard that unifies data from two Go
     - A PostgreSQL database (Neon) is used for user management and preference storage.
     - The backend is powered by Express.js and Node.js.
     - Commission calculation logic is implemented based on claim dates: 25% for the first 6 months post-claim, then 10%.
+    - **Unified Status Color System**: Status dropdown and table rows both read from `statusColors` in the useCustomTheme hook, eliminating previous hard-coded color divergence.
+    - **Debug Logging**: Centralized debug utility (`lib/debug.ts`) provides structured logging for status colors, preferences, and data operations with emoji-prefixed categories.
 
 ## External Dependencies
 - **Google Sheets API**: For connecting and interacting with the "Store Database" and "Commission Tracker" Google Sheets.
