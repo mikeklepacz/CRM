@@ -1059,6 +1059,46 @@ export default function ClientDashboard() {
 
   // Filter and sort data (memoized for performance)
   const filteredData = useMemo(() => {
+    // My Stores Only filter - bypass state/city filters when active
+    if (showMyStoresOnly) {
+      // Filter to only claimed stores (_hasTrackerData === true)
+      let filtered = data.filter((row: any) => row._hasTrackerData === true);
+
+      // Apply search filter (if any)
+      if (searchTerm.trim()) {
+        const searchLower = searchTerm.toLowerCase();
+        filtered = filtered.filter((row: any) => {
+          return headers.some((header: string) => {
+            const value = row[header]?.toString().toLowerCase() || '';
+            return value.includes(searchLower);
+          });
+        });
+      }
+
+      // Apply sorting
+      if (sortColumn) {
+        filtered = [...filtered].sort((a: any, b: any) => {
+          const aVal = String(a[sortColumn] || '');
+          const bVal = String(b[sortColumn] || '');
+
+          // Try numeric comparison first
+          const aNum = parseFloat(aVal);
+          const bNum = parseFloat(bVal);
+
+          if (!isNaN(aNum) && !isNaN(bNum)) {
+            return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+          }
+
+          // Fall back to string comparison
+          const comparison = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+          return sortDirection === 'asc' ? comparison : -comparison;
+        });
+      }
+
+      return filtered;
+    }
+
+    // Regular filtering (all stores mode)
     // CRITICAL: If any filter has 0 selections, show NOTHING (not everything)
     if (allStates.length > 0 && selectedStates.size === 0) {
       return []; // Show 0 rows when nothing is selected
@@ -1175,7 +1215,8 @@ export default function ClientDashboard() {
     allStates.length,
     headers,
     sortColumn,
-    sortDirection
+    sortDirection,
+    showMyStoresOnly
   ]);
 
   const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
