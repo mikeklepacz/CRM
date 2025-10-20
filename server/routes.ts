@@ -344,17 +344,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
     try {
+      console.log('🎨 [BACKEND] PUT /api/user/preferences - Request body:', JSON.stringify(req.body, null, 2));
+      
       const validation = userPreferencesSchema.safeParse(req.body);
       if (!validation.success) {
+        console.error('🎨 [BACKEND] Validation failed:', validation.error.errors);
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const preferences = await storage.saveUserPreferences(userId, validation.data);
+      console.log('🎨 [BACKEND] Validation successful, data:', JSON.stringify(validation.data, null, 2));
 
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('🎨 [BACKEND] User ID:', userId);
+      
+      const preferences = await storage.saveUserPreferences(userId, validation.data);
+      console.log('🎨 [BACKEND] Preferences saved to DB:', JSON.stringify(preferences, null, 2));
+
+      console.log('🎨 [BACKEND] Sending response with status 200');
       res.json(preferences);
     } catch (error: any) {
-      console.error("Error saving user preferences:", error);
+      console.error("🎨 [BACKEND] Error saving user preferences:", error);
       res.status(500).json({ message: error.message || "Failed to save preferences" });
     }
   });

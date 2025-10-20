@@ -237,6 +237,10 @@ export function useCustomTheme() {
   // Mutation to save colors - centralized here to prevent state sync issues
   const saveColorsMutation = useMutation({
     mutationFn: async (colors: ThemeColors) => {
+      console.log('🎨 [COLOR SAVE] Starting mutation with colors:', colors);
+      console.log('🎨 [COLOR SAVE] Current theme:', actualTheme);
+      console.log('🎨 [COLOR SAVE] User preferences before merge:', userPreferences);
+      
       const preferences: any = userPreferences ? { ...userPreferences } : {};
 
       if (actualTheme === 'dark') {
@@ -247,16 +251,27 @@ export function useCustomTheme() {
         preferences.hasLightOverrides = true;
       }
 
-      return await apiRequest('/api/user/preferences', 'PUT', preferences);
+      console.log('🎨 [COLOR SAVE] Sending preferences to backend:', preferences);
+      
+      try {
+        const result = await apiRequest('/api/user/preferences', 'PUT', preferences);
+        console.log('🎨 [COLOR SAVE] Backend response:', result);
+        return result;
+      } catch (error) {
+        console.error('🎨 [COLOR SAVE] Backend error:', error);
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('🎨 [COLOR SAVE] onSuccess called with data:', data);
       queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
       toast({
         title: "Colors saved",
         description: `${actualTheme === 'dark' ? 'Dark' : 'Light'} mode colors updated successfully.`,
       });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('🎨 [COLOR SAVE] onError called with error:', error);
       toast({
         title: "Error",
         description: "Failed to save color preferences",
