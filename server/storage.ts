@@ -238,6 +238,14 @@ export class DatabaseStorage implements IStorage {
       selectedStates: preferences.selectedStates || existing?.selectedStates || [],
     };
 
+    // Set override flags when custom colors are saved
+    if (preferences.lightModeColors) {
+      formattedPreferences.hasLightOverrides = true;
+    }
+    if (preferences.darkModeColors) {
+      formattedPreferences.hasDarkOverrides = true;
+    }
+
     if (existing) {
       const updated = await db
         .update(userPreferences)

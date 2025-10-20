@@ -127,7 +127,7 @@ export default function ClientDashboard() {
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [contextMenuColumn, setContextMenuColumn] = useState<string | null>(null);
-  const { theme: currentTheme, resolvedTheme = 'light' } = useTheme() as any;
+  const { theme: currentTheme, actualTheme } = useTheme();
   // New state variables for text alignment and vertical alignment
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
@@ -176,8 +176,8 @@ export default function ClientDashboard() {
   const [lightModeColors, setLightModeColors] = useState(lightColors);
   const [darkModeColors, setDarkModeColors] = useState(darkColors);
   const [hasInitializedColors, setHasInitializedColors] = useState(false);
-  const customColors = resolvedTheme === 'dark' ? darkModeColors : lightModeColors;
-  const setCustomColors = resolvedTheme === 'dark' ? setDarkModeColors : setLightModeColors;
+  const customColors = actualTheme === 'dark' ? darkModeColors : lightModeColors;
+  const setCustomColors = actualTheme === 'dark' ? setDarkModeColors : setLightModeColors;
 
   // Color presets state
   const [colorPresets, setColorPresets] = useState<Array<{name: string, color: string}>>([]);
@@ -187,7 +187,11 @@ export default function ClientDashboard() {
   // Initialize local state from hook values only once (when preferences load)
   // Don't continuously sync to allow editing before saving
   useEffect(() => {
-    if (!hasInitializedColors && (lightColors !== defaultLightColors || darkColors !== defaultDarkColors)) {
+    // Use JSON comparison to detect when colors actually differ from defaults
+    const lightChanged = JSON.stringify(lightColors) !== JSON.stringify(defaultLightColors);
+    const darkChanged = JSON.stringify(darkColors) !== JSON.stringify(defaultDarkColors);
+    
+    if (!hasInitializedColors && (lightChanged || darkChanged)) {
       setLightModeColors(lightColors);
       setDarkModeColors(darkColors);
       setHasInitializedColors(true);
@@ -1696,11 +1700,11 @@ export default function ClientDashboard() {
                       <div className="flex items-center justify-between">
                         <h4 className="font-medium">Customize Colors</h4>
                         <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted text-xs font-medium">
-                          {resolvedTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+                          {actualTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Currently editing colors for {resolvedTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
+                        Currently editing colors for {actualTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
                       </p>
                       <div className="space-y-4">
                         {(['background', 'tableTextColor', 'text', 'primary', 'secondary', 'accent', 'border', 'bodyBackground', 'headerBackground'] as const).map((field) => {
@@ -1872,7 +1876,7 @@ export default function ClientDashboard() {
                                           setCustomColors({ ...customColors, [field]: '' });
                                         } else {
                                           // Use the correct defaults based on current theme
-                                          const defaultColors = resolvedTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+                                          const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
                                           setCustomColors({ ...customColors, [field]: defaultColors[field] });
                                         }
                                       }}
@@ -2165,20 +2169,20 @@ export default function ClientDashboard() {
                               variant="destructive"
                               className="w-full"
                               onClick={() => {
-                                if (resolvedTheme === 'dark') {
+                                if (actualTheme === 'dark') {
                                   setDarkModeColors(defaultDarkColors);
                                 } else {
                                   setLightModeColors(defaultLightColors);
                                 }
                                 toast({
                                   title: "Colors Reset",
-                                  description: `${resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode colors have been reset to defaults. Click "Save Color Changes" to persist.`,
+                                  description: `${actualTheme === 'dark' ? 'Dark' : 'Light'} mode colors have been reset to defaults. Click "Save Color Changes" to persist.`,
                                 });
                               }}
                               data-testid="button-reset-all-colors-inline"
                             >
                               <RotateCcw className="mr-2 h-4 w-4" />
-                              Reset {resolvedTheme === 'dark' ? 'Dark' : 'Light'} Mode Colors
+                              Reset {actualTheme === 'dark' ? 'Dark' : 'Light'} Mode Colors
                             </Button>
                           </div>
                         </div>

@@ -192,6 +192,8 @@ export const userPreferences = pgTable("user_preferences", {
     headerBackground: string;
     statusColors?: { [status: string]: { background: string; text: string } };
   }>(),
+  hasLightOverrides: boolean("has_light_overrides").default(false), // True when user has saved custom light colors
+  hasDarkOverrides: boolean("has_dark_overrides").default(false), // True when user has saved custom dark colors
   textAlign: varchar("text_align", { length: 20 }),
   freezeFirstColumn: boolean("freeze_first_column").default(false),
   createdAt: timestamp("created_at").defaultNow(),

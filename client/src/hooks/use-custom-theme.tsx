@@ -18,6 +18,8 @@ interface ThemeColors {
 interface UserPreferences {
   lightModeColors?: ThemeColors;
   darkModeColors?: ThemeColors;
+  hasLightOverrides?: boolean;
+  hasDarkOverrides?: boolean;
 }
 
 // Default colors for light and dark modes
@@ -111,10 +113,10 @@ export function useCustomTheme() {
       ? { ...defaultDarkColors, ...userPreferences?.darkModeColors }
       : { ...defaultLightColors, ...userPreferences?.lightModeColors };
 
-    // Only apply custom colors if user has preferences saved
-    // This prevents overriding default theme when no customization exists
-    const hasCustomColors = (actualTheme === 'dark' && userPreferences?.darkModeColors) ||
-                           (actualTheme === 'light' && userPreferences?.lightModeColors);
+    // Only apply custom colors if user has explicitly saved overrides
+    // Use the flags from database to reliably detect customization
+    const hasCustomColors = (actualTheme === 'dark' && userPreferences?.hasDarkOverrides) ||
+                           (actualTheme === 'light' && userPreferences?.hasLightOverrides);
 
     if (!hasCustomColors) {
       // Clear ALL overridden CSS variables to prevent color bleed across themes
