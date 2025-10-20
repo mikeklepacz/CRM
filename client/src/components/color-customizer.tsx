@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,9 +54,15 @@ export function ColorCustomizer() {
   const [colorPresets, setColorPresets] = useState<Array<{ name: string; color: string }>>([]);
   const [presetName, setPresetName] = useState("");
 
-  // Reset customColors when theme changes or currentColors reference changes
+  // Initialize customColors from currentColors only when theme changes
+  // Use a ref to track if we've initialized to prevent unnecessary updates
+  const initializedTheme = useRef<string | null>(null);
+
   useEffect(() => {
-    setCustomColors(currentColors);
+    if (initializedTheme.current !== actualTheme) {
+      setCustomColors(currentColors);
+      initializedTheme.current = actualTheme;
+    }
   }, [actualTheme, currentColors]);
 
   const handleSaveColors = () => {

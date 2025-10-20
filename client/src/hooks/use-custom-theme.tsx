@@ -206,26 +206,24 @@ export function useCustomTheme() {
   }, [actualTheme, userPreferences]);
 
   // Memoize the merged color objects to prevent infinite re-renders
-  const lightColors = useMemo(
-    () => ({ ...defaultLightColors, ...userPreferences?.lightModeColors }),
-    [userPreferences?.lightModeColors]
-  );
+  // Use deep comparison by stringifying the values
+  const lightColors = useMemo(() => {
+    return { ...defaultLightColors, ...userPreferences?.lightModeColors };
+  }, [JSON.stringify(userPreferences?.lightModeColors)]);
 
-  const darkColors = useMemo(
-    () => ({ ...defaultDarkColors, ...userPreferences?.darkModeColors }),
-    [userPreferences?.darkModeColors]
-  );
+  const darkColors = useMemo(() => {
+    return { ...defaultDarkColors, ...userPreferences?.darkModeColors };
+  }, [JSON.stringify(userPreferences?.darkModeColors)]);
 
-  const currentColors = useMemo(
-    () => actualTheme === 'dark' ? darkColors : lightColors,
-    [actualTheme, darkColors, lightColors]
-  );
+  const currentColors = useMemo(() => {
+    return actualTheme === 'dark' ? darkColors : lightColors;
+  }, [actualTheme, JSON.stringify(darkColors), JSON.stringify(lightColors)]);
 
   // Mutation to save colors - centralized here to prevent state sync issues
   const saveColorsMutation = useMutation({
     mutationFn: async (colors: ThemeColors) => {
       const preferences: any = userPreferences ? { ...userPreferences } : {};
-      
+
       if (actualTheme === 'dark') {
         preferences.darkModeColors = colors;
         preferences.hasDarkOverrides = true;
