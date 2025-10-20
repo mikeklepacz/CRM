@@ -30,10 +30,10 @@ import { useCustomTheme, defaultLightColors, defaultDarkColors } from "@/hooks/u
 import { debug } from "@/lib/debug";
 import { format, parse, isValid } from "date-fns";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
-import { HslColorPicker } from "react-colorful";
 import { Loader2 } from "lucide-react";
 import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
 import type { FranchiseGroup } from "@shared/franchiseUtils";
+import { SharedColorPicker } from "@/components/shared-color-picker";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -126,8 +126,6 @@ function StatusEditorPopover({
   const [localStatuses, setLocalStatuses] = useState(statusOptions);
   const [localColors, setLocalColors] = useState(statusColors);
   const [isSaving, setIsSaving] = useState(false);
-  const [presetName, setPresetName] = useState("");
-  const [activeColorPicker, setActiveColorPicker] = useState<string | null>(null);
   
   const isAdmin = currentUser?.role === 'admin';
 
@@ -172,23 +170,9 @@ function StatusEditorPopover({
     });
   };
 
-  const handleSavePreset = (color: string) => {
-    if (!presetName.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a preset name",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const newPresets = [...colorPresets, { name: presetName.trim(), color }];
+  const handleSavePreset = (color: string, name: string) => {
+    const newPresets = [...colorPresets, { name, color }];
     setColorPresets(newPresets);
-    setPresetName("");
-    toast({
-      title: "Preset Saved",
-      description: `"${presetName}" saved to your presets`,
-    });
   };
 
   return (
@@ -259,170 +243,58 @@ function StatusEditorPopover({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {/* Background Color */}
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Background</Label>
-                      <div className="flex gap-1">
-                        <Input
-                          type="color"
-                          value={colors.background}
-                          onChange={(e) => {
-                            const statusKey = `${statusNumber} – ${statusName}`;
-                            setLocalColors({
-                              ...localColors,
-                              [statusKey]: { ...colors, background: e.target.value }
-                            });
-                          }}
-                          onFocus={() => setActiveColorPicker(`bg-${index}`)}
-                          className="h-9 flex-1 cursor-pointer"
-                          data-testid={`input-status-bg-${index}`}
-                        />
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => {
-                            const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
-                            const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
-                            if (defaultStatus) {
-                              const statusKey = `${statusNumber} – ${statusName}`;
-                              setLocalColors({
-                                ...localColors,
-                                [statusKey]: { ...colors, background: defaultStatus[1].background }
-                              });
-                            }
-                          }}
-                          className="h-9 w-9"
-                          title="Reset to default"
-                          data-testid={`button-reset-bg-${index}`}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {/* Color Presets for Background */}
-                      {colorPresets.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {colorPresets.map((preset, pIndex) => (
-                            <button
-                              key={pIndex}
-                              onClick={() => {
-                                const statusKey = `${statusNumber} – ${statusName}`;
-                                setLocalColors({
-                                  ...localColors,
-                                  [statusKey]: { ...colors, background: preset.color }
-                                });
-                              }}
-                              className="w-6 h-6 rounded border border-border"
-                              style={{ backgroundColor: preset.color }}
-                              title={preset.name}
-                              data-testid={`preset-bg-${index}-${pIndex}`}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {/* Save Preset for Background */}
-                      {activeColorPicker === `bg-${index}` && (
-                        <div className="flex gap-1 pt-1">
-                          <Input
-                            value={presetName}
-                            onChange={(e) => setPresetName(e.target.value)}
-                            placeholder="Preset name..."
-                            className="flex-1 h-8 text-xs"
-                            data-testid={`input-preset-name-bg-${index}`}
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() => handleSavePreset(colors.background)}
-                            disabled={!presetName.trim()}
-                            className="h-8"
-                            data-testid={`button-save-preset-bg-${index}`}
-                          >
-                            <Save className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                    <SharedColorPicker
+                      label="Background"
+                      value={colors.background}
+                      onChange={(color) => {
+                        const statusKey = `${statusNumber} – ${statusName}`;
+                        setLocalColors({
+                          ...localColors,
+                          [statusKey]: { ...colors, background: color }
+                        });
+                      }}
+                      onReset={() => {
+                        const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+                        const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
+                        if (defaultStatus) {
+                          const statusKey = `${statusNumber} – ${statusName}`;
+                          setLocalColors({
+                            ...localColors,
+                            [statusKey]: { ...colors, background: defaultStatus[1].background }
+                          });
+                        }
+                      }}
+                      colorPresets={colorPresets}
+                      onSavePreset={(color, name) => handleSavePreset(color, name)}
+                      testId={`input-status-bg-${index}`}
+                    />
                     
                     {/* Text Color */}
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Text</Label>
-                      <div className="flex gap-1">
-                        <Input
-                          type="color"
-                          value={colors.text}
-                          onChange={(e) => {
-                            const statusKey = `${statusNumber} – ${statusName}`;
-                            setLocalColors({
-                              ...localColors,
-                              [statusKey]: { ...colors, text: e.target.value }
-                            });
-                          }}
-                          onFocus={() => setActiveColorPicker(`text-${index}`)}
-                          className="h-9 flex-1 cursor-pointer"
-                          data-testid={`input-status-text-${index}`}
-                        />
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => {
-                            const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
-                            const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
-                            if (defaultStatus) {
-                              const statusKey = `${statusNumber} – ${statusName}`;
-                              setLocalColors({
-                                ...localColors,
-                                [statusKey]: { ...colors, text: defaultStatus[1].text }
-                              });
-                            }
-                          }}
-                          className="h-9 w-9"
-                          title="Reset to default"
-                          data-testid={`button-reset-text-${index}`}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {/* Color Presets for Text */}
-                      {colorPresets.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {colorPresets.map((preset, pIndex) => (
-                            <button
-                              key={pIndex}
-                              onClick={() => {
-                                const statusKey = `${statusNumber} – ${statusName}`;
-                                setLocalColors({
-                                  ...localColors,
-                                  [statusKey]: { ...colors, text: preset.color }
-                                });
-                              }}
-                              className="w-6 h-6 rounded border border-border"
-                              style={{ backgroundColor: preset.color }}
-                              title={preset.name}
-                              data-testid={`preset-text-${index}-${pIndex}`}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {/* Save Preset for Text */}
-                      {activeColorPicker === `text-${index}` && (
-                        <div className="flex gap-1 pt-1">
-                          <Input
-                            value={presetName}
-                            onChange={(e) => setPresetName(e.target.value)}
-                            placeholder="Preset name..."
-                            className="flex-1 h-8 text-xs"
-                            data-testid={`input-preset-name-text-${index}`}
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() => handleSavePreset(colors.text)}
-                            disabled={!presetName.trim()}
-                            className="h-8"
-                            data-testid={`button-save-preset-text-${index}`}
-                          >
-                            <Save className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                    <SharedColorPicker
+                      label="Text"
+                      value={colors.text}
+                      onChange={(color) => {
+                        const statusKey = `${statusNumber} – ${statusName}`;
+                        setLocalColors({
+                          ...localColors,
+                          [statusKey]: { ...colors, text: color }
+                        });
+                      }}
+                      onReset={() => {
+                        const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+                        const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
+                        if (defaultStatus) {
+                          const statusKey = `${statusNumber} – ${statusName}`;
+                          setLocalColors({
+                            ...localColors,
+                            [statusKey]: { ...colors, text: defaultStatus[1].text }
+                          });
+                        }
+                      }}
+                      colorPresets={colorPresets}
+                      onSavePreset={(color, name) => handleSavePreset(color, name)}
+                      testId={`input-status-text-${index}`}
+                    />
                   </div>
                   {/* Live Preview */}
                   <div
