@@ -693,46 +693,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const users = await storage.getAllUsers();
       
-      // Get Commission Tracker sheet to calculate sales metrics
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
-      
-      // Read sheet data once using the sheet owner's userId
-      let trackerRows: any[][] = [];
-      let headers: string[] = [];
-      let agentIndex = -1;
-      let totalIndex = -1;
-      
-      if (trackerSheet) {
-        try {
-          const sheetOwnerId = trackerSheet.connectedBy;
-          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-          trackerRows = await googleSheets.readSheetData(sheetOwnerId, trackerSheet.spreadsheetId, trackerRange);
-          
-          if (trackerRows.length > 0) {
-            headers = trackerRows[0];
-            agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent' || h.toLowerCase() === 'agent name');
-            totalIndex = headers.findIndex((h: string) => h.toLowerCase() === 'total');
-          }
-        } catch (error) {
-          console.error('Error reading Commission Tracker sheet:', error);
-        }
-      }
+      // Get all orders from database to calculate sales metrics
+      const allOrders = await storage.getAllOrders();
       
       const usersWithMetrics = users.map((user) => {
         let totalSales = 0;
         let grossIncome = 0;
         
-        if (trackerRows.length > 0 && user.agentName && agentIndex >= 0 && totalIndex >= 0) {
-          for (let i = 1; i < trackerRows.length; i++) {
-            const row = trackerRows[i];
-            const agent = row[agentIndex] || '';
-            const total = parseFloat(row[totalIndex] || '0');
-            
-            if (agent.toLowerCase() === user.agentName.toLowerCase() && total > 0) {
-              totalSales++;
-              grossIncome += total;
-            }
-          }
+        // Match orders by salesAgentName
+        if (user.agentName) {
+          const userOrders = allOrders.filter(order => {
+            if (!order.salesAgentName) return false;
+            return order.salesAgentName.toLowerCase().trim() === user.agentName.toLowerCase().trim();
+          });
+          
+          totalSales = userOrders.length;
+          grossIncome = userOrders.reduce((sum, order) => {
+            return sum + parseFloat(order.total || '0');
+          }, 0);
         }
         
         return {
