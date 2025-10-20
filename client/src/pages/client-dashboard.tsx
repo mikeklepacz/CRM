@@ -26,6 +26,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useCustomTheme, defaultLightColors, defaultDarkColors } from "@/hooks/use-custom-theme";
 import { format, parse, isValid } from "date-fns";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
 import { HslColorPicker } from "react-colorful";
@@ -167,51 +168,12 @@ export default function ClientDashboard() {
   const [franchiseFinderOpen, setFranchiseFinderOpen] = useState(false);
   const [selectedFranchise, setSelectedFranchise] = useState<FranchiseGroup | null>(null);
 
-  // Default colors for light and dark modes
-  const defaultLightColors = {
-    background: '#ffffff',
-    text: '#000000',
-    tableTextColor: '#000000',
-    primary: '#3b82f6',
-    secondary: '#f3f4f6',
-    accent: '#8b5cf6',
-    border: '#e5e7eb',
-    bodyBackground: '',
-    headerBackground: '',
-    statusColors: {
-      '1 – Contacted': { background: '#dbeafe', text: '#1e40af' },
-      '2 – Interested': { background: '#fef3c7', text: '#92400e' },
-      '3 – Sample Sent': { background: '#e0e7ff', text: '#3730a3' },
-      '4 – Follow-Up': { background: '#fed7aa', text: '#9a3412' },
-      '5 – Closed Won': { background: '#d1fae5', text: '#065f46' },
-      '6 – Closed Lost': { background: '#fee2e2', text: '#991b1b' },
-      '7 – Warm': { background: '#ffedd5', text: '#9a3412' },
-    },
-  };
-
-  const defaultDarkColors = {
-    background: '#1a1a1a',
-    text: '#ffffff',
-    tableTextColor: '#ffffff',
-    primary: '#60a5fa',
-    secondary: '#2a2a2a',
-    accent: '#a7bfa',
-    border: '#404040',
-    bodyBackground: '',
-    headerBackground: '',
-    statusColors: {
-      '1 – Contacted': { background: '#1e3a8a', text: '#bfdbfe' },
-      '2 – Interested': { background: '#78350f', text: '#fef3c7' },
-      '3 – Sample Sent': { background: '#312e81', text: '#c7d2fe' },
-      '4 – Follow-Up': { background: '#7c2d12', text: '#fed7aa' },
-      '5 – Closed Won': { background: '#064e3b', text: '#a7f3d0' },
-      '6 – Closed Lost': { background: '#7f1d1d', text: '#fecaca' },
-      '7 – Warm': { background: '#7c2d12', text: '#fed7aa' },
-    },
-  };
-
-  const [lightModeColors, setLightModeColors] = useState(defaultLightColors);
-  const [darkModeColors, setDarkModeColors] = useState(defaultDarkColors);
+  // Use global theme hook for colors
+  const { lightColors, darkColors, currentColors } = useCustomTheme();
+  
+  // Local state for editing colors before saving
+  const [lightModeColors, setLightModeColors] = useState(lightColors);
+  const [darkModeColors, setDarkModeColors] = useState(darkColors);
   const customColors = resolvedTheme === 'dark' ? darkModeColors : lightModeColors;
   const setCustomColors = resolvedTheme === 'dark' ? setDarkModeColors : setLightModeColors;
 
@@ -220,7 +182,13 @@ export default function ClientDashboard() {
   const [presetName, setPresetName] = useState("");
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
 
-  // Convert hex to HSL
+  // Sync local state with hook values when they change
+  useEffect(() => {
+    setLightModeColors(lightColors);
+    setDarkModeColors(darkColors);
+  }, [lightColors, darkColors]);
+
+  // Convert hex to HSL (imported from use-custom-theme hook, but need local version for UI)
   const hexToHsl = (hex: string): { h: number; s: number; l: number } => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     if (!result) return { h: 0, s: 0, l: 0 };
@@ -357,6 +325,30 @@ export default function ClientDashboard() {
       toast({
         title: "Store Claimed",
         description: "Store claimed successfully and value updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation to save color preferences
+  const saveColorsMutation = useMutation({
+    mutationFn: async ({ lightModeColors, darkModeColors }: any) => {
+      return await apiRequest('PUT', '/api/user/preferences', {
+        lightModeColors,
+        darkModeColors,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      toast({
+        title: "Colors Saved",
+        description: "Your color preferences have been saved",
       });
     },
     onError: (error: Error) => {
@@ -574,19 +566,8 @@ export default function ClientDashboard() {
           setRowHeight(userPreferences.rowHeight);
         }
 
-        // Load theme-specific colors
-        if (userPreferences.lightModeColors) {
-          setLightModeColors({
-            ...defaultLightColors,
-            ...userPreferences.lightModeColors,
-          } as any);
-        }
-        if (userPreferences.darkModeColors) {
-          setDarkModeColors({
-            ...defaultDarkColors,
-            ...userPreferences.darkModeColors,
-          } as any);
-        }
+        // Load theme-specific colors from hook (already loaded)
+        // Colors are now managed by useCustomTheme hook
 
         // Load alignment preferences
         if (userPreferences.textAlign) {
@@ -958,8 +939,6 @@ export default function ClientDashboard() {
           selectedCities: Array.from(selectedCities),
           fontSize,
           rowHeight,
-          lightModeColors,
-          darkModeColors,
           textAlign, // Save alignment preferences
           verticalAlign, // Save alignment preferences
           statusOptions, // Save status options
@@ -967,6 +946,7 @@ export default function ClientDashboard() {
           colorPresets, // Save color presets
           freezeFirstColumn, // Save freeze column preference
           showMyStoresOnly, // Save My Stores Only preference
+          // Note: Colors are saved separately via saveColorsMutation
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -974,7 +954,7 @@ export default function ClientDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn, showMyStoresOnly]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn, showMyStoresOnly]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -2144,6 +2124,34 @@ export default function ClientDashboard() {
 
                             <Separator className="my-4" />
 
+                            {/* Save Colors Button */}
+                            <Button
+                              variant="default"
+                              className="w-full"
+                              onClick={() => {
+                                saveColorsMutation.mutate({
+                                  lightModeColors,
+                                  darkModeColors,
+                                });
+                              }}
+                              disabled={saveColorsMutation.isPending}
+                              data-testid="button-save-colors"
+                            >
+                              {saveColorsMutation.isPending ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                <>
+                                  <Save className="mr-2 h-4 w-4" />
+                                  Save Color Changes
+                                </>
+                              )}
+                            </Button>
+
+                            <Separator className="my-2" />
+
                             {/* Reset All Colors Button - Inside Colors Popover */}
                             <Button
                               variant="destructive"
@@ -2156,7 +2164,7 @@ export default function ClientDashboard() {
                                 }
                                 toast({
                                   title: "Colors Reset",
-                                  description: `${resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode colors have been reset to defaults`,
+                                  description: `${resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode colors have been reset to defaults. Click "Save Color Changes" to persist.`,
                                 });
                               }}
                               data-testid="button-reset-all-colors-inline"
