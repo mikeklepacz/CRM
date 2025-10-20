@@ -117,6 +117,7 @@ export default function ClientDashboard() {
   const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
   const [citySearchTerm, setCitySearchTerm] = useState("");
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [showMyStoresOnly, setShowMyStoresOnly] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
   const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
@@ -1079,6 +1080,20 @@ export default function ClientDashboard() {
         });
       }
 
+      // Apply status filter (if any)
+      if (selectedStatuses.size > 0) {
+        const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
+        filtered = filtered.filter((row: any) => {
+          return statusColumns.some((col: string) => {
+            const value = row[col];
+            if (value && String(value).trim()) {
+              return selectedStatuses.has(String(value).trim());
+            }
+            return false;
+          });
+        });
+      }
+
       // Apply sorting
       if (sortColumn) {
         filtered = [...filtered].sort((a: any, b: any) => {
@@ -1187,6 +1202,20 @@ export default function ClientDashboard() {
       // If all cities are selected, don't filter (show everything)
     }
 
+    // Filter by status if any statuses are selected
+    if (selectedStatuses.size > 0) {
+      const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
+      filtered = filtered.filter((row: any) => {
+        return statusColumns.some((col: string) => {
+          const value = row[col];
+          if (value && String(value).trim()) {
+            return selectedStatuses.has(String(value).trim());
+          }
+          return false;
+        });
+      });
+    }
+
     // Then sort
     if (sortColumn) {
       filtered = [...filtered].sort((a: any, b: any) => {
@@ -1220,7 +1249,8 @@ export default function ClientDashboard() {
     headers,
     sortColumn,
     sortDirection,
-    showMyStoresOnly
+    showMyStoresOnly,
+    selectedStatuses
   ]);
 
   const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
@@ -2260,6 +2290,73 @@ export default function ClientDashboard() {
                     </PopoverContent>
                   </Popover>
                 )}
+
+                {/* Status Filter */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-status-filter">
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      Status ({selectedStatuses.size > 0 ? selectedStatuses.size : 'All'})
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Filter by Status</h4>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedStatuses(new Set(statusOptions.map(s => s.value)))}
+                            data-testid="button-select-all-statuses"
+                          >
+                            All
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedStatuses(new Set())}
+                            data-testid="button-clear-all-statuses"
+                          >
+                            None
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Select which statuses to display
+                      </p>
+                      
+                      <ScrollArea className="h-64">
+                        <div className="space-y-2">
+                          {statusOptions.map((status) => (
+                            <div key={status.value} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`status-${status.value}`}
+                                checked={selectedStatuses.has(status.value)}
+                                onCheckedChange={() => {
+                                  const newSelected = new Set(selectedStatuses);
+                                  if (newSelected.has(status.value)) {
+                                    newSelected.delete(status.value);
+                                  } else {
+                                    newSelected.add(status.value);
+                                  }
+                                  setSelectedStatuses(newSelected);
+                                }}
+                                data-testid={`checkbox-status-${status.value}`}
+                              />
+                              <Label
+                                htmlFor={`status-${status.value}`}
+                                className="text-sm cursor-pointer flex-1"
+                              >
+                                {status.value}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
                 <Popover>
                   <PopoverTrigger asChild>
