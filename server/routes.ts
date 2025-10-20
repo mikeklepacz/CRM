@@ -2366,6 +2366,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('No agent name found for user, filtering all rows');
       }
 
+      // ============================================================================
+      // CRITICAL: Filter Out Closed Listings (Open = FALSE)
+      // ============================================================================
+      // Purpose:
+      // Exclude stores where the "Open" column is set to FALSE (listing closed)
+      //
+      // Column Lookup:
+      // - Case-insensitive search for "Open" column in Store Database
+      //
+      // Filter Logic:
+      // - Keep stores where Open is empty, "TRUE", or any truthy value
+      // - Filter out stores where Open is "FALSE" or "false" (case-insensitive)
+      // ============================================================================
+      const storeOpenColumnName = storeHeaders.find(h => 
+        h.toLowerCase().trim() === 'open'
+      );
+      
+      if (storeOpenColumnName) {
+        const beforeFilterCount = filteredStoreData.length;
+        filteredStoreData = filteredStoreData.filter(row => {
+          const openValue = row[storeOpenColumnName];
+          // Keep if empty (default open) OR not explicitly "FALSE"
+          return !openValue || openValue.toLowerCase().trim() !== 'false';
+        });
+        const afterFilterCount = filteredStoreData.length;
+        console.log(`Filtered closed listings: ${beforeFilterCount - afterFilterCount} stores removed (Open = FALSE)`);
+      }
+
       // === COMPREHENSIVE MERGE DEBUGGING ===
       console.log('\n=== LINK NORMALIZATION DEBUG ===');
       if (filteredTrackerData.length > 0) {
@@ -3423,6 +3451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cityIndex = headers.findIndex((h: string) => h.toLowerCase() === 'city');
       const stateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'state');
       const addressIndex = headers.findIndex((h: string) => h.toLowerCase() === 'address');
+      const openIndex = headers.findIndex((h: string) => h.toLowerCase() === 'open');
 
       const stores = rows.slice(1)
         .map((row: any[]) => ({
@@ -3431,8 +3460,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           city: cityIndex !== -1 ? (row[cityIndex] || '') : '',
           state: stateIndex !== -1 ? (row[stateIndex] || '') : '',
           address: addressIndex !== -1 ? (row[addressIndex] || '') : '',
+          open: openIndex !== -1 ? (row[openIndex] || '') : '',
         }))
-        .filter((store: any) => store.link); // Only include stores with a link
+        .filter((store: any) => {
+          // Only include stores with a link
+          if (!store.link) return false;
+          // Filter out closed listings (Open = FALSE)
+          if (store.open && store.open.toLowerCase().trim() === 'false') return false;
+          return true;
+        });
 
       res.json(stores);
     } catch (error: any) {
