@@ -99,11 +99,7 @@ export function ColorCustomizerButton() {
         ? { darkModeColors: colors, hasDarkOverrides: true }
         : { lightModeColors: colors, hasLightOverrides: true };
       
-      return apiRequest('/api/user/preferences', {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return apiRequest('PUT', '/api/user/preferences', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
@@ -129,11 +125,7 @@ export function ColorCustomizerButton() {
         ? { darkModeColors: defaultDarkColors, hasDarkOverrides: false }
         : { lightModeColors: defaultLightColors, hasLightOverrides: false };
       
-      return apiRequest('/api/user/preferences', {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return apiRequest('PUT', '/api/user/preferences', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
