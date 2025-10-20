@@ -59,8 +59,13 @@ export function ColorCustomizer() {
   const [presetName, setPresetName] = useState("");
 
   // Sync customColors when currentColors changes (when user preferences load)
+  // Use JSON comparison to prevent infinite loops from object reference changes
   useEffect(() => {
-    setCustomColors(currentColors);
+    const currentColorsStr = JSON.stringify(currentColors);
+    const customColorsStr = JSON.stringify(customColors);
+    if (currentColorsStr !== customColorsStr) {
+      setCustomColors(currentColors);
+    }
   }, [currentColors]);
 
   // Load user preferences to get initial state
