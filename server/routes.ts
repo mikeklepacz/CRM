@@ -723,6 +723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: user.lastName,
           agentName: user.agentName,
           role: user.role,
+          isActive: user.isActive,
           totalSales,
           grossIncome: grossIncome.toFixed(2),
           createdAt: user.createdAt,
