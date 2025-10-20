@@ -3937,9 +3937,8 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="follow_up_date" className="flex items-center gap-1">
+                      <Label htmlFor="follow_up_date">
                         Follow-Up Date
-                        <span className="text-destructive">*</span>
                       </Label>
                       <Popover>
                         <PopoverTrigger asChild>
