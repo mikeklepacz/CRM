@@ -57,16 +57,16 @@ export function ColorCustomizer() {
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
   const [colorPresets, setColorPresets] = useState<Array<{ name: string; color: string }>>([]);
   const [presetName, setPresetName] = useState("");
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // Sync customColors when currentColors changes (when user preferences load)
-  // Use JSON comparison to prevent infinite loops from object reference changes
+  // Only sync once on initial load
   useEffect(() => {
-    const currentColorsStr = JSON.stringify(currentColors);
-    const customColorsStr = JSON.stringify(customColors);
-    if (currentColorsStr !== customColorsStr) {
+    if (!hasInitialized) {
       setCustomColors(currentColors);
+      setHasInitialized(true);
     }
-  }, [currentColors]);
+  }, [currentColors, hasInitialized]);
 
   // Load user preferences to get initial state
   const { data: userPreferences } = useQuery({
@@ -77,7 +77,7 @@ export function ColorCustomizer() {
   const saveColorsMutation = useMutation({
     mutationFn: async (colors: any) => {
       const preferences: any = userPreferences ? { ...userPreferences } : {};
-      
+
       if (actualTheme === 'dark') {
         preferences.darkModeColors = colors;
         preferences.hasDarkOverrides = true;
