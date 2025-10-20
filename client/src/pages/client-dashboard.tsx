@@ -27,6 +27,7 @@ import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useCustomTheme, defaultLightColors, defaultDarkColors } from "@/hooks/use-custom-theme";
+import { debug } from "@/lib/debug";
 import { format, parse, isValid } from "date-fns";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
 import { HslColorPicker } from "react-colorful";
@@ -144,8 +145,9 @@ export default function ClientDashboard() {
     '7 – Warm',
   ]);
 
-  // Color row by status state
-  const [colorRowByStatus, setColorRowByStatus] = useState<boolean>(false);
+  // Color row by status - now managed by useCustomTheme hook
+  const colorRowByStatus = themeColorRowByStatus;
+  const setColorRowByStatus = setThemeColorRowByStatus;
 
 
   // Address edit dialog state
@@ -169,7 +171,7 @@ export default function ClientDashboard() {
   const [selectedFranchise, setSelectedFranchise] = useState<FranchiseGroup | null>(null);
 
   // Use global theme hook for colors
-  const { lightColors, darkColors, currentColors } = useCustomTheme();
+  const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus: themeColorRowByStatus, setColorRowByStatus: setThemeColorRowByStatus } = useCustomTheme();
 
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
@@ -589,13 +591,11 @@ export default function ClientDashboard() {
           setVerticalAlign(userPreferences.verticalAlign);
         }
 
-        // Load status options and row coloring preference
+        // Load status options
         if (userPreferences.statusOptions) {
           setStatusOptions(userPreferences.statusOptions);
         }
-        if (userPreferences.colorRowByStatus !== undefined) {
-          setColorRowByStatus(userPreferences.colorRowByStatus);
-        }
+        // colorRowByStatus is now managed by useCustomTheme hook
         if (userPreferences.colorPresets) {
           setColorPresets(userPreferences.colorPresets);
         }
@@ -954,11 +954,10 @@ export default function ClientDashboard() {
           textAlign, // Save alignment preferences
           verticalAlign, // Save alignment preferences
           statusOptions, // Save status options
-          colorRowByStatus, // Save row coloring preference
           colorPresets, // Save color presets
           freezeFirstColumn, // Save freeze column preference
           showMyStoresOnly, // Save My Stores Only preference
-          // Note: Colors are saved separately via saveColorsMutation
+          // Note: Colors and colorRowByStatus are saved separately via useCustomTheme
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -966,7 +965,7 @@ export default function ClientDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn, showMyStoresOnly]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorPresets, freezeFirstColumn, showMyStoresOnly]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -1694,6 +1693,22 @@ export default function ClientDashboard() {
                           data-testid="checkbox-freeze-column"
                         />
                         <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
+                      </div>
+
+                      {/* Color Rows by Status Checkbox */}
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="color-row-by-status"
+                          checked={colorRowByStatus}
+                          onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
+                          data-testid="checkbox-color-row-by-status"
+                        />
+                        <Label htmlFor="color-row-by-status" className="text-sm cursor-pointer">Color Rows by Status</Label>
+                      </div>
+
+                      {/* Statuses Button - Opens editor dialog */}
+                      <div className="text-xs text-muted-foreground">
+                        Status customization coming soon - dropdown colors now match row colors!
                       </div>
                     </div>
                   </CardContent>
@@ -3663,12 +3678,28 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="1 – Contacted" data-testid="status-option-contacted">1 – Contacted</SelectItem>
-                          <SelectItem value="2 – Interested" data-testid="status-option-interested">2 – Interested</SelectItem>
-                          <SelectItem value="3 – Sample Sent" data-testid="status-option-sample-sent">3 – Sample Sent</SelectItem>
-                          <SelectItem value="4 – Follow-Up" data-testid="status-option-follow-up">4 – Follow-Up</SelectItem>
-                          <SelectItem value="5 – Closed Won" data-testid="status-option-closed-won">5 – Closed Won</SelectItem>
-                          <SelectItem value="6 – Closed Lost" data-testid="status-option-closed-lost">6 – Closed Lost</SelectItem>
+                          {statusOptions.slice(0, 6).map((status) => {
+                            const colors = statusColors[status];
+                            debug.statusColors(`Applying status colors to dropdown`, {
+                              status,
+                              backgroundColor: colors?.background,
+                              textColor: colors?.text,
+                            });
+                            return (
+                              <SelectItem 
+                                key={status}
+                                value={status} 
+                                data-testid={`status-option-${status.toLowerCase().replace(/[^a-z]+/g, '-')}`}
+                                style={{
+                                  backgroundColor: colors?.background || 'transparent',
+                                  color: colors?.text || 'inherit',
+                                }}
+                              >
+                                {status}
+                              </SelectItem>
+                            );
+                          })}
+                          <SelectItem value="7 – Warm" data-testid="status-option-warm">7 – Warm</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

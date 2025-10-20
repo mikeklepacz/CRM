@@ -50,7 +50,7 @@ function hslToHex(h: number, s: number, l: number): string {
 
 export function ColorCustomizer() {
   const { actualTheme } = useTheme();
-  const { currentColors, saveColors, resetColors, isSaving, colorRowByStatus, setColorRowByStatus } = useCustomTheme();
+  const { currentColors, saveColors, resetColors, isSaving } = useCustomTheme();
   const [customColors, setCustomColors] = useState(currentColors);
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
   const { toast } = useToast();
@@ -112,25 +112,6 @@ export function ColorCustomizer() {
           </div>
           <p className="text-xs text-muted-foreground">
             Currently editing colors for {actualTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
-          </p>
-
-          {/* Color row by status checkbox */}
-          <div className="flex items-center space-x-2 p-3 rounded-md border">
-            <Checkbox
-              id="color-row-by-status"
-              checked={colorRowByStatus}
-              onCheckedChange={(checked) => setColorRowByStatus(checked as boolean)}
-              data-testid="checkbox-color-row-by-status"
-            />
-            <Label
-              htmlFor="color-row-by-status"
-              className="text-sm cursor-pointer flex-1"
-            >
-              Color table rows by status
-            </Label>
-          </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            When enabled, table rows will be colored based on their status value
           </p>
 
           <div className="space-y-4">

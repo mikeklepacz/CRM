@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTheme } from "@/components/theme-provider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { debug } from "@/lib/debug";
 
 interface ThemeColors {
   background: string;
@@ -231,7 +232,14 @@ export function useCustomTheme() {
 
   // Finally, currentColors only depends on theme and the stable color objects
   const currentColors = useMemo(
-    () => (actualTheme === 'dark' ? darkColors : lightColors),
+    () => {
+      const colors = actualTheme === 'dark' ? darkColors : lightColors;
+      debug.statusLoad(`Current theme colors loaded`, {
+        theme: actualTheme,
+        statusColors: colors.statusColors
+      });
+      return colors;
+    },
     [actualTheme, darkColors, lightColors]
   );
 
@@ -316,6 +324,7 @@ export function useCustomTheme() {
       lightColors,
       darkColors,
       currentColors,
+      statusColors: currentColors.statusColors || {},
       saveColors,
       resetColors,
       isLoading,
