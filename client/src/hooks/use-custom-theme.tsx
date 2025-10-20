@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "@/components/theme-provider";
 
@@ -27,15 +27,15 @@ interface UserPreferences {
   hasDarkOverrides?: boolean;
 }
 
-// Default colors for light and dark modes
+// Default colors for light and dark modes (matching Replit's default theme)
 export const defaultLightColors: ThemeColors = {
-  background: '#ffffff',
-  text: '#000000',
-  tableTextColor: '#000000',
-  primary: '#3b82f6',
-  secondary: '#f3f4f6',
-  accent: '#8b5cf6',
-  border: '#e5e7eb',
+  background: '#f7f8f9',        // --card: 220 13% 97%
+  text: '#2a3441',              // --card-foreground: 220 9% 16%
+  tableTextColor: '#2a3441',    // --foreground: 220 9% 16%
+  primary: '#3b7efa',           // --primary: 221 83% 53%
+  secondary: '#e3e5e8',         // --secondary: 220 13% 89%
+  accent: '#e9ebec',            // --accent: 220 13% 91%
+  border: '#e3e5e8',            // --border: 220 13% 91%
   bodyBackground: '',
   headerBackground: '',
   statesButton: '',
@@ -54,13 +54,13 @@ export const defaultLightColors: ThemeColors = {
 };
 
 export const defaultDarkColors: ThemeColors = {
-  background: '#1a1a1a',
-  text: '#ffffff',
-  tableTextColor: '#ffffff',
-  primary: '#60a5fa',
-  secondary: '#2a2a2a',
-  accent: '#a78bfa',
-  border: '#404040',
+  background: '#242a33',        // --card: 217 33% 17%
+  text: '#f5f7f9',              // --card-foreground: 210 20% 98%
+  tableTextColor: '#f5f7f9',    // --foreground: 210 20% 98%
+  primary: '#3b7efa',           // --primary: 221 83% 53%
+  secondary: '#2f3640',         // --secondary: 217 33% 23%
+  accent: '#2a2f38',            // --accent: 217 33% 20%
+  border: '#3a4350',            // --border: 217 33% 24%
   bodyBackground: '',
   headerBackground: '',
   statesButton: '',
@@ -201,11 +201,25 @@ export function useCustomTheme() {
     }
   }, [actualTheme, userPreferences]);
 
+  // Memoize the color objects to prevent infinite re-renders in ColorCustomizer
+  const lightColors = useMemo(
+    () => ({ ...defaultLightColors, ...userPreferences?.lightModeColors }),
+    [userPreferences?.lightModeColors]
+  );
+
+  const darkColors = useMemo(
+    () => ({ ...defaultDarkColors, ...userPreferences?.darkModeColors }),
+    [userPreferences?.darkModeColors]
+  );
+
+  const currentColors = useMemo(
+    () => actualTheme === 'dark' ? darkColors : lightColors,
+    [actualTheme, darkColors, lightColors]
+  );
+
   return {
-    lightColors: { ...defaultLightColors, ...userPreferences?.lightModeColors },
-    darkColors: { ...defaultDarkColors, ...userPreferences?.darkModeColors },
-    currentColors: actualTheme === 'dark'
-      ? { ...defaultDarkColors, ...userPreferences?.darkModeColors }
-      : { ...defaultLightColors, ...userPreferences?.lightModeColors },
+    lightColors,
+    darkColors,
+    currentColors,
   };
 }
