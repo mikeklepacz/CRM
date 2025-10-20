@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WooCommerceSync } from "@/components/woocommerce-sync";
 import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { UserManagement } from "@/components/user-management";
+import { SalesReports } from "@/components/sales-reports";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -35,12 +36,17 @@ export default function AdminDashboard() {
       <Tabs defaultValue="users" className="space-y-6">
         <TabsList>
           <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
+          <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
           <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users">
           <UserManagement />
+        </TabsContent>
+
+        <TabsContent value="reports">
+          <SalesReports />
         </TabsContent>
 
         <TabsContent value="sheets">

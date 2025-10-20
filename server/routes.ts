@@ -780,6 +780,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get sales report data (admin only)
+  app.get('/api/reports/sales-data', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "Start date and end date are required" });
+      }
+      
+      // Parse dates
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      end.setHours(23, 59, 59, 999); // Include the entire end date
+      
+      // Fetch all orders within the date range
+      const allOrders = await storage.getAllOrders();
+      const ordersInRange = allOrders.filter(order => {
+        const orderDate = new Date(order.orderDate);
+        return orderDate >= start && orderDate <= end;
+      });
+      
+      // Fetch all users to get agent information
+      const allUsers = await storage.getAllUsers();
+      
+      // Group orders by agent and calculate metrics
+      const agentSales: Record<string, {
+        agentName: string;
+        agentId: string | null;
+        firstName: string | null;
+        lastName: string | null;
+        email: string | null;
+        totalOrders: number;
+        totalSales: number;
+        totalCommission: number;
+        orders: any[];
+      }> = {};
+      
+      // Process each order
+      for (const order of ordersInRange) {
+        const agentName = order.salesAgentName || 'Unassigned';
+        
+        if (!agentSales[agentName]) {
+          // Find matching user
+          const matchingUser = allUsers.find(u => 
+            u.agentName && u.agentName.toLowerCase().trim() === agentName.toLowerCase().trim()
+          );
+          
+          agentSales[agentName] = {
+            agentName,
+            agentId: matchingUser?.id || null,
+            firstName: matchingUser?.firstName || null,
+            lastName: matchingUser?.lastName || null,
+            email: matchingUser?.email || null,
+            totalOrders: 0,
+            totalSales: 0,
+            totalCommission: 0,
+            orders: [],
+          };
+        }
+        
+        const salesAmount = parseFloat(order.total || '0');
+        const commissionAmount = parseFloat(order.commissionAmount || '0');
+        
+        agentSales[agentName].totalOrders++;
+        agentSales[agentName].totalSales += salesAmount;
+        agentSales[agentName].totalCommission += commissionAmount;
+        agentSales[agentName].orders.push({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          orderDate: order.orderDate,
+          billingCompany: order.billingCompany,
+          billingEmail: order.billingEmail,
+          total: salesAmount,
+          commissionType: order.commissionType,
+          commissionAmount: commissionAmount,
+          status: order.status,
+        });
+      }
+      
+      // Convert to array and sort by total sales (descending)
+      const agentSummaries = Object.values(agentSales)
+        .filter(agent => agent.agentName !== 'Unassigned' && agent.totalOrders > 0)
+        .sort((a, b) => b.totalSales - a.totalSales);
+      
+      // Calculate totals
+      const summary = {
+        totalAgents: agentSummaries.length,
+        totalOrders: ordersInRange.length,
+        totalRevenue: agentSummaries.reduce((sum, agent) => sum + agent.totalSales, 0),
+        totalCommissionsPaid: agentSummaries.reduce((sum, agent) => sum + agent.totalCommission, 0),
+        dateRange: {
+          start: start.toISOString(),
+          end: end.toISOString(),
+        },
+      };
+      
+      res.json({
+        summary,
+        agents: agentSummaries,
+      });
+    } catch (error: any) {
+      console.error("Error fetching sales report data:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch sales report data" });
+    }
+  });
+
   // Note: To make a user admin, run this SQL command in the database console:
   // UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 
