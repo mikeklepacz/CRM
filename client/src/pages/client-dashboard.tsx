@@ -19,7 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -30,6 +30,8 @@ import { format, parse, isValid } from "date-fns";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
 import { HslColorPicker } from "react-colorful";
 import { Loader2 } from "lucide-react";
+import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
+import type { FranchiseGroup } from "@shared/franchiseUtils";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -155,7 +157,15 @@ export default function ClientDashboard() {
   const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
     open: boolean;
     row: any;
+    franchiseContext?: {
+      brandName: string;
+      allLocations: any[];
+    };
   } | null>(null);
+
+  // Franchise finder dialog state
+  const [franchiseFinderOpen, setFranchiseFinderOpen] = useState(false);
+  const [selectedFranchise, setSelectedFranchise] = useState<FranchiseGroup | null>(null);
 
   // Default colors for light and dark modes
   const defaultLightColors = {
@@ -1064,6 +1074,45 @@ export default function ClientDashboard() {
 
   // Filter and sort data (memoized for performance)
   const filteredData = useMemo(() => {
+    // Franchise filter - show only selected franchise locations
+    if (selectedFranchise) {
+      const franchiseLinks = new Set(selectedFranchise.locations.map((loc: any) => loc.Link));
+      let filtered = data.filter((row: any) => franchiseLinks.has(row.Link));
+
+      // Apply search filter (if any)
+      if (searchTerm.trim()) {
+        const searchLower = searchTerm.toLowerCase();
+        filtered = filtered.filter((row: any) => {
+          return headers.some((header: string) => {
+            const value = row[header]?.toString().toLowerCase() || '';
+            return value.includes(searchLower);
+          });
+        });
+      }
+
+      // Apply sorting
+      if (sortColumn) {
+        filtered = [...filtered].sort((a: any, b: any) => {
+          const aVal = String(a[sortColumn] || '');
+          const bVal = String(b[sortColumn] || '');
+
+          // Try numeric comparison first
+          const aNum = parseFloat(aVal);
+          const bNum = parseFloat(bVal);
+
+          if (!isNaN(aNum) && !isNaN(bNum)) {
+            return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+          }
+
+          // Fall back to string comparison
+          const comparison = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+          return sortDirection === 'asc' ? comparison : -comparison;
+        });
+      }
+
+      return filtered;
+    }
+
     // My Stores Only filter - bypass state/city filters when active
     if (showMyStoresOnly) {
       // Filter to only claimed stores (_hasTrackerData === true)
@@ -1250,7 +1299,8 @@ export default function ClientDashboard() {
     sortColumn,
     sortDirection,
     showMyStoresOnly,
-    selectedStatuses
+    selectedStatuses,
+    selectedFranchise
   ]);
 
   const visibleHeaders = columnOrder.filter((h: string) => visibleColumns[h]);
@@ -2291,6 +2341,40 @@ export default function ClientDashboard() {
                   </Popover>
                 )}
 
+                {/* Franchise Finder */}
+                {selectedFranchise ? (
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setFranchiseFinderOpen(true)}
+                      data-testid="button-franchise-finder"
+                    >
+                      <Store className="mr-2 h-4 w-4" />
+                      {selectedFranchise.brandName}
+                      <Badge variant="secondary" className="ml-2">
+                        {selectedFranchise.locations.length}
+                      </Badge>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedFranchise(null)}
+                      data-testid="button-clear-franchise"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setFranchiseFinderOpen(true)}
+                    data-testid="button-franchise-finder"
+                  >
+                    <Store className="mr-2 h-4 w-4" />
+                    Find Franchises
+                  </Button>
+                )}
+
                 {/* Status Filter */}
                 <Popover>
                   <PopoverTrigger asChild>
@@ -2307,7 +2391,7 @@ export default function ClientDashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setSelectedStatuses(new Set(statusOptions.map(s => s.value)))}
+                            onClick={() => setSelectedStatuses(new Set(statusOptions))}
                             data-testid="button-select-all-statuses"
                           >
                             All
@@ -2329,26 +2413,26 @@ export default function ClientDashboard() {
                       <ScrollArea className="h-64">
                         <div className="space-y-2">
                           {statusOptions.map((status) => (
-                            <div key={status.value} className="flex items-center gap-2">
+                            <div key={status} className="flex items-center gap-2">
                               <Checkbox
-                                id={`status-${status.value}`}
-                                checked={selectedStatuses.has(status.value)}
+                                id={`status-${status}`}
+                                checked={selectedStatuses.has(status)}
                                 onCheckedChange={() => {
                                   const newSelected = new Set(selectedStatuses);
-                                  if (newSelected.has(status.value)) {
-                                    newSelected.delete(status.value);
+                                  if (newSelected.has(status)) {
+                                    newSelected.delete(status);
                                   } else {
-                                    newSelected.add(status.value);
+                                    newSelected.add(status);
                                   }
                                   setSelectedStatuses(newSelected);
                                 }}
-                                data-testid={`checkbox-status-${status.value}`}
+                                data-testid={`checkbox-status-${status}`}
                               />
                               <Label
-                                htmlFor={`status-${status.value}`}
+                                htmlFor={`status-${status}`}
                                 className="text-sm cursor-pointer flex-1"
                               >
-                                {status.value}
+                                {status}
                               </Label>
                             </div>
                           ))}
@@ -4264,6 +4348,23 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Franchise Finder Dialog */}
+    <FranchiseFinderDialog
+      open={franchiseFinderOpen}
+      onOpenChange={(open) => {
+        setFranchiseFinderOpen(open);
+        if (!open) {
+          // Don't clear selected franchise when dialog closes - let user manage it via toolbar
+        }
+      }}
+      stores={data}
+      onSelectFranchise={(franchise) => {
+        setSelectedFranchise(franchise);
+        // Also clear other filters to show only franchise stores
+        setShowMyStoresOnly(false);
+      }}
+    />
     </>
   );
 }
