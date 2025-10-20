@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Palette, Save, RotateCcw } from "lucide-react";
 import { HslColorPicker } from "react-colorful";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
+import { useTheme } from "@/components/theme-provider";
 
 // HSL <-> Hex conversion utilities
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
