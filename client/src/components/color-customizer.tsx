@@ -71,7 +71,7 @@ export function ColorCustomizer() {
   // Mutation to save color preferences
   const saveColorsMutation = useMutation({
     mutationFn: async (colors: any) => {
-      const preferences = userPreferences ? { ...userPreferences } : {};
+      const preferences: any = userPreferences ? { ...userPreferences } : {};
       
       if (actualTheme === 'dark') {
         preferences.darkModeColors = colors;
