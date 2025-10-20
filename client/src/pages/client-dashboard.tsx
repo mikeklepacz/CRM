@@ -27,7 +27,6 @@ import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parse, isValid } from "date-fns";
-import { ContactActionDialog } from "@/components/contact-action-dialog";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
 import { HslColorPicker } from "react-colorful";
 import { Loader2 } from "lucide-react";
@@ -142,13 +141,6 @@ export default function ClientDashboard() {
   // Color row by status state
   const [colorRowByStatus, setColorRowByStatus] = useState<boolean>(false);
 
-  // Contact action dialog state
-  const [contactActionDialog, setContactActionDialog] = useState<{
-    open: boolean;
-    contactType: 'phone' | 'email';
-    contactValue: string;
-    row: any;
-  } | null>(null);
 
   // Address edit dialog state
   const [addressEditDialog, setAddressEditDialog] = useState<{
@@ -2982,20 +2974,6 @@ export default function ClientDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Contact Action Dialog */}
-      {contactActionDialog && (
-        <ContactActionDialog
-          open={contactActionDialog.open}
-          onOpenChange={(open) => !open && setContactActionDialog(null)}
-          contactType={contactActionDialog.contactType}
-          contactValue={contactActionDialog.contactValue}
-          row={contactActionDialog.row}
-          trackerSheetId={trackerSheetId}
-          joinColumn={joinColumn}
-          userEmail={currentUser?.email || ''}
-        />
-      )}
 
       {/* Address Edit Dialog */}
       {addressEditDialog && (
