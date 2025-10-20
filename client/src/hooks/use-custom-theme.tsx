@@ -206,18 +206,33 @@ export function useCustomTheme() {
   }, [actualTheme, userPreferences]);
 
   // Memoize the merged color objects to prevent infinite re-renders
-  // Use deep comparison by stringifying the values
-  const lightColors = useMemo(() => {
-    return { ...defaultLightColors, ...userPreferences?.lightModeColors };
-  }, [JSON.stringify(userPreferences?.lightModeColors)]);
+  // First, create stable stringified versions of the color data
+  const lightColorsStr = useMemo(
+    () => JSON.stringify(userPreferences?.lightModeColors),
+    [userPreferences?.lightModeColors]
+  );
 
-  const darkColors = useMemo(() => {
-    return { ...defaultDarkColors, ...userPreferences?.darkModeColors };
-  }, [JSON.stringify(userPreferences?.darkModeColors)]);
+  const darkColorsStr = useMemo(
+    () => JSON.stringify(userPreferences?.darkModeColors),
+    [userPreferences?.darkModeColors]
+  );
 
-  const currentColors = useMemo(() => {
-    return actualTheme === 'dark' ? darkColors : lightColors;
-  }, [actualTheme, JSON.stringify(darkColors), JSON.stringify(lightColors)]);
+  // Then use those stable strings as dependencies for the merged objects
+  const lightColors = useMemo(
+    () => ({ ...defaultLightColors, ...userPreferences?.lightModeColors }),
+    [lightColorsStr]
+  );
+
+  const darkColors = useMemo(
+    () => ({ ...defaultDarkColors, ...userPreferences?.darkModeColors }),
+    [darkColorsStr]
+  );
+
+  // Finally, currentColors only depends on theme and the stable color objects
+  const currentColors = useMemo(
+    () => (actualTheme === 'dark' ? darkColors : lightColors),
+    [actualTheme, darkColors, lightColors]
+  );
 
   // Mutation to save colors - centralized here to prevent state sync issues
   const saveColorsMutation = useMutation({
