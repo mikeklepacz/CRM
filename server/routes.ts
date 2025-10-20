@@ -696,6 +696,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const users = await storage.getAllUsers();
       
+      // Debug: Log the first user to see what fields are actually present
+      if (users.length > 0) {
+        console.log('DEBUG - First user from DB:', JSON.stringify(users[0], null, 2));
+      }
+      
       // Get all orders from database to calculate sales metrics
       const allOrders = await storage.getAllOrders();
       
@@ -723,7 +728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: user.lastName,
           agentName: user.agentName,
           role: user.role,
-          isActive: user.isActive,
+          isActive: user.isActive ?? (user as any).is_active ?? true,
           totalSales,
           grossIncome: grossIncome.toFixed(2),
           createdAt: user.createdAt,
