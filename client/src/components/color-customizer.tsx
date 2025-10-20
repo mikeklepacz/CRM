@@ -48,11 +48,17 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
-export function ColorCustomizer() {
+interface ColorCustomizerProps {
+  colorPresets: Array<{name: string, color: string}>;
+  setColorPresets: (presets: Array<{name: string, color: string}>) => void;
+}
+
+export function ColorCustomizer({ colorPresets, setColorPresets }: ColorCustomizerProps) {
   const { actualTheme } = useTheme();
   const { currentColors, saveColors, resetColors, isSaving } = useCustomTheme();
   const [customColors, setCustomColors] = useState(currentColors);
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
+  const [presetName, setPresetName] = useState("");
   const { toast } = useToast();
 
   // Sync customColors when theme changes (light/dark switch)
@@ -73,6 +79,26 @@ export function ColorCustomizer() {
     const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
     const defaultValue = defaultColors[field as keyof typeof defaultColors] || '';
     setCustomColors({ ...customColors, [field]: defaultValue });
+  };
+
+  // Save current color as a preset
+  const handleSavePreset = (color: string) => {
+    if (!presetName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a preset name",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const newPresets = [...colorPresets, { name: presetName.trim(), color }];
+    setColorPresets(newPresets);
+    setPresetName("");
+    toast({
+      title: "Preset Saved",
+      description: `"${presetName}" saved to your presets`,
+    });
   };
 
   // Use browser's EyeDropper API if available
@@ -212,6 +238,49 @@ export function ColorCustomizer() {
                               title="Reset to default"
                             >
                               <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Color Presets/Swatches */}
+                        {colorPresets.length > 0 && (
+                          <div className="space-y-2">
+                            <Label className="text-xs">Saved Presets</Label>
+                            <div className="flex flex-wrap gap-1">
+                              {colorPresets.map((preset, pIndex) => (
+                                <button
+                                  key={pIndex}
+                                  onClick={() => {
+                                    setCustomColors({ ...customColors, [field]: preset.color });
+                                  }}
+                                  className="w-8 h-8 rounded border border-border"
+                                  style={{ backgroundColor: preset.color }}
+                                  title={preset.name}
+                                  data-testid={`preset-${field}-${pIndex}`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Save Preset */}
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-xs">Save as Preset</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              value={presetName}
+                              onChange={(e) => setPresetName(e.target.value)}
+                              placeholder="Preset name..."
+                              className="flex-1 text-xs"
+                              data-testid={`input-preset-name-${field}`}
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() => handleSavePreset(currentColor)}
+                              disabled={!presetName.trim()}
+                              data-testid={`button-save-preset-${field}`}
+                            >
+                              <Save className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>

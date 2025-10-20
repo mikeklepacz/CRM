@@ -29,6 +29,7 @@ interface UserPreferences {
   hasLightOverrides?: boolean;
   hasDarkOverrides?: boolean;
   colorRowByStatus?: boolean;
+  colorPresets?: Array<{name: string, color: string}>;
 }
 
 // Default colors for light and dark modes (matching Replit's default theme)
@@ -358,6 +359,25 @@ export function useCustomTheme() {
     updateStatusEntryMutation.mutate({ index, name, bgColor, textColor });
   }, [updateStatusEntryMutation]);
 
+  // Get colorPresets from user preferences
+  const colorPresets = userPreferences?.colorPresets ?? [];
+
+  // Mutation to update colorPresets
+  const setColorPresetsMutation = useMutation({
+    mutationFn: async (presets: Array<{name: string, color: string}>) => {
+      const preferences = userPreferences ? { ...userPreferences } : {};
+      preferences.colorPresets = presets;
+      return await apiRequest('PUT', '/api/user/preferences', preferences);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+    },
+  });
+
+  const setColorPresets = useCallback((presets: Array<{name: string, color: string}>) => {
+    setColorPresetsMutation.mutate(presets);
+  }, [setColorPresetsMutation]);
+
   return useMemo(
     () => ({
       lightColors,
@@ -372,7 +392,9 @@ export function useCustomTheme() {
       setColorRowByStatus,
       updateStatusEntry,
       isUpdatingStatus: updateStatusEntryMutation.isPending,
+      colorPresets,
+      setColorPresets,
     }),
-    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending]
+    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending, colorPresets, setColorPresets]
   );
 }

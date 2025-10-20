@@ -16,7 +16,12 @@ import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
 
-export function Header() {
+interface HeaderProps {
+  colorPresets?: Array<{name: string, color: string}>;
+  setColorPresets?: (presets: Array<{name: string, color: string}>) => void;
+}
+
+export function Header({ colorPresets = [], setColorPresets = () => {} }: HeaderProps) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
@@ -57,7 +62,7 @@ export function Header() {
           </div>
           
           <div className="flex items-center gap-3">
-            <ColorCustomizer />
+            <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} />
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

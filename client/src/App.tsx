@@ -21,7 +21,7 @@ function Router() {
   
   // Apply global theme customization
   // Hook is always called (Rules of Hooks), but only applies colors when authenticated
-  useCustomTheme();
+  const { colorPresets, setColorPresets } = useCustomTheme();
 
   if (isLoading) {
     return (
@@ -45,7 +45,7 @@ function Router() {
 
   return (
     <>
-      <Header />
+      <Header colorPresets={colorPresets} setColorPresets={setColorPresets} />
       <Switch>
         <Route path="/settings" component={Settings} />
         <Route path="/clients" component={ClientDashboard} />

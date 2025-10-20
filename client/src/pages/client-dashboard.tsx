@@ -101,6 +101,372 @@ interface MergedDataRow {
   _deletedFromStore?: boolean;
 }
 
+// Status Editor Popover Component
+function StatusEditorPopover({
+  statusOptions,
+  statusColors,
+  colorRowByStatus,
+  setColorRowByStatus,
+  updateStatusEntry,
+  colorPresets,
+  setColorPresets,
+  currentUser,
+}: {
+  statusOptions: string[];
+  statusColors: { [status: string]: { background: string; text: string } };
+  colorRowByStatus: boolean;
+  setColorRowByStatus: (value: boolean) => void;
+  updateStatusEntry: (index: number, name: string, bgColor: string, textColor: string) => void;
+  colorPresets: Array<{name: string, color: string}>;
+  setColorPresets: (presets: Array<{name: string, color: string}>) => void;
+  currentUser: any;
+}) {
+  const { toast } = useToast();
+  const { actualTheme } = useTheme();
+  const [localStatuses, setLocalStatuses] = useState(statusOptions);
+  const [localColors, setLocalColors] = useState(statusColors);
+  const [isSaving, setIsSaving] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [activeColorPicker, setActiveColorPicker] = useState<string | null>(null);
+  
+  const isAdmin = currentUser?.role === 'admin';
+
+  // Update local state when props change
+  useEffect(() => {
+    setLocalStatuses(statusOptions);
+    setLocalColors(statusColors);
+  }, [statusOptions, statusColors]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Save all status entries
+      for (let i = 0; i < localStatuses.length; i++) {
+        const statusEntry = Object.entries(localColors).find(([key]) => key.startsWith(`${i + 1} –`));
+        const statusName = statusEntry?.[0]?.replace(/^\d+ – /, '') || localStatuses[i].replace(/^\d+ – /, '');
+        const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
+        await updateStatusEntry(i, statusName, colors.background, colors.text);
+      }
+      
+      toast({
+        title: "Success",
+        description: "Status colors saved successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save status colors",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+    setLocalColors(defaultColors.statusColors || {});
+    toast({
+      title: "Reset Complete",
+      description: "Status colors reset to defaults",
+    });
+  };
+
+  const handleSavePreset = (color: string) => {
+    if (!presetName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a preset name",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const newPresets = [...colorPresets, { name: presetName.trim(), color }];
+    setColorPresets(newPresets);
+    setPresetName("");
+    toast({
+      title: "Preset Saved",
+      description: `"${presetName}" saved to your presets`,
+    });
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" data-testid="button-status">
+          <Palette className="mr-2 h-4 w-4" />
+          Status
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[500px] max-h-[600px] overflow-y-auto" align="end">
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium">Status Customization</h4>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Customize status colors{isAdmin ? ' and names' : ''}. Changes apply everywhere.
+          </p>
+
+          {/* Color Rows by Status Checkbox */}
+          <div className="flex items-center gap-2 p-3 rounded-md border">
+            <Checkbox
+              id="status-color-rows"
+              checked={colorRowByStatus}
+              onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
+              data-testid="checkbox-status-color-rows"
+            />
+            <Label htmlFor="status-color-rows" className="text-sm cursor-pointer">
+              Color Rows by Status
+            </Label>
+          </div>
+
+          {/* Status Editors */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Edit Status Colors</Label>
+            {localStatuses.map((status, index) => {
+              const statusNumber = index + 1;
+              const statusEntry = Object.entries(localColors).find(([key]) => key.startsWith(`${statusNumber} –`));
+              const statusName = statusEntry?.[0]?.replace(/^\d+ – /, '') || status.replace(/^\d+ – /, '');
+              const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
+
+              return (
+                <div key={index} className="space-y-2 p-3 rounded-md border">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-muted-foreground w-4">{statusNumber}</span>
+                    {isAdmin ? (
+                      <Input
+                        value={statusName}
+                        onChange={(e) => {
+                          const newName = e.target.value;
+                          const newKey = `${statusNumber} – ${newName}`;
+                          const newColors = { ...localColors };
+                          // Remove old key
+                          const oldKey = Object.keys(newColors).find(k => k.startsWith(`${statusNumber} –`));
+                          if (oldKey) delete newColors[oldKey];
+                          // Add new key
+                          newColors[newKey] = colors;
+                          setLocalColors(newColors);
+                        }}
+                        className="flex-1"
+                        placeholder={`Status ${statusNumber} name`}
+                        data-testid={`input-status-name-${index}`}
+                      />
+                    ) : (
+                      <div className="flex-1 text-sm">{statusName}</div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Background Color */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Background</Label>
+                      <div className="flex gap-1">
+                        <Input
+                          type="color"
+                          value={colors.background}
+                          onChange={(e) => {
+                            const statusKey = `${statusNumber} – ${statusName}`;
+                            setLocalColors({
+                              ...localColors,
+                              [statusKey]: { ...colors, background: e.target.value }
+                            });
+                          }}
+                          onFocus={() => setActiveColorPicker(`bg-${index}`)}
+                          className="h-9 flex-1 cursor-pointer"
+                          data-testid={`input-status-bg-${index}`}
+                        />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => {
+                            const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+                            const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
+                            if (defaultStatus) {
+                              const statusKey = `${statusNumber} – ${statusName}`;
+                              setLocalColors({
+                                ...localColors,
+                                [statusKey]: { ...colors, background: defaultStatus[1].background }
+                              });
+                            }
+                          }}
+                          className="h-9 w-9"
+                          title="Reset to default"
+                          data-testid={`button-reset-bg-${index}`}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {/* Color Presets for Background */}
+                      {colorPresets.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {colorPresets.map((preset, pIndex) => (
+                            <button
+                              key={pIndex}
+                              onClick={() => {
+                                const statusKey = `${statusNumber} – ${statusName}`;
+                                setLocalColors({
+                                  ...localColors,
+                                  [statusKey]: { ...colors, background: preset.color }
+                                });
+                              }}
+                              className="w-6 h-6 rounded border border-border"
+                              style={{ backgroundColor: preset.color }}
+                              title={preset.name}
+                              data-testid={`preset-bg-${index}-${pIndex}`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {/* Save Preset for Background */}
+                      {activeColorPicker === `bg-${index}` && (
+                        <div className="flex gap-1 pt-1">
+                          <Input
+                            value={presetName}
+                            onChange={(e) => setPresetName(e.target.value)}
+                            placeholder="Preset name..."
+                            className="flex-1 h-8 text-xs"
+                            data-testid={`input-preset-name-bg-${index}`}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleSavePreset(colors.background)}
+                            disabled={!presetName.trim()}
+                            className="h-8"
+                            data-testid={`button-save-preset-bg-${index}`}
+                          >
+                            <Save className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Text Color */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Text</Label>
+                      <div className="flex gap-1">
+                        <Input
+                          type="color"
+                          value={colors.text}
+                          onChange={(e) => {
+                            const statusKey = `${statusNumber} – ${statusName}`;
+                            setLocalColors({
+                              ...localColors,
+                              [statusKey]: { ...colors, text: e.target.value }
+                            });
+                          }}
+                          onFocus={() => setActiveColorPicker(`text-${index}`)}
+                          className="h-9 flex-1 cursor-pointer"
+                          data-testid={`input-status-text-${index}`}
+                        />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => {
+                            const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+                            const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
+                            if (defaultStatus) {
+                              const statusKey = `${statusNumber} – ${statusName}`;
+                              setLocalColors({
+                                ...localColors,
+                                [statusKey]: { ...colors, text: defaultStatus[1].text }
+                              });
+                            }
+                          }}
+                          className="h-9 w-9"
+                          title="Reset to default"
+                          data-testid={`button-reset-text-${index}`}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {/* Color Presets for Text */}
+                      {colorPresets.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {colorPresets.map((preset, pIndex) => (
+                            <button
+                              key={pIndex}
+                              onClick={() => {
+                                const statusKey = `${statusNumber} – ${statusName}`;
+                                setLocalColors({
+                                  ...localColors,
+                                  [statusKey]: { ...colors, text: preset.color }
+                                });
+                              }}
+                              className="w-6 h-6 rounded border border-border"
+                              style={{ backgroundColor: preset.color }}
+                              title={preset.name}
+                              data-testid={`preset-text-${index}-${pIndex}`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {/* Save Preset for Text */}
+                      {activeColorPicker === `text-${index}` && (
+                        <div className="flex gap-1 pt-1">
+                          <Input
+                            value={presetName}
+                            onChange={(e) => setPresetName(e.target.value)}
+                            placeholder="Preset name..."
+                            className="flex-1 h-8 text-xs"
+                            data-testid={`input-preset-name-text-${index}`}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleSavePreset(colors.text)}
+                            disabled={!presetName.trim()}
+                            className="h-8"
+                            data-testid={`button-save-preset-text-${index}`}
+                          >
+                            <Save className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Live Preview */}
+                  <div
+                    className="px-3 py-2 rounded-sm text-sm text-center"
+                    style={{
+                      backgroundColor: colors.background,
+                      color: colors.text,
+                    }}
+                    data-testid={`preview-status-${index}`}
+                  >
+                    {statusNumber} – {statusName || `Status ${statusNumber}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Save Button */}
+          <div className="pt-4 border-t">
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="w-full"
+              data-testid="button-save-status-colors"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Colors
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function ClientDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -176,8 +542,8 @@ export default function ClientDashboard() {
   const customColors = actualTheme === 'dark' ? darkModeColors : lightModeColors;
   const setCustomColors = actualTheme === 'dark' ? setDarkModeColors : setLightModeColors;
 
-  // Color presets state
-  const [colorPresets, setColorPresets] = useState<Array<{name: string, color: string}>>([]);
+  // Get color presets from useCustomTheme hook (now managed globally)
+  const { colorPresets, setColorPresets } = useCustomTheme();
   const [presetName, setPresetName] = useState("");
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
 
@@ -451,8 +817,7 @@ export default function ClientDashboard() {
     verticalAlign?: 'top' | 'middle' | 'bottom';
     // Add new preferences
     statusOptions?: string[];
-    colorRowByStatus?: boolean;
-    colorPresets?: Array<{name: string, color: string}>;
+    // colorRowByStatus and colorPresets now managed by useCustomTheme hook
     freezeFirstColumn?: boolean;
     showMyStoresOnly?: boolean;
   } | null>({
@@ -590,10 +955,7 @@ export default function ClientDashboard() {
         if (userPreferences.statusOptions) {
           setStatusOptions(userPreferences.statusOptions);
         }
-        // colorRowByStatus is now managed by useCustomTheme hook
-        if (userPreferences.colorPresets) {
-          setColorPresets(userPreferences.colorPresets);
-        }
+        // colorRowByStatus and colorPresets are now managed by useCustomTheme hook
         if (userPreferences.freezeFirstColumn !== undefined) {
           setFreezeFirstColumn(userPreferences.freezeFirstColumn);
         }
@@ -949,7 +1311,7 @@ export default function ClientDashboard() {
           textAlign, // Save alignment preferences
           verticalAlign, // Save alignment preferences
           statusOptions, // Save status options
-          colorPresets, // Save color presets
+          // colorPresets now managed by useCustomTheme hook
           freezeFirstColumn, // Save freeze column preference
           showMyStoresOnly, // Save My Stores Only preference
           // Note: Colors and colorRowByStatus are saved separately via useCustomTheme
@@ -960,7 +1322,7 @@ export default function ClientDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorPresets, freezeFirstColumn, showMyStoresOnly]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, freezeFirstColumn, showMyStoresOnly]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -1690,108 +2052,17 @@ export default function ClientDashboard() {
                         <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
                       </div>
 
-                      {/* Status Button - Opens editor dialog with Color Rows checkbox inside */}
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" data-testid="button-status">
-                            <Palette className="mr-2 h-4 w-4" />
-                            Status
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[500px] max-h-[600px] overflow-y-auto" align="end">
-                          <div className="space-y-4">
-                            {/* Header */}
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-medium">Status Customization</h4>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Customize status names and colors. Changes apply to dropdown, table rows, and store info popup.
-                            </p>
-
-                            {/* Color Rows by Status Checkbox */}
-                            <div className="flex items-center gap-2 p-3 rounded-md border">
-                              <input
-                                type="checkbox"
-                                id="status-color-rows"
-                                checked={colorRowByStatus}
-                                onChange={(e) => setColorRowByStatus(e.target.checked)}
-                                className="h-4 w-4"
-                                data-testid="checkbox-status-color-rows"
-                              />
-                              <Label htmlFor="status-color-rows" className="text-sm cursor-pointer">
-                                Color Rows by Status
-                              </Label>
-                            </div>
-
-                            {/* Status Editors */}
-                            <div className="space-y-3">
-                              <Label className="text-sm font-medium">Edit Status Colors</Label>
-                              {[0, 1, 2, 3, 4, 5, 6].map((index) => {
-                                const statusNumber = index + 1;
-                                const statusEntries = Object.entries(statusColors);
-                                const currentEntry = statusEntries.find(([key]) => key.startsWith(`${statusNumber} –`));
-                                const statusName = currentEntry?.[0]?.replace(/^\d+ – /, '') || (index === 6 ? 'Warm' : '');
-                                const colors = currentEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
-
-                                return (
-                                  <div key={index} className="space-y-2 p-3 rounded-md border">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs font-mono text-muted-foreground w-4">{statusNumber}</span>
-                                      <Input
-                                        value={statusName}
-                                        onChange={(e) => {
-                                          const newName = e.target.value;
-                                          updateStatusEntry(index, newName, colors.background, colors.text);
-                                        }}
-                                        className="flex-1"
-                                        placeholder={`Status ${statusNumber} name`}
-                                        data-testid={`input-status-name-${index}`}
-                                      />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="space-y-1">
-                                        <Label className="text-xs text-muted-foreground">Background</Label>
-                                        <Input
-                                          type="color"
-                                          value={colors.background}
-                                          onChange={(e) => {
-                                            updateStatusEntry(index, statusName, e.target.value, colors.text);
-                                          }}
-                                          className="h-9 w-full cursor-pointer"
-                                          data-testid={`input-status-bg-${index}`}
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label className="text-xs text-muted-foreground">Text</Label>
-                                        <Input
-                                          type="color"
-                                          value={colors.text}
-                                          onChange={(e) => {
-                                            updateStatusEntry(index, statusName, colors.background, e.target.value);
-                                          }}
-                                          className="h-9 w-full cursor-pointer"
-                                          data-testid={`input-status-text-${index}`}
-                                        />
-                                      </div>
-                                    </div>
-                                    {/* Live Preview */}
-                                    <div
-                                      className="px-3 py-2 rounded-sm text-sm text-center"
-                                      style={{
-                                        backgroundColor: colors.background,
-                                        color: colors.text,
-                                      }}
-                                      data-testid={`preview-status-${index}`}
-                                    >
-                                      {statusNumber} – {statusName || `Status ${statusNumber}`}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                      {/* Status Button - Opens editor dialog */}
+                      <StatusEditorPopover
+                        statusOptions={statusOptions}
+                        statusColors={statusColors}
+                        colorRowByStatus={colorRowByStatus}
+                        setColorRowByStatus={setColorRowByStatus}
+                        updateStatusEntry={updateStatusEntry}
+                        colorPresets={colorPresets}
+                        setColorPresets={setColorPresets}
+                        currentUser={currentUser}
+                      />
                     </div>
                   </CardContent>
                 </Card>
@@ -3760,7 +4031,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
-                          {statusOptions.map((status) => {
+                          {statusOptions.map((status: string) => {
                             const colors = statusColors[status];
                             debug.statusColors(`Applying status colors to Store Info popup dropdown`, {
                               status,
