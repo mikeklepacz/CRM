@@ -2367,7 +2367,11 @@ export default function ClientDashboard() {
                 ) : (
                   <Button 
                     variant="outline" 
-                    onClick={() => setFranchiseFinderOpen(true)}
+                    onClick={() => {
+                      console.debug('[Find Franchises Button] clicked, opening dialog');
+                      console.debug('[Find Franchises Button] current franchiseFinderOpen state:', franchiseFinderOpen);
+                      setFranchiseFinderOpen(true);
+                    }}
                     data-testid="button-franchise-finder"
                   >
                     <Store className="mr-2 h-4 w-4" />
@@ -3260,6 +3264,25 @@ export default function ClientDashboard() {
           franchiseContext={storeDetailsDialog.franchiseContext}
         />
       )}
+
+      {/* Franchise Finder Dialog */}
+      <FranchiseFinderDialog
+        open={franchiseFinderOpen}
+        onOpenChange={(open) => {
+          console.debug('[FranchiseFinderDialog] onOpenChange called with:', open);
+          setFranchiseFinderOpen(open);
+          if (!open) {
+            // Don't clear selected franchise when dialog closes - let user manage it via toolbar
+          }
+        }}
+        stores={data}
+        onSelectFranchise={(franchise) => {
+          console.debug('[FranchiseFinderDialog] onSelectFranchise called with:', franchise);
+          setSelectedFranchise(franchise);
+          // Also clear other filters to show only franchise stores
+          setShowMyStoresOnly(false);
+        }}
+      />
       </div>
     </div>
   );
@@ -4408,23 +4431,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         </DialogFooter>
       </DialogContent>
     </Dialog>
-
-    {/* Franchise Finder Dialog */}
-    <FranchiseFinderDialog
-      open={franchiseFinderOpen}
-      onOpenChange={(open) => {
-        setFranchiseFinderOpen(open);
-        if (!open) {
-          // Don't clear selected franchise when dialog closes - let user manage it via toolbar
-        }
-      }}
-      stores={data}
-      onSelectFranchise={(franchise) => {
-        setSelectedFranchise(franchise);
-        // Also clear other filters to show only franchise stores
-        setShowMyStoresOnly(false);
-      }}
-    />
     </>
   );
 }
