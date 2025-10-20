@@ -337,6 +337,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     colorRowByStatus: z.boolean().optional(),
     colorPresets: z.array(z.object({ name: z.string(), color: z.string() })).optional(),
     showCanadaOnly: z.boolean().optional(),
+    freezeFirstColumn: z.boolean().optional(),
+    statusOptions: z.array(z.string()).optional(),
+    showMyStoresOnly: z.boolean().optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {

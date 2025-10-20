@@ -439,6 +439,7 @@ export default function ClientDashboard() {
     colorRowByStatus?: boolean;
     colorPresets?: Array<{name: string, color: string}>;
     freezeFirstColumn?: boolean;
+    showMyStoresOnly?: boolean;
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
