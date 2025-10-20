@@ -700,7 +700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let trackerRows: any[][] = [];
       let headers: string[] = [];
       let agentIndex = -1;
-      let amountIndex = -1;
+      let totalIndex = -1;
       
       if (trackerSheet) {
         try {
@@ -710,8 +710,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (trackerRows.length > 0) {
             headers = trackerRows[0];
-            agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
-            amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+            agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent' || h.toLowerCase() === 'agent name');
+            totalIndex = headers.findIndex((h: string) => h.toLowerCase() === 'total');
           }
         } catch (error) {
           console.error('Error reading Commission Tracker sheet:', error);
@@ -722,15 +722,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let totalSales = 0;
         let grossIncome = 0;
         
-        if (trackerRows.length > 0 && user.agentName && agentIndex >= 0 && amountIndex >= 0) {
+        if (trackerRows.length > 0 && user.agentName && agentIndex >= 0 && totalIndex >= 0) {
           for (let i = 1; i < trackerRows.length; i++) {
             const row = trackerRows[i];
             const agent = row[agentIndex] || '';
-            const amount = parseFloat(row[amountIndex] || '0');
+            const total = parseFloat(row[totalIndex] || '0');
             
-            if (agent.toLowerCase() === user.agentName.toLowerCase() && amount > 0) {
+            if (agent.toLowerCase() === user.agentName.toLowerCase() && total > 0) {
               totalSales++;
-              grossIncome += amount;
+              grossIncome += total;
             }
           }
         }
