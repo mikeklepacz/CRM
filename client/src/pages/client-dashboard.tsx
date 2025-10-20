@@ -117,6 +117,7 @@ export default function ClientDashboard() {
   const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
   const [citySearchTerm, setCitySearchTerm] = useState("");
+  const [showMyStoresOnly, setShowMyStoresOnly] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
   const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
@@ -593,6 +594,9 @@ export default function ClientDashboard() {
         if (userPreferences.freezeFirstColumn !== undefined) {
           setFreezeFirstColumn(userPreferences.freezeFirstColumn);
         }
+        if (userPreferences.showMyStoresOnly !== undefined) {
+          setShowMyStoresOnly(userPreferences.showMyStoresOnly);
+        }
 
         setPreferencesLoaded(true);
       } else if (!preferencesLoaded) {
@@ -610,6 +614,7 @@ export default function ClientDashboard() {
         setVerticalAlign('middle');
         setColorRowByStatus(false); // Default to false
         setFreezeFirstColumn(false); // Default to false
+        setShowMyStoresOnly(false); // Default to false
         setPreferencesLoaded(true);
       } else {
         // Preferences already loaded - check for new headers
@@ -946,6 +951,7 @@ export default function ClientDashboard() {
           colorRowByStatus, // Save row coloring preference
           colorPresets, // Save color presets
           freezeFirstColumn, // Save freeze column preference
+          showMyStoresOnly, // Save My Stores Only preference
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
@@ -953,7 +959,7 @@ export default function ClientDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, lightModeColors, darkModeColors, preferencesLoaded, textAlign, verticalAlign, statusOptions, colorRowByStatus, colorPresets, freezeFirstColumn, showMyStoresOnly]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
