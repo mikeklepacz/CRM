@@ -1685,625 +1685,148 @@ export default function ClientDashboard() {
                   />
                   <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
                 </div>
-
-                      {/* Theme Toggle with Label */}
-                      <ThemeToggle showLabel={true} variant="outline" />
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" data-testid="button-theme-customizer">
-                      <Palette className="mr-2 h-4 w-4" />
-                      Colors
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-96 max-h-[600px] overflow-y-auto">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium">Customize Colors</h4>
-                        <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted text-xs font-medium">
-                          {actualTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Currently editing colors for {actualTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
-                      </p>
-                      <div className="space-y-4">
-                        {(['background', 'tableTextColor', 'text', 'primary', 'secondary', 'accent', 'border', 'bodyBackground', 'headerBackground', 'statesButton', 'franchiseButton', 'statusButton', 'columnsButton', 'actionButtons'] as const).map((field) => {
-                          const fieldLabels = {
-                            background: 'Table Background',
-                            tableTextColor: 'Table Text Color',
-                            text: 'Interface Text',
-                            primary: 'Table Links (Phone, Email, Website)',
-                            secondary: 'Card & Panel Background',
-                            accent: 'Accent Highlights',
-                            border: 'Borders & Dividers',
-                            bodyBackground: 'Page Background',
-                            headerBackground: 'Header Background',
-                            statesButton: 'States Filter Button',
-                            franchiseButton: 'Find Franchise Button',
-                            statusButton: 'Status Filter Button',
-                            columnsButton: 'Columns Button',
-                            actionButtons: 'Action Buttons (Save, Export, etc)',
-                          };
-
-                          const fieldDescriptions = {
-                            background: 'Background color of the main data table',
-                            tableTextColor: 'Text color inside table cells and data rows',
-                            text: 'Color of headings, labels, and interface text',
-                            primary: 'Color for clickable phone numbers, emails, and website links in table',
-                            secondary: 'Secondary buttons and card backgrounds',
-                            accent: 'Accent elements and secondary highlights',
-                            border: 'Border lines between rows and card edges',
-                            bodyBackground: 'Main page body background (leave empty for theme default)',
-                            headerBackground: 'Top header background (leave empty for theme default)',
-                            statesButton: 'Color for the States filter button',
-                            franchiseButton: 'Color for the Find Franchise button',
-                            statusButton: 'Color for the Status filter button',
-                            columnsButton: 'Color for the Columns visibility button',
-                            actionButtons: 'Color for Save, Export, and other action buttons',
-                          };
-
-                          const currentColor = customColors[field] || (field === 'bodyBackground' ? '#f9fafb' : field === 'headerBackground' ? '#ffffff' : '#000000');
-                          const hslColor = hexToHsl(currentColor);
-                          const hslString = customColors[field] ? `${Math.round(hslColor.h)}° ${Math.round(hslColor.s)}% ${Math.round(hslColor.l)}%` : '(Theme Default)';
-
-                          return (
-                            <div key={field} className="space-y-2">
-                              <Label className="text-sm font-medium">{fieldLabels[field]}</Label>
-                              <p className="text-xs text-muted-foreground">{fieldDescriptions[field]}</p>
-
-                              <Popover open={activeColorField === field} onOpenChange={(open) => setActiveColorField(open ? field : null)}>
-                                <PopoverTrigger asChild>
-                                  <Button variant="outline" className="w-full justify-start gap-2" data-testid={`button-color-${field}`}>
-                                    <div
-                                      className="h-6 w-6 rounded border"
-                                      style={{ backgroundColor: currentColor }}
-                                    />
-                                    <span className="font-mono text-sm">{hslString}</span>
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80" align="start">
-                                  <div className="space-y-4">
-                                    <HslColorPicker
-                                      color={hslColor}
-                                      onChange={(color) => {
-                                        const hexColor = hslToHex(color.h, color.s, color.l);
-                                        setCustomColors({ ...customColors, [field]: hexColor });
-                                      }}
-                                    />
-
-                                    <div className="space-y-2">
-                                      <Label className="text-xs">HSL Values</Label>
-                                      <div className="grid grid-cols-3 gap-2">
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">H</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="360"
-                                            value={Math.round(hslColor.h)}
-                                            onChange={(e) => {
-                                              const h = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(h, hslColor.s, hslColor.l);
-                                              setCustomColors({ ...customColors, [field]: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">S%</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={Math.round(hslColor.s)}
-                                            onChange={(e) => {
-                                              const s = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(hslColor.h, s, hslColor.l);
-                                              setCustomColors({ ...customColors, [field]: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">L%</Label>
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={Math.round(hslColor.l)}
-                                            onChange={(e) => {
-                                              const l = parseInt(e.target.value) || 0;
-                                              const hexColor = hslToHex(hslColor.h, hslColor.s, l);
-                                              setCustomColors({ ...customColors, [field]: hexColor });
-                                            }}
-                                            className="font-mono text-xs"
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {colorPresets.length > 0 && (
-                                      <div className="space-y-2">
-                                        <Label className="text-xs text-muted-foreground">Saved Presets</Label>
-                                        <div className="grid grid-cols-5 gap-2">
-                                          {colorPresets.map((preset, idx) => (
-                                            <div key={idx} className="relative group">
-                                              <button
-                                                onClick={() => setCustomColors({ ...customColors, [field]: preset.color })}
-                                                className="h-10 w-full rounded border hover:ring-2 hover:ring-primary transition-all"
-                                                style={{ backgroundColor: preset.color }}
-                                                title={preset.name}
-                                              />
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setColorPresets(colorPresets.filter((_, i) => i !== idx));
-                                                  toast({ title: "Preset deleted", description: `"${preset.name}" removed` });
-                                                }}
-                                                className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs"
-                                              >
-                                                ×
-                                              </button>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-muted-foreground">Save as Preset</Label>
-                                      <div className="flex gap-2">
-                                        <Input
-                                          placeholder="Preset name"
-                                          value={presetName}
-                                          onChange={(e) => setPresetName(e.target.value)}
-                                          className="flex-1 text-sm"
-                                        />
-                                        <Button
-                                          size="sm"
-                                          onClick={() => {
-                                            if (presetName.trim()) {
-                                              const colorValue = customColors[field as keyof typeof customColors];
-                                              const colorString = typeof colorValue === 'string' ? colorValue : JSON.stringify(colorValue);
-                                              setColorPresets([...colorPresets, { name: presetName, color: colorString }]);
-                                              setPresetName("");
-                                              toast({ title: "Preset saved", description: `"${presetName}" added to presets` });
-                                            }
-                                          }}
-                                          disabled={!presetName.trim()}
-                                        >
-                                          <Save className="h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    </div>
-
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="w-full"
-                                      onClick={() => {
-                                        if (field === 'bodyBackground' || field === 'headerBackground') {
-                                          setCustomColors({ ...customColors, [field]: '' });
-                                        } else {
-                                          // Use the correct defaults based on current theme
-                                          const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
-                                          setCustomColors({ ...customColors, [field]: defaultColors[field] });
-                                        }
-                                      }}
-                                    >
-                                      <RotateCcw className="h-4 w-4 mr-2" />
-                                      {field === 'bodyBackground' || field === 'headerBackground' ? 'Reset to Theme Default' : 'Reset to Default'}
-                                    </Button>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                          );
-                        })}
-
-                        <Separator className="my-4" />
-
-                            <div className="space-y-3">
-                              <h5 className="font-medium text-sm">Status Colors</h5>
-                              <p className="text-xs text-muted-foreground">Customize status dropdown colors (background and text)</p>
-
-                              <div className="space-y-3">
-                                {statusOptions.map((status) => {
-                                  const statusColor = (customColors.statusColors as any)?.[status] || { background: '#e5e7eb', text: '#1f2937' };
-                                  const bgHsl = hexToHsl(statusColor.background);
-                                  const textHsl = hexToHsl(statusColor.text);
-                                  const bgHslString = `${Math.round(bgHsl.h)}° ${Math.round(bgHsl.s)}% ${Math.round(bgHsl.l)}%`;
-                                  const textHslString = `${Math.round(textHsl.h)}° ${Math.round(textHsl.s)}% ${Math.round(textHsl.l)}%`;
-
-                                  return (
-                                    <div key={status} className="space-y-2">
-                                      <Label className="text-sm font-medium">{status}</Label>
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">Background (Row Color)</Label>
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <Button variant="outline" size="sm" className="w-full justify-start gap-2 mt-1 h-8">
-                                                <div className="h-4 w-4 rounded border" style={{ backgroundColor: statusColor.background }} />
-                                                <span className="font-mono text-xs">{bgHslString}</span>
-                                              </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-72" align="start">
-                                              <div className="space-y-3">
-                                                <HslColorPicker
-                                                  color={bgHsl}
-                                                  onChange={(color) => {
-                                                    const hexColor = hslToHex(color.h, color.s, color.l);
-                                                    setCustomColors({
-                                                      ...customColors,
-                                                      statusColors: {
-                                                        ...customColors.statusColors,
-                                                        [status]: { ...statusColor, background: hexColor }
-                                                      }
-                                                    });
-                                                  }}
-                                                />
-                                                <div className="space-y-2">
-                                                  <Label className="text-xs">HSL Values</Label>
-                                                  <div className="grid grid-cols-3 gap-2">
-                                                    <div>
-                                                      <Label className="text-xs text-muted-foreground">H</Label>
-                                                      <Input
-                                                        type="number"
-                                                        min="0"
-                                                        max="360"
-                                                        value={Math.round(bgHsl.h)}
-                                                        onChange={(e) => {
-                                                          const h = parseInt(e.target.value) || 0;
-                                                          const hexColor = hslToHex(h, bgHsl.s, bgHsl.l);
-                                                          setCustomColors({
-                                                            ...customColors,
-                                                            statusColors: {
-                                                              ...customColors.statusColors,
-                                                              [status]: { ...statusColor, background: hexColor }
-                                                            }
-                                                          });
-                                                        }}
-                                                        className="font-mono text-xs"
-                                                      />
-                                                    </div>
-                                                    <div>
-                                                      <Label className="text-xs text-muted-foreground">S%</Label>
-                                                      <Input
-                                                        type="number"
-                                                        min="0"
-                                                        max="100"
-                                                        value={Math.round(bgHsl.s)}
-                                                        onChange={(e) => {
-                                                          const s = parseInt(e.target.value) || 0;
-                                                          const hexColor = hslToHex(bgHsl.h, s, bgHsl.l);
-                                                          setCustomColors({
-                                                            ...customColors,
-                                                            statusColors: {
-                                                              ...customColors.statusColors,
-                                                              [status]: { ...statusColor, background: hexColor }
-                                                            }
-                                                          });
-                                                        }}
-                                                        className="font-mono text-xs"
-                                                      />
-                                                    </div>
-                                                    <div>
-                                                      <Label className="text-xs text-muted-foreground">L%</Label>
-                                                      <Input
-                                                        type="number"
-                                                        min="0"
-                                                        max="100"
-                                                        value={Math.round(bgHsl.l)}
-                                                        onChange={(e) => {
-                                                          const l = parseInt(e.target.value) || 0;
-                                                          const hexColor = hslToHex(bgHsl.h, bgHsl.s, l);
-                                                          setCustomColors({
-                                                            ...customColors,
-                                                            statusColors: {
-                                                              ...customColors.statusColors,
-                                                              [status]: { ...statusColor, background: hexColor }
-                                                            }
-                                                          });
-                                                        }}
-                                                        className="font-mono text-xs"
-                                                      />
-                                                    </div>
-                                                  </div>
-                                                  <p className="text-xs text-muted-foreground mt-2">
-                                                    Button/dropdown colors auto-darken by 30% L
-                                                  </p>
-                                                </div>
-                                              </div>
-                                            </PopoverContent>
-                                          </Popover>
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs text-muted-foreground">Text</Label>
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <Button variant="outline" size="sm" className="w-full justify-start gap-2 mt-1 h-8">
-                                                <div className="h-4 w-4 rounded border" style={{ backgroundColor: statusColor.text }} />
-                                                <span className="font-mono text-xs">{textHslString}</span>
-                                              </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-72" align="start">
-                                              <div className="space-y-3">
-                                                <HslColorPicker
-                                                  color={textHsl}
-                                                  onChange={(color) => {
-                                                    const hexColor = hslToHex(color.h, color.s, color.l);
-                                                    setCustomColors({
-                                                      ...customColors,
-                                                      statusColors: {
-                                                        ...customColors.statusColors,
-                                                        [status]: { ...statusColor, text: hexColor }
-                                                      }
-                                                    });
-                                                  }}
-                                                />
-                                                <div className="space-y-2">
-                                                  <Label className="text-xs">HSL Values</Label>
-                                                  <div className="grid grid-cols-3 gap-2">
-                                                    <div>
-                                                      <Label className="text-xs text-muted-foreground">H</Label>
-                                                      <Input
-                                                        type="number"
-                                                        min="0"
-                                                        max="360"
-                                                        value={Math.round(textHsl.h)}
-                                                        onChange={(e) => {
-                                                          const h = parseInt(e.target.value) || 0;
-                                                          const hexColor = hslToHex(h, textHsl.s, textHsl.l);
-                                                          setCustomColors({
-                                                            ...customColors,
-                                                            statusColors: {
-                                                              ...customColors.statusColors,
-                                                              [status]: { ...statusColor, text: hexColor }
-                                                            }
-                                                          });
-                                                        }}
-                                                        className="font-mono text-xs"
-                                                      />
-                                                    </div>
-                                                    <div>
-                                                      <Label className="text-xs text-muted-foreground">S%</Label>
-                                                      <Input
-                                                        type="number"
-                                                        min="0"
-                                                        max="100"
-                                                        value={Math.round(textHsl.s)}
-                                                        onChange={(e) => {
-                                                          const s = parseInt(e.target.value) || 0;
-                                                          const hexColor = hslToHex(textHsl.h, s, textHsl.l);
-                                                          setCustomColors({
-                                                            ...customColors,
-                                                            statusColors: {
-                                                              ...customColors.statusColors,
-                                                              [status]: { ...statusColor, text: hexColor }
-                                                            }
-                                                          });
-                                                        }}
-                                                        className="font-mono text-xs"
-                                                      />
-                                                    </div>
-                                                    <div>
-                                                      <Label className="text-xs text-muted-foreground">L%</Label>
-                                                      <Input
-                                                        type="number"
-                                                        min="0"
-                                                        max="100"
-                                                        value={Math.round(textHsl.l)}
-                                                        onChange={(e) => {
-                                                          const l = parseInt(e.target.value) || 0;
-                                                          const hexColor = hslToHex(textHsl.h, textHsl.s, l);
-                                                          setCustomColors({
-                                                            ...customColors,
-                                                            statusColors: {
-                                                              ...customColors.statusColors,
-                                                              [status]: { ...statusColor, text: hexColor }
-                                                            }
-                                                          });
-                                                        }}
-                                                        className="font-mono text-xs"
-                                                      />
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </PopoverContent>
-                                          </Popover>
-                                        </div>
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="w-full mt-1"
-                                        onClick={() => setCustomColors({ ...customColors, statusColors: { ...customColors.statusColors, [status]: { background: '', text: '' } } })}
-                                        title="Reset to theme default"
-                                      >
-                                        <RotateCcw className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            <Separator className="my-4" />
-
-                            {/* Row Coloring Toggle */}
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <Checkbox
-                                  id="color-row-by-status"
-                                  checked={colorRowByStatus}
-                                  onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
-                                />
-                                <Label htmlFor="color-row-by-status" className="text-sm font-medium">Color entire row by status</Label>
-                              </div>
-                            </div>
-
-                            <Separator className="my-4" />
-
-                            {/* Save Colors Button */}
-                            <Button
-                              variant="default"
-                              className="w-full"
-                              onClick={() => {
-                                saveColorsMutation.mutate({
-                                  lightModeColors,
-                                  darkModeColors,
-                                });
-                              }}
-                              disabled={saveColorsMutation.isPending}
-                              data-testid="button-save-colors"
-                              style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
-                            >
-                              {saveColorsMutation.isPending ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Saving...
-                                </>
-                              ) : (
-                                <>
-                                  <Save className="mr-2 h-4 w-4" />
-                                  Save Color Changes
-                                </>
-                              )}
-                            </Button>
-
-                            <Separator className="my-2" />
-
-                            {/* Reset All Colors Button - Inside Colors Popover */}
-                            <Button
-                              variant="destructive"
-                              className="w-full"
-                              onClick={() => {
-                                if (actualTheme === 'dark') {
-                                  setDarkModeColors(defaultDarkColors);
-                                } else {
-                                  setLightModeColors(defaultLightColors);
-                                }
-                                toast({
-                                  title: "Colors Reset",
-                                  description: `${actualTheme === 'dark' ? 'Dark' : 'Light'} mode colors have been reset to defaults. Click "Save Color Changes" to persist.`,
-                                });
-                              }}
-                              data-testid="button-reset-all-colors-inline"
-                            >
-                              <RotateCcw className="mr-2 h-4 w-4" />
-                              Reset {actualTheme === 'dark' ? 'Dark' : 'Light'} Mode Colors
-                            </Button>
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Filter Buttons Row */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Total and Visible Shops Counter */}
-                <div className="flex items-center gap-2 text-sm text-muted-foreground px-3 py-1 bg-muted rounded-md" data-testid="text-shops-counter">
-                  <span className="font-medium">Showing {filteredData.length} of {data.length} shops</span>
-                </div>
+            {/* Font Size Selector */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="font-size" className="text-sm font-medium whitespace-nowrap">Font Size</Label>
+              <Select
+                value={fontSize.toString()}
+                onValueChange={(value) => setFontSize(parseInt(value))}
+              >
+                <SelectTrigger id="font-size" className="w-24" data-testid="select-font-size">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent data-testid="select-content-font-size">
+                  {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 26, 28, 30].map((size) => (
+                    <SelectItem key={size} value={size.toString()} data-testid={`font-size-${size}`}>
+                      {size}px
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      data-testid="button-states-filter"
-                      style={currentColors.statesButton ? { backgroundColor: currentColors.statesButton, borderColor: currentColors.statesButton } : undefined}
+            {/* Row Height Slider */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="row-height" className="text-sm font-medium whitespace-nowrap">Row Height</Label>
+              <div className="flex items-center gap-2 flex-1 max-w-xs">
+                <Slider
+                  id="row-height"
+                  min={24}
+                  max={200}
+                  step={1}
+                  value={[rowHeight]}
+                  onValueChange={(value) => setRowHeight(value[0])}
+                  className="flex-1"
+                  data-testid="slider-row-height"
+                />
+                <span className="text-sm font-mono w-12 text-right">{rowHeight}px</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters Row - Fixed to NOT use wrapped gap */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Total and Visible Shops Counter */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground px-3 py-1 bg-muted rounded-md" data-testid="text-shops-counter">
+              <span className="font-medium">Showing {filteredData.length} of {data.length} shops</span>
+            </div>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  data-testid="button-states-filter"
+                  style={currentColors.statesButton ? { backgroundColor: currentColors.statesButton, borderColor: currentColors.statesButton } : undefined}
+                >
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  States ({selectedStates.size}/{allStates.length})
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Filter by State</h4>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={selectAllStates}
+                        data-testid="button-select-all-states"
+                      >
+                        All
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAllStates}
+                        data-testid="button-clear-all-states"
+                      >
+                        None
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Uncheck states to hide rows from those states
+                  </p>
+                  
+                  {/* Canada Checkbox */}
+                  <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                    <Checkbox
+                      id="canada-toggle"
+                      checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state))}
+                      onCheckedChange={(checked) => {
+                        const canadianStates = allStates.filter(isCanadianProvince);
+                        const newSelected = new Set(selectedStates);
+                        if (checked) {
+                          canadianStates.forEach(state => newSelected.add(state));
+                        } else {
+                          canadianStates.forEach(state => newSelected.delete(state));
+                        }
+                        setSelectedStates(newSelected);
+                      }}
+                      data-testid="checkbox-canada-toggle"
+                    />
+                    <Label
+                      htmlFor="canada-toggle"
+                      className="text-sm cursor-pointer flex-1 font-medium"
                     >
-                      <Settings2 className="mr-2 h-4 w-4" />
-                      States ({selectedStates.size}/{allStates.length})
-                    </Button>
-                  </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium">Filter by State</h4>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={selectAllStates}
-                              data-testid="button-select-all-states"
-                            >
-                              All
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={clearAllStates}
-                              data-testid="button-clear-all-states"
-                            >
-                              None
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Uncheck states to hide rows from those states
-                        </p>
-                        
-                        {/* Canada Checkbox */}
-                        <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                      Canada
+                    </Label>
+                    <span className="text-xs text-muted-foreground">
+                      ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
+                    </span>
+                  </div>
+                  
+                  <ScrollArea className="h-64">
+                    <div className="space-y-2">
+                      {allStates.map((state: string) => (
+                        <div key={state} className="flex items-center gap-2">
                           <Checkbox
-                            id="canada-toggle"
-                            checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state))}
-                            onCheckedChange={(checked) => {
-                              const canadianStates = allStates.filter(isCanadianProvince);
-                              const newSelected = new Set(selectedStates);
-                              if (checked) {
-                                canadianStates.forEach(state => newSelected.add(state));
-                              } else {
-                                canadianStates.forEach(state => newSelected.delete(state));
-                              }
-                              setSelectedStates(newSelected);
-                            }}
-                            data-testid="checkbox-canada-toggle"
+                            id={`state-${state}`}
+                            checked={selectedStates.has(state)}
+                            onCheckedChange={() => toggleState(state)}
+                            data-testid={`checkbox-state-${state}`}
                           />
                           <Label
-                            htmlFor="canada-toggle"
-                            className="text-sm cursor-pointer flex-1 font-medium"
+                            htmlFor={`state-${state}`}
+                            className="text-sm cursor-pointer flex-1"
                           >
-                            Canada
+                            {state}
                           </Label>
                           <span className="text-xs text-muted-foreground">
-                            ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
+                            ({stateCounts[state] || 0})
                           </span>
                         </div>
-                        
-                        <ScrollArea className="h-64">
-                          <div className="space-y-2">
-                            {allStates.map((state: string) => (
-                              <div key={state} className="flex items-center gap-2">
-                                <Checkbox
-                                  id={`state-${state}`}
-                                  checked={selectedStates.has(state)}
-                                  onCheckedChange={() => toggleState(state)}
-                                  data-testid={`checkbox-state-${state}`}
-                                />
-                                <Label
-                                  htmlFor={`state-${state}`}
-                                  className="text-sm cursor-pointer flex-1"
-                                >
-                                  {state}
-                                </Label>
-                                <span className="text-xs text-muted-foreground">
-                                  ({stateCounts[state] || 0})
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </PopoverContent>
+            </Popover>
 
                 {/* Cities Filter - Only shown when states are selected */}
                 {selectedStates.size > 0 && citiesInSelectedStates.length > 0 && (

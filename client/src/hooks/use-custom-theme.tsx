@@ -185,9 +185,19 @@ export function useCustomTheme() {
 
     if (colors.border) {
       const borderHsl = hexToHsl(colors.border);
+      // Override ALL border CSS variables to ensure consistent border colors
       root.style.setProperty('--border', `${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%`);
       root.style.setProperty('--card-border', `${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%`);
       root.style.setProperty('--popover-border', `${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%`);
+      root.style.setProperty('--sidebar-border', `${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%`);
+      // Also override computed borders that are derived from other colors
+      root.style.setProperty('--primary-border', `hsl(${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%)`);
+      root.style.setProperty('--secondary-border', `hsl(${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%)`);
+      root.style.setProperty('--accent-border', `hsl(${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%)`);
+      root.style.setProperty('--muted-border', `hsl(${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%)`);
+      root.style.setProperty('--destructive-border', `hsl(${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%)`);
+      root.style.setProperty('--sidebar-primary-border', `hsl(${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%)`);
+      root.style.setProperty('--sidebar-accent-border', `hsl(${borderHsl.h} ${borderHsl.s}% ${borderHsl.l}%)`);
     }
   }, [actualTheme, userPreferences]);
 

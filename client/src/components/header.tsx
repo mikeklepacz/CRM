@@ -14,6 +14,7 @@ import {
 import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
+import { ColorCustomizer } from "./color-customizer";
 
 export function Header() {
   const { user } = useAuth();
@@ -56,6 +57,8 @@ export function Header() {
           </div>
           
           <div className="flex items-center gap-3">
+            <ColorCustomizer />
+            <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2" data-testid="button-user-menu">
@@ -87,7 +90,6 @@ export function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <ThemeToggle />
           </div>
         </div>
       </div>
