@@ -1275,23 +1275,41 @@ export default function ClientDashboard() {
               {/* Top Row: Search/Refresh + Display Settings Card */}
               <div className="flex flex-wrap items-start justify-between gap-4">
                 {/* Left side: Search and Refresh */}
-                <div className="flex items-center gap-2 flex-1 min-w-[300px]">
-                  <Input
-                    placeholder="Search all columns..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="flex-1 max-w-md"
-                    data-testid="input-search"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() => refetch()}
-                    disabled={isLoading}
-                    data-testid="button-refresh"
-                  >
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Refresh
-                  </Button>
+                <div className="flex flex-col gap-2 flex-1 min-w-[300px]">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Search all columns..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="flex-1 max-w-md"
+                      data-testid="input-search"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => refetch()}
+                      disabled={isLoading}
+                      data-testid="button-refresh"
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Refresh
+                    </Button>
+                  </div>
+                  {/* My Stores Only toggle */}
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="my-stores-only"
+                      checked={showMyStoresOnly}
+                      onCheckedChange={(checked) => setShowMyStoresOnly(checked === true)}
+                      data-testid="checkbox-my-stores-only"
+                    />
+                    <Label
+                      htmlFor="my-stores-only"
+                      className="text-sm font-medium cursor-pointer"
+                      style={{ color: customColors.text }}
+                    >
+                      My Stores Only
+                    </Label>
+                  </div>
                 </div>
 
                 {/* Right side: Display Settings Card */}
