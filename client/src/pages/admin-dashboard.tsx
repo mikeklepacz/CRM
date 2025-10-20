@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WooCommerceSync } from "@/components/woocommerce-sync";
 import { GoogleSheetsSync } from "@/components/google-sheets-sync";
+import { UserManagement } from "@/components/user-management";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -31,11 +32,16 @@ export default function AdminDashboard() {
         <p className="text-muted-foreground">Manage integrations and system settings</p>
       </div>
 
-      <Tabs defaultValue="sheets" className="space-y-6">
+      <Tabs defaultValue="users" className="space-y-6">
         <TabsList>
+          <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
           <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="users">
+          <UserManagement />
+        </TabsContent>
 
         <TabsContent value="sheets">
           <GoogleSheetsSync />

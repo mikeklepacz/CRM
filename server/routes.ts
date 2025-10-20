@@ -688,6 +688,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all users with sales metrics (admin only)
+  app.get('/api/users', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      
+      // Get Commission Tracker sheet to calculate sales metrics
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      
+      // Read sheet data once using the sheet owner's userId
+      let trackerRows: any[][] = [];
+      let headers: string[] = [];
+      let agentIndex = -1;
+      let amountIndex = -1;
+      
+      if (trackerSheet) {
+        try {
+          const sheetOwnerId = trackerSheet.connectedBy;
+          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          trackerRows = await googleSheets.readSheetData(sheetOwnerId, trackerSheet.spreadsheetId, trackerRange);
+          
+          if (trackerRows.length > 0) {
+            headers = trackerRows[0];
+            agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
+            amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+          }
+        } catch (error) {
+          console.error('Error reading Commission Tracker sheet:', error);
+        }
+      }
+      
+      const usersWithMetrics = users.map((user) => {
+        let totalSales = 0;
+        let grossIncome = 0;
+        
+        if (trackerRows.length > 0 && user.agentName && agentIndex >= 0 && amountIndex >= 0) {
+          for (let i = 1; i < trackerRows.length; i++) {
+            const row = trackerRows[i];
+            const agent = row[agentIndex] || '';
+            const amount = parseFloat(row[amountIndex] || '0');
+            
+            if (agent.toLowerCase() === user.agentName.toLowerCase() && amount > 0) {
+              totalSales++;
+              grossIncome += amount;
+            }
+          }
+        }
+        
+        return {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          agentName: user.agentName,
+          role: user.role,
+          totalSales,
+          grossIncome: grossIncome.toFixed(2),
+          createdAt: user.createdAt,
+        };
+      });
+      
+      res.json({ users: usersWithMetrics });
+    } catch (error: any) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch users" });
+    }
+  });
+
+  // Create new user (admin only)
+  app.post('/api/users', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { email, firstName, lastName, agentName, password, role } = req.body;
+      
+      if (!email || !agentName || !password) {
+        return res.status(400).json({ message: "Email, agent name, and password are required" });
+      }
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
+      
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
+      
+      // Create username from email
+      const username = email.split('@')[0];
+      
+      const newUser = await storage.createUser({
+        email,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        agentName,
+        username,
+        passwordHash,
+        role: role || 'agent',
+      });
+      
+      res.json({ user: newUser });
+    } catch (error: any) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: error.message || "Failed to create user" });
+    }
+  });
+
   // Note: To make a user admin, run this SQL command in the database console:
   // UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 
