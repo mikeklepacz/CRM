@@ -15,6 +15,40 @@ export interface FranchiseGroup {
 }
 
 /**
+ * Extract the brand name from a store name
+ * - Removes location suffix (everything after first dash)
+ * - Removes generic terms (Cannabis, Co, Company, Dispensary, etc.)
+ * - Returns the core brand identifier for exact matching
+ */
+function extractBrandName(name: string): string {
+  if (!name || typeof name !== 'string') return '';
+  
+  // First, remove everything after the first dash (location suffix)
+  let brand = name.split('-')[0].trim();
+  
+  // Remove generic terms that don't help identify the brand
+  const genericTerms = [
+    /\bcannabis\b/gi,
+    /\bco\.?\b/gi,
+    /\bcompany\b/gi,
+    /\bdispensary\b/gi,
+    /\bthe\b/gi,
+    /\binc\.?\b/gi,
+    /\bllc\.?\b/gi,
+    /\bltd\.?\b/gi,
+  ];
+  
+  genericTerms.forEach(term => {
+    brand = brand.replace(term, ' ');
+  });
+  
+  // Normalize whitespace and convert to lowercase for comparison
+  brand = brand.replace(/\s+/g, ' ').trim().toLowerCase();
+  
+  return brand;
+}
+
+/**
  * Normalize a store name for comparison
  * - Lowercase
  * - Remove common suffixes like location indicators
@@ -45,48 +79,20 @@ function extractDomain(url: string): string {
 }
 
 /**
- * Calculate string similarity using Levenshtein distance
- * Returns a value between 0 and 1 (1 = identical)
+ * Extract email domain (e.g., "example.com" from "info@example.com")
  */
-function stringSimilarity(str1: string, str2: string): number {
-  if (str1 === str2) return 1;
-  if (!str1 || !str2) return 0;
-
-  const longer = str1.length > str2.length ? str1 : str2;
-  const shorter = str1.length > str2.length ? str2 : str1;
-
-  if (longer.length === 0) return 1;
-
-  const editDistance = levenshteinDistance(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
+function extractEmailDomain(email: string): string {
+  if (!email || typeof email !== 'string') return '';
+  const match = email.match(/@(.+)$/);
+  return match ? match[1].toLowerCase() : '';
 }
 
-function levenshteinDistance(str1: string, str2: string): number {
-  const matrix: number[][] = [];
-
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
-  }
-
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-
-  return matrix[str2.length][str1.length];
+/**
+ * Extract phone number digits only for comparison
+ */
+function normalizePhone(phone: string): string {
+  if (!phone || typeof phone !== 'string') return '';
+  return phone.replace(/\D/g, ''); // Remove all non-digits
 }
 
 /**
@@ -131,38 +137,52 @@ export function detectFranchises(
     }
   });
 
-  // Second pass: group ungrouped stores by name similarity
-  const nameGroups = new Map<string, StoreData[]>();
+  // Second pass: group ungrouped stores by EXACT brand name match
+  const brandGroups = new Map<string, StoreData[]>();
   
   ungroupedStores.forEach(store => {
-    const normalized = normalizeStoreName(store.Name);
-    if (!normalized || normalized.length < 3) return;
+    const brand = extractBrandName(store.Name);
+    if (!brand || brand.length < 2) return; // Need at least 2 chars for a brand
     
-    // Try to find an existing group with similar name
-    let foundGroup = false;
-    const entries = Array.from(nameGroups.entries());
-    for (const [groupKey, groupStores] of entries) {
-      const similarity = stringSimilarity(normalized, groupKey);
-      if (similarity >= 0.7) { // 70% similarity threshold
-        groupStores.push(store);
-        foundGroup = true;
-        break;
-      }
+    // Use exact brand match - no fuzzy matching
+    if (!brandGroups.has(brand)) {
+      brandGroups.set(brand, []);
     }
-    
-    if (!foundGroup) {
-      nameGroups.set(normalized, [store]);
-    }
+    brandGroups.get(brand)!.push(store);
   });
 
-  // Convert name groups to franchise groups
-  nameGroups.forEach((locations, normalizedName) => {
+  // Convert brand groups to franchise groups with multi-signal verification
+  brandGroups.forEach((locations, brand) => {
     if (locations.length >= minLocations && locations.length <= maxLocations) {
-      franchiseGroups.push({
-        brandName: locations[0].Name.split('-')[0].trim(),
-        locations,
-        matchType: 'name'
-      });
+      // Additional verification: check if stores share email domain or phone patterns
+      const emailDomains = new Set(
+        locations
+          .map(s => extractEmailDomain(s.Email || ''))
+          .filter(d => d && d.length > 3)
+      );
+      
+      const phones = new Set(
+        locations
+          .map(s => normalizePhone(s.Phone || ''))
+          .filter(p => p && p.length >= 10)
+      );
+      
+      // Count matching signals
+      const hasCommonEmail = emailDomains.size === 1 && emailDomains.size > 0;
+      const hasCommonPhone = phones.size === 1 && phones.size > 0;
+      
+      // For name-based grouping, require at least one additional signal if locations > 10
+      // This prevents over-grouping of common generic names
+      const needsAdditionalSignal = locations.length > 10;
+      const hasAdditionalSignal = hasCommonEmail || hasCommonPhone;
+      
+      if (!needsAdditionalSignal || hasAdditionalSignal) {
+        franchiseGroups.push({
+          brandName: locations[0].Name.split('-')[0].trim(),
+          locations,
+          matchType: 'name'
+        });
+      }
     }
   });
 
