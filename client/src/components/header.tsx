@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
+import { ColorCustomizerButton } from "./color-customizer";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -55,7 +56,9 @@ export function Header() {
             </nav>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <ColorCustomizerButton />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2" data-testid="button-user-menu">
@@ -87,7 +90,6 @@ export function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <ThemeToggle />
           </div>
         </div>
       </div>
