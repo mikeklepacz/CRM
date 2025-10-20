@@ -3061,7 +3061,11 @@ export default function ClientDashboard() {
                                       <button
                                         onClick={() => setStoreDetailsDialog({
                                           open: true,
-                                          row: row
+                                          row: row,
+                                          franchiseContext: selectedFranchise ? {
+                                            brandName: selectedFranchise.brandName,
+                                            allLocations: selectedFranchise.stores
+                                          } : undefined
                                         })}
                                         className="flex items-center gap-1 hover:underline"
                                         style={{ color: customColors.primary }}
@@ -3074,7 +3078,11 @@ export default function ClientDashboard() {
                                       <button
                                         onClick={() => setStoreDetailsDialog({
                                           open: true,
-                                          row: row
+                                          row: row,
+                                          franchiseContext: selectedFranchise ? {
+                                            brandName: selectedFranchise.brandName,
+                                            allLocations: selectedFranchise.stores
+                                          } : undefined
                                         })}
                                         className="flex items-center gap-1 hover:underline"
                                         style={{ color: customColors.primary }}
@@ -3096,7 +3104,11 @@ export default function ClientDashboard() {
                                       <button
                                         onClick={() => setStoreDetailsDialog({
                                           open: true,
-                                          row: row
+                                          row: row,
+                                          franchiseContext: selectedFranchise ? {
+                                            brandName: selectedFranchise.brandName,
+                                            allLocations: selectedFranchise.stores
+                                          } : undefined
                                         })}
                                         className="hover:underline font-medium text-left"
                                         style={{ color: customColors.primary }}
@@ -3245,6 +3257,7 @@ export default function ClientDashboard() {
           trackerSheetId={trackerSheetId}
           storeSheetId={storeSheetId}
           refetch={refetch}
+          franchiseContext={storeDetailsDialog.franchiseContext}
         />
       )}
       </div>
@@ -3253,13 +3266,17 @@ export default function ClientDashboard() {
 }
 
 // Store Details Dialog Component
-function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch }: { 
+function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
   row: any;
   trackerSheetId: string | undefined;
   storeSheetId: string | undefined;
   refetch: () => Promise<any>;
+  franchiseContext?: {
+    brandName: string;
+    allLocations: any[];
+  };
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -3299,6 +3316,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   
   // Track the current row's link to prevent race conditions
   const [activeRowLink, setActiveRowLink] = useState<string | null>(null);
+  
+  // Preserve franchise context for the entire dialog lifecycle
+  const [preservedFranchiseContext, setPreservedFranchiseContext] = useState<{
+    brandName: string;
+    allLocations: any[];
+  } | null>(null);
 
   // Query all stores for multi-location picker - LAZY LOAD (only when search has 2+ chars)
   const { data: allStores, isLoading: isLoadingStores } = useQuery<any[]>({
@@ -3347,6 +3370,11 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   // Populate form directly from row data when dialog opens
   useEffect(() => {
     if (row && open) {
+      // Preserve franchise context when dialog first opens
+      if (franchiseContext) {
+        setPreservedFranchiseContext(franchiseContext);
+      }
+      
       // Helper function to get value from various possible field names (case-insensitive)
       const getValue = (fieldNames: string[]) => {
         for (const fieldName of fieldNames) {
@@ -3390,7 +3418,36 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       // Check if this store has a DBA - if yes, auto-enable Multiple Locations mode
       const existingDba = getValue(['DBA', 'dba']);
       console.log('[StoreDetails] Checking for existing DBA:', existingDba);
-      if (existingDba && existingDba.trim()) {
+      
+      // Use preserved franchise context for consistent behavior during dialog lifecycle
+      const activeFranchiseContext = preservedFranchiseContext || franchiseContext;
+      
+      // Priority 1: Franchise context (from Franchise Finder)
+      if (activeFranchiseContext && activeFranchiseContext.allLocations && activeFranchiseContext.allLocations.length > 0) {
+        console.log('[StoreDetails] Franchise context detected:', activeFranchiseContext.brandName, 'with', activeFranchiseContext.allLocations.length, 'locations');
+        setMultiLocationMode(true);
+        setDbaName(activeFranchiseContext.brandName);
+        // Pre-select all franchise locations (with guards for missing data)
+        const validLocations = activeFranchiseContext.allLocations
+          .map((loc: any) => {
+            const link = loc.link || loc.Link;
+            const name = loc.name || loc.Name;
+            // Only include if both link and name are present
+            return link && name ? { link, name } : null;
+          })
+          .filter((loc): loc is { link: string; name: string } => loc !== null);
+        
+        if (validLocations.length > 0) {
+          setSelectedStores(validLocations);
+          console.log('[StoreDetails] Pre-selected', validLocations.length, 'valid franchise locations');
+        } else {
+          console.warn('[StoreDetails] Franchise context had no valid locations with link+name');
+          setSelectedStores([]);
+        }
+        setCurrentDbaStores([]);
+      }
+      // Priority 2: Existing DBA
+      else if (existingDba && existingDba.trim()) {
         console.log('[StoreDetails] Store has DBA, enabling Multiple Locations mode');
         setMultiLocationMode(true);
         setDbaName(existingDba.trim());
@@ -3398,8 +3455,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         setCurrentDbaStores([]);
         setSelectedStores([]);
         // Let the dbaStores query populate currentDbaStores when it completes
-      } else {
-        console.log('[StoreDetails] No DBA found, disabling Multiple Locations mode');
+      } 
+      // Priority 3: No DBA or franchise
+      else {
+        console.log('[StoreDetails] No DBA or franchise found, disabling Multiple Locations mode');
         setMultiLocationMode(false);
         setDbaName("");
         setCurrentDbaStores([]);
@@ -3408,8 +3467,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     } else if (!open) {
       // Reset state when dialog closes
       setActiveRowLink(null);
+      setPreservedFranchiseContext(null);
     }
-  }, [row, open, storeSheetId]);
+  }, [row, open, storeSheetId, franchiseContext]);
 
   // Auto-populate currentDbaStores when dbaStores query completes
   useEffect(() => {
