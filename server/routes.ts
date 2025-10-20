@@ -2497,7 +2497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const excludedCols = [agentCol, joinColumn].filter(Boolean).map(c => c?.toLowerCase());
       const editableColumns = [
         ...trackerHeaders.filter(h => !excludedCols.includes(h.toLowerCase())), // All tracker columns except agent and join column
-        'phone', 'email', 'additional phone', 'additional email', // Editable store columns
+        'additional phone', 'additional email', // Editable store columns (main phone/email are clickable links)
         'dba', 'agent name', // Corporate name and agent assignment for multi-location tracking
       ].filter(col => allHeaders.some(h => h.toLowerCase() === col.toLowerCase())); // Only include if they exist
 
