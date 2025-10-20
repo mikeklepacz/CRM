@@ -263,13 +263,16 @@ export function useCustomTheme() {
     saveColorsMutation.mutate(defaultColors);
   }, [actualTheme, saveColorsMutation]);
 
-  return {
-    lightColors,
-    darkColors,
-    currentColors,
-    saveColors,
-    resetColors,
-    isLoading,
-    isSaving: saveColorsMutation.isPending,
-  };
+  return useMemo(
+    () => ({
+      lightColors,
+      darkColors,
+      currentColors,
+      saveColors,
+      resetColors,
+      isLoading,
+      isSaving: saveColorsMutation.isPending,
+    }),
+    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending]
+  );
 }

@@ -54,10 +54,10 @@ export function ColorCustomizer() {
   const [colorPresets, setColorPresets] = useState<Array<{ name: string; color: string }>>([]);
   const [presetName, setPresetName] = useState("");
 
-  // Sync customColors when currentColors changes (theme switch or initial load)
+  // Reset customColors when theme changes or currentColors reference changes
   useEffect(() => {
     setCustomColors(currentColors);
-  }, [currentColors]);
+  }, [actualTheme, currentColors]);
 
   const handleSaveColors = () => {
     saveColors(customColors);

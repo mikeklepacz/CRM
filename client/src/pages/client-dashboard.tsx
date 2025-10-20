@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLocation } from "wouter";
@@ -170,7 +170,7 @@ export default function ClientDashboard() {
 
   // Use global theme hook for colors
   const { lightColors, darkColors, currentColors } = useCustomTheme();
-  
+
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
   const [lightModeColors, setLightModeColors] = useState(lightColors);
@@ -190,7 +190,7 @@ export default function ClientDashboard() {
     // Use JSON comparison to detect when colors actually differ from defaults
     const lightChanged = JSON.stringify(lightColors) !== JSON.stringify(defaultLightColors);
     const darkChanged = JSON.stringify(darkColors) !== JSON.stringify(defaultDarkColors);
-    
+
     if (!hasInitializedColors && (lightChanged || darkChanged)) {
       setLightModeColors(lightColors);
       setDarkModeColors(darkColors);
@@ -508,7 +508,7 @@ export default function ClientDashboard() {
   const editableColumns = mergedData?.editableColumns || [];
   const storeHeaders = mergedData?.storeHeaders || [];
   const trackerHeaders = mergedData?.trackerHeaders || [];
-  
+
   console.log('=== FRONTEND DEBUG ===');
   console.log('All headers received:', headers);
   console.log('Store headers:', storeHeaders);
@@ -631,14 +631,14 @@ export default function ClientDashboard() {
           console.log('New headers detected:', newHeaders);
           // Add new headers to column order
           setColumnOrder([...currentOrder, ...newHeaders]);
-          
+
           // Add new headers to visible columns (visible by default unless in hiddenColumns)
           const updatedVisible = { ...currentVisible };
           newHeaders.forEach((header: string) => {
             updatedVisible[header] = !hiddenColumns.includes(header.toLowerCase());
           });
           setVisibleColumns(updatedVisible);
-          
+
           // Add default widths for new headers
           const updatedWidths = { ...currentWidths };
           newHeaders.forEach((header: string) => {
@@ -788,13 +788,13 @@ export default function ClientDashboard() {
   const { allStates, stateCounts } = useMemo(() => {
     const states = new Set<string>();
     const counts: Record<string, number> = {};
-    
+
     // Look for columns named "state" OR containing ", state" (like "City, State")
     const stateColumns = headers.filter((h: string) => {
       const lower = h.toLowerCase();
       return lower === 'state' || lower.includes(', state');
     });
-    
+
     data.forEach((row: any) => {
       stateColumns.forEach((col: string) => {
         const value = row[col];
@@ -819,13 +819,13 @@ export default function ClientDashboard() {
               stateName = fullName;
             }
           }
-          
+
           states.add(stateName);
           counts[stateName] = (counts[stateName] || 0) + 1;
         }
       });
     });
-    
+
     return {
       allStates: Array.from(states).sort(),
       stateCounts: counts
@@ -840,13 +840,13 @@ export default function ClientDashboard() {
 
     const cities = new Set<string>();
     const counts: Record<string, number> = {};
-    
+
     const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
     const stateColumns = headers.filter((h: string) => {
       const lower = h.toLowerCase();
       return lower === 'state' || lower.includes(', state');
     });
-    
+
     data.forEach((row: any) => {
       // Check if this row's state is in selected states
       const rowState = stateColumns.map((col: string) => {
@@ -879,7 +879,7 @@ export default function ClientDashboard() {
         });
       }
     });
-    
+
     return {
       citiesInSelectedStates: Array.from(cities).sort(),
       cityCounts: counts
@@ -1300,10 +1300,10 @@ export default function ClientDashboard() {
 
   // Virtual scrolling setup
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  
+
   // Calculate row height based on user settings
   const estimatedRowHeight = rowHeight;
-  
+
   const rowVirtualizer = useVirtualizer({
     count: filteredData.length,
     getScrollElement: () => tableContainerRef.current,
@@ -1333,7 +1333,7 @@ export default function ClientDashboard() {
         }}
       >
       <Card style={{ backgroundColor: customColors.secondary, borderColor: customColors.border }}>
-        <CardHeader style={{ color: customColors.text }}>
+        <CardHeader className="pb-3">
           <CardTitle>Client Dashboard</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1348,7 +1348,7 @@ export default function ClientDashboard() {
               <p className="text-muted-foreground">Loading your data...</p>
             </div>
           )}
-          
+
           {/* No Sheets Found - Only show when loading is complete */}
           {!isLoadingSheets && !isLoading && !storeSheetId && !trackerSheetId && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
@@ -1772,7 +1772,7 @@ export default function ClientDashboard() {
                   <p className="text-xs text-muted-foreground">
                     Uncheck states to hide rows from those states
                   </p>
-                  
+
                   {/* Canada Checkbox */}
                   <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
                     <Checkbox
@@ -1800,7 +1800,7 @@ export default function ClientDashboard() {
                       ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
                     </span>
                   </div>
-                  
+
                   <ScrollArea className="h-64">
                     <div className="space-y-2">
                       {allStates.map((state: string) => (
@@ -1863,7 +1863,7 @@ export default function ClientDashboard() {
                         <p className="text-xs text-muted-foreground">
                           Cities in selected states ({citiesInSelectedStates.length} total)
                         </p>
-                        
+
                         {/* City search box */}
                         <Input
                           placeholder="Search cities..."
@@ -1872,7 +1872,7 @@ export default function ClientDashboard() {
                           className="h-8"
                           data-testid="input-search-cities"
                         />
-                        
+
                         <ScrollArea className="h-64">
                           <div className="space-y-2">
                             {citiesInSelectedStates
@@ -1987,7 +1987,7 @@ export default function ClientDashboard() {
                       <p className="text-xs text-muted-foreground">
                         Select which statuses to display
                       </p>
-                      
+
                       <ScrollArea className="h-64">
                         <div className="space-y-2">
                           {statusOptions.map((status) => (
@@ -2918,10 +2918,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   const [selectedStores, setSelectedStores] = useState<Array<{ link: string; name: string }>>([]);
   const [storeSearchDialog, setStoreSearchDialog] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
-  
+
   // Track the current row's link to prevent race conditions
   const [activeRowLink, setActiveRowLink] = useState<string | null>(null);
-  
+
   // Preserve franchise context for the entire dialog lifecycle
   const [preservedFranchiseContext, setPreservedFranchiseContext] = useState<{
     brandName: string;
@@ -2948,13 +2948,13 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   const filteredStores = useMemo(() => {
     if (!allStores || !Array.isArray(allStores)) return [];
     const searchLower = storeSearch.toLowerCase();
-    
+
     // Create set of links to exclude (current DBA stores + selected stores)
     const excludedLinks = new Set([
       ...currentDbaStores.map(s => s.link),
       ...selectedStores.map(s => s.link)
     ]);
-    
+
     return allStores.filter((store: any) => 
       !excludedLinks.has(store.link) &&
       (store.name?.toLowerCase().includes(searchLower) ||
@@ -2963,7 +2963,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       store.address?.toLowerCase().includes(searchLower))
     );
   }, [allStores, storeSearch, currentDbaStores, selectedStores]);
-  
+
   // Check if there are unsaved changes
   const hasUnsavedChanges = useMemo(() => {
     return Object.keys(formData).some((key) => {
@@ -2979,13 +2979,13 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       if (franchiseContext) {
         setPreservedFranchiseContext(franchiseContext);
       }
-      
+
       // Helper function to get value from various possible field names (case-insensitive)
       const getValue = (fieldNames: string[]) => {
         for (const fieldName of fieldNames) {
           // Try exact match first
           if (row[fieldName]) return row[fieldName];
-          
+
           // Try case-insensitive match
           const key = Object.keys(row).find(k => k.toLowerCase() === fieldName.toLowerCase());
           if (key && row[key]) return row[key];
@@ -3023,10 +3023,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       // Check if this store has a DBA - if yes, auto-enable Multiple Locations mode
       const existingDba = getValue(['DBA', 'dba']);
       console.log('[StoreDetails] Checking for existing DBA:', existingDba);
-      
+
       // Use preserved franchise context for consistent behavior during dialog lifecycle
       const activeFranchiseContext = preservedFranchiseContext || franchiseContext;
-      
+
       // Priority 1: Franchise context (from Franchise Finder)
       if (activeFranchiseContext && activeFranchiseContext.allLocations && activeFranchiseContext.allLocations.length > 0) {
         console.log('[StoreDetails] Franchise context detected:', activeFranchiseContext.brandName, 'with', activeFranchiseContext.allLocations.length, 'locations');
@@ -3041,7 +3041,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             return link && name ? { link, name } : null;
           })
           .filter((loc): loc is { link: string; name: string } => loc !== null);
-        
+
         if (validLocations.length > 0) {
           setSelectedStores(validLocations);
           console.log('[StoreDetails] Pre-selected', validLocations.length, 'valid franchise locations');
@@ -3099,14 +3099,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
       // Phone regex - matches various formats: (555) 123-4567, 555-123-4567, 555.123.4567, 5551234567
       const phoneRegex = /\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
-      
+
       const emails = formData.notes.match(emailRegex);
       const phones = formData.notes.match(phoneRegex);
-      
+
       let updated = false;
       let emailToSet = '';
       let phoneToSet = '';
-      
+
       // Auto-populate POC Email if found and hasn't been manually edited
       if (emails && emails.length > 0 && !pocFieldsManuallyEdited.email) {
         emailToSet = emails[0];
@@ -3115,13 +3115,13 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           updated = true;
         }
       }
-      
+
       // Auto-populate POC Phone if found and hasn't been manually edited
       if (phones && phones.length > 0 && !pocFieldsManuallyEdited.phone) {
         // Format phone number to international format: +1 (xxx) xxx-xxxx
         const rawPhone = phones[0].replace(/\D/g, ''); // Remove all non-digits
         let formatted = rawPhone;
-        
+
         // If it's a 10-digit number, format it
         if (rawPhone.length === 10) {
           formatted = `+1 (${rawPhone.slice(0, 3)}) ${rawPhone.slice(3, 6)}-${rawPhone.slice(6)}`;
@@ -3130,14 +3130,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         else if (rawPhone.length === 11 && rawPhone.startsWith('1')) {
           formatted = `+1 (${rawPhone.slice(1, 4)}) ${rawPhone.slice(4, 7)}-${rawPhone.slice(7)}`;
         }
-        
+
         phoneToSet = formatted;
         if (phoneToSet !== formData.poc_phone) {
           setFormData(prev => ({ ...prev, poc_phone: phoneToSet }));
           updated = true;
         }
       }
-      
+
       // DO NOT update initialData - we want auto-detected values to be saved when user clicks Save
       // They should be treated as unsaved changes so they get written to Google Sheets
     } else {
@@ -3180,7 +3180,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       // Separate Store Database fields from Commission Tracker fields
       const storeChanges: Array<{ sheetId: string; rowIndex: number; column: string; value: string }> = [];
       const trackerChanges: Record<string, string> = {};
-      
+
       Object.keys(formData).forEach((key) => {
         const typedKey = key as keyof typeof formData;
         if (formData[typedKey] !== initialData[typedKey]) {
@@ -3190,7 +3190,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
               // Store Database - direct update
               const sheetId = storeSheetId;
               const rowIndex = row._storeRowIndex;
-              
+
               if (sheetId && rowIndex) {
                 storeChanges.push({
                   sheetId,
@@ -3211,7 +3211,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       if (multiLocationMode && dbaName && dbaName.trim()) {
         const sheetId = storeSheetId;
         const rowIndex = row._storeRowIndex;
-        
+
         if (sheetId && rowIndex && currentUser?.email) {
           // Add DBA change
           storeChanges.push({
@@ -3220,7 +3220,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             column: 'DBA',
             value: dbaName.trim()
           });
-          
+
           // Add Agent Name change
           storeChanges.push({
             sheetId,
@@ -3252,7 +3252,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         if (!link) {
           throw new Error("Cannot save tracker fields: Store link is missing");
         }
-        
+
         promises.push(
           apiRequest('POST', '/api/sheets/tracker/upsert', { link, updates: trackerChanges })
         );
@@ -3282,7 +3282,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Mark POC fields as manually edited when user changes them
     if (field === 'poc_email') {
       setPocFieldsManuallyEdited(prev => ({ ...prev, email: true }));
@@ -3294,33 +3294,33 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   // Manual re-detection function
   const handleReDetect = () => {
     if (!formData.notes || !formData.notes.trim()) return;
-    
+
     // Email regex - matches most common email formats (fixed character class)
     const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
     // Phone regex - matches various formats
     const phoneRegex = /\b(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
-    
+
     const emails = formData.notes.match(emailRegex);
     const phones = formData.notes.match(phoneRegex);
-    
+
     // Update email if found
     if (emails && emails.length > 0) {
       setFormData(prev => ({ ...prev, poc_email: emails[0] }));
       setInitialData(prev => ({ ...prev, poc_email: emails[0] }));
       setPocFieldsManuallyEdited(prev => ({ ...prev, email: false }));
     }
-    
+
     // Update phone if found
     if (phones && phones.length > 0) {
       const rawPhone = phones[0].replace(/\D/g, '');
       let formatted = rawPhone;
-      
+
       if (rawPhone.length === 10) {
         formatted = `+1 (${rawPhone.slice(0, 3)}) ${rawPhone.slice(3, 6)}-${rawPhone.slice(6)}`;
       } else if (rawPhone.length === 11 && rawPhone.startsWith('1')) {
         formatted = `+1 (${rawPhone.slice(1, 4)}) ${rawPhone.slice(4, 7)}-${rawPhone.slice(7)}`;
       }
-      
+
       setFormData(prev => ({ ...prev, poc_phone: formatted }));
       setInitialData(prev => ({ ...prev, poc_phone: formatted }));
       setPocFieldsManuallyEdited(prev => ({ ...prev, phone: false }));
@@ -3334,7 +3334,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       const mapping = fieldToSheetMapping[key];
       return mapping?.sheet === 'tracker' && formData[typedKey] !== initialData[typedKey];
     });
-    
+
     // If tracker fields are being changed, follow_up_date is mandatory
     if (trackerFieldsChanged && !formData.follow_up_date) {
       toast({
@@ -3344,13 +3344,13 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       });
       return;
     }
-    
+
     saveMutation.mutate();
   };
 
   // Handle close with unsaved changes warning
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
-  
+
   const handleClose = () => {
     if (hasUnsavedChanges) {
       setShowUnsavedWarning(true);
@@ -3562,13 +3562,13 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               });
                               return;
                             }
-                            
+
                             try {
                               const storeLinks = selectedStores.map(s => s.link);
                               const isUpdatingExisting = currentDbaStores.length > 0;
-                              
+
                               console.log('[CLAIM-DBA] Claiming locations:', { storeLinks, dbaName, storeSheetId, trackerSheetId, isUpdatingExisting });
-                              
+
                               const response = await apiRequest('POST', '/api/stores/claim-multiple', {
                                 storeLinks,
                                 dbaName: dbaName.trim(),
@@ -3583,7 +3583,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                                 ? `Added ${response.updatedStoreCount} new store${response.updatedStoreCount !== 1 ? 's' : ''} to DBA "${dbaName}"`
                                 : `Claimed ${response.createdTrackerCount} location${response.createdTrackerCount !== 1 ? 's' : ''} with DBA "${dbaName}"`;
                               const warningMessage = response.skippedCount > 0 ? ` (${response.skippedCount} skipped - already in DBA)` : '';
-                              
+
                               toast({
                                 title: "Success",
                                 description: successMessage + warningMessage,
@@ -3609,7 +3609,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               // Refresh the dashboard
                               await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
                               await refetch();
-                              
+
                               // Close the dialog
                               onOpenChange(false);
                             } catch (error: any) {
@@ -3668,7 +3668,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                       />
                     </div>
                   </div>
-                  
+
                   {/* Status, Follow-Up Date, Next Action */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
                     <div className="space-y-2">
@@ -3969,7 +3969,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
               ) : (
                 filteredStores.map((store: any) => {
                   const isSelected = selectedStores.some(s => s.link === store.link);
-                  
+
                   const toggleStore = () => {
                     setSelectedStores(prev => {
                       const alreadySelected = prev.some(s => s.link === store.link);
@@ -3980,7 +3980,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                       }
                     });
                   };
-                  
+
                   return (
                     <div
                       key={store.link}
