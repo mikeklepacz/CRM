@@ -3497,25 +3497,20 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <DialogTitle>{formData.name || "Store Details"}</DialogTitle>
-              <DialogDescription>{formData.type}</DialogDescription>
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              <Checkbox
-                id="listing-active"
-                checked={formData.open === "TRUE" || formData.open === "true"}
-                onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
-                data-testid="checkbox-listing-active"
-              />
-              <Label 
-                htmlFor="listing-active" 
-                className="text-sm font-medium cursor-pointer whitespace-nowrap"
-              >
-                Listing Active
-              </Label>
-            </div>
+          <DialogTitle className="text-center">Store Details</DialogTitle>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Checkbox
+              id="listing-active"
+              checked={formData.open === "TRUE" || formData.open === "true"}
+              onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
+              data-testid="checkbox-listing-active"
+            />
+            <Label 
+              htmlFor="listing-active" 
+              className="text-sm font-medium cursor-pointer whitespace-nowrap"
+            >
+              Listing Active
+            </Label>
           </div>
         </DialogHeader>
 
