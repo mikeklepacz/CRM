@@ -1685,8 +1685,21 @@ export default function ClientDashboard() {
                   />
                   <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
                 </div>
-                  </div>
-                </CardContent>
+
+                      {/* Theme Toggle with Label */}
+                      <ThemeToggle showLabel={true} variant="outline" />
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" data-testid="button-theme-customizer">
+                      <Palette className="mr-2 h-4 w-4" />
+                      Colors
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-96 max-h-[600px] overflow-y-auto">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Customize Colors</h4>
                         <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted text-xs font-medium">
                           {actualTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
                         </div>
