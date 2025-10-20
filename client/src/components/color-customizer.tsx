@@ -5,11 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Palette, Save, RotateCcw } from "lucide-react";
 import { HslColorPicker } from "react-colorful";
-import { useTheme } from "@/components/theme-provider";
-import { useCustomTheme, defaultLightColors, defaultDarkColors } from "@/hooks/use-custom-theme";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useCustomTheme } from "@/hooks/use-custom-theme";
 
 // HSL <-> Hex conversion utilities
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
@@ -50,68 +46,24 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 export function ColorCustomizer() {
-  const { toast } = useToast();
-  const { theme, actualTheme } = useTheme();
-  const { currentColors } = useCustomTheme();
+  const { actualTheme } = useTheme();
+  const { currentColors, saveColors, resetColors, isSaving } = useCustomTheme();
   const [customColors, setCustomColors] = useState(currentColors);
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
   const [colorPresets, setColorPresets] = useState<Array<{ name: string; color: string }>>([]);
   const [presetName, setPresetName] = useState("");
-  const [hasInitialized, setHasInitialized] = useState(false);
 
-  // Sync customColors when currentColors changes (when user preferences load)
-  // Only sync once on initial load
+  // Sync customColors when currentColors changes (theme switch or initial load)
   useEffect(() => {
-    if (!hasInitialized) {
-      setCustomColors(currentColors);
-      setHasInitialized(true);
-    }
-  }, [currentColors, hasInitialized]);
-
-  // Load user preferences to get initial state
-  const { data: userPreferences } = useQuery({
-    queryKey: ['/api/user/preferences'],
-  });
-
-  // Mutation to save color preferences
-  const saveColorsMutation = useMutation({
-    mutationFn: async (colors: any) => {
-      const preferences: any = userPreferences ? { ...userPreferences } : {};
-
-      if (actualTheme === 'dark') {
-        preferences.darkModeColors = colors;
-        preferences.hasDarkOverrides = true;
-      } else {
-        preferences.lightModeColors = colors;
-        preferences.hasLightOverrides = true;
-      }
-
-      return await apiRequest('/api/user/preferences', 'PUT', preferences);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
-      toast({
-        title: "Colors saved",
-        description: `${actualTheme === 'dark' ? 'Dark' : 'Light'} mode colors updated successfully.`,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to save color preferences",
-        variant: "destructive",
-      });
-    },
-  });
+    setCustomColors(currentColors);
+  }, [currentColors]);
 
   const handleSaveColors = () => {
-    saveColorsMutation.mutate(customColors);
+    saveColors(customColors);
   };
 
   const handleResetColors = () => {
-    const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
-    setCustomColors(defaultColors);
-    saveColorsMutation.mutate(defaultColors);
+    resetColors();
   };
 
   return (
@@ -285,17 +237,17 @@ export function ColorCustomizer() {
           <div className="flex gap-2 pt-4 border-t">
             <Button
               onClick={handleSaveColors}
-              disabled={saveColorsMutation.isPending}
+              disabled={isSaving}
               className="flex-1"
               data-testid="button-save-colors"
             >
               <Save className="mr-2 h-4 w-4" />
-              {saveColorsMutation.isPending ? 'Saving...' : 'Save Colors'}
+              {isSaving ? 'Saving...' : 'Save Colors'}
             </Button>
             <Button
               variant="outline"
               onClick={handleResetColors}
-              disabled={saveColorsMutation.isPending}
+              disabled={isSaving}
               data-testid="button-reset-colors"
             >
               <RotateCcw className="mr-2 h-4 w-4" />
