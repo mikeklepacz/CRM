@@ -172,8 +172,10 @@ export default function ClientDashboard() {
   const { lightColors, darkColors, currentColors } = useCustomTheme();
   
   // Local state for editing colors before saving
+  // Initialize once from hook values, then allow independent editing
   const [lightModeColors, setLightModeColors] = useState(lightColors);
   const [darkModeColors, setDarkModeColors] = useState(darkColors);
+  const [hasInitializedColors, setHasInitializedColors] = useState(false);
   const customColors = resolvedTheme === 'dark' ? darkModeColors : lightModeColors;
   const setCustomColors = resolvedTheme === 'dark' ? setDarkModeColors : setLightModeColors;
 
@@ -182,11 +184,15 @@ export default function ClientDashboard() {
   const [presetName, setPresetName] = useState("");
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
 
-  // Sync local state with hook values when they change
+  // Initialize local state from hook values only once (when preferences load)
+  // Don't continuously sync to allow editing before saving
   useEffect(() => {
-    setLightModeColors(lightColors);
-    setDarkModeColors(darkColors);
-  }, [lightColors, darkColors]);
+    if (!hasInitializedColors && (lightColors !== defaultLightColors || darkColors !== defaultDarkColors)) {
+      setLightModeColors(lightColors);
+      setDarkModeColors(darkColors);
+      setHasInitializedColors(true);
+    }
+  }, [lightColors, darkColors, hasInitializedColors]);
 
   // Convert hex to HSL (imported from use-custom-theme hook, but need local version for UI)
   const hexToHsl = (hex: string): { h: number; s: number; l: number } => {
@@ -345,6 +351,8 @@ export default function ClientDashboard() {
       });
     },
     onSuccess: () => {
+      // Reset initialization flag so saved colors get loaded back into local state
+      setHasInitializedColors(false);
       queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
       toast({
         title: "Colors Saved",
