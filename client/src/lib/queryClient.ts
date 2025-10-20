@@ -20,7 +20,10 @@ export async function apiRequest(
   });
 
   await throwIfResNotOk(res);
-  return res.json();
+  
+  // Handle empty responses (204, etc.) without trying to parse JSON
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
