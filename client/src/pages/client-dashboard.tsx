@@ -1497,336 +1497,298 @@ export default function ClientDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Font Size Dropdown */}
+                      {/* Font Size Selector */}
                       <div className="flex items-center gap-2">
-                  <Type className="h-4 w-4 text-muted-foreground" />
-                  <Select
-                    value={fontSize.toString()}
-                    onValueChange={(value) => setFontSize(parseInt(value))}
-                  >
-                    <SelectTrigger className="w-20" data-testid="select-font-size">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="8">8</SelectItem>
-                      <SelectItem value="9">9</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="11">11</SelectItem>
-                      <SelectItem value="12">12</SelectItem>
-                      <SelectItem value="13">13</SelectItem>
-                      <SelectItem value="14">14</SelectItem>
-                      <SelectItem value="15">15</SelectItem>
-                      <SelectItem value="16">16</SelectItem>
-                      <SelectItem value="17">17</SelectItem>
-                      <SelectItem value="18">18</SelectItem>
-                      <SelectItem value="19">19</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="21">21</SelectItem>
-                      <SelectItem value="22">22</SelectItem>
-                      <SelectItem value="24">24</SelectItem>
-                      <SelectItem value="26">26</SelectItem>
-                      <SelectItem value="28">28</SelectItem>
-                      <SelectItem value="30">30</SelectItem>
-                    </SelectContent>
-                  </Select>
+                        <Type className="h-4 w-4 text-muted-foreground" />
+                        <Select
+                          value={fontSize.toString()}
+                          onValueChange={(value) => setFontSize(parseInt(value))}
+                        >
+                          <SelectTrigger className="w-20" data-testid="select-font-size">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="8">8</SelectItem>
+                            <SelectItem value="9">9</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="11">11</SelectItem>
+                            <SelectItem value="12">12</SelectItem>
+                            <SelectItem value="13">13</SelectItem>
+                            <SelectItem value="14">14</SelectItem>
+                            <SelectItem value="15">15</SelectItem>
+                            <SelectItem value="16">16</SelectItem>
+                            <SelectItem value="17">17</SelectItem>
+                            <SelectItem value="18">18</SelectItem>
+                            <SelectItem value="19">19</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="21">21</SelectItem>
+                            <SelectItem value="22">22</SelectItem>
+                            <SelectItem value="24">24</SelectItem>
+                            <SelectItem value="26">26</SelectItem>
+                            <SelectItem value="28">28</SelectItem>
+                            <SelectItem value="30">30</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Row Height Slider */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="icon" data-testid="button-row-height">
+                            <AlignJustify className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium">Row Height</Label>
+                              <span className="text-sm text-muted-foreground">{rowHeight}px</span>
+                            </div>
+                            <Slider
+                              value={[rowHeight]}
+                              onValueChange={(value) => setRowHeight(value[0])}
+                              min={24}
+                              max={200}
+                              step={1}
+                              className="w-full"
+                              data-testid="slider-row-height"
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Compact</span>
+                              <span>Comfortable</span>
+                              <span>Spacious</span>
+                            </div>
+                            {(() => {
+                              const minRequired = Math.ceil(fontSize * 1.4 + Math.max(8, fontSize * 0.5) * 2);
+                              return rowHeight < minRequired ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Note: Minimum {minRequired}px needed for {fontSize}px font
+                                </p>
+                              ) : null;
+                            })()}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+
+                      {/* Text Alignment Buttons */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="icon" data-testid="button-text-align">
+                            {textAlign === 'left' && <AlignLeft className="h-4 w-4" />}
+                            {textAlign === 'center' && <AlignCenter className="h-4 w-4" />}
+                            {textAlign === 'right' && <AlignRight className="h-4 w-4" />}
+                            {textAlign === 'justify' && <AlignJustify className="h-4 w-4" />}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48">
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              variant={textAlign === 'left' ? 'default' : 'outline'}
+                              size="icon"
+                              onClick={() => setTextAlign('left')}
+                              data-testid="button-align-left"
+                            >
+                              <AlignLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant={textAlign === 'center' ? 'default' : 'outline'}
+                              size="icon"
+                              onClick={() => setTextAlign('center')}
+                              data-testid="button-align-center"
+                            >
+                              <AlignCenter className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant={textAlign === 'right' ? 'default' : 'outline'}
+                              size="icon"
+                              onClick={() => setTextAlign('right')}
+                              data-testid="button-align-right"
+                            >
+                              <AlignRight className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant={textAlign === 'justify' ? 'default' : 'outline'}
+                              size="icon"
+                              onClick={() => setTextAlign('justify')}
+                              data-testid="button-align-justify"
+                            >
+                              <AlignJustify className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+
+                      {/* Vertical Alignment Buttons */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="icon" data-testid="button-vertical-align">
+                            {verticalAlign === 'top' && (
+                              <div className="flex flex-col justify-start h-4 w-4">
+                                <div className="w-1 h-1 bg-current rounded-full"></div>
+                              </div>
+                            )}
+                            {verticalAlign === 'middle' && (
+                              <div className="flex flex-col justify-center h-4 w-4">
+                                <div className="w-1 h-1 bg-current rounded-full"></div>
+                              </div>
+                            )}
+                            {verticalAlign === 'bottom' && (
+                              <div className="flex flex-col justify-end h-4 w-4">
+                                <div className="w-1 h-1 bg-current rounded-full"></div>
+                              </div>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48">
+                          <div className="grid grid-cols-1 gap-2">
+                            <Button
+                              variant={verticalAlign === 'top' ? 'default' : 'outline'}
+                              size="icon"
+                              onClick={() => setVerticalAlign('top')}
+                              data-testid="button-valign-top"
+                            >
+                              <div className="flex flex-col justify-start h-4 w-4">
+                                <div className="w-1 h-1 bg-current rounded-full"></div>
+                              </div>
+                            </Button>
+                            <Button
+                              variant={verticalAlign === 'middle' ? 'default' : 'outline'}
+                              size="icon"
+                              onClick={() => setVerticalAlign('middle')}
+                              data-testid="button-valign-middle"
+                            >
+                              <div className="flex flex-col justify-center h-4 w-4">
+                                <div className="w-1 h-1 bg-current rounded-full"></div>
+                              </div>
+                            </Button>
+                            <Button
+                              variant={verticalAlign === 'bottom' ? 'default' : 'outline'}
+                              size="icon"
+                              onClick={() => setVerticalAlign('bottom')}
+                              data-testid="button-valign-bottom"
+                            >
+                              <div className="flex flex-col justify-end h-4 w-4">
+                                <div className="w-1 h-1 bg-current rounded-full"></div>
+                              </div>
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+
+                      {/* Freeze First Column Checkbox */}
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="freeze-first-column"
+                          checked={freezeFirstColumn}
+                          onCheckedChange={(checked) => setFreezeFirstColumn(!!checked)}
+                          data-testid="checkbox-freeze-column"
+                        />
+                        <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Filters Row */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Total and Visible Shops Counter */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground px-3 py-1 bg-muted rounded-md" data-testid="text-shops-counter">
+                  <span className="font-medium">Showing {filteredData.length} of {data.length} shops</span>
                 </div>
 
-                {/* Row Height Slider */}
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" size="icon" data-testid="button-row-height">
-                      <AlignJustify className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Row Height</Label>
-                        <span className="text-sm text-muted-foreground">{rowHeight}px</span>
-                      </div>
-                      <Slider
-                        value={[rowHeight]}
-                        onValueChange={(value) => setRowHeight(value[0])}
-                        min={24}
-                        max={200}
-                        step={1}
-                        className="w-full"
-                        data-testid="slider-row-height"
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Compact</span>
-                        <span>Comfortable</span>
-                        <span>Spacious</span>
-                      </div>
-                      {(() => {
-                        const minRequired = Math.ceil(fontSize * 1.4 + Math.max(8, fontSize * 0.5) * 2);
-                        return rowHeight < minRequired ? (
-                          <p className="text-xs text-muted-foreground">
-                            Note: Minimum {minRequired}px needed for {fontSize}px font
-                          </p>
-                        ) : null;
-                      })()}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Text Alignment Buttons */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="icon" data-testid="button-text-align">
-                      {textAlign === 'left' && <AlignLeft className="h-4 w-4" />}
-                      {textAlign === 'center' && <AlignCenter className="h-4 w-4" />}
-                      {textAlign === 'right' && <AlignRight className="h-4 w-4" />}
-                      {textAlign === 'justify' && <AlignJustify className="h-4 w-4" />}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-48">
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant={textAlign === 'left' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setTextAlign('left')}
-                        data-testid="button-align-left"
-                      >
-                        <AlignLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant={textAlign === 'center' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setTextAlign('center')}
-                        data-testid="button-align-center"
-                      >
-                        <AlignCenter className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant={textAlign === 'right' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setTextAlign('right')}
-                        data-testid="button-align-right"
-                      >
-                        <AlignRight className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant={textAlign === 'justify' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setTextAlign('justify')}
-                        data-testid="button-align-justify"
-                      >
-                        <AlignJustify className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Vertical Alignment Buttons */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="icon" data-testid="button-vertical-align">
-                      {verticalAlign === 'top' && (
-                        <div className="flex flex-col justify-start h-4 w-4">
-                          <div className="w-1 h-1 bg-current rounded-full"></div>
-                        </div>
-                      )}
-                      {verticalAlign === 'middle' && (
-                        <div className="flex flex-col justify-center h-4 w-4">
-                          <div className="w-1 h-1 bg-current rounded-full"></div>
-                        </div>
-                      )}
-                      {verticalAlign === 'bottom' && (
-                        <div className="flex flex-col justify-end h-4 w-4">
-                          <div className="w-1 h-1 bg-current rounded-full"></div>
-                        </div>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-48">
-                    <div className="grid grid-cols-1 gap-2">
-                      <Button
-                        variant={verticalAlign === 'top' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setVerticalAlign('top')}
-                        data-testid="button-valign-top"
-                      >
-                        <div className="flex flex-col justify-start h-4 w-4">
-                          <div className="w-1 h-1 bg-current rounded-full"></div>
-                        </div>
-                      </Button>
-                      <Button
-                        variant={verticalAlign === 'middle' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setVerticalAlign('middle')}
-                        data-testid="button-valign-middle"
-                      >
-                        <div className="flex flex-col justify-center h-4 w-4">
-                          <div className="w-1 h-1 bg-current rounded-full"></div>
-                        </div>
-                      </Button>
-                      <Button
-                        variant={verticalAlign === 'bottom' ? 'default' : 'outline'}
-                        size="icon"
-                        onClick={() => setVerticalAlign('bottom')}
-                        data-testid="button-valign-bottom"
-                      >
-                        <div className="flex flex-col justify-end h-4 w-4">
-                          <div className="w-1 h-1 bg-current rounded-full"></div>
-                        </div>
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Freeze First Column Checkbox */}
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="freeze-first-column"
-                    checked={freezeFirstColumn}
-                    onCheckedChange={(checked) => setFreezeFirstColumn(!!checked)}
-                    data-testid="checkbox-freeze-column"
-                  />
-                  <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-            {/* Font Size Selector */}
-            <div className="flex items-center gap-2">
-              <Label htmlFor="font-size" className="text-sm font-medium whitespace-nowrap">Font Size</Label>
-              <Select
-                value={fontSize.toString()}
-                onValueChange={(value) => setFontSize(parseInt(value))}
-              >
-                <SelectTrigger id="font-size" className="w-24" data-testid="select-font-size">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent data-testid="select-content-font-size">
-                  {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 26, 28, 30].map((size) => (
-                    <SelectItem key={size} value={size.toString()} data-testid={`font-size-${size}`}>
-                      {size}px
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Row Height Slider */}
-            <div className="flex items-center gap-2">
-              <Label htmlFor="row-height" className="text-sm font-medium whitespace-nowrap">Row Height</Label>
-              <div className="flex items-center gap-2 flex-1 max-w-xs">
-                <Slider
-                  id="row-height"
-                  min={24}
-                  max={200}
-                  step={1}
-                  value={[rowHeight]}
-                  onValueChange={(value) => setRowHeight(value[0])}
-                  className="flex-1"
-                  data-testid="slider-row-height"
-                />
-                <span className="text-sm font-mono w-12 text-right">{rowHeight}px</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Filters Row - Fixed to NOT use wrapped gap */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Total and Visible Shops Counter */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground px-3 py-1 bg-muted rounded-md" data-testid="text-shops-counter">
-              <span className="font-medium">Showing {filteredData.length} of {data.length} shops</span>
-            </div>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  data-testid="button-states-filter"
-                  style={currentColors.statesButton ? { backgroundColor: currentColors.statesButton, borderColor: currentColors.statesButton } : undefined}
-                >
-                  <Settings2 className="mr-2 h-4 w-4" />
-                  States ({selectedStates.size}/{allStates.length})
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">Filter by State</h4>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={selectAllStates}
-                        data-testid="button-select-all-states"
-                      >
-                        All
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearAllStates}
-                        data-testid="button-clear-all-states"
-                      >
-                        None
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Uncheck states to hide rows from those states
-                  </p>
-
-                  {/* Canada Checkbox */}
-                  <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
-                    <Checkbox
-                      id="canada-toggle"
-                      checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state))}
-                      onCheckedChange={(checked) => {
-                        const canadianStates = allStates.filter(isCanadianProvince);
-                        const newSelected = new Set(selectedStates);
-                        if (checked) {
-                          canadianStates.forEach(state => newSelected.add(state));
-                        } else {
-                          canadianStates.forEach(state => newSelected.delete(state));
-                        }
-                        setSelectedStates(newSelected);
-                      }}
-                      data-testid="checkbox-canada-toggle"
-                    />
-                    <Label
-                      htmlFor="canada-toggle"
-                      className="text-sm cursor-pointer flex-1 font-medium"
+                    <Button 
+                      variant="outline" 
+                      data-testid="button-states-filter"
+                      style={currentColors.statesButton ? { backgroundColor: currentColors.statesButton, borderColor: currentColors.statesButton } : undefined}
                     >
-                      Canada
-                    </Label>
-                    <span className="text-xs text-muted-foreground">
-                      ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
-                    </span>
-                  </div>
-
-                  <ScrollArea className="h-64">
-                    <div className="space-y-2">
-                      {allStates.map((state: string) => (
-                        <div key={state} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`state-${state}`}
-                            checked={selectedStates.has(state)}
-                            onCheckedChange={() => toggleState(state)}
-                            data-testid={`checkbox-state-${state}`}
-                          />
-                          <Label
-                            htmlFor={`state-${state}`}
-                            className="text-sm cursor-pointer flex-1"
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      States ({selectedStates.size}/{allStates.length})
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Filter by State</h4>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={selectAllStates}
+                            data-testid="button-select-all-states"
                           >
-                            {state}
-                          </Label>
-                          <span className="text-xs text-muted-foreground">
-                            ({stateCounts[state] || 0})
-                          </span>
+                            All
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clearAllStates}
+                            data-testid="button-clear-all-states"
+                          >
+                            None
+                          </Button>
                         </div>
-                      ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Uncheck states to hide rows from those states
+                      </p>
+
+                      {/* Canada Checkbox */}
+                      <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                        <Checkbox
+                          id="canada-toggle"
+                          checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state))}
+                          onCheckedChange={(checked) => {
+                            const canadianStates = allStates.filter(isCanadianProvince);
+                            const newSelected = new Set(selectedStates);
+                            if (checked) {
+                              canadianStates.forEach(state => newSelected.add(state));
+                            } else {
+                              canadianStates.forEach(state => newSelected.delete(state));
+                            }
+                            setSelectedStates(newSelected);
+                          }}
+                          data-testid="checkbox-canada-toggle"
+                        />
+                        <Label
+                          htmlFor="canada-toggle"
+                          className="text-sm cursor-pointer flex-1 font-medium"
+                        >
+                          Canada
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
+                        </span>
+                      </div>
+
+                      <ScrollArea className="h-64">
+                        <div className="space-y-2">
+                          {allStates.map((state: string) => (
+                            <div key={state} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`state-${state}`}
+                                checked={selectedStates.has(state)}
+                                onCheckedChange={() => toggleState(state)}
+                                data-testid={`checkbox-state-${state}`}
+                              />
+                              <Label
+                                htmlFor={`state-${state}`}
+                                className="text-sm cursor-pointer flex-1"
+                              >
+                                {state}
+                              </Label>
+                              <span className="text-xs text-muted-foreground">
+                                ({stateCounts[state] || 0})
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     </div>
-                  </ScrollArea>
-                </div>
-              </PopoverContent>
-            </Popover>
+                  </PopoverContent>
+                </Popover>
 
                 {/* Cities Filter - Only shown when states are selected */}
                 {selectedStates.size > 0 && citiesInSelectedStates.length > 0 && (
