@@ -26,17 +26,26 @@ export function RevenueOverviewWidget() {
 
   if (isLoading) {
     return (
-      <Card className="h-full">
-        <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Revenue Overview
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
-          <CardDescription>Total earnings and monthly averages</CardDescription>
+      <Card className="h-full min-h-[300px]">
+        <CardHeader className="drag-handle cursor-move pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <CardTitle>Revenue Overview</CardTitle>
+              <CardDescription className="mt-1.5">Total earnings and monthly averages</CardDescription>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="flex flex-col items-end gap-1">
+                <Skeleton className="h-7 w-32" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Settings2 className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-20 w-full" />
+        <CardContent>
           <div className="grid grid-cols-2 gap-4">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
           </div>
@@ -47,13 +56,18 @@ export function RevenueOverviewWidget() {
 
   if (error || !data) {
     return (
-      <Card className="h-full">
-        <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Revenue Overview
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
-          <CardDescription>Total earnings and monthly averages</CardDescription>
+      <Card className="h-full min-h-[300px]">
+        <CardHeader className="drag-handle cursor-move pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <CardTitle>Revenue Overview</CardTitle>
+              <CardDescription className="mt-1.5">Total earnings and monthly averages</CardDescription>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-32" />
+              <Settings2 className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-destructive" data-testid="error-revenue-overview">
@@ -70,26 +84,28 @@ export function RevenueOverviewWidget() {
   const isPositiveChange = monthOverMonthChange >= 0;
 
   return (
-    <Card className="h-full">
-      <CardHeader className="drag-handle cursor-move">
-        <CardTitle className="flex items-center justify-between">
-          Revenue Overview
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
-        </CardTitle>
-        <CardDescription>Total earnings and monthly averages</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Total Earnings - Primary Metric */}
-        <div className="space-y-1">
-          <div className="flex items-baseline gap-2">
-            <DollarSign className="h-5 w-5 text-muted-foreground" />
-            <span className="text-3xl font-bold" data-testid="text-total-earnings">
-              ${parseFloat(data.totalEarnings || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
+    <Card className="h-full min-h-[300px]">
+      <CardHeader className="drag-handle cursor-move pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <CardTitle>Revenue Overview</CardTitle>
+            <CardDescription className="mt-1.5">Total earnings and monthly averages</CardDescription>
           </div>
-          <p className="text-sm text-muted-foreground">Total Earnings</p>
+          <div className="flex items-start gap-2">
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-baseline gap-1.5">
+                <DollarSign className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <span className="text-2xl font-bold whitespace-nowrap" data-testid="text-total-earnings">
+                  ${parseFloat(data.totalEarnings || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground whitespace-nowrap">Total Earnings</p>
+            </div>
+            <Settings2 className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+          </div>
         </div>
-
+      </CardHeader>
+      <CardContent>
         {/* Secondary Metrics Grid */}
         <div className="grid grid-cols-2 gap-4">
           {/* Monthly Average */}
