@@ -3077,7 +3077,7 @@ export default function ClientDashboard() {
                                           row: row,
                                           franchiseContext: selectedFranchise ? {
                                             brandName: selectedFranchise.brandName,
-                                            allLocations: selectedFranchise.stores
+                                            allLocations: selectedFranchise.locations
                                           } : undefined
                                         })}
                                         className="flex items-center gap-1 hover:underline"
@@ -3094,7 +3094,7 @@ export default function ClientDashboard() {
                                           row: row,
                                           franchiseContext: selectedFranchise ? {
                                             brandName: selectedFranchise.brandName,
-                                            allLocations: selectedFranchise.stores
+                                            allLocations: selectedFranchise.locations
                                           } : undefined
                                         })}
                                         className="flex items-center gap-1 hover:underline"
@@ -3120,7 +3120,7 @@ export default function ClientDashboard() {
                                           row: row,
                                           franchiseContext: selectedFranchise ? {
                                             brandName: selectedFranchise.brandName,
-                                            allLocations: selectedFranchise.stores
+                                            allLocations: selectedFranchise.locations
                                           } : undefined
                                         })}
                                         className="hover:underline font-medium text-left"
