@@ -777,6 +777,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Note: To make a user admin, run this SQL command in the database console:
   // UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 
+  // Analyze user's listings for deactivation (admin only)
+  app.get('/api/users/:userId/listing-analysis', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const adminUserId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { userId } = req.params;
+
+      // Get user info
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return res.json({
+          protectedCount: 0,
+          releasableCount: 0,
+          protected: [],
+          releasable: [],
+        });
+      }
+
+      // Read tracker data
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(adminUserId, trackerSheet.spreadsheetId, trackerRange);
+
+      if (trackerRows.length === 0) {
+        return res.json({
+          protectedCount: 0,
+          releasableCount: 0,
+          protected: [],
+          releasable: [],
+        });
+      }
+
+      const headers = trackerRows[0];
+      const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
+      const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+      const transactionIdIndex = headers.findIndex(h => h.toLowerCase() === 'transaction id');
+      const nameIndex = headers.findIndex(h => h.toLowerCase() === 'name');
+
+      if (agentNameIndex === -1 || linkIndex === -1) {
+        return res.status(400).json({ message: "Tracker sheet must have Agent Name and Link columns" });
+      }
+
+      const protected: Array<{ link: string; name: string; transactionId: string }> = [];
+      const releasable: Array<{ link: string; name: string }> = [];
+
+      // Analyze each row
+      for (let i = 1; i < trackerRows.length; i++) {
+        const row = trackerRows[i];
+        const agentName = row[agentNameIndex] || '';
+        const link = row[linkIndex] || '';
+        const transactionId = row[transactionIdIndex] || '';
+        const name = nameIndex !== -1 ? row[nameIndex] || '' : '';
+
+        // Check if this row belongs to the user
+        if (agentName.toLowerCase().trim() === (user.agentName || '').toLowerCase().trim()) {
+          if (transactionId) {
+            // Has transaction ID = protected
+            protected.push({ link, name, transactionId });
+          } else {
+            // No transaction ID = releasable
+            releasable.push({ link, name });
+          }
+        }
+      }
+
+      res.json({
+        protectedCount: protected.length,
+        releasableCount: releasable.length,
+        protected,
+        releasable,
+      });
+    } catch (error: any) {
+      console.error("Error analyzing user listings:", error);
+      res.status(500).json({ message: error.message || "Failed to analyze listings" });
+    }
+  });
+
+  // Deactivate user and release unclosed listings (admin only)
+  app.post('/api/users/:userId/deactivate', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const adminUserId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { userId } = req.params;
+
+      // Get user info
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Deactivate user in database
+      await storage.updateUser(userId, { isActive: false });
+
+      // Find both sheets
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+
+      let releasedCount = 0;
+
+      if (trackerSheet && storeDbSheet) {
+        // Read tracker data
+        const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+        const trackerRows = await googleSheets.readSheetData(adminUserId, trackerSheet.spreadsheetId, trackerRange);
+
+        if (trackerRows.length > 0) {
+          const headers = trackerRows[0];
+          const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
+          const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+          const transactionIdIndex = headers.findIndex(h => h.toLowerCase() === 'transaction id');
+          const statusIndex = headers.findIndex(h => h.toLowerCase() === 'status');
+
+          if (agentNameIndex !== -1 && linkIndex !== -1) {
+            // Read Store Database
+            const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
+            const storeDbRows = await googleSheets.readSheetData(adminUserId, storeDbSheet.spreadsheetId, storeDbRange);
+
+            if (storeDbRows.length > 0) {
+              const storeHeaders = storeDbRows[0];
+              const storeLinkIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'link');
+              const storeAgentNameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+
+              // Process each tracker row
+              for (let i = 1; i < trackerRows.length; i++) {
+                const row = trackerRows[i];
+                const agentName = row[agentNameIndex] || '';
+                const link = row[linkIndex] || '';
+                const transactionId = row[transactionIdIndex] || '';
+                const rowIndex = i + 1; // 1-indexed
+
+                // Check if this row belongs to the user
+                if (agentName.toLowerCase().trim() === (user.agentName || '').toLowerCase().trim()) {
+                  // Only release if no transaction ID
+                  if (!transactionId) {
+                    // Clear Agent Name in tracker (keep row for history)
+                    if (agentNameIndex !== -1) {
+                      const agentColumn = String.fromCharCode(65 + agentNameIndex);
+                      const agentRange = `${trackerSheet.sheetName}!${agentColumn}${rowIndex}`;
+                      await googleSheets.writeSheetData(adminUserId, trackerSheet.spreadsheetId, agentRange, [['']]);
+                    }
+
+                    // Set status to "7 – Warm" in tracker
+                    if (statusIndex !== -1) {
+                      const statusColumn = String.fromCharCode(65 + statusIndex);
+                      const statusRange = `${trackerSheet.sheetName}!${statusColumn}${rowIndex}`;
+                      await googleSheets.writeSheetData(adminUserId, trackerSheet.spreadsheetId, statusRange, [['7 – Warm']]);
+                    }
+
+                    // Clear Agent Name in Store Database
+                    if (storeLinkIndex !== -1 && storeAgentNameIndex !== -1) {
+                      for (let j = 1; j < storeDbRows.length; j++) {
+                        if (storeDbRows[j][storeLinkIndex] === link) {
+                          const storeAgentColumn = String.fromCharCode(65 + storeAgentNameIndex);
+                          const storeAgentRange = `${storeDbSheet.sheetName}!${storeAgentColumn}${j + 1}`;
+                          await googleSheets.writeSheetData(adminUserId, storeDbSheet.spreadsheetId, storeAgentRange, [['']]);
+                          break;
+                        }
+                      }
+                    }
+
+                    releasedCount++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      res.json({
+        message: `User deactivated successfully. Released ${releasedCount} unclosed listings.`,
+        releasedCount,
+      });
+    } catch (error: any) {
+      console.error("Error deactivating user:", error);
+      res.status(500).json({ message: error.message || "Failed to deactivate user" });
+    }
+  });
+
+  // Reactivate user (admin only)
+  app.post('/api/users/:userId/reactivate', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+
+      // Get user info
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Reactivate user in database
+      await storage.updateUser(userId, { isActive: true });
+
+      res.json({ message: "User reactivated successfully" });
+    } catch (error: any) {
+      console.error("Error reactivating user:", error);
+      res.status(500).json({ message: error.message || "Failed to reactivate user" });
+    }
+  });
+
   // Get all orders
   app.get('/api/orders', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
