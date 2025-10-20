@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { UserPlus, Mail, User as UserIcon, Briefcase, Lock, Shield, DollarSign, TrendingUp, Loader2 } from "lucide-react";
+import { UserPlus, Mail, User as UserIcon, Briefcase, Lock, Shield, DollarSign, TrendingUp, Loader2, UserX, UserCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface UserWithMetrics {
@@ -19,6 +21,7 @@ interface UserWithMetrics {
   lastName: string | null;
   agentName: string | null;
   role: string;
+  isActive?: boolean;
   totalSales: number;
   grossIncome: string;
   createdAt: string;
@@ -27,6 +30,9 @@ interface UserWithMetrics {
 export function UserManagement() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("active");
+  const [deactivateDialog, setDeactivateDialog] = useState<{ open: boolean; userId: string; analysis: any } | null>(null);
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [newUser, setNewUser] = useState({
     email: "",
     firstName: "",
@@ -71,6 +77,49 @@ export function UserManagement() {
     },
   });
 
+  // Deactivate user mutation
+  const deactivateUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest("POST", `/api/users/${userId}/deactivate`, {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setDeactivateDialog(null);
+      toast({
+        title: "Success",
+        description: data.message || "User deactivated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to deactivate user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Reactivate user mutation
+  const reactivateUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest("POST", `/api/users/${userId}/reactivate`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      toast({
+        title: "Success",
+        description: "User reactivated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reactivate user",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateUser = () => {
     if (!newUser.email || !newUser.agentName || !newUser.password) {
       toast({
@@ -81,6 +130,32 @@ export function UserManagement() {
       return;
     }
     createUserMutation.mutate(newUser);
+  };
+
+  const handleDeactivateClick = async (userId: string) => {
+    setLoadingAnalysis(true);
+    try {
+      const analysis = await apiRequest("GET", `/api/users/${userId}/listing-analysis`, {});
+      setDeactivateDialog({ open: true, userId, analysis });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to analyze user listings",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingAnalysis(false);
+    }
+  };
+
+  const handleDeactivateConfirm = () => {
+    if (deactivateDialog) {
+      deactivateUserMutation.mutate(deactivateDialog.userId);
+    }
+  };
+
+  const handleReactivate = (userId: string) => {
+    reactivateUserMutation.mutate(userId);
   };
 
   if (isLoading) {
@@ -112,6 +187,9 @@ export function UserManagement() {
   }
 
   const users = data?.users || [];
+  const activeUsers = users.filter(u => u.isActive !== false);
+  const inactiveUsers = users.filter(u => u.isActive === false);
+  const displayedUsers = activeTab === "active" ? activeUsers : inactiveUsers;
   const totalGrossIncome = users.reduce((sum, user) => sum + parseFloat(user.grossIncome || "0"), 0);
   const totalSales = users.reduce((sum, user) => sum + user.totalSales, 0);
 
@@ -125,9 +203,9 @@ export function UserManagement() {
             <UserIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-users">{users.length}</div>
+            <div className="text-2xl font-bold" data-testid="text-total-users">{activeUsers.length}</div>
             <p className="text-xs text-muted-foreground">
-              {users.filter(u => u.role === 'admin').length} admins, {users.filter(u => u.role === 'agent').length} agents
+              {activeUsers.filter(u => u.role === 'admin').length} admins, {activeUsers.filter(u => u.role === 'agent').length} agents
             </p>
           </CardContent>
         </Card>
@@ -290,55 +368,203 @@ export function UserManagement() {
         </CardHeader>
 
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Agent Name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="text-right">Total Sales</TableHead>
-                  <TableHead className="text-right">Gross Income</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No users found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  users.map((user) => (
-                    <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-                      <TableCell className="font-medium">
-                        {user.firstName || user.lastName
-                          ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-                          : '-'}
-                      </TableCell>
-                      <TableCell>{user.email || '-'}</TableCell>
-                      <TableCell>{user.agentName || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                          {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
-                          {user.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right" data-testid={`text-sales-${user.id}`}>
-                        {user.totalSales}
-                      </TableCell>
-                      <TableCell className="text-right font-medium" data-testid={`text-income-${user.id}`}>
-                        ${parseFloat(user.grossIncome || "0").toFixed(2)}
-                      </TableCell>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="active" data-testid="tab-active-users">
+                Active Users ({activeUsers.length})
+              </TabsTrigger>
+              <TabsTrigger value="inactive" data-testid="tab-inactive-users">
+                Inactive Users ({inactiveUsers.length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="active">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Agent Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead className="text-right">Total Sales</TableHead>
+                      <TableHead className="text-right">Gross Income</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {displayedUsers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          No active users found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      displayedUsers.map((user) => (
+                        <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                          <TableCell className="font-medium">
+                            {user.firstName || user.lastName
+                              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                              : '-'}
+                          </TableCell>
+                          <TableCell>{user.email || '-'}</TableCell>
+                          <TableCell>{user.agentName || '-'}</TableCell>
+                          <TableCell>
+                            <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                              {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
+                              {user.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right" data-testid={`text-sales-${user.id}`}>
+                            {user.totalSales}
+                          </TableCell>
+                          <TableCell className="text-right font-medium" data-testid={`text-income-${user.id}`}>
+                            ${parseFloat(user.grossIncome || "0").toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeactivateClick(user.id)}
+                              disabled={loadingAnalysis || deactivateUserMutation.isPending}
+                              data-testid={`button-deactivate-${user.id}`}
+                            >
+                              {loadingAnalysis ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <UserX className="h-3 w-3 mr-1" />
+                              )}
+                              Deactivate
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="inactive">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Agent Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead className="text-right">Total Sales</TableHead>
+                      <TableHead className="text-right">Gross Income</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {displayedUsers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          No inactive users found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      displayedUsers.map((user) => (
+                        <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                          <TableCell className="font-medium">
+                            {user.firstName || user.lastName
+                              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                              : '-'}
+                          </TableCell>
+                          <TableCell>{user.email || '-'}</TableCell>
+                          <TableCell>{user.agentName || '-'}</TableCell>
+                          <TableCell>
+                            <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                              {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
+                              {user.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right" data-testid={`text-sales-${user.id}`}>
+                            {user.totalSales}
+                          </TableCell>
+                          <TableCell className="text-right font-medium" data-testid={`text-income-${user.id}`}>
+                            ${parseFloat(user.grossIncome || "0").toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleReactivate(user.id)}
+                              disabled={reactivateUserMutation.isPending}
+                              data-testid={`button-reactivate-${user.id}`}
+                            >
+                              {reactivateUserMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <UserCheck className="h-3 w-3 mr-1" />
+                              )}
+                              Reactivate
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
+
+      {/* Deactivation Confirmation Dialog */}
+      <AlertDialog open={deactivateDialog?.open || false} onOpenChange={(open) => !open && setDeactivateDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate User</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deactivateDialog?.analysis && (
+                <div className="space-y-3">
+                  <p>This action will deactivate the user and release their unclosed listings:</p>
+                  
+                  <div className="bg-muted p-3 rounded-md space-y-2">
+                    <div className="flex justify-between">
+                      <span className="font-medium">Protected Listings (with Transaction IDs):</span>
+                      <span className="font-bold text-green-600">{deactivateDialog.analysis.protectedCount}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      These will stay assigned to this agent (10% commission for life)
+                    </p>
+                  </div>
+
+                  <div className="bg-muted p-3 rounded-md space-y-2">
+                    <div className="flex justify-between">
+                      <span className="font-medium">Releasable Listings (no Transaction IDs):</span>
+                      <span className="font-bold text-orange-600">{deactivateDialog.analysis.releasableCount}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      These will be marked as "7 – Warm" and made available for other agents
+                    </p>
+                  </div>
+
+                  <p className="text-sm font-medium">Are you sure you want to proceed?</p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeactivateDialog(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeactivateConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deactivateUserMutation.isPending}
+            >
+              {deactivateUserMutation.isPending && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              Deactivate User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

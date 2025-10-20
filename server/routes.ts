@@ -825,7 +825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Tracker sheet must have Agent Name and Link columns" });
       }
 
-      const protected: Array<{ link: string; name: string; transactionId: string }> = [];
+      const protectedListings: Array<{ link: string; name: string; transactionId: string }> = [];
       const releasable: Array<{ link: string; name: string }> = [];
 
       // Analyze each row
@@ -839,8 +839,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if this row belongs to the user
         if (agentName.toLowerCase().trim() === (user.agentName || '').toLowerCase().trim()) {
           if (transactionId) {
-            // Has transaction ID = protected
-            protected.push({ link, name, transactionId });
+            // Has transaction ID = protectedListings
+            protectedListings.push({ link, name, transactionId });
           } else {
             // No transaction ID = releasable
             releasable.push({ link, name });
@@ -849,9 +849,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({
-        protectedCount: protected.length,
+        protectedCount: protectedListings.length,
         releasableCount: releasable.length,
-        protected,
+        protected: protectedListings,
         releasable,
       });
     } catch (error: any) {
