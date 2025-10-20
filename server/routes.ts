@@ -2998,11 +2998,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Set Agent Name to claim the store
         if (agentNameIndex !== -1) {
-          const agentName = currentUser.agentName 
-            || (currentUser.firstName && currentUser.lastName 
-              ? `${currentUser.firstName} ${currentUser.lastName}`
-              : 'Unknown Agent');
-          newRow[agentNameIndex] = agentName;
+          if (!currentUser.agentName) {
+            return res.status(400).json({ 
+              message: "Agent Name is required in your profile to claim stores. Please set it in Settings." 
+            });
+          }
+          newRow[agentNameIndex] = currentUser.agentName;
         }
         
         // Set updated fields

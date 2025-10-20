@@ -3181,10 +3181,20 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
       // MULTIPLE LOCATIONS MODE: Write DBA and Agent Name to Store Database
       if (multiLocationMode && dbaName && dbaName.trim()) {
+        // Validate Agent Name is set
+        if (!currentUser?.agentName) {
+          toast({
+            title: "Agent Name Required",
+            description: "Please set your Agent Name in Settings before claiming stores.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const sheetId = storeSheetId;
         const rowIndex = row._storeRowIndex;
 
-        if (sheetId && rowIndex && currentUser?.agentName) {
+        if (sheetId && rowIndex) {
           // Add DBA change
           storeChanges.push({
             sheetId,
