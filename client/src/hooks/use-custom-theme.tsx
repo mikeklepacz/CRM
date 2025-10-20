@@ -254,7 +254,7 @@ export function useCustomTheme() {
       console.log('🎨 [COLOR SAVE] Sending preferences to backend:', preferences);
       
       try {
-        const result = await apiRequest('/api/user/preferences', 'PUT', preferences);
+        const result = await apiRequest('PUT', '/api/user/preferences', preferences);
         console.log('🎨 [COLOR SAVE] Backend response:', result);
         return result;
       } catch (error) {
