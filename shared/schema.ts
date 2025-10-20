@@ -38,6 +38,7 @@ export const users = pgTable("users", {
   role: varchar("role", { length: 20 }).notNull().default('agent'), // 'admin' or 'agent'
   agentName: varchar("agent_name"), // Name used in WooCommerce and Google Sheets for matching
   referredBy: varchar("referred_by").references(() => users.id), // MLM: who referred this user
+  isActive: boolean("is_active").notNull().default(true), // Active/Inactive status for deactivating agents
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
