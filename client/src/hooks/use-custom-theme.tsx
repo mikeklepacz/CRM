@@ -54,6 +54,7 @@ export const defaultLightColors: ThemeColors = {
     '4 – Follow-Up': { background: '#fed7aa', text: '#9a3412' },
     '5 – Closed Won': { background: '#d1fae5', text: '#065f46' },
     '6 – Closed Lost': { background: '#fee2e2', text: '#991b1b' },
+    '7 – Warm': { background: '#fef9c3', text: '#854d0e' },
   },
 };
 
@@ -79,6 +80,7 @@ export const defaultDarkColors: ThemeColors = {
     '4 – Follow-Up': { background: '#7c2d12', text: '#fed7aa' },
     '5 – Closed Won': { background: '#064e3b', text: '#a7f3d0' },
     '6 – Closed Lost': { background: '#7f1d1d', text: '#fecaca' },
+    '7 – Warm': { background: '#78350f', text: '#fef9c3' },
   },
 };
 
@@ -319,6 +321,43 @@ export function useCustomTheme() {
     setColorRowByStatusMutation.mutate(value);
   }, [setColorRowByStatusMutation]);
 
+  // Mutation to update a single status entry
+  const updateStatusEntryMutation = useMutation({
+    mutationFn: async ({ index, name, bgColor, textColor }: { index: number; name: string; bgColor: string; textColor: string }) => {
+      const statusKey = `${index + 1} – ${name}`;
+      const newStatusColors = { ...currentColors.statusColors, [statusKey]: { background: bgColor, text: textColor } };
+      
+      // Remove old status if name changed
+      const oldStatusKey = Object.keys(currentColors.statusColors || {}).find(key => key.startsWith(`${index + 1} –`));
+      if (oldStatusKey && oldStatusKey !== statusKey) {
+        delete newStatusColors[oldStatusKey];
+      }
+      
+      const updatedColors = { ...currentColors, statusColors: newStatusColors };
+      
+      debug.statusSave('Updating status entry', { index, name, bgColor, textColor, statusKey });
+      
+      const preferences: any = userPreferences ? { ...userPreferences } : {};
+      if (actualTheme === 'dark') {
+        preferences.darkModeColors = updatedColors;
+        preferences.hasDarkOverrides = true;
+      } else {
+        preferences.lightModeColors = updatedColors;
+        preferences.hasLightOverrides = true;
+      }
+      
+      return await apiRequest('PUT', '/api/user/preferences', preferences);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      debug.statusSave('Status entry saved successfully');
+    },
+  });
+
+  const updateStatusEntry = useCallback((index: number, name: string, bgColor: string, textColor: string) => {
+    updateStatusEntryMutation.mutate({ index, name, bgColor, textColor });
+  }, [updateStatusEntryMutation]);
+
   return useMemo(
     () => ({
       lightColors,
@@ -331,7 +370,9 @@ export function useCustomTheme() {
       isSaving: saveColorsMutation.isPending,
       colorRowByStatus,
       setColorRowByStatus,
+      updateStatusEntry,
+      isUpdatingStatus: updateStatusEntryMutation.isPending,
     }),
-    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus]
+    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending]
   );
 }

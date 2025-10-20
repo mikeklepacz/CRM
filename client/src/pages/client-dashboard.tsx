@@ -166,7 +166,7 @@ export default function ClientDashboard() {
   const [selectedFranchise, setSelectedFranchise] = useState<FranchiseGroup | null>(null);
 
   // Use global theme hook for colors
-  const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus } = useCustomTheme();
+  const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus, updateStatusEntry } = useCustomTheme();
 
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
@@ -1690,21 +1690,108 @@ export default function ClientDashboard() {
                         <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
                       </div>
 
-                      {/* Color Rows by Status Checkbox */}
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="color-row-by-status"
-                          checked={colorRowByStatus}
-                          onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
-                          data-testid="checkbox-color-row-by-status"
-                        />
-                        <Label htmlFor="color-row-by-status" className="text-sm cursor-pointer">Color Rows by Status</Label>
-                      </div>
+                      {/* Status Button - Opens editor dialog with Color Rows checkbox inside */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" data-testid="button-status">
+                            <Palette className="mr-2 h-4 w-4" />
+                            Status
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[500px] max-h-[600px] overflow-y-auto" align="end">
+                          <div className="space-y-4">
+                            {/* Header */}
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-medium">Status Customization</h4>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Customize status names and colors. Changes apply to dropdown, table rows, and store info popup.
+                            </p>
 
-                      {/* Statuses Button - Opens editor dialog */}
-                      <div className="text-xs text-muted-foreground">
-                        Status customization coming soon - dropdown colors now match row colors!
-                      </div>
+                            {/* Color Rows by Status Checkbox */}
+                            <div className="flex items-center gap-2 p-3 rounded-md border">
+                              <input
+                                type="checkbox"
+                                id="status-color-rows"
+                                checked={colorRowByStatus}
+                                onChange={(e) => setColorRowByStatus(e.target.checked)}
+                                className="h-4 w-4"
+                                data-testid="checkbox-status-color-rows"
+                              />
+                              <Label htmlFor="status-color-rows" className="text-sm cursor-pointer">
+                                Color Rows by Status
+                              </Label>
+                            </div>
+
+                            {/* Status Editors */}
+                            <div className="space-y-3">
+                              <Label className="text-sm font-medium">Edit Status Colors</Label>
+                              {[0, 1, 2, 3, 4, 5, 6].map((index) => {
+                                const statusNumber = index + 1;
+                                const statusEntries = Object.entries(statusColors);
+                                const currentEntry = statusEntries.find(([key]) => key.startsWith(`${statusNumber} –`));
+                                const statusName = currentEntry?.[0]?.replace(/^\d+ – /, '') || (index === 6 ? 'Warm' : '');
+                                const colors = currentEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
+
+                                return (
+                                  <div key={index} className="space-y-2 p-3 rounded-md border">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-mono text-muted-foreground w-4">{statusNumber}</span>
+                                      <Input
+                                        value={statusName}
+                                        onChange={(e) => {
+                                          const newName = e.target.value;
+                                          updateStatusEntry(index, newName, colors.background, colors.text);
+                                        }}
+                                        className="flex-1"
+                                        placeholder={`Status ${statusNumber} name`}
+                                        data-testid={`input-status-name-${index}`}
+                                      />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground">Background</Label>
+                                        <Input
+                                          type="color"
+                                          value={colors.background}
+                                          onChange={(e) => {
+                                            updateStatusEntry(index, statusName, e.target.value, colors.text);
+                                          }}
+                                          className="h-9 w-full cursor-pointer"
+                                          data-testid={`input-status-bg-${index}`}
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground">Text</Label>
+                                        <Input
+                                          type="color"
+                                          value={colors.text}
+                                          onChange={(e) => {
+                                            updateStatusEntry(index, statusName, colors.background, e.target.value);
+                                          }}
+                                          className="h-9 w-full cursor-pointer"
+                                          data-testid={`input-status-text-${index}`}
+                                        />
+                                      </div>
+                                    </div>
+                                    {/* Live Preview */}
+                                    <div
+                                      className="px-3 py-2 rounded-sm text-sm text-center"
+                                      style={{
+                                        backgroundColor: colors.background,
+                                        color: colors.text,
+                                      }}
+                                      data-testid={`preview-status-${index}`}
+                                    >
+                                      {statusNumber} – {statusName || `Status ${statusNumber}`}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </CardContent>
                 </Card>
@@ -3673,9 +3760,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
-                          {statusOptions.slice(0, 6).map((status) => {
+                          {statusOptions.map((status) => {
                             const colors = statusColors[status];
-                            debug.statusColors(`Applying status colors to dropdown`, {
+                            debug.statusColors(`Applying status colors to Store Info popup dropdown`, {
                               status,
                               backgroundColor: colors?.background,
                               textColor: colors?.text,
@@ -3694,7 +3781,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               </SelectItem>
                             );
                           })}
-                          <SelectItem value="7 – Warm" data-testid="status-option-warm">7 – Warm</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
