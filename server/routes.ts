@@ -881,6 +881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       let releasedCount = 0;
+      let protectedCount = 0;
 
       if (trackerSheet && storeDbSheet) {
         // Read tracker data
@@ -943,6 +944,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     }
 
                     releasedCount++;
+                  } else {
+                    // Has transaction ID - keep protected
+                    protectedCount++;
                   }
                 }
               }
@@ -952,8 +956,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({
-        message: `User deactivated successfully. Released ${releasedCount} unclosed listings.`,
+        message: `User deactivated successfully. Released ${releasedCount} unclosed listings. Protected ${protectedCount} listings with transactions.`,
         releasedCount,
+        protectedCount,
       });
     } catch (error: any) {
       console.error("Error deactivating user:", error);
