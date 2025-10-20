@@ -125,8 +125,7 @@ export default function Settings() {
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: z.infer<typeof profileSchema>) => {
-      const res = await apiRequest("PUT", "/api/user/profile", data);
-      return res.json();
+      return await apiRequest("PUT", "/api/user/profile", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
@@ -146,11 +145,10 @@ export default function Settings() {
 
   const updatePasswordMutation = useMutation({
     mutationFn: async (data: z.infer<typeof passwordSchema>) => {
-      const res = await apiRequest("PUT", "/api/user/password", {
+      return await apiRequest("PUT", "/api/user/password", {
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
       });
-      return res.json();
     },
     onSuccess: () => {
       passwordForm.reset();
@@ -171,8 +169,7 @@ export default function Settings() {
 
   const updateWooMutation = useMutation({
     mutationFn: async (data: z.infer<typeof wooCommerceSchema>) => {
-      const res = await apiRequest("PUT", "/api/woocommerce/settings", data);
-      return res.json();
+      return await apiRequest("PUT", "/api/woocommerce/settings", data);
     },
     onSuccess: () => {
       toast({
@@ -191,8 +188,7 @@ export default function Settings() {
 
   const updateGoogleMutation = useMutation({
     mutationFn: async (data: z.infer<typeof googleOAuthSchema>) => {
-      const res = await apiRequest("PUT", "/api/google/settings", data);
-      return res.json();
+      return await apiRequest("PUT", "/api/google/settings", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/google/settings"] });
@@ -212,8 +208,7 @@ export default function Settings() {
 
   const connectGoogleOAuthMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("GET", "/api/google/oauth-url");
-      return res.json();
+      return await apiRequest("GET", "/api/google/oauth-url");
     },
     onSuccess: (data: { url: string }) => {
       // Open OAuth popup
