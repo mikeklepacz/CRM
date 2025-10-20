@@ -3062,6 +3062,8 @@ export default function ClientDashboard() {
           refetch={refetch}
           franchiseContext={storeDetailsDialog.franchiseContext}
           currentColors={currentColors}
+          statusOptions={statusOptions}
+          statusColors={statusColors}
         />
       )}
 
@@ -3087,7 +3089,7 @@ export default function ClientDashboard() {
 }
 
 // Store Details Dialog Component
-function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors }: { 
+function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
   row: any;
@@ -3099,6 +3101,8 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     brandName: string;
     allLocations: any[];
   };
+  statusOptions: string[];
+  statusColors: { [status: string]: { background: string; text: string } };
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
