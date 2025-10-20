@@ -1318,6 +1318,27 @@ export default function ClientDashboard() {
     return row['Company'] || row['company'] || row['Business Name'] || row['name'] || 'Unknown';
   };
 
+  // Show full-page loading state until data is ready
+  if (isLoadingSheets || isLoading || !preferencesLoaded) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={customColors.bodyBackground ? {
+          backgroundColor: customColors.bodyBackground,
+        } : {}}
+      >
+        <div className="flex flex-col items-center justify-center">
+          <img 
+            src="/attached_assets/loading image_1760961223145.png" 
+            alt="Loading..." 
+            className="w-32 h-32 mb-4 animate-pulse"
+          />
+          <p className="text-muted-foreground">Loading your data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-screen"
@@ -1337,20 +1358,9 @@ export default function ClientDashboard() {
           <CardTitle>Client Dashboard</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Loading State */}
-          {(isLoadingSheets || isLoading) && (
-            <div className="flex flex-col items-center justify-center py-12">
-              <img 
-                src="/attached_assets/loading image_1760961223145.png" 
-                alt="Loading..." 
-                className="w-32 h-32 mb-4 animate-pulse"
-              />
-              <p className="text-muted-foreground">Loading your data...</p>
-            </div>
-          )}
 
-          {/* No Sheets Found - Only show when loading is complete */}
-          {!isLoadingSheets && !isLoading && !storeSheetId && !trackerSheetId && (
+          {/* No Sheets Found */}
+          {!storeSheetId && !trackerSheetId && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
                 No sheets found. Please connect your sheets in Admin Dashboard → Google Sheets tab with purposes "clients" (Store Database) and "commissions" (Commission Tracker).
