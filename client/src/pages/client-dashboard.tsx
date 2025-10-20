@@ -467,7 +467,7 @@ export default function ClientDashboard() {
       if (storeSheet) setStoreSheetId(storeSheet.id);
       if (trackerSheet) setTrackerSheetId(trackerSheet.id);
     }
-  }, [sheets.length]);
+  }, [sheets]);
 
   // Fetch merged data
   // Get current user
