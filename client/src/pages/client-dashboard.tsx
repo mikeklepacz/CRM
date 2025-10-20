@@ -3059,6 +3059,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     status: "",
     follow_up_date: "",
     next_action: "",
+    open: "TRUE",
   });
 
   // Track initial data to determine what changed
@@ -3153,6 +3154,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         status: getValue(['Status', 'status']),
         follow_up_date: getValue(['Follow-Up Date', 'follow_up_date']),
         next_action: getValue(['Next Action', 'next_action']),
+        open: getValue(['Open', 'open']) || "TRUE",
       };
       setFormData(populatedData);
       setInitialData(populatedData);
@@ -3273,6 +3275,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     website: { sheet: 'store', column: 'Website' },
     email: { sheet: 'store', column: 'Email' },
     sales_ready_summary: { sheet: 'store', column: 'Sales-ready Summary' },
+    open: { sheet: 'store', column: 'Open' },
     notes: { sheet: 'tracker', column: 'Notes' },
     point_of_contact: { sheet: 'tracker', column: 'Point of Contact' },
     poc_email: { sheet: 'tracker', column: 'POC Email' },
@@ -3494,8 +3497,26 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{formData.name || "Store Details"}</DialogTitle>
-          <DialogDescription>{formData.type}</DialogDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <DialogTitle>{formData.name || "Store Details"}</DialogTitle>
+              <DialogDescription>{formData.type}</DialogDescription>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="listing-active"
+                checked={formData.open === "TRUE" || formData.open === "true"}
+                onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
+                data-testid="checkbox-listing-active"
+              />
+              <Label 
+                htmlFor="listing-active" 
+                className="text-sm font-medium cursor-pointer whitespace-nowrap"
+              >
+                Listing Active
+              </Label>
+            </div>
+          </div>
         </DialogHeader>
 
         {!row ? (
