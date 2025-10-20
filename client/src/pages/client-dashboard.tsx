@@ -145,11 +145,6 @@ export default function ClientDashboard() {
     '7 – Warm',
   ]);
 
-  // Color row by status - now managed by useCustomTheme hook
-  const colorRowByStatus = themeColorRowByStatus;
-  const setColorRowByStatus = setThemeColorRowByStatus;
-
-
   // Address edit dialog state
   const [addressEditDialog, setAddressEditDialog] = useState<{
     open: boolean;
@@ -171,7 +166,7 @@ export default function ClientDashboard() {
   const [selectedFranchise, setSelectedFranchise] = useState<FranchiseGroup | null>(null);
 
   // Use global theme hook for colors
-  const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus: themeColorRowByStatus, setColorRowByStatus: setThemeColorRowByStatus } = useCustomTheme();
+  const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus } = useCustomTheme();
 
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
