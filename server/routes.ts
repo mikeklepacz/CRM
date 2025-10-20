@@ -2998,9 +2998,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Set Agent Name to claim the store
         if (agentNameIndex !== -1) {
-          const agentName = currentUser.firstName && currentUser.lastName 
-            ? `${currentUser.firstName} ${currentUser.lastName}`
-            : currentUser.email || 'Unknown Agent';
+          const agentName = currentUser.agentName 
+            || (currentUser.firstName && currentUser.lastName 
+              ? `${currentUser.firstName} ${currentUser.lastName}`
+              : 'Unknown Agent');
           newRow[agentNameIndex] = agentName;
         }
         

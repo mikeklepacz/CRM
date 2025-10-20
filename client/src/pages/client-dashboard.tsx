@@ -483,7 +483,7 @@ export default function ClientDashboard() {
 
   // Fetch merged data
   // Get current user
-  const { data: currentUser } = useQuery<{ id: string; email?: string; role?: string }>({
+  const { data: currentUser } = useQuery<{ id: string; email?: string; role?: string; agentName?: string }>({
     queryKey: ['/api/auth/user'],
   });
 
@@ -2857,7 +2857,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: currentUser } = useQuery<{ email: string; role: string }>({ queryKey: ['/api/auth/user'] });
+  const { data: currentUser } = useQuery<{ email: string; role: string; agentName?: string }>({ queryKey: ['/api/auth/user'] });
 
   const [formData, setFormData] = useState({
     name: "",
@@ -3184,7 +3184,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         const sheetId = storeSheetId;
         const rowIndex = row._storeRowIndex;
 
-        if (sheetId && rowIndex && currentUser?.email) {
+        if (sheetId && rowIndex && currentUser?.agentName) {
           // Add DBA change
           storeChanges.push({
             sheetId,
@@ -3198,7 +3198,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             sheetId,
             rowIndex,
             column: 'Agent Name',
-            value: currentUser.email
+            value: currentUser.agentName
           });
         }
       }

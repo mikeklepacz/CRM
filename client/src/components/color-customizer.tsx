@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Palette, Save, RotateCcw } from "lucide-react";
+import { Palette, Save, RotateCcw, Pipette } from "lucide-react";
 import { HslColorPicker } from "react-colorful";
-import { useCustomTheme } from "@/hooks/use-custom-theme";
+import { useCustomTheme, defaultLightColors, defaultDarkColors } from "@/hooks/use-custom-theme";
 import { useTheme } from "@/components/theme-provider";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
 
 // HSL <-> Hex conversion utilities
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
@@ -48,17 +50,15 @@ function hslToHex(h: number, s: number, l: number): string {
 
 export function ColorCustomizer() {
   const { actualTheme } = useTheme();
-  const { currentColors, saveColors, resetColors, isSaving } = useCustomTheme();
+  const { currentColors, saveColors, resetColors, isSaving, colorRowByStatus, setColorRowByStatus } = useCustomTheme();
   const [customColors, setCustomColors] = useState(currentColors);
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
-  const [colorPresets, setColorPresets] = useState<Array<{ name: string; color: string }>>([]);
-  const [presetName, setPresetName] = useState("");
+  const { toast } = useToast();
 
   // Sync customColors when theme changes (light/dark switch)
-  // Only update when actualTheme changes, not on every currentColors reference change
   useEffect(() => {
     setCustomColors(currentColors);
-  }, [actualTheme]);
+  }, [actualTheme, currentColors]);
 
   const handleSaveColors = () => {
     saveColors(customColors);
@@ -66,6 +66,33 @@ export function ColorCustomizer() {
 
   const handleResetColors = () => {
     resetColors();
+  };
+
+  // Reset individual field to default
+  const resetFieldToDefault = (field: keyof typeof customColors) => {
+    const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+    const defaultValue = defaultColors[field as keyof typeof defaultColors] || '';
+    setCustomColors({ ...customColors, [field]: defaultValue });
+  };
+
+  // Use browser's EyeDropper API if available
+  const useEyeDropper = async (field: keyof typeof customColors) => {
+    if (!('EyeDropper' in window)) {
+      toast({
+        title: "Not Supported",
+        description: "Your browser doesn't support the eyedropper tool. Try using Chrome or Edge.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const eyeDropper = new (window as any).EyeDropper();
+      const result = await eyeDropper.open();
+      setCustomColors({ ...customColors, [field]: result.sRGBHex });
+    } catch (e) {
+      // User cancelled
+    }
   };
 
   return (
@@ -86,6 +113,26 @@ export function ColorCustomizer() {
           <p className="text-xs text-muted-foreground">
             Currently editing colors for {actualTheme === 'dark' ? 'dark' : 'light'} theme. Switch theme to customize the other color set.
           </p>
+
+          {/* Color row by status checkbox */}
+          <div className="flex items-center space-x-2 p-3 rounded-md border">
+            <Checkbox
+              id="color-row-by-status"
+              checked={colorRowByStatus}
+              onCheckedChange={(checked) => setColorRowByStatus(checked as boolean)}
+              data-testid="checkbox-color-row-by-status"
+            />
+            <Label
+              htmlFor="color-row-by-status"
+              className="text-sm cursor-pointer flex-1"
+            >
+              Color table rows by status
+            </Label>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            When enabled, table rows will be colored based on their status value
+          </p>
+
           <div className="space-y-4">
             {(['background', 'tableTextColor', 'text', 'primary', 'secondary', 'accent', 'border', 'bodyBackground', 'headerBackground', 'statesButton', 'franchiseButton', 'statusButton', 'columnsButton', 'actionButtons'] as const).map((field) => {
               const fieldLabels = {
@@ -165,16 +212,26 @@ export function ColorCustomizer() {
                               }}
                               className="font-mono text-xs flex-1"
                               placeholder="#000000"
+                              data-testid={`input-hex-${field}`}
                             />
-                            <Input
-                              type="color"
-                              value={currentColor}
-                              onChange={(e) => {
-                                setCustomColors({ ...customColors, [field]: e.target.value });
-                              }}
-                              className="w-16 h-9 p-1 cursor-pointer"
-                              data-testid={`eyedropper-${field}`}
-                            />
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => useEyeDropper(field)}
+                              data-testid={`button-eyedropper-${field}`}
+                              title="Pick color from screen"
+                            >
+                              <Pipette className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => resetFieldToDefault(field)}
+                              data-testid={`button-reset-${field}`}
+                              title="Reset to default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
 

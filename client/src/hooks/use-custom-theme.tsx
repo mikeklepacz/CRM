@@ -27,6 +27,7 @@ interface UserPreferences {
   darkModeColors?: ThemeColors;
   hasLightOverrides?: boolean;
   hasDarkOverrides?: boolean;
+  colorRowByStatus?: boolean;
 }
 
 // Default colors for light and dark modes (matching Replit's default theme)
@@ -291,6 +292,25 @@ export function useCustomTheme() {
     saveColorsMutation.mutate(defaultColors);
   }, [actualTheme, saveColorsMutation]);
 
+  // Get colorRowByStatus from user preferences
+  const colorRowByStatus = userPreferences?.colorRowByStatus ?? false;
+
+  // Mutation to update colorRowByStatus preference
+  const setColorRowByStatusMutation = useMutation({
+    mutationFn: async (value: boolean) => {
+      const preferences = userPreferences ? { ...userPreferences } : {};
+      preferences.colorRowByStatus = value;
+      return await apiRequest('PUT', '/api/user/preferences', preferences);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+    },
+  });
+
+  const setColorRowByStatus = useCallback((value: boolean) => {
+    setColorRowByStatusMutation.mutate(value);
+  }, [setColorRowByStatusMutation]);
+
   return useMemo(
     () => ({
       lightColors,
@@ -300,7 +320,9 @@ export function useCustomTheme() {
       resetColors,
       isLoading,
       isSaving: saveColorsMutation.isPending,
+      colorRowByStatus,
+      setColorRowByStatus,
     }),
-    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending]
+    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus]
   );
 }
