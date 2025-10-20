@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { UserPlus, Mail, User as UserIcon, Briefcase, Lock, Shield, DollarSign, TrendingUp, Loader2, UserX, UserCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UserWithMetrics {
   id: string;
@@ -29,6 +30,7 @@ interface UserWithMetrics {
 
 export function UserManagement() {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
   const [deactivateDialog, setDeactivateDialog] = useState<{ open: boolean; userId: string; analysis: any } | null>(null);
@@ -429,20 +431,24 @@ export function UserManagement() {
                             ${parseFloat(user.grossIncome || "0").toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDeactivateClick(user.id)}
-                              disabled={loadingAnalysis || deactivateUserMutation.isPending}
-                              data-testid={`button-deactivate-${user.id}`}
-                            >
-                              {loadingAnalysis ? (
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                              ) : (
-                                <UserX className="h-3 w-3 mr-1" />
-                              )}
-                              Deactivate
-                            </Button>
+                            {user.id !== currentUser?.id ? (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeactivateClick(user.id)}
+                                disabled={loadingAnalysis || deactivateUserMutation.isPending}
+                                data-testid={`button-deactivate-${user.id}`}
+                              >
+                                {loadingAnalysis ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <UserX className="h-3 w-3 mr-1" />
+                                )}
+                                Deactivate
+                              </Button>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">You</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
@@ -496,20 +502,24 @@ export function UserManagement() {
                             ${parseFloat(user.grossIncome || "0").toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => handleReactivate(user.id)}
-                              disabled={reactivateUserMutation.isPending}
-                              data-testid={`button-reactivate-${user.id}`}
-                            >
-                              {reactivateUserMutation.isPending ? (
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                              ) : (
-                                <UserCheck className="h-3 w-3 mr-1" />
-                              )}
-                              Reactivate
-                            </Button>
+                            {user.id !== currentUser?.id ? (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleReactivate(user.id)}
+                                disabled={reactivateUserMutation.isPending}
+                                data-testid={`button-reactivate-${user.id}`}
+                              >
+                                {reactivateUserMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <UserCheck className="h-3 w-3 mr-1" />
+                                )}
+                                Reactivate
+                              </Button>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">You</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
