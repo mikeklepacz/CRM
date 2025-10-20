@@ -135,7 +135,14 @@ export function UserManagement() {
   const handleDeactivateClick = async (userId: string) => {
     setLoadingAnalysis(true);
     try {
-      const analysis = await apiRequest("GET", `/api/users/${userId}/listing-analysis`, {});
+      const response = await fetch(`/api/users/${userId}/listing-analysis`, {
+        method: "GET",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      const analysis = await response.json();
       setDeactivateDialog({ open: true, userId, analysis });
     } catch (error: any) {
       toast({
