@@ -2817,11 +2817,9 @@ export default function ClientDashboard() {
                                   <div className="flex items-center gap-2">
                                     {isPhoneColumn && cellValue ? (
                                       <button
-                                        onClick={() => setContactActionDialog({
+                                        onClick={() => setStoreDetailsDialog({
                                           open: true,
-                                          contactType: 'phone',
-                                          contactValue: cellValue,
-                                          row: row,
+                                          row: row
                                         })}
                                         className="flex items-center gap-1 hover:underline"
                                         style={{ color: customColors.primary }}
@@ -2832,11 +2830,9 @@ export default function ClientDashboard() {
                                       </button>
                                     ) : isEmailColumn && cellValue ? (
                                       <button
-                                        onClick={() => setContactActionDialog({
+                                        onClick={() => setStoreDetailsDialog({
                                           open: true,
-                                          contactType: 'email',
-                                          contactValue: cellValue,
-                                          row: row,
+                                          row: row
                                         })}
                                         className="flex items-center gap-1 hover:underline"
                                         style={{ color: customColors.primary }}
