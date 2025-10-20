@@ -462,7 +462,7 @@ export default function ClientDashboard() {
   useEffect(() => {
     if (sheets.length > 0) {
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'Commission Tracker');
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
       if (storeSheet) setStoreSheetId(storeSheet.id);
       if (trackerSheet) setTrackerSheetId(trackerSheet.id);
