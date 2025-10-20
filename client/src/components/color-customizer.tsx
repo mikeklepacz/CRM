@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Palette, Save, RotateCcw, Pipette } from "lucide-react";
+import { Palette, Save, RotateCcw, Pipette, X } from "lucide-react";
 import { HslColorPicker } from "react-colorful";
 import { useCustomTheme, defaultLightColors, defaultDarkColors } from "@/hooks/use-custom-theme";
 import { useTheme } from "@/components/theme-provider";
@@ -51,9 +51,10 @@ function hslToHex(h: number, s: number, l: number): string {
 interface ColorCustomizerProps {
   colorPresets: Array<{name: string, color: string}>;
   setColorPresets: (presets: Array<{name: string, color: string}>) => void;
+  deleteColorPreset: (index: number) => void;
 }
 
-export function ColorCustomizer({ colorPresets, setColorPresets }: ColorCustomizerProps) {
+export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPreset }: ColorCustomizerProps) {
   const { actualTheme } = useTheme();
   const { currentColors, saveColors, resetColors, isSaving } = useCustomTheme();
   const [customColors, setCustomColors] = useState(currentColors);
@@ -248,16 +249,31 @@ export function ColorCustomizer({ colorPresets, setColorPresets }: ColorCustomiz
                             <Label className="text-xs">Saved Presets</Label>
                             <div className="flex flex-wrap gap-1">
                               {colorPresets.map((preset, pIndex) => (
-                                <button
+                                <div
                                   key={pIndex}
-                                  onClick={() => {
-                                    setCustomColors({ ...customColors, [field]: preset.color });
-                                  }}
-                                  className="w-8 h-8 rounded border border-border"
-                                  style={{ backgroundColor: preset.color }}
-                                  title={preset.name}
-                                  data-testid={`preset-${field}-${pIndex}`}
-                                />
+                                  className="relative group"
+                                >
+                                  <button
+                                    onClick={() => {
+                                      setCustomColors({ ...customColors, [field]: preset.color });
+                                    }}
+                                    className="w-8 h-8 rounded border border-border"
+                                    style={{ backgroundColor: preset.color }}
+                                    title={preset.name}
+                                    data-testid={`preset-${field}-${pIndex}`}
+                                  />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteColorPreset(pIndex);
+                                    }}
+                                    className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover-elevate active-elevate-2"
+                                    title={`Delete ${preset.name}`}
+                                    data-testid={`delete-preset-${field}-${pIndex}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
                               ))}
                             </div>
                           </div>

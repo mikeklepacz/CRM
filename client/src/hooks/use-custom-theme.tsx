@@ -378,6 +378,11 @@ export function useCustomTheme() {
     setColorPresetsMutation.mutate(presets);
   }, [setColorPresetsMutation]);
 
+  const deleteColorPreset = useCallback((index: number) => {
+    const newPresets = colorPresets.filter((_, i) => i !== index);
+    setColorPresetsMutation.mutate(newPresets);
+  }, [colorPresets, setColorPresetsMutation]);
+
   return useMemo(
     () => ({
       lightColors,
@@ -394,7 +399,8 @@ export function useCustomTheme() {
       isUpdatingStatus: updateStatusEntryMutation.isPending,
       colorPresets,
       setColorPresets,
+      deleteColorPreset,
     }),
-    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending, colorPresets, setColorPresets]
+    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending, colorPresets, setColorPresets, deleteColorPreset]
   );
 }

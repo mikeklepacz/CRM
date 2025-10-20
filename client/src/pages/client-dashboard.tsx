@@ -110,6 +110,7 @@ function StatusEditorPopover({
   updateStatusEntry,
   colorPresets,
   setColorPresets,
+  deleteColorPreset,
   currentUser,
 }: {
   statusOptions: string[];
@@ -119,6 +120,7 @@ function StatusEditorPopover({
   updateStatusEntry: (index: number, name: string, bgColor: string, textColor: string) => void;
   colorPresets: Array<{name: string, color: string}>;
   setColorPresets: (presets: Array<{name: string, color: string}>) => void;
+  deleteColorPreset: (index: number) => void;
   currentUser: any;
 }) {
   const { toast } = useToast();
@@ -266,6 +268,7 @@ function StatusEditorPopover({
                       }}
                       colorPresets={colorPresets}
                       onSavePreset={(color, name) => handleSavePreset(color, name)}
+                      onDeletePreset={deleteColorPreset}
                       testId={`input-status-bg-${index}`}
                     />
                     
@@ -293,6 +296,7 @@ function StatusEditorPopover({
                       }}
                       colorPresets={colorPresets}
                       onSavePreset={(color, name) => handleSavePreset(color, name)}
+                      onDeletePreset={deleteColorPreset}
                       testId={`input-status-text-${index}`}
                     />
                   </div>
@@ -415,7 +419,7 @@ export default function ClientDashboard() {
   const setCustomColors = actualTheme === 'dark' ? setDarkModeColors : setLightModeColors;
 
   // Get color presets from useCustomTheme hook (now managed globally)
-  const { colorPresets, setColorPresets } = useCustomTheme();
+  const { colorPresets, setColorPresets, deleteColorPreset } = useCustomTheme();
   const [presetName, setPresetName] = useState("");
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
 
@@ -1933,6 +1937,7 @@ export default function ClientDashboard() {
                         updateStatusEntry={updateStatusEntry}
                         colorPresets={colorPresets}
                         setColorPresets={setColorPresets}
+                        deleteColorPreset={deleteColorPreset}
                         currentUser={currentUser}
                       />
                     </div>

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Save, RotateCcw, Pipette } from "lucide-react";
+import { Save, RotateCcw, Pipette, X } from "lucide-react";
 import { HslColorPicker } from "react-colorful";
 import { useToast } from "@/hooks/use-toast";
 
@@ -52,6 +52,7 @@ interface SharedColorPickerProps {
   onReset?: () => void;
   colorPresets?: Array<{ name: string; color: string }>;
   onSavePreset?: (color: string, name: string) => void;
+  onDeletePreset?: (index: number) => void;
   testId?: string;
 }
 
@@ -62,6 +63,7 @@ export function SharedColorPicker({
   onReset,
   colorPresets = [],
   onSavePreset,
+  onDeletePreset,
   testId,
 }: SharedColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -199,14 +201,31 @@ export function SharedColorPicker({
                 <Label className="text-xs">Saved Presets</Label>
                 <div className="flex flex-wrap gap-1">
                   {colorPresets.map((preset, pIndex) => (
-                    <button
+                    <div
                       key={pIndex}
-                      onClick={() => onChange(preset.color)}
-                      className="w-8 h-8 rounded border border-border"
-                      style={{ backgroundColor: preset.color }}
-                      title={preset.name}
-                      data-testid={`${testId}-preset-${pIndex}`}
-                    />
+                      className="relative group"
+                    >
+                      <button
+                        onClick={() => onChange(preset.color)}
+                        className="w-8 h-8 rounded border border-border"
+                        style={{ backgroundColor: preset.color }}
+                        title={preset.name}
+                        data-testid={`${testId}-preset-${pIndex}`}
+                      />
+                      {onDeletePreset && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeletePreset(pIndex);
+                          }}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover-elevate active-elevate-2"
+                          title={`Delete ${preset.name}`}
+                          data-testid={`${testId}-delete-preset-${pIndex}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>

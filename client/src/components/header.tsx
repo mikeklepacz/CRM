@@ -19,9 +19,10 @@ import { ColorCustomizer } from "./color-customizer";
 interface HeaderProps {
   colorPresets?: Array<{name: string, color: string}>;
   setColorPresets?: (presets: Array<{name: string, color: string}>) => void;
+  deleteColorPreset?: (index: number) => void;
 }
 
-export function Header({ colorPresets = [], setColorPresets = () => {} }: HeaderProps) {
+export function Header({ colorPresets = [], setColorPresets = () => {}, deleteColorPreset = () => {} }: HeaderProps) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
@@ -62,7 +63,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {} }: Header
           </div>
           
           <div className="flex items-center gap-3">
-            <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} />
+            <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
