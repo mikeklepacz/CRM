@@ -499,9 +499,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
               </div>
             </Collapsible>
 
-            {/* Templates Collapsible */}
+            {/* Templates Collapsible - moved to bottom */}
             <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
-              <div className="border-b">
+              <div>
                 <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-templates">
                   <div className="flex items-center gap-2">
                     <Tag className="h-4 w-4" />
