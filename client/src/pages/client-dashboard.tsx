@@ -35,7 +35,6 @@ import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
 import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
 import { ChatPanelGlobal } from "@/components/chat-panel-global";
-import { FloatingSalesAssistButton } from "@/components/floating-sales-assist-button";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -3087,10 +3086,7 @@ export default function ClientDashboard() {
       />
       </div>
 
-      {/* Floating Sales Assist Button - portal-based to stay above dialogs */}
-      <FloatingSalesAssistButton />
-
-      {/* Sales Assist Panel */}
+      {/* Sales Assist Panel - global slide-out */}
       <ChatPanelGlobal />
     </div>
   );
