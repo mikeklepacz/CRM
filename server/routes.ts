@@ -594,6 +594,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
       const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/calendar';
 
+      // Debug logging for OAuth setup
+      console.log('[Gmail OAuth] Generating OAuth URL');
+      console.log('[Gmail OAuth] Protocol:', req.protocol);
+      console.log('[Gmail OAuth] Host:', req.get('host'));
+      console.log('[Gmail OAuth] Redirect URI:', redirectUri);
+      console.log('[Gmail OAuth] X-Forwarded-Proto:', req.get('x-forwarded-proto'));
+
       const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       oauthUrl.searchParams.set('client_id', integration.googleClientId);
       oauthUrl.searchParams.set('redirect_uri', redirectUri);
@@ -624,6 +631,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
+
+      // Debug logging for OAuth callback
+      console.log('[Gmail OAuth Callback] Processing callback');
+      console.log('[Gmail OAuth Callback] Protocol:', req.protocol);
+      console.log('[Gmail OAuth Callback] Host:', req.get('host'));
+      console.log('[Gmail OAuth Callback] Redirect URI:', redirectUri);
+      console.log('[Gmail OAuth Callback] Code received:', !!code);
 
       // Exchange code for tokens
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
