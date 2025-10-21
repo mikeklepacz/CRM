@@ -41,6 +41,7 @@ import type {
   ChatMessage as ChatMessageType,
 } from "@shared/schema";
 import { ConversationContextMenu } from "./conversation-context-menu";
+import { ProjectContextMenu } from "./project-context-menu";
 import { EmailPreview } from "./email-preview";
 
 interface InlineAIChatEnhancedProps {
@@ -225,6 +226,17 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       setNewProjectDialogOpen(false);
       setNewProjectName("");
       toast({ title: "Success", description: "Project created" });
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      return await apiRequest("DELETE", `/api/projects/${projectId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      toast({ title: "Success", description: "Project folder deleted" });
     },
   });
 
@@ -477,10 +489,15 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                       {/* Projects */}
                       {projects.map((project) => (
                         <div key={project.id} className="space-y-1">
-                          <div className="flex items-center gap-2 px-2 py-1">
-                            <Folder className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">{project.name}</span>
-                          </div>
+                          <ProjectContextMenu
+                            projectId={project.id}
+                            onDelete={() => deleteProjectMutation.mutate(project.id)}
+                          >
+                            <div className="flex items-center gap-2 px-2 py-1 rounded-md hover-elevate" data-testid={`project-item-${project.id}`}>
+                              <Folder className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">{project.name}</span>
+                            </div>
+                          </ProjectContextMenu>
                           {conversationsByProject[project.id]?.map((conv) => (
                             <ConversationContextMenu
                               key={conv.id}
@@ -511,116 +528,122 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                 </CollapsibleContent>
               </div>
             </Collapsible>
-
-            {/* Templates Collapsible - moved to bottom */}
-            <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
-              <div>
-                <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-templates">
-                  <div className="flex items-center gap-2">
-                    <Tag className="h-4 w-4" />
-                    <span className="font-semibold text-sm">Template Library</span>
-                    <Badge variant="secondary">{templates.length}</Badge>
-                  </div>
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform ${templatesOpen ? "rotate-180" : ""}`}
-                  />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="p-2 space-y-3">
-                    {/* Add Template Form */}
-                    <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
-                      <h4 className="font-semibold text-xs">Save New Template</h4>
-                      <Input
-                        placeholder="Template title..."
-                        value={newTemplateTitle}
-                        onChange={(e) => setNewTemplateTitle(e.target.value)}
-                        data-testid="input-template-title"
-                      />
-                      <Textarea
-                        placeholder="Paste content here..."
-                        value={newTemplateContent}
-                        onChange={(e) => setNewTemplateContent(e.target.value)}
-                        className="min-h-[60px]"
-                        data-testid="textarea-template-content"
-                      />
-                      <Input
-                        placeholder="Tags (comma-separated)..."
-                        value={newTemplateTags}
-                        onChange={(e) => setNewTemplateTags(e.target.value)}
-                        data-testid="input-template-tags"
-                      />
-                      <Button
-                        onClick={handleSaveTemplate}
-                        disabled={createTemplateMutation.isPending}
-                        className="w-full"
-                        size="sm"
-                        data-testid="button-save-template"
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Save Template
-                      </Button>
-                    </div>
-
-                    {/* Search Templates */}
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search templates..."
-                        value={templateSearch}
-                        onChange={(e) => setTemplateSearch(e.target.value)}
-                        className="pl-8"
-                        data-testid="input-template-search"
-                      />
-                    </div>
-
-                    {/* Template List */}
-                    <div className="space-y-2">
-                      {filteredTemplates.map((template) => (
-                        <div key={template.id} className="p-2 border rounded-md hover-elevate" data-testid={`template-${template.id}`}>
-                          <div className="flex items-start justify-between mb-1">
-                            <h5 className="text-sm font-medium">{template.title}</h5>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleCopyTemplate(template.content)}
-                                data-testid={`button-copy-template-${template.id}`}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-destructive"
-                                onClick={() => deleteTemplateMutation.mutate(template.id)}
-                                disabled={deleteTemplateMutation.isPending}
-                                data-testid={`button-delete-template-${template.id}`}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2 mb-1">
-                            {template.content}
-                          </p>
-                          {template.tags && template.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {template.tags.map((tag, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
           </ScrollArea>
+
+          {/* Template Library - anchored at bottom outside ScrollArea */}
+          <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
+            <div className="border-t">
+              <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-templates">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  <span className="font-semibold text-sm">Template Library</span>
+                  <Badge variant="secondary">{templates.length}</Badge>
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${templatesOpen ? "rotate-180" : ""}`}
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="p-2 space-y-3 max-h-96 overflow-y-auto">
+                  {/* Add Template Form */}
+                  <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
+                    <h4 className="font-semibold text-xs">Save New Template</h4>
+                    <Input
+                      placeholder="Template title..."
+                      value={newTemplateTitle}
+                      onChange={(e) => setNewTemplateTitle(e.target.value)}
+                      data-testid="input-template-title"
+                    />
+                    <Textarea
+                      placeholder="Paste content here..."
+                      value={newTemplateContent}
+                      onChange={(e) => setNewTemplateContent(e.target.value)}
+                      className="min-h-[60px]"
+                      data-testid="textarea-template-content"
+                    />
+                    <Input
+                      placeholder="Tags (comma-separated)..."
+                      value={newTemplateTags}
+                      onChange={(e) => setNewTemplateTags(e.target.value)}
+                      data-testid="input-template-tags"
+                    />
+                    <Button
+                      onClick={handleSaveTemplate}
+                      disabled={createTemplateMutation.isPending}
+                      className="w-full"
+                      size="sm"
+                      data-testid="button-save-template"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Save Template
+                    </Button>
+                  </div>
+
+                  {/* Search Templates */}
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search templates..."
+                      value={templateSearch}
+                      onChange={(e) => setTemplateSearch(e.target.value)}
+                      className="pl-8"
+                      data-testid="input-template-search"
+                    />
+                  </div>
+
+                  {/* Template List */}
+                  <div className="space-y-2">
+                    {filteredTemplates.map((template) => (
+                      <div key={template.id} className="p-2 border rounded-md hover-elevate cursor-pointer bg-card" onClick={() => handleCopyTemplate(template.content)} data-testid={`template-${template.id}`}>
+                        <div className="flex items-start justify-between mb-1">
+                          <h5 className="text-xs font-semibold">{template.title}</h5>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyTemplate(template.content);
+                              }}
+                              data-testid={`button-copy-template-${template.id}`}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteTemplateMutation.mutate(template.id);
+                              }}
+                              disabled={deleteTemplateMutation.isPending}
+                              data-testid={`button-delete-template-${template.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mb-1">
+                          {template.content}
+                        </p>
+                        {template.tags && template.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {template.tags.map((tag, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs py-0">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
         </div>
       )}
 
@@ -757,109 +780,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
           </div>
         </div>
 
-        {/* Template Library */}
-        <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
-          <div className="border-t">
-            <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-templates">
-              <div className="flex items-center gap-2">
-                <Tag className="h-4 w-4" />
-                <span className="font-semibold text-sm">Template Library</span>
-                <Badge variant="secondary">{templates.length}</Badge>
-              </div>
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${templatesOpen ? "rotate-180" : ""}`}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
-                {/* Add Template Form */}
-                <div className="space-y-2 p-4 border rounded-lg">
-                  <h4 className="font-semibold text-sm">Save New Template</h4>
-                  <Input
-                    placeholder="Template title..."
-                    value={newTemplateTitle}
-                    onChange={(e) => setNewTemplateTitle(e.target.value)}
-                    data-testid="input-template-title"
-                  />
-                  <Textarea
-                    placeholder="Paste content here..."
-                    value={newTemplateContent}
-                    onChange={(e) => setNewTemplateContent(e.target.value)}
-                    className="min-h-[80px]"
-                    data-testid="textarea-template-content"
-                  />
-                  <Input
-                    placeholder="Tags (comma-separated)..."
-                    value={newTemplateTags}
-                    onChange={(e) => setNewTemplateTags(e.target.value)}
-                    data-testid="input-template-tags"
-                  />
-                  <Button
-                    onClick={handleSaveTemplate}
-                    disabled={createTemplateMutation.isPending}
-                    className="w-full"
-                    data-testid="button-save-template"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Save Template
-                  </Button>
-                </div>
-
-                {/* Search Templates */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search templates..."
-                    value={templateSearch}
-                    onChange={(e) => setTemplateSearch(e.target.value)}
-                    className="pl-9"
-                    data-testid="input-search-templates"
-                  />
-                </div>
-
-                {/* Templates List */}
-                <div className="space-y-2">
-                  {filteredTemplates.map((template) => (
-                    <div
-                      key={template.id}
-                      className="p-3 border rounded-lg hover-elevate cursor-pointer"
-                      onClick={() => handleCopyTemplate(template.content)}
-                      data-testid={`template-item-${template.id}`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h5 className="font-semibold text-sm">{template.title}</h5>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopyTemplate(template.content);
-                          }}
-                          className="h-6 w-6"
-                          data-testid={`button-copy-template-${template.id}`}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                        {template.content}
-                      </p>
-                      {template.tags && template.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {template.tags.map((tag, idx) => (
-                            <Badge key={idx} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CollapsibleContent>
-          </div>
-        </Collapsible>
       </div>
 
       {/* New Project Dialog */}
