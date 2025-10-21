@@ -1565,11 +1565,16 @@ export default function ClientDashboard() {
         } : {}}
       >
         <div className="flex flex-col items-center justify-center">
-          <img 
-            src="/attached_assets/loading image_1760961223145.png" 
-            alt="Loading..." 
-            className="w-32 h-32 mb-4 animate-pulse"
-          />
+          {userPreferences?.loadingLogoUrl ? (
+            <img 
+              src={userPreferences.loadingLogoUrl} 
+              alt="Loading..." 
+              className="w-32 h-32 mb-4 animate-pulse object-contain"
+              data-testid="img-loading-logo"
+            />
+          ) : (
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mb-4" data-testid="spinner-loading"></div>
+          )}
           <p className="text-muted-foreground">Loading your data...</p>
         </div>
       </div>
