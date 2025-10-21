@@ -615,7 +615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
-      const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/calendar';
+      const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/calendar';
 
       // Debug logging for OAuth setup
       console.log('[Gmail OAuth] Generating OAuth URL');
@@ -708,12 +708,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Helper function to get or create Gmail labels
   async function getOrCreateGmailLabels(accessToken: string, labelNames: string[]): Promise<string[]> {
+    console.log('📧 [GMAIL LABELS] Starting label resolution for:', labelNames);
+    
     if (!labelNames || labelNames.length === 0) {
+      console.log('📧 [GMAIL LABELS] No labels requested, returning empty array');
       return [];
     }
 
     try {
       // List all existing labels
+      console.log('📧 [GMAIL LABELS] Fetching existing labels from Gmail API...');
       const listResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
         headers: {
           'Authorization': `Bearer ${accessToken}`
@@ -721,11 +725,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!listResponse.ok) {
-        console.error('Failed to list Gmail labels:', await listResponse.text());
+        const errorText = await listResponse.text();
+        console.error('📧 [GMAIL LABELS] ❌ Failed to list Gmail labels. Status:', listResponse.status);
+        console.error('📧 [GMAIL LABELS] Error details:', errorText);
         return [];
       }
 
       const { labels } = await listResponse.json();
+      console.log(`📧 [GMAIL LABELS] ✅ Fetched ${labels.length} existing labels from Gmail`);
+      
       const existingLabels = new Map(labels.map((l: any) => [l.name, l.id]));
       const labelIds: string[] = [];
 
@@ -733,11 +741,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const labelName of labelNames) {
         if (existingLabels.has(labelName)) {
           // Label exists, use its ID
-          labelIds.push(existingLabels.get(labelName)!);
-          console.log(`📧 [GMAIL] Label "${labelName}" already exists`);
+          const labelId = existingLabels.get(labelName)!;
+          labelIds.push(labelId);
+          console.log(`📧 [GMAIL LABELS] ✅ Label "${labelName}" already exists (ID: ${labelId})`);
         } else {
           // Create new label
-          console.log(`📧 [GMAIL] Creating new label: "${labelName}"`);
+          console.log(`📧 [GMAIL LABELS] 🔨 Creating new label: "${labelName}"`);
           const createResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
             method: 'POST',
             headers: {
@@ -754,16 +763,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (createResponse.ok) {
             const newLabel = await createResponse.json();
             labelIds.push(newLabel.id);
-            console.log(`📧 [GMAIL] Created label "${labelName}" with ID: ${newLabel.id}`);
+            console.log(`📧 [GMAIL LABELS] ✅ Successfully created label "${labelName}" (ID: ${newLabel.id})`);
           } else {
-            console.error(`Failed to create label "${labelName}":`, await createResponse.text());
+            const errorText = await createResponse.text();
+            console.error(`📧 [GMAIL LABELS] ❌ Failed to create label "${labelName}". Status: ${createResponse.status}`);
+            console.error(`📧 [GMAIL LABELS] Error details:`, errorText);
           }
         }
       }
 
+      console.log(`📧 [GMAIL LABELS] ✅ Resolution complete. Returning ${labelIds.length} label IDs:`, labelIds);
       return labelIds;
     } catch (error) {
-      console.error('Error in getOrCreateGmailLabels:', error);
+      console.error('📧 [GMAIL LABELS] ❌ Unexpected error in getOrCreateGmailLabels:', error);
       return [];
     }
   }
@@ -853,43 +865,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const draft = await draftResponse.json();
+      console.log('📧 [GMAIL] ✅ Draft created successfully. Draft ID:', draft.id, 'Message ID:', draft.message.id);
 
       // Apply labels if user has configured them
+      console.log('📧 [GMAIL] Fetching user settings to check for Gmail labels...');
       const user = await storage.getUser(userId);
+      
+      let labelsApplied = false;
+      let labelWarning = null;
+      
       if (user?.gmailLabels && user.gmailLabels.length > 0) {
-        console.log('📧 [GMAIL] Applying labels to draft:', user.gmailLabels);
+        console.log('📧 [GMAIL] 🏷️  User has configured labels:', user.gmailLabels);
+        console.log('📧 [GMAIL] Starting label application process...');
         
-        // Get or create label IDs
-        const labelIds = await getOrCreateGmailLabels(accessToken, user.gmailLabels);
-        
-        if (labelIds.length > 0) {
-          // Modify the draft's message to add labels
-          const modifyResponse = await fetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${draft.message.id}/modify`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                addLabelIds: labelIds
-              })
-            }
-          );
+        try {
+          // Get or create label IDs
+          const labelIds = await getOrCreateGmailLabels(accessToken, user.gmailLabels);
+          
+          if (labelIds.length > 0) {
+            console.log(`📧 [GMAIL] Attempting to apply ${labelIds.length} labels to draft message...`);
+            // Modify the draft's message to add labels
+            const modifyResponse = await fetch(
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${draft.message.id}/modify`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  addLabelIds: labelIds
+                })
+              }
+            );
 
-          if (modifyResponse.ok) {
-            console.log(`📧 [GMAIL] Successfully applied ${labelIds.length} labels to draft`);
+            if (modifyResponse.ok) {
+              const result = await modifyResponse.json();
+              console.log(`📧 [GMAIL] ✅ Successfully applied ${labelIds.length} labels to draft`);
+              console.log(`📧 [GMAIL] Modified message now has labels:`, result.labelIds);
+              labelsApplied = true;
+            } else {
+              const errorText = await modifyResponse.text();
+              console.error('📧 [GMAIL] ❌ Failed to apply labels to draft. Status:', modifyResponse.status);
+              console.error('📧 [GMAIL] Error details:', errorText);
+              
+              // Check if it's a permission error
+              if (modifyResponse.status === 403 || errorText.includes('insufficient') || errorText.includes('permission')) {
+                labelWarning = "Draft created but labels could not be applied. You may need to reconnect Gmail in Settings to grant label permissions.";
+              } else {
+                labelWarning = "Draft created but labels could not be applied. Please check server logs for details.";
+              }
+            }
           } else {
-            console.error('Failed to apply labels to draft:', await modifyResponse.text());
+            console.log('📧 [GMAIL] ⚠️  No label IDs returned from getOrCreateGmailLabels. Labels will not be applied.');
+            labelWarning = "Draft created but configured labels could not be found or created.";
           }
+        } catch (error: any) {
+          console.error('📧 [GMAIL] ❌ Error during label application:', error);
+          labelWarning = `Draft created but labels could not be applied: ${error.message}`;
         }
+      } else {
+        console.log('📧 [GMAIL] ℹ️  No Gmail labels configured for this user. Skipping label application.');
       }
 
       res.json({
         success: true,
         draftId: draft.id,
-        message: "Gmail draft created successfully"
+        message: labelsApplied 
+          ? `Gmail draft created successfully with ${user?.gmailLabels?.length || 0} labels applied`
+          : labelWarning 
+            ? `${labelWarning}`
+            : "Gmail draft created successfully",
+        labelsApplied,
+        labelWarning
       });
     } catch (error: any) {
       console.error("Error creating Gmail draft:", error);
