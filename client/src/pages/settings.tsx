@@ -69,6 +69,7 @@ export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [loadingLogoPreview, setLoadingLogoPreview] = useState<string | null>(null);
 
   // Fetch WooCommerce settings
   const { data: wooSettings } = useQuery<WooCommerceSettings>({
@@ -78,6 +79,11 @@ export default function Settings() {
   // Fetch Google OAuth settings
   const { data: googleSettings } = useQuery<GoogleOAuthSettings>({
     queryKey: ["/api/google/settings"],
+  });
+
+  // Fetch user preferences to get existing loading logo
+  const { data: userPreferences } = useQuery<{ loadingLogoUrl?: string }>({
+    queryKey: ['/api/user/preferences'],
   });
 
   const profileForm = useForm({
@@ -237,6 +243,59 @@ export default function Settings() {
       });
     },
   });
+
+  const uploadLoadingLogoMutation = useMutation({
+    mutationFn: async (imageData: string) => {
+      return await apiRequest("POST", "/api/user/upload-loading-logo", { imageData });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      toast({
+        title: "Success",
+        description: "Loading logo uploaded successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image is too large. Maximum size is 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageData = e.target?.result as string;
+      setLoadingLogoPreview(imageData);
+      uploadLoadingLogoMutation.mutate(imageData);
+    };
+    reader.readAsDataURL(file);
+  };
 
   if (!user) return null;
 
@@ -443,6 +502,49 @@ export default function Settings() {
                   </form>
                 </Form>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Loading Logo</CardTitle>
+              <CardDescription>Customize the logo that appears on loading screens</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-4">
+                {(loadingLogoPreview || userPreferences?.loadingLogoUrl) && (
+                  <div className="flex justify-center p-4 border rounded-md bg-muted/20">
+                    <img
+                      src={loadingLogoPreview || userPreferences?.loadingLogoUrl}
+                      alt="Loading logo preview"
+                      className="max-w-xs max-h-48 object-contain"
+                      data-testid="img-loading-logo-preview"
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <Label htmlFor="logo-upload" className="block mb-2">
+                    Upload Logo Image
+                  </Label>
+                  <Input
+                    id="logo-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoFileChange}
+                    disabled={uploadLoadingLogoMutation.isPending}
+                    data-testid="input-upload-logo"
+                    className="cursor-pointer"
+                  />
+                  <p className="text-sm text-muted-foreground mt-2">
+                    PNG, JPG, or GIF. Maximum size: 5MB
+                  </p>
+                </div>
+
+                {uploadLoadingLogoMutation.isPending && (
+                  <p className="text-sm text-muted-foreground">Uploading...</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
