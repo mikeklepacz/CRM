@@ -3604,9 +3604,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   };
 
   // AI Assistant toggle - load from localStorage per-store
-  const getStorageKey = () => `store-ai-assistant-${row?.id || 'unknown'}`;
+  // Use a unique identifier for each store (combination of store and tracker row indexes)
+  const getStorageKey = () => {
+    const storeId = row?._storeRowIndex || row?._trackerRowIndex || row?.Name || 'unknown';
+    return `store-ai-assistant-${storeId}`;
+  };
+  
   const [showAssistant, setShowAssistant] = useState(() => {
-    if (typeof window !== 'undefined' && row?.id) {
+    if (typeof window !== 'undefined' && row) {
       const saved = localStorage.getItem(getStorageKey());
       return saved === 'true';
     }
@@ -3616,19 +3621,21 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
   // Re-sync showAssistant from localStorage when store changes
   useEffect(() => {
-    if (typeof window !== 'undefined' && row?.id) {
-      const saved = localStorage.getItem(getStorageKey());
+    if (typeof window !== 'undefined' && row) {
+      const key = getStorageKey();
+      const saved = localStorage.getItem(key);
       setShowAssistant(saved === 'true');
     } else {
       setShowAssistant(false);
     }
-  }, [row?.id]);
+  }, [row?._storeRowIndex, row?._trackerRowIndex, row?.Name]);
 
   // Handler to update showAssistant and persist to localStorage
   const handleShowAssistantChange = (checked: boolean) => {
     setShowAssistant(checked);
-    if (typeof window !== 'undefined' && row?.id) {
-      localStorage.setItem(getStorageKey(), String(checked));
+    if (typeof window !== 'undefined' && row) {
+      const key = getStorageKey();
+      localStorage.setItem(key, String(checked));
     }
   };
 
