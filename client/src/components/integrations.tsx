@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, FileSpreadsheet, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Calendar, FileSpreadsheet, CheckCircle2, XCircle, Loader2, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Integration {
   id: string;
@@ -27,11 +31,33 @@ interface IntegrationStatusResponse {
 
 export function Integrations() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [signature, setSignature] = useState("");
+  const [gmailLabelsInput, setGmailLabelsInput] = useState("");
 
   const { data: integrationStatus, isLoading } = useQuery<IntegrationStatusResponse>({
     queryKey: ['/api/integrations/status'],
   });
+
+  // Load signature and labels from user data
+  const { data: userData } = useQuery({
+    queryKey: ['/api/auth/user'],
+    enabled: !!user,
+  });
+
+  // Initialize state when user data loads
+  useEffect(() => {
+    if (userData) {
+      const data = userData as any;
+      if (data.signature) {
+        setSignature(data.signature);
+      }
+      if (data.gmailLabels && Array.isArray(data.gmailLabels)) {
+        setGmailLabelsInput(data.gmailLabels.join(", "));
+      }
+    }
+  }, [userData]);
 
   const connectCalendarMutation = useMutation({
     mutationFn: async () => {
@@ -123,6 +149,35 @@ export function Integrations() {
         variant: "destructive",
       });
       setConnectingId(null);
+    },
+  });
+
+  const updateGmailSettingsMutation = useMutation({
+    mutationFn: async () => {
+      // Parse comma-separated labels and trim whitespace
+      const labelsArray = gmailLabelsInput
+        .split(',')
+        .map(label => label.trim())
+        .filter(label => label.length > 0);
+      
+      return await apiRequest('PUT', '/api/user/gmail-settings', {
+        signature: signature || null,
+        gmailLabels: labelsArray.length > 0 ? labelsArray : null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+      toast({
+        title: "Saved!",
+        description: "Gmail settings updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Save Failed",
+        description: error.message || "Failed to update Gmail settings",
+        variant: "destructive",
+      });
     },
   });
 
@@ -294,6 +349,76 @@ export function Integrations() {
           );
         })}
       </div>
+
+      {/* Gmail Settings - shown when Gmail is connected */}
+      {integrationStatus?.googleCalendarConnected && (
+        <Card className="max-w-2xl">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary/10 p-2">
+                <Mail className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Gmail Settings</CardTitle>
+                <CardDescription>
+                  Customize your email signature and auto-applied labels for AI-generated emails
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="signature" data-testid="label-signature">
+                Email Signature
+              </Label>
+              <Textarea
+                id="signature"
+                placeholder="-- &#10;Best Regards,&#10;Michael Klepacz&#10;Let's Meet! Ask me about a zoom call!&#10;Founder - Natural Materials Unlimited&#10;+48 662 331 212 (Whatsapp)&#10;+1 (517) 312-3530 (USA)"
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                rows={8}
+                className="font-mono text-sm resize-y"
+                data-testid="textarea-signature"
+              />
+              <p className="text-xs text-muted-foreground">
+                This signature will be used in all AI-generated emails. Use plain text or simple formatting.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gmail-labels" data-testid="label-gmail-labels">
+                Auto-Apply Gmail Labels
+              </Label>
+              <Input
+                id="gmail-labels"
+                placeholder="[Awaiting Reply], Sales Outreach, Follow-up"
+                value={gmailLabelsInput}
+                onChange={(e) => setGmailLabelsInput(e.target.value)}
+                data-testid="input-gmail-labels"
+              />
+              <p className="text-xs text-muted-foreground">
+                Comma-separated list of labels. If a label doesn't exist, it will be created automatically in your Gmail account.
+              </p>
+            </div>
+
+            <Button
+              onClick={() => updateGmailSettingsMutation.mutate()}
+              disabled={updateGmailSettingsMutation.isPending}
+              className="w-full"
+              data-testid="button-save-gmail-settings"
+            >
+              {updateGmailSettingsMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Gmail Settings"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-muted/30 max-w-2xl">
         <CardHeader>
