@@ -34,7 +34,6 @@ import { Loader2 } from "lucide-react";
 import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
 import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
-import { ChatPanelGlobal } from "@/components/chat-panel-global";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 import { useChatPanel } from "@/hooks/useChatPanel";
 
