@@ -5578,6 +5578,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const openai = new OpenAI({ apiKey: settings.apiKey });
       console.log('💬 [CHAT] OpenAI client initialized');
 
+      // Fetch conversation to get contextData
+      console.log('💬 [CHAT] Fetching conversation for contextData...');
+      const conversation = await storage.getConversation(activeConversationId);
+      const contextInfo = conversation?.contextData as any;
+      console.log('💬 [CHAT] Context data available:', !!contextInfo);
+
       // Save user message
       console.log('💬 [CHAT] Saving user message to database...');
       await storage.saveChatMessage({
@@ -5597,7 +5603,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let tokensUsed = 0;
 
       // Get custom instructions or use default
-      const systemInstructions = settings.aiInstructions || 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.';
+      let systemInstructions = settings.aiInstructions || 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.';
+      
+      // Append store context if available
+      if (contextInfo && Object.keys(contextInfo).length > 0) {
+        console.log('💬 [CHAT] Appending store context to system instructions...');
+        const contextString = `
+
+Current Store Information:
+- Store Name: ${contextInfo.name || 'N/A'}
+- Type: ${contextInfo.type || 'N/A'}
+- Website Link: ${contextInfo.link || 'N/A'}
+- Address: ${contextInfo.address || 'N/A'}
+- City: ${contextInfo.city || 'N/A'}
+- State: ${contextInfo.state || 'N/A'}
+- Phone: ${contextInfo.phone || 'N/A'}
+- Email: ${contextInfo.email || 'N/A'}
+- Website: ${contextInfo.website || 'N/A'}
+- DBA: ${contextInfo.dba || 'N/A'}
+- Sales-Ready Summary: ${contextInfo.sales_ready_summary || 'N/A'}
+- Status: ${contextInfo.status || 'N/A'}
+- Follow-Up Date: ${contextInfo.follow_up_date || 'N/A'}
+- Next Action: ${contextInfo.next_action || 'N/A'}
+- Notes: ${contextInfo.notes || 'N/A'}
+- Point of Contact: ${contextInfo.point_of_contact || 'N/A'}
+- POC Email: ${contextInfo.poc_email || 'N/A'}
+- POC Phone: ${contextInfo.poc_phone || 'N/A'}
+
+Use this store information to provide context-aware responses. When helping draft emails or communications, reference specific details about this store.`;
+        systemInstructions += contextString;
+        console.log('💬 [CHAT] Store context appended (length:', contextString.length, ')');
+      }
+      
       console.log('💬 [CHAT] System instructions length:', systemInstructions.length);
 
       if (settings.vectorStoreId) {
