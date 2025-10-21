@@ -251,6 +251,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     clientSecret: z.string().min(1, "Client Secret is required"),
   });
 
+  const gmailSettingsSchema = z.object({
+    signature: z.string().nullable().optional(),
+    gmailLabels: z.array(z.string()).nullable().optional(),
+  });
+
   // User settings endpoints
   app.put('/api/user/profile', isAuthenticatedCustom, async (req: any, res) => {
     try {
@@ -296,6 +301,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error updating password:", error);
       res.status(500).json({ message: error.message || "Failed to update password" });
+    }
+  });
+
+  app.put('/api/user/gmail-settings', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const validation = gmailSettingsSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { signature, gmailLabels } = validation.data;
+
+      const updated = await storage.updateUser(userId, { signature, gmailLabels });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating Gmail settings:", error);
+      res.status(500).json({ message: error.message || "Failed to update Gmail settings" });
     }
   });
 
