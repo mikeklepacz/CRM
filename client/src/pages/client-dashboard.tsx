@@ -3587,6 +3587,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     saveMutation.mutate();
   };
 
+  // AI Assistant toggle
+  const [showAssistant, setShowAssistant] = useState(false);
+
   // Handle close with unsaved changes warning
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
 
@@ -3623,31 +3626,51 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       </AlertDialog>
 
       <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className={showAssistant ? "max-w-7xl max-h-[90vh] overflow-hidden" : "max-w-4xl max-h-[90vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="text-center">Store Details</DialogTitle>
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <Checkbox
-              id="listing-active"
-              checked={formData.open === "TRUE" || formData.open === "true"}
-              onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
-              data-testid="checkbox-listing-active"
-            />
-            <Label 
-              htmlFor="listing-active" 
-              className="text-sm font-medium cursor-pointer whitespace-nowrap"
-            >
-              Listing Active
-            </Label>
+          <div className="flex items-center justify-between gap-4 pt-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="show-assistant"
+                checked={showAssistant}
+                onCheckedChange={(checked) => setShowAssistant(!!checked)}
+                data-testid="checkbox-show-assistant"
+              />
+              <Label 
+                htmlFor="show-assistant" 
+                className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
+              >
+                <Sparkles className="h-3 w-3" />
+                Show AI Assistant
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="listing-active"
+                checked={formData.open === "TRUE" || formData.open === "true"}
+                onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
+                data-testid="checkbox-listing-active"
+              />
+              <Label 
+                htmlFor="listing-active" 
+                className="text-sm font-medium cursor-pointer whitespace-nowrap"
+              >
+                Listing Active
+              </Label>
+            </div>
           </div>
         </DialogHeader>
 
-        {!row ? (
-          <div className="flex items-center justify-center h-64">
-            <p>No store data available</p>
-          </div>
-        ) : (
-          <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
+        <div className={showAssistant ? "flex gap-4 overflow-hidden flex-1" : ""}>
+          {/* Store Details Content */}
+          <div className={showAssistant ? "flex-1 overflow-y-auto" : "w-full"}>
+            {!row ? (
+              <div className="flex items-center justify-center h-64">
+                <p>No store data available</p>
+              </div>
+            ) : (
+              <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
             {/* Sales Info - AT THE TOP - EXPANDED BY DEFAULT */}
             <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
               <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-sales-info">
@@ -4122,7 +4145,21 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-        )}
+            )}
+          </div>
+
+          {/* AI Assistant Panel */}
+          {showAssistant && (
+            <div className="w-[400px] border-l pl-4 flex flex-col h-[70vh]">
+              <div className="flex-1 overflow-y-auto border rounded-md p-4 mb-4 bg-muted/20">
+                <p className="text-sm text-muted-foreground text-center">AI Assistant Coming Soon</p>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Chat interface will appear here with context about {formData.name || 'this store'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
