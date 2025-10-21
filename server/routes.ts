@@ -5332,14 +5332,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('📤 [FILE UPLOAD] Temp file cleaned up');
       }
 
-      // If no vector store exists, create one
+      // If no vector store exists, create one using direct API call
       let vectorStoreId = settings.vectorStoreId;
       if (!vectorStoreId) {
-        console.log('📤 [FILE UPLOAD] No vector store exists, creating new one...');
-        const vectorStore = await openai.beta.vectorStores.create({
-          name: 'Sales Knowledge Base'
-        });
-        vectorStoreId = vectorStore.id;
+        console.log('📤 [FILE UPLOAD] No vector store exists, creating new one via REST API...');
+        const vectorStoreResponse = await axios.post(
+          'https://api.openai.com/v1/vector_stores',
+          {
+            name: 'Sales Knowledge Base'
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${settings.apiKey}`,
+              'Content-Type': 'application/json',
+              'OpenAI-Beta': 'assistants=v2'
+            }
+          }
+        );
+        vectorStoreId = vectorStoreResponse.data.id;
         console.log('📤 [FILE UPLOAD] Vector store created:', vectorStoreId);
         await storage.saveOpenaiSettings({ vectorStoreId });
         console.log('📤 [FILE UPLOAD] Vector store ID saved to database');
@@ -5347,11 +5357,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('📤 [FILE UPLOAD] Using existing vector store:', vectorStoreId);
       }
 
-      // Add file to vector store
-      console.log('📤 [FILE UPLOAD] Adding file to vector store...');
-      await openai.beta.vectorStores.files.create(vectorStoreId, {
-        file_id: file.id
-      });
+      // Add file to vector store using direct API call
+      console.log('📤 [FILE UPLOAD] Adding file to vector store via REST API...');
+      await axios.post(
+        `https://api.openai.com/v1/vector_stores/${vectorStoreId}/files`,
+        {
+          file_id: file.id
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${settings.apiKey}`,
+            'Content-Type': 'application/json',
+            'OpenAI-Beta': 'assistants=v2'
+          }
+        }
+      );
       console.log('📤 [FILE UPLOAD] File added to vector store successfully');
 
       // Save file metadata to database
