@@ -35,7 +35,7 @@ import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
 import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
 import { ChatPanelGlobal } from "@/components/chat-panel-global";
-import { InlineAIChat } from "@/components/inline-ai-chat";
+import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -3623,7 +3623,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       </AlertDialog>
 
       <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className={showAssistant ? "max-w-7xl max-h-[90vh] overflow-hidden" : "max-w-4xl max-h-[90vh] overflow-y-auto"}>
+      <DialogContent className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden" : "max-w-4xl max-h-[90vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="text-center">Store Details</DialogTitle>
           <div className="flex items-center justify-between gap-4 pt-2">
@@ -3661,7 +3661,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
         <div className={showAssistant ? "flex gap-4 overflow-hidden flex-1" : ""}>
           {/* Store Details Content */}
-          <div className={showAssistant ? "flex-1 overflow-y-auto" : "w-full"}>
+          <div className={showAssistant ? "w-1/2 overflow-y-auto pr-2" : "w-full"}>
             {!row ? (
               <div className="flex items-center justify-center h-64">
                 <p>No store data available</p>
@@ -4147,8 +4147,8 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
           {/* AI Assistant Panel */}
           {showAssistant && (
-            <div className="w-[400px] border-l pl-4 flex flex-col h-[70vh]">
-              <InlineAIChat 
+            <div className="w-1/2 border-l pl-4 flex flex-col overflow-hidden">
+              <InlineAIChatEnhanced 
                 storeContext={{
                   name: formData.name,
                   address: formData.address,
