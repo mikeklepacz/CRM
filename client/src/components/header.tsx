@@ -11,11 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MessageSquare } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
-import { useChatPanel } from "@/hooks/useChatPanel";
 
 interface HeaderProps {
   colorPresets?: Array<{name: string, color: string}>;
@@ -26,7 +25,6 @@ interface HeaderProps {
 export function Header({ colorPresets = [], setColorPresets = () => {}, deleteColorPreset = () => {} }: HeaderProps) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const { togglePanel } = useChatPanel();
 
   if (!user) return null;
 
@@ -71,15 +69,6 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
           </div>
           
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={togglePanel}
-              data-testid="button-toggle-chat"
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Chat Assistant</span>
-            </Button>
             <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
             <ThemeToggle />
             <DropdownMenu>

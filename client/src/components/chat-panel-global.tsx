@@ -333,8 +333,7 @@ export function ChatPanelGlobal() {
       <Sheet open={isPanelOpen} onOpenChange={closePanel}>
         <SheetContent
           side="left"
-          className="w-full sm:max-w-none p-0 flex flex-col"
-          style={{ width: "90vw", maxWidth: "1400px" }}
+          className="w-[33.33vw] max-w-[500px] p-0 flex flex-col"
           data-testid="panel-sales-assistant"
         >
           <div className="flex h-full">

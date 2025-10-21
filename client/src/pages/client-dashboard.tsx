@@ -34,6 +34,8 @@ import { Loader2 } from "lucide-react";
 import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
 import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
+import { useChatPanel } from "@/hooks/useChatPanel";
+import { ChatPanelGlobal } from "@/components/chat-panel-global";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -409,6 +411,9 @@ export default function ClientDashboard() {
 
   // Use global theme hook for colors
   const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus, updateStatusEntry } = useCustomTheme();
+  
+  // Chat panel control
+  const { isPanelOpen, togglePanel } = useChatPanel();
 
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
@@ -3083,6 +3088,20 @@ export default function ClientDashboard() {
           setShowMyStoresOnly(false);
         }}
       />
+
+      {/* Floating Sales Assist Button */}
+      <Button
+        onClick={togglePanel}
+        className="fixed left-0 top-1/2 -translate-y-1/2 z-40 rounded-l-none rounded-r-md shadow-lg"
+        size="sm"
+        data-testid="button-toggle-sales-assist"
+      >
+        <Sparkles className="h-4 w-4 mr-2" />
+        <span className="text-xs font-medium">Sales Assist</span>
+      </Button>
+
+      {/* Sales Assist Panel */}
+      <ChatPanelGlobal />
       </div>
     </div>
   );
