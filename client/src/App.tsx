@@ -47,22 +47,26 @@ function Router() {
 
   return (
     <ChatPanelProvider>
-      <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
-      <Switch>
-        <Route path="/settings" component={Settings} />
-        <Route path="/clients" component={ClientDashboard} />
-        <Route path="/sales" component={SalesDashboard} />
-        <Route path="/assistant" component={SalesAssistant} />
-        <Route path="/store/:storeId" component={StoreDetails} />
-        <Route path="/admin">
-          {user?.role === 'admin' ? <AdminDashboard /> : <NotFound />}
-        </Route>
-        <Route path="/agent" component={AgentDashboard} />
-        <Route path="/">
-          {user?.role === 'admin' ? <AdminDashboard /> : <AgentDashboard />}
-        </Route>
-        <Route component={NotFound} />
-      </Switch>
+      <div className="h-screen flex flex-col">
+        <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
+        <main className="flex-1 overflow-hidden">
+          <Switch>
+            <Route path="/settings" component={Settings} />
+            <Route path="/clients" component={ClientDashboard} />
+            <Route path="/sales" component={SalesDashboard} />
+            <Route path="/assistant" component={SalesAssistant} />
+            <Route path="/store/:storeId" component={StoreDetails} />
+            <Route path="/admin">
+              {user?.role === 'admin' ? <AdminDashboard /> : <NotFound />}
+            </Route>
+            <Route path="/agent" component={AgentDashboard} />
+            <Route path="/">
+              {user?.role === 'admin' ? <AdminDashboard /> : <AgentDashboard />}
+            </Route>
+            <Route component={NotFound} />
+          </Switch>
+        </main>
+      </div>
     </ChatPanelProvider>
   );
 }
