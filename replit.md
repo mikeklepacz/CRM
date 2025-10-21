@@ -27,9 +27,14 @@ The application is built around a client dashboard that unifies data from two Go
     - **Client Dashboard**: Unified view of both Google Sheets with extensive customization options for display and filtering (search, states filter with Canada toggle).
     - **Store Details Popup**: Comprehensive, collapsible view of store information, including sales info, contact details, and additional specifics.
     - **Call/Email Logging**: Integrated logging system that records interactions, updates store status, and claims stores.
-    - **Sales Assistant**: AI-powered chat interface providing on-demand help with sales techniques, product information, and objection handling. Features include:
+    - **Sales Assist**: AI-powered chat interface providing on-demand help with sales techniques, product information, and objection handling. Features include:
       - Dedicated Sales Assistant page accessible via navigation
-      - Global slide-out chat panel accessible from any page via header button
+      - Floating "Sales Assist" button on Client Dashboard (left edge, vertically centered)
+      - Slide-out panel from left edge (max 1/3 screen width, capped at 500px) with ChatGPT-style conversation management
+      - Projects (folders) for organizing conversations
+      - Shared template library with tags and search
+      - Email preview with mailto: link generation
+      - Context-aware: automatically reads store details from current page
       - Knowledge base file upload and management (admin only)
       - Chat history persistence across sessions
       - OpenAI API integration using Assistants API with file search capability
