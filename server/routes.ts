@@ -5359,7 +5359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Add file to vector store using direct API call
       console.log('📤 [FILE UPLOAD] Adding file to vector store via REST API...');
-      await axios.post(
+      const vectorStoreFileResponse = await axios.post(
         `https://api.openai.com/v1/vector_stores/${vectorStoreId}/files`,
         {
           file_id: file.id
@@ -5372,6 +5372,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       );
+      console.log('📤 [FILE UPLOAD] File added to vector store, status:', vectorStoreFileResponse.data.status);
+
+      // Poll for file processing completion
+      console.log('📤 [FILE UPLOAD] Waiting for file to be processed...');
+      let processingComplete = false;
+      let attempts = 0;
+      const maxAttempts = 60; // 60 seconds max wait
+      
+      while (!processingComplete && attempts < maxAttempts) {
+        const statusResponse = await axios.get(
+          `https://api.openai.com/v1/vector_stores/${vectorStoreId}/files/${file.id}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${settings.apiKey}`,
+              'OpenAI-Beta': 'assistants=v2'
+            }
+          }
+        );
+        
+        const status = statusResponse.data.status;
+        console.log('📤 [FILE UPLOAD] Processing status:', status, 'attempt:', attempts + 1);
+        
+        if (status === 'completed') {
+          processingComplete = true;
+          console.log('📤 [FILE UPLOAD] File processing completed!');
+        } else if (status === 'failed') {
+          throw new Error('File processing failed in vector store');
+        } else {
+          // Wait 1 second before checking again
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+        }
+      }
+      
+      if (!processingComplete) {
+        console.log('📤 [FILE UPLOAD] ⚠️ File processing timeout, but file may still complete');
+      }
+      
       console.log('📤 [FILE UPLOAD] File added to vector store successfully');
 
       // Save file metadata to database
