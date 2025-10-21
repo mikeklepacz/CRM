@@ -44,16 +44,29 @@ import { ConversationContextMenu } from "./conversation-context-menu";
 
 interface InlineAIChatEnhancedProps {
   storeContext?: {
+    sales_ready_summary?: string;
+    notes?: string;
+    point_of_contact?: string;
+    poc_email?: string;
+    poc_phone?: string;
+    status?: string;
+    follow_up_date?: string;
+    next_action?: string;
+    dba?: string;
     name: string;
+    type?: string;
+    link?: string;
     address?: string;
+    city?: string;
+    state?: string;
     phone?: string;
     email?: string;
-    notes?: string;
-    status?: string;
+    website?: string;
   };
+  contextUpdateTrigger?: number;
 }
 
-export function InlineAIChatEnhanced({ storeContext }: InlineAIChatEnhancedProps) {
+export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: InlineAIChatEnhancedProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -104,16 +117,61 @@ export function InlineAIChatEnhanced({ storeContext }: InlineAIChatEnhancedProps
     }
   }, [messages]);
 
+  // Handle context update from parent (when Save is clicked and contextUpdateTrigger changes)
+  useEffect(() => {
+    if (contextUpdateTrigger && contextUpdateTrigger > 0 && selectedConversationId && storeContext) {
+      const updateContext = async () => {
+        const contextData = {
+          sales_ready_summary: storeContext.sales_ready_summary,
+          notes: storeContext.notes,
+          point_of_contact: storeContext.point_of_contact,
+          poc_email: storeContext.poc_email,
+          poc_phone: storeContext.poc_phone,
+          status: storeContext.status,
+          follow_up_date: storeContext.follow_up_date,
+          next_action: storeContext.next_action,
+          dba: storeContext.dba,
+          name: storeContext.name,
+          type: storeContext.type,
+          link: storeContext.link,
+          address: storeContext.address,
+          city: storeContext.city,
+          state: storeContext.state,
+          phone: storeContext.phone,
+          email: storeContext.email,
+          website: storeContext.website,
+        };
+        await updateConversationContextMutation.mutateAsync({ 
+          id: selectedConversationId, 
+          contextData 
+        });
+      };
+      updateContext();
+    }
+  }, [contextUpdateTrigger, selectedConversationId]);
+
   // Mutations
   const createConversationMutation = useMutation({
     mutationFn: async () => {
       const contextData = storeContext ? {
-        storeName: storeContext.name,
-        storeAddress: storeContext.address,
-        pocEmail: storeContext.email,
-        pocPhone: storeContext.phone,
+        sales_ready_summary: storeContext.sales_ready_summary,
         notes: storeContext.notes,
+        point_of_contact: storeContext.point_of_contact,
+        poc_email: storeContext.poc_email,
+        poc_phone: storeContext.poc_phone,
         status: storeContext.status,
+        follow_up_date: storeContext.follow_up_date,
+        next_action: storeContext.next_action,
+        dba: storeContext.dba,
+        name: storeContext.name,
+        type: storeContext.type,
+        link: storeContext.link,
+        address: storeContext.address,
+        city: storeContext.city,
+        state: storeContext.state,
+        phone: storeContext.phone,
+        email: storeContext.email,
+        website: storeContext.website,
       } : {};
       
       return await apiRequest("POST", "/api/conversations", {
@@ -125,6 +183,16 @@ export function InlineAIChatEnhanced({ storeContext }: InlineAIChatEnhancedProps
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       setSelectedConversationId(data.id);
+    },
+  });
+
+  const updateConversationContextMutation = useMutation({
+    mutationFn: async ({ id, contextData }: { id: string; contextData: any }) => {
+      return await apiRequest("PATCH", `/api/conversations/${id}`, { contextData });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      toast({ title: "Context updated", description: "Store information refreshed in conversation" });
     },
   });
 

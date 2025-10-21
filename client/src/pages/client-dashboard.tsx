@@ -3518,6 +3518,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
       await refetch();
       setInitialData(formData); // Update initial data so changes are no longer "unsaved"
+      
+      // If AI Assistant is open, trigger context update with latest field values
+      if (showAssistant) {
+        setContextUpdateTrigger(prev => prev + 1);
+      }
+      
       onOpenChange(false);
     },
     onError: (error: Error) => {
@@ -3599,6 +3605,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
   // AI Assistant toggle
   const [showAssistant, setShowAssistant] = useState(false);
+  const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
 
   // Handle close with unsaved changes warning
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
@@ -4194,13 +4201,26 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             <div className="w-1/2 border-l pl-4 flex flex-col overflow-hidden">
               <InlineAIChatEnhanced 
                 storeContext={{
+                  sales_ready_summary: formData.sales_ready_summary,
+                  notes: formData.notes,
+                  point_of_contact: formData.point_of_contact,
+                  poc_email: formData.poc_email,
+                  poc_phone: formData.poc_phone,
+                  status: formData.status,
+                  follow_up_date: formData.follow_up_date,
+                  next_action: formData.next_action,
+                  dba: dbaName,
                   name: formData.name,
+                  type: formData.type,
+                  link: formData.link,
                   address: formData.address,
+                  city: formData.city,
+                  state: formData.state,
                   phone: formData.phone,
                   email: formData.email,
-                  notes: formData.notes,
-                  status: formData.status,
+                  website: formData.website,
                 }}
+                contextUpdateTrigger={contextUpdateTrigger}
               />
             </div>
           )}
