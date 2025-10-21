@@ -5179,8 +5179,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: 'Admin access required' });
       }
       
-      const { apiKey, vectorStoreId } = req.body;
-      const settings = await storage.saveOpenaiSettings({ apiKey, vectorStoreId });
+      const { apiKey, aiInstructions, vectorStoreId } = req.body;
+      const settings = await storage.saveOpenaiSettings({ apiKey, aiInstructions, vectorStoreId });
       
       res.json({ 
         success: true,
@@ -5364,13 +5364,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let model = 'gpt-4o';
       let tokensUsed = 0;
 
+      // Get custom instructions or use default
+      const systemInstructions = settings.aiInstructions || 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.';
+
       if (settings.vectorStoreId) {
         // Use Assistants API with file search
         try {
           // Create assistant with file search
           const assistant = await openai.beta.assistants.create({
             model: 'gpt-4o',
-            instructions: 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.',
+            instructions: systemInstructions,
             tools: [{ type: 'file_search' }],
             tool_resources: {
               file_search: {
@@ -5425,7 +5428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             messages: [
               {
                 role: 'system',
-                content: 'You are a helpful sales assistant for a hemp wick company. Provide advice on sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.'
+                content: systemInstructions
               },
               {
                 role: 'user',
@@ -5446,7 +5449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           messages: [
             {
               role: 'system',
-              content: 'You are a helpful sales assistant for a hemp wick company. Provide advice on sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.'
+              content: systemInstructions
             },
             {
               role: 'user',

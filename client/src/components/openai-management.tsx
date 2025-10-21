@@ -10,13 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Key, Upload, FileText, Trash2, Loader2, Save, CheckCircle2, AlertCircle } from "lucide-react";
+import { Key, Upload, FileText, Trash2, Loader2, Save, CheckCircle2, AlertCircle, BookOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function OpenAIManagement() {
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
+  const [aiInstructions, setAiInstructions] = useState("");
   
   // File upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -36,8 +37,11 @@ export function OpenAIManagement() {
   });
 
   useEffect(() => {
-    if (settings && !showApiKey) {
-      setApiKey("");
+    if (settings) {
+      if (!showApiKey) {
+        setApiKey("");
+      }
+      setAiInstructions(settings.aiInstructions || "");
     }
   }, [settings, showApiKey]);
 
@@ -59,6 +63,27 @@ export function OpenAIManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to save API key",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Save instructions mutation
+  const saveInstructionsMutation = useMutation({
+    mutationFn: async (instructions: string) => {
+      return await apiRequest("POST", "/api/openai/settings", { aiInstructions: instructions });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "AI instructions saved successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/openai/settings'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save instructions",
         variant: "destructive",
       });
     },
@@ -122,6 +147,10 @@ export function OpenAIManagement() {
     saveApiKeyMutation.mutate(apiKey);
   };
 
+  const handleSaveInstructions = () => {
+    saveInstructionsMutation.mutate(aiInstructions);
+  };
+
   const handleUploadFile = () => {
     if (!fileName || !fileContent) {
       toast({
@@ -147,7 +176,15 @@ export function OpenAIManagement() {
       reader.onload = (event) => {
         setFileContent(event.target?.result as string);
       };
-      reader.readAsText(file);
+      
+      // Handle different file types
+      if (file.name.endsWith('.pdf') || file.name.endsWith('.docx')) {
+        // For binary files, read as base64
+        reader.readAsDataURL(file);
+      } else {
+        // For text files, read as text
+        reader.readAsText(file);
+      }
     }
   };
 
@@ -159,88 +196,7 @@ export function OpenAIManagement() {
 
   return (
     <div className="space-y-6">
-      {/* API Key Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5" />
-            OpenAI API Configuration
-          </CardTitle>
-          <CardDescription>
-            Configure your OpenAI API key to enable the Sales Assistant
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {settingsLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading settings...
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {settings?.hasApiKey && !showApiKey ? (
-                <div className="flex items-center gap-2 p-4 border rounded-md bg-muted/50">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  <span className="text-sm">API key is configured (ending in ...{settings.apiKey?.slice(-4)})</span>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="ml-auto"
-                    onClick={() => setShowApiKey(true)}
-                    data-testid="button-change-api-key"
-                  >
-                    Change Key
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="api-key">OpenAI API Key</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="api-key"
-                      type="password"
-                      placeholder="sk-..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      data-testid="input-api-key"
-                    />
-                    <Button 
-                      onClick={handleSaveApiKey} 
-                      disabled={saveApiKeyMutation.isPending}
-                      data-testid="button-save-api-key"
-                    >
-                      {saveApiKeyMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-4 w-4 mr-2" />
-                          Save
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Get your API key from{" "}
-                    <a 
-                      href="https://platform.openai.com/api-keys" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                    >
-                      OpenAI Platform
-                    </a>
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Knowledge Base Files */}
+      {/* Card 1: Knowledge Base */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -325,6 +281,156 @@ export function OpenAIManagement() {
         </CardContent>
       </Card>
 
+      {/* Card 2: Instructions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            AI Instructions
+          </CardTitle>
+          <CardDescription>
+            Configure the AI assistant's personality and behavior
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {settingsLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="ai-instructions">System Prompt</Label>
+                <Textarea
+                  id="ai-instructions"
+                  value={aiInstructions}
+                  onChange={(e) => setAiInstructions(e.target.value)}
+                  placeholder="You are the 'Hemp-Wick Sales Assistant' for Natural Materials Unlimited.
+Your role is to teach sales reps how to sell hemp wick intelligently.
+
+Core truths:
+- All hemp wick is made in Poland.
+- Single beeswax formula only.
+- 3-hour self-dispensing roll.
+- World's largest white-label manufacturer.
+
+Rules:
+- Speak in clear, direct English.
+- No emojis, no marketing fluff.
+- When uncertain, list assumptions.
+- Always give concrete examples."
+                  rows={12}
+                  className="font-mono text-sm"
+                  data-testid="textarea-instructions"
+                />
+                <p className="text-xs text-muted-foreground">
+                  These instructions will be used as the system message for every chat request
+                </p>
+              </div>
+              <Button 
+                onClick={handleSaveInstructions} 
+                disabled={saveInstructionsMutation.isPending}
+                data-testid="button-save-instructions"
+              >
+                {saveInstructionsMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Instructions
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Card 3: API Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Key className="h-5 w-5" />
+            OpenAI API Configuration
+          </CardTitle>
+          <CardDescription>
+            Configure your OpenAI API key to enable the Sales Assistant
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {settingsLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading settings...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {settings?.hasApiKey && !showApiKey ? (
+                <div className="flex items-center gap-2 p-4 border rounded-md bg-muted/50">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  <span className="text-sm">API key is configured (ending in ...{settings.apiKey?.slice(-4)})</span>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="ml-auto"
+                    onClick={() => setShowApiKey(true)}
+                    data-testid="button-change-api-key"
+                  >
+                    Change Key
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="api-key">OpenAI API Key</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="api-key"
+                      type="password"
+                      placeholder="sk-..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      data-testid="input-api-key"
+                    />
+                    <Button 
+                      onClick={handleSaveApiKey} 
+                      disabled={saveApiKeyMutation.isPending}
+                      data-testid="button-save-api-key"
+                    >
+                      {saveApiKeyMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Get your API key from{" "}
+                    <a 
+                      href="https://platform.openai.com/api-keys" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      OpenAI Platform
+                    </a>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Upload File Dialog */}
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
         <DialogContent className="max-w-2xl">
@@ -339,12 +445,12 @@ export function OpenAIManagement() {
               <Label>Upload File</Label>
               <Input
                 type="file"
-                accept=".txt,.md,.csv"
+                accept=".txt,.md,.pdf,.docx"
                 onChange={handleFileSelect}
                 data-testid="input-file-upload"
               />
               <p className="text-xs text-muted-foreground">
-                Supported formats: .txt, .md, .csv
+                Supported formats: .txt, .md, .pdf, .docx
               </p>
             </div>
 
@@ -387,7 +493,7 @@ export function OpenAIManagement() {
               />
             </div>
 
-            {fileContent && (
+            {fileContent && !fileName.endsWith('.pdf') && !fileName.endsWith('.docx') && (
               <div className="space-y-2">
                 <Label>File Preview</Label>
                 <div className="border rounded-md p-3 bg-muted/50 max-h-48 overflow-y-auto">

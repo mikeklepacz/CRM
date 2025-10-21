@@ -290,6 +290,7 @@ export const widgetLayouts = pgTable("widget_layouts", {
 export const openaiSettings = pgTable("openai_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   apiKey: text("api_key"), // Encrypted OpenAI API key
+  aiInstructions: text("ai_instructions"), // Custom system prompt for AI assistant
   vectorStoreId: varchar("vector_store_id"), // OpenAI vector store ID for file search
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
