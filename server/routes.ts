@@ -854,6 +854,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const draft = await draftResponse.json();
 
+      // Apply labels if user has configured them
+      const user = await storage.getUser(userId);
+      if (user?.gmailLabels && user.gmailLabels.length > 0) {
+        console.log('📧 [GMAIL] Applying labels to draft:', user.gmailLabels);
+        
+        // Get or create label IDs
+        const labelIds = await getOrCreateGmailLabels(accessToken, user.gmailLabels);
+        
+        if (labelIds.length > 0) {
+          // Modify the draft's message to add labels
+          const modifyResponse = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${draft.message.id}/modify`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                addLabelIds: labelIds
+              })
+            }
+          );
+
+          if (modifyResponse.ok) {
+            console.log(`📧 [GMAIL] Successfully applied ${labelIds.length} labels to draft`);
+          } else {
+            console.error('Failed to apply labels to draft:', await modifyResponse.text());
+          }
+        }
+      }
+
       res.json({
         success: true,
         draftId: draft.id,
