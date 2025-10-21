@@ -52,3 +52,4 @@ The application is built around a client dashboard that unifies data from two Go
 - **Replit Auth (OpenID Connect)**: For user authentication and role management.
 - **PostgreSQL (Neon)**: The primary database for user data, preferences, and potentially other application-specific data.
 - **OpenAI API**: For AI-powered Sales Assistant with knowledge base file search. Admins configure their own API key via the Admin Dashboard.
+- **Gmail API**: Manual OAuth integration (not using Replit connector) for creating email drafts from AI-generated content. Users can connect their Gmail account via Settings > Gmail tab to enable "Create Gmail Draft" functionality in the Sales Assistant.
