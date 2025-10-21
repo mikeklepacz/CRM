@@ -411,9 +411,6 @@ export default function ClientDashboard() {
 
   // Use global theme hook for colors
   const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus, updateStatusEntry } = useCustomTheme();
-  
-  // Chat panel control
-  const { isPanelOpen, togglePanel } = useChatPanel();
 
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
