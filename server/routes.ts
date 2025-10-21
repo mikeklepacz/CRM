@@ -5858,8 +5858,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let model = 'gpt-4o';
       let tokensUsed = 0;
 
+      // Fetch current user info for email signatures
+      console.log('💬 [CHAT] Fetching user info for email signatures...');
+      const currentUser = await storage.getUser(userId);
+      console.log('💬 [CHAT] User info retrieved:', {
+        hasFirstName: !!currentUser?.firstName,
+        hasLastName: !!currentUser?.lastName,
+        hasEmail: !!currentUser?.email
+      });
+
       // Get custom instructions or use default
       let systemInstructions = settings.aiInstructions || 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.';
+      
+      // Append user signature information
+      if (currentUser) {
+        console.log('💬 [CHAT] Appending user signature info to system instructions...');
+        const userFullName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Sales Representative';
+        const userEmail = currentUser.email || '';
+        const userRole = currentUser.role === 'admin' ? 'Sales Manager' : 'Sales Representative';
+        
+        const signatureInstructions = `
+
+YOUR IDENTITY & EMAIL SIGNATURE:
+When drafting emails or communications, ALWAYS use this exact signature format:
+
+${userFullName}
+${userRole}
+Natural Materials Unlimited${userEmail ? `\n${userEmail}` : ''}
+
+IMPORTANT: Never use placeholders like [Your Name] or [Your Contact Information]. Always use the exact information provided above.`;
+        
+        systemInstructions += signatureInstructions;
+        console.log('💬 [CHAT] User signature appended for:', userFullName);
+      }
       
       // Append store context if available
       if (contextInfo && Object.keys(contextInfo).length > 0) {
