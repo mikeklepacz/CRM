@@ -230,9 +230,31 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ conversationId, content }: { conversationId: string | null; content: string }) => {
-      return await apiRequest("POST", "/api/chat", {
-        conversationId,
+      const contextData = storeContext ? {
+        sales_ready_summary: storeContext.sales_ready_summary,
+        notes: storeContext.notes,
+        point_of_contact: storeContext.point_of_contact,
+        poc_email: storeContext.poc_email,
+        poc_phone: storeContext.poc_phone,
+        status: storeContext.status,
+        follow_up_date: storeContext.follow_up_date,
+        next_action: storeContext.next_action,
+        dba: storeContext.dba,
+        name: storeContext.name,
+        type: storeContext.type,
+        link: storeContext.link,
+        address: storeContext.address,
+        city: storeContext.city,
+        state: storeContext.state,
+        phone: storeContext.phone,
+        email: storeContext.email,
+        website: storeContext.website,
+      } : undefined;
+
+      return await apiRequest("POST", "/api/openai/chat", {
         message: content,
+        conversationId,
+        contextData,
       });
     },
   });
