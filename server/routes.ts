@@ -5143,6 +5143,374 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== OPENAI ENDPOINTS =====
+  
+  // Get OpenAI settings
+  app.get('/api/openai/settings', isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+      
+      const settings = await storage.getOpenaiSettings();
+      // Don't send the full API key to frontend
+      if (settings) {
+        const maskedSettings = {
+          ...settings,
+          apiKey: settings.apiKey ? `sk-...${settings.apiKey.slice(-4)}` : null,
+          hasApiKey: !!settings.apiKey
+        };
+        res.json(maskedSettings);
+      } else {
+        res.json(null);
+      }
+    } catch (error: any) {
+      console.error('Error fetching OpenAI settings:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch settings' });
+    }
+  });
+
+  // Save OpenAI settings
+  app.post('/api/openai/settings', isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+      
+      const { apiKey, vectorStoreId } = req.body;
+      const settings = await storage.saveOpenaiSettings({ apiKey, vectorStoreId });
+      
+      res.json({ 
+        success: true,
+        hasApiKey: !!settings.apiKey,
+        vectorStoreId: settings.vectorStoreId
+      });
+    } catch (error: any) {
+      console.error('Error saving OpenAI settings:', error);
+      res.status(500).json({ message: error.message || 'Failed to save settings' });
+    }
+  });
+
+  // Get all knowledge base files
+  app.get('/api/openai/files', isAuthenticated, async (req, res) => {
+    try {
+      const files = await storage.getAllKnowledgeBaseFiles();
+      res.json(files);
+    } catch (error: any) {
+      console.error('Error fetching files:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch files' });
+    }
+  });
+
+  // Upload file to knowledge base
+  app.post('/api/openai/files/upload', isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const { filename, content, category, description } = req.body;
+      
+      if (!filename || !content) {
+        return res.status(400).json({ message: 'Filename and content required' });
+      }
+
+      // Get OpenAI settings
+      const settings = await storage.getOpenaiSettings();
+      if (!settings?.apiKey) {
+        return res.status(400).json({ message: 'OpenAI API key not configured' });
+      }
+
+      // Initialize OpenAI client
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: settings.apiKey });
+
+      // Upload file to OpenAI using a temporary file
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const os = await import('os');
+      const { randomUUID } = await import('crypto');
+      
+      // Sanitize filename to prevent path traversal
+      const safeFilename = path.basename(filename);
+      const uniqueSuffix = randomUUID();
+      const tmpFilename = `${uniqueSuffix}-${safeFilename}`;
+      const tmpDir = os.tmpdir();
+      const tmpFilePath = path.join(tmpDir, tmpFilename);
+      
+      let file;
+      try {
+        await fs.writeFile(tmpFilePath, content, 'utf-8');
+        
+        const fileStream = (await import('fs')).createReadStream(tmpFilePath);
+        
+        file = await openai.files.create({
+          file: fileStream,
+          purpose: 'assistants'
+        });
+      } finally {
+        // Always clean up temporary file, even if upload fails
+        await fs.unlink(tmpFilePath).catch(() => {});
+      }
+
+      // If no vector store exists, create one
+      let vectorStoreId = settings.vectorStoreId;
+      if (!vectorStoreId) {
+        const vectorStore = await openai.beta.vectorStores.create({
+          name: 'Sales Knowledge Base'
+        });
+        vectorStoreId = vectorStore.id;
+        await storage.saveOpenaiSettings({ vectorStoreId });
+      }
+
+      // Add file to vector store
+      await openai.beta.vectorStores.files.create(vectorStoreId, {
+        file_id: file.id
+      });
+
+      // Save file metadata to database
+      const fileRecord = await storage.createKnowledgeBaseFile({
+        filename: filename.replace(/[^a-zA-Z0-9.-]/g, '_'),
+        originalName: filename,
+        fileSize: content.length,
+        mimeType: 'text/plain',
+        openaiFileId: file.id,
+        uploadedBy: user.id,
+        category: category || 'general',
+        description: description || null,
+        isActive: true
+      });
+
+      res.json({ success: true, file: fileRecord });
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      res.status(500).json({ message: error.message || 'Failed to upload file' });
+    }
+  });
+
+  // Delete knowledge base file
+  app.delete('/api/openai/files/:id', isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const fileId = req.params.id;
+      const file = await storage.getKnowledgeBaseFile(fileId);
+      
+      if (!file) {
+        return res.status(404).json({ message: 'File not found' });
+      }
+
+      // Get OpenAI settings and delete from OpenAI
+      const settings = await storage.getOpenaiSettings();
+      if (settings?.apiKey && file.openaiFileId) {
+        const OpenAI = (await import('openai')).default;
+        const openai = new OpenAI({ apiKey: settings.apiKey });
+        
+        try {
+          await openai.files.del(file.openaiFileId);
+        } catch (err) {
+          console.error('Error deleting from OpenAI:', err);
+          // Continue with database deletion even if OpenAI deletion fails
+        }
+      }
+
+      await storage.deleteKnowledgeBaseFile(fileId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting file:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete file' });
+    }
+  });
+
+  // Chat with AI
+  app.post('/api/openai/chat', isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { message, conversationId } = req.body;
+
+      if (!message) {
+        return res.status(400).json({ message: 'Message required' });
+      }
+
+      // Get OpenAI settings
+      const settings = await storage.getOpenaiSettings();
+      if (!settings?.apiKey) {
+        return res.status(400).json({ message: 'OpenAI API key not configured' });
+      }
+
+      // Initialize OpenAI client
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: settings.apiKey });
+
+      // Save user message
+      await storage.saveChatMessage({
+        userId,
+        conversationId: conversationId || null,
+        role: 'user',
+        content: message,
+        responseId: null,
+        metadata: {}
+      });
+
+      // Create AI response using Chat Completions with tools
+      let assistantMessage = '';
+      let responseId = '';
+      let model = 'gpt-4o';
+      let tokensUsed = 0;
+
+      if (settings.vectorStoreId) {
+        // Use Assistants API with file search
+        try {
+          // Create assistant with file search
+          const assistant = await openai.beta.assistants.create({
+            model: 'gpt-4o',
+            instructions: 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.',
+            tools: [{ type: 'file_search' }],
+            tool_resources: {
+              file_search: {
+                vector_store_ids: [settings.vectorStoreId]
+              }
+            }
+          });
+
+          // Create thread
+          const thread = await openai.beta.threads.create();
+
+          // Add message to thread
+          await openai.beta.threads.messages.create(thread.id, {
+            role: 'user',
+            content: message
+          });
+
+          // Run assistant
+          const run = await openai.beta.threads.runs.create(thread.id, {
+            assistant_id: assistant.id
+          });
+
+          // Poll for completion
+          let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+          let attempts = 0;
+          while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < 30) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+            attempts++;
+          }
+
+          if (runStatus.status === 'completed') {
+            // Get messages
+            const messages = await openai.beta.threads.messages.list(thread.id);
+            const lastMessage = messages.data[0];
+            
+            if (lastMessage.content[0].type === 'text') {
+              assistantMessage = lastMessage.content[0].text.value;
+            }
+            responseId = run.id;
+          } else {
+            throw new Error('Assistant run did not complete successfully');
+          }
+
+          // Clean up assistant
+          await openai.beta.assistants.del(assistant.id);
+        } catch (error) {
+          console.error('Assistants API error:', error);
+          // Fallback to regular chat completion
+          const response = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a helpful sales assistant for a hemp wick company. Provide advice on sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.'
+              },
+              {
+                role: 'user',
+                content: message
+              }
+            ]
+          });
+
+          assistantMessage = response.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
+          responseId = response.id;
+          model = response.model;
+          tokensUsed = response.usage?.total_tokens || 0;
+        }
+      } else {
+        // No vector store - use regular chat completion
+        const response = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a helpful sales assistant for a hemp wick company. Provide advice on sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.'
+            },
+            {
+              role: 'user',
+              content: message
+            }
+          ]
+        });
+
+        assistantMessage = response.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
+        responseId = response.id;
+        model = response.model;
+        tokensUsed = response.usage?.total_tokens || 0;
+      }
+
+      // Save assistant message
+      await storage.saveChatMessage({
+        userId,
+        conversationId: conversationId || null,
+        role: 'assistant',
+        content: assistantMessage,
+        responseId: responseId,
+        metadata: {
+          model: model,
+          tokensUsed: tokensUsed
+        }
+      });
+
+      res.json({
+        message: assistantMessage,
+        responseId: responseId
+      });
+    } catch (error: any) {
+      console.error('Error in chat:', error);
+      res.status(500).json({ message: error.message || 'Failed to get AI response' });
+    }
+  });
+
+  // Get chat history
+  app.get('/api/openai/chat/history', isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      const history = await storage.getChatHistory(userId, limit);
+      // Return in chronological order (oldest first)
+      res.json(history.reverse());
+    } catch (error: any) {
+      console.error('Error fetching chat history:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch chat history' });
+    }
+  });
+
+  // Clear chat history
+  app.delete('/api/openai/chat/history', isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      await storage.clearChatHistory(userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error clearing chat history:', error);
+      res.status(500).json({ message: error.message || 'Failed to clear chat history' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

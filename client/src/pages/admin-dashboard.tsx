@@ -6,6 +6,7 @@ import { WooCommerceSync } from "@/components/woocommerce-sync";
 import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { UserManagement } from "@/components/user-management";
 import { SalesReports } from "@/components/sales-reports";
+import { OpenAIManagement } from "@/components/openai-management";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -37,6 +38,7 @@ export default function AdminDashboard() {
         <TabsList>
           <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
+          <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
           <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
         </TabsList>
@@ -47,6 +49,10 @@ export default function AdminDashboard() {
 
         <TabsContent value="reports">
           <SalesReports />
+        </TabsContent>
+
+        <TabsContent value="openai">
+          <OpenAIManagement />
         </TabsContent>
 
         <TabsContent value="sheets">

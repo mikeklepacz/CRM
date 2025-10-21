@@ -12,6 +12,9 @@ import {
   reminders,
   notifications,
   widgetLayouts,
+  openaiSettings,
+  knowledgeBaseFiles,
+  chatMessages,
   type User,
   type UpsertUser,
   type Client,
@@ -35,6 +38,12 @@ import {
   type InsertNotification,
   type WidgetLayout,
   type InsertWidgetLayout,
+  type OpenaiSettings,
+  type InsertOpenaiSettings,
+  type KnowledgeBaseFile,
+  type InsertKnowledgeBaseFile,
+  type ChatMessage,
+  type InsertChatMessage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -121,6 +130,21 @@ export interface IStorage {
   // Widget layout operations
   getWidgetLayout(userId: string, dashboardType: string): Promise<WidgetLayout | undefined>;
   saveWidgetLayout(layout: InsertWidgetLayout): Promise<WidgetLayout>;
+
+  // OpenAI operations
+  getOpenaiSettings(): Promise<OpenaiSettings | undefined>;
+  saveOpenaiSettings(settings: Partial<InsertOpenaiSettings>): Promise<OpenaiSettings>;
+  
+  // Knowledge base operations
+  getAllKnowledgeBaseFiles(): Promise<KnowledgeBaseFile[]>;
+  getKnowledgeBaseFile(id: string): Promise<KnowledgeBaseFile | undefined>;
+  createKnowledgeBaseFile(file: InsertKnowledgeBaseFile): Promise<KnowledgeBaseFile>;
+  deleteKnowledgeBaseFile(id: string): Promise<void>;
+  
+  // Chat operations
+  getChatHistory(userId: string, limit?: number): Promise<ChatMessage[]>;
+  saveChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  clearChatHistory(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -660,6 +684,91 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return newLayout;
     }
+  }
+
+  // OpenAI operations
+  async getOpenaiSettings(): Promise<OpenaiSettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(openaiSettings)
+      .where(eq(openaiSettings.isActive, true))
+      .limit(1);
+    return settings;
+  }
+
+  async saveOpenaiSettings(settings: Partial<InsertOpenaiSettings>): Promise<OpenaiSettings> {
+    const existing = await this.getOpenaiSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(openaiSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(openaiSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [newSettings] = await db
+        .insert(openaiSettings)
+        .values(settings as InsertOpenaiSettings)
+        .returning();
+      return newSettings;
+    }
+  }
+
+  // Knowledge base operations
+  async getAllKnowledgeBaseFiles(): Promise<KnowledgeBaseFile[]> {
+    return await db
+      .select()
+      .from(knowledgeBaseFiles)
+      .where(eq(knowledgeBaseFiles.isActive, true))
+      .orderBy(desc(knowledgeBaseFiles.uploadedAt));
+  }
+
+  async getKnowledgeBaseFile(id: string): Promise<KnowledgeBaseFile | undefined> {
+    const [file] = await db
+      .select()
+      .from(knowledgeBaseFiles)
+      .where(eq(knowledgeBaseFiles.id, id));
+    return file;
+  }
+
+  async createKnowledgeBaseFile(file: InsertKnowledgeBaseFile): Promise<KnowledgeBaseFile> {
+    const [newFile] = await db
+      .insert(knowledgeBaseFiles)
+      .values(file)
+      .returning();
+    return newFile;
+  }
+
+  async deleteKnowledgeBaseFile(id: string): Promise<void> {
+    await db
+      .update(knowledgeBaseFiles)
+      .set({ isActive: false })
+      .where(eq(knowledgeBaseFiles.id, id));
+  }
+
+  // Chat operations
+  async getChatHistory(userId: string, limit: number = 50): Promise<ChatMessage[]> {
+    return await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.userId, userId))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(limit);
+  }
+
+  async saveChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
+    const [newMessage] = await db
+      .insert(chatMessages)
+      .values(message)
+      .returning();
+    return newMessage;
+  }
+
+  async clearChatHistory(userId: string): Promise<void> {
+    await db
+      .delete(chatMessages)
+      .where(eq(chatMessages.userId, userId));
   }
 }
 

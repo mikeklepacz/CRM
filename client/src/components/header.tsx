@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,10 +12,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MessageSquare } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
+import { ChatPanel } from "./chat-panel";
 
 interface HeaderProps {
   colorPresets?: Array<{name: string, color: string}>;
@@ -25,6 +27,7 @@ interface HeaderProps {
 export function Header({ colorPresets = [], setColorPresets = () => {}, deleteColorPreset = () => {} }: HeaderProps) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const [chatPanelOpen, setChatPanelOpen] = useState(false);
 
   if (!user) return null;
 
@@ -59,10 +62,24 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   Sales Analytics
                 </Button>
               </Link>
+              <Link href="/assistant">
+                <Button variant="ghost" size="sm" data-testid="nav-assistant">
+                  <Bot className="mr-2 h-4 w-4" />
+                  Sales Assistant
+                </Button>
+              </Link>
             </nav>
           </div>
           
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setChatPanelOpen(true)}
+              data-testid="button-toggle-chat"
+            >
+              <MessageSquare className="h-4 w-4" />
+            </Button>
             <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
             <ThemeToggle />
             <DropdownMenu>
@@ -99,6 +116,8 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
           </div>
         </div>
       </div>
+      
+      <ChatPanel open={chatPanelOpen} onOpenChange={setChatPanelOpen} />
     </header>
   );
 }

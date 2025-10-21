@@ -15,6 +15,7 @@ import Settings from "@/pages/settings";
 import ClientDashboard from "@/pages/client-dashboard";
 import StoreDetails from "@/pages/store-details";
 import SalesDashboard from "@/pages/sales-dashboard";
+import SalesAssistant from "@/pages/sales-assistant";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -50,6 +51,7 @@ function Router() {
         <Route path="/settings" component={Settings} />
         <Route path="/clients" component={ClientDashboard} />
         <Route path="/sales" component={SalesDashboard} />
+        <Route path="/assistant" component={SalesAssistant} />
         <Route path="/store/:storeId" component={StoreDetails} />
         <Route path="/admin">
           {user?.role === 'admin' ? <AdminDashboard /> : <NotFound />}

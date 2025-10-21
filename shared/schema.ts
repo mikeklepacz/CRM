@@ -286,6 +286,48 @@ export const widgetLayouts = pgTable("widget_layouts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// OpenAI settings table - stores API key and file search configuration
+export const openaiSettings = pgTable("openai_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  apiKey: text("api_key"), // Encrypted OpenAI API key
+  vectorStoreId: varchar("vector_store_id"), // OpenAI vector store ID for file search
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Knowledge base files table - tracks uploaded files
+export const knowledgeBaseFiles = pgTable("knowledge_base_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filename: varchar("filename", { length: 255 }).notNull(),
+  originalName: varchar("original_name", { length: 255 }).notNull(),
+  fileSize: integer("file_size").notNull(), // in bytes
+  mimeType: varchar("mime_type", { length: 100 }),
+  openaiFileId: varchar("openai_file_id", { length: 100 }), // OpenAI file ID
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  category: varchar("category", { length: 100 }).default('general'), // scripts, objections, product-info, etc.
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+});
+
+// Chat history table - stores conversations
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  conversationId: varchar("conversation_id"), // OpenAI conversation ID for multi-turn chats
+  role: varchar("role", { length: 20 }).notNull(), // 'user' or 'assistant'
+  content: text("content").notNull(),
+  responseId: varchar("response_id"), // OpenAI response ID for state management
+  metadata: jsonb("metadata").$type<{
+    model?: string;
+    tokensUsed?: number;
+    filesSearched?: number;
+    [key: string]: any;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
@@ -429,6 +471,22 @@ export const insertWidgetLayoutSchema = createInsertSchema(widgetLayouts).omit({
   updatedAt: true,
 });
 
+export const insertOpenaiSettingsSchema = createInsertSchema(openaiSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertKnowledgeBaseFileSchema = createInsertSchema(knowledgeBaseFiles).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -454,3 +512,9 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type WidgetLayout = typeof widgetLayouts.$inferSelect;
 export type InsertWidgetLayout = z.infer<typeof insertWidgetLayoutSchema>;
+export type OpenaiSettings = typeof openaiSettings.$inferSelect;
+export type InsertOpenaiSettings = z.infer<typeof insertOpenaiSettingsSchema>;
+export type KnowledgeBaseFile = typeof knowledgeBaseFiles.$inferSelect;
+export type InsertKnowledgeBaseFile = z.infer<typeof insertKnowledgeBaseFileSchema>;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
