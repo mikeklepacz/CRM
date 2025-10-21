@@ -35,23 +35,47 @@ export function Integrations() {
 
   const connectCalendarMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('POST', '/api/integrations/google-calendar/connect');
+      const response = await apiRequest('GET', '/api/gmail/oauth-url');
+      return response;
     },
     onSuccess: (data: any) => {
-      if (data.authUrl) {
-        window.location.href = data.authUrl;
-      } else if (data.message) {
-        toast({
-          title: "Coming Soon",
-          description: data.message,
-        });
+      if (data.url) {
+        // Open OAuth window
+        const width = 600;
+        const height = 700;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
+        window.open(
+          data.url,
+          'Google OAuth',
+          `width=${width},height=${height},left=${left},top=${top}`
+        );
+        
+        // Poll for connection status
+        const pollInterval = setInterval(async () => {
+          const status = await apiRequest('GET', '/api/integrations/status') as IntegrationStatusResponse;
+          if (status.googleCalendarConnected) {
+            clearInterval(pollInterval);
+            queryClient.invalidateQueries({ queryKey: ['/api/integrations/status'] });
+            toast({
+              title: "Connected!",
+              description: "Gmail and Calendar have been connected successfully",
+            });
+            setConnectingId(null);
+          }
+        }, 2000);
+        
+        // Stop polling after 2 minutes
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          setConnectingId(null);
+        }, 120000);
       }
-      setConnectingId(null);
     },
     onError: (error: Error) => {
       toast({
         title: "Connection Failed",
-        description: error.message || "Failed to connect Google Calendar",
+        description: error.message || "Failed to connect Gmail and Calendar",
         variant: "destructive",
       });
       setConnectingId(null);

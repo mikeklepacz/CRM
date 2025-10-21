@@ -338,10 +338,6 @@ export default function Settings() {
             <User className="mr-2 h-4 w-4" />
             Profile
           </TabsTrigger>
-          <TabsTrigger value="gmail" data-testid="tab-gmail">
-            <Mail className="mr-2 h-4 w-4" />
-            Gmail
-          </TabsTrigger>
           <TabsTrigger value="integrations" data-testid="tab-integrations">
             <Plug className="mr-2 h-4 w-4" />
             Integrations
@@ -557,59 +553,6 @@ export default function Settings() {
                 {uploadLoadingLogoMutation.isPending && (
                   <p className="text-sm text-muted-foreground">Uploading...</p>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="gmail">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gmail Integration</CardTitle>
-              <CardDescription>
-                Connect your Gmail account to create email drafts directly from the Sales Assistant
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-md bg-muted/50 p-4">
-                <h4 className="text-sm font-medium mb-2">How it works:</h4>
-                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                  <li>The AI Sales Assistant can draft personalized emails based on store context</li>
-                  <li>Click "Create Gmail Draft" to save the email as a draft in your Gmail</li>
-                  <li>Open Gmail to review, edit, and send the draft</li>
-                </ul>
-              </div>
-
-              <div className="border-t pt-4">
-                <h3 className="text-sm font-medium mb-3">Connection Status</h3>
-                
-                {integrationStatus?.googleCalendarEmail ? (
-                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-green-700 dark:text-green-400" data-testid="text-gmail-status">
-                        Connected
-                      </span>
-                    </div>
-                    <p className="text-sm text-green-600 dark:text-green-500">
-                      Gmail account: {integrationStatus.googleCalendarEmail}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Connect your Gmail account to enable AI-powered email drafting
-                  </p>
-                )}
-                
-                <Button
-                  variant={integrationStatus?.googleCalendarEmail ? "outline" : "default"}
-                  onClick={() => connectGoogleOAuthMutation.mutate()}
-                  disabled={connectGoogleOAuthMutation.isPending}
-                  data-testid="button-connect-gmail"
-                >
-                  <Mail className="mr-2 h-4 w-4" />
-                  {connectGoogleOAuthMutation.isPending ? "Opening..." : integrationStatus?.googleCalendarEmail ? "Reconnect Gmail" : "Connect Gmail"}
-                </Button>
               </div>
             </CardContent>
           </Card>

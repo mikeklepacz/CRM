@@ -592,7 +592,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
-      const scope = 'https://www.googleapis.com/auth/gmail.compose';
+      const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/calendar';
 
       const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       oauthUrl.searchParams.set('client_id', integration.googleClientId);
@@ -662,7 +662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleCalendarConnectedAt: new Date()
       });
 
-      res.send('<script>alert("Gmail connected successfully!"); window.close();</script>');
+      res.send('<script>alert("Gmail and Calendar connected successfully!"); window.close();</script>');
     } catch (error: any) {
       console.error("Gmail OAuth callback error:", error);
       res.send('<script>alert("Connection failed"); window.close();</script>');
