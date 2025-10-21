@@ -5149,12 +5149,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get OpenAI settings
   app.get('/api/openai/settings', isAuthenticated, async (req, res) => {
     try {
-      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      console.log('⚙️ [SETTINGS] Starting GET request...');
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('⚙️ [SETTINGS] User ID:', userId);
+      
+      const user = await storage.getUser(userId);
+      console.log('⚙️ [SETTINGS] User role:', user?.role);
+      
       if (user?.role !== 'admin') {
+        console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
       
+      console.log('⚙️ [SETTINGS] Fetching OpenAI settings from database...');
       const settings = await storage.getOpenaiSettings();
+      console.log('⚙️ [SETTINGS] Settings retrieved:', {
+        hasSettings: !!settings,
+        hasApiKey: !!settings?.apiKey,
+        hasVectorStoreId: !!settings?.vectorStoreId,
+        hasAiInstructions: !!settings?.aiInstructions
+      });
+      
       // Don't send the full API key to frontend
       if (settings) {
         const maskedSettings = {
@@ -5162,12 +5178,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           apiKey: settings.apiKey ? `sk-...${settings.apiKey.slice(-4)}` : null,
           hasApiKey: !!settings.apiKey
         };
+        console.log('⚙️ [SETTINGS] ✅ Sending masked settings to client');
         res.json(maskedSettings);
       } else {
+        console.log('⚙️ [SETTINGS] ✅ No settings found, sending null');
         res.json(null);
       }
     } catch (error: any) {
-      console.error('Error fetching OpenAI settings:', error);
+      console.error('⚙️ [SETTINGS] ❌ ERROR:', error.message);
+      console.error('⚙️ [SETTINGS] Stack trace:', error.stack);
+      console.error('⚙️ [SETTINGS] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch settings' });
     }
   });
@@ -5175,21 +5195,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save OpenAI settings
   app.post('/api/openai/settings', isAuthenticated, async (req, res) => {
     try {
-      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      console.log('⚙️ [SETTINGS] Starting POST request...');
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('⚙️ [SETTINGS] User ID:', userId);
+      
+      const user = await storage.getUser(userId);
+      console.log('⚙️ [SETTINGS] User role:', user?.role);
+      
       if (user?.role !== 'admin') {
+        console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
       
       const { apiKey, aiInstructions, vectorStoreId } = req.body;
-      const settings = await storage.saveOpenaiSettings({ apiKey, aiInstructions, vectorStoreId });
+      console.log('⚙️ [SETTINGS] Request data:', {
+        hasApiKey: !!apiKey,
+        apiKeyPrefix: apiKey ? apiKey.substring(0, 7) + '...' : 'none',
+        hasAiInstructions: !!aiInstructions,
+        instructionsLength: aiInstructions?.length || 0,
+        vectorStoreId: vectorStoreId || 'none'
+      });
       
-      res.json({ 
+      console.log('⚙️ [SETTINGS] Saving settings to database...');
+      const settings = await storage.saveOpenaiSettings({ apiKey, aiInstructions, vectorStoreId });
+      console.log('⚙️ [SETTINGS] Settings saved successfully');
+      
+      const response = { 
         success: true,
         hasApiKey: !!settings.apiKey,
         vectorStoreId: settings.vectorStoreId
-      });
+      };
+      console.log('⚙️ [SETTINGS] ✅ Sending success response:', response);
+      res.json(response);
     } catch (error: any) {
-      console.error('Error saving OpenAI settings:', error);
+      console.error('⚙️ [SETTINGS] ❌ ERROR:', error.message);
+      console.error('⚙️ [SETTINGS] Stack trace:', error.stack);
+      console.error('⚙️ [SETTINGS] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to save settings' });
     }
   });
@@ -5197,10 +5239,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all knowledge base files
   app.get('/api/openai/files', isAuthenticated, async (req, res) => {
     try {
+      console.log('📁 [FILES] Starting GET request...');
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('📁 [FILES] User ID:', userId);
+      
+      console.log('📁 [FILES] Fetching all knowledge base files from database...');
       const files = await storage.getAllKnowledgeBaseFiles();
+      console.log('📁 [FILES] Files retrieved:', {
+        count: files.length,
+        fileIds: files.map(f => f.id)
+      });
+      
+      console.log('📁 [FILES] ✅ Sending files to client');
       res.json(files);
     } catch (error: any) {
-      console.error('Error fetching files:', error);
+      console.error('📁 [FILES] ❌ ERROR:', error.message);
+      console.error('📁 [FILES] Stack trace:', error.stack);
+      console.error('📁 [FILES] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch files' });
     }
   });
@@ -5208,12 +5264,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Upload file to knowledge base
   app.post('/api/openai/files/upload', isAuthenticated, async (req, res) => {
     try {
+      console.log('📤 [FILE UPLOAD] Starting file upload...');
+      
       const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
       const { filename, content, category, description } = req.body;
+      console.log('📤 [FILE UPLOAD] File details:', {
+        filename,
+        contentLength: content?.length || 0,
+        category,
+        description
+      });
       
       if (!filename || !content) {
         return res.status(400).json({ message: 'Filename and content required' });
@@ -5224,9 +5288,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!settings?.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
       }
+      console.log('📤 [FILE UPLOAD] OpenAI settings retrieved, API key exists:', !!settings.apiKey);
+      console.log('📤 [FILE UPLOAD] Existing vector store ID:', settings.vectorStoreId || 'none');
 
       // Initialize OpenAI client
       const openai = new OpenAI({ apiKey: settings.apiKey });
+      console.log('📤 [FILE UPLOAD] OpenAI client initialized');
+      console.log('📤 [FILE UPLOAD] OpenAI beta available:', !!openai.beta);
+      console.log('📤 [FILE UPLOAD] OpenAI beta.vectorStores available:', !!openai.beta?.vectorStores);
 
       // Upload file to OpenAI using a temporary file
       const fs = await import('fs/promises');
@@ -5241,37 +5310,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tmpDir = os.tmpdir();
       const tmpFilePath = path.join(tmpDir, tmpFilename);
       
+      console.log('📤 [FILE UPLOAD] Temp file path:', tmpFilePath);
+      
       let file;
       try {
+        console.log('📤 [FILE UPLOAD] Writing file to temp location...');
         await fs.writeFile(tmpFilePath, content, 'utf-8');
+        console.log('📤 [FILE UPLOAD] File written successfully');
         
         const fileStream = (await import('fs')).createReadStream(tmpFilePath);
         
+        console.log('📤 [FILE UPLOAD] Uploading to OpenAI...');
         file = await openai.files.create({
           file: fileStream,
           purpose: 'assistants'
         });
+        console.log('📤 [FILE UPLOAD] File uploaded to OpenAI, file ID:', file.id);
       } finally {
         // Always clean up temporary file, even if upload fails
         await fs.unlink(tmpFilePath).catch(() => {});
+        console.log('📤 [FILE UPLOAD] Temp file cleaned up');
       }
 
       // If no vector store exists, create one
       let vectorStoreId = settings.vectorStoreId;
       if (!vectorStoreId) {
+        console.log('📤 [FILE UPLOAD] No vector store exists, creating new one...');
         const vectorStore = await openai.beta.vectorStores.create({
           name: 'Sales Knowledge Base'
         });
         vectorStoreId = vectorStore.id;
+        console.log('📤 [FILE UPLOAD] Vector store created:', vectorStoreId);
         await storage.saveOpenaiSettings({ vectorStoreId });
+        console.log('📤 [FILE UPLOAD] Vector store ID saved to database');
+      } else {
+        console.log('📤 [FILE UPLOAD] Using existing vector store:', vectorStoreId);
       }
 
       // Add file to vector store
+      console.log('📤 [FILE UPLOAD] Adding file to vector store...');
       await openai.beta.vectorStores.files.create(vectorStoreId, {
         file_id: file.id
       });
+      console.log('📤 [FILE UPLOAD] File added to vector store successfully');
 
       // Save file metadata to database
+      console.log('📤 [FILE UPLOAD] Saving file metadata to database...');
       const fileRecord = await storage.createKnowledgeBaseFile({
         filename: filename.replace(/[^a-zA-Z0-9.-]/g, '_'),
         originalName: filename,
@@ -5283,10 +5367,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: description || null,
         isActive: true
       });
+      console.log('📤 [FILE UPLOAD] File metadata saved, record ID:', fileRecord.id);
 
+      console.log('📤 [FILE UPLOAD] ✅ Upload completed successfully!');
       res.json({ success: true, file: fileRecord });
     } catch (error: any) {
-      console.error('Error uploading file:', error);
+      console.error('📤 [FILE UPLOAD] ❌ ERROR:', error.message);
+      console.error('📤 [FILE UPLOAD] Stack trace:', error.stack);
+      console.error('📤 [FILE UPLOAD] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to upload file' });
     }
   });
@@ -5294,36 +5382,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete knowledge base file
   app.delete('/api/openai/files/:id', isAuthenticated, async (req, res) => {
     try {
-      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      console.log('📁 [DELETE FILE] Starting DELETE request...');
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('📁 [DELETE FILE] User ID:', userId);
+      
+      const user = await storage.getUser(userId);
+      console.log('📁 [DELETE FILE] User role:', user?.role);
+      
       if (user?.role !== 'admin') {
+        console.log('📁 [DELETE FILE] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
 
       const fileId = req.params.id;
+      console.log('📁 [DELETE FILE] File ID to delete:', fileId);
+      
+      console.log('📁 [DELETE FILE] Fetching file metadata from database...');
       const file = await storage.getKnowledgeBaseFile(fileId);
       
       if (!file) {
+        console.log('📁 [DELETE FILE] ❌ File not found in database');
         return res.status(404).json({ message: 'File not found' });
       }
+      
+      console.log('📁 [DELETE FILE] File found:', {
+        filename: file.filename,
+        openaiFileId: file.openaiFileId,
+        uploadedBy: file.uploadedBy
+      });
 
       // Get OpenAI settings and delete from OpenAI
+      console.log('📁 [DELETE FILE] Fetching OpenAI settings...');
       const settings = await storage.getOpenaiSettings();
+      console.log('📁 [DELETE FILE] Settings retrieved:', {
+        hasApiKey: !!settings?.apiKey,
+        hasOpenaiFileId: !!file.openaiFileId
+      });
+      
       if (settings?.apiKey && file.openaiFileId) {
+        console.log('📁 [DELETE FILE] Deleting file from OpenAI...');
         const OpenAI = (await import('openai')).default;
         const openai = new OpenAI({ apiKey: settings.apiKey });
         
         try {
           await openai.files.del(file.openaiFileId);
-        } catch (err) {
-          console.error('Error deleting from OpenAI:', err);
-          // Continue with database deletion even if OpenAI deletion fails
+          console.log('📁 [DELETE FILE] File deleted from OpenAI successfully');
+        } catch (err: any) {
+          console.error('📁 [DELETE FILE] ⚠️ Error deleting from OpenAI:', err.message);
+          console.error('📁 [DELETE FILE] Will continue with database deletion');
         }
+      } else {
+        console.log('📁 [DELETE FILE] Skipping OpenAI deletion (no API key or file ID)');
       }
 
+      console.log('📁 [DELETE FILE] Deleting file from database...');
       await storage.deleteKnowledgeBaseFile(fileId);
+      console.log('📁 [DELETE FILE] ✅ File deleted successfully');
+      
       res.json({ success: true });
     } catch (error: any) {
-      console.error('Error deleting file:', error);
+      console.error('📁 [DELETE FILE] ❌ ERROR:', error.message);
+      console.error('📁 [DELETE FILE] Stack trace:', error.stack);
+      console.error('📁 [DELETE FILE] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to delete file' });
     }
   });
@@ -5331,23 +5452,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Chat with AI
   app.post('/api/openai/chat', isAuthenticated, async (req, res) => {
     try {
+      console.log('💬 [CHAT] Starting chat request...');
+      
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { message, conversationId } = req.body;
+      console.log('💬 [CHAT] Request details:', {
+        userId,
+        messageLength: message?.length || 0,
+        conversationId: conversationId || 'new conversation'
+      });
 
       if (!message) {
+        console.log('💬 [CHAT] ❌ No message provided');
         return res.status(400).json({ message: 'Message required' });
       }
 
       // Get OpenAI settings
+      console.log('💬 [CHAT] Fetching OpenAI settings...');
       const settings = await storage.getOpenaiSettings();
+      console.log('💬 [CHAT] Settings retrieved:', {
+        hasApiKey: !!settings?.apiKey,
+        hasVectorStoreId: !!settings?.vectorStoreId,
+        hasAiInstructions: !!settings?.aiInstructions
+      });
+      
       if (!settings?.apiKey) {
+        console.log('💬 [CHAT] ❌ No API key configured');
         return res.status(400).json({ message: 'OpenAI API key not configured' });
       }
 
       // Initialize OpenAI client
+      console.log('💬 [CHAT] Initializing OpenAI client...');
       const openai = new OpenAI({ apiKey: settings.apiKey });
+      console.log('💬 [CHAT] OpenAI client initialized');
 
       // Save user message
+      console.log('💬 [CHAT] Saving user message to database...');
       await storage.saveChatMessage({
         userId,
         conversationId: conversationId || null,
@@ -5356,6 +5496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         responseId: null,
         metadata: {}
       });
+      console.log('💬 [CHAT] User message saved');
 
       // Create AI response using Chat Completions with tools
       let assistantMessage = '';
@@ -5365,11 +5506,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get custom instructions or use default
       const systemInstructions = settings.aiInstructions || 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.';
+      console.log('💬 [CHAT] System instructions length:', systemInstructions.length);
 
       if (settings.vectorStoreId) {
+        console.log('💬 [CHAT] Using Assistants API with vector store:', settings.vectorStoreId);
         // Use Assistants API with file search
         try {
           // Create assistant with file search
+          console.log('💬 [CHAT] Creating assistant with file search...');
           const assistant = await openai.beta.assistants.create({
             model: 'gpt-4o',
             instructions: systemInstructions,
@@ -5380,47 +5524,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
           });
+          console.log('💬 [CHAT] Assistant created:', assistant.id);
 
           // Create thread
+          console.log('💬 [CHAT] Creating thread...');
           const thread = await openai.beta.threads.create();
+          console.log('💬 [CHAT] Thread created:', thread.id);
 
           // Add message to thread
+          console.log('💬 [CHAT] Adding message to thread...');
           await openai.beta.threads.messages.create(thread.id, {
             role: 'user',
             content: message
           });
+          console.log('💬 [CHAT] Message added to thread');
 
           // Run assistant
+          console.log('💬 [CHAT] Starting assistant run...');
           const run = await openai.beta.threads.runs.create(thread.id, {
             assistant_id: assistant.id
           });
+          console.log('💬 [CHAT] Run started:', run.id);
 
           // Poll for completion
+          console.log('💬 [CHAT] Polling for completion...');
           let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
           let attempts = 0;
           while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < 30) {
+            console.log('💬 [CHAT] Run status:', runStatus.status, 'attempt:', attempts + 1);
             await new Promise(resolve => setTimeout(resolve, 1000));
             runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
             attempts++;
           }
 
           if (runStatus.status === 'completed') {
+            console.log('💬 [CHAT] Run completed successfully');
             // Get messages
             const messages = await openai.beta.threads.messages.list(thread.id);
             const lastMessage = messages.data[0];
             
             if (lastMessage.content[0].type === 'text') {
               assistantMessage = lastMessage.content[0].text.value;
+              console.log('💬 [CHAT] Assistant response length:', assistantMessage.length);
             }
             responseId = run.id;
           } else {
+            console.log('💬 [CHAT] ⚠️ Run did not complete, status:', runStatus.status);
             throw new Error('Assistant run did not complete successfully');
           }
 
           // Clean up assistant
+          console.log('💬 [CHAT] Cleaning up assistant...');
           await openai.beta.assistants.del(assistant.id);
-        } catch (error) {
-          console.error('Assistants API error:', error);
+          console.log('💬 [CHAT] Assistant deleted');
+        } catch (error: any) {
+          console.error('💬 [CHAT] ⚠️ Assistants API error:', error.message);
+          console.log('💬 [CHAT] Falling back to regular chat completion...');
           // Fallback to regular chat completion
           const response = await openai.chat.completions.create({
             model: 'gpt-4o',
@@ -5440,8 +5599,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           responseId = response.id;
           model = response.model;
           tokensUsed = response.usage?.total_tokens || 0;
+          console.log('💬 [CHAT] Fallback response received:', {
+            responseId,
+            model,
+            tokensUsed,
+            responseLength: assistantMessage.length
+          });
         }
       } else {
+        console.log('💬 [CHAT] No vector store - using regular chat completion...');
         // No vector store - use regular chat completion
         const response = await openai.chat.completions.create({
           model: 'gpt-4o',
@@ -5461,9 +5627,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         responseId = response.id;
         model = response.model;
         tokensUsed = response.usage?.total_tokens || 0;
+        console.log('💬 [CHAT] Chat completion response received:', {
+          responseId,
+          model,
+          tokensUsed,
+          responseLength: assistantMessage.length
+        });
       }
 
       // Save assistant message
+      console.log('💬 [CHAT] Saving assistant message to database...');
       await storage.saveChatMessage({
         userId,
         conversationId: conversationId || null,
@@ -5475,13 +5648,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           tokensUsed: tokensUsed
         }
       });
+      console.log('💬 [CHAT] Assistant message saved');
 
+      console.log('💬 [CHAT] ✅ Chat completed successfully');
       res.json({
         message: assistantMessage,
         responseId: responseId
       });
     } catch (error: any) {
-      console.error('Error in chat:', error);
+      console.error('💬 [CHAT] ❌ ERROR:', error.message);
+      console.error('💬 [CHAT] Stack trace:', error.stack);
+      console.error('💬 [CHAT] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to get AI response' });
     }
   });
@@ -5489,14 +5666,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get chat history
   app.get('/api/openai/chat/history', isAuthenticated, async (req, res) => {
     try {
+      console.log('💬 [HISTORY] Starting GET request...');
+      
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const limit = parseInt(req.query.limit as string) || 50;
+      console.log('💬 [HISTORY] Request details:', {
+        userId,
+        limit
+      });
       
+      console.log('💬 [HISTORY] Fetching chat history from database...');
       const history = await storage.getChatHistory(userId, limit);
+      console.log('💬 [HISTORY] Chat history retrieved:', {
+        messageCount: history.length,
+        hasMessages: history.length > 0
+      });
+      
       // Return in chronological order (oldest first)
-      res.json(history.reverse());
+      const reversedHistory = history.reverse();
+      console.log('💬 [HISTORY] ✅ Sending chat history to client');
+      res.json(reversedHistory);
     } catch (error: any) {
-      console.error('Error fetching chat history:', error);
+      console.error('💬 [HISTORY] ❌ ERROR:', error.message);
+      console.error('💬 [HISTORY] Stack trace:', error.stack);
+      console.error('💬 [HISTORY] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch chat history' });
     }
   });
@@ -5504,11 +5697,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clear chat history
   app.delete('/api/openai/chat/history', isAuthenticated, async (req, res) => {
     try {
+      console.log('💬 [CLEAR HISTORY] Starting DELETE request...');
+      
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('💬 [CLEAR HISTORY] User ID:', userId);
+      
+      console.log('💬 [CLEAR HISTORY] Clearing chat history from database...');
       await storage.clearChatHistory(userId);
+      console.log('💬 [CLEAR HISTORY] Chat history cleared successfully');
+      
+      console.log('💬 [CLEAR HISTORY] ✅ Sending success response');
       res.json({ success: true });
     } catch (error: any) {
-      console.error('Error clearing chat history:', error);
+      console.error('💬 [CLEAR HISTORY] ❌ ERROR:', error.message);
+      console.error('💬 [CLEAR HISTORY] Stack trace:', error.stack);
+      console.error('💬 [CLEAR HISTORY] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to clear chat history' });
     }
   });
