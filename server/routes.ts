@@ -10,6 +10,11 @@ import * as googleSheets from "./googleSheets";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
+import {
+  insertConversationSchema,
+  insertProjectSchema,
+  insertTemplateSchema,
+} from "@shared/schema";
 
 // Helper function for fuzzy string matching (Levenshtein distance)
 function stringSimilarity(str1: string, str2: string): number {
@@ -5519,21 +5524,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Chat with AI
-  app.post('/api/openai/chat', isAuthenticated, async (req, res) => {
+  app.post('/api/openai/chat', isAuthenticatedCustom, async (req: any, res) => {
     try {
       console.log('💬 [CHAT] Starting chat request...');
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { message, conversationId } = req.body;
+      const { message, conversationId, contextData } = req.body;
       console.log('💬 [CHAT] Request details:', {
         userId,
         messageLength: message?.length || 0,
-        conversationId: conversationId || 'new conversation'
+        conversationId: conversationId || 'new conversation',
+        hasContextData: !!contextData
       });
 
       if (!message) {
         console.log('💬 [CHAT] ❌ No message provided');
         return res.status(400).json({ message: 'Message required' });
+      }
+
+      // Auto-create conversation if not provided
+      let activeConversationId = conversationId;
+      if (!activeConversationId) {
+        console.log('💬 [CHAT] Creating new conversation...');
+        const newConversation = await storage.createConversation({
+          userId,
+          title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+          contextData: contextData || {},
+          projectId: null,
+        });
+        activeConversationId = newConversation.id;
+        console.log('💬 [CHAT] New conversation created:', activeConversationId);
+      } else if (contextData) {
+        console.log('💬 [CHAT] Updating conversation with context data...');
+        await storage.updateConversation(activeConversationId, { contextData });
       }
 
       // Get OpenAI settings
@@ -5559,7 +5582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('💬 [CHAT] Saving user message to database...');
       await storage.saveChatMessage({
         userId,
-        conversationId: conversationId || null,
+        conversationId: activeConversationId,
         role: 'user',
         content: message,
         responseId: null,
@@ -5708,7 +5731,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('💬 [CHAT] Saving assistant message to database...');
       await storage.saveChatMessage({
         userId,
-        conversationId: conversationId || null,
+        conversationId: activeConversationId,
         role: 'assistant',
         content: assistantMessage,
         responseId: responseId,
@@ -5722,7 +5745,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('💬 [CHAT] ✅ Chat completed successfully');
       res.json({
         message: assistantMessage,
-        responseId: responseId
+        responseId: responseId,
+        conversationId: activeConversationId
       });
     } catch (error: any) {
       console.error('💬 [CHAT] ❌ ERROR:', error.message);
@@ -5733,7 +5757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get chat history
-  app.get('/api/openai/chat/history', isAuthenticated, async (req, res) => {
+  app.get('/api/openai/chat/history', isAuthenticatedCustom, async (req: any, res) => {
     try {
       console.log('💬 [HISTORY] Starting GET request...');
       
@@ -5764,7 +5788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Clear chat history
-  app.delete('/api/openai/chat/history', isAuthenticated, async (req, res) => {
+  app.delete('/api/openai/chat/history', isAuthenticatedCustom, async (req, res) => {
     try {
       console.log('💬 [CLEAR HISTORY] Starting DELETE request...');
       
@@ -5782,6 +5806,396 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('💬 [CLEAR HISTORY] Stack trace:', error.stack);
       console.error('💬 [CLEAR HISTORY] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to clear chat history' });
+    }
+  });
+
+  // Conversations routes
+  app.get('/api/conversations', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const conversations = await storage.getConversations(userId);
+      res.json(conversations);
+    } catch (error: any) {
+      console.error('Error fetching conversations:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch conversations' });
+    }
+  });
+
+  app.get('/api/conversations/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const conversation = await storage.getConversation(id);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const messages = await storage.getConversationMessages(id);
+      res.json({ ...conversation, messages });
+    } catch (error: any) {
+      console.error('Error fetching conversation:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch conversation' });
+    }
+  });
+
+  app.post('/api/conversations', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const validation = insertConversationSchema.safeParse({ ...req.body, userId });
+      
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+      
+      const conversation = await storage.createConversation(validation.data);
+      res.json(conversation);
+    } catch (error: any) {
+      console.error('Error creating conversation:', error);
+      res.status(500).json({ message: error.message || 'Failed to create conversation' });
+    }
+  });
+
+  app.get('/api/conversations/:id/messages', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const conversation = await storage.getConversation(id);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const messages = await storage.getConversationMessages(id);
+      res.json(messages);
+    } catch (error: any) {
+      console.error('Error fetching conversation messages:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch messages' });
+    }
+  });
+
+  app.post('/api/conversations/:id/rename', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const conversation = await storage.getConversation(id);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const { title } = req.body;
+      if (!title || !title.trim()) {
+        return res.status(400).json({ message: 'Title is required' });
+      }
+      
+      const updated = await storage.updateConversation(id, { title: title.trim() });
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error renaming conversation:', error);
+      res.status(500).json({ message: error.message || 'Failed to rename conversation' });
+    }
+  });
+
+  app.patch('/api/conversations/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const conversation = await storage.getConversation(id);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const updateSchema = z.object({
+        title: z.string().min(1).optional(),
+        contextData: z.record(z.any()).optional(),
+      });
+      
+      const validation = updateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+      
+      const updated = await storage.updateConversation(id, validation.data);
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating conversation:', error);
+      res.status(500).json({ message: error.message || 'Failed to update conversation' });
+    }
+  });
+
+  app.delete('/api/conversations/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const conversation = await storage.getConversation(id);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      await storage.deleteConversation(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting conversation:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete conversation' });
+    }
+  });
+
+  app.post('/api/conversations/:id/move', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const conversation = await storage.getConversation(id);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const moveSchema = z.object({
+        projectId: z.string().nullable(),
+      });
+      
+      const validation = moveSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+      
+      const updated = await storage.moveConversationToProject(id, validation.data.projectId);
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error moving conversation:', error);
+      res.status(500).json({ message: error.message || 'Failed to move conversation' });
+    }
+  });
+
+  app.get('/api/conversations/:id/export', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const conversation = await storage.getConversation(id);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      
+      if (conversation.userId !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const messages = await storage.getConversationMessages(id);
+      
+      let exportText = `Conversation: ${conversation.title}\n`;
+      exportText += `Created: ${conversation.createdAt}\n\n`;
+      
+      if (conversation.contextData) {
+        exportText += `Context:\n`;
+        Object.entries(conversation.contextData).forEach(([key, value]) => {
+          exportText += `  ${key}: ${value}\n`;
+        });
+        exportText += `\n`;
+      }
+      
+      exportText += `Messages:\n${'='.repeat(50)}\n\n`;
+      
+      messages.forEach((msg: any) => {
+        exportText += `[${msg.role.toUpperCase()}] ${new Date(msg.createdAt).toLocaleString()}\n`;
+        exportText += `${msg.content}\n\n`;
+      });
+      
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="conversation-${id}.txt"`);
+      res.send(exportText);
+    } catch (error: any) {
+      console.error('Error exporting conversation:', error);
+      res.status(500).json({ message: error.message || 'Failed to export conversation' });
+    }
+  });
+
+  // Projects routes
+  app.get('/api/projects', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const projects = await storage.getProjects(userId);
+      res.json(projects);
+    } catch (error: any) {
+      console.error('Error fetching projects:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch projects' });
+    }
+  });
+
+  app.post('/api/projects', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const validation = insertProjectSchema.safeParse({ ...req.body, userId });
+      
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+      
+      const project = await storage.createProject(validation.data);
+      res.json(project);
+    } catch (error: any) {
+      console.error('Error creating project:', error);
+      res.status(500).json({ message: error.message || 'Failed to create project' });
+    }
+  });
+
+  app.patch('/api/projects/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const projects = await storage.getProjects(userId);
+      const project = projects.find(p => p.id === id);
+      
+      if (!project) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+      
+      const updateSchema = z.object({
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+      });
+      
+      const validation = updateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+      
+      const updated = await storage.updateProject(id, validation.data);
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating project:', error);
+      res.status(500).json({ message: error.message || 'Failed to update project' });
+    }
+  });
+
+  app.delete('/api/projects/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const projects = await storage.getProjects(userId);
+      const project = projects.find(p => p.id === id);
+      
+      if (!project) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+      
+      await storage.deleteProject(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting project:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete project' });
+    }
+  });
+
+  // Templates routes
+  app.get('/api/templates', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const templates = await storage.getTemplates();
+      res.json(templates);
+    } catch (error: any) {
+      console.error('Error fetching templates:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch templates' });
+    }
+  });
+
+  app.post('/api/templates', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const validation = insertTemplateSchema.safeParse({ ...req.body, createdBy: userId });
+      
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+      
+      const template = await storage.createTemplate(validation.data);
+      res.json(template);
+    } catch (error: any) {
+      console.error('Error creating template:', error);
+      res.status(500).json({ message: error.message || 'Failed to create template' });
+    }
+  });
+
+  app.patch('/api/templates/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const template = await storage.getTemplate(id);
+      if (!template) {
+        return res.status(404).json({ message: 'Template not found' });
+      }
+      
+      if (template.createdBy !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const updateSchema = z.object({
+        title: z.string().min(1).optional(),
+        content: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      });
+      
+      const validation = updateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+      
+      const updated = await storage.updateTemplate(id, validation.data);
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating template:', error);
+      res.status(500).json({ message: error.message || 'Failed to update template' });
+    }
+  });
+
+  app.delete('/api/templates/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const template = await storage.getTemplate(id);
+      if (!template) {
+        return res.status(404).json({ message: 'Template not found' });
+      }
+      
+      if (template.createdBy !== userId) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      await storage.deleteTemplate(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting template:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete template' });
     }
   });
 

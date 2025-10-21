@@ -313,11 +313,39 @@ export const knowledgeBaseFiles = pgTable("knowledge_base_files", {
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
-// Chat history table - stores conversations
+// Projects table - organize conversations into folders
+export const projects = pgTable("projects", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Conversations table - ChatGPT-style conversation threads
+export const conversations = pgTable("conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: 'set null' }),
+  title: varchar("title", { length: 300 }).notNull(),
+  contextData: jsonb("context_data").$type<{
+    storeName?: string;
+    pocName?: string;
+    pocEmail?: string;
+    pocPhone?: string;
+    storeNotes?: string;
+    [key: string]: any;
+  }>(), // Store context from the page where conversation started
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Chat history table - stores individual messages within conversations
 export const chatMessages = pgTable("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  conversationId: varchar("conversation_id"), // OpenAI conversation ID for multi-turn chats
+  conversationId: varchar("conversation_id").references(() => conversations.id, { onDelete: 'cascade' }),
   role: varchar("role", { length: 20 }).notNull(), // 'user' or 'assistant'
   content: text("content").notNull(),
   responseId: varchar("response_id"), // OpenAI response ID for state management
@@ -330,6 +358,18 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Templates table - shared library of email/script templates
+export const templates = pgTable("templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull(),
+  tags: text("tags").array().default(sql`ARRAY[]::text[]`), // e.g., ['email', 'follow-up', 'objection-handler']
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  isShared: boolean("is_shared").default(true), // Templates are shared across all users
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
@@ -337,6 +377,48 @@ export const usersRelations = relations(users, ({ many }) => ({
   notes: many(notes),
   reminders: many(reminders),
   notifications: many(notifications),
+  projects: many(projects),
+  conversations: many(conversations),
+  chatMessages: many(chatMessages),
+  templatesCreated: many(templates),
+}));
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  user: one(users, {
+    fields: [projects.userId],
+    references: [users.id],
+  }),
+  conversations: many(conversations),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  user: one(users, {
+    fields: [conversations.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [conversations.projectId],
+    references: [projects.id],
+  }),
+  messages: many(chatMessages),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  user: one(users, {
+    fields: [chatMessages.userId],
+    references: [users.id],
+  }),
+  conversation: one(conversations, {
+    fields: [chatMessages.conversationId],
+    references: [conversations.id],
+  }),
+}));
+
+export const templatesRelations = relations(templates, ({ one }) => ({
+  creator: one(users, {
+    fields: [templates.createdBy],
+    references: [users.id],
+  }),
 }));
 
 export const clientsRelations = relations(clients, ({ one, many }) => ({
@@ -489,6 +571,24 @@ export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
   createdAt: true,
 });
 
+export const insertProjectSchema = createInsertSchema(projects).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTemplateSchema = createInsertSchema(templates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -520,3 +620,9 @@ export type KnowledgeBaseFile = typeof knowledgeBaseFiles.$inferSelect;
 export type InsertKnowledgeBaseFile = z.infer<typeof insertKnowledgeBaseFileSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = z.infer<typeof insertProjectSchema>;
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type Template = typeof templates.$inferSelect;
+export type InsertTemplate = z.infer<typeof insertTemplateSchema>;

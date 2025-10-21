@@ -15,6 +15,9 @@ import {
   openaiSettings,
   knowledgeBaseFiles,
   chatMessages,
+  projects,
+  conversations,
+  templates,
   type User,
   type UpsertUser,
   type Client,
@@ -44,6 +47,12 @@ import {
   type InsertKnowledgeBaseFile,
   type ChatMessage,
   type InsertChatMessage,
+  type Project,
+  type InsertProject,
+  type Conversation,
+  type InsertConversation,
+  type Template,
+  type InsertTemplate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -144,8 +153,30 @@ export interface IStorage {
   
   // Chat operations
   getChatHistory(userId: string, limit?: number): Promise<ChatMessage[]>;
+  getConversationMessages(conversationId: string): Promise<ChatMessage[]>;
   saveChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   clearChatHistory(userId: string): Promise<void>;
+  
+  // Project operations
+  getProjects(userId: string): Promise<Project[]>;
+  createProject(project: InsertProject): Promise<Project>;
+  updateProject(id: string, updates: Partial<InsertProject>): Promise<Project>;
+  deleteProject(id: string): Promise<void>;
+  
+  // Conversation operations
+  getConversations(userId: string): Promise<Conversation[]>;
+  getConversation(id: string): Promise<Conversation | undefined>;
+  createConversation(conversation: InsertConversation): Promise<Conversation>;
+  updateConversation(id: string, updates: Partial<InsertConversation>): Promise<Conversation>;
+  deleteConversation(id: string): Promise<void>;
+  moveConversationToProject(conversationId: string, projectId: string | null): Promise<Conversation>;
+  
+  // Template operations
+  getTemplates(): Promise<Template[]>;  // Shared across all users
+  getTemplate(id: string): Promise<Template | undefined>;
+  createTemplate(template: InsertTemplate): Promise<Template>;
+  updateTemplate(id: string, updates: Partial<InsertTemplate>): Promise<Template>;
+  deleteTemplate(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -779,6 +810,135 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(chatMessages)
       .where(eq(chatMessages.userId, userId));
+  }
+
+  async getConversationMessages(conversationId: string): Promise<ChatMessage[]> {
+    return await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, conversationId))
+      .orderBy(chatMessages.createdAt);
+  }
+
+  // Project operations
+  async getProjects(userId: string): Promise<Project[]> {
+    return await db
+      .select()
+      .from(projects)
+      .where(eq(projects.userId, userId))
+      .orderBy(desc(projects.createdAt));
+  }
+
+  async createProject(project: InsertProject): Promise<Project> {
+    const [newProject] = await db
+      .insert(projects)
+      .values(project)
+      .returning();
+    return newProject;
+  }
+
+  async updateProject(id: string, updates: Partial<InsertProject>): Promise<Project> {
+    const [updated] = await db
+      .update(projects)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(projects.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    await db
+      .delete(projects)
+      .where(eq(projects.id, id));
+  }
+
+  // Conversation operations
+  async getConversations(userId: string): Promise<Conversation[]> {
+    return await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.userId, userId))
+      .orderBy(desc(conversations.updatedAt));
+  }
+
+  async getConversation(id: string): Promise<Conversation | undefined> {
+    const [conversation] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, id));
+    return conversation;
+  }
+
+  async createConversation(conversation: InsertConversation): Promise<Conversation> {
+    const [newConversation] = await db
+      .insert(conversations)
+      .values(conversation)
+      .returning();
+    return newConversation;
+  }
+
+  async updateConversation(id: string, updates: Partial<InsertConversation>): Promise<Conversation> {
+    const [updated] = await db
+      .update(conversations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(conversations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    await db
+      .delete(conversations)
+      .where(eq(conversations.id, id));
+  }
+
+  async moveConversationToProject(conversationId: string, projectId: string | null): Promise<Conversation> {
+    const [updated] = await db
+      .update(conversations)
+      .set({ projectId, updatedAt: new Date() })
+      .where(eq(conversations.id, conversationId))
+      .returning();
+    return updated;
+  }
+
+  // Template operations
+  async getTemplates(): Promise<Template[]> {
+    return await db
+      .select()
+      .from(templates)
+      .where(eq(templates.isShared, true))
+      .orderBy(desc(templates.createdAt));
+  }
+
+  async getTemplate(id: string): Promise<Template | undefined> {
+    const [template] = await db
+      .select()
+      .from(templates)
+      .where(eq(templates.id, id));
+    return template;
+  }
+
+  async createTemplate(template: InsertTemplate): Promise<Template> {
+    const [newTemplate] = await db
+      .insert(templates)
+      .values(template)
+      .returning();
+    return newTemplate;
+  }
+
+  async updateTemplate(id: string, updates: Partial<InsertTemplate>): Promise<Template> {
+    const [updated] = await db
+      .update(templates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(templates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    await db
+      .delete(templates)
+      .where(eq(templates.id, id));
   }
 }
 

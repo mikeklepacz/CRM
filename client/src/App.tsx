@@ -4,6 +4,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ChatPanelProvider } from "@/hooks/useChatPanel";
+import { ChatPanelGlobal } from "@/components/chat-panel-global";
 import { useAuth } from "@/hooks/useAuth";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { Header } from "@/components/header";
@@ -45,7 +47,7 @@ function Router() {
   }
 
   return (
-    <>
+    <ChatPanelProvider>
       <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
       <Switch>
         <Route path="/settings" component={Settings} />
@@ -62,7 +64,8 @@ function Router() {
         </Route>
         <Route component={NotFound} />
       </Switch>
-    </>
+      <ChatPanelGlobal />
+    </ChatPanelProvider>
   );
 }
 
