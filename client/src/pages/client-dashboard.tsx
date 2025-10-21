@@ -34,8 +34,8 @@ import { Loader2 } from "lucide-react";
 import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
 import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
-import { useChatPanel } from "@/hooks/useChatPanel";
 import { ChatPanelGlobal } from "@/components/chat-panel-global";
+import { FloatingSalesAssistButton } from "@/components/floating-sales-assist-button";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -3090,15 +3090,8 @@ export default function ClientDashboard() {
       />
       </div>
 
-      {/* Floating Sales Assist Button - positioned on body background */}
-      <button
-        onClick={togglePanel}
-        className="fixed left-0 top-1/2 -translate-y-1/2 z-[9999] rounded-r-md shadow-lg bg-primary text-primary-foreground hover-elevate active-elevate-2 px-3 py-2 flex items-center gap-2 text-xs font-medium"
-        data-testid="button-toggle-sales-assist"
-      >
-        <Sparkles className="h-4 w-4" />
-        <span>Sales Assist</span>
-      </button>
+      {/* Floating Sales Assist Button - portal-based to stay above dialogs */}
+      <FloatingSalesAssistButton />
 
       {/* Sales Assist Panel */}
       <ChatPanelGlobal />
