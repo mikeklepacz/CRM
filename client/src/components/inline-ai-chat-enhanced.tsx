@@ -632,14 +632,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
           </div>
         </div>
 
-        {/* Context Indicator */}
-        {selectedConversation?.contextData && (
+        {/* Context Indicator - only show when there's actual store context */}
+        {selectedConversation?.contextData?.storeName && (
           <div className="px-4 py-2 bg-muted/50 text-sm flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-muted-foreground">
               Context:{" "}
               <span className="font-medium text-foreground">
-                {selectedConversation.contextData.storeName || "Active"}
+                {selectedConversation.contextData.storeName}
               </span>
             </span>
           </div>
