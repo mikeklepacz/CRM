@@ -18,15 +18,25 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
   const handleCreateDraft = async () => {
     try {
       setIsCreatingDraft(true);
-      await apiRequest("POST", "/api/gmail/create-draft", {
+      const response = await apiRequest("POST", "/api/gmail/create-draft", {
         to,
         subject,
         body,
       });
-      toast({
-        title: "Success",
-        description: "Gmail draft created successfully! Check your Gmail drafts folder.",
-      });
+      
+      // Check if labels were applied successfully
+      if (response.labelWarning) {
+        toast({
+          title: "Draft Created with Warning",
+          description: response.labelWarning,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: response.message || "Gmail draft created successfully! Check your Gmail drafts folder.",
+        });
+      }
     } catch (error: any) {
       console.error("Failed to create Gmail draft:", error);
       toast({
