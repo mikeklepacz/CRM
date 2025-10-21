@@ -3089,6 +3089,17 @@ export default function ClientDashboard() {
       />
       </div>
 
+      {/* Floating Sales Assist Button */}
+      <Button
+        onClick={openPanel}
+        className="fixed left-0 top-1/2 -translate-y-1/2 rounded-l-none shadow-lg z-50"
+        size="lg"
+        data-testid="button-floating-sales-assist"
+      >
+        <Bot className="h-5 w-5 mr-2" />
+        Sales Assist
+      </Button>
+
       {/* Sales Assist Panel - global slide-out */}
       <ChatPanelGlobal />
     </div>
@@ -3663,12 +3674,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
         <div className={showAssistant ? "flex gap-4 overflow-hidden flex-1" : ""}>
           {/* Store Details Content */}
-          <div className={showAssistant ? "w-1/2 overflow-y-auto pr-2" : "w-full"}>
+          <div className={showAssistant ? "w-1/2 flex flex-col overflow-hidden pr-2" : "w-full"}>
             {!row ? (
               <div className="flex items-center justify-center h-64">
                 <p>No store data available</p>
               </div>
             ) : (
+              <>
+              <div className={showAssistant ? "flex-1 overflow-y-auto" : ""}>
               <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
             {/* Sales Info - AT THE TOP - EXPANDED BY DEFAULT */}
             <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
@@ -4144,6 +4157,35 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
               </AccordionContent>
             </AccordionItem>
           </Accordion>
+              </div>
+              
+              {/* Sticky Save/Cancel Buttons - Only shown when AI Assistant is visible */}
+              {showAssistant && (
+                <div className="sticky bottom-0 bg-background border-t pt-4 mt-4 flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSave} 
+                    disabled={saveMutation.isPending} 
+                    data-testid="button-save"
+                    style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
+                  >
+                    {saveMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+              </>
             )}
           </div>
 
@@ -4164,6 +4206,8 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           )}
         </div>
 
+        {/* DialogFooter - Only shown when AI Assistant is NOT visible */}
+        {!showAssistant && (
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
             Cancel
@@ -4187,6 +4231,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             )}
           </Button>
         </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
 
@@ -4311,17 +4356,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         </DialogFooter>
       </DialogContent>
     </Dialog>
-
-    {/* Floating Sales Assist Button */}
-    <Button
-      onClick={openPanel}
-      className="fixed left-0 top-1/2 -translate-y-1/2 rounded-l-none shadow-lg z-50"
-      size="lg"
-      data-testid="button-floating-sales-assist"
-    >
-      <Bot className="h-5 w-5 mr-2" />
-      Sales Assist
-    </Button>
     </>
   );
 }
