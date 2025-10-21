@@ -696,7 +696,8 @@ export default function ClientDashboard() {
     verticalAlign?: 'top' | 'middle' | 'bottom';
     // Add new preferences
     statusOptions?: string[];
-    // colorRowByStatus and colorPresets now managed by useCustomTheme hook
+    colorRowByStatus?: boolean;
+    // colorPresets now managed by useCustomTheme hook
     freezeFirstColumn?: boolean;
     showMyStoresOnly?: boolean;
   } | null>({
@@ -1193,7 +1194,8 @@ export default function ClientDashboard() {
           // colorPresets now managed by useCustomTheme hook
           freezeFirstColumn, // Save freeze column preference
           showMyStoresOnly, // Save My Stores Only preference
-          // Note: Colors and colorRowByStatus are saved separately via useCustomTheme
+          colorRowByStatus: userPreferences?.colorRowByStatus, // Preserve colorRowByStatus state
+          // Note: Colors are saved separately via useCustomTheme
         });
       } catch (error) {
         console.error('Failed to save preferences:', error);
