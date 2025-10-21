@@ -3603,9 +3603,34 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     saveMutation.mutate();
   };
 
-  // AI Assistant toggle
-  const [showAssistant, setShowAssistant] = useState(false);
+  // AI Assistant toggle - load from localStorage per-store
+  const getStorageKey = () => `store-ai-assistant-${row?.id || 'unknown'}`;
+  const [showAssistant, setShowAssistant] = useState(() => {
+    if (typeof window !== 'undefined' && row?.id) {
+      const saved = localStorage.getItem(getStorageKey());
+      return saved === 'true';
+    }
+    return false;
+  });
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
+
+  // Re-sync showAssistant from localStorage when store changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && row?.id) {
+      const saved = localStorage.getItem(getStorageKey());
+      setShowAssistant(saved === 'true');
+    } else {
+      setShowAssistant(false);
+    }
+  }, [row?.id]);
+
+  // Handler to update showAssistant and persist to localStorage
+  const handleShowAssistantChange = (checked: boolean) => {
+    setShowAssistant(checked);
+    if (typeof window !== 'undefined' && row?.id) {
+      localStorage.setItem(getStorageKey(), String(checked));
+    }
+  };
 
   // Handle close with unsaved changes warning
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
@@ -3651,7 +3676,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
               <Checkbox
                 id="show-assistant"
                 checked={showAssistant}
-                onCheckedChange={(checked) => setShowAssistant(!!checked)}
+                onCheckedChange={(checked) => handleShowAssistantChange(!!checked)}
                 data-testid="checkbox-show-assistant"
               />
               <Label 
@@ -3680,8 +3705,37 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         </DialogHeader>
 
         <div className={showAssistant ? "flex gap-4 overflow-hidden flex-1" : ""}>
-          {/* Store Details Content */}
-          <div className={showAssistant ? "w-1/2 flex flex-col overflow-hidden pr-2" : "w-full"}>
+          {/* AI Assistant Panel - NOW ON LEFT */}
+          {showAssistant && (
+            <div className="w-1/2 border-r pr-4 flex flex-col overflow-hidden">
+              <InlineAIChatEnhanced 
+                storeContext={{
+                  sales_ready_summary: formData.sales_ready_summary,
+                  notes: formData.notes,
+                  point_of_contact: formData.point_of_contact,
+                  poc_email: formData.poc_email,
+                  poc_phone: formData.poc_phone,
+                  status: formData.status,
+                  follow_up_date: formData.follow_up_date,
+                  next_action: formData.next_action,
+                  dba: dbaName,
+                  name: formData.name,
+                  type: formData.type,
+                  link: formData.link,
+                  address: formData.address,
+                  city: formData.city,
+                  state: formData.state,
+                  phone: formData.phone,
+                  email: formData.email,
+                  website: formData.website,
+                }}
+                contextUpdateTrigger={contextUpdateTrigger}
+              />
+            </div>
+          )}
+
+          {/* Store Details Content - NOW ON RIGHT */}
+          <div className={showAssistant ? "w-1/2 flex flex-col overflow-hidden pl-2" : "w-full"}>
             {!row ? (
               <div className="flex items-center justify-center h-64">
                 <p>No store data available</p>
@@ -4195,35 +4249,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
               </>
             )}
           </div>
-
-          {/* AI Assistant Panel */}
-          {showAssistant && (
-            <div className="w-1/2 border-l pl-4 flex flex-col overflow-hidden">
-              <InlineAIChatEnhanced 
-                storeContext={{
-                  sales_ready_summary: formData.sales_ready_summary,
-                  notes: formData.notes,
-                  point_of_contact: formData.point_of_contact,
-                  poc_email: formData.poc_email,
-                  poc_phone: formData.poc_phone,
-                  status: formData.status,
-                  follow_up_date: formData.follow_up_date,
-                  next_action: formData.next_action,
-                  dba: dbaName,
-                  name: formData.name,
-                  type: formData.type,
-                  link: formData.link,
-                  address: formData.address,
-                  city: formData.city,
-                  state: formData.state,
-                  phone: formData.phone,
-                  email: formData.email,
-                  website: formData.website,
-                }}
-                contextUpdateTrigger={contextUpdateTrigger}
-              />
-            </div>
-          )}
         </div>
 
         {/* DialogFooter - Only shown when AI Assistant is NOT visible */}
