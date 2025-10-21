@@ -9,6 +9,7 @@ import * as client from "openid-client";
 import * as googleSheets from "./googleSheets";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
+import OpenAI from "openai";
 
 // Helper function for fuzzy string matching (Levenshtein distance)
 function stringSimilarity(str1: string, str2: string): number {
@@ -5225,7 +5226,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Initialize OpenAI client
-      const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: settings.apiKey });
 
       // Upload file to OpenAI using a temporary file
@@ -5345,7 +5345,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Initialize OpenAI client
-      const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: settings.apiKey });
 
       // Save user message
