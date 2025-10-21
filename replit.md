@@ -22,19 +22,28 @@ The application is built around a client dashboard that unifies data from two Go
     - **WooCommerce Sync**: Fetches orders, matches them to stores, calculates commissions, and updates the Commission Tracker.
     - **Sales Reports**: Generates professional PDF commission reports for accountants and agents, with options for full company or individual agent reports and batch downloads.
     - **Smart Data Handling**: Auto-detection of email addresses and phone numbers in notes fields, auto-population of POC fields, smart date pickers, and formatted display for hours and links.
+    - **Sales Assistant AI**: OpenAI-powered ChatGPT-like assistant with knowledge base integration for sales scripts, product info, and objection handlers. Accessible as a dedicated page or slide-out panel from anywhere in the app.
 - **Feature Specifications**:
     - **Client Dashboard**: Unified view of both Google Sheets with extensive customization options for display and filtering (search, states filter with Canada toggle).
     - **Store Details Popup**: Comprehensive, collapsible view of store information, including sales info, contact details, and additional specifics.
     - **Call/Email Logging**: Integrated logging system that records interactions, updates store status, and claims stores.
+    - **Sales Assistant**: AI-powered chat interface providing on-demand help with sales techniques, product information, and objection handling. Features include:
+      - Dedicated Sales Assistant page accessible via navigation
+      - Global slide-out chat panel accessible from any page via header button
+      - Knowledge base file upload and management (admin only)
+      - Chat history persistence across sessions
+      - OpenAI API integration using Assistants API with file search capability
 - **System Design Choices**:
     - A PostgreSQL database (Neon) is used for user management and preference storage.
     - The backend is powered by Express.js and Node.js.
     - Commission calculation logic is implemented based on claim dates: 25% for the first 6 months post-claim, then 10%.
     - **Unified Status Color System**: Status dropdown and table rows both read from `statusColors` in the useCustomTheme hook, eliminating previous hard-coded color divergence.
     - **Debug Logging**: Centralized debug utility (`lib/debug.ts`) provides structured logging for status colors, preferences, and data operations with emoji-prefixed categories.
+    - **Sales Assistant Architecture**: User's own OpenAI API key stored securely in database. Knowledge base files uploaded to OpenAI's servers (metadata in PostgreSQL, actual files on OpenAI). Chat uses Assistants API with file search tool when knowledge base is available, falls back to standard chat completion otherwise.
 
 ## External Dependencies
 - **Google Sheets API**: For connecting and interacting with the "Store Database" and "Commission Tracker" Google Sheets.
 - **WooCommerce REST API**: For synchronizing orders and calculating commissions.
 - **Replit Auth (OpenID Connect)**: For user authentication and role management.
 - **PostgreSQL (Neon)**: The primary database for user data, preferences, and potentially other application-specific data.
+- **OpenAI API**: For AI-powered Sales Assistant with knowledge base file search. Admins configure their own API key via the Admin Dashboard.
