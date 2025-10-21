@@ -6359,10 +6359,11 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Templates routes
+  // Templates routes - per-user templates
   app.get('/api/templates', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const templates = await storage.getTemplates();
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const templates = await storage.getUserTemplates(userId);
       res.json(templates);
     } catch (error: any) {
       console.error('Error fetching templates:', error);
@@ -6373,7 +6374,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/templates', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const validation = insertTemplateSchema.safeParse({ ...req.body, createdBy: userId });
+      const validation = insertTemplateSchema.safeParse({ ...req.body, userId });
       
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
@@ -6397,7 +6398,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'Template not found' });
       }
       
-      if (template.createdBy !== userId) {
+      if (template.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
       
@@ -6430,7 +6431,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'Template not found' });
       }
       
-      if (template.createdBy !== userId) {
+      if (template.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
       

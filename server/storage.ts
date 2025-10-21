@@ -172,7 +172,7 @@ export interface IStorage {
   moveConversationToProject(conversationId: string, projectId: string | null): Promise<Conversation>;
   
   // Template operations
-  getTemplates(): Promise<Template[]>;  // Shared across all users
+  getUserTemplates(userId: string): Promise<Template[]>;  // Per-user templates
   getTemplate(id: string): Promise<Template | undefined>;
   createTemplate(template: InsertTemplate): Promise<Template>;
   updateTemplate(id: string, updates: Partial<InsertTemplate>): Promise<Template>;
@@ -902,11 +902,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Template operations
-  async getTemplates(): Promise<Template[]> {
+  async getUserTemplates(userId: string): Promise<Template[]> {
     return await db
       .select()
       .from(templates)
-      .where(eq(templates.isShared, true))
+      .where(eq(templates.userId, userId))
       .orderBy(desc(templates.createdAt));
   }
 

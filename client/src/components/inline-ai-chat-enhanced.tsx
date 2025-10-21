@@ -272,6 +272,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     },
   });
 
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      return await apiRequest("DELETE", `/api/templates/${templateId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({ title: "Success", description: "Template deleted" });
+    },
+  });
+
   const handleSendMessage = async () => {
     if (!messageInput.trim() || isSending) return;
 
@@ -355,116 +365,248 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
 
+  const [conversationsOpen, setConversationsOpen] = useState(true);
+
   return (
     <div className="flex h-full">
       {/* Sidebar */}
       {sidebarOpen && (
         <div className="w-64 border-r flex flex-col">
           <div className="p-3 border-b flex items-center justify-between">
-            <h3 className="font-semibold text-sm">Conversations</h3>
-            <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => createConversationMutation.mutate()}
-                className="h-7 w-7"
-                data-testid="button-new-chat"
-              >
-                <MessageSquarePlus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setNewProjectDialogOpen(true)}
-                className="h-7 w-7"
-                data-testid="button-new-project"
-              >
-                <FolderPlus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen(false)}
-                className="h-7 w-7"
-                data-testid="button-close-sidebar"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            </div>
+            <h3 className="font-semibold text-sm">Sales Assistant</h3>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(false)}
+              className="h-7 w-7"
+              data-testid="button-close-sidebar"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
           </div>
 
           <ScrollArea className="flex-1">
-            <div className="p-2 space-y-4">
-              {/* Uncategorized */}
-              {conversationsByProject.none && conversationsByProject.none.length > 0 && (
-                <div className="space-y-1">
-                  {conversationsByProject.none.map((conv) => (
-                    <ConversationContextMenu
-                      key={conv.id}
-                      conversationId={conv.id}
-                      onRename={() => {
-                        /* TODO: implement rename */
-                      }}
-                      onDelete={() => {
-                        /* TODO: implement delete */
-                      }}
-                      onMove={(projectId) => {
-                        /* TODO: implement move */
-                      }}
-                      projects={projects}
-                      currentProjectId={conv.projectId}
-                    >
-                      <div
-                        className={`p-2 rounded-md cursor-pointer hover-elevate ${
-                          selectedConversationId === conv.id ? "bg-accent" : ""
-                        }`}
-                        onClick={() => setSelectedConversationId(conv.id)}
-                        data-testid={`conversation-item-${conv.id}`}
-                      >
-                        <p className="text-sm font-medium truncate">{conv.title}</p>
-                      </div>
-                    </ConversationContextMenu>
-                  ))}
-                </div>
-              )}
-
-              {/* Projects */}
-              {projects.map((project) => (
-                <div key={project.id} className="space-y-1">
-                  <div className="flex items-center gap-2 px-2 py-1">
-                    <Folder className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{project.name}</span>
+            {/* Conversations Collapsible */}
+            <Collapsible open={conversationsOpen} onOpenChange={setConversationsOpen}>
+              <div className="border-b">
+                <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-conversations">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    <span className="font-semibold text-sm">Conversations</span>
+                    <Badge variant="secondary">{conversations.length}</Badge>
                   </div>
-                  {conversationsByProject[project.id]?.map((conv) => (
-                    <ConversationContextMenu
-                      key={conv.id}
-                      conversationId={conv.id}
-                      onRename={() => {
-                        /* TODO: implement rename */
-                      }}
-                      onDelete={() => {
-                        /* TODO: implement delete */
-                      }}
-                      onMove={(projectId) => {
-                        /* TODO: implement move */
-                      }}
-                      projects={projects}
-                      currentProjectId={conv.projectId}
-                    >
-                      <div
-                        className={`p-2 rounded-md cursor-pointer ml-4 hover-elevate ${
-                          selectedConversationId === conv.id ? "bg-accent" : ""
-                        }`}
-                        onClick={() => setSelectedConversationId(conv.id)}
-                        data-testid={`conversation-item-${conv.id}`}
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${conversationsOpen ? "rotate-180" : ""}`}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="p-2">
+                    <div className="flex gap-1 mb-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => createConversationMutation.mutate()}
+                        className="flex-1"
+                        data-testid="button-new-chat"
                       >
-                        <p className="text-sm font-medium truncate">{conv.title}</p>
-                      </div>
-                    </ConversationContextMenu>
-                  ))}
-                </div>
-              ))}
-            </div>
+                        <MessageSquarePlus className="h-4 w-4 mr-1" />
+                        New Chat
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setNewProjectDialogOpen(true)}
+                        className="flex-1"
+                        data-testid="button-new-project"
+                      >
+                        <FolderPlus className="h-4 w-4 mr-1" />
+                        New Project
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {/* Uncategorized */}
+                      {conversationsByProject.none && conversationsByProject.none.length > 0 && (
+                        <div className="space-y-1">
+                          {conversationsByProject.none.map((conv) => (
+                            <ConversationContextMenu
+                              key={conv.id}
+                              conversationId={conv.id}
+                              onRename={() => {
+                                /* TODO: implement rename */
+                              }}
+                              onDelete={() => {
+                                /* TODO: implement delete */
+                              }}
+                              onMove={(projectId) => {
+                                /* TODO: implement move */
+                              }}
+                              projects={projects}
+                              currentProjectId={conv.projectId}
+                            >
+                              <div
+                                className={`p-2 rounded-md cursor-pointer hover-elevate ${
+                                  selectedConversationId === conv.id ? "bg-accent" : ""
+                                }`}
+                                onClick={() => setSelectedConversationId(conv.id)}
+                                data-testid={`conversation-item-${conv.id}`}
+                              >
+                                <p className="text-sm font-medium truncate">{conv.title}</p>
+                              </div>
+                            </ConversationContextMenu>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Projects */}
+                      {projects.map((project) => (
+                        <div key={project.id} className="space-y-1">
+                          <div className="flex items-center gap-2 px-2 py-1">
+                            <Folder className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">{project.name}</span>
+                          </div>
+                          {conversationsByProject[project.id]?.map((conv) => (
+                            <ConversationContextMenu
+                              key={conv.id}
+                              conversationId={conv.id}
+                              onRename={() => {
+                                /* TODO: implement rename */
+                              }}
+                              onDelete={() => {
+                                /* TODO: implement delete */
+                              }}
+                              onMove={(projectId) => {
+                                /* TODO: implement move */
+                              }}
+                              projects={projects}
+                              currentProjectId={conv.projectId}
+                            >
+                              <div
+                                className={`p-2 rounded-md cursor-pointer ml-4 hover-elevate ${
+                                  selectedConversationId === conv.id ? "bg-accent" : ""
+                                }`}
+                                onClick={() => setSelectedConversationId(conv.id)}
+                                data-testid={`conversation-item-${conv.id}`}
+                              >
+                                <p className="text-sm font-medium truncate">{conv.title}</p>
+                              </div>
+                            </ConversationContextMenu>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+
+            {/* Templates Collapsible */}
+            <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
+              <div className="border-b">
+                <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-templates">
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-4 w-4" />
+                    <span className="font-semibold text-sm">Template Library</span>
+                    <Badge variant="secondary">{templates.length}</Badge>
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${templatesOpen ? "rotate-180" : ""}`}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="p-2 space-y-3">
+                    {/* Add Template Form */}
+                    <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
+                      <h4 className="font-semibold text-xs">Save New Template</h4>
+                      <Input
+                        placeholder="Template title..."
+                        value={newTemplateTitle}
+                        onChange={(e) => setNewTemplateTitle(e.target.value)}
+                        data-testid="input-template-title"
+                      />
+                      <Textarea
+                        placeholder="Paste content here..."
+                        value={newTemplateContent}
+                        onChange={(e) => setNewTemplateContent(e.target.value)}
+                        className="min-h-[60px]"
+                        data-testid="textarea-template-content"
+                      />
+                      <Input
+                        placeholder="Tags (comma-separated)..."
+                        value={newTemplateTags}
+                        onChange={(e) => setNewTemplateTags(e.target.value)}
+                        data-testid="input-template-tags"
+                      />
+                      <Button
+                        onClick={handleSaveTemplate}
+                        disabled={createTemplateMutation.isPending}
+                        className="w-full"
+                        size="sm"
+                        data-testid="button-save-template"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Save Template
+                      </Button>
+                    </div>
+
+                    {/* Search Templates */}
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search templates..."
+                        value={templateSearch}
+                        onChange={(e) => setTemplateSearch(e.target.value)}
+                        className="pl-8"
+                        data-testid="input-template-search"
+                      />
+                    </div>
+
+                    {/* Template List */}
+                    <div className="space-y-2">
+                      {filteredTemplates.map((template) => (
+                        <div key={template.id} className="p-2 border rounded-md hover-elevate" data-testid={`template-${template.id}`}>
+                          <div className="flex items-start justify-between mb-1">
+                            <h5 className="text-sm font-medium">{template.title}</h5>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleCopyTemplate(template.content)}
+                                data-testid={`button-copy-template-${template.id}`}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-destructive"
+                                onClick={() => deleteTemplateMutation.mutate(template.id)}
+                                disabled={deleteTemplateMutation.isPending}
+                                data-testid={`button-delete-template-${template.id}`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mb-1">
+                            {template.content}
+                          </p>
+                          {template.tags && template.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {template.tags.map((tag, idx) => (
+                                <Badge key={idx} variant="outline" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
           </ScrollArea>
         </div>
       )}
