@@ -3408,7 +3408,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
   // Save mutation - update cells directly
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ closeDialog }: { closeDialog: boolean }) => {
       // Separate Store Database fields from Commission Tracker fields
       const storeChanges: Array<{ sheetId: string; rowIndex: number; column: string; value: string }> = [];
       const trackerChanges: Record<string, string> = {};
@@ -3501,8 +3501,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       }
 
       await Promise.all(promises);
+      return { closeDialog };
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       toast({
         title: "Success",
         description: "Store information updated successfully",
@@ -3517,7 +3518,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         setContextUpdateTrigger(prev => prev + 1);
       }
       
-      onOpenChange(false);
+      // Only close if requested
+      if (data.closeDialog) {
+        onOpenChange(false);
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -3593,7 +3597,28 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       return;
     }
 
-    saveMutation.mutate();
+    saveMutation.mutate({ closeDialog: false });
+  };
+
+  const handleSaveAndExit = () => {
+    // Check if any tracker fields are being changed
+    const trackerFieldsChanged = Object.keys(formData).some((key) => {
+      const typedKey = key as keyof typeof formData;
+      const mapping = fieldToSheetMapping[key];
+      return mapping?.sheet === 'tracker' && formData[typedKey] !== initialData[typedKey];
+    });
+
+    // If tracker fields are being changed, follow_up_date is mandatory
+    if (trackerFieldsChanged && !formData.follow_up_date) {
+      toast({
+        title: "Validation Error",
+        description: "Follow-Up Date is required when updating sales tracking information.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    saveMutation.mutate({ closeDialog: true });
   };
 
   // AI Assistant toggle - load from localStorage per-store
@@ -4230,6 +4255,24 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                     onClick={handleSave} 
                     disabled={saveMutation.isPending} 
                     data-testid="button-save"
+                    variant="outline"
+                  >
+                    {saveMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    onClick={handleSaveAndExit} 
+                    disabled={saveMutation.isPending} 
+                    data-testid="button-save-and-exit"
                     style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
                   >
                     {saveMutation.isPending ? (
@@ -4240,7 +4283,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                     ) : (
                       <>
                         <Save className="h-4 w-4 mr-2" />
-                        Save Changes
+                        Save & Exit
                       </>
                     )}
                   </Button>
@@ -4261,6 +4304,24 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             onClick={handleSave} 
             disabled={saveMutation.isPending} 
             data-testid="button-save"
+            variant="outline"
+          >
+            {saveMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save
+              </>
+            )}
+          </Button>
+          <Button 
+            onClick={handleSaveAndExit} 
+            disabled={saveMutation.isPending} 
+            data-testid="button-save-and-exit"
             style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
           >
             {saveMutation.isPending ? (
@@ -4271,7 +4332,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             ) : (
               <>
                 <Save className="h-4 w-4 mr-2" />
-                Save Changes
+                Save & Exit
               </>
             )}
           </Button>
