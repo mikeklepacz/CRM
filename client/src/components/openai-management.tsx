@@ -242,39 +242,60 @@ export function OpenAIManagement() {
                 <TableRow>
                   <TableHead>Filename</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Size</TableHead>
                   <TableHead>Uploaded</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {files.map((file: any) => (
-                  <TableRow key={file.id}>
-                    <TableCell className="font-medium">{file.originalName}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{file.category}</Badge>
-                    </TableCell>
-                    <TableCell>{formatFileSize(file.fileSize)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(file.uploadedAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Delete ${file.originalName}?`)) {
-                            deleteFileMutation.mutate(file.id);
-                          }
-                        }}
-                        disabled={deleteFileMutation.isPending}
-                        data-testid={`button-delete-file-${file.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {files.map((file: any) => {
+                  const getStatusBadge = (status: string) => {
+                    switch (status) {
+                      case 'uploading':
+                        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200"><Loader2 className="h-3 w-3 mr-1 animate-spin inline" />Uploading</Badge>;
+                      case 'processing':
+                        return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200"><Loader2 className="h-3 w-3 mr-1 animate-spin inline" />Processing</Badge>;
+                      case 'ready':
+                        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200"><CheckCircle2 className="h-3 w-3 mr-1 inline" />Ready</Badge>;
+                      case 'failed':
+                        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200"><AlertCircle className="h-3 w-3 mr-1 inline" />Failed</Badge>;
+                      default:
+                        return <Badge variant="secondary">{status}</Badge>;
+                    }
+                  };
+
+                  return (
+                    <TableRow key={file.id}>
+                      <TableCell className="font-medium">{file.originalName}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{file.category}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(file.processingStatus || 'ready')}
+                      </TableCell>
+                      <TableCell>{formatFileSize(file.fileSize)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(file.uploadedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Delete ${file.originalName}?`)) {
+                              deleteFileMutation.mutate(file.id);
+                            }
+                          }}
+                          disabled={deleteFileMutation.isPending}
+                          data-testid={`button-delete-file-${file.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

@@ -308,6 +308,7 @@ export const knowledgeBaseFiles = pgTable("knowledge_base_files", {
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
   category: varchar("category", { length: 100 }).default('general'), // scripts, objections, product-info, etc.
   description: text("description"),
+  processingStatus: varchar("processing_status", { length: 50 }).default('uploading'), // 'uploading', 'processing', 'ready', 'failed'
   isActive: boolean("is_active").default(true),
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 });

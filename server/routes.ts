@@ -5357,6 +5357,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('📤 [FILE UPLOAD] Using existing vector store:', vectorStoreId);
       }
 
+      // Save file metadata to database with 'uploading' status
+      console.log('📤 [FILE UPLOAD] Saving file metadata to database...');
+      const fileRecord = await storage.createKnowledgeBaseFile({
+        filename: filename.replace(/[^a-zA-Z0-9.-]/g, '_'),
+        originalName: filename,
+        fileSize: content.length,
+        mimeType: 'text/plain',
+        openaiFileId: file.id,
+        uploadedBy: user.id,
+        category: category || 'general',
+        description: description || null,
+        processingStatus: 'uploading',
+        isActive: true
+      });
+      console.log('📤 [FILE UPLOAD] File metadata saved, record ID:', fileRecord.id);
+
+      // Update status to 'processing'
+      await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'processing');
+      console.log('📤 [FILE UPLOAD] Status updated to: processing');
+
       // Add file to vector store using direct API call
       console.log('📤 [FILE UPLOAD] Adding file to vector store via REST API...');
       const vectorStoreFileResponse = await axios.post(
@@ -5397,7 +5417,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (status === 'completed') {
           processingComplete = true;
           console.log('📤 [FILE UPLOAD] File processing completed!');
+          // Update status to 'ready'
+          await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'ready');
+          console.log('📤 [FILE UPLOAD] Status updated to: ready');
         } else if (status === 'failed') {
+          await storage.updateKnowledgeBaseFileStatus(fileRecord.id, 'failed');
+          console.log('📤 [FILE UPLOAD] Status updated to: failed');
           throw new Error('File processing failed in vector store');
         } else {
           // Wait 1 second before checking again
@@ -5408,24 +5433,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!processingComplete) {
         console.log('📤 [FILE UPLOAD] ⚠️ File processing timeout, but file may still complete');
+        // Keep status as 'processing' if timeout - it might still complete on OpenAI's side
       }
       
       console.log('📤 [FILE UPLOAD] File added to vector store successfully');
-
-      // Save file metadata to database
-      console.log('📤 [FILE UPLOAD] Saving file metadata to database...');
-      const fileRecord = await storage.createKnowledgeBaseFile({
-        filename: filename.replace(/[^a-zA-Z0-9.-]/g, '_'),
-        originalName: filename,
-        fileSize: content.length,
-        mimeType: 'text/plain',
-        openaiFileId: file.id,
-        uploadedBy: user.id,
-        category: category || 'general',
-        description: description || null,
-        isActive: true
-      });
-      console.log('📤 [FILE UPLOAD] File metadata saved, record ID:', fileRecord.id);
 
       console.log('📤 [FILE UPLOAD] ✅ Upload completed successfully!');
       res.json({ success: true, file: fileRecord });
