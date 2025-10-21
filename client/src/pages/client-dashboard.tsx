@@ -3090,15 +3090,14 @@ export default function ClientDashboard() {
       />
 
       {/* Floating Sales Assist Button */}
-      <Button
+      <button
         onClick={togglePanel}
-        className="fixed left-0 top-1/2 -translate-y-1/2 z-40 rounded-l-none rounded-r-md shadow-lg"
-        size="sm"
+        className="fixed left-0 top-1/2 -translate-y-1/2 z-[9999] rounded-r-md shadow-lg bg-primary text-primary-foreground hover-elevate active-elevate-2 px-3 py-2 flex items-center gap-2 text-xs font-medium"
         data-testid="button-toggle-sales-assist"
       >
-        <Sparkles className="h-4 w-4 mr-2" />
-        <span className="text-xs font-medium">Sales Assist</span>
-      </Button>
+        <Sparkles className="h-4 w-4" />
+        <span>Sales Assist</span>
+      </button>
 
       {/* Sales Assist Panel */}
       <ChatPanelGlobal />
