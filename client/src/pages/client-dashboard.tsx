@@ -3088,8 +3088,9 @@ export default function ClientDashboard() {
           setShowMyStoresOnly(false);
         }}
       />
+      </div>
 
-      {/* Floating Sales Assist Button */}
+      {/* Floating Sales Assist Button - positioned on body background */}
       <button
         onClick={togglePanel}
         className="fixed left-0 top-1/2 -translate-y-1/2 z-[9999] rounded-r-md shadow-lg bg-primary text-primary-foreground hover-elevate active-elevate-2 px-3 py-2 flex items-center gap-2 text-xs font-medium"
@@ -3101,7 +3102,6 @@ export default function ClientDashboard() {
 
       {/* Sales Assist Panel */}
       <ChatPanelGlobal />
-      </div>
     </div>
   );
 }
