@@ -64,6 +64,13 @@ type GoogleOAuthSettings = {
   gmailEmail?: string | null;
 };
 
+type IntegrationStatus = {
+  googleSheetsConnected: boolean;
+  googleCalendarConnected: boolean;
+  googleSheetsEmail: string | null;
+  googleCalendarEmail: string | null;
+};
+
 export default function Settings() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -76,9 +83,15 @@ export default function Settings() {
     queryKey: ["/api/woocommerce/settings"],
   });
 
-  // Fetch Google OAuth settings
+  // Fetch Google OAuth settings (admin only)
   const { data: googleSettings } = useQuery<GoogleOAuthSettings>({
     queryKey: ["/api/google/settings"],
+    enabled: user?.role === 'admin',
+  });
+
+  // Fetch integration status (all users)
+  const { data: integrationStatus } = useQuery<IntegrationStatus>({
+    queryKey: ["/api/integrations/status"],
   });
 
   // Fetch user preferences to get existing loading logo
@@ -570,7 +583,7 @@ export default function Settings() {
               <div className="border-t pt-4">
                 <h3 className="text-sm font-medium mb-3">Connection Status</h3>
                 
-                {googleSettings?.gmailEmail ? (
+                {integrationStatus?.googleCalendarEmail ? (
                   <div className="mb-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
                     <div className="flex items-center gap-2 mb-1">
                       <div className="h-2 w-2 bg-green-500 rounded-full"></div>
@@ -579,7 +592,7 @@ export default function Settings() {
                       </span>
                     </div>
                     <p className="text-sm text-green-600 dark:text-green-500">
-                      Gmail account: {googleSettings.gmailEmail}
+                      Gmail account: {integrationStatus.googleCalendarEmail}
                     </p>
                   </div>
                 ) : (
@@ -589,13 +602,13 @@ export default function Settings() {
                 )}
                 
                 <Button
-                  variant={googleSettings?.gmailEmail ? "outline" : "default"}
+                  variant={integrationStatus?.googleCalendarEmail ? "outline" : "default"}
                   onClick={() => connectGoogleOAuthMutation.mutate()}
                   disabled={connectGoogleOAuthMutation.isPending}
                   data-testid="button-connect-gmail"
                 >
                   <Mail className="mr-2 h-4 w-4" />
-                  {connectGoogleOAuthMutation.isPending ? "Opening..." : googleSettings?.gmailEmail ? "Reconnect Gmail" : "Connect Gmail"}
+                  {connectGoogleOAuthMutation.isPending ? "Opening..." : integrationStatus?.googleCalendarEmail ? "Reconnect Gmail" : "Connect Gmail"}
                 </Button>
               </div>
             </CardContent>
