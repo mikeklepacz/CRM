@@ -130,7 +130,7 @@ function StatusEditorPopover({
   const [localStatuses, setLocalStatuses] = useState(statusOptions);
   const [localColors, setLocalColors] = useState(statusColors);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const isAdmin = currentUser?.role === 'admin';
 
   // Update local state when props change
@@ -149,7 +149,7 @@ function StatusEditorPopover({
         const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
         await updateStatusEntry(i, statusName, colors.background, colors.text);
       }
-      
+
       toast({
         title: "Success",
         description: "Status colors saved successfully",
@@ -273,7 +273,7 @@ function StatusEditorPopover({
                       onDeletePreset={deleteColorPreset}
                       testId={`input-status-bg-${index}`}
                     />
-                    
+
                     {/* Text Color */}
                     <SharedColorPicker
                       label="Text"
@@ -1266,7 +1266,7 @@ export default function ClientDashboard() {
 
     if (!sheetId || !rowIndex) return;
 
-    // Use a stable unique key based on row link (not index) for virtual scrolling
+    // Use a stable unique key based on row link for virtual scrolling
     const key = `${rowLink}-${column}-${sheetId}`;
     setEditedCells(prev => ({
       ...prev,
@@ -2542,22 +2542,14 @@ export default function ClientDashboard() {
                       };
 
                       return (
-                        <div
+                        <TableRow
                           key={virtualRow.key}
                           data-testid={`row-data-${rowIdx}`}
                           className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
                           title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
                           style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
                             height: `${virtualRow.size}px`,
-                            transform: `translateY(${virtualRow.start}px)`,
-                            fontSize: `${fontSize}px`,
-                            backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
-                            color: rowStatusColor ? rowStatusColor.text : customColors.tableTextColor,
-                            display: 'flex',
+                            backgroundColor: rowStatusColor?.background || undefined,
                           }}
                         >
                           {visibleHeaders.map((header: string) => {
@@ -2618,15 +2610,17 @@ export default function ClientDashboard() {
                             const isFirstColumn = visibleHeaders.indexOf(header) === 0;
 
                             return (
-                              <div
-                                key={header}
+                              <TableCell
+                                key={`${rowIndex}-${header}`}
+                                className={`border-r last:border-r-0 overflow-hidden ${rowStatusColor ? "" : "hover:bg-muted/50"}`}
                                 style={{
                                   ...cellStyle,
+                                  color: rowStatusColor?.text || undefined,
                                   ...(isFirstColumn && freezeFirstColumn ? {
                                     position: 'sticky',
                                     left: 0,
                                     zIndex: 10,
-                                    backgroundColor: rowStatusColor ? rowStatusColor.background : (colorRowByStatus ? '#ffffff' : customColors.background)
+                                    backgroundColor: rowStatusColor?.background || (colorRowByStatus ? '#ffffff' : customColors.background)
                                   } : {})
                                 }}
                               >
@@ -2963,10 +2957,10 @@ export default function ClientDashboard() {
                                     )}
                                   </div>
                                 )}
-                              </div>
+                              </TableCell>
                             );
                           })}
-                        </div>
+                        </TableRow>
                       );
                     })}
                         </div>
@@ -3504,12 +3498,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
       await refetch();
       setInitialData(formData); // Update initial data so changes are no longer "unsaved"
-      
+
       // If AI Assistant is open, trigger context update with latest field values
       if (showAssistant) {
         setContextUpdateTrigger(prev => prev + 1);
       }
-      
+
       onOpenChange(false);
     },
     onError: (error: Error) => {
@@ -3568,34 +3562,13 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     }
   };
 
-  const handleSave = () => {
-    // Check if any tracker fields are being changed
-    const trackerFieldsChanged = Object.keys(formData).some((key) => {
-      const typedKey = key as keyof typeof formData;
-      const mapping = fieldToSheetMapping[key];
-      return mapping?.sheet === 'tracker' && formData[typedKey] !== initialData[typedKey];
-    });
-
-    // If tracker fields are being changed, follow_up_date is mandatory
-    if (trackerFieldsChanged && !formData.follow_up_date) {
-      toast({
-        title: "Validation Error",
-        description: "Follow-Up Date is required when updating sales tracking information.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    saveMutation.mutate();
-  };
-
   // AI Assistant toggle - load from localStorage per-store
   // Use a unique identifier for each store (combination of store and tracker row indexes)
   const getStorageKey = () => {
     const storeId = row?._storeRowIndex || row?._trackerRowIndex || row?.Name || 'unknown';
     return `store-ai-assistant-${storeId}`;
   };
-  
+
   const [showAssistant, setShowAssistant] = useState(() => {
     if (typeof window !== 'undefined' && row) {
       const saved = localStorage.getItem(getStorageKey());
@@ -4212,7 +4185,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             </AccordionItem>
           </Accordion>
               </div>
-              
+
               {/* Sticky Save/Cancel Buttons - Only shown when AI Assistant is visible */}
               {showAssistant && (
                 <div className="sticky bottom-0 bg-background border-t pt-4 mt-4 flex justify-end gap-2">
