@@ -39,6 +39,8 @@ export const users = pgTable("users", {
   agentName: varchar("agent_name"), // Name used in WooCommerce and Google Sheets for matching
   referredBy: varchar("referred_by").references(() => users.id), // MLM: who referred this user
   isActive: boolean("is_active").notNull().default(true), // Active/Inactive status for deactivating agents
+  signature: text("signature"), // Custom email signature for AI-generated emails
+  gmailLabels: text("gmail_labels").array(), // Gmail labels to auto-apply to drafts
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
