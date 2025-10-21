@@ -544,6 +544,212 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Gmail OAuth - Available to all users
+  app.get('/api/gmail/oauth-url', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const integration = await storage.getUserIntegration(userId);
+
+      // Use shared Google OAuth credentials (same as Sheets)
+      if (!integration?.googleClientId) {
+        return res.status(400).json({ message: "Please contact admin to configure Google OAuth credentials" });
+      }
+
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
+      const scope = 'https://www.googleapis.com/auth/gmail.compose';
+
+      const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+      oauthUrl.searchParams.set('client_id', integration.googleClientId);
+      oauthUrl.searchParams.set('redirect_uri', redirectUri);
+      oauthUrl.searchParams.set('response_type', 'code');
+      oauthUrl.searchParams.set('scope', scope);
+      oauthUrl.searchParams.set('access_type', 'offline');
+      oauthUrl.searchParams.set('prompt', 'consent');
+      oauthUrl.searchParams.set('state', userId);
+
+      res.json({ url: oauthUrl.toString() });
+    } catch (error: any) {
+      console.error("Error generating Gmail OAuth URL:", error);
+      res.status(500).json({ message: error.message || "Failed to generate OAuth URL" });
+    }
+  });
+
+  app.get('/api/gmail/callback', async (req, res) => {
+    try {
+      const { code, state: userId } = req.query;
+
+      if (!code || !userId) {
+        return res.send('<script>alert("Authorization failed"); window.close();</script>');
+      }
+
+      const integration = await storage.getUserIntegration(userId as string);
+      if (!integration?.googleClientId || !integration?.googleClientSecret) {
+        return res.send('<script>alert("Missing OAuth credentials"); window.close();</script>');
+      }
+
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
+
+      // Exchange code for tokens
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code: code as string,
+          client_id: integration.googleClientId,
+          client_secret: integration.googleClientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code'
+        })
+      });
+
+      if (!tokenResponse.ok) {
+        const error = await tokenResponse.text();
+        console.error('Gmail token exchange failed:', error);
+        return res.send('<script>alert("Authentication failed"); window.close();</script>');
+      }
+
+      const tokens = await tokenResponse.json();
+
+      // Get user email from Google
+      const userinfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` }
+      });
+      const userinfo = await userinfoResponse.json();
+
+      // Store Gmail tokens separately from Sheets tokens
+      const expiryTimestamp = Date.now() + (tokens.expires_in * 1000);
+      await storage.updateUserIntegration(userId as string, {
+        googleCalendarAccessToken: tokens.access_token,
+        googleCalendarRefreshToken: tokens.refresh_token,
+        googleCalendarTokenExpiry: expiryTimestamp,
+        googleCalendarEmail: userinfo.email,
+        googleCalendarConnectedAt: new Date()
+      });
+
+      res.send('<script>alert("Gmail connected successfully!"); window.close();</script>');
+    } catch (error: any) {
+      console.error("Gmail OAuth callback error:", error);
+      res.send('<script>alert("Connection failed"); window.close();</script>');
+    }
+  });
+
+  app.post('/api/gmail/create-draft', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { to, subject, body } = req.body;
+
+      if (!to || !subject || !body) {
+        return res.status(400).json({ message: "Missing required fields: to, subject, body" });
+      }
+
+      // Get Gmail tokens
+      const integration = await storage.getUserIntegration(userId);
+      if (!integration?.googleCalendarAccessToken) {
+        return res.status(400).json({ message: "Gmail not connected. Please connect Gmail in Settings." });
+      }
+
+      // Check if token needs refresh
+      let accessToken = integration.googleCalendarAccessToken;
+      if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
+        // Token expired, refresh it
+        if (!integration.googleCalendarRefreshToken) {
+          return res.status(400).json({ message: "Gmail token expired. Please reconnect Gmail in Settings." });
+        }
+
+        const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: integration.googleClientId!,
+            client_secret: integration.googleClientSecret!,
+            refresh_token: integration.googleCalendarRefreshToken,
+            grant_type: 'refresh_token'
+          })
+        });
+
+        if (!refreshResponse.ok) {
+          return res.status(400).json({ message: "Failed to refresh Gmail token. Please reconnect Gmail in Settings." });
+        }
+
+        const tokens = await refreshResponse.json();
+        accessToken = tokens.access_token;
+
+        // Update stored token
+        const newExpiry = Date.now() + (tokens.expires_in * 1000);
+        await storage.updateUserIntegration(userId, {
+          googleCalendarAccessToken: accessToken,
+          googleCalendarTokenExpiry: newExpiry
+        });
+      }
+
+      // Create RFC 2822 formatted email
+      const emailContent = [
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        '',
+        body
+      ].join('\r\n');
+
+      // Base64 encode for Gmail API
+      const encodedMessage = Buffer.from(emailContent)
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      // Create draft using Gmail API
+      const draftResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: {
+            raw: encodedMessage
+          }
+        })
+      });
+
+      if (!draftResponse.ok) {
+        const error = await draftResponse.text();
+        console.error('Gmail API error:', error);
+        return res.status(500).json({ message: "Failed to create Gmail draft" });
+      }
+
+      const draft = await draftResponse.json();
+
+      res.json({
+        success: true,
+        draftId: draft.id,
+        message: "Gmail draft created successfully"
+      });
+    } catch (error: any) {
+      console.error("Error creating Gmail draft:", error);
+      res.status(500).json({ message: error.message || "Failed to create Gmail draft" });
+    }
+  });
+
+  // Gmail disconnect
+  app.post('/api/gmail/disconnect', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+
+      await storage.updateUserIntegration(userId, {
+        googleCalendarAccessToken: null,
+        googleCalendarRefreshToken: null,
+        googleCalendarTokenExpiry: null,
+        googleCalendarEmail: null,
+        googleCalendarConnectedAt: null
+      });
+
+      res.json({ message: "Gmail disconnected successfully" });
+    } catch (error: any) {
+      console.error("Error disconnecting Gmail:", error);
+      res.status(500).json({ message: error.message || "Failed to disconnect Gmail" });
+    }
+  });
+
   // CSV Upload endpoint
   app.post('/api/csv/upload', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

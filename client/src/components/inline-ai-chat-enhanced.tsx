@@ -41,6 +41,7 @@ import type {
   ChatMessage as ChatMessageType,
 } from "@shared/schema";
 import { ConversationContextMenu } from "./conversation-context-menu";
+import { EmailPreview } from "./email-preview";
 
 interface InlineAIChatEnhancedProps {
   storeContext?: {
@@ -64,6 +65,25 @@ interface InlineAIChatEnhancedProps {
     website?: string;
   };
   contextUpdateTrigger?: number;
+}
+
+// Helper function to detect and parse email content from AI messages
+function parseEmailFromMessage(content: string): { to: string; subject: string; body: string } | null {
+  // Look for email pattern: To:, Subject:, and Body: (or Message:)
+  const toMatch = content.match(/To:\s*(.+?)(?:\n|$)/i);
+  const subjectMatch = content.match(/Subject:\s*(.+?)(?:\n|$)/i);
+  
+  // Match body from "Body:" or "Message:" to the end of content (captures multi-paragraph emails)
+  const bodyMatch = content.match(/(?:Body|Message):\s*\n([\s\S]+)$/i);
+
+  if (toMatch && subjectMatch && bodyMatch) {
+    return {
+      to: toMatch[1].trim(),
+      subject: subjectMatch[1].trim(),
+      body: bodyMatch[1].trim(),
+    };
+  }
+  return null;
 }
 
 export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: InlineAIChatEnhancedProps) {
@@ -461,36 +481,53 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
             </div>
           ) : (
             <div className="space-y-4">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
-                >
-                  {msg.role === "assistant" && (
-                    <div className="flex-shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-4 w-4 text-primary" />
-                      </div>
-                    </div>
-                  )}
+              {messages.map((msg) => {
+                const emailData = msg.role === "assistant" ? parseEmailFromMessage(msg.content) : null;
+                
+                return (
                   <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
-                    }`}
+                    key={msg.id}
+                    className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  </div>
-                  {msg.role === "user" && (
-                    <div className="flex-shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
-                        <UserIcon className="h-4 w-4" />
+                    {msg.role === "assistant" && (
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Bot className="h-4 w-4 text-primary" />
+                        </div>
                       </div>
+                    )}
+                    <div
+                      className={`max-w-[80%] ${
+                        msg.role === "user" ? "w-full" : ""
+                      }`}
+                    >
+                      <div
+                        className={`rounded-lg p-3 ${
+                          msg.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                      {emailData && (
+                        <EmailPreview
+                          to={emailData.to}
+                          subject={emailData.subject}
+                          body={emailData.body}
+                        />
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+                    {msg.role === "user" && (
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
+                          <UserIcon className="h-4 w-4" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </ScrollArea>
