@@ -282,6 +282,27 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     },
   });
 
+  const deleteConversationMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      return await apiRequest("DELETE", `/api/conversations/${conversationId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setSelectedConversationId(null);
+      toast({ title: "Success", description: "Conversation deleted" });
+    },
+  });
+
+  const moveConversationMutation = useMutation({
+    mutationFn: async ({ conversationId, projectId }: { conversationId: string; projectId: string | null }) => {
+      return await apiRequest("POST", `/api/conversations/${conversationId}/move`, { projectId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      toast({ title: "Success", description: "Conversation moved" });
+    },
+  });
+
   const handleSendMessage = async () => {
     if (!messageInput.trim() || isSending) return;
 
@@ -434,12 +455,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                               onRename={() => {
                                 /* TODO: implement rename */
                               }}
-                              onDelete={() => {
-                                /* TODO: implement delete */
-                              }}
-                              onMove={(projectId) => {
-                                /* TODO: implement move */
-                              }}
+                              onDelete={() => deleteConversationMutation.mutate(conv.id)}
+                              onMove={(projectId) => moveConversationMutation.mutate({ conversationId: conv.id, projectId })}
                               projects={projects}
                               currentProjectId={conv.projectId}
                             >
@@ -471,12 +488,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                               onRename={() => {
                                 /* TODO: implement rename */
                               }}
-                              onDelete={() => {
-                                /* TODO: implement delete */
-                              }}
-                              onMove={(projectId) => {
-                                /* TODO: implement move */
-                              }}
+                              onDelete={() => deleteConversationMutation.mutate(conv.id)}
+                              onMove={(projectId) => moveConversationMutation.mutate({ conversationId: conv.id, projectId })}
                               projects={projects}
                               currentProjectId={conv.projectId}
                             >
