@@ -35,6 +35,7 @@ import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
 import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
 import { ChatPanelGlobal } from "@/components/chat-panel-global";
+import { InlineAIChat } from "@/components/inline-ai-chat";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -4147,12 +4148,16 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           {/* AI Assistant Panel */}
           {showAssistant && (
             <div className="w-[400px] border-l pl-4 flex flex-col h-[70vh]">
-              <div className="flex-1 overflow-y-auto border rounded-md p-4 mb-4 bg-muted/20">
-                <p className="text-sm text-muted-foreground text-center">AI Assistant Coming Soon</p>
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  Chat interface will appear here with context about {formData.name || 'this store'}
-                </p>
-              </div>
+              <InlineAIChat 
+                storeContext={{
+                  name: formData.name,
+                  address: formData.address,
+                  phone: formData.phone,
+                  email: formData.email,
+                  notes: formData.notes,
+                  status: formData.status,
+                }}
+              />
             </div>
           )}
         </div>
