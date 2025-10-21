@@ -6092,6 +6092,12 @@ Current Store Information:
 - POC Email: ${contextInfo.poc_email || 'N/A'}
 - POC Phone: ${contextInfo.poc_phone || 'N/A'}
 
+CRITICAL CONTACT PRIORITY RULES:
+When drafting emails or communications, ALWAYS prioritize POC (Point of Contact) information:
+1. If POC Email is available, use it instead of the general Email field
+2. If POC Phone is available, use it instead of the general Phone field
+3. If Point of Contact name is available, address communications to that person specifically
+
 Use this store information to provide context-aware responses. When helping draft emails or communications, reference specific details about this store.`;
         systemInstructions += contextString;
         console.log('💬 [CHAT] Store context appended (length:', contextString.length, ')');
