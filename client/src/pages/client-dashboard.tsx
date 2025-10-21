@@ -19,7 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store, Bot } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -36,6 +36,7 @@ import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
 import { ChatPanelGlobal } from "@/components/chat-panel-global";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
+import { useChatPanel } from "@/hooks/useChatPanel";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -348,6 +349,7 @@ function StatusEditorPopover({
 export default function ClientDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { openPanel } = useChatPanel();
   const [storeSheetId, setStoreSheetId] = useState<string>("");
   const [trackerSheetId, setTrackerSheetId] = useState<string>("");
   const joinColumn = "link"; // Hardcoded to "link"
@@ -4309,6 +4311,17 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Floating Sales Assist Button */}
+    <Button
+      onClick={openPanel}
+      className="fixed left-0 top-1/2 -translate-y-1/2 rounded-l-none shadow-lg z-50"
+      size="lg"
+      data-testid="button-floating-sales-assist"
+    >
+      <Bot className="h-5 w-5 mr-2" />
+      Sales Assist
+    </Button>
     </>
   );
 }
