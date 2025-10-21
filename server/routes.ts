@@ -5896,23 +5896,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Append user signature information
       if (currentUser) {
         console.log('💬 [CHAT] Appending user signature info to system instructions...');
-        const userFullName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Sales Representative';
-        const userEmail = currentUser.email || '';
-        const userRole = currentUser.role === 'admin' ? 'Sales Manager' : 'Sales Representative';
+        
+        let signatureText = '';
+        
+        // Use custom signature if available, otherwise auto-generate
+        if (currentUser.signature) {
+          console.log('💬 [CHAT] Using custom signature from user profile');
+          signatureText = currentUser.signature;
+        } else {
+          console.log('💬 [CHAT] Using auto-generated signature');
+          const userFullName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Sales Representative';
+          const userEmail = currentUser.email || '';
+          const userRole = currentUser.role === 'admin' ? 'Sales Manager' : 'Sales Representative';
+          
+          signatureText = `${userFullName}\n${userRole}\nNatural Materials Unlimited${userEmail ? `\n${userEmail}` : ''}`;
+        }
         
         const signatureInstructions = `
 
 YOUR IDENTITY & EMAIL SIGNATURE:
 When drafting emails or communications, ALWAYS use this exact signature format:
 
-${userFullName}
-${userRole}
-Natural Materials Unlimited${userEmail ? `\n${userEmail}` : ''}
+${signatureText}
 
 IMPORTANT: Never use placeholders like [Your Name] or [Your Contact Information]. Always use the exact information provided above.`;
         
         systemInstructions += signatureInstructions;
-        console.log('💬 [CHAT] User signature appended for:', userFullName);
+        console.log('💬 [CHAT] User signature appended');
       }
       
       // Append store context if available
