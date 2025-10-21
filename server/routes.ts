@@ -346,6 +346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     freezeFirstColumn: z.boolean().optional(),
     statusOptions: z.array(z.string()).optional(),
     showMyStoresOnly: z.boolean().optional(),
+    loadingLogoUrl: z.string().optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
@@ -371,6 +372,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("🎨 [BACKEND] Error saving user preferences:", error);
       res.status(500).json({ message: error.message || "Failed to save preferences" });
+    }
+  });
+
+  // Upload loading logo
+  app.post('/api/user/upload-loading-logo', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { imageData } = req.body;
+      
+      if (!imageData || !imageData.startsWith('data:image/')) {
+        return res.status(400).json({ message: 'Invalid image data. Must be a base64-encoded image.' });
+      }
+
+      // Validate image size (limit to 5MB)
+      const base64Length = imageData.length - (imageData.indexOf(',') + 1);
+      const sizeInBytes = (base64Length * 3) / 4;
+      const sizeInMB = sizeInBytes / (1024 * 1024);
+      
+      if (sizeInMB > 5) {
+        return res.status(400).json({ message: 'Image too large. Maximum size is 5MB.' });
+      }
+
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // Save the loading logo URL to user preferences
+      const preferences = await storage.saveUserPreferences(userId, {
+        loadingLogoUrl: imageData
+      });
+
+      res.json({ 
+        message: 'Loading logo uploaded successfully',
+        loadingLogoUrl: preferences.loadingLogoUrl 
+      });
+    } catch (error: any) {
+      console.error("Error uploading loading logo:", error);
+      res.status(500).json({ message: error.message || "Failed to upload logo" });
     }
   });
 
