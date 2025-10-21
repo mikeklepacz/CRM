@@ -401,11 +401,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const [conversationsOpen, setConversationsOpen] = useState(true);
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full overflow-hidden">
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="w-64 border-r flex flex-col">
-          <div className="p-3 border-b flex items-center justify-between">
+        <div className="w-64 border-r flex flex-col min-h-0 h-full">
+          <div className="p-3 border-b flex items-center justify-between flex-shrink-0">
             <h3 className="font-semibold text-sm">Sales Assistant</h3>
             <Button
               variant="ghost"
@@ -418,7 +418,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
             </Button>
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             {/* Conversations Collapsible */}
             <Collapsible open={conversationsOpen} onOpenChange={setConversationsOpen}>
               <div className="border-b">
@@ -532,7 +532,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
           {/* Template Library - anchored at bottom outside ScrollArea */}
           <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
-            <div className="border-t">
+            <div className="border-t flex-shrink-0">
               <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-templates">
                 <div className="flex items-center gap-2">
                   <Tag className="h-4 w-4" />
@@ -648,9 +648,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
         {/* Header */}
-        <div className="p-3 border-b flex items-center justify-between">
+        <div className="p-3 border-b flex items-center justify-between flex-shrink-0">
           {!sidebarOpen && (
             <Button
               variant="ghost"
@@ -682,7 +682,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
         )}
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
           {!selectedConversationId ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <Bot className="h-16 w-16 mb-4 text-muted-foreground opacity-50" />
@@ -753,7 +753,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
         </ScrollArea>
 
         {/* Input */}
-        <div className="p-4 border-t">
+        <div className="p-4 border-t flex-shrink-0">
           <div className="flex gap-2">
             <Textarea
               value={messageInput}
