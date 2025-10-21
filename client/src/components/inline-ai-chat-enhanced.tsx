@@ -401,8 +401,18 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   {conversationsByProject.none.map((conv) => (
                     <ConversationContextMenu
                       key={conv.id}
-                      conversation={conv}
+                      conversationId={conv.id}
+                      onRename={() => {
+                        /* TODO: implement rename */
+                      }}
+                      onDelete={() => {
+                        /* TODO: implement delete */
+                      }}
+                      onMove={(projectId) => {
+                        /* TODO: implement move */
+                      }}
                       projects={projects}
+                      currentProjectId={conv.projectId}
                     >
                       <div
                         className={`p-2 rounded-md cursor-pointer hover-elevate ${
@@ -428,8 +438,18 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   {conversationsByProject[project.id]?.map((conv) => (
                     <ConversationContextMenu
                       key={conv.id}
-                      conversation={conv}
+                      conversationId={conv.id}
+                      onRename={() => {
+                        /* TODO: implement rename */
+                      }}
+                      onDelete={() => {
+                        /* TODO: implement delete */
+                      }}
+                      onMove={(projectId) => {
+                        /* TODO: implement move */
+                      }}
                       projects={projects}
+                      currentProjectId={conv.projectId}
                     >
                       <div
                         className={`p-2 rounded-md cursor-pointer ml-4 hover-elevate ${
