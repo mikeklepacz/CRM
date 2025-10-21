@@ -313,8 +313,31 @@ export function useCustomTheme() {
       preferences.colorRowByStatus = value;
       return await apiRequest('PUT', '/api/user/preferences', preferences);
     },
+    onMutate: async (value: boolean) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['/api/user/preferences'] });
+      
+      // Snapshot the previous value
+      const previousPreferences = queryClient.getQueryData(['/api/user/preferences']);
+      
+      // Optimistically update to the new value
+      queryClient.setQueryData(['/api/user/preferences'], (old: any) => {
+        return old ? { ...old, colorRowByStatus: value } : old;
+      });
+      
+      console.log('🎨 [OPTIMISTIC UPDATE] colorRowByStatus set to:', value);
+      
+      // Return context with the snapshot
+      return { previousPreferences };
+    },
+    onError: (err, value, context: any) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      queryClient.setQueryData(['/api/user/preferences'], context.previousPreferences);
+      console.error('🎨 [ROLLBACK] colorRowByStatus update failed, rolled back');
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      console.log('🎨 [SUCCESS] colorRowByStatus saved to database');
     },
   });
 
