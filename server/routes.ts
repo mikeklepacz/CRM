@@ -706,6 +706,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to get or create Gmail labels
+  async function getOrCreateGmailLabels(accessToken: string, labelNames: string[]): Promise<string[]> {
+    if (!labelNames || labelNames.length === 0) {
+      return [];
+    }
+
+    try {
+      // List all existing labels
+      const listResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      if (!listResponse.ok) {
+        console.error('Failed to list Gmail labels:', await listResponse.text());
+        return [];
+      }
+
+      const { labels } = await listResponse.json();
+      const existingLabels = new Map(labels.map((l: any) => [l.name, l.id]));
+      const labelIds: string[] = [];
+
+      // For each requested label, get existing ID or create new
+      for (const labelName of labelNames) {
+        if (existingLabels.has(labelName)) {
+          // Label exists, use its ID
+          labelIds.push(existingLabels.get(labelName)!);
+          console.log(`📧 [GMAIL] Label "${labelName}" already exists`);
+        } else {
+          // Create new label
+          console.log(`📧 [GMAIL] Creating new label: "${labelName}"`);
+          const createResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              name: labelName,
+              labelListVisibility: 'labelShow',
+              messageListVisibility: 'show'
+            })
+          });
+
+          if (createResponse.ok) {
+            const newLabel = await createResponse.json();
+            labelIds.push(newLabel.id);
+            console.log(`📧 [GMAIL] Created label "${labelName}" with ID: ${newLabel.id}`);
+          } else {
+            console.error(`Failed to create label "${labelName}":`, await createResponse.text());
+          }
+        }
+      }
+
+      return labelIds;
+    } catch (error) {
+      console.error('Error in getOrCreateGmailLabels:', error);
+      return [];
+    }
+  }
+
   app.post('/api/gmail/create-draft', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
