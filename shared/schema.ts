@@ -358,14 +358,13 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Templates table - shared library of email/script templates
+// Templates table - per-user library of email/script templates
 export const templates = pgTable("templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
   title: varchar("title", { length: 200 }).notNull(),
   content: text("content").notNull(),
   tags: text("tags").array().default(sql`ARRAY[]::text[]`), // e.g., ['email', 'follow-up', 'objection-handler']
-  createdBy: varchar("created_by").notNull().references(() => users.id),
-  isShared: boolean("is_shared").default(true), // Templates are shared across all users
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -415,8 +414,8 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
 }));
 
 export const templatesRelations = relations(templates, ({ one }) => ({
-  creator: one(users, {
-    fields: [templates.createdBy],
+  user: one(users, {
+    fields: [templates.userId],
     references: [users.id],
   }),
 }));

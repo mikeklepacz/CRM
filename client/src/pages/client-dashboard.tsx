@@ -3089,19 +3089,6 @@ export default function ClientDashboard() {
       />
       </div>
 
-      {/* Floating Sales Assist Button */}
-      <Button
-        onClick={openPanel}
-        className="fixed left-0 top-1/2 -translate-y-1/2 rounded-l-none shadow-lg z-50"
-        size="lg"
-        data-testid="button-floating-sales-assist"
-      >
-        <Bot className="h-5 w-5 mr-2" />
-        Sales Assist
-      </Button>
-
-      {/* Sales Assist Panel - global slide-out */}
-      <ChatPanelGlobal />
     </div>
   );
 }
