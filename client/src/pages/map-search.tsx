@@ -715,7 +715,11 @@ export default function MapSearch() {
           center={mapCenter}
           zoom={mapZoom}
           onClick={handleMapClick}
-          options={{ disableDefaultUI: false, zoomControl: true }}
+          options={{ 
+            disableDefaultUI: false, 
+            zoomControl: true,
+            fullscreenControl: false
+          }}
         >
           {selectedLocation && <Marker position={selectedLocation} />}
         </GoogleMap>
