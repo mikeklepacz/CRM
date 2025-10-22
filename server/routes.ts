@@ -7752,25 +7752,33 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Prepare row data for Google Sheet
-      // Expected columns: Name, Type, Link, Address, City, State, Phone, Email, Website, Hours, Agent Name, OPEN, Category
+      // Columns: A=Name, B=Type, C=Link, D=Member Since, E=Address, F=City, G=State, 
+      //          H=Phone, I=Website, J=Email, K=Followers, L=Tags, M=Hours, N=DBA, 
+      //          O=Vibe Score, P=Sales-ready Summary, Q=Agent Name, R=OPEN, S=Category
       const row = [
-        place.name || '',
-        place.types?.[0] || '',
-        place.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
-        place.formatted_address || '',
-        city,
-        state,
-        place.formatted_phone_number || place.international_phone_number || '',
-        '', // Email - will be blank
-        place.website || '',
-        place.opening_hours?.weekday_text?.join('; ') || '',
-        '', // Agent Name - will be blank (unclaimed)
-        place.opening_hours?.open_now === true ? 'TRUE' : (place.opening_hours?.open_now === false ? 'FALSE' : ''),
-        category,
+        place.name || '',                                    // A: Name
+        place.types?.[0] || '',                             // B: Type
+        place.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`, // C: Link
+        '',                                                  // D: Member Since (blank)
+        place.formatted_address || '',                      // E: Address
+        city,                                                // F: City
+        state,                                               // G: State
+        place.formatted_phone_number || place.international_phone_number || '', // H: Phone
+        place.website || '',                                // I: Website
+        '',                                                  // J: Email (blank)
+        '',                                                  // K: Followers (blank)
+        '',                                                  // L: Tags (blank)
+        place.opening_hours?.weekday_text?.join('; ') || '', // M: Hours
+        '',                                                  // N: DBA (blank)
+        '',                                                  // O: Vibe Score (blank)
+        '',                                                  // P: Sales-ready Summary (blank)
+        '',                                                  // Q: Agent Name (blank - unclaimed)
+        place.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE', // R: OPEN (based on business status)
+        category,                                            // S: Category
       ];
 
-      // Append to Google Sheet
-      const range = `${storeSheet.sheetName}!A:M`; // A-M for all columns
+      // Append to Google Sheet (A through S = 19 columns)
+      const range = `${storeSheet.sheetName}!A:S`;
       await googleSheets.appendSheetData(userId, storeSheet.spreadsheetId, range, [row]);
 
       res.json({ 

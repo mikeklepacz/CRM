@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 interface PlaceResult {
@@ -86,6 +87,7 @@ export default function MapSearch() {
   const [stateOpen, setStateOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
+  const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
 
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
     queryKey: ["/api/categories/active"],
@@ -362,44 +364,68 @@ export default function MapSearch() {
         {searchResults.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Search Results ({searchResults.length})</CardTitle>
-              <CardDescription>
-                Click "Add to Database" to save a business to your Store Database sheet
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Search Results ({searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL').length})</CardTitle>
+                  <CardDescription>
+                    Click "Add to Database" to save a business to your Store Database sheet
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="hide-closed"
+                    checked={hideClosedBusinesses}
+                    onCheckedChange={(checked) => setHideClosedBusinesses(checked as boolean)}
+                    data-testid="checkbox-hide-closed"
+                  />
+                  <Label htmlFor="hide-closed" className="cursor-pointer text-sm">
+                    Hide closed businesses
+                  </Label>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
+                      <TableHead>Name & Rating</TableHead>
                       <TableHead>Address</TableHead>
-                      <TableHead>City</TableHead>
-                      <TableHead>State</TableHead>
+                      <TableHead>Location</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {searchResults.map((place) => {
+                    {searchResults
+                      .filter(place => !hideClosedBusinesses || place.business_status === 'OPERATIONAL')
+                      .map((place) => {
                       const { city: placeCity, state: placeState } = parseCityState(place.formatted_address);
                       return (
                         <TableRow key={place.place_id} data-testid={`row-place-${place.place_id}`}>
                           <TableCell className="font-medium">
-                            <div className="flex flex-col">
-                              <span>{place.name}</span>
-                              {place.rating && (
-                                <span className="text-sm text-muted-foreground">
-                                  ⭐ {place.rating} ({place.user_ratings_total} reviews)
-                                </span>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-base">{place.name}</span>
+                              {place.rating ? (
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                  <span className="text-yellow-500">★</span>
+                                  <span className="font-medium">{place.rating}</span>
+                                  <span>({place.user_ratings_total?.toLocaleString()} reviews)</span>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">No reviews</span>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {place.formatted_address}
+                          <TableCell className="max-w-xs">
+                            <span className="line-clamp-2">{place.formatted_address}</span>
                           </TableCell>
-                          <TableCell>{placeCity}</TableCell>
-                          <TableCell>{placeState}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col text-sm">
+                              <span className="font-medium">{placeCity}</span>
+                              <span className="text-muted-foreground">{placeState}</span>
+                            </div>
+                          </TableCell>
                           <TableCell>
                             {place.business_status === 'OPERATIONAL' ? (
                               <Badge variant="default">Open</Badge>
