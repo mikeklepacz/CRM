@@ -56,8 +56,19 @@ export function QuickReminder({
   const customerTimezone = detectTimezoneFromAddress(storeAddress, storeCity, storeState);
   const agentTimezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  // Debug logging
+  useEffect(() => {
+    console.log('[QuickReminder] Props received:', {
+      defaultTimezoneMode,
+      useCustomerTimezone,
+      customerTimezone,
+      agentTimezone
+    });
+  }, [defaultTimezoneMode, useCustomerTimezone, customerTimezone, agentTimezone]);
+
   // Update checkbox default when defaultTimezoneMode changes
   useEffect(() => {
+    console.log('[QuickReminder] Setting useCustomerTimezone based on defaultTimezoneMode:', defaultTimezoneMode, '->', defaultTimezoneMode === "customer");
     setUseCustomerTimezone(defaultTimezoneMode === "customer");
   }, [defaultTimezoneMode]);
 
