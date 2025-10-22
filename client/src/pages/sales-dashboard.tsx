@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { TopClientsWidget } from "@/components/widgets/top-clients";
 import { ActionAlertsWidget } from "@/components/widgets/action-alerts";
 import { RevenueTrendsWidget } from "@/components/widgets/revenue-trends";
 import { RemindersWidget } from "@/components/widgets/reminders";
+import { apiRequest } from "@/lib/queryClient";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -54,17 +55,50 @@ export default function SalesDashboard() {
   const [layouts, setLayouts] = useState(defaultLayouts);
   const [isLocked, setIsLocked] = useState(true);
 
+  // Load saved layout on mount
+  useEffect(() => {
+    const loadLayout = async () => {
+      try {
+        const response = await fetch('/api/widget-layout?dashboardType=sales', {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.layout && data.layout.layoutData) {
+            setLayouts(data.layout.layoutData);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load widget layout:', error);
+        // Fall back to default layouts on error
+      }
+    };
+    loadLayout();
+  }, []);
+
   const handleLayoutChange = (layout: Layout[], allLayouts: any) => {
     if (!isLocked) {
       setLayouts(allLayouts);
-      // TODO: Save layout to backend via API
-      // await apiRequest('/api/widget-layout', { method: 'POST', body: { dashboardType: 'sales', layout: allLayouts } });
+      // Save layout to backend
+      saveLayout(allLayouts);
     }
   };
 
-  const resetLayout = () => {
+  const saveLayout = async (layoutData: any) => {
+    try {
+      await apiRequest('POST', '/api/widget-layout', {
+        dashboardType: 'sales',
+        layoutData
+      });
+    } catch (error) {
+      console.error('Failed to save widget layout:', error);
+    }
+  };
+
+  const resetLayout = async () => {
     setLayouts(defaultLayouts);
-    // TODO: Reset layout on backend
+    // Clear layout on backend by saving default
+    await saveLayout(defaultLayouts);
   };
 
   return (
