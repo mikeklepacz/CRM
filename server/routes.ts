@@ -7767,6 +7767,18 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Delete search history entry
+  app.delete('/api/maps/search-history/:id', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSearchHistory(id);
+      res.json({ message: 'Search history entry deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting search history:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete search history' });
+    }
+  });
+
   // Search for places using Google Maps API
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {

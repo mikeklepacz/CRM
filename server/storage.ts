@@ -204,6 +204,7 @@ export interface IStorage {
   // Search History operations
   getAllSearchHistory(): Promise<SearchHistory[]>;
   recordSearch(businessType: string, city: string, state: string, country: string, excludedKeywords?: string[]): Promise<SearchHistory>;
+  deleteSearchHistory(id: string): Promise<void>;
   
   // Saved Exclusions operations
   getAllSavedExclusions(): Promise<SavedExclusion[]>;
@@ -1104,6 +1105,10 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return newEntry;
     }
+  }
+
+  async deleteSearchHistory(id: string): Promise<void> {
+    await db.delete(searchHistory).where(eq(searchHistory.id, id));
   }
 
   // Saved Exclusions operations
