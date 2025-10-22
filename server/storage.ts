@@ -205,7 +205,7 @@ export interface IStorage {
   
   // Search History operations
   getAllSearchHistory(): Promise<SearchHistory[]>;
-  recordSearch(businessType: string, city: string, state: string, country: string, excludedKeywords?: string[], excludedTypes?: string[], category?: string, radius?: number): Promise<SearchHistory>;
+  recordSearch(businessType: string, city: string, state: string, country: string, excludedKeywords?: string[], excludedTypes?: string[], category?: string): Promise<SearchHistory>;
   deleteSearchHistory(id: string): Promise<void>;
   
   // Saved Exclusions operations
@@ -1073,8 +1073,7 @@ export class DatabaseStorage implements IStorage {
     country: string,
     excludedKeywords: string[] = [],
     excludedTypes: string[] = [],
-    category?: string,
-    radius?: number
+    category?: string
   ): Promise<SearchHistory> {
     // Check if this exact search already exists
     const [existing] = await db
@@ -1090,7 +1089,7 @@ export class DatabaseStorage implements IStorage {
       );
 
     if (existing) {
-      // Update existing entry: increment count, update timestamp, and update excluded keywords/types, category, and radius
+      // Update existing entry: increment count, update timestamp, and update excluded keywords/types and category
       const [updated] = await db
         .update(searchHistory)
         .set({
@@ -1099,7 +1098,6 @@ export class DatabaseStorage implements IStorage {
           excludedKeywords: excludedKeywords.length > 0 ? excludedKeywords : existing.excludedKeywords,
           excludedTypes: excludedTypes.length > 0 ? excludedTypes : existing.excludedTypes,
           category: category || existing.category,
-          radius: radius !== undefined ? radius : existing.radius,
         })
         .where(eq(searchHistory.id, existing.id))
         .returning();
@@ -1116,7 +1114,6 @@ export class DatabaseStorage implements IStorage {
           excludedKeywords,
           excludedTypes,
           category,
-          radius,
           searchCount: 1,
         })
         .returning();
