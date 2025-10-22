@@ -6845,19 +6845,19 @@ Use this store information to provide context-aware responses. When helping draf
         customerTimeZone: useCustomerTimezone && customerTimezone ? customerTimezone : undefined
       } : null;
 
-      // Create reminder data (use DB column names for Zod validation)
+      // Create reminder data (use camelCase property names from Drizzle schema)
       const reminderData = {
-        user_id: userId,
+        userId,
         title,
         description: description || null,
-        reminder_type: 'one_time' as const,
-        trigger_date: utcTriggerDate,
-        next_trigger: utcTriggerDate,
-        scheduled_at_utc: utcTriggerDate,
-        reminder_time_zone: effectiveTimezone,
-        is_active: true,
-        add_to_calendar: false,
-        store_metadata: enhancedStoreMetadata,
+        reminderType: 'one_time' as const,
+        triggerDate: utcTriggerDate,
+        nextTrigger: utcTriggerDate,
+        scheduledAtUtc: utcTriggerDate,
+        reminderTimeZone: effectiveTimezone,
+        isActive: true,
+        addToCalendar: false,
+        storeMetadata: enhancedStoreMetadata,
       };
 
       console.log('[REMINDER API] Reminder data before validation:', JSON.stringify(reminderData, null, 2));
