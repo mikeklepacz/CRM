@@ -73,6 +73,7 @@ export interface IStorage {
 
   // User integrations operations
   getUserIntegration(userId: string): Promise<UserIntegration | undefined>;
+  getAllUserIntegrations(): Promise<UserIntegration[]>;
   updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration>;
 
   // User preferences operations
@@ -254,6 +255,10 @@ export class DatabaseStorage implements IStorage {
       .from(userIntegrations)
       .where(eq(userIntegrations.userId, userId));
     return integration;
+  }
+
+  async getAllUserIntegrations(): Promise<UserIntegration[]> {
+    return await db.select().from(userIntegrations);
   }
 
   async updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration> {

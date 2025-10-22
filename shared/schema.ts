@@ -144,6 +144,10 @@ export const userIntegrations = pgTable("user_integrations", {
   googleCalendarTokenExpiry: bigint("google_calendar_token_expiry", { mode: "number" }),
   googleCalendarEmail: varchar("google_calendar_email"),
   googleCalendarConnectedAt: timestamp("google_calendar_connected_at"),
+  // Google Calendar webhook (push notifications)
+  googleCalendarWebhookChannelId: varchar("google_calendar_webhook_channel_id"),
+  googleCalendarWebhookResourceId: varchar("google_calendar_webhook_resource_id"),
+  googleCalendarWebhookExpiry: bigint("google_calendar_webhook_expiry", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

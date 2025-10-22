@@ -705,6 +705,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleCalendarConnectedAt: new Date()
       });
 
+      // Register Google Calendar webhook for push notifications
+      try {
+        // Use forwarded protocol for HTTPS (required by Google)
+        const protocol = req.get('x-forwarded-proto') || req.protocol;
+        const webhookUrl = `${protocol}://${req.get('host')}/api/webhooks/google-calendar`;
+        const channelId = `calendar-${userId}-${Date.now()}`;
+        const expiration = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days from now
+
+        console.log('[Calendar Webhook] Registering webhook:', { webhookUrl, channelId, protocol });
+
+        const oauth2Client = new google.auth.OAuth2(
+          integration.googleClientId,
+          integration.googleClientSecret
+        );
+        
+        oauth2Client.setCredentials({
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token
+        });
+
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+        const watchResponse = await calendar.events.watch({
+          calendarId: 'primary',
+          requestBody: {
+            id: channelId,
+            type: 'web_hook',
+            address: webhookUrl,
+            expiration: expiration.toString(),
+          },
+        });
+
+        // Save webhook details
+        await storage.updateUserIntegration(userId as string, {
+          googleCalendarWebhookChannelId: channelId,
+          googleCalendarWebhookResourceId: watchResponse.data.resourceId || undefined,
+          googleCalendarWebhookExpiry: expiration,
+        });
+
+        console.log('[Calendar Webhook] ✅ Successfully registered webhook:', {
+          channelId,
+          resourceId: watchResponse.data.resourceId,
+          expiration: new Date(expiration).toISOString()
+        });
+      } catch (webhookError: any) {
+        console.error('[Calendar Webhook] ❌ FAILED to register webhook:', {
+          error: webhookError.message,
+          userId,
+          webhookUrl
+        });
+        // Continue with connection - user can still use calendar features without webhooks
+        // But log prominently so we know sync will be one-way only
+      }
+
       res.send('<script>alert("Gmail and Calendar connected successfully!"); window.close();</script>');
     } catch (error: any) {
       console.error("Gmail OAuth callback error:", error);
@@ -956,12 +1010,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
+      // Stop webhook before disconnecting
+      const integration = await storage.getUserIntegration(userId);
+      if (integration?.googleCalendarWebhookChannelId && 
+          integration?.googleCalendarWebhookResourceId &&
+          integration?.googleCalendarAccessToken) {
+        try {
+          const oauth2Client = new google.auth.OAuth2(
+            integration.googleClientId,
+            integration.googleClientSecret
+          );
+          
+          oauth2Client.setCredentials({
+            access_token: integration.googleCalendarAccessToken,
+            refresh_token: integration.googleCalendarRefreshToken || undefined
+          });
+
+          const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+          
+          await calendar.channels.stop({
+            requestBody: {
+              id: integration.googleCalendarWebhookChannelId,
+              resourceId: integration.googleCalendarWebhookResourceId,
+            },
+          });
+          console.log('[Calendar Webhook] Stopped webhook on disconnect:', integration.googleCalendarWebhookChannelId);
+        } catch (stopError: any) {
+          console.error('[Calendar Webhook] Failed to stop webhook on disconnect:', stopError.message);
+        }
+      }
+
       await storage.updateUserIntegration(userId, {
         googleCalendarAccessToken: null,
         googleCalendarRefreshToken: null,
         googleCalendarTokenExpiry: null,
         googleCalendarEmail: null,
-        googleCalendarConnectedAt: null
+        googleCalendarConnectedAt: null,
+        googleCalendarWebhookChannelId: null,
+        googleCalendarWebhookResourceId: null,
+        googleCalendarWebhookExpiry: null,
       });
 
       res.json({ message: "Gmail disconnected successfully" });
@@ -5928,13 +6015,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       
+      // Stop webhook before disconnecting
+      const integration = await storage.getUserIntegration(userId);
+      if (integration?.googleCalendarWebhookChannelId && 
+          integration?.googleCalendarWebhookResourceId &&
+          integration?.googleCalendarAccessToken) {
+        try {
+          const oauth2Client = new google.auth.OAuth2(
+            integration.googleClientId,
+            integration.googleClientSecret
+          );
+          
+          oauth2Client.setCredentials({
+            access_token: integration.googleCalendarAccessToken,
+            refresh_token: integration.googleCalendarRefreshToken || undefined
+          });
+
+          const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+          
+          await calendar.channels.stop({
+            requestBody: {
+              id: integration.googleCalendarWebhookChannelId,
+              resourceId: integration.googleCalendarWebhookResourceId,
+            },
+          });
+          console.log('[Calendar Webhook] Stopped webhook on disconnect:', integration.googleCalendarWebhookChannelId);
+        } catch (stopError: any) {
+          console.error('[Calendar Webhook] Failed to stop webhook on disconnect:', stopError.message);
+        }
+      }
+      
       // Clear Google Calendar tokens from user integration
       await storage.updateUserIntegration(userId, {
         googleCalendarAccessToken: null,
         googleCalendarRefreshToken: null,
         googleCalendarTokenExpiry: null,
         googleCalendarEmail: null,
-        googleCalendarConnectedAt: null
+        googleCalendarConnectedAt: null,
+        googleCalendarWebhookChannelId: null,
+        googleCalendarWebhookResourceId: null,
+        googleCalendarWebhookExpiry: null,
       });
       
       res.json({ success: true });
@@ -7183,6 +7303,147 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Webhook endpoint for Google Calendar push notifications
+  app.post('/api/webhooks/google-calendar', async (req, res) => {
+    try {
+      // Validate webhook notification from Google
+      const channelId = req.headers['x-goog-channel-id'];
+      const resourceState = req.headers['x-goog-resource-state'];
+      const resourceId = req.headers['x-goog-resource-id'];
+
+      console.log('[Webhook] Received Google Calendar notification:', {
+        channelId,
+        resourceState,
+        resourceId
+      });
+
+      // Respond immediately to Google (required within 30 seconds)
+      res.status(200).send('OK');
+
+      // Handle sync message (initial handshake)
+      if (resourceState === 'sync') {
+        console.log('[Webhook] Sync message received, webhook active');
+        return;
+      }
+
+      // Find user by webhook channel ID
+      const users = await storage.getAllUserIntegrations();
+      const userIntegration = users.find((u: any) => 
+        u.googleCalendarWebhookChannelId === channelId
+      );
+
+      if (!userIntegration) {
+        console.log('[Webhook] No user found for channel ID:', channelId);
+        return;
+      }
+
+      const userId = userIntegration.userId;
+      console.log('[Webhook] Processing calendar changes for user:', userId);
+
+      // Check if token needs refresh
+      let accessToken = userIntegration.googleCalendarAccessToken;
+      if (userIntegration.googleCalendarTokenExpiry && 
+          userIntegration.googleCalendarTokenExpiry < Date.now()) {
+        if (userIntegration.googleCalendarRefreshToken && 
+            userIntegration.googleClientId && 
+            userIntegration.googleClientSecret) {
+          const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: userIntegration.googleClientId,
+              client_secret: userIntegration.googleClientSecret,
+              refresh_token: userIntegration.googleCalendarRefreshToken,
+              grant_type: 'refresh_token'
+            })
+          });
+          
+          if (tokenResponse.ok) {
+            const tokens = await tokenResponse.json();
+            accessToken = tokens.access_token;
+            await storage.updateUserIntegration(userId, {
+              googleCalendarAccessToken: tokens.access_token,
+              googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
+            });
+          }
+        }
+      }
+
+      // Fetch recent calendar events to detect changes
+      const oauth2Client = new google.auth.OAuth2(
+        userIntegration.googleClientId,
+        userIntegration.googleClientSecret
+      );
+      
+      oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: userIntegration.googleCalendarRefreshToken || undefined
+      });
+
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+      
+      // Get all reminders for this user
+      const reminders = await storage.getRemindersByUser(userId);
+      
+      // Fetch each event to check for updates/deletions
+      for (const reminder of reminders) {
+        const calendarEventId = reminder.storeMetadata?.calendarEventId;
+        if (!calendarEventId) continue;
+
+        try {
+          // Try to fetch the event
+          const eventResponse = await calendar.events.get({
+            calendarId: 'primary',
+            eventId: calendarEventId,
+          });
+
+          const event = eventResponse.data;
+          
+          // Check if event was modified
+          if (event.status === 'cancelled') {
+            // Event was deleted, delete the reminder
+            console.log(`[Webhook] Calendar event ${calendarEventId} deleted, deleting reminder ${reminder.id}`);
+            await storage.deleteReminder(reminder.id);
+          } else if (event.updated) {
+            // Event was updated, sync the changes
+            const updatedTime = new Date(event.start?.dateTime || event.start?.date || '');
+            const currentTime = new Date(reminder.scheduledAtUtc || reminder.triggerDate || '');
+            
+            if (updatedTime.getTime() !== currentTime.getTime()) {
+              console.log(`[Webhook] Calendar event ${calendarEventId} time changed, updating reminder ${reminder.id}`);
+              await storage.updateReminder(reminder.id, {
+                scheduledAtUtc: updatedTime,
+                nextTrigger: updatedTime,
+                triggerDate: updatedTime
+              });
+            }
+            
+            // Update title if changed
+            if (event.summary && event.summary !== reminder.title) {
+              console.log(`[Webhook] Calendar event ${calendarEventId} title changed, updating reminder ${reminder.id}`);
+              await storage.updateReminder(reminder.id, {
+                title: event.summary
+              });
+            }
+          }
+        } catch (eventError: any) {
+          // Event not found (404) means it was deleted
+          if (eventError.code === 404 || eventError.status === 404) {
+            console.log(`[Webhook] Calendar event ${calendarEventId} not found (deleted), deleting reminder ${reminder.id}`);
+            await storage.deleteReminder(reminder.id);
+          } else {
+            console.error(`[Webhook] Error fetching event ${calendarEventId}:`, eventError.message);
+          }
+        }
+      }
+
+      console.log('[Webhook] Calendar sync completed for user:', userId);
+    } catch (error: any) {
+      console.error('[Webhook] Error processing calendar webhook:', error);
+      // Don't send error response since we already responded with 200
+    }
+  });
+
   // Reminder routes
   app.get('/api/reminders', isAuthenticatedCustom, async (req: any, res) => {
     try {
@@ -7194,6 +7455,148 @@ Use this store information to provide context-aware responses. When helping draf
       res.status(500).json({ message: error.message || 'Failed to fetch reminders' });
     }
   });
+
+  // Automatic webhook renewal system - runs daily
+  async function renewWebhooksIfNeeded() {
+    try {
+      console.log('[Webhook Renewal] Checking for webhooks that need renewal...');
+      
+      const allIntegrations = await storage.getAllUserIntegrations();
+      const threeDaysFromNow = Date.now() + (3 * 24 * 60 * 60 * 1000);
+      
+      for (const integration of allIntegrations) {
+        // Skip if no webhook registered or no calendar access
+        if (!integration.googleCalendarWebhookChannelId || 
+            !integration.googleCalendarAccessToken ||
+            !integration.googleCalendarWebhookExpiry) {
+          continue;
+        }
+
+        // Check if webhook expires in less than 3 days
+        if (integration.googleCalendarWebhookExpiry < threeDaysFromNow) {
+          console.log(`[Webhook Renewal] Renewing webhook for user ${integration.userId}`);
+
+          try {
+            // Check if token needs refresh
+            let accessToken = integration.googleCalendarAccessToken;
+            if (integration.googleCalendarTokenExpiry && 
+                integration.googleCalendarTokenExpiry < Date.now()) {
+              if (integration.googleCalendarRefreshToken && 
+                  integration.googleClientId && 
+                  integration.googleClientSecret) {
+                const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: new URLSearchParams({
+                    client_id: integration.googleClientId,
+                    client_secret: integration.googleClientSecret,
+                    refresh_token: integration.googleCalendarRefreshToken,
+                    grant_type: 'refresh_token'
+                  })
+                });
+                
+                if (tokenResponse.ok) {
+                  const tokens = await tokenResponse.json();
+                  accessToken = tokens.access_token;
+                  await storage.updateUserIntegration(integration.userId, {
+                    googleCalendarAccessToken: tokens.access_token,
+                    googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
+                  });
+                }
+              }
+            }
+
+            // Stop old webhook
+            if (integration.googleCalendarWebhookChannelId && 
+                integration.googleCalendarWebhookResourceId) {
+              try {
+                const oauth2Client = new google.auth.OAuth2(
+                  integration.googleClientId,
+                  integration.googleClientSecret
+                );
+                
+                oauth2Client.setCredentials({
+                  access_token: accessToken,
+                  refresh_token: integration.googleCalendarRefreshToken || undefined
+                });
+
+                const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+                
+                await calendar.channels.stop({
+                  requestBody: {
+                    id: integration.googleCalendarWebhookChannelId,
+                    resourceId: integration.googleCalendarWebhookResourceId,
+                  },
+                });
+                console.log(`[Webhook Renewal] Stopped old webhook ${integration.googleCalendarWebhookChannelId}`);
+              } catch (stopError: any) {
+                console.error('[Webhook Renewal] Failed to stop old webhook:', stopError.message);
+              }
+            }
+
+            // Register new webhook - always use HTTPS for production/Replit
+            const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`
+              : `https://localhost:5000/api/webhooks/google-calendar`; // Use HTTPS even for local (Google requires it)
+            const channelId = `calendar-${integration.userId}-${Date.now()}`;
+            const expiration = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+
+            const oauth2Client = new google.auth.OAuth2(
+              integration.googleClientId,
+              integration.googleClientSecret
+            );
+            
+            oauth2Client.setCredentials({
+              access_token: accessToken,
+              refresh_token: integration.googleCalendarRefreshToken || undefined
+            });
+
+            const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+            const watchResponse = await calendar.events.watch({
+              calendarId: 'primary',
+              requestBody: {
+                id: channelId,
+                type: 'web_hook',
+                address: webhookUrl,
+                expiration: expiration.toString(),
+              },
+            });
+
+            // Update webhook details
+            await storage.updateUserIntegration(integration.userId, {
+              googleCalendarWebhookChannelId: channelId,
+              googleCalendarWebhookResourceId: watchResponse.data.resourceId || undefined,
+              googleCalendarWebhookExpiry: expiration,
+            });
+
+            console.log(`[Webhook Renewal] ✅ Successfully renewed webhook for user ${integration.userId}`, {
+              channelId,
+              expiration: new Date(expiration).toISOString()
+            });
+          } catch (renewError: any) {
+            console.error(`[Webhook Renewal] ❌ FAILED to renew webhook for user ${integration.userId}:`, {
+              error: renewError.message,
+              userId: integration.userId
+            });
+            // Alert: Bidirectional sync will stop working for this user
+          }
+        }
+      }
+
+      console.log('[Webhook Renewal] Check completed');
+    } catch (error: any) {
+      console.error('[Webhook Renewal] Error during renewal check:', error);
+    }
+  }
+
+  // Run webhook renewal check every 24 hours
+  setInterval(renewWebhooksIfNeeded, 24 * 60 * 60 * 1000);
+  
+  // Run initial check 1 minute after startup
+  setTimeout(renewWebhooksIfNeeded, 60 * 1000);
+
+  console.log('[Webhook Renewal] Automatic renewal system started');
 
   const httpServer = createServer(app);
   return httpServer;
