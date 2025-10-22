@@ -7683,6 +7683,17 @@ Use this store information to provide context-aware responses. When helping draf
   // GOOGLE MAPS SEARCH ROUTES
   // ============================================================================
 
+  // Get all search history (global, newest first)
+  app.get('/api/maps/search-history', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const history = await storage.getAllSearchHistory();
+      res.json({ history });
+    } catch (error: any) {
+      console.error('Error fetching search history:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch search history' });
+    }
+  });
+
   // Search for places using Google Maps API
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {
@@ -7691,6 +7702,15 @@ Use this store information to provide context-aware responses. When helping draf
       if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
       }
+
+      // Parse location into city, state, country
+      const locationParts = location.split(',').map((s: string) => s.trim());
+      const city = locationParts[0] || '';
+      const state = locationParts[1] || '';
+      const country = locationParts[2] || '';
+
+      // Record this search in history
+      await storage.recordSearch(query, city, state, country);
 
       // Get search results from Google Maps
       const results = await googleMaps.searchPlaces(query, location);
