@@ -726,36 +726,36 @@ export default function MapSearch() {
       </LoadScript>
 
       {/* Floating Search History Card (Top) */}
-      <div className="absolute top-4 left-4 right-4 z-10 max-w-2xl">
+      <div className="absolute top-4 left-4 right-4 z-10 max-w-xl">
         <Card className="backdrop-blur-md bg-background/80">
-          <CardHeader>
-            <div className="flex items-center gap-2 mb-2">
-              <MapPin className="w-6 h-6 text-primary" />
-              <h1 className="text-2xl font-semibold" data-testid="text-page-title">Map Search</h1>
+          <CardHeader className="p-4 pb-2">
+            <div className="flex items-center gap-2 mb-1">
+              <MapPin className="w-5 h-5 text-primary" />
+              <h1 className="text-xl font-semibold" data-testid="text-page-title">Map Search</h1>
             </div>
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Search for businesses and add them to your Store Database
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0">
             <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
           </CardContent>
         </Card>
       </div>
 
       {/* Floating Search Form Card (Bottom) */}
-      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-2xl max-h-[65vh]">
+      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-xl max-h-[65vh]">
         <Card className="backdrop-blur-md bg-background/80 flex flex-col max-h-full overflow-hidden">
-          <CardHeader className="flex-shrink-0">
-            <CardTitle>Search Businesses</CardTitle>
-            <CardDescription>
+          <CardHeader className="flex-shrink-0 p-4 pb-2">
+            <CardTitle className="text-lg">Search Businesses</CardTitle>
+            <CardDescription className="text-sm">
               Find local businesses using Google Maps and add them to your database
             </CardDescription>
           </CardHeader>
-          <CardContent className="overflow-y-auto flex-1">
-            <form onSubmit={handleSearch} className="space-y-4">
+          <CardContent className="overflow-y-auto flex-1 p-4 pt-2">
+            <form onSubmit={handleSearch} className="space-y-3">
               {/* Row 1: Business Type, Category */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Business Type *</Label>
                   <Popover open={businessTypeOpen} onOpenChange={setBusinessTypeOpen}>
@@ -839,7 +839,7 @@ export default function MapSearch() {
               </div>
 
               {/* Row 2: Country, State, City */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="country">Country</Label>
                   <Select value={country} onValueChange={setCountry}>
@@ -955,9 +955,9 @@ export default function MapSearch() {
                 </div>
 
                 {filtersOpen && (
-                  <div className="p-4 space-y-4 border-t">
+                  <div className="p-4 space-y-3 border-t">
                     {/* Hide Keyword Results Section */}
-                    <Collapsible defaultOpen={true}>
+                    <Collapsible defaultOpen={false}>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <CollapsibleTrigger asChild>
@@ -1048,7 +1048,7 @@ export default function MapSearch() {
                     </Collapsible>
 
                     {/* Exclude Place Types Section */}
-                    <Collapsible defaultOpen={true}>
+                    <Collapsible defaultOpen={false}>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <CollapsibleTrigger asChild>
