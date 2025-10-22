@@ -26,7 +26,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X } from "lucide-react";
+import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X, Settings2 } from "lucide-react";
+import { Link } from "wouter";
 import {
   Table,
   TableBody,
@@ -544,23 +545,35 @@ export default function MapSearch() {
 
               {/* Filters Panel */}
               <div className="border rounded-md">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setFiltersOpen(!filtersOpen)}
-                  className="w-full justify-between hover-elevate"
-                  data-testid="button-filters-toggle"
-                >
-                  <div className="flex items-center gap-2">
-                    {filtersOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    <span className="font-medium">Filters</span>
-                    {(activeKeywords.length > 0 || activeTypes.length > 0) && (
-                      <Badge variant="secondary" className="ml-2">
-                        {activeKeywords.length + activeTypes.length} active
-                      </Badge>
-                    )}
-                  </div>
-                </Button>
+                <div className="flex items-center justify-between pr-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setFiltersOpen(!filtersOpen)}
+                    className="flex-1 justify-start hover-elevate"
+                    data-testid="button-filters-toggle"
+                  >
+                    <div className="flex items-center gap-2">
+                      {filtersOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <span className="font-medium">Filters</span>
+                      {(activeKeywords.length > 0 || activeTypes.length > 0) && (
+                        <Badge variant="secondary" className="ml-2">
+                          {activeKeywords.length + activeTypes.length} active
+                        </Badge>
+                      )}
+                    </div>
+                  </Button>
+                  <Link href="/map-search-settings">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      data-testid="button-filters-settings"
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
 
                 {filtersOpen && (
                   <div className="p-4 space-y-4 border-t">
