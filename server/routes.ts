@@ -5248,20 +5248,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create date in the effective timezone
       const tempDate = new Date(year, month - 1, day, hours, minutes, 0);
-      
-      // Check if date is in the past
-      const now = new Date();
-      if (tempDate <= now) {
-        return res.status(400).json({ 
-          message: 'Cannot create reminder in the past. Please select a future date and time.' 
-        });
-      }
 
       // Get timezone offset
       const offset = getTimezoneOffset(effectiveTimezone, tempDate);
       
       // Convert to UTC
       const utcTriggerDate = new Date(tempDate.getTime() - offset);
+      
+      // Check if date is in the past (AFTER UTC conversion)
+      const now = new Date();
+      if (utcTriggerDate <= now) {
+        return res.status(400).json({ 
+          message: 'Cannot create reminder in the past. Please select a future date and time.' 
+        });
+      }
 
       // Check for existing reminders at the same time (conflict detection)
       const existingReminders = await storage.getRemindersByUser(userId);
