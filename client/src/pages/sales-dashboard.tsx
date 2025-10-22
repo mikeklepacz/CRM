@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lock, Unlock, RotateCcw, Settings2, Eye, EyeOff } from "lucide-react";
+import { Lock, Unlock, RotateCcw, Settings2, Eye, EyeOff, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,12 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { RevenueOverviewWidget } from "@/components/widgets/revenue-overview";
 import { CommissionBreakdownWidget } from "@/components/widgets/commission-breakdown";
 import { PortfolioMetricsWidget } from "@/components/widgets/portfolio-metrics";
@@ -72,6 +78,35 @@ const defaultLayouts = {
     { i: "top-clients", x: 0, y: 20, w: 12, h: 3, minW: 4, minH: 2 },
   ],
 };
+
+// Widget wrapper with context menu for hiding
+function WidgetWithContextMenu({ 
+  widgetId, 
+  widgetName,
+  children, 
+  onHide 
+}: { 
+  widgetId: string;
+  widgetName: string;
+  children: React.ReactNode;
+  onHide: () => void;
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="h-full w-full">
+          {children}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent data-testid={`context-menu-${widgetId}`}>
+        <ContextMenuItem onClick={onHide} data-testid={`menu-hide-${widgetId}`}>
+          <EyeOff className="h-4 w-4 mr-2" />
+          Hide {widgetName}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
 
 export default function SalesDashboard() {
   const [layouts, setLayouts] = useState(defaultLayouts);
@@ -250,49 +285,97 @@ export default function SalesDashboard() {
       >
         {visibleWidgets.has("revenue-overview") && (
           <div key="revenue-overview">
-            <RevenueOverviewWidget />
+            <WidgetWithContextMenu
+              widgetId="revenue-overview"
+              widgetName="Revenue Overview"
+              onHide={() => toggleWidgetVisibility("revenue-overview")}
+            >
+              <RevenueOverviewWidget />
+            </WidgetWithContextMenu>
           </div>
         )}
 
         {visibleWidgets.has("commission-breakdown") && (
           <div key="commission-breakdown">
-            <CommissionBreakdownWidget />
+            <WidgetWithContextMenu
+              widgetId="commission-breakdown"
+              widgetName="Commission Breakdown"
+              onHide={() => toggleWidgetVisibility("commission-breakdown")}
+            >
+              <CommissionBreakdownWidget />
+            </WidgetWithContextMenu>
           </div>
         )}
 
         {visibleWidgets.has("commission-status") && (
           <div key="commission-status">
-            <CommissionStatusWidget />
+            <WidgetWithContextMenu
+              widgetId="commission-status"
+              widgetName="Commission Status"
+              onHide={() => toggleWidgetVisibility("commission-status")}
+            >
+              <CommissionStatusWidget />
+            </WidgetWithContextMenu>
           </div>
         )}
 
         {visibleWidgets.has("portfolio-metrics") && (
           <div key="portfolio-metrics">
-            <PortfolioMetricsWidget />
+            <WidgetWithContextMenu
+              widgetId="portfolio-metrics"
+              widgetName="Portfolio Metrics"
+              onHide={() => toggleWidgetVisibility("portfolio-metrics")}
+            >
+              <PortfolioMetricsWidget />
+            </WidgetWithContextMenu>
           </div>
         )}
 
         {visibleWidgets.has("revenue-trends") && (
           <div key="revenue-trends">
-            <RevenueTrendsWidget />
+            <WidgetWithContextMenu
+              widgetId="revenue-trends"
+              widgetName="Revenue Trends"
+              onHide={() => toggleWidgetVisibility("revenue-trends")}
+            >
+              <RevenueTrendsWidget />
+            </WidgetWithContextMenu>
           </div>
         )}
 
         {visibleWidgets.has("action-alerts") && (
           <div key="action-alerts">
-            <ActionAlertsWidget />
+            <WidgetWithContextMenu
+              widgetId="action-alerts"
+              widgetName="Action Alerts"
+              onHide={() => toggleWidgetVisibility("action-alerts")}
+            >
+              <ActionAlertsWidget />
+            </WidgetWithContextMenu>
           </div>
         )}
 
         {visibleWidgets.has("reminders") && (
           <div key="reminders">
-            <RemindersWidget />
+            <WidgetWithContextMenu
+              widgetId="reminders"
+              widgetName="Reminders"
+              onHide={() => toggleWidgetVisibility("reminders")}
+            >
+              <RemindersWidget />
+            </WidgetWithContextMenu>
           </div>
         )}
 
         {visibleWidgets.has("top-clients") && (
           <div key="top-clients">
-            <TopClientsWidget />
+            <WidgetWithContextMenu
+              widgetId="top-clients"
+              widgetName="Top Clients"
+              onHide={() => toggleWidgetVisibility("top-clients")}
+            >
+              <TopClientsWidget />
+            </WidgetWithContextMenu>
           </div>
         )}
       </ResponsiveGridLayout>
