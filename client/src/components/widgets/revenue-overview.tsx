@@ -26,7 +26,7 @@ export function RevenueOverviewWidget() {
 
   if (isLoading) {
     return (
-      <Card className="h-full min-h-[300px]">
+      <Card className="h-full">
         <CardHeader className="drag-handle cursor-move pb-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -56,7 +56,7 @@ export function RevenueOverviewWidget() {
 
   if (error || !data) {
     return (
-      <Card className="h-full min-h-[300px]">
+      <Card className="h-full">
         <CardHeader className="drag-handle cursor-move pb-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -84,7 +84,7 @@ export function RevenueOverviewWidget() {
   const isPositiveChange = monthOverMonthChange >= 0;
 
   return (
-    <Card className="h-full min-h-[300px]">
+    <Card className="h-full">
       <CardHeader className="drag-handle cursor-move pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
