@@ -94,14 +94,10 @@ export default function MapSearch() {
   const searchMutation = useMutation({
     mutationFn: async () => {
       const location = [city, state, country].filter(Boolean).join(", ");
-      const response = await apiRequest("/api/maps/search", {
-        method: "POST",
-        body: JSON.stringify({
-          query: businessType,
-          location,
-        }),
+      return await apiRequest("POST", "/api/maps/search", {
+        query: businessType,
+        location,
       });
-      return response.json();
     },
     onSuccess: (data) => {
       setSearchResults(data.results || []);
@@ -123,11 +119,10 @@ export default function MapSearch() {
 
   const saveToSheetMutation = useMutation({
     mutationFn: async ({ placeId, category }: { placeId: string; category: string }) => {
-      const response = await apiRequest("/api/maps/save-to-sheet", {
-        method: "POST",
-        body: JSON.stringify({ placeId, category }),
+      return await apiRequest("POST", "/api/maps/save-to-sheet", {
+        placeId,
+        category,
       });
-      return response.json();
     },
     onSuccess: (data) => {
       toast({
