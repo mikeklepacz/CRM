@@ -7697,7 +7697,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Search for places using Google Maps API
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { query, location } = req.body;
+      const { query, location, excludedKeywords } = req.body;
 
       if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
@@ -7709,8 +7709,21 @@ Use this store information to provide context-aware responses. When helping draf
       const state = locationParts[1] || '';
       const country = locationParts[2] || '';
 
+      // Parse excluded keywords from comma-separated string or array
+      let excludedKeywordsArray: string[] = [];
+      if (typeof excludedKeywords === 'string' && excludedKeywords.trim()) {
+        excludedKeywordsArray = excludedKeywords
+          .split(',')
+          .map((k: string) => k.trim().toLowerCase())
+          .filter((k: string) => k.length > 0);
+      } else if (Array.isArray(excludedKeywords)) {
+        excludedKeywordsArray = excludedKeywords
+          .map((k: string) => k.trim().toLowerCase())
+          .filter((k: string) => k.length > 0);
+      }
+
       // Record this search in history
-      await storage.recordSearch(query, city, state, country);
+      await storage.recordSearch(query, city, state, country, excludedKeywordsArray);
 
       // Get search results from Google Maps
       const results = await googleMaps.searchPlaces(query, location);
@@ -7720,13 +7733,26 @@ Use this store information to provide context-aware responses. When helping draf
       const importedPlaceIds = await storage.checkImportedPlaces(placeIds);
       
       // Filter out already imported places
-      const newResults = results.filter(r => !importedPlaceIds.has(r.place_id));
-      const duplicateCount = results.length - newResults.length;
+      let filteredResults = results.filter(r => !importedPlaceIds.has(r.place_id));
+      const duplicateCount = results.length - filteredResults.length;
+      
+      // Filter out results containing excluded keywords
+      let excludedCount = 0;
+      if (excludedKeywordsArray.length > 0) {
+        const beforeExclusionCount = filteredResults.length;
+        filteredResults = filteredResults.filter(place => {
+          const placeName = place.name?.toLowerCase() || '';
+          // Check if place name contains any excluded keyword
+          return !excludedKeywordsArray.some(keyword => placeName.includes(keyword));
+        });
+        excludedCount = beforeExclusionCount - filteredResults.length;
+      }
       
       res.json({ 
-        results: newResults,
+        results: filteredResults,
         totalResults: results.length,
-        duplicateCount 
+        duplicateCount,
+        excludedCount
       });
     } catch (error: any) {
       console.error('Error searching places:', error);
