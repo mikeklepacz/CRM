@@ -110,9 +110,10 @@ export default function Settings() {
   });
 
   // Fetch available categories
-  const { data: categories } = useQuery<Array<{id: string, name: string}>>({
-    queryKey: ['/api/categories'],
+  const { data: categoriesData } = useQuery<{ categories: Array<{id: string, name: string}> }>({
+    queryKey: ['/api/categories/active'],
   });
+  const categories = categoriesData?.categories;
 
   // Fetch user's selected category for CRM filtering
   const { data: selectedCategoryData } = useQuery<{ category: string | null }>({
