@@ -600,6 +600,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createReminder(reminder: InsertReminder): Promise<Reminder> {
+    console.log('[STORAGE] createReminder received:', JSON.stringify(reminder, null, 2));
+    console.log('[STORAGE] createReminder keys:', Object.keys(reminder));
+    console.log('[STORAGE] reminderType value:', (reminder as any).reminderType);
+    
     const [newReminder] = await db
       .insert(reminders)
       .values(reminder)

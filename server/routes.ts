@@ -6870,6 +6870,8 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       console.log('[REMINDER API] Validated data:', JSON.stringify(validation.data, null, 2));
+      console.log('[REMINDER API] Validated data keys:', Object.keys(validation.data));
+      console.log('[REMINDER API] reminderType value:', validation.data.reminderType);
 
       // Create the reminder
       const reminder = await storage.createReminder(validation.data);
