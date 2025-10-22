@@ -5221,9 +5221,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const reminderData = { ...req.body, userId };
-      const reminder = await storage.createReminder(reminderData);
-      res.json({ reminder });
+      const { 
+        title, 
+        description, 
+        reminderDate, 
+        reminderTime, 
+        storeMetadata,
+        useCustomerTimezone,
+        customerTimezone,
+        agentTimezone
+      } = req.body;
+
+      // Validate required fields
+      if (!title || !reminderDate || !reminderTime) {
+        return res.status(400).json({ message: 'Missing required fields: title, reminderDate, reminderTime' });
+      }
+
+      // Determine effective timezone
+      const effectiveTimezone = useCustomerTimezone && customerTimezone 
+        ? customerTimezone 
+        : agentTimezone || 'UTC';
+
+      // Parse the date and time in the effective timezone
+      const [year, month, day] = reminderDate.split('T')[0].split('-').map(Number);
+      const [hours, minutes] = reminderTime.split(':').map(Number);
+
+      // Create date in the effective timezone
+      const tempDate = new Date(year, month - 1, day, hours, minutes, 0);
+      
+      // Check if date is in the past
+      const now = new Date();
+      if (tempDate <= now) {
+        return res.status(400).json({ 
+          message: 'Cannot create reminder in the past. Please select a future date and time.' 
+        });
+      }
+
+      // Get timezone offset
+      const offset = getTimezoneOffset(effectiveTimezone, tempDate);
+      
+      // Convert to UTC
+      const utcTriggerDate = new Date(tempDate.getTime() - offset);
+
+      // Check for existing reminders at the same time (conflict detection)
+      const existingReminders = await storage.getRemindersByUser(userId);
+      const conflictingReminder = existingReminders.find((r: any) => {
+        if (!r.scheduledAtUtc || r.isCompleted) return false;
+        const existing = new Date(r.scheduledAtUtc).getTime();
+        const newTime = utcTriggerDate.getTime();
+        // Consider reminders within 1 minute window as conflicting
+        return Math.abs(existing - newTime) < 60000;
+      });
+
+      // Prepare store metadata with customer timezone if applicable
+      const enhancedStoreMetadata = storeMetadata ? {
+        ...storeMetadata,
+        customerTimeZone: useCustomerTimezone && customerTimezone ? customerTimezone : undefined
+      } : null;
+
+      // Create reminder data with Drizzle schema field names
+      const reminderData = {
+        userId,
+        title,
+        description: description || null,
+        reminderType: 'one_time' as const,
+        triggerDate: utcTriggerDate,
+        nextTrigger: utcTriggerDate,
+        scheduledAtUtc: utcTriggerDate,
+        reminderTimeZone: effectiveTimezone,
+        isActive: true,
+        addToCalendar: false,
+        storeMetadata: enhancedStoreMetadata,
+      };
+
+      // Validate with schema
+      const validation = insertReminderSchema.safeParse(reminderData);
+      if (!validation.success) {
+        console.error('Validation failed:', validation.error.errors);
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      // Create the reminder
+      const reminder = await storage.createReminder(validation.data);
+
+      // Include conflict warning in response
+      const response: any = { reminder };
+      if (conflictingReminder) {
+        response.warning = {
+          type: 'duplicate_time',
+          message: `You already have a reminder scheduled at this time: "${conflictingReminder.title}"`,
+          existingReminder: {
+            id: conflictingReminder.id,
+            title: conflictingReminder.title,
+            scheduledAt: conflictingReminder.scheduledAtUtc
+          }
+        };
+      }
+
+      res.json(response);
     } catch (error: any) {
       console.error('Error creating reminder:', error);
       res.status(500).json({ message: error.message || 'Failed to create reminder' });
@@ -6786,177 +6881,6 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error fetching reminders:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch reminders' });
-    }
-  });
-
-  app.post('/api/reminders', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { 
-        title, 
-        description, 
-        reminderDate, 
-        reminderTime, 
-        storeMetadata,
-        useCustomerTimezone,
-        customerTimezone,
-        agentTimezone 
-      } = req.body;
-
-      console.log('[REMINDER API] Request body:', JSON.stringify(req.body, null, 2));
-
-      // Determine which timezone to use
-      const effectiveTimezone = useCustomerTimezone && customerTimezone 
-        ? customerTimezone 
-        : agentTimezone || 'UTC';
-
-      // Combine date and time into a proper datetime string in the effective timezone
-      const dateStr = new Date(reminderDate).toISOString().split('T')[0];
-      const naiveDateTimeStr = `${dateStr}T${reminderTime}:00`;
-      
-      // Convert from the effective timezone to UTC
-      // We treat naiveDateTimeStr as a wall-clock time in effectiveTimezone
-      const { getTimezoneOffset } = await import('date-fns-tz');
-      
-      // Create a Date object from the string (this will be in UTC by default)
-      // Then adjust by adding the timezone offset to get the correct UTC time
-      const tempDate = new Date(naiveDateTimeStr + 'Z'); // Parse as UTC first
-      const offset = getTimezoneOffset(effectiveTimezone, tempDate);
-      
-      // The offset tells us how many ms ahead of UTC the timezone is
-      // So to convert FROM the timezone TO UTC, we subtract the offset
-      const utcTriggerDate = new Date(tempDate.getTime() - offset);
-
-      console.log('[REMINDER API] UTC trigger date:', utcTriggerDate.toISOString());
-
-      // Check for existing reminders at the same time (conflict detection)
-      const existingReminders = await storage.getRemindersByUser(userId);
-      const conflictingReminder = existingReminders.find((r: any) => {
-        if (!r.scheduledAtUtc || r.isCompleted) return false;
-        const existing = new Date(r.scheduledAtUtc).getTime();
-        const newTime = utcTriggerDate.getTime();
-        // Consider reminders within 1 minute window as conflicting
-        return Math.abs(existing - newTime) < 60000;
-      });
-
-      // Prepare store metadata with customer timezone if applicable
-      const enhancedStoreMetadata = storeMetadata ? {
-        ...storeMetadata,
-        customerTimeZone: useCustomerTimezone && customerTimezone ? customerTimezone : undefined
-      } : null;
-
-      // Create reminder data (use camelCase property names from Drizzle schema)
-      const reminderData = {
-        userId,
-        title,
-        description: description || null,
-        reminderType: 'one_time' as const,
-        triggerDate: utcTriggerDate,
-        nextTrigger: utcTriggerDate,
-        scheduledAtUtc: utcTriggerDate,
-        reminderTimeZone: effectiveTimezone,
-        isActive: true,
-        addToCalendar: false,
-        storeMetadata: enhancedStoreMetadata,
-      };
-
-      console.log('[REMINDER API] Reminder data before validation:', JSON.stringify(reminderData, null, 2));
-
-      // Validate with schema
-      const validation = insertReminderSchema.safeParse(reminderData);
-      if (!validation.success) {
-        console.error('[REMINDER API] Validation failed:', validation.error.errors);
-        return res.status(400).json({ message: validation.error.errors[0].message });
-      }
-
-      console.log('[REMINDER API] Validated data:', JSON.stringify(validation.data, null, 2));
-      console.log('[REMINDER API] Validated data keys:', Object.keys(validation.data));
-      console.log('[REMINDER API] reminderType value:', validation.data.reminderType);
-
-      // Create the reminder
-      const reminder = await storage.createReminder(validation.data);
-
-      // Include conflict warning in response
-      const response: any = { reminder };
-      if (conflictingReminder) {
-        response.warning = {
-          type: 'duplicate_time',
-          message: `You already have a reminder scheduled at this time: "${conflictingReminder.title}"`,
-          existingReminder: {
-            id: conflictingReminder.id,
-            title: conflictingReminder.title,
-            scheduledAt: conflictingReminder.scheduledAtUtc
-          }
-        };
-      }
-
-      // Update Google Sheets if store metadata is provided
-      if (storeMetadata?.sheetId && storeMetadata?.uniqueIdentifier) {
-        try {
-          const sheet = await storage.getGoogleSheetById(storeMetadata.sheetId);
-          if (sheet) {
-            const { spreadsheetId, sheetName } = sheet;
-            
-            // Read headers and data
-            const dataRange = `${sheetName}!A:ZZ`;
-            const rows = await googleSheets.readSheetData(userId, spreadsheetId, dataRange);
-            const headers = rows[0] || [];
-            
-            // Find the row by unique identifier
-            const uniqueIdColIndex = headers.findIndex((h: string) => 
-              h.toLowerCase() === sheet.uniqueIdentifierColumn.toLowerCase()
-            );
-            
-            if (uniqueIdColIndex !== -1) {
-              const rowIndex = rows.findIndex((row: any[], idx: number) => 
-                idx > 0 && row[uniqueIdColIndex] === storeMetadata.uniqueIdentifier
-              );
-              
-              if (rowIndex !== -1) {
-                // Find Follow-up Date and Next Action columns
-                const followUpColIndex = headers.findIndex((h: string) => 
-                  h.toLowerCase() === 'follow-up date' || h.toLowerCase() === 'followup'
-                );
-                const nextActionColIndex = headers.findIndex((h: string) => 
-                  h.toLowerCase() === 'next action'
-                );
-                
-                // Prepare updates
-                const updates: any[] = [];
-                if (followUpColIndex !== -1) {
-                  const colLetter = String.fromCharCode(65 + followUpColIndex);
-                  const cellRange = `${sheetName}!${colLetter}${rowIndex + 1}`;
-                  updates.push({
-                    range: cellRange,
-                    values: [[new Date(reminderDate).toLocaleDateString('en-US')]]
-                  });
-                }
-                if (nextActionColIndex !== -1) {
-                  const colLetter = String.fromCharCode(65 + nextActionColIndex);
-                  const cellRange = `${sheetName}!${colLetter}${rowIndex + 1}`;
-                  updates.push({
-                    range: cellRange,
-                    values: [[title]]
-                  });
-                }
-                
-                // Update the cells
-                for (const update of updates) {
-                  await googleSheets.writeSheetData(userId, spreadsheetId, update.range, update.values);
-                }
-              }
-            }
-          }
-        } catch (sheetError) {
-          console.error('Error updating Google Sheets for reminder:', sheetError);
-          // Don't fail the whole request if Google Sheets update fails
-        }
-      }
-
-      res.json(response);
-    } catch (error: any) {
-      console.error('Error creating reminder:', error);
-      res.status(500).json({ message: error.message || 'Failed to create reminder' });
     }
   });
 
