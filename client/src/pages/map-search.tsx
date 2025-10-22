@@ -153,6 +153,9 @@ export default function MapSearch() {
     failed: number;
   } | null>(null);
 
+  // Show/hide search history state
+  const [showSearchHistory, setShowSearchHistory] = useState(true);
+
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
     queryKey: ["/api/categories/active"],
   });
@@ -735,6 +738,17 @@ export default function MapSearch() {
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-y-auto flex-1 p-4 pt-2">
+            <div className="mb-3 flex items-center gap-2 pb-3 border-b">
+              <Checkbox
+                id="show-search-history"
+                checked={showSearchHistory}
+                onCheckedChange={(checked) => setShowSearchHistory(checked as boolean)}
+                data-testid="checkbox-show-history"
+              />
+              <Label htmlFor="show-search-history" className="cursor-pointer text-sm">
+                Show Search History
+              </Label>
+            </div>
             <form onSubmit={handleSearch} className="space-y-3">
               {/* Row 1: Business Type, Category */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1146,23 +1160,25 @@ export default function MapSearch() {
         </Card>
       </div>
 
-      {/* Floating Search History Card (Bottom) */}
-      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-xl">
-        <Card className="backdrop-blur-md bg-background/80">
-          <CardHeader className="p-4 pb-2">
-            <div className="flex items-center gap-2 mb-1">
-              <MapPin className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-semibold" data-testid="text-page-title">Map Search</h1>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Search for businesses and add them to your Store Database
-            </p>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
-          </CardContent>
-        </Card>
-      </div>
+      {/* Floating Search History Card (Bottom) - conditionally shown */}
+      {showSearchHistory && (
+        <div className="absolute bottom-4 left-4 right-4 z-10 max-w-xl">
+          <Card className="backdrop-blur-md bg-background/80">
+            <CardHeader className="p-4 pb-2">
+              <div className="flex items-center gap-2 mb-1">
+                <MapPin className="w-5 h-5 text-primary" />
+                <h1 className="text-xl font-semibold" data-testid="text-page-title">Map Search</h1>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Search for businesses and add them to your Store Database
+              </p>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Slide-in Results Panel (Right) - only visible when searchResults exist */}
       {searchResults.length > 0 && (
