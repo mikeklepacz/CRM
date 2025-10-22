@@ -12,8 +12,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Search, MapPin, Phone, Globe, Plus, Loader2 } from "lucide-react";
+import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -23,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface PlaceResult {
   place_id: string;
@@ -47,10 +61,29 @@ interface Category {
   isActive: boolean;
 }
 
+const US_STATES = [
+  "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
+  "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
+  "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan",
+  "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
+  "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
+  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
+  "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
+  "Wisconsin", "Wyoming"
+];
+
+const COUNTRIES = [
+  "United States", "Canada", "United Kingdom", "Australia", "Germany", "France",
+  "Spain", "Italy", "Japan", "Mexico", "Brazil", "India", "China"
+];
+
 export default function MapSearch() {
   const { toast } = useToast();
   const [businessType, setBusinessType] = useState("");
   const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [country, setCountry] = useState("United States");
+  const [stateOpen, setStateOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
 
@@ -60,11 +93,12 @@ export default function MapSearch() {
 
   const searchMutation = useMutation({
     mutationFn: async () => {
+      const location = [city, state, country].filter(Boolean).join(", ");
       const response = await apiRequest("/api/maps/search", {
         method: "POST",
         body: JSON.stringify({
           query: businessType,
-          location: city,
+          location,
         }),
       });
       return response.json();
@@ -74,7 +108,7 @@ export default function MapSearch() {
       if (!data.results || data.results.length === 0) {
         toast({
           title: "No results found",
-          description: "Try adjusting your search terms",
+          description: "Try adjusting your search terms or location",
         });
       }
     },
@@ -112,6 +146,7 @@ export default function MapSearch() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!businessType.trim()) {
       toast({
         title: "Business type required",
@@ -120,6 +155,25 @@ export default function MapSearch() {
       });
       return;
     }
+    
+    if (!city.trim()) {
+      toast({
+        title: "City required",
+        description: "Please enter a city",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!state) {
+      toast({
+        title: "State required",
+        description: "Please select a state",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (!selectedCategory) {
       toast({
         title: "Category required",
@@ -128,6 +182,7 @@ export default function MapSearch() {
       });
       return;
     }
+    
     searchMutation.mutate();
   };
 
@@ -177,9 +232,9 @@ export default function MapSearch() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSearch} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="businessType">Business Type</Label>
+                  <Label htmlFor="businessType">Business Type *</Label>
                   <Input
                     id="businessType"
                     placeholder="e.g., pet store, dispensary"
@@ -190,18 +245,88 @@ export default function MapSearch() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="city">City (Optional)</Label>
+                  <Label htmlFor="city">City *</Label>
                   <Input
                     id="city"
-                    placeholder="e.g., New York, Los Angeles"
+                    placeholder="e.g., Denver, Portland"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
+                    required
                     data-testid="input-city"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
+                  <Label>State *</Label>
+                  <Popover open={stateOpen} onOpenChange={setStateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={stateOpen}
+                        className="w-full justify-between"
+                        data-testid="button-state-select"
+                      >
+                        {state || "Select state..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0">
+                      <Command
+                        filter={(value, search) => {
+                          // Prefix matching: only match if state starts with search term
+                          if (value.toLowerCase().startsWith(search.toLowerCase())) return 1;
+                          return 0;
+                        }}
+                      >
+                        <CommandInput placeholder="Search state..." />
+                        <CommandList>
+                          <CommandEmpty>No state found.</CommandEmpty>
+                          <CommandGroup>
+                            {US_STATES.map((stateName) => (
+                              <CommandItem
+                                key={stateName}
+                                value={stateName}
+                                onSelect={(currentValue) => {
+                                  setState(currentValue);
+                                  setStateOpen(false);
+                                }}
+                                data-testid={`state-${stateName.toLowerCase().replace(/\s+/g, '-')}`}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    state === stateName ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {stateName}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="country">Country</Label>
+                  <Select value={country} onValueChange={setCountry}>
+                    <SelectTrigger data-testid="select-country">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRIES.map((countryName) => (
+                        <SelectItem key={countryName} value={countryName}>
+                          {countryName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category *</Label>
                   <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                     <SelectTrigger data-testid="select-category">
                       <SelectValue placeholder="Select category" />
