@@ -324,7 +324,7 @@ export default function MapSearch() {
       return;
     }
     
-    if (!selectedCategory) {
+    if (!category) {
       toast({
         title: "Category required",
         description: "Please select a category",
@@ -337,7 +337,7 @@ export default function MapSearch() {
   };
 
   const handleSavePlace = (placeId: string) => {
-    if (!selectedCategory) {
+    if (!category) {
       toast({
         title: "Category required",
         description: "Please select a category before saving",
@@ -345,7 +345,7 @@ export default function MapSearch() {
       });
       return;
     }
-    saveToSheetMutation.mutate({ placeId, category: selectedCategory });
+    saveToSheetMutation.mutate({ placeId, category });
   };
 
   // Toggle keyword exclusion
