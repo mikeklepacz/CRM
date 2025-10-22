@@ -2,8 +2,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Trash2, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 import type { SearchHistory, SavedExclusion } from "@shared/schema";
 
 export default function MapSearchSettings() {
@@ -16,7 +17,7 @@ export default function MapSearchSettings() {
 
   // Fetch saved exclusions
   const { data: exclusionsData, isLoading: exclusionsLoading } = useQuery<{ exclusions: SavedExclusion[] }>({
-    queryKey: ['/api/maps/exclusions'],
+    queryKey: ['/api/exclusions'],
   });
 
   // Delete search history mutation
@@ -43,10 +44,10 @@ export default function MapSearchSettings() {
   // Delete exclusion mutation
   const deleteExclusionMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/maps/exclusions/${id}`);
+      return apiRequest('DELETE', `/api/exclusions/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/maps/exclusions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/exclusions'] });
       toast({
         title: "Deleted",
         description: "Exclusion removed successfully",
@@ -69,9 +70,17 @@ export default function MapSearchSettings() {
   return (
     <div className="h-screen overflow-auto p-6">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold" data-testid="text-page-title">Map Search Settings</h1>
-          <p className="text-muted-foreground mt-1">Manage your search history and saved exclusions</p>
+        <div className="space-y-4">
+          <Link href="/map-search">
+            <Button variant="ghost" size="sm" data-testid="button-back-to-search">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Map Search
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold" data-testid="text-page-title">Map Search Settings</h1>
+            <p className="text-muted-foreground mt-1">Manage your search history and saved exclusions</p>
+          </div>
         </div>
 
         {/* Business Type History */}
