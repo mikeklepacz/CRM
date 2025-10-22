@@ -45,6 +45,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
 
 interface PlaceResult {
   place_id: string;
@@ -123,6 +124,11 @@ export default function MapSearch() {
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
   const [duplicateCount, setDuplicateCount] = useState(0);
+  
+  // Map state
+  const [mapCenter, setMapCenter] = useState({ lat: 39.8283, lng: -98.5795 }); // Center of USA
+  const [mapZoom, setMapZoom] = useState(4);
+  const [selectedLocation, setSelectedLocation] = useState<{lat: number, lng: number} | null>(null);
   
   // Pagination state
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
@@ -225,6 +231,41 @@ export default function MapSearch() {
     container.addEventListener('scroll', handleScroll);
     return () => container.removeEventListener('scroll', handleScroll);
   }, [nextPageToken, loadingMore]);
+
+  // Reverse geocode mutation
+  const reverseGeocodeMutation = useMutation({
+    mutationFn: async ({ lat, lng }: { lat: number; lng: number }) => {
+      return await apiRequest("POST", "/api/maps/reverse-geocode", { lat, lng });
+    },
+    onSuccess: (data) => {
+      setCity(data.city);
+      setState(data.state);
+      setCountry(data.country);
+      toast({
+        title: "Location Selected",
+        description: `${data.city}, ${data.state}`
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to get location details",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Map click handler
+  const handleMapClick = (e: google.maps.MapMouseEvent) => {
+    if (e.latLng) {
+      const lat = e.latLng.lat();
+      const lng = e.latLng.lng();
+      setSelectedLocation({ lat, lng });
+      setMapCenter({ lat, lng });
+      setMapZoom(12);
+      reverseGeocodeMutation.mutate({ lat, lng });
+    }
+  };
 
   // Mutation to add new exclusion
   const addExclusionMutation = useMutation({
@@ -666,23 +707,41 @@ export default function MapSearch() {
   const hiddenByKeywordFilters = resultsWithoutClosedFilter.length - filteredResults.length;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-6 border-b">
-        <div className="flex items-center gap-2 mb-2">
-          <MapPin className="w-6 h-6 text-primary" />
-          <h1 className="text-2xl font-semibold" data-testid="text-page-title">Map Search</h1>
-        </div>
-        <p className="text-muted-foreground">
-          Search for businesses and add them to your Store Database
-        </p>
+    <div className="relative w-full h-screen overflow-hidden" data-testid="map-container">
+      {/* Full-screen Google Map Background */}
+      <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}>
+        <GoogleMap
+          mapContainerStyle={{ width: '100%', height: '100%' }}
+          center={mapCenter}
+          zoom={mapZoom}
+          onClick={handleMapClick}
+          options={{ disableDefaultUI: false, zoomControl: true }}
+        >
+          {selectedLocation && <Marker position={selectedLocation} />}
+        </GoogleMap>
+      </LoadScript>
+
+      {/* Floating Search History Card (Top) */}
+      <div className="absolute top-4 left-4 right-4 z-10 max-w-2xl">
+        <Card className="backdrop-blur-md bg-background/80">
+          <CardHeader>
+            <div className="flex items-center gap-2 mb-2">
+              <MapPin className="w-6 h-6 text-primary" />
+              <h1 className="text-2xl font-semibold" data-testid="text-page-title">Map Search</h1>
+            </div>
+            <p className="text-muted-foreground">
+              Search for businesses and add them to your Store Database
+            </p>
+          </CardHeader>
+          <CardContent>
+            <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6" ref={resultsContainerRef}>
-        <div className="mb-6">
-          <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
-        </div>
-
-        <Card className="mb-6">
+      {/* Floating Search Form Card (Bottom) */}
+      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-2xl">
+        <Card className="backdrop-blur-md bg-background/80">
           <CardHeader>
             <CardTitle>Search Businesses</CardTitle>
             <CardDescription>
@@ -1099,13 +1158,16 @@ export default function MapSearch() {
             </form>
           </CardContent>
         </Card>
+      </div>
 
-        {searchResults.length > 0 && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
+      {/* Slide-in Results Panel (Right) - only visible when searchResults exist */}
+      {searchResults.length > 0 && (
+        <div className="absolute top-0 right-0 bottom-0 w-1/3 min-w-[500px] z-20 bg-background shadow-2xl overflow-y-auto" ref={resultsContainerRef}>
+          <div className="p-6">
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
                 <div>
-                  <CardTitle>
+                  <h2 className="text-2xl font-semibold">
                     Search Results
                     {hiddenByKeywordFilters > 0 ? (
                       <span className="text-sm font-normal ml-2">
@@ -1124,121 +1186,167 @@ export default function MapSearch() {
                         ({duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''} filtered)
                       </span>
                     )}
-                  </CardTitle>
-                  <CardDescription>
+                  </h2>
+                  <p className="text-muted-foreground text-sm">
                     {showCheckboxes 
                       ? "Select businesses and use the export bar to save to your database" 
                       : "Click 'Add to Database' to save a business to your Store Database sheet"}
-                  </CardDescription>
+                  </p>
                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="hide-closed"
+                  checked={hideClosedBusinesses}
+                  onCheckedChange={(checked) => setHideClosedBusinesses(checked as boolean)}
+                  data-testid="checkbox-hide-closed"
+                />
+                <Label htmlFor="hide-closed" className="cursor-pointer text-sm">
+                  Hide closed businesses
+                </Label>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {showCheckboxes && <TableHead className="w-12">Select</TableHead>}
+                    <TableHead>Name & Rating</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead>Location</TableHead>
+                    {!showCheckboxes && <TableHead>Action</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredResults.map((place) => {
+                    const { city: placeCity, state: placeState } = parseCityState(place.formatted_address);
+                    const businessLink = getBusinessLink(place);
+                    
+                    return (
+                      <TableRow key={place.place_id} data-testid={`row-place-${place.place_id}`}>
+                        {showCheckboxes && (
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedPlaces.has(place.place_id)}
+                              onCheckedChange={() => togglePlaceSelection(place.place_id)}
+                              data-testid={`checkbox-place-${place.place_id}`}
+                            />
+                          </TableCell>
+                        )}
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={businessLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-base hover:underline flex items-center gap-1"
+                                data-testid={`link-place-${place.place_id}`}
+                              >
+                                {place.name}
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </div>
+                            {place.rating ? (
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                <span className="text-yellow-500">★</span>
+                                <span className="font-medium">{place.rating}</span>
+                                <span>({place.user_ratings_total?.toLocaleString()} reviews)</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">No reviews</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          <span className="line-clamp-2">{place.formatted_address}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col text-sm">
+                            <span className="font-medium">{placeCity}</span>
+                            <span className="text-muted-foreground">{placeState}</span>
+                          </div>
+                        </TableCell>
+                        {!showCheckboxes && (
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              onClick={() => handleSavePlace(place.place_id)}
+                              disabled={saveToSheetMutation.isPending}
+                              data-testid={`button-save-${place.place_id}`}
+                            >
+                              <Plus className="mr-1 h-3 w-3" />
+                              Add to Database
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            
+            {/* Dog Bone Loading Indicator */}
+            {loadingMore && (
+              <div className="flex justify-center items-center py-8" data-testid="loading-more-indicator">
+                <Bone className="h-8 w-8 text-primary animate-pulse" />
+              </div>
+            )}
+          </div>
+
+          {/* Export Bar - Fixed at bottom of results panel */}
+          {showCheckboxes && (
+            <div 
+              className="sticky bottom-0 bg-background border-t p-4"
+              data-testid="export-bar"
+            >
+              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Checkbox
-                    id="hide-closed"
-                    checked={hideClosedBusinesses}
-                    onCheckedChange={(checked) => setHideClosedBusinesses(checked as boolean)}
-                    data-testid="checkbox-hide-closed"
+                    id="select-all"
+                    checked={allSelected}
+                    onCheckedChange={toggleSelectAll}
+                    data-testid="checkbox-select-all"
                   />
-                  <Label htmlFor="hide-closed" className="cursor-pointer text-sm">
-                    Hide closed businesses
+                  <Label htmlFor="select-all" className="cursor-pointer text-sm font-medium">
+                    Select All
                   </Label>
                 </div>
+                
+                <Badge variant="secondary" data-testid="badge-selected-count">
+                  {selectedPlaces.size} selected
+                </Badge>
+                
+                <Button
+                  onClick={handleExportSelected}
+                  disabled={selectedPlaces.size === 0 || exportProgress !== null}
+                  data-testid="button-export-crm"
+                >
+                  {exportProgress ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Exporting {exportProgress.current}/{exportProgress.total}...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Export to CRM ({selectedPlaces.size})
+                    </>
+                  )}
+                </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {showCheckboxes && <TableHead className="w-12">Select</TableHead>}
-                      <TableHead>Name & Rating</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>Location</TableHead>
-                      {!showCheckboxes && <TableHead>Action</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredResults.map((place) => {
-                      const { city: placeCity, state: placeState } = parseCityState(place.formatted_address);
-                      const businessLink = getBusinessLink(place);
-                      
-                      return (
-                        <TableRow key={place.place_id} data-testid={`row-place-${place.place_id}`}>
-                          {showCheckboxes && (
-                            <TableCell>
-                              <Checkbox
-                                checked={selectedPlaces.has(place.place_id)}
-                                onCheckedChange={() => togglePlaceSelection(place.place_id)}
-                                data-testid={`checkbox-place-${place.place_id}`}
-                              />
-                            </TableCell>
-                          )}
-                          <TableCell className="font-medium">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <a
-                                  href={businessLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-base hover:underline flex items-center gap-1"
-                                  data-testid={`link-place-${place.place_id}`}
-                                >
-                                  {place.name}
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              </div>
-                              {place.rating ? (
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  <span className="text-yellow-500">★</span>
-                                  <span className="font-medium">{place.rating}</span>
-                                  <span>({place.user_ratings_total?.toLocaleString()} reviews)</span>
-                                </div>
-                              ) : (
-                                <span className="text-sm text-muted-foreground">No reviews</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-xs">
-                            <span className="line-clamp-2">{place.formatted_address}</span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col text-sm">
-                              <span className="font-medium">{placeCity}</span>
-                              <span className="text-muted-foreground">{placeState}</span>
-                            </div>
-                          </TableCell>
-                          {!showCheckboxes && (
-                            <TableCell>
-                              <Button
-                                size="sm"
-                                onClick={() => handleSavePlace(place.place_id)}
-                                disabled={saveToSheetMutation.isPending}
-                                data-testid={`button-save-${place.place_id}`}
-                              >
-                                <Plus className="mr-1 h-3 w-3" />
-                                Add to Database
-                              </Button>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              
-              {/* Dog Bone Loading Indicator */}
-              {loadingMore && (
-                <div className="flex justify-center items-center py-8" data-testid="loading-more-indicator">
-                  <Bone className="h-8 w-8 text-primary animate-pulse" />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
+        </div>
+      )}
 
-        {searchMutation.isSuccess && searchResults.length === 0 && (
-          <Card>
-            <CardContent className="py-12 text-center">
+      {/* No results message */}
+      {searchMutation.isSuccess && searchResults.length === 0 && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+          <Card className="backdrop-blur-md bg-background/80">
+            <CardContent className="py-12 px-8 text-center">
               <MapPin className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-medium mb-2">No results found</h3>
               <p className="text-muted-foreground">
@@ -1246,50 +1354,6 @@ export default function MapSearch() {
               </p>
             </CardContent>
           </Card>
-        )}
-      </div>
-
-      {/* Sticky Bottom-Right Export Bar */}
-      {showCheckboxes && (
-        <div 
-          className="fixed bottom-4 right-4 z-50 bg-card/95 backdrop-blur-sm border rounded-lg shadow-lg p-4"
-          data-testid="export-bar"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="select-all"
-                checked={allSelected}
-                onCheckedChange={toggleSelectAll}
-                data-testid="checkbox-select-all"
-              />
-              <Label htmlFor="select-all" className="cursor-pointer text-sm font-medium">
-                Select All
-              </Label>
-            </div>
-            
-            <Badge variant="secondary" data-testid="badge-selected-count">
-              {selectedPlaces.size} selected
-            </Badge>
-            
-            <Button
-              onClick={handleExportSelected}
-              disabled={selectedPlaces.size === 0 || exportProgress !== null}
-              data-testid="button-export-crm"
-            >
-              {exportProgress ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Exporting {exportProgress.current}/{exportProgress.total}...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export to CRM ({selectedPlaces.size})
-                </>
-              )}
-            </Button>
-          </div>
         </div>
       )}
     </div>
