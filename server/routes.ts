@@ -7680,6 +7680,79 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // ============================================================================
+  // SAVED EXCLUSIONS ROUTES
+  // ============================================================================
+
+  // Get all saved exclusions
+  app.get('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const exclusions = await storage.getAllSavedExclusions();
+      res.json({ exclusions });
+    } catch (error: any) {
+      console.error('Error fetching exclusions:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
+    }
+  });
+
+  // Get exclusions by type
+  app.get('/api/exclusions/:type', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { type } = req.params;
+      if (type !== 'keyword' && type !== 'place_type') {
+        return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
+      }
+      const exclusions = await storage.getSavedExclusionsByType(type);
+      res.json({ exclusions });
+    } catch (error: any) {
+      console.error('Error fetching exclusions by type:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch exclusions' });
+    }
+  });
+
+  // Create new exclusion
+  app.post('/api/exclusions', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { type, value } = req.body;
+      if (!type || !value) {
+        return res.status(400).json({ message: 'Type and value are required' });
+      }
+      if (type !== 'keyword' && type !== 'place_type') {
+        return res.status(400).json({ message: 'Invalid type. Must be "keyword" or "place_type"' });
+      }
+      const exclusion = await storage.createSavedExclusion({ type, value: value.toLowerCase().trim() });
+      res.json({ exclusion });
+    } catch (error: any) {
+      console.error('Error creating exclusion:', error);
+      res.status(500).json({ message: error.message || 'Failed to create exclusion' });
+    }
+  });
+
+  // Delete exclusion
+  app.delete('/api/exclusions/:id', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSavedExclusion(id);
+      res.json({ message: 'Exclusion deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting exclusion:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete exclusion' });
+    }
+  });
+
+  // Update user's active exclusions
+  app.put('/api/user/active-exclusions', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { activeKeywords = [], activeTypes = [] } = req.body;
+      const prefs = await storage.updateUserActiveExclusions(userId, activeKeywords, activeTypes);
+      res.json({ preferences: prefs });
+    } catch (error: any) {
+      console.error('Error updating active exclusions:', error);
+      res.status(500).json({ message: error.message || 'Failed to update active exclusions' });
+    }
+  });
+
+  // ============================================================================
   // GOOGLE MAPS SEARCH ROUTES
   // ============================================================================
 

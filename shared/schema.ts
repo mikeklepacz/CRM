@@ -220,8 +220,18 @@ export const userPreferences = pgTable("user_preferences", {
   defaultTimezoneMode: varchar("default_timezone_mode", { length: 20 }).default('agent'), // 'agent' or 'customer' - default mode for new reminders
   timeFormat: varchar("time_format", { length: 10 }).default('12hr'), // '12hr' or '24hr' - time display format preference
   defaultCalendarReminders: jsonb("default_calendar_reminders").$type<Array<{method: 'popup' | 'email', minutes: number}>>().default(sql`'[{"method":"popup","minutes":0}]'::jsonb`), // Default Google Calendar reminder settings
+  activeExcludedKeywords: text("active_excluded_keywords").array().default(sql`ARRAY[]::text[]`), // Keywords to filter out from Map Search results
+  activeExcludedTypes: text("active_excluded_types").array().default(sql`ARRAY[]::text[]`), // Place types to exclude from Map Search API calls
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Saved exclusions for Map Search - global keywords and place types
+export const savedExclusions = pgTable("saved_exclusions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: varchar("type", { length: 20 }).notNull(), // 'keyword' or 'place_type'
+  value: varchar("value").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Custom reminders for client follow-ups
@@ -652,6 +662,11 @@ export const insertSearchHistorySchema = createInsertSchema(searchHistory).omit(
   searchedAt: true,
 });
 
+export const insertSavedExclusionSchema = createInsertSchema(savedExclusions).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -693,3 +708,5 @@ export type Category = typeof categories.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type SearchHistory = typeof searchHistory.$inferSelect;
 export type InsertSearchHistory = z.infer<typeof insertSearchHistorySchema>;
+export type SavedExclusion = typeof savedExclusions.$inferSelect;
+export type InsertSavedExclusion = z.infer<typeof insertSavedExclusionSchema>;

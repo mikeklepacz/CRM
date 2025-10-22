@@ -21,6 +21,7 @@ import {
   categories,
   importedPlaces,
   searchHistory,
+  savedExclusions,
   type User,
   type UpsertUser,
   type Client,
@@ -60,6 +61,8 @@ import {
   type InsertCategory,
   type SearchHistory,
   type InsertSearchHistory,
+  type SavedExclusion,
+  type InsertSavedExclusion,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -201,6 +204,13 @@ export interface IStorage {
   // Search History operations
   getAllSearchHistory(): Promise<SearchHistory[]>;
   recordSearch(businessType: string, city: string, state: string, country: string, excludedKeywords?: string[]): Promise<SearchHistory>;
+  
+  // Saved Exclusions operations
+  getAllSavedExclusions(): Promise<SavedExclusion[]>;
+  getSavedExclusionsByType(type: 'keyword' | 'place_type'): Promise<SavedExclusion[]>;
+  createSavedExclusion(exclusion: InsertSavedExclusion): Promise<SavedExclusion>;
+  deleteSavedExclusion(id: string): Promise<void>;
+  updateUserActiveExclusions(userId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1094,6 +1104,77 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return newEntry;
     }
+  }
+
+  // Saved Exclusions operations
+  async getAllSavedExclusions(): Promise<SavedExclusion[]> {
+    const exclusions = await db
+      .select()
+      .from(savedExclusions)
+      .orderBy(savedExclusions.type, savedExclusions.value);
+    return exclusions;
+  }
+
+  async getSavedExclusionsByType(type: 'keyword' | 'place_type'): Promise<SavedExclusion[]> {
+    const exclusions = await db
+      .select()
+      .from(savedExclusions)
+      .where(eq(savedExclusions.type, type))
+      .orderBy(savedExclusions.value);
+    return exclusions;
+  }
+
+  async createSavedExclusion(exclusion: InsertSavedExclusion): Promise<SavedExclusion> {
+    // Check if this exclusion already exists
+    const [existing] = await db
+      .select()
+      .from(savedExclusions)
+      .where(
+        and(
+          eq(savedExclusions.type, exclusion.type),
+          eq(savedExclusions.value, exclusion.value)
+        )
+      );
+
+    if (existing) {
+      return existing;
+    }
+
+    const [newExclusion] = await db
+      .insert(savedExclusions)
+      .values(exclusion)
+      .returning();
+    return newExclusion;
+  }
+
+  async deleteSavedExclusion(id: string): Promise<void> {
+    await db.delete(savedExclusions).where(eq(savedExclusions.id, id));
+  }
+
+  async updateUserActiveExclusions(userId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences> {
+    const [prefs] = await db
+      .update(userPreferences)
+      .set({
+        activeExcludedKeywords: activeKeywords,
+        activeExcludedTypes: activeTypes,
+      })
+      .where(eq(userPreferences.userId, userId))
+      .returning();
+
+    if (!prefs) {
+      // Create new preferences if they don't exist
+      const [newPrefs] = await db
+        .insert(userPreferences)
+        .values({
+          userId,
+          activeExcludedKeywords: activeKeywords,
+          activeExcludedTypes: activeTypes,
+        })
+        .returning();
+      return newPrefs;
+    }
+
+    return prefs;
   }
 }
 
