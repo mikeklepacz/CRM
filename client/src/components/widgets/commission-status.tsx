@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, TrendingUp, TrendingDown, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
@@ -29,10 +29,7 @@ export function CommissionStatusWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Commission Status
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Commission Status</CardTitle>
           <CardDescription>Clients by commission tier</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -47,10 +44,7 @@ export function CommissionStatusWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Commission Status
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Commission Status</CardTitle>
           <CardDescription>Clients by commission tier</CardDescription>
         </CardHeader>
         <CardContent>
@@ -70,10 +64,7 @@ export function CommissionStatusWidget() {
   return (
     <Card className="h-full">
       <CardHeader className="drag-handle cursor-move">
-        <CardTitle className="flex items-center justify-between">
-          Commission Status
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
-        </CardTitle>
+        <CardTitle>Commission Status</CardTitle>
         <CardDescription>Clients by commission tier</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

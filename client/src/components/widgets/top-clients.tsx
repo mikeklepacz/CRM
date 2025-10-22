@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Trophy, ShoppingCart } from "lucide-react";
+import { Trophy, ShoppingCart } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,10 +23,7 @@ export function TopClientsWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Top Clients
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Top Clients</CardTitle>
           <CardDescription>Revenue leaders and order history</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -42,10 +39,7 @@ export function TopClientsWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Top Clients
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Top Clients</CardTitle>
           <CardDescription>Revenue leaders and order history</CardDescription>
         </CardHeader>
         <CardContent>
@@ -62,12 +56,9 @@ export function TopClientsWidget() {
   return (
     <Card className="h-full">
       <CardHeader className="drag-handle cursor-move">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-primary" />
-            Top Clients
-          </div>
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
+        <CardTitle className="flex items-center gap-2">
+          <Trophy className="h-5 w-5 text-primary" />
+          Top Clients
         </CardTitle>
         <CardDescription>Revenue leaders and order history</CardDescription>
       </CardHeader>

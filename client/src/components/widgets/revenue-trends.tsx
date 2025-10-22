@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, TrendingUp } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -23,10 +23,7 @@ export function RevenueTrendsWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Revenue Trends
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Revenue Trends</CardTitle>
           <CardDescription>Time-based revenue analysis</CardDescription>
         </CardHeader>
         <CardContent>
@@ -40,10 +37,7 @@ export function RevenueTrendsWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Revenue Trends
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Revenue Trends</CardTitle>
           <CardDescription>Time-based revenue analysis</CardDescription>
         </CardHeader>
         <CardContent>
@@ -71,12 +65,9 @@ export function RevenueTrendsWidget() {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="drag-handle cursor-move flex-shrink-0">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            Revenue Trends
-          </div>
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          Revenue Trends
         </CardTitle>
         <CardDescription>Time-based revenue analysis</CardDescription>
       </CardHeader>

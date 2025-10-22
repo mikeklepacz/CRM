@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Bell, Clock, Plus, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
+import { Bell, Clock, Plus, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,10 +81,7 @@ export function RemindersWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Reminders
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Reminders</CardTitle>
           <CardDescription>Custom alerts and notifications</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -100,10 +97,7 @@ export function RemindersWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Reminders
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Reminders</CardTitle>
           <CardDescription>Custom alerts and notifications</CardDescription>
         </CardHeader>
         <CardContent>
@@ -152,29 +146,24 @@ export function RemindersWidget() {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="drag-handle cursor-move flex-shrink-0">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5 text-primary" />
-            Reminders
-            {overdueCount > 0 && (
-              <Badge variant="destructive" className="ml-2" data-testid="badge-overdue-count">
-                {overdueCount}
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleExportCalendar}
-              className="h-7 w-7"
-              data-testid="button-export-calendar"
-              title="Export to calendar (.ics)"
-            >
-              <Download className="h-4 w-4" />
-            </Button>
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </div>
+        <CardTitle className="flex items-center gap-2">
+          <Bell className="h-5 w-5 text-primary" />
+          Reminders
+          {overdueCount > 0 && (
+            <Badge variant="destructive" className="ml-2" data-testid="badge-overdue-count">
+              {overdueCount}
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleExportCalendar}
+            className="h-7 w-7 ml-auto"
+            data-testid="button-export-calendar"
+            title="Export to calendar (.ics)"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
         </CardTitle>
         <CardDescription>Custom alerts and notifications</CardDescription>
       </CardHeader>

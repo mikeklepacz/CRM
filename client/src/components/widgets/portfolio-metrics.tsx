@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Users, DollarSign, RefreshCw } from "lucide-react";
+import { Users, DollarSign, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface PortfolioMetrics {
@@ -19,10 +19,7 @@ export function PortfolioMetricsWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Client Portfolio
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Client Portfolio</CardTitle>
           <CardDescription>Active clients and performance</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -37,10 +34,7 @@ export function PortfolioMetricsWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Client Portfolio
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Client Portfolio</CardTitle>
           <CardDescription>Active clients and performance</CardDescription>
         </CardHeader>
         <CardContent>
@@ -59,10 +53,7 @@ export function PortfolioMetricsWidget() {
   return (
     <Card className="h-full">
       <CardHeader className="drag-handle cursor-move">
-        <CardTitle className="flex items-center justify-between">
-          Client Portfolio
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
-        </CardTitle>
+        <CardTitle>Client Portfolio</CardTitle>
         <CardDescription>Active clients and performance</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

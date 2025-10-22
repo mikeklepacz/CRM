@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, AlertTriangle, Bell, RefreshCw } from "lucide-react";
+import { AlertTriangle, Bell, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,10 +29,7 @@ export function ActionAlertsWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Action Required
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Action Required</CardTitle>
           <CardDescription>Commission warnings and follow-ups</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -48,10 +45,7 @@ export function ActionAlertsWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Action Required
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Action Required</CardTitle>
           <CardDescription>Commission warnings and follow-ups</CardDescription>
         </CardHeader>
         <CardContent>
@@ -104,16 +98,13 @@ export function ActionAlertsWidget() {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="drag-handle cursor-move flex-shrink-0">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            Action Required
-            {urgentCount > 0 && (
-              <Badge variant="destructive" className="ml-2" data-testid="badge-urgent-count">
-                {urgentCount}
-              </Badge>
-            )}
-          </div>
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
+        <CardTitle className="flex items-center gap-2">
+          Action Required
+          {urgentCount > 0 && (
+            <Badge variant="destructive" className="ml-2" data-testid="badge-urgent-count">
+              {urgentCount}
+            </Badge>
+          )}
         </CardTitle>
         <CardDescription>Commission warnings and follow-ups</CardDescription>
       </CardHeader>

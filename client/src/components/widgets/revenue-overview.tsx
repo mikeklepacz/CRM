@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, TrendingUp, TrendingDown, DollarSign, Calendar } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Calendar } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface DashboardSummary {
@@ -38,7 +38,6 @@ export function RevenueOverviewWidget() {
                 <Skeleton className="h-7 w-32" />
                 <Skeleton className="h-3 w-24" />
               </div>
-              <Settings2 className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
             </div>
           </div>
         </CardHeader>
@@ -65,7 +64,6 @@ export function RevenueOverviewWidget() {
             </div>
             <div className="flex items-start gap-2">
               <div className="w-32" />
-              <Settings2 className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
             </div>
           </div>
         </CardHeader>
@@ -101,7 +99,6 @@ export function RevenueOverviewWidget() {
               </div>
               <p className="text-xs text-muted-foreground whitespace-nowrap">Total Earnings</p>
             </div>
-            <Settings2 className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
           </div>
         </div>
       </CardHeader>

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,10 +26,7 @@ export function CommissionBreakdownWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Commission Breakdown
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Commission Breakdown</CardTitle>
           <CardDescription>25% vs 10% tier earnings</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -44,10 +41,7 @@ export function CommissionBreakdownWidget() {
     return (
       <Card className="h-full">
         <CardHeader className="drag-handle cursor-move">
-          <CardTitle className="flex items-center justify-between">
-            Commission Breakdown
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </CardTitle>
+          <CardTitle>Commission Breakdown</CardTitle>
           <CardDescription>25% vs 10% tier earnings</CardDescription>
         </CardHeader>
         <CardContent>
@@ -66,10 +60,7 @@ export function CommissionBreakdownWidget() {
   return (
     <Card className="h-full">
       <CardHeader className="drag-handle cursor-move">
-        <CardTitle className="flex items-center justify-between">
-          Commission Breakdown
-          <Settings2 className="h-4 w-4 text-muted-foreground" />
-        </CardTitle>
+        <CardTitle>Commission Breakdown</CardTitle>
         <CardDescription>25% vs 10% tier earnings</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
