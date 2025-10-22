@@ -6810,16 +6810,22 @@ Use this store information to provide context-aware responses. When helping draf
         ? customerTimezone 
         : agentTimezone || 'UTC';
 
-      // Combine date and time into a naive datetime string (wall-clock time)
+      // Combine date and time into a proper datetime string in the effective timezone
       const dateStr = new Date(reminderDate).toISOString().split('T')[0];
       const naiveDateTimeStr = `${dateStr}T${reminderTime}:00`;
       
-      // Convert local time to UTC using date-fns-tz
-      // Parse as Date and adjust for timezone offset
+      // Convert from the effective timezone to UTC
+      // We treat naiveDateTimeStr as a wall-clock time in effectiveTimezone
       const { getTimezoneOffset } = await import('date-fns-tz');
-      const naiveDate = new Date(naiveDateTimeStr);
-      const offset = getTimezoneOffset(effectiveTimezone, naiveDate);
-      const utcTriggerDate = new Date(naiveDate.getTime() - offset);
+      
+      // Create a Date object from the string (this will be in UTC by default)
+      // Then adjust by adding the timezone offset to get the correct UTC time
+      const tempDate = new Date(naiveDateTimeStr + 'Z'); // Parse as UTC first
+      const offset = getTimezoneOffset(effectiveTimezone, tempDate);
+      
+      // The offset tells us how many ms ahead of UTC the timezone is
+      // So to convert FROM the timezone TO UTC, we subtract the offset
+      const utcTriggerDate = new Date(tempDate.getTime() - offset);
 
       console.log('[REMINDER API] UTC trigger date:', utcTriggerDate.toISOString());
 
@@ -6839,19 +6845,19 @@ Use this store information to provide context-aware responses. When helping draf
         customerTimeZone: useCustomerTimezone && customerTimezone ? customerTimezone : undefined
       } : null;
 
-      // Create reminder data
+      // Create reminder data (use DB column names for Zod validation)
       const reminderData = {
-        userId,
+        user_id: userId,
         title,
         description: description || null,
-        reminderType: 'one_time' as const,
-        triggerDate: utcTriggerDate,
-        nextTrigger: utcTriggerDate,
-        scheduledAtUtc: utcTriggerDate,
-        reminderTimeZone: effectiveTimezone,
-        isActive: true,
-        addToCalendar: false,
-        storeMetadata: enhancedStoreMetadata,
+        reminder_type: 'one_time' as const,
+        trigger_date: utcTriggerDate,
+        next_trigger: utcTriggerDate,
+        scheduled_at_utc: utcTriggerDate,
+        reminder_time_zone: effectiveTimezone,
+        is_active: true,
+        add_to_calendar: false,
+        store_metadata: enhancedStoreMetadata,
       };
 
       console.log('[REMINDER API] Reminder data before validation:', JSON.stringify(reminderData, null, 2));
