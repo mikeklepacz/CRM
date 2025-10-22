@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown } from "lucide-react";
+import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -39,6 +39,11 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { SearchHistoryComponent } from "@/components/search-history";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface PlaceResult {
   place_id: string;
@@ -61,6 +66,13 @@ interface Category {
   name: string;
   description: string | null;
   isActive: boolean;
+}
+
+interface SavedExclusion {
+  id: string;
+  type: 'keyword' | 'place_type';
+  value: string;
+  createdAt: string;
 }
 
 const US_STATES = [
@@ -90,11 +102,81 @@ export default function MapSearch() {
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
   const [duplicateCount, setDuplicateCount] = useState(0);
-  const [excludedKeywords, setExcludedKeywords] = useState("");
-  const [excludedTypes, setExcludedTypes] = useState("");
+  
+  // Filters panel state
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [newPlaceType, setNewPlaceType] = useState("");
+  const [activeKeywords, setActiveKeywords] = useState<string[]>([]);
+  const [activeTypes, setActiveTypes] = useState<string[]>([]);
 
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
     queryKey: ["/api/categories/active"],
+  });
+
+  // Fetch saved exclusions
+  const { data: exclusionsData } = useQuery<{ exclusions: SavedExclusion[] }>({
+    queryKey: ["/api/exclusions"],
+  });
+
+  // Fetch user preferences to get active exclusions
+  const { data: preferencesData } = useQuery<{ preferences: any }>({
+    queryKey: ["/api/user/preferences"],
+  });
+
+  // Initialize active exclusions from user preferences
+  useEffect(() => {
+    if (preferencesData?.preferences) {
+      setActiveKeywords(preferencesData.preferences.activeExcludedKeywords || []);
+      setActiveTypes(preferencesData.preferences.activeExcludedTypes || []);
+    }
+  }, [preferencesData]);
+
+  // Save active exclusions to user preferences whenever they change
+  useEffect(() => {
+    const saveActiveExclusions = async () => {
+      try {
+        await apiRequest("PUT", "/api/user/active-exclusions", {
+          activeKeywords,
+          activeTypes,
+        });
+      } catch (error) {
+        console.error("Failed to save active exclusions:", error);
+      }
+    };
+
+    if (preferencesData) {
+      saveActiveExclusions();
+    }
+  }, [activeKeywords, activeTypes, preferencesData]);
+
+  // Mutation to add new exclusion
+  const addExclusionMutation = useMutation({
+    mutationFn: async (params: { type: 'keyword' | 'place_type', value: string }) => {
+      return await apiRequest("POST", "/api/exclusions", params);
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/exclusions"] });
+      // Automatically check the newly added exclusion
+      if (variables.type === 'keyword') {
+        setActiveKeywords(prev => [...prev, data.exclusion.value]);
+        setNewKeyword("");
+      } else {
+        setActiveTypes(prev => [...prev, data.exclusion.value]);
+        setNewPlaceType("");
+      }
+      toast({
+        title: "Exclusion added",
+        description: `"${data.exclusion.value}" has been added and activated`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to add exclusion",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const searchMutation = useMutation({
@@ -103,8 +185,8 @@ export default function MapSearch() {
       return await apiRequest("POST", "/api/maps/search", {
         query: businessType,
         location,
-        excludedKeywords,
-        excludedTypes,
+        excludedKeywords: activeKeywords,
+        excludedTypes: activeTypes,
       });
     },
     onSuccess: (data) => {
@@ -222,6 +304,67 @@ export default function MapSearch() {
     saveToSheetMutation.mutate({ placeId, category: selectedCategory });
   };
 
+  // Toggle keyword exclusion
+  const toggleKeyword = (keyword: string) => {
+    setActiveKeywords(prev => 
+      prev.includes(keyword)
+        ? prev.filter(k => k !== keyword)
+        : [...prev, keyword]
+    );
+  };
+
+  // Toggle place type exclusion
+  const togglePlaceType = (type: string) => {
+    setActiveTypes(prev => 
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+  };
+
+  // Clear all active keywords
+  const clearAllKeywords = () => {
+    setActiveKeywords([]);
+  };
+
+  // Clear all active place types
+  const clearAllTypes = () => {
+    setActiveTypes([]);
+  };
+
+  // Add new keyword exclusion
+  const handleAddKeyword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newKeyword.trim()) {
+      addExclusionMutation.mutate({
+        type: 'keyword',
+        value: newKeyword.trim(),
+      });
+    }
+  };
+
+  // Add new place type exclusion
+  const handleAddPlaceType = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPlaceType.trim()) {
+      addExclusionMutation.mutate({
+        type: 'place_type',
+        value: newPlaceType.trim().toLowerCase().replace(/\s+/g, '_'),
+      });
+    }
+  };
+
+  // Get sorted keywords and place types
+  const keywords = (exclusionsData?.exclusions || [])
+    .filter(e => e.type === 'keyword')
+    .map(e => e.value)
+    .sort();
+  
+  const placeTypes = (exclusionsData?.exclusions || [])
+    .filter(e => e.type === 'place_type')
+    .map(e => e.value)
+    .sort();
+
   const parseCityState = (address: string) => {
     const parts = address.split(',').map(p => p.trim());
     if (parts.length >= 3) {
@@ -248,18 +391,13 @@ export default function MapSearch() {
     setState(stateParam);
     setCountry(countryParam);
     
-    // Set excluded keywords if provided
+    // Set active exclusions if provided
     if (excludedKeywordsParam && excludedKeywordsParam.length > 0) {
-      setExcludedKeywords(excludedKeywordsParam.join(', '));
-    } else {
-      setExcludedKeywords('');
+      setActiveKeywords(excludedKeywordsParam);
     }
 
-    // Set excluded types if provided
     if (excludedTypesParam && excludedTypesParam.length > 0) {
-      setExcludedTypes(excludedTypesParam.join(', '));
-    } else {
-      setExcludedTypes('');
+      setActiveTypes(excludedTypesParam);
     }
 
     // Trigger search automatically
@@ -404,32 +542,173 @@ export default function MapSearch() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="excludedKeywords">Exclude Keywords (optional)</Label>
-                <Input
-                  id="excludedKeywords"
-                  placeholder="e.g., PetSmart, Pet Supplies Plus, Petco"
-                  value={excludedKeywords}
-                  onChange={(e) => setExcludedKeywords(e.target.value)}
-                  data-testid="input-exclude-keywords"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Backend filtering by business name - filters out after API call
-                </p>
-              </div>
+              {/* Filters Panel */}
+              <div className="border rounded-md">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setFiltersOpen(!filtersOpen)}
+                  className="w-full justify-between hover-elevate"
+                  data-testid="button-filters-toggle"
+                >
+                  <div className="flex items-center gap-2">
+                    {filtersOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    <span className="font-medium">Filters</span>
+                    {(activeKeywords.length > 0 || activeTypes.length > 0) && (
+                      <Badge variant="secondary" className="ml-2">
+                        {activeKeywords.length + activeTypes.length} active
+                      </Badge>
+                    )}
+                  </div>
+                </Button>
 
-              <div className="space-y-2">
-                <Label htmlFor="excludedTypes">Exclude Place Types (optional)</Label>
-                <Input
-                  id="excludedTypes"
-                  placeholder="e.g., pet_store, shopping_mall, department_store"
-                  value={excludedTypes}
-                  onChange={(e) => setExcludedTypes(e.target.value)}
-                  data-testid="input-exclude-types"
-                />
-                <p className="text-sm text-muted-foreground">
-                  API-level filtering by place type - saves API credits by excluding before fetching results
-                </p>
+                {filtersOpen && (
+                  <div className="p-4 space-y-4 border-t">
+                    {/* Hide Keyword Results Section */}
+                    <Collapsible defaultOpen={true}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="p-0 hover-elevate">
+                              <Label className="cursor-pointer font-semibold">Hide Keyword Results</Label>
+                            </Button>
+                          </CollapsibleTrigger>
+                          {activeKeywords.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={clearAllKeywords}
+                              data-testid="button-clear-keywords"
+                            >
+                              Clear All
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Backend filtering - filters out results after API call
+                        </p>
+
+                        <CollapsibleContent>
+                          {/* Add new keyword */}
+                          <form onSubmit={handleAddKeyword} className="flex gap-2 mb-3">
+                            <Input
+                              placeholder="Add keyword to exclude..."
+                              value={newKeyword}
+                              onChange={(e) => setNewKeyword(e.target.value)}
+                              data-testid="input-new-keyword"
+                            />
+                            <Button
+                              type="submit"
+                              size="sm"
+                              disabled={!newKeyword.trim() || addExclusionMutation.isPending}
+                              data-testid="button-add-keyword"
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add
+                            </Button>
+                          </form>
+
+                          {/* Keyword checkboxes */}
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                            {keywords.length === 0 ? (
+                              <p className="text-sm text-muted-foreground italic">No keywords saved yet</p>
+                            ) : (
+                              keywords.map((keyword) => (
+                                <div key={keyword} className="flex items-center gap-2">
+                                  <Checkbox
+                                    id={`keyword-${keyword}`}
+                                    checked={activeKeywords.includes(keyword)}
+                                    onCheckedChange={() => toggleKeyword(keyword)}
+                                    data-testid={`checkbox-keyword-${keyword}`}
+                                  />
+                                  <Label
+                                    htmlFor={`keyword-${keyword}`}
+                                    className="cursor-pointer text-sm flex-1"
+                                  >
+                                    {keyword}
+                                  </Label>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+
+                    {/* Exclude Place Types Section */}
+                    <Collapsible defaultOpen={true}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="p-0 hover-elevate">
+                              <Label className="cursor-pointer font-semibold">Exclude Place Types</Label>
+                            </Button>
+                          </CollapsibleTrigger>
+                          {activeTypes.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={clearAllTypes}
+                              data-testid="button-clear-types"
+                            >
+                              Clear All
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          API-level filtering - saves credits by excluding before results
+                        </p>
+
+                        <CollapsibleContent>
+                          {/* Add new place type */}
+                          <form onSubmit={handleAddPlaceType} className="flex gap-2 mb-3">
+                            <Input
+                              placeholder="Add place type to exclude..."
+                              value={newPlaceType}
+                              onChange={(e) => setNewPlaceType(e.target.value)}
+                              data-testid="input-new-place-type"
+                            />
+                            <Button
+                              type="submit"
+                              size="sm"
+                              disabled={!newPlaceType.trim() || addExclusionMutation.isPending}
+                              data-testid="button-add-place-type"
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add
+                            </Button>
+                          </form>
+
+                          {/* Place type checkboxes */}
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                            {placeTypes.length === 0 ? (
+                              <p className="text-sm text-muted-foreground italic">No place types saved yet</p>
+                            ) : (
+                              placeTypes.map((type) => (
+                                <div key={type} className="flex items-center gap-2">
+                                  <Checkbox
+                                    id={`type-${type}`}
+                                    checked={activeTypes.includes(type)}
+                                    onCheckedChange={() => togglePlaceType(type)}
+                                    data-testid={`checkbox-type-${type}`}
+                                  />
+                                  <Label
+                                    htmlFor={`type-${type}`}
+                                    className="cursor-pointer text-sm flex-1"
+                                  >
+                                    {type}
+                                  </Label>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+                  </div>
+                )}
               </div>
 
               <Button
