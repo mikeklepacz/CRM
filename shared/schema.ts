@@ -424,7 +424,6 @@ export const searchHistory = pgTable(
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     businessType: text("business_type").notNull(),
     category: varchar("category", { length: 100 }), // Category used for this search (e.g., 'pet', 'food', etc.)
-    radius: integer("radius"), // Search radius in miles
     city: text("city").notNull(),
     state: text("state").notNull(),
     country: text("country").notNull(),
