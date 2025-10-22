@@ -44,11 +44,17 @@ export interface PlaceDetails {
   types: string[];
 }
 
+export interface PlaceSearchResponse {
+  results: PlaceSearchResult[];
+  nextPageToken?: string;
+}
+
 export async function searchPlaces(
   query: string, 
   location?: string, 
-  excludedTypes?: string[]
-): Promise<PlaceSearchResult[]> {
+  excludedTypes?: string[],
+  pageToken?: string
+): Promise<PlaceSearchResponse> {
   if (!GOOGLE_MAPS_API_KEY) {
     throw new Error('Google Maps API key not configured');
   }
@@ -65,12 +71,16 @@ export async function searchPlaces(
       requestBody.excludedTypes = excludedTypes;
     }
 
+    if (pageToken) {
+      requestBody.pageToken = pageToken;
+    }
+
     const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.businessStatus,places.rating,places.userRatingCount'
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.businessStatus,places.rating,places.userRatingCount,nextPageToken'
       },
       body: JSON.stringify(requestBody)
     });
@@ -82,10 +92,10 @@ export async function searchPlaces(
     }
 
     if (!data.places || data.places.length === 0) {
-      return [];
+      return { results: [], nextPageToken: undefined };
     }
 
-    return data.places.map((place: any) => ({
+    const results = data.places.map((place: any) => ({
       place_id: place.id.replace('places/', ''),
       name: place.displayName?.text || '',
       formatted_address: place.formattedAddress || '',
@@ -100,6 +110,11 @@ export async function searchPlaces(
       rating: place.rating,
       user_ratings_total: place.userRatingCount
     }));
+
+    return {
+      results,
+      nextPageToken: data.nextPageToken
+    };
   } catch (error: any) {
     console.error('Error searching places:', error);
     throw error;
