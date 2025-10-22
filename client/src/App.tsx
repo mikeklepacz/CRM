@@ -19,6 +19,7 @@ import ClientDashboard from "@/pages/client-dashboard";
 import StoreDetails from "@/pages/store-details";
 import SalesDashboard from "@/pages/sales-dashboard";
 import SalesAssistant from "@/pages/sales-assistant";
+import MapSearch from "@/pages/map-search";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -62,6 +63,7 @@ function Router() {
           <Switch>
             <Route path="/settings" component={Settings} />
             <Route path="/clients" component={ClientDashboard} />
+            <Route path="/map-search" component={MapSearch} />
             <Route path="/sales" component={SalesDashboard} />
             <Route path="/assistant" component={SalesAssistant} />
             <Route path="/store/:storeId" component={StoreDetails} />

@@ -384,6 +384,17 @@ export const templates = pgTable("templates", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Categories table - global categories for Map Search filtering
+export const categories = pgTable("categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
@@ -603,6 +614,12 @@ export const insertTemplateSchema = createInsertSchema(templates).omit({
   updatedAt: true,
 });
 
+export const insertCategorySchema = createInsertSchema(categories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -640,3 +657,5 @@ export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type Template = typeof templates.$inferSelect;
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
+export type Category = typeof categories.$inferSelect;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;

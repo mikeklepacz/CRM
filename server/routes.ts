@@ -8,6 +8,7 @@ import axios from "axios";
 import bcrypt from "bcrypt";
 import * as client from "openid-client";
 import * as googleSheets from "./googleSheets";
+import * as googleMaps from "./googleMaps";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
@@ -16,6 +17,7 @@ import {
   insertProjectSchema,
   insertTemplateSchema,
   insertReminderSchema,
+  insertCategorySchema,
 } from "@shared/schema";
 import { google } from "googleapis";
 
@@ -7605,6 +7607,185 @@ Use this store information to provide context-aware responses. When helping draf
   setTimeout(renewWebhooksIfNeeded, 60 * 1000);
 
   console.log('[Webhook Renewal] Automatic renewal system started');
+
+  // ============================================================================
+  // CATEGORY MANAGEMENT ROUTES
+  // ============================================================================
+
+  // Get all categories (admin only)
+  app.get('/api/categories', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const categories = await storage.getAllCategories();
+      res.json({ categories });
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch categories' });
+    }
+  });
+
+  // Get active categories (all authenticated users)
+  app.get('/api/categories/active', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const categories = await storage.getActiveCategories();
+      res.json({ categories });
+    } catch (error: any) {
+      console.error('Error fetching active categories:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch categories' });
+    }
+  });
+
+  // Create category (admin only)
+  app.post('/api/categories', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const validation = insertCategorySchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const category = await storage.createCategory(validation.data);
+      res.json({ category });
+    } catch (error: any) {
+      console.error('Error creating category:', error);
+      res.status(500).json({ message: error.message || 'Failed to create category' });
+    }
+  });
+
+  // Update category (admin only)
+  app.put('/api/categories/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validation = insertCategorySchema.partial().safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const category = await storage.updateCategory(id, validation.data);
+      res.json({ category });
+    } catch (error: any) {
+      console.error('Error updating category:', error);
+      res.status(500).json({ message: error.message || 'Failed to update category' });
+    }
+  });
+
+  // Delete category (admin only)
+  app.delete('/api/categories/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteCategory(id);
+      res.json({ message: 'Category deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting category:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete category' });
+    }
+  });
+
+  // ============================================================================
+  // GOOGLE MAPS SEARCH ROUTES
+  // ============================================================================
+
+  // Search for places using Google Maps API
+  app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { query, location } = req.body;
+
+      if (!query) {
+        return res.status(400).json({ message: 'Search query is required' });
+      }
+
+      const results = await googleMaps.searchPlaces(query, location);
+      res.json({ results });
+    } catch (error: any) {
+      console.error('Error searching places:', error);
+      res.status(500).json({ message: error.message || 'Failed to search places' });
+    }
+  });
+
+  // Get place details
+  app.get('/api/maps/place/:placeId', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { placeId } = req.params;
+
+      if (!placeId) {
+        return res.status(400).json({ message: 'Place ID is required' });
+      }
+
+      const details = await googleMaps.getPlaceDetails(placeId);
+      
+      if (!details) {
+        return res.status(404).json({ message: 'Place not found' });
+      }
+
+      res.json({ place: details });
+    } catch (error: any) {
+      console.error('Error fetching place details:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch place details' });
+    }
+  });
+
+  // Save place to Store Database Google Sheet
+  app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { placeId, category } = req.body;
+
+      if (!placeId || !category) {
+        return res.status(400).json({ message: 'Place ID and category are required' });
+      }
+
+      // Get place details
+      const place = await googleMaps.getPlaceDetails(placeId);
+      if (!place) {
+        return res.status(404).json({ message: 'Place not found' });
+      }
+
+      // Parse city and state from address
+      const { city, state } = googleMaps.parseCityStateFromAddress(place.formatted_address);
+
+      // Find the Store Database sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
+
+      if (!storeSheet) {
+        return res.status(404).json({ 
+          message: 'Store Database sheet not connected. Please connect a Google Sheet with purpose "Store Database" in Settings.' 
+        });
+      }
+
+      // Prepare row data for Google Sheet
+      // Expected columns: Name, Type, Link, Address, City, State, Phone, Email, Website, Hours, Agent Name, OPEN, Category
+      const row = [
+        place.name || '',
+        place.types?.[0] || '',
+        place.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+        place.formatted_address || '',
+        city,
+        state,
+        place.formatted_phone_number || place.international_phone_number || '',
+        '', // Email - will be blank
+        place.website || '',
+        place.opening_hours?.weekday_text?.join('; ') || '',
+        '', // Agent Name - will be blank (unclaimed)
+        place.opening_hours?.open_now === true ? 'TRUE' : (place.opening_hours?.open_now === false ? 'FALSE' : ''),
+        category,
+      ];
+
+      // Append to Google Sheet
+      const range = `${storeSheet.sheetName}!A:M`; // A-M for all columns
+      await googleSheets.appendSheetData(userId, storeSheet.spreadsheetId, range, [row]);
+
+      res.json({ 
+        message: 'Place saved successfully to Store Database',
+        place: {
+          name: place.name,
+          address: place.formatted_address,
+          category
+        }
+      });
+    } catch (error: any) {
+      console.error('Error saving place to sheet:', error);
+      res.status(500).json({ message: error.message || 'Failed to save place to sheet' });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

@@ -20,12 +20,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug, Mail, Clock } from "lucide-react";
+import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug, Mail, Clock, Tag } from "lucide-react";
 import { Link } from "wouter";
 import { Integrations } from "@/components/integrations";
 import { TimezoneAutocomplete } from "@/components/timezone-autocomplete";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CategoryManagement } from "@/components/category-management";
 
 const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -445,6 +446,10 @@ export default function Settings() {
               <TabsTrigger value="google-sheets" data-testid="tab-google">
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
                 Google Sheets
+              </TabsTrigger>
+              <TabsTrigger value="categories" data-testid="tab-categories">
+                <Tag className="mr-2 h-4 w-4" />
+                Categories
               </TabsTrigger>
             </>
           )}
@@ -1000,6 +1005,10 @@ export default function Settings() {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="categories">
+              <CategoryManagement />
             </TabsContent>
           </>
         )}
