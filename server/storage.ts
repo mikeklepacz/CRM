@@ -1049,7 +1049,8 @@ export class DatabaseStorage implements IStorage {
     city: string, 
     state: string, 
     country: string,
-    excludedKeywords: string[] = []
+    excludedKeywords: string[] = [],
+    excludedTypes: string[] = []
   ): Promise<SearchHistory> {
     // Check if this exact search already exists
     const [existing] = await db
@@ -1065,13 +1066,14 @@ export class DatabaseStorage implements IStorage {
       );
 
     if (existing) {
-      // Update existing entry: increment count, update timestamp, and update excluded keywords
+      // Update existing entry: increment count, update timestamp, and update excluded keywords/types
       const [updated] = await db
         .update(searchHistory)
         .set({
           searchedAt: new Date(),
           searchCount: existing.searchCount + 1,
           excludedKeywords: excludedKeywords.length > 0 ? excludedKeywords : existing.excludedKeywords,
+          excludedTypes: excludedTypes.length > 0 ? excludedTypes : existing.excludedTypes,
         })
         .where(eq(searchHistory.id, existing.id))
         .returning();
@@ -1086,6 +1088,7 @@ export class DatabaseStorage implements IStorage {
           state,
           country,
           excludedKeywords,
+          excludedTypes,
           searchCount: 1,
         })
         .returning();

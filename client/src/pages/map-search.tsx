@@ -91,6 +91,7 @@ export default function MapSearch() {
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [excludedKeywords, setExcludedKeywords] = useState("");
+  const [excludedTypes, setExcludedTypes] = useState("");
 
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
     queryKey: ["/api/categories/active"],
@@ -103,6 +104,7 @@ export default function MapSearch() {
         query: businessType,
         location,
         excludedKeywords,
+        excludedTypes,
       });
     },
     onSuccess: (data) => {
@@ -237,7 +239,8 @@ export default function MapSearch() {
     cityParam: string,
     stateParam: string,
     countryParam: string,
-    excludedKeywordsParam?: string[] | null
+    excludedKeywordsParam?: string[] | null,
+    excludedTypesParam?: string[] | null
   ) => {
     // Populate form fields
     setBusinessType(businessTypeParam);
@@ -250,6 +253,13 @@ export default function MapSearch() {
       setExcludedKeywords(excludedKeywordsParam.join(', '));
     } else {
       setExcludedKeywords('');
+    }
+
+    // Set excluded types if provided
+    if (excludedTypesParam && excludedTypesParam.length > 0) {
+      setExcludedTypes(excludedTypesParam.join(', '));
+    } else {
+      setExcludedTypes('');
     }
 
     // Trigger search automatically
@@ -404,7 +414,21 @@ export default function MapSearch() {
                   data-testid="input-exclude-keywords"
                 />
                 <p className="text-sm text-muted-foreground">
-                  Enter keywords to exclude from results (comma-separated). Businesses containing these words will be filtered out to save API costs.
+                  Backend filtering by business name - filters out after API call
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="excludedTypes">Exclude Place Types (optional)</Label>
+                <Input
+                  id="excludedTypes"
+                  placeholder="e.g., pet_store, shopping_mall, department_store"
+                  value={excludedTypes}
+                  onChange={(e) => setExcludedTypes(e.target.value)}
+                  data-testid="input-exclude-types"
+                />
+                <p className="text-sm text-muted-foreground">
+                  API-level filtering by place type - saves API credits by excluding before fetching results
                 </p>
               </div>
 

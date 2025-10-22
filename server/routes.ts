@@ -7697,7 +7697,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Search for places using Google Maps API
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { query, location, excludedKeywords } = req.body;
+      const { query, location, excludedKeywords, excludedTypes } = req.body;
 
       if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
@@ -7722,11 +7722,24 @@ Use this store information to provide context-aware responses. When helping draf
           .filter((k: string) => k.length > 0);
       }
 
-      // Record this search in history
-      await storage.recordSearch(query, city, state, country, excludedKeywordsArray);
+      // Parse excluded types from comma-separated string or array
+      let excludedTypesArray: string[] = [];
+      if (typeof excludedTypes === 'string' && excludedTypes.trim()) {
+        excludedTypesArray = excludedTypes
+          .split(',')
+          .map((k: string) => k.trim().toLowerCase().replace(/\s+/g, '_'))
+          .filter((k: string) => k.length > 0);
+      } else if (Array.isArray(excludedTypes)) {
+        excludedTypesArray = excludedTypes
+          .map((k: string) => k.trim().toLowerCase().replace(/\s+/g, '_'))
+          .filter((k: string) => k.length > 0);
+      }
 
-      // Get search results from Google Maps
-      const results = await googleMaps.searchPlaces(query, location);
+      // Record this search in history
+      await storage.recordSearch(query, city, state, country, excludedKeywordsArray, excludedTypesArray);
+
+      // Get search results from Google Maps with API-level type filtering
+      const results = await googleMaps.searchPlaces(query, location, excludedTypesArray);
       
       // Check which place_ids are already imported
       const placeIds = results.map(r => r.place_id);
@@ -7736,7 +7749,7 @@ Use this store information to provide context-aware responses. When helping draf
       let filteredResults = results.filter(r => !importedPlaceIds.has(r.place_id));
       const duplicateCount = results.length - filteredResults.length;
       
-      // Filter out results containing excluded keywords
+      // Filter out results containing excluded keywords (backend filtering)
       let excludedCount = 0;
       if (excludedKeywordsArray.length > 0) {
         const beforeExclusionCount = filteredResults.length;

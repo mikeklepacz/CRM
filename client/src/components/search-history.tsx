@@ -9,7 +9,7 @@ import { formatDistanceToNow } from "date-fns";
 import type { SearchHistory } from "@shared/schema";
 
 interface SearchHistoryProps {
-  onSearchAgain: (businessType: string, city: string, state: string, country: string, excludedKeywords?: string[] | null) => void;
+  onSearchAgain: (businessType: string, city: string, state: string, country: string, excludedKeywords?: string[] | null, excludedTypes?: string[] | null) => void;
 }
 
 export function SearchHistoryComponent({ onSearchAgain }: SearchHistoryProps) {
@@ -84,6 +84,7 @@ export function SearchHistoryComponent({ onSearchAgain }: SearchHistoryProps) {
                       <TableHead>State</TableHead>
                       <TableHead>Country</TableHead>
                       <TableHead>Excluded Keywords</TableHead>
+                      <TableHead>Excluded Types</TableHead>
                       <TableHead>Last Searched</TableHead>
                       <TableHead className="text-center">Times Searched</TableHead>
                       <TableHead>Action</TableHead>
@@ -92,7 +93,7 @@ export function SearchHistoryComponent({ onSearchAgain }: SearchHistoryProps) {
                   <TableBody>
                     {filteredHistory.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground">
+                        <TableCell colSpan={9} className="text-center text-muted-foreground">
                           No results found for "{filterText}"
                         </TableCell>
                       </TableRow>
@@ -109,6 +110,12 @@ export function SearchHistoryComponent({ onSearchAgain }: SearchHistoryProps) {
                               : <span className="text-muted-foreground/50">None</span>
                             }
                           </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {item.excludedTypes && item.excludedTypes.length > 0 
+                              ? item.excludedTypes.join(', ') 
+                              : <span className="text-muted-foreground/50">None</span>
+                            }
+                          </TableCell>
                           <TableCell className="text-muted-foreground">
                             {formatDistanceToNow(new Date(item.searchedAt), { addSuffix: true })}
                           </TableCell>
@@ -122,7 +129,8 @@ export function SearchHistoryComponent({ onSearchAgain }: SearchHistoryProps) {
                                 item.city,
                                 item.state,
                                 item.country,
-                                item.excludedKeywords
+                                item.excludedKeywords,
+                                item.excludedTypes
                               )}
                               data-testid={`button-search-again-${item.id}`}
                             >
