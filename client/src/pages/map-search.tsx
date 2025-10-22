@@ -90,6 +90,7 @@ export default function MapSearch() {
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
   const [duplicateCount, setDuplicateCount] = useState(0);
+  const [excludedKeywords, setExcludedKeywords] = useState("");
 
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
     queryKey: ["/api/categories/active"],
@@ -101,11 +102,14 @@ export default function MapSearch() {
       return await apiRequest("POST", "/api/maps/search", {
         query: businessType,
         location,
+        excludedKeywords,
       });
     },
     onSuccess: (data) => {
       setSearchResults(data.results || []);
       setDuplicateCount(data.duplicateCount || 0);
+      const excludedCount = data.excludedCount || 0;
+      
       if (!data.results || data.results.length === 0) {
         toast({
           title: "No results found",
@@ -113,11 +117,22 @@ export default function MapSearch() {
             ? `All ${data.duplicateCount} results were already in your database`
             : "Try adjusting your search terms or location",
         });
-      } else if (data.duplicateCount > 0) {
-        toast({
-          title: `${data.results.length} new results`,
-          description: `${data.duplicateCount} duplicate${data.duplicateCount > 1 ? 's' : ''} filtered out`,
-        });
+      } else {
+        let description = '';
+        const parts = [];
+        if (data.duplicateCount > 0) {
+          parts.push(`${data.duplicateCount} duplicate${data.duplicateCount > 1 ? 's' : ''}`);
+        }
+        if (excludedCount > 0) {
+          parts.push(`${excludedCount} excluded`);
+        }
+        if (parts.length > 0) {
+          description = `${parts.join(', ')} filtered out`;
+          toast({
+            title: `${data.results.length} new results`,
+            description,
+          });
+        }
       }
     },
     onError: (error: Error) => {
@@ -221,13 +236,21 @@ export default function MapSearch() {
     businessTypeParam: string,
     cityParam: string,
     stateParam: string,
-    countryParam: string
+    countryParam: string,
+    excludedKeywordsParam?: string[] | null
   ) => {
     // Populate form fields
     setBusinessType(businessTypeParam);
     setCity(cityParam);
     setState(stateParam);
     setCountry(countryParam);
+    
+    // Set excluded keywords if provided
+    if (excludedKeywordsParam && excludedKeywordsParam.length > 0) {
+      setExcludedKeywords(excludedKeywordsParam.join(', '));
+    } else {
+      setExcludedKeywords('');
+    }
 
     // Trigger search automatically
     setTimeout(() => {
@@ -369,6 +392,20 @@ export default function MapSearch() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="excludedKeywords">Exclude Keywords (optional)</Label>
+                <Input
+                  id="excludedKeywords"
+                  placeholder="e.g., PetSmart, Pet Supplies Plus, Petco"
+                  value={excludedKeywords}
+                  onChange={(e) => setExcludedKeywords(e.target.value)}
+                  data-testid="input-exclude-keywords"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Enter keywords to exclude from results (comma-separated). Businesses containing these words will be filtered out to save API costs.
+                </p>
               </div>
 
               <Button
