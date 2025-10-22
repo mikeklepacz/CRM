@@ -214,6 +214,7 @@ export const userPreferences = pgTable("user_preferences", {
   loadingLogoUrl: text("loading_logo_url"), // Custom loading logo URL
   timezone: varchar("timezone", { length: 100 }), // IANA timezone (e.g., "America/New_York", "Europe/Warsaw")
   defaultTimezoneMode: varchar("default_timezone_mode", { length: 20 }).default('agent'), // 'agent' or 'customer' - default mode for new reminders
+  timeFormat: varchar("time_format", { length: 10 }).default('12hr'), // '12hr' or '24hr' - time display format preference
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

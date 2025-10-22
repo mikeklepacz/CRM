@@ -101,14 +101,18 @@ export default function Settings() {
     loadingLogoUrl?: string;
     timezone?: string;
     defaultTimezoneMode?: string;
+    timeFormat?: string;
   }>({
     queryKey: ['/api/user/preferences'],
   });
 
-  // Timezone state
+  // Timezone and time format state
   const [timezone, setTimezone] = useState<string>(userPreferences?.timezone || "");
   const [defaultTimezoneMode, setDefaultTimezoneMode] = useState<string>(
     userPreferences?.defaultTimezoneMode || "agent"
+  );
+  const [timeFormat, setTimeFormat] = useState<string>(
+    userPreferences?.timeFormat || "12hr"
   );
 
   // Update state when preferences load
@@ -118,6 +122,9 @@ export default function Settings() {
     }
     if (userPreferences?.defaultTimezoneMode) {
       setDefaultTimezoneMode(userPreferences.defaultTimezoneMode);
+    }
+    if (userPreferences?.timeFormat) {
+      setTimeFormat(userPreferences.timeFormat);
     }
   }, [userPreferences]);
 
@@ -328,7 +335,7 @@ export default function Settings() {
       });
       return;
     }
-    updateTimezoneMutation.mutate({ timezone, defaultTimezoneMode });
+    updateTimezoneMutation.mutate({ timezone, defaultTimezoneMode, timeFormat });
   };
 
   const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -657,6 +664,27 @@ export default function Settings() {
                     <RadioGroupItem value="customer" id="customer" data-testid="radio-customer-timezone" />
                     <Label htmlFor="customer" className="font-normal cursor-pointer">
                       Customer timezone - Auto-detect and use customer's timezone when available
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Time Display Format</Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Choose how you want times displayed throughout the app
+                </p>
+                <RadioGroup value={timeFormat} onValueChange={setTimeFormat}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="12hr" id="12hr" data-testid="radio-12hr-format" />
+                    <Label htmlFor="12hr" className="font-normal cursor-pointer">
+                      12-hour format (9:00 AM, 3:30 PM)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="24hr" id="24hr" data-testid="radio-24hr-format" />
+                    <Label htmlFor="24hr" className="font-normal cursor-pointer">
+                      24-hour format (09:00, 15:30)
                     </Label>
                   </div>
                 </RadioGroup>

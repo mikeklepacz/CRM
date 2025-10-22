@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { zonedTimeToUtc, formatInTimeZone } from "date-fns-tz";
-import { Calendar as CalendarIcon, Clock } from "lucide-react";
+import { Calendar as CalendarIcon, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
@@ -11,15 +11,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { detectTimezoneFromAddress, formatTimezoneDisplay } from "@shared/timezoneUtils";
+import { TimeSpinner } from "@/components/time-spinner";
 
 interface QuickReminderProps {
   onSave: (data: {
@@ -38,6 +32,7 @@ interface QuickReminderProps {
   storeState?: string | null;
   userTimezone?: string | null;
   defaultTimezoneMode?: string | null;
+  timeFormat?: string | null;
 }
 
 export function QuickReminder({ 
@@ -49,7 +44,8 @@ export function QuickReminder({
   storeCity,
   storeState,
   userTimezone,
-  defaultTimezoneMode = "agent"
+  defaultTimezoneMode = "agent",
+  timeFormat = "12hr"
 }: QuickReminderProps) {
   const [note, setNote] = useState(defaultNote);
   const [date, setDate] = useState<Date | undefined>(defaultDate);
@@ -77,14 +73,6 @@ export function QuickReminder({
     });
   };
 
-  const timeOptions = [];
-  for (let hour = 0; hour < 24; hour++) {
-    for (let minute = 0; minute < 60; minute += 30) {
-      const h = hour.toString().padStart(2, '0');
-      const m = minute.toString().padStart(2, '0');
-      timeOptions.push(`${h}:${m}`);
-    }
-  }
 
   // Calculate time conversion preview
   const getTimeConversionPreview = () => {
@@ -121,6 +109,13 @@ export function QuickReminder({
 
   return (
     <div className="space-y-4" data-testid="quick-reminder-form">
+      {customerTimezone && (
+        <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-muted-foreground text-sm" data-testid="timezone-indicator">
+          <MapPin className="h-4 w-4" />
+          <span>Client timezone: {formatTimezoneDisplay(customerTimezone)}</span>
+        </div>
+      )}
+      
       <div className="space-y-2">
         <Label htmlFor="reminder-note">Note / Next Action</Label>
         <Textarea
@@ -160,19 +155,11 @@ export function QuickReminder({
 
         <div className="space-y-2">
           <Label>Time</Label>
-          <Select value={time} onValueChange={setTime}>
-            <SelectTrigger data-testid="select-time">
-              <Clock className="mr-2 h-4 w-4" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {timeOptions.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <TimeSpinner
+            value={time}
+            onChange={setTime}
+            format={timeFormat === '24hr' ? '24hr' : '12hr'}
+          />
         </div>
       </div>
 

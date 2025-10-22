@@ -46,8 +46,8 @@ export function ContactActionDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch user preferences for timezone
-  const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string }>({
+  // Fetch user preferences for timezone and time format
+  const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string; timeFormat?: string }>({
     queryKey: ['/api/user/preferences'],
   });
 
@@ -239,6 +239,7 @@ export function ContactActionDialog({
                 storeState={row.State || row.state || null}
                 userTimezone={userPreferences?.timezone}
                 defaultTimezoneMode={userPreferences?.defaultTimezoneMode}
+                timeFormat={userPreferences?.timeFormat}
               />
             </CardContent>
           </Card>
