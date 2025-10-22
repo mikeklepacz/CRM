@@ -7914,6 +7914,28 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Save place to Store Database Google Sheet
+  // Reverse geocode coordinates to get location details
+  app.post('/api/maps/reverse-geocode', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { lat, lng } = req.body;
+
+      if (lat === undefined || lng === undefined) {
+        return res.status(400).json({ message: 'Latitude and longitude are required' });
+      }
+
+      const result = await googleMaps.reverseGeocode(lat, lng);
+      
+      if (!result) {
+        return res.status(404).json({ message: 'Location not found' });
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error reverse geocoding:', error);
+      res.status(500).json({ message: error.message || 'Failed to reverse geocode location' });
+    }
+  });
+
   app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;

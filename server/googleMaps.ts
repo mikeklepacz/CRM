@@ -206,3 +206,60 @@ export function parseCityStateFromAddress(formattedAddress: string): { city: str
   
   return { city: '', state: '' };
 }
+
+export interface ReverseGeocodeResult {
+  city: string;
+  state: string;
+  country: string;
+  formattedAddress: string;
+  lat: number;
+  lng: number;
+}
+
+export async function reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult | null> {
+  if (!GOOGLE_MAPS_API_KEY) {
+    throw new Error('Google Maps API key not configured');
+  }
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      return null;
+    }
+
+    const result = data.results[0];
+    const addressComponents = result.address_components || [];
+
+    // Extract city, state, country from address components
+    let city = '';
+    let state = '';
+    let country = '';
+
+    for (const component of addressComponents) {
+      if (component.types.includes('locality')) {
+        city = component.long_name;
+      } else if (component.types.includes('administrative_area_level_1')) {
+        // Get full state name
+        const stateAbbr = component.short_name;
+        state = STATE_ABBREVIATIONS[stateAbbr.toUpperCase()] || component.long_name;
+      } else if (component.types.includes('country')) {
+        country = component.long_name;
+      }
+    }
+
+    return {
+      city,
+      state,
+      country,
+      formattedAddress: result.formatted_address,
+      lat,
+      lng
+    };
+  } catch (error: any) {
+    console.error('Error reverse geocoding:', error);
+    throw error;
+  }
+}
