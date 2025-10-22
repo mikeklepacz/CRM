@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Bell, Clock, Plus, Check, Download, Store } from "lucide-react";
+import { Settings2, Bell, Clock, Plus, Check, Download, Store, Globe } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { formatInTimeZone } from "date-fns-tz";
+import { formatTimezoneDisplay } from "@shared/timezoneUtils";
 
 interface Reminder {
   id: string;
@@ -15,6 +17,8 @@ interface Reminder {
   title: string;
   description: string | null;
   dueDate: string;
+  scheduledAtUtc?: string;
+  reminderTimeZone?: string;
   isCompleted: boolean;
   createdAt: string;
   storeMetadata?: {
@@ -22,6 +26,7 @@ interface Reminder {
     storeLink?: string;
     uniqueIdentifier?: string;
     sheetId?: string;
+    customerTimeZone?: string;
     [key: string]: any;
   };
 }
@@ -32,6 +37,13 @@ export function RemindersWidget() {
   const { data, isLoading, error } = useQuery<{ reminders: Reminder[] }>({
     queryKey: ['/api/reminders'],
   });
+
+  // Fetch user preferences for timezone
+  const { data: userPreferences } = useQuery<{ timezone?: string }>({
+    queryKey: ['/api/user/preferences'],
+  });
+
+  const userTimezone = userPreferences?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const completeMutation = useMutation({
     mutationFn: async (reminderId: string) => {
@@ -124,19 +136,38 @@ export function RemindersWidget() {
     );
   }
 
+  // Helper function to get effective reminder date (prefer scheduledAtUtc, fallback to dueDate)
+  const getReminderDate = (reminder: Reminder) => {
+    return reminder.scheduledAtUtc ? new Date(reminder.scheduledAtUtc) : new Date(reminder.dueDate);
+  };
+
   const activeReminders = data.reminders
     .filter(r => !r.isCompleted)
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    .sort((a, b) => getReminderDate(a).getTime() - getReminderDate(b).getTime());
 
-  const overdueCount = activeReminders.filter(r => new Date(r.dueDate) < new Date()).length;
+  const overdueCount = activeReminders.filter(r => getReminderDate(r) < new Date()).length;
 
-  const isOverdue = (dueDate: string) => new Date(dueDate) < new Date();
-  const getDaysUntil = (dueDate: string) => {
-    const days = Math.ceil((new Date(dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+  const isOverdue = (reminder: Reminder) => getReminderDate(reminder) < new Date();
+  const getDaysUntil = (reminder: Reminder) => {
+    const dueDate = getReminderDate(reminder);
+    const days = Math.ceil((dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
     if (days < 0) return `${Math.abs(days)}d overdue`;
     if (days === 0) return 'Today';
     if (days === 1) return 'Tomorrow';
     return `${days}d`;
+  };
+
+  const formatReminderTime = (reminder: Reminder) => {
+    const date = getReminderDate(reminder);
+    try {
+      return formatInTimeZone(date, userTimezone, 'MMM d, yyyy h:mm a zzz');
+    } catch {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
   };
 
   return (
@@ -187,7 +218,7 @@ export function RemindersWidget() {
                 <div
                   key={reminder.id}
                   className={`flex items-start gap-3 p-3 rounded-md border transition-colors ${
-                    isOverdue(reminder.dueDate)
+                    isOverdue(reminder)
                       ? 'bg-destructive/10 border-destructive/20'
                       : 'bg-muted/30 border-border hover-elevate'
                   }`}
@@ -195,7 +226,7 @@ export function RemindersWidget() {
                 >
                   {/* Icon */}
                   <div className="flex-shrink-0 mt-0.5">
-                    <Clock className={`h-4 w-4 ${isOverdue(reminder.dueDate) ? 'text-destructive' : 'text-muted-foreground'}`} />
+                    <Clock className={`h-4 w-4 ${isOverdue(reminder) ? 'text-destructive' : 'text-muted-foreground'}`} />
                   </div>
 
                   {/* Content */}
@@ -224,20 +255,22 @@ export function RemindersWidget() {
                         {reminder.description}
                       </p>
                     )}
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Badge 
-                        variant={isOverdue(reminder.dueDate) ? "destructive" : "secondary"}
+                        variant={isOverdue(reminder) ? "destructive" : "secondary"}
                         className="text-xs"
                       >
-                        {getDaysUntil(reminder.dueDate)}
+                        {getDaysUntil(reminder)}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(reminder.dueDate).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
+                        {formatReminderTime(reminder)}
                       </span>
+                      {reminder.storeMetadata?.customerTimeZone && (
+                        <Badge variant="outline" className="text-xs">
+                          <Globe className="h-3 w-3 mr-1" />
+                          {formatTimezoneDisplay(reminder.storeMetadata.customerTimeZone)}
+                        </Badge>
+                      )}
                     </div>
                   </div>
 

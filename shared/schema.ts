@@ -212,6 +212,8 @@ export const userPreferences = pgTable("user_preferences", {
   textAlign: varchar("text_align", { length: 20 }),
   freezeFirstColumn: boolean("freeze_first_column").default(false),
   loadingLogoUrl: text("loading_logo_url"), // Custom loading logo URL
+  timezone: varchar("timezone", { length: 100 }), // IANA timezone (e.g., "America/New_York", "Europe/Warsaw")
+  defaultTimezoneMode: varchar("default_timezone_mode", { length: 20 }).default('agent'), // 'agent' or 'customer' - default mode for new reminders
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -237,11 +239,14 @@ export const reminders = pgTable("reminders", {
   customEmailSubject: varchar("custom_email_subject", { length: 200 }),
   customEmailBody: text("custom_email_body"),
   googleCalendarEventId: varchar("google_calendar_event_id"), // Google Calendar event ID for sync
+  scheduledAtUtc: timestamp("scheduled_at_utc"), // When the reminder should trigger in UTC
+  reminderTimeZone: varchar("reminder_time_zone", { length: 100 }), // Timezone used when creating reminder
   storeMetadata: jsonb("store_metadata").$type<{
     storeName?: string;
     storeLink?: string;
     uniqueIdentifier?: string; // For linking back to Google Sheets
     sheetId?: string; // Which Google Sheet this reminder relates to
+    customerTimeZone?: string; // Customer's timezone if using customer timezone mode
     [key: string]: any;
   }>(), // Store-related metadata for display and Google Sheets sync
   createdAt: timestamp("created_at").defaultNow(),

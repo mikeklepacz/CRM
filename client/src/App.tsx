@@ -8,6 +8,8 @@ import { ChatPanelProvider } from "@/hooks/useChatPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { Header } from "@/components/header";
+import { TimezoneDetector } from "@/components/timezone-detector";
+import { useQuery } from "@tanstack/react-query";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import AdminDashboard from "@/pages/admin-dashboard";
@@ -20,6 +22,12 @@ import SalesAssistant from "@/pages/sales-assistant";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  
+  // Fetch user preferences to check for timezone
+  const { data: userPreferences, isLoading: prefsLoading } = useQuery<{ timezone?: string }>({
+    queryKey: ['/api/user/preferences'],
+    enabled: isAuthenticated,
+  });
   
   // Apply global theme customization
   // Hook is always called (Rules of Hooks), but only applies colors when authenticated
@@ -47,6 +55,7 @@ function Router() {
 
   return (
     <ChatPanelProvider>
+      <TimezoneDetector userTimezone={userPreferences?.timezone} isLoading={prefsLoading} />
       <div className="h-screen flex flex-col">
         <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
         <main className="flex-1 overflow-auto">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -20,9 +20,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug, Mail } from "lucide-react";
+import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug, Mail, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { Integrations } from "@/components/integrations";
+import { TimezoneAutocomplete } from "@/components/timezone-autocomplete";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -94,10 +96,30 @@ export default function Settings() {
     queryKey: ["/api/integrations/status"],
   });
 
-  // Fetch user preferences to get existing loading logo
-  const { data: userPreferences } = useQuery<{ loadingLogoUrl?: string }>({
+  // Fetch user preferences to get existing loading logo, timezone, and defaultTimezoneMode
+  const { data: userPreferences } = useQuery<{ 
+    loadingLogoUrl?: string;
+    timezone?: string;
+    defaultTimezoneMode?: string;
+  }>({
     queryKey: ['/api/user/preferences'],
   });
+
+  // Timezone state
+  const [timezone, setTimezone] = useState<string>(userPreferences?.timezone || "");
+  const [defaultTimezoneMode, setDefaultTimezoneMode] = useState<string>(
+    userPreferences?.defaultTimezoneMode || "agent"
+  );
+
+  // Update state when preferences load
+  useEffect(() => {
+    if (userPreferences?.timezone) {
+      setTimezone(userPreferences.timezone);
+    }
+    if (userPreferences?.defaultTimezoneMode) {
+      setDefaultTimezoneMode(userPreferences.defaultTimezoneMode);
+    }
+  }, [userPreferences]);
 
   const profileForm = useForm({
     resolver: zodResolver(profileSchema),
@@ -277,6 +299,38 @@ export default function Settings() {
     },
   });
 
+  const updateTimezoneMutation = useMutation({
+    mutationFn: async (data: { timezone: string; defaultTimezoneMode: string }) => {
+      return await apiRequest("PUT", "/api/user/preferences", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      toast({
+        title: "Success",
+        description: "Timezone settings updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveTimezone = () => {
+    if (!timezone) {
+      toast({
+        title: "Error",
+        description: "Please select a timezone",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateTimezoneMutation.mutate({ timezone, defaultTimezoneMode });
+  };
+
   const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -341,6 +395,10 @@ export default function Settings() {
           <TabsTrigger value="integrations" data-testid="tab-integrations">
             <Plug className="mr-2 h-4 w-4" />
             Integrations
+          </TabsTrigger>
+          <TabsTrigger value="timezone" data-testid="tab-timezone">
+            <Clock className="mr-2 h-4 w-4" />
+            Timezone
           </TabsTrigger>
           {user.role === 'admin' && (
             <>
@@ -560,6 +618,59 @@ export default function Settings() {
 
         <TabsContent value="integrations">
           <Integrations />
+        </TabsContent>
+
+        <TabsContent value="timezone" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Timezone Settings</CardTitle>
+              <CardDescription>
+                Configure your timezone and default reminder settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label>Your Timezone</Label>
+                <TimezoneAutocomplete
+                  value={timezone}
+                  onChange={setTimezone}
+                  placeholder="Select your timezone..."
+                />
+                <p className="text-sm text-muted-foreground">
+                  This will be used to display times correctly and schedule reminders
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Default Reminder Mode</Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Choose whether new reminders should default to your timezone or the customer's timezone
+                </p>
+                <RadioGroup value={defaultTimezoneMode} onValueChange={setDefaultTimezoneMode}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="agent" id="agent" data-testid="radio-agent-timezone" />
+                    <Label htmlFor="agent" className="font-normal cursor-pointer">
+                      My timezone - Schedule reminders in my own timezone
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="customer" id="customer" data-testid="radio-customer-timezone" />
+                    <Label htmlFor="customer" className="font-normal cursor-pointer">
+                      Customer timezone - Auto-detect and use customer's timezone when available
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <Button
+                onClick={handleSaveTimezone}
+                disabled={updateTimezoneMutation.isPending || !timezone}
+                data-testid="button-save-timezone"
+              >
+                {updateTimezoneMutation.isPending ? "Saving..." : "Save Timezone Settings"}
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {user.role === 'admin' && (

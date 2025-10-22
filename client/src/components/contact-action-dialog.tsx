@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -45,6 +45,11 @@ export function ContactActionDialog({
 }: ContactActionDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch user preferences for timezone
+  const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string }>({
+    queryKey: ['/api/user/preferences'],
+  });
 
   const [status, setStatus] = useState(row.Status || row.status || '');
   const [notes, setNotes] = useState('');
@@ -120,7 +125,14 @@ export function ContactActionDialog({
     },
   });
 
-  const handleReminderSave = async (data: { note: string; date: Date; time: string }) => {
+  const handleReminderSave = async (data: { 
+    note: string; 
+    date: Date; 
+    time: string;
+    useCustomerTimezone: boolean;
+    customerTimezone: string | null;
+    agentTimezone: string;
+  }) => {
     setReminderData(data);
     
     // Create reminder via API
@@ -128,11 +140,14 @@ export function ContactActionDialog({
     const storeLink = row[joinColumn] || '';
     
     try {
-      await apiRequest("POST", "/api/reminders", {
+      const response: any = await apiRequest("POST", "/api/reminders", {
         title: data.note,
         description: null,
         reminderDate: data.date,
         reminderTime: data.time,
+        useCustomerTimezone: data.useCustomerTimezone,
+        customerTimezone: data.customerTimezone,
+        agentTimezone: data.agentTimezone,
         storeMetadata: {
           storeName,
           storeLink,
@@ -141,10 +156,20 @@ export function ContactActionDialog({
         },
       });
 
+      // Show success toast
       toast({
         title: "Reminder created",
         description: "Your reminder has been saved",
       });
+
+      // Show warning toast if there's a conflict
+      if (response.warning) {
+        toast({
+          title: "Duplicate Reminder Warning",
+          description: response.warning.message,
+          variant: "default",
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -209,6 +234,11 @@ export function ContactActionDialog({
               <QuickReminder 
                 onSave={handleReminderSave}
                 isSaving={false}
+                storeAddress={row.Address || row.address || null}
+                storeCity={row.City || row.city || null}
+                storeState={row.State || row.state || null}
+                userTimezone={userPreferences?.timezone}
+                defaultTimezoneMode={userPreferences?.defaultTimezoneMode}
               />
             </CardContent>
           </Card>

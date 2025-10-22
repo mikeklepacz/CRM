@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
+import { zonedTimeToUtc, formatInTimeZone } from "date-fns-tz";
 import { Calendar as CalendarIcon, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
   PopoverContent,
@@ -18,26 +19,62 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { detectTimezoneFromAddress, formatTimezoneDisplay } from "@shared/timezoneUtils";
 
 interface QuickReminderProps {
   onSave: (data: {
     note: string;
     date: Date;
     time: string;
+    useCustomerTimezone: boolean;
+    customerTimezone: string | null;
+    agentTimezone: string;
   }) => void;
   isSaving?: boolean;
   defaultNote?: string;
   defaultDate?: Date;
+  storeAddress?: string | null;
+  storeCity?: string | null;
+  storeState?: string | null;
+  userTimezone?: string | null;
+  defaultTimezoneMode?: string | null;
 }
 
-export function QuickReminder({ onSave, isSaving, defaultNote = "", defaultDate }: QuickReminderProps) {
+export function QuickReminder({ 
+  onSave, 
+  isSaving, 
+  defaultNote = "", 
+  defaultDate,
+  storeAddress,
+  storeCity,
+  storeState,
+  userTimezone,
+  defaultTimezoneMode = "agent"
+}: QuickReminderProps) {
   const [note, setNote] = useState(defaultNote);
   const [date, setDate] = useState<Date | undefined>(defaultDate);
   const [time, setTime] = useState("09:00");
+  const [useCustomerTimezone, setUseCustomerTimezone] = useState(defaultTimezoneMode === "customer");
+  
+  // Auto-detect customer timezone from address
+  const customerTimezone = detectTimezoneFromAddress(storeAddress, storeCity, storeState);
+  const agentTimezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // Update checkbox default when defaultTimezoneMode changes
+  useEffect(() => {
+    setUseCustomerTimezone(defaultTimezoneMode === "customer");
+  }, [defaultTimezoneMode]);
 
   const handleSave = () => {
     if (!note.trim() || !date) return;
-    onSave({ note, date, time });
+    onSave({ 
+      note, 
+      date, 
+      time, 
+      useCustomerTimezone: useCustomerTimezone && !!customerTimezone,
+      customerTimezone,
+      agentTimezone 
+    });
   };
 
   const timeOptions = [];
@@ -48,6 +85,39 @@ export function QuickReminder({ onSave, isSaving, defaultNote = "", defaultDate 
       timeOptions.push(`${h}:${m}`);
     }
   }
+
+  // Calculate time conversion preview
+  const getTimeConversionPreview = () => {
+    if (!date || !useCustomerTimezone || !customerTimezone) return null;
+    
+    try {
+      // Create naive datetime string (wall-clock time in customer's timezone)
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const naiveDateTimeStr = `${dateStr}T${time}:00`;
+      
+      // Treat this naive string as customer's local time and convert to UTC
+      const utcTime = zonedTimeToUtc(naiveDateTimeStr, customerTimezone);
+      
+      // Format in both timezones for preview
+      const customerTime = formatInTimeZone(
+        utcTime,
+        customerTimezone,
+        'h:mm a zzz'
+      );
+      
+      const agentTime = formatInTimeZone(
+        utcTime,
+        agentTimezone,
+        'h:mm a zzz'
+      );
+      
+      return `${customerTime} = ${agentTime}`;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const timePreview = getTimeConversionPreview();
 
   return (
     <div className="space-y-4" data-testid="quick-reminder-form">
@@ -105,6 +175,36 @@ export function QuickReminder({ onSave, isSaving, defaultNote = "", defaultDate 
           </Select>
         </div>
       </div>
+
+      {customerTimezone && (
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="use-customer-timezone"
+              checked={useCustomerTimezone}
+              onCheckedChange={(checked) => setUseCustomerTimezone(!!checked)}
+              data-testid="checkbox-customer-timezone"
+            />
+            <Label
+              htmlFor="use-customer-timezone"
+              className="text-sm font-normal cursor-pointer"
+            >
+              Use customer timezone ({formatTimezoneDisplay(customerTimezone)})
+            </Label>
+          </div>
+          {timePreview && useCustomerTimezone && (
+            <p className="text-sm text-muted-foreground ml-6" data-testid="timezone-preview">
+              {timePreview}
+            </p>
+          )}
+        </div>
+      )}
+
+      {!customerTimezone && (
+        <p className="text-sm text-muted-foreground">
+          Customer timezone could not be detected. Reminder will use your timezone ({formatTimezoneDisplay(agentTimezone)})
+        </p>
+      )}
 
       <Button
         onClick={handleSave}

@@ -6789,11 +6789,46 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/reminders', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { title, description, reminderDate, reminderTime, storeMetadata } = req.body;
+      const { 
+        title, 
+        description, 
+        reminderDate, 
+        reminderTime, 
+        storeMetadata,
+        useCustomerTimezone,
+        customerTimezone,
+        agentTimezone 
+      } = req.body;
 
-      // Combine date and time into a timestamp
+      // Determine which timezone to use
+      const effectiveTimezone = useCustomerTimezone && customerTimezone 
+        ? customerTimezone 
+        : agentTimezone || 'UTC';
+
+      // Combine date and time into a naive datetime string (wall-clock time)
       const dateStr = new Date(reminderDate).toISOString().split('T')[0];
-      const triggerDate = new Date(`${dateStr}T${reminderTime}:00`);
+      const naiveDateTimeStr = `${dateStr}T${reminderTime}:00`;
+      
+      // Convert local time to UTC using date-fns-tz
+      // Pass the string directly - zonedTimeToUtc will treat it as wall-clock time in the specified timezone
+      const { zonedTimeToUtc } = await import('date-fns-tz');
+      const utcTriggerDate = zonedTimeToUtc(naiveDateTimeStr, effectiveTimezone);
+
+      // Check for existing reminders at the same time (conflict detection)
+      const existingReminders = await storage.getRemindersByUser(userId);
+      const conflictingReminder = existingReminders.find((r: any) => {
+        if (!r.scheduledAtUtc || r.isCompleted) return false;
+        const existing = new Date(r.scheduledAtUtc).getTime();
+        const newTime = utcTriggerDate.getTime();
+        // Consider reminders within 1 minute window as conflicting
+        return Math.abs(existing - newTime) < 60000;
+      });
+
+      // Prepare store metadata with customer timezone if applicable
+      const enhancedStoreMetadata = storeMetadata ? {
+        ...storeMetadata,
+        customerTimeZone: useCustomerTimezone && customerTimezone ? customerTimezone : undefined
+      } : null;
 
       // Create reminder data
       const reminderData = {
@@ -6801,11 +6836,13 @@ Use this store information to provide context-aware responses. When helping draf
         title,
         description: description || null,
         reminderType: 'one_time' as const,
-        triggerDate,
-        nextTrigger: triggerDate,
+        triggerDate: utcTriggerDate,
+        nextTrigger: utcTriggerDate,
+        scheduledAtUtc: utcTriggerDate,
+        reminderTimeZone: effectiveTimezone,
         isActive: true,
         addToCalendar: false,
-        storeMetadata: storeMetadata || null,
+        storeMetadata: enhancedStoreMetadata,
       };
 
       // Validate with schema
@@ -6816,6 +6853,20 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Create the reminder
       const reminder = await storage.createReminder(validation.data);
+
+      // Include conflict warning in response
+      const response: any = { reminder };
+      if (conflictingReminder) {
+        response.warning = {
+          type: 'duplicate_time',
+          message: `You already have a reminder scheduled at this time: "${conflictingReminder.title}"`,
+          existingReminder: {
+            id: conflictingReminder.id,
+            title: conflictingReminder.title,
+            scheduledAt: conflictingReminder.scheduledAtUtc
+          }
+        };
+      }
 
       // Update Google Sheets if store metadata is provided
       if (storeMetadata?.sheetId && storeMetadata?.uniqueIdentifier) {
@@ -6880,7 +6931,7 @@ Use this store information to provide context-aware responses. When helping draf
         }
       }
 
-      res.json(reminder);
+      res.json(response);
     } catch (error: any) {
       console.error('Error creating reminder:', error);
       res.status(500).json({ message: error.message || 'Failed to create reminder' });
