@@ -7812,7 +7812,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Search for places using Google Maps API
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { query, location, excludedKeywords, excludedTypes, category, radius } = req.body;
+      const { query, location, excludedKeywords, excludedTypes, category } = req.body;
 
       if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
@@ -7850,14 +7850,11 @@ Use this store information to provide context-aware responses. When helping draf
           .filter((k: string) => k.length > 0);
       }
 
-      // Convert radius from miles to meters if provided
-      const radiusMeters = radius ? Math.round(radius * 1609.34) : undefined;
-
       // Record this search in history
-      await storage.recordSearch(query, city, state, country, excludedKeywordsArray, excludedTypesArray, category, radius);
+      await storage.recordSearch(query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
 
-      // Get search results from Google Maps with API-level type filtering and radius
-      const results = await googleMaps.searchPlaces(query, location, excludedTypesArray, radiusMeters);
+      // Get search results from Google Maps with API-level type filtering
+      const results = await googleMaps.searchPlaces(query, location, excludedTypesArray);
       
       // Check which place_ids are already imported
       const placeIds = results.map(r => r.place_id);
