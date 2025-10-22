@@ -863,33 +863,38 @@ export default function MapSearch() {
                         <CommandList>
                           {searchHistoryData?.history && searchHistoryData.history.length > 0 ? (
                             <>
-                              <CommandGroup heading="Recent Searches (by popularity)">
-                                {searchHistoryData.history
-                                  .sort((a, b) => b.searchCount - a.searchCount)
-                                  .slice(0, 10)
-                                  .map((entry) => (
-                                    <CommandItem
-                                      key={entry.id}
-                                      value={entry.businessType}
-                                      onSelect={(currentValue) => {
-                                        setBusinessType(currentValue);
-                                        setBusinessTypeOpen(false);
-                                      }}
-                                    >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-4 w-4",
-                                          businessType === entry.businessType ? "opacity-100" : "opacity-0"
-                                        )}
-                                      />
-                                      <div className="flex-1">
-                                        <div>{entry.businessType}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                          Searched {entry.searchCount}x
-                                        </div>
-                                      </div>
-                                    </CommandItem>
-                                  ))}
+                              <CommandGroup heading="Recent Searches">
+                                {(() => {
+                                  const uniqueBusinessTypes = new Map();
+                                  searchHistoryData.history
+                                    .sort((a, b) => new Date(b.searchedAt).getTime() - new Date(a.searchedAt).getTime())
+                                    .forEach((entry) => {
+                                      if (!uniqueBusinessTypes.has(entry.businessType)) {
+                                        uniqueBusinessTypes.set(entry.businessType, entry);
+                                      }
+                                    });
+                                  
+                                  return Array.from(uniqueBusinessTypes.values())
+                                    .slice(0, 10)
+                                    .map((entry) => (
+                                      <CommandItem
+                                        key={entry.id}
+                                        value={entry.businessType}
+                                        onSelect={(currentValue) => {
+                                          setBusinessType(currentValue);
+                                          setBusinessTypeOpen(false);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            businessType === entry.businessType ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        {entry.businessType}
+                                      </CommandItem>
+                                    ));
+                                })()}
                               </CommandGroup>
                             </>
                           ) : (
