@@ -415,6 +415,7 @@ export const searchHistory = pgTable(
     city: text("city").notNull(),
     state: text("state").notNull(),
     country: text("country").notNull(),
+    excludedKeywords: text("excluded_keywords").array().default(sql`ARRAY[]::text[]`), // Keywords to exclude from results
     searchedAt: timestamp("searched_at").defaultNow(),
     searchCount: integer("search_count").notNull().default(1),
   },
