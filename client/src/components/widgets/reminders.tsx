@@ -1,11 +1,10 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Bell, Clock, Plus, Check, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
+import { Settings2, Bell, Clock, Plus, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { formatInTimeZone } from "date-fns-tz";
@@ -44,26 +43,6 @@ export function RemindersWidget() {
   });
 
   const userTimezone = userPreferences?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  const completeMutation = useMutation({
-    mutationFn: async (reminderId: string) => {
-      await apiRequest("PUT", `/api/reminders/${reminderId}`, { isCompleted: true });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/reminders'] });
-      toast({
-        title: "Reminder completed",
-        description: "The reminder has been marked as complete."
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to complete reminder. Please try again.",
-        variant: "destructive"
-      });
-    }
-  });
 
   const handleExportCalendar = async () => {
     try {
@@ -308,17 +287,6 @@ export function RemindersWidget() {
                       )}
                     </div>
                   </div>
-
-                  {/* Complete Button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => completeMutation.mutate(reminder.id)}
-                    disabled={completeMutation.isPending}
-                    data-testid={`button-complete-${reminder.id}`}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
                 </div>
               ))}
             </div>
