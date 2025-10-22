@@ -1,12 +1,13 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Bell, Clock, Plus, Check, Download } from "lucide-react";
+import { Settings2, Bell, Clock, Plus, Check, Download, Store } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 interface Reminder {
   id: string;
@@ -16,6 +17,13 @@ interface Reminder {
   dueDate: string;
   isCompleted: boolean;
   createdAt: string;
+  storeMetadata?: {
+    storeName?: string;
+    storeLink?: string;
+    uniqueIdentifier?: string;
+    sheetId?: string;
+    [key: string]: any;
+  };
 }
 
 export function RemindersWidget() {
@@ -195,6 +203,22 @@ export function RemindersWidget() {
                     <p className="text-sm font-medium leading-snug">
                       {reminder.title}
                     </p>
+                    {reminder.storeMetadata?.storeName && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Store className="h-3 w-3" />
+                        {reminder.storeMetadata.uniqueIdentifier ? (
+                          <Link 
+                            href={`/store/${encodeURIComponent(reminder.storeMetadata.uniqueIdentifier)}`}
+                            className="hover:text-primary hover:underline"
+                            data-testid={`link-store-${reminder.id}`}
+                          >
+                            {reminder.storeMetadata.storeName}
+                          </Link>
+                        ) : (
+                          <span>{reminder.storeMetadata.storeName}</span>
+                        )}
+                      </div>
+                    )}
                     {reminder.description && (
                       <p className="text-xs text-muted-foreground line-clamp-2">
                         {reminder.description}
@@ -210,7 +234,8 @@ export function RemindersWidget() {
                       <span className="text-xs text-muted-foreground">
                         {new Date(reminder.dueDate).toLocaleDateString('en-US', { 
                           month: 'short', 
-                          day: 'numeric'
+                          day: 'numeric',
+                          year: 'numeric'
                         })}
                       </span>
                     </div>
