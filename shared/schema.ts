@@ -74,7 +74,7 @@ export const googleSheets = pgTable("google_sheets", {
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   // Google Sheets sync fields
-  uniqueIdentifier: varchar("unique_identifier").unique(), // Leafly link or other unique ID
+  uniqueIdentifier: varchar("unique_identifier"), // Leafly link or other unique ID (temporarily removed .unique() due to drizzle metadata mismatch - will re-add after migration cleanup)
   googleSheetId: varchar("google_sheet_id"), // ID of the connected Google Sheet
   googleSheetRowId: integer("google_sheet_row_id"), // Row number in Google Sheet
   // CSV/Sheet data stored as JSONB for flexibility
