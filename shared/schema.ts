@@ -406,6 +406,21 @@ export const importedPlaces = pgTable(
   (table) => [index("idx_place_id").on(table.placeId)],
 );
 
+// Search History table - global history of Map Search queries
+export const searchHistory = pgTable(
+  "search_history",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    businessType: text("business_type").notNull(),
+    city: text("city").notNull(),
+    state: text("state").notNull(),
+    country: text("country").notNull(),
+    searchedAt: timestamp("searched_at").defaultNow(),
+    searchCount: integer("search_count").notNull().default(1),
+  },
+  (table) => [index("idx_searched_at").on(table.searchedAt)],
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
@@ -631,6 +646,11 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
   updatedAt: true,
 });
 
+export const insertSearchHistorySchema = createInsertSchema(searchHistory).omit({
+  id: true,
+  searchedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -670,3 +690,5 @@ export type Template = typeof templates.$inferSelect;
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 export type Category = typeof categories.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
+export type SearchHistory = typeof searchHistory.$inferSelect;
+export type InsertSearchHistory = z.infer<typeof insertSearchHistorySchema>;
