@@ -148,10 +148,13 @@ export default function MapSearch() {
     queryKey: ["/api/maps/last-category"],
   });
 
-  // Initialize category from last selection (defaults to 'pet' if never chosen)
+  // Initialize category from last selection (defaults to 'Pets' if never chosen)
   useEffect(() => {
     if (lastCategoryData?.category) {
       setCategory(lastCategoryData.category);
+    } else {
+      // Default to 'Pets' if no last category exists
+      setCategory("Pets");
     }
   }, [lastCategoryData]);
 
@@ -541,13 +544,20 @@ export default function MapSearch() {
 
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
-                  <Input
-                    id="category"
-                    placeholder="e.g., pet, food, retail"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    data-testid="input-category"
-                  />
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger data-testid="select-category">
+                      <SelectValue placeholder="Select category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoriesData?.categories
+                        .filter((cat) => cat.isActive)
+                        .map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">

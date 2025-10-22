@@ -7784,7 +7784,7 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const lastCategory = await storage.getLastCategory(userId);
-      res.json({ category: lastCategory || 'pet' }); // Default to 'pet'
+      res.json({ category: lastCategory || 'Pets' }); // Default to 'Pets'
     } catch (error: any) {
       console.error('Error fetching last category:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch last category' });
