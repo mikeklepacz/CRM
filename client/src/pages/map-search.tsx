@@ -112,7 +112,6 @@ export default function MapSearch() {
   const [country, setCountry] = useState("United States");
   const [stateOpen, setStateOpen] = useState(false);
   const [businessTypeOpen, setBusinessTypeOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("");
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
   const [duplicateCount, setDuplicateCount] = useState(0);
