@@ -106,7 +106,6 @@ export default function MapSearch() {
   const { toast } = useToast();
   const [businessType, setBusinessType] = useState("");
   const [category, setCategory] = useState("");
-  const [radius, setRadius] = useState<string>("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [country, setCountry] = useState("United States");
@@ -221,7 +220,6 @@ export default function MapSearch() {
         excludedKeywords: activeKeywords,
         excludedTypes: activeTypes,
         category: category || undefined,
-        radius: radius ? parseFloat(radius) : undefined,
       });
     },
     onSuccess: async (data) => {
@@ -476,8 +474,8 @@ export default function MapSearch() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSearch} className="space-y-4">
-              {/* Row 1: Business Type, Category, Radius */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Row 1: Business Type, Category */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Business Type *</Label>
                   <Popover open={businessTypeOpen} onOpenChange={setBusinessTypeOpen}>
@@ -557,20 +555,6 @@ export default function MapSearch() {
                         ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="radius">Radius (miles)</Label>
-                  <Input
-                    id="radius"
-                    type="number"
-                    placeholder="e.g., 5, 10, 25"
-                    value={radius}
-                    onChange={(e) => setRadius(e.target.value)}
-                    min="1"
-                    step="1"
-                    data-testid="input-radius"
-                  />
                 </div>
               </div>
 
