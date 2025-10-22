@@ -744,8 +744,8 @@ export default function MapSearch() {
       </div>
 
       {/* Floating Search Form Card (Bottom) */}
-      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-2xl max-h-[calc(100vh-8rem)]">
-        <Card className="backdrop-blur-md bg-background/80 flex flex-col max-h-full">
+      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-2xl max-h-[65vh]">
+        <Card className="backdrop-blur-md bg-background/80 flex flex-col max-h-full overflow-hidden">
           <CardHeader className="flex-shrink-0">
             <CardTitle>Search Businesses</CardTitle>
             <CardDescription>
