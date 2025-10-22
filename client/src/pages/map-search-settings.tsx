@@ -22,9 +22,7 @@ export default function MapSearchSettings() {
   // Delete search history mutation
   const deleteHistoryMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/maps/search-history/${id}`, {
-        method: 'DELETE',
-      });
+      return apiRequest('DELETE', `/api/maps/search-history/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/maps/search-history'] });
@@ -45,9 +43,7 @@ export default function MapSearchSettings() {
   // Delete exclusion mutation
   const deleteExclusionMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/maps/exclusions/${id}`, {
-        method: 'DELETE',
-      });
+      return apiRequest('DELETE', `/api/maps/exclusions/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/maps/exclusions'] });

@@ -76,6 +76,16 @@ interface SavedExclusion {
   createdAt: string;
 }
 
+interface SearchHistory {
+  id: string;
+  businessType: string;
+  city: string;
+  state: string;
+  country: string;
+  searchCount: number;
+  searchedAt: string;
+}
+
 const US_STATES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
   "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
@@ -99,6 +109,7 @@ export default function MapSearch() {
   const [state, setState] = useState("");
   const [country, setCountry] = useState("United States");
   const [stateOpen, setStateOpen] = useState(false);
+  const [businessTypeOpen, setBusinessTypeOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
@@ -123,6 +134,11 @@ export default function MapSearch() {
   // Fetch user preferences to get active exclusions
   const { data: preferencesData } = useQuery<{ preferences: any }>({
     queryKey: ["/api/user/preferences"],
+  });
+
+  // Fetch search history for business type combobox
+  const { data: searchHistoryData } = useQuery<{ history: SearchHistory[] }>({
+    queryKey: ["/api/maps/search-history"],
   });
 
   // Initialize active exclusions from user preferences
@@ -435,14 +451,66 @@ export default function MapSearch() {
             <form onSubmit={handleSearch} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="businessType">Business Type *</Label>
-                  <Input
-                    id="businessType"
-                    placeholder="e.g., pet store, dispensary"
-                    value={businessType}
-                    onChange={(e) => setBusinessType(e.target.value)}
-                    data-testid="input-business-type"
-                  />
+                  <Label>Business Type *</Label>
+                  <Popover open={businessTypeOpen} onOpenChange={setBusinessTypeOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={businessTypeOpen}
+                        className="w-full justify-between"
+                        data-testid="button-business-type-select"
+                      >
+                        {businessType || "Select or type business type..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0">
+                      <Command shouldFilter={false}>
+                        <CommandInput 
+                          placeholder="Type to search or enter new..." 
+                          value={businessType}
+                          onValueChange={setBusinessType}
+                        />
+                        <CommandList>
+                          {searchHistoryData?.history && searchHistoryData.history.length > 0 ? (
+                            <>
+                              <CommandGroup heading="Recent Searches (by popularity)">
+                                {searchHistoryData.history
+                                  .sort((a, b) => b.searchCount - a.searchCount)
+                                  .slice(0, 10)
+                                  .map((entry) => (
+                                    <CommandItem
+                                      key={entry.id}
+                                      value={entry.businessType}
+                                      onSelect={(currentValue) => {
+                                        setBusinessType(currentValue);
+                                        setBusinessTypeOpen(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          businessType === entry.businessType ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div className="flex-1">
+                                        <div>{entry.businessType}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Searched {entry.searchCount}x
+                                        </div>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                              </CommandGroup>
+                            </>
+                          ) : (
+                            <CommandEmpty>Type to enter a business type</CommandEmpty>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 <div className="space-y-2">
