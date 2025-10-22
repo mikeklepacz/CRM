@@ -88,6 +88,7 @@ export default function MapSearch() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
+  const [duplicateCount, setDuplicateCount] = useState(0);
 
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
     queryKey: ["/api/categories/active"],
@@ -103,10 +104,18 @@ export default function MapSearch() {
     },
     onSuccess: (data) => {
       setSearchResults(data.results || []);
+      setDuplicateCount(data.duplicateCount || 0);
       if (!data.results || data.results.length === 0) {
         toast({
           title: "No results found",
-          description: "Try adjusting your search terms or location",
+          description: data.duplicateCount > 0 
+            ? `All ${data.duplicateCount} results were already in your database`
+            : "Try adjusting your search terms or location",
+        });
+      } else if (data.duplicateCount > 0) {
+        toast({
+          title: `${data.results.length} new results`,
+          description: `${data.duplicateCount} duplicate${data.duplicateCount > 1 ? 's' : ''} filtered out`,
         });
       }
     },
@@ -366,7 +375,14 @@ export default function MapSearch() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Search Results ({searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL').length})</CardTitle>
+                  <CardTitle>
+                    Search Results ({searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL').length})
+                    {duplicateCount > 0 && (
+                      <span className="text-sm font-normal text-muted-foreground ml-2">
+                        ({duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''} filtered)
+                      </span>
+                    )}
+                  </CardTitle>
                   <CardDescription>
                     Click "Add to Database" to save a business to your Store Database sheet
                   </CardDescription>
@@ -392,7 +408,6 @@ export default function MapSearch() {
                       <TableHead>Name & Rating</TableHead>
                       <TableHead>Address</TableHead>
                       <TableHead>Location</TableHead>
-                      <TableHead>Status</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -425,17 +440,6 @@ export default function MapSearch() {
                               <span className="font-medium">{placeCity}</span>
                               <span className="text-muted-foreground">{placeState}</span>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            {place.business_status === 'OPERATIONAL' ? (
-                              <Badge variant="default">Open</Badge>
-                            ) : place.business_status === 'CLOSED_TEMPORARILY' ? (
-                              <Badge variant="secondary">Temp Closed</Badge>
-                            ) : place.business_status === 'CLOSED_PERMANENTLY' ? (
-                              <Badge variant="destructive">Closed</Badge>
-                            ) : (
-                              <Badge variant="outline">Unknown</Badge>
-                            )}
                           </TableCell>
                           <TableCell>
                             <Button
