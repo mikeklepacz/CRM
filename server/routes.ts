@@ -7751,6 +7751,23 @@ Use this store information to provide context-aware responses. When helping draf
         });
       }
 
+      // Clean up address - extract just street address without city/state/zip/country
+      const cleanAddress = (fullAddress: string, cityName: string, stateName: string): string => {
+        const parts = fullAddress.split(',').map(p => p.trim());
+        // Remove the last 2 parts (state+zip and country), keep street address
+        if (parts.length >= 3) {
+          return parts.slice(0, -2).join(', ');
+        }
+        return parts[0] || fullAddress;
+      };
+
+      // Format hours more concisely - just show if open and basic hours
+      const formatHours = (weekdayText?: string[]): string => {
+        if (!weekdayText || weekdayText.length === 0) return '';
+        // Just take the first entry as a sample
+        return weekdayText[0] || '';
+      };
+
       // Prepare row data for Google Sheet
       // Columns: A=Name, B=Type, C=Link, D=Member Since, E=Address, F=City, G=State, 
       //          H=Phone, I=Website, J=Email, K=Followers, L=Tags, M=Hours, N=DBA, 
@@ -7760,7 +7777,7 @@ Use this store information to provide context-aware responses. When helping draf
         place.types?.[0] || '',                             // B: Type
         place.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`, // C: Link
         '',                                                  // D: Member Since (blank)
-        place.formatted_address || '',                      // E: Address
+        cleanAddress(place.formatted_address || '', city, state), // E: Address (street only)
         city,                                                // F: City
         state,                                               // G: State
         place.formatted_phone_number || place.international_phone_number || '', // H: Phone
@@ -7768,7 +7785,7 @@ Use this store information to provide context-aware responses. When helping draf
         '',                                                  // J: Email (blank)
         '',                                                  // K: Followers (blank)
         '',                                                  // L: Tags (blank)
-        place.opening_hours?.weekday_text?.join('; ') || '', // M: Hours
+        formatHours(place.opening_hours?.weekday_text),     // M: Hours (sample)
         '',                                                  // N: DBA (blank)
         '',                                                  // O: Vibe Score (blank)
         '',                                                  // P: Sales-ready Summary (blank)
