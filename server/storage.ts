@@ -20,6 +20,7 @@ import {
   templates,
   categories,
   importedPlaces,
+  searchHistory,
   type User,
   type UpsertUser,
   type Client,
@@ -57,6 +58,8 @@ import {
   type InsertTemplate,
   type Category,
   type InsertCategory,
+  type SearchHistory,
+  type InsertSearchHistory,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -190,6 +193,14 @@ export interface IStorage {
   createCategory(category: InsertCategory): Promise<Category>;
   updateCategory(id: string, updates: Partial<InsertCategory>): Promise<Category>;
   deleteCategory(id: string): Promise<void>;
+  
+  // Imported Places operations
+  checkImportedPlaces(placeIds: string[]): Promise<Set<string>>;
+  recordImportedPlace(placeId: string): Promise<void>;
+  
+  // Search History operations
+  getAllSearchHistory(): Promise<SearchHistory[]>;
+  recordSearch(businessType: string, city: string, state: string, country: string): Promise<SearchHistory>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1022,6 +1033,61 @@ export class DatabaseStorage implements IStorage {
       .insert(importedPlaces)
       .values({ placeId })
       .onConflictDoNothing(); // Ignore if already exists
+  }
+
+  // Search History operations - for Map Search
+  async getAllSearchHistory(): Promise<SearchHistory[]> {
+    const history = await db
+      .select()
+      .from(searchHistory)
+      .orderBy(desc(searchHistory.searchedAt));
+    return history;
+  }
+
+  async recordSearch(
+    businessType: string, 
+    city: string, 
+    state: string, 
+    country: string
+  ): Promise<SearchHistory> {
+    // Check if this exact search already exists
+    const [existing] = await db
+      .select()
+      .from(searchHistory)
+      .where(
+        and(
+          eq(searchHistory.businessType, businessType),
+          eq(searchHistory.city, city),
+          eq(searchHistory.state, state),
+          eq(searchHistory.country, country)
+        )
+      );
+
+    if (existing) {
+      // Update existing entry: increment count and update timestamp
+      const [updated] = await db
+        .update(searchHistory)
+        .set({
+          searchedAt: new Date(),
+          searchCount: existing.searchCount + 1,
+        })
+        .where(eq(searchHistory.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new entry
+      const [newEntry] = await db
+        .insert(searchHistory)
+        .values({
+          businessType,
+          city,
+          state,
+          country,
+          searchCount: 1,
+        })
+        .returning();
+      return newEntry;
+    }
   }
 }
 
