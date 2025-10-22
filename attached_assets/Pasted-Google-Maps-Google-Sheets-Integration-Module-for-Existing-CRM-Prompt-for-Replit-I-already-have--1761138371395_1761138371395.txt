@@ -1,0 +1,37 @@
+Google Maps → Google Sheets Integration Module for Existing CRM
+
+Prompt for Replit:
+
+I already have a Node.js + Express project set up in Replit.
+It includes:
+	•	a .env file with valid credentials
+	•	a working node.js / index.js server
+	•	functioning Google Sheets API integration (the app already writes and reads rows)
+	•	a verified GOOGLE_API_KEY that connects to the Google Places API (New) and Geocoding API
+
+I want to extend this existing CRM by adding a “Map Search” module that uses the Google Places API to find businesses and optionally save them into my Google Sheet.
+Users will search small, city-by-city volumes (no bulk crawler needed).
+
+Please build this in a modular way so it can live alongside the current codebase.
+
+Requirements
+	•	Create a new Express route file:
+routes/maps.js
+Handles GET /api/maps/search?term=&city= calls, using my existing GOOGLE_API_KEY from .env.
+	•	Create a frontend page:
+views/maps.html (or EJS if preferred)
+Provides a simple search form (term, city) and displays tabular results with “Save” buttons.
+	•	Add a frontend script:
+public/js/maps.js
+Handles submitting the search, rendering results, and posting selected rows to /api/sheets/add — an endpoint that already appends data to the Google Sheet.
+	•	When saving a record, include these fields:
+Name, Type, Link, Address, City, State, Phone, Website, Email (blank), Hours, Agent Name (blank), OPEN, Category (generic).
+Use the Google Places API fields name, formatted_address, formatted_phone_number, website, opening_hours.open_now, and place_id.
+Construct the map link as:
+https://www.google.com/maps/place/?q=place_id:<place_id>
+	•	Reuse the current .env and npm packages (dotenv, node-fetch v2, googleapis, json2csv, etc.).
+	•	Use minimal Bootstrap or Tailwind styling for the page.
+	•	Comment the code thoroughly so it’s easy to adapt for different categories (pet stores, dispensaries, restaurants, etc.).
+
+The end goal:
+Employees can open /maps in Replit’s web view → enter a business type + city → view results → click Save → rows appear in the connected Google Sheet.
