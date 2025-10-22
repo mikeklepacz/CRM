@@ -744,15 +744,15 @@ export default function MapSearch() {
       </div>
 
       {/* Floating Search Form Card (Bottom) */}
-      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-2xl">
-        <Card className="backdrop-blur-md bg-background/80">
-          <CardHeader>
+      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-2xl max-h-[calc(100vh-8rem)]">
+        <Card className="backdrop-blur-md bg-background/80 flex flex-col max-h-full">
+          <CardHeader className="flex-shrink-0">
             <CardTitle>Search Businesses</CardTitle>
             <CardDescription>
               Find local businesses using Google Maps and add them to your database
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-y-auto flex-1">
             <form onSubmit={handleSearch} className="space-y-4">
               {/* Row 1: Business Type, Category */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
