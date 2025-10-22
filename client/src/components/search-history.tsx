@@ -75,51 +75,28 @@ export function SearchHistoryComponent({ onSearchAgain }: SearchHistoryProps) {
                 />
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Action</TableHead>
                       <TableHead>Business Type</TableHead>
                       <TableHead>City</TableHead>
                       <TableHead>State</TableHead>
-                      <TableHead>Country</TableHead>
                       <TableHead>Excluded Keywords</TableHead>
                       <TableHead>Excluded Types</TableHead>
-                      <TableHead>Last Searched</TableHead>
-                      <TableHead className="text-center">Times Searched</TableHead>
-                      <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredHistory.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">
                           No results found for "{filterText}"
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredHistory.map((item) => (
                         <TableRow key={item.id} data-testid={`row-history-${item.id}`}>
-                          <TableCell className="font-medium">{item.businessType}</TableCell>
-                          <TableCell>{item.city}</TableCell>
-                          <TableCell>{item.state}</TableCell>
-                          <TableCell>{item.country}</TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {item.excludedKeywords && item.excludedKeywords.length > 0 
-                              ? item.excludedKeywords.join(', ') 
-                              : <span className="text-muted-foreground/50">None</span>
-                            }
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {item.excludedTypes && item.excludedTypes.length > 0 
-                              ? item.excludedTypes.join(', ') 
-                              : <span className="text-muted-foreground/50">None</span>
-                            }
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatDistanceToNow(new Date(item.searchedAt), { addSuffix: true })}
-                          </TableCell>
-                          <TableCell className="text-center">{item.searchCount}</TableCell>
                           <TableCell>
                             <Button
                               size="sm"
@@ -137,6 +114,21 @@ export function SearchHistoryComponent({ onSearchAgain }: SearchHistoryProps) {
                               <RotateCcw className="mr-1 h-3 w-3" />
                               Search Again
                             </Button>
+                          </TableCell>
+                          <TableCell className="font-medium">{item.businessType}</TableCell>
+                          <TableCell>{item.city}</TableCell>
+                          <TableCell>{item.state}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {item.excludedKeywords && item.excludedKeywords.length > 0 
+                              ? item.excludedKeywords.join(', ') 
+                              : <span className="text-muted-foreground/50">None</span>
+                            }
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {item.excludedTypes && item.excludedTypes.length > 0 
+                              ? item.excludedTypes.join(', ') 
+                              : <span className="text-muted-foreground/50">None</span>
+                            }
                           </TableCell>
                         </TableRow>
                       ))
