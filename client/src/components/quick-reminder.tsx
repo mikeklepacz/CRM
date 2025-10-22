@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { zonedTimeToUtc, formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, getTimezoneOffset } from "date-fns-tz";
 import { Calendar as CalendarIcon, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -83,8 +83,10 @@ export function QuickReminder({
       const dateStr = format(date, 'yyyy-MM-dd');
       const naiveDateTimeStr = `${dateStr}T${time}:00`;
       
-      // Treat this naive string as customer's local time and convert to UTC
-      const utcTime = zonedTimeToUtc(naiveDateTimeStr, customerTimezone);
+      // Parse as Date and adjust for timezone offset
+      const naiveDate = new Date(naiveDateTimeStr);
+      const offset = getTimezoneOffset(customerTimezone, naiveDate);
+      const utcTime = new Date(naiveDate.getTime() - offset);
       
       // Format in both timezones for preview
       const customerTime = formatInTimeZone(

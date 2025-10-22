@@ -36,6 +36,7 @@ import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 import { useChatPanel } from "@/hooks/useChatPanel";
+import { QuickReminder } from "@/components/quick-reminder";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -3118,6 +3119,11 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: currentUser } = useQuery<{ email: string; role: string; agentName?: string }>({ queryKey: ['/api/auth/user'] });
+  
+  // Fetch user preferences for timezone and time format
+  const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string; timeFormat?: string }>({
+    queryKey: ['/api/preferences'],
+  });
 
   const [formData, setFormData] = useState({
     name: "",
@@ -4029,81 +4035,77 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                     </div>
                   </div>
 
-                  {/* Status, Follow-Up Date, Next Action */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
-                    <div className="space-y-2">
-                      <Label htmlFor="status">Status</Label>
-                      <Select
-                        value={formData.status}
-                        onValueChange={(value) => handleInputChange('status', value)}
-                      >
-                        <SelectTrigger id="status" data-testid="select-status">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {statusOptions.map((status: string) => {
-                            const colors = statusColors[status];
-                            debug.statusColors(`Applying status colors to Store Info popup dropdown`, {
-                              status,
-                              backgroundColor: colors?.background,
-                              textColor: colors?.text,
-                            });
-                            return (
-                              <SelectItem 
-                                key={status}
-                                value={status} 
-                                data-testid={`status-option-${status.toLowerCase().replace(/[^a-z]+/g, '-')}`}
-                                style={{
-                                  backgroundColor: colors?.background || 'transparent',
-                                  color: colors?.text || 'inherit',
-                                }}
-                              >
-                                {status}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="follow_up_date">
-                        Follow-Up Date
-                      </Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start text-left font-normal"
-                            data-testid="button-follow-up-date"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {formData.follow_up_date ? (
-                              format(parse(formData.follow_up_date, 'M/d/yyyy', new Date()), 'PPP')
-                            ) : (
-                              <span className="text-muted-foreground">Pick a date</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" data-testid="popover-follow-up-date">
-                          <Calendar
-                            mode="single"
-                            selected={formData.follow_up_date ? parse(formData.follow_up_date, 'M/d/yyyy', new Date()) : undefined}
-                            onSelect={(date) => handleInputChange('follow_up_date', date ? format(date, 'M/d/yyyy') : '')}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="next_action">Next Action</Label>
-                      <Input
-                        id="next_action"
-                        data-testid="input-next-action"
-                        value={formData.next_action}
-                        onChange={(e) => handleInputChange('next_action', e.target.value)}
-                        placeholder="e.g., Call back next week"
-                      />
-                    </div>
+                  {/* Status */}
+                  <div className="space-y-2 pt-4 border-t">
+                    <Label htmlFor="status">Status</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(value) => handleInputChange('status', value)}
+                    >
+                      <SelectTrigger id="status" data-testid="select-status">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((status: string) => {
+                          const colors = statusColors[status];
+                          debug.statusColors(`Applying status colors to Store Info popup dropdown`, {
+                            status,
+                            backgroundColor: colors?.background,
+                            textColor: colors?.text,
+                          });
+                          return (
+                            <SelectItem 
+                              key={status}
+                              value={status} 
+                              data-testid={`status-option-${status.toLowerCase().replace(/[^a-z]+/g, '-')}`}
+                              style={{
+                                backgroundColor: colors?.background || 'transparent',
+                                color: colors?.text || 'inherit',
+                              }}
+                            >
+                              {status}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Smart Reminder Box */}
+                  <div className="pt-4 border-t">
+                    <QuickReminder
+                      onSave={async (reminderData) => {
+                        try {
+                          await apiRequest('POST', '/api/reminders', {
+                            storeId: row.link,
+                            storeName: formData.name,
+                            note: reminderData.note,
+                            scheduledAtUtc: reminderData.date.toISOString(),
+                            scheduledTime: reminderData.time,
+                            useCustomerTimezone: reminderData.useCustomerTimezone,
+                            customerTimezone: reminderData.customerTimezone,
+                            agentTimezone: reminderData.agentTimezone,
+                          });
+                          
+                          toast({
+                            title: "Reminder Created",
+                            description: "Your reminder has been saved successfully.",
+                          });
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to create reminder",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      storeAddress={formData.address}
+                      storeCity={formData.city}
+                      storeState={formData.state}
+                      userTimezone={userPreferences?.timezone}
+                      defaultTimezoneMode={userPreferences?.defaultTimezoneMode}
+                      timeFormat={userPreferences?.timeFormat}
+                    />
                   </div>
                 </div>
               </AccordionContent>
