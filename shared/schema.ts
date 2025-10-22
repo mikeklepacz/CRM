@@ -241,6 +241,7 @@ export const reminders = pgTable("reminders", {
   googleCalendarEventId: varchar("google_calendar_event_id"), // Google Calendar event ID for sync
   scheduledAtUtc: timestamp("scheduled_at_utc"), // When the reminder should trigger in UTC
   reminderTimeZone: varchar("reminder_time_zone", { length: 100 }), // Timezone used when creating reminder
+  dueDate: timestamp("due_date"), // Legacy field - kept for compatibility, new reminders use scheduledAtUtc
   storeMetadata: jsonb("store_metadata").$type<{
     storeName?: string;
     storeLink?: string;

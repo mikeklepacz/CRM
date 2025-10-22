@@ -371,6 +371,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     statusOptions: z.array(z.string()).optional(),
     showMyStoresOnly: z.boolean().optional(),
     loadingLogoUrl: z.string().optional(),
+    timezone: z.string().optional(),
+    defaultTimezoneMode: z.enum(['agent', 'customer']).optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
