@@ -5149,12 +5149,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filteredMonths = sortedMonths.slice(-12);
       }
 
-      const trends = filteredMonths.map(month => ({
-        month,
-        revenue: "0.00", // We don't track order totals in Commission Tracker, only commission amounts
-        commission: monthlyData[month].commission.toFixed(2),
-        orders: monthlyData[month].transactions
-      }));
+      const trends = filteredMonths.map(month => {
+        const commissionAmount = monthlyData[month].commission;
+        // Format month for display (e.g., "May 2025")
+        const [year, monthNum] = month.split('-');
+        const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+        const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        
+        return {
+          period: monthName, // Readable label for X-axis
+          revenue: commissionAmount, // Use commission as revenue for chart
+          commissions: commissionAmount, // Also include as commissions
+          orders: monthlyData[month].transactions
+        };
+      });
 
       res.json({ trends });
     } catch (error: any) {
