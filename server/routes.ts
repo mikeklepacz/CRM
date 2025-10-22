@@ -7692,8 +7692,22 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: 'Search query is required' });
       }
 
+      // Get search results from Google Maps
       const results = await googleMaps.searchPlaces(query, location);
-      res.json({ results });
+      
+      // Check which place_ids are already imported
+      const placeIds = results.map(r => r.place_id);
+      const importedPlaceIds = await storage.checkImportedPlaces(placeIds);
+      
+      // Filter out already imported places
+      const newResults = results.filter(r => !importedPlaceIds.has(r.place_id));
+      const duplicateCount = results.length - newResults.length;
+      
+      res.json({ 
+        results: newResults,
+        totalResults: results.length,
+        duplicateCount 
+      });
     } catch (error: any) {
       console.error('Error searching places:', error);
       res.status(500).json({ message: error.message || 'Failed to search places' });
