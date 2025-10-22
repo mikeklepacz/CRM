@@ -395,6 +395,17 @@ export const categories = pgTable("categories", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Imported Places table - tracks Google Maps place_ids to prevent duplicates
+export const importedPlaces = pgTable(
+  "imported_places",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    placeId: varchar("place_id", { length: 255 }).notNull().unique(), // Google Maps place_id
+    importedAt: timestamp("imported_at").defaultNow(),
+  },
+  (table) => [index("idx_place_id").on(table.placeId)],
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   csvUploads: many(csvUploads),
