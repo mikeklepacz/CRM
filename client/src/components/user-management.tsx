@@ -42,11 +42,17 @@ export function UserManagement() {
     agentName: "",
     password: "",
     role: "agent",
+    selectedCategory: "",
   });
 
   // Fetch all users with metrics
   const { data, isLoading, error } = useQuery<{ users: UserWithMetrics[] }>({
     queryKey: ['/api/users'],
+  });
+
+  // Fetch available categories for user creation
+  const { data: categories } = useQuery<Array<{id: string, name: string}>>({
+    queryKey: ['/api/categories'],
   });
 
   // Create user mutation
@@ -64,6 +70,7 @@ export function UserManagement() {
         agentName: "",
         password: "",
         role: "agent",
+        selectedCategory: "",
       });
       toast({
         title: "Success",
@@ -349,6 +356,25 @@ export function UserManagement() {
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category">CRM Category Filter</Label>
+                  <Select value={newUser.selectedCategory} onValueChange={(value) => setNewUser({ ...newUser, selectedCategory: value })}>
+                    <SelectTrigger id="category" data-testid="select-user-category">
+                      <SelectValue placeholder="Select category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories?.map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    User will only see stores from this category in their CRM
+                  </p>
                 </div>
               </div>
 

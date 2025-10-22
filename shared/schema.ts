@@ -83,6 +83,7 @@ export const clients = pgTable("clients", {
   assignedAgent: varchar("assigned_agent").references(() => users.id),
   claimDate: timestamp("claim_date"),
   status: varchar("status", { length: 50 }).default('unassigned'), // unassigned, claimed, active, inactive
+  category: varchar("category", { length: 100 }), // Category filter (e.g., "Pets", "Cannabis") for team segregation
   tags: text("tags").array().default(sql`ARRAY[]::text[]`),
   // Order tracking
   firstOrderDate: timestamp("first_order_date"),

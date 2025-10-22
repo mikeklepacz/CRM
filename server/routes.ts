@@ -1294,7 +1294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new user (admin only)
   app.post('/api/users', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
-      const { email, firstName, lastName, agentName, password, role } = req.body;
+      const { email, firstName, lastName, agentName, password, role, selectedCategory } = req.body;
       
       if (!email || !agentName || !password) {
         return res.status(400).json({ message: "Email, agent name, and password are required" });
@@ -1321,6 +1321,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         passwordHash,
         role: role || 'agent',
       });
+      
+      // Set selectedCategory preference if provided
+      if (selectedCategory) {
+        await storage.setSelectedCategory(newUser.id, selectedCategory);
+      }
       
       res.json({ user: newUser });
     } catch (error: any) {
