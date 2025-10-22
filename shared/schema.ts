@@ -334,6 +334,7 @@ export const knowledgeBaseFiles = pgTable("knowledge_base_files", {
   openaiFileId: varchar("openai_file_id", { length: 100 }), // OpenAI file ID
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
   category: varchar("category", { length: 100 }).default('general'), // scripts, objections, product-info, etc.
+  productCategory: varchar("product_category", { length: 100 }), // Product line: Pets, Cannabis, etc. - filters which agents see this file
   description: text("description"),
   processingStatus: varchar("processing_status", { length: 50 }).default('uploading'), // 'uploading', 'processing', 'ready', 'failed'
   isActive: boolean("is_active").default(true),

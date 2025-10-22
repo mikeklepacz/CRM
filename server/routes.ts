@@ -6294,11 +6294,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: 'Admin access required' });
       }
 
-      const { filename, content, category, description } = req.body;
+      const { filename, content, category, productCategory, description } = req.body;
       console.log('📤 [FILE UPLOAD] File details:', {
         filename,
         contentLength: content?.length || 0,
         category,
+        productCategory,
         description
       });
       
@@ -6390,6 +6391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         openaiFileId: file.id,
         uploadedBy: user.id,
         category: category || 'general',
+        productCategory: productCategory || null,
         description: description || null,
         processingStatus: 'uploading',
         isActive: true
@@ -6468,6 +6470,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('📤 [FILE UPLOAD] Stack trace:', error.stack);
       console.error('📤 [FILE UPLOAD] Full error object:', error);
       res.status(500).json({ message: error.message || 'Failed to upload file' });
+    }
+  });
+
+  // Update knowledge base file metadata
+  app.put('/api/openai/files/:id', isAuthenticated, async (req, res) => {
+    try {
+      console.log('📝 [EDIT FILE] Starting PUT request...');
+      
+      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const { id } = req.params;
+      const { category, productCategory, description } = req.body;
+      
+      console.log('📝 [EDIT FILE] Updating file:', id);
+      console.log('📝 [EDIT FILE] New values:', { category, productCategory, description });
+
+      const updates: any = {};
+      if (category !== undefined) updates.category = category;
+      if (productCategory !== undefined) updates.productCategory = productCategory;
+      if (description !== undefined) updates.description = description;
+
+      const updatedFile = await storage.updateKnowledgeBaseFile(id, updates);
+      console.log('📝 [EDIT FILE] File updated successfully');
+      
+      res.json(updatedFile);
+    } catch (error: any) {
+      console.error('📝 [EDIT FILE] ❌ ERROR:', error.message);
+      res.status(500).json({ message: error.message || 'Failed to update file' });
     }
   });
 
@@ -6629,8 +6662,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hasEmail: !!currentUser?.email
       });
 
+      // Get user's selected category for category-aware prompting
+      const selectedCategory = await storage.getSelectedCategory(userId);
+      console.log('💬 [CHAT] User selected category:', selectedCategory || 'none');
+
       // Get custom instructions or use default
       let systemInstructions = settings.aiInstructions || 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.';
+      
+      // Add category-specific context to system prompt
+      if (selectedCategory) {
+        systemInstructions += `\n\nIMPORTANT CATEGORY RESTRICTION: You are specifically assisting with ${selectedCategory} product sales. Focus EXCLUSIVELY on ${selectedCategory}-related sales strategies, product information, and objection handling. DO NOT provide information, scripts, or advice about other product categories. If asked about other categories, politely redirect: "I specialize in ${selectedCategory} sales. For other products, please consult the appropriate specialist."\n`;
+        console.log('💬 [CHAT] Category-specific context added for:', selectedCategory);
+      }
       
       // Append user signature information
       if (currentUser) {

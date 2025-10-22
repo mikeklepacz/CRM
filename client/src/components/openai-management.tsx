@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Key, Upload, FileText, Trash2, Loader2, Save, CheckCircle2, AlertCircle, BookOpen } from "lucide-react";
+import { Key, Upload, FileText, Trash2, Loader2, Save, CheckCircle2, AlertCircle, BookOpen, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function OpenAIManagement() {
@@ -19,11 +19,13 @@ export function OpenAIManagement() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [aiInstructions, setAiInstructions] = useState("");
   
-  // File upload state
+  // File upload/edit state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [editingFile, setEditingFile] = useState<any>(null);
   const [fileContent, setFileContent] = useState("");
   const [fileName, setFileName] = useState("");
   const [fileCategory, setFileCategory] = useState("scripts");
+  const [productCategory, setProductCategory] = useState<string>("");
   const [fileDescription, setFileDescription] = useState("");
 
   // Fetch OpenAI settings
@@ -35,6 +37,12 @@ export function OpenAIManagement() {
   const { data: files = [], isLoading: filesLoading } = useQuery({
     queryKey: ['/api/openai/files'],
   });
+
+  // Fetch active categories for Product Category dropdown
+  const { data: categoriesData } = useQuery<{categories: Array<{id: string, name: string}>}>({
+    queryKey: ['/api/categories/active'],
+  });
+  const categories = categoriesData?.categories || [];
 
   useEffect(() => {
     if (settings) {
@@ -91,7 +99,7 @@ export function OpenAIManagement() {
 
   // Upload file mutation
   const uploadFileMutation = useMutation({
-    mutationFn: async (data: { filename: string; content: string; category: string; description: string }) => {
+    mutationFn: async (data: { filename: string; content: string; category: string; productCategory?: string; description: string }) => {
       return await apiRequest("POST", "/api/openai/files/upload", data);
     },
     onSuccess: () => {
@@ -103,12 +111,39 @@ export function OpenAIManagement() {
       setUploadDialogOpen(false);
       setFileContent("");
       setFileName("");
+      setProductCategory("");
       setFileDescription("");
     },
     onError: (error: any) => {
       toast({
         title: "Error",
         description: error.message || "Failed to upload file",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Edit file mutation
+  const editFileMutation = useMutation({
+    mutationFn: async (data: { id: string; category?: string; productCategory?: string; description?: string }) => {
+      return await apiRequest("PUT", `/api/openai/files/${data.id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "File updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/openai/files'] });
+      setUploadDialogOpen(false);
+      setEditingFile(null);
+      setFileCategory("scripts");
+      setProductCategory("");
+      setFileDescription("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update file",
         variant: "destructive",
       });
     },
@@ -164,6 +199,26 @@ export function OpenAIManagement() {
       filename: fileName,
       content: fileContent,
       category: fileCategory,
+      productCategory: productCategory || undefined,
+      description: fileDescription,
+    });
+  };
+
+  const handleEditFile = (file: any) => {
+    setEditingFile(file);
+    setFileCategory(file.category || "scripts");
+    setProductCategory(file.productCategory || "");
+    setFileDescription(file.description || "");
+    setUploadDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingFile) return;
+    
+    editFileMutation.mutate({
+      id: editingFile.id,
+      category: fileCategory,
+      productCategory: productCategory || undefined,
       description: fileDescription,
     });
   };
@@ -279,19 +334,29 @@ export function OpenAIManagement() {
                         {new Date(file.uploadedAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`Delete ${file.originalName}?`)) {
-                              deleteFileMutation.mutate(file.id);
-                            }
-                          }}
-                          disabled={deleteFileMutation.isPending}
-                          data-testid={`button-delete-file-${file.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditFile(file)}
+                            data-testid={`button-edit-file-${file.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`Delete ${file.originalName}?`)) {
+                                deleteFileMutation.mutate(file.id);
+                              }
+                            }}
+                            disabled={deleteFileMutation.isPending}
+                            data-testid={`button-delete-file-${file.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -452,39 +517,62 @@ Rules:
         </CardContent>
       </Card>
 
-      {/* Upload File Dialog */}
-      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+      {/* Upload/Edit File Dialog */}
+      <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
+        setUploadDialogOpen(open);
+        if (!open) {
+          setEditingFile(null);
+          setFileContent("");
+          setFileName("");
+          setFileCategory("scripts");
+          setProductCategory("");
+          setFileDescription("");
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Upload Knowledge Base File</DialogTitle>
+            <DialogTitle>{editingFile ? "Edit Knowledge Base File" : "Upload Knowledge Base File"}</DialogTitle>
             <DialogDescription>
-              Add sales scripts, product info, or objection handlers to help agents
+              {editingFile ? "Update file metadata and category assignment" : "Add sales scripts, product info, or objection handlers to help agents"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Upload File</Label>
-              <Input
-                type="file"
-                accept=".txt,.md,.pdf,.docx"
-                onChange={handleFileSelect}
-                data-testid="input-file-upload"
-              />
-              <p className="text-xs text-muted-foreground">
-                Supported formats: .txt, .md, .pdf, .docx
-              </p>
-            </div>
+            {!editingFile && (
+              <div className="space-y-2">
+                <Label>Upload File</Label>
+                <Input
+                  type="file"
+                  accept=".txt,.md,.pdf,.docx"
+                  onChange={handleFileSelect}
+                  data-testid="input-file-upload"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Supported formats: .txt, .md, .pdf, .docx
+                </p>
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="filename">Filename</Label>
-              <Input
-                id="filename"
-                value={fileName}
-                onChange={(e) => setFileName(e.target.value)}
-                placeholder="e.g., cold-call-script.txt"
-                data-testid="input-filename"
-              />
-            </div>
+            {editingFile ? (
+              <div className="space-y-2">
+                <Label>Filename</Label>
+                <Input
+                  value={editingFile.originalName}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="filename">Filename</Label>
+                <Input
+                  id="filename"
+                  value={fileName}
+                  onChange={(e) => setFileName(e.target.value)}
+                  placeholder="e.g., cold-call-script.txt"
+                  data-testid="input-filename"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
@@ -500,6 +588,25 @@ Rules:
                   <SelectItem value="general">General</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="productCategory">Product Category</Label>
+              <Select value={productCategory} onValueChange={setProductCategory}>
+                <SelectTrigger data-testid="select-product-category">
+                  <SelectValue placeholder="Select product line..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.name}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Determines which sales teams can access this file
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -528,19 +635,19 @@ Rules:
               Cancel
             </Button>
             <Button 
-              onClick={handleUploadFile} 
-              disabled={uploadFileMutation.isPending || !fileName || !fileContent}
-              data-testid="button-confirm-upload"
+              onClick={editingFile ? handleSaveEdit : handleUploadFile} 
+              disabled={editingFile ? editFileMutation.isPending : (uploadFileMutation.isPending || !fileName || !fileContent)}
+              data-testid={editingFile ? "button-confirm-edit" : "button-confirm-upload"}
             >
-              {uploadFileMutation.isPending ? (
+              {(editingFile ? editFileMutation.isPending : uploadFileMutation.isPending) ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Uploading...
+                  {editingFile ? "Saving..." : "Uploading..."}
                 </>
               ) : (
                 <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload
+                  <Save className="h-4 w-4 mr-2" />
+                  {editingFile ? "Save Changes" : "Upload"}
                 </>
               )}
             </Button>

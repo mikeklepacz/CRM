@@ -164,6 +164,7 @@ export interface IStorage {
   getKnowledgeBaseFile(id: string): Promise<KnowledgeBaseFile | undefined>;
   createKnowledgeBaseFile(file: InsertKnowledgeBaseFile): Promise<KnowledgeBaseFile>;
   updateKnowledgeBaseFileStatus(id: string, status: string): Promise<KnowledgeBaseFile>;
+  updateKnowledgeBaseFile(id: string, updates: Partial<InsertKnowledgeBaseFile>): Promise<KnowledgeBaseFile>;
   deleteKnowledgeBaseFile(id: string): Promise<void>;
   
   // Chat operations
@@ -837,6 +838,15 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(knowledgeBaseFiles)
       .set({ processingStatus: status })
+      .where(eq(knowledgeBaseFiles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateKnowledgeBaseFile(id: string, updates: Partial<InsertKnowledgeBaseFile>): Promise<KnowledgeBaseFile> {
+    const [updated] = await db
+      .update(knowledgeBaseFiles)
+      .set(updates)
       .where(eq(knowledgeBaseFiles.id, id))
       .returning();
     return updated;
