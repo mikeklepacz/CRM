@@ -725,26 +725,8 @@ export default function MapSearch() {
         </GoogleMap>
       </LoadScript>
 
-      {/* Floating Search History Card (Top) */}
-      <div className="absolute top-4 left-4 right-4 z-10 max-w-xl">
-        <Card className="backdrop-blur-md bg-background/80">
-          <CardHeader className="p-4 pb-2">
-            <div className="flex items-center gap-2 mb-1">
-              <MapPin className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-semibold" data-testid="text-page-title">Map Search</h1>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Search for businesses and add them to your Store Database
-            </p>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Floating Search Form Card (Bottom) */}
-      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-xl max-h-[65vh]">
+      {/* Floating Search Form Card (Top) */}
+      <div className="absolute top-4 left-4 right-4 z-10 max-w-xl max-h-[65vh]">
         <Card className="backdrop-blur-md bg-background/80 flex flex-col max-h-full overflow-hidden">
           <CardHeader className="flex-shrink-0 p-4 pb-2">
             <CardTitle className="text-lg">Search Businesses</CardTitle>
@@ -1160,6 +1142,24 @@ export default function MapSearch() {
                 )}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Floating Search History Card (Bottom) */}
+      <div className="absolute bottom-4 left-4 right-4 z-10 max-w-xl">
+        <Card className="backdrop-blur-md bg-background/80">
+          <CardHeader className="p-4 pb-2">
+            <div className="flex items-center gap-2 mb-1">
+              <MapPin className="w-5 h-5 text-primary" />
+              <h1 className="text-xl font-semibold" data-testid="text-page-title">Map Search</h1>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Search for businesses and add them to your Store Database
+            </p>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
           </CardContent>
         </Card>
       </div>
