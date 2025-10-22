@@ -1118,22 +1118,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all clients (admin only)
-  app.get('/api/clients', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  // Get all clients (admin only) - filtered by user's selected category
+  app.get('/api/clients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const selectedCategory = await storage.getSelectedCategory(userId);
+      
       const clients = await storage.getAllClients();
-      res.json(clients);
+      
+      // Filter by selected category if one is set
+      const filteredClients = selectedCategory 
+        ? clients.filter(client => client.category === selectedCategory)
+        : clients;
+      
+      res.json(filteredClients);
     } catch (error: any) {
       console.error("Error fetching clients:", error);
       res.status(500).json({ message: error.message || "Failed to fetch clients" });
     }
   });
 
-  // Get agent's clients
+  // Get agent's clients - filtered by user's selected category
   app.get('/api/clients/my', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const selectedCategory = await storage.getSelectedCategory(userId);
+      
       const clients = await storage.getClientsByAgent(req.currentUser.id);
-      res.json(clients);
+      
+      // Filter by selected category if one is set
+      const filteredClients = selectedCategory 
+        ? clients.filter(client => client.category === selectedCategory)
+        : clients;
+      
+      res.json(filteredClients);
     } catch (error: any) {
       console.error("Error fetching agent clients:", error);
       res.status(500).json({ message: error.message || "Failed to fetch clients" });
