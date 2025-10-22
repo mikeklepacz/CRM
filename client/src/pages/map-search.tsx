@@ -38,6 +38,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { SearchHistoryComponent } from "@/components/search-history";
 
 interface PlaceResult {
   place_id: string;
@@ -216,6 +217,24 @@ export default function MapSearch() {
     return { city: '', state: '' };
   };
 
+  const handleSearchAgain = (
+    businessTypeParam: string,
+    cityParam: string,
+    stateParam: string,
+    countryParam: string
+  ) => {
+    // Populate form fields
+    setBusinessType(businessTypeParam);
+    setCity(cityParam);
+    setState(stateParam);
+    setCountry(countryParam);
+
+    // Trigger search automatically
+    setTimeout(() => {
+      searchMutation.mutate();
+    }, 100);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="p-6 border-b">
@@ -229,6 +248,10 @@ export default function MapSearch() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
+        <div className="mb-6">
+          <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
+        </div>
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Search Businesses</CardTitle>
