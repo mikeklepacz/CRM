@@ -295,6 +295,7 @@ export const openaiSettings = pgTable("openai_settings", {
   apiKey: text("api_key"), // Encrypted OpenAI API key
   aiInstructions: text("ai_instructions"), // Custom system prompt for AI assistant
   vectorStoreId: varchar("vector_store_id"), // OpenAI vector store ID for file search
+  assistantId: varchar("assistant_id"), // Reusable OpenAI assistant ID for performance optimization
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -340,6 +341,7 @@ export const conversations = pgTable("conversations", {
     storeNotes?: string;
     [key: string]: any;
   }>(), // Store context from the page where conversation started
+  threadId: varchar("thread_id"), // OpenAI thread ID for reusing threads (performance optimization)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

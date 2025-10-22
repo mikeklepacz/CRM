@@ -6109,6 +6109,7 @@ Use this store information to provide context-aware responses. When helping draf
         console.log('💬 [CHAT] Using Assistants API with vector store:', settings.vectorStoreId);
         // Use Assistants API with file search
         try {
+          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
           // Create assistant with file search
           console.log('💬 [CHAT] Creating assistant with file search...');
           const assistant = await openai.beta.assistants.create({
@@ -6122,15 +6123,77 @@ Use this store information to provide context-aware responses. When helping draf
             }
           });
           console.log('💬 [CHAT] Assistant created:', assistant.id);
+          */
 
+          // OPTIMIZED: Reuse assistant instead of creating new one each time
+          let assistantId = settings.assistantId;
+          
+          // Get or create assistant
+          if (assistantId) {
+            console.log('💬 [CHAT] Reusing existing assistant:', assistantId);
+            try {
+              // Verify assistant still exists and update its instructions AND vector store
+              const assistant = await openai.beta.assistants.update(assistantId, {
+                instructions: systemInstructions,
+                tool_resources: {
+                  file_search: {
+                    vector_store_ids: [settings.vectorStoreId]
+                  }
+                }
+              });
+              console.log('💬 [CHAT] Assistant updated with new instructions and vector store');
+            } catch (error: any) {
+              console.log('💬 [CHAT] Existing assistant not found, creating new one...');
+              assistantId = null; // Force recreation
+            }
+          }
+          
+          if (!assistantId) {
+            console.log('💬 [CHAT] Creating new reusable assistant...');
+            const assistant = await openai.beta.assistants.create({
+              model: 'gpt-4o',
+              instructions: systemInstructions,
+              tools: [{ type: 'file_search' }],
+              tool_resources: {
+                file_search: {
+                  vector_store_ids: [settings.vectorStoreId]
+                }
+              }
+            });
+            assistantId = assistant.id;
+            console.log('💬 [CHAT] New assistant created:', assistantId);
+            
+            // Save assistant ID for future reuse
+            await storage.saveOpenaiSettings({ assistantId });
+            console.log('💬 [CHAT] Assistant ID saved to database');
+          }
+
+          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
           // Create thread
           console.log('💬 [CHAT] Creating thread...');
           const thread = await openai.beta.threads.create();
           console.log('💬 [CHAT] Thread created:', thread.id);
+          */
+
+          // OPTIMIZED: Reuse thread for this conversation
+          let threadId = conversation?.threadId;
+          
+          if (threadId) {
+            console.log('💬 [CHAT] Reusing existing thread:', threadId);
+          } else {
+            console.log('💬 [CHAT] Creating new thread for this conversation...');
+            const thread = await openai.beta.threads.create();
+            threadId = thread.id;
+            console.log('💬 [CHAT] New thread created:', threadId);
+            
+            // Save thread ID to conversation for future reuse
+            await storage.updateConversation(activeConversationId, { threadId });
+            console.log('💬 [CHAT] Thread ID saved to conversation');
+          }
 
           // Add message to thread
           console.log('💬 [CHAT] Adding message to thread...');
-          await openai.beta.threads.messages.create(thread.id, {
+          await openai.beta.threads.messages.create(threadId, {
             role: 'user',
             content: message
           });
@@ -6138,26 +6201,26 @@ Use this store information to provide context-aware responses. When helping draf
 
           // Run assistant
           console.log('💬 [CHAT] Starting assistant run...');
-          const run = await openai.beta.threads.runs.create(thread.id, {
-            assistant_id: assistant.id
+          const run = await openai.beta.threads.runs.create(threadId, {
+            assistant_id: assistantId
           });
           console.log('💬 [CHAT] Run started:', run.id);
 
-          // Poll for completion
+          // Poll for completion (OPTIMIZED: faster polling at 500ms instead of 1000ms)
           console.log('💬 [CHAT] Polling for completion...');
-          let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+          let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
           let attempts = 0;
-          while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < 30) {
+          while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < 60) {
             console.log('💬 [CHAT] Run status:', runStatus.status, 'attempt:', attempts + 1);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+            await new Promise(resolve => setTimeout(resolve, 500)); // OPTIMIZED: 500ms instead of 1000ms
+            runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
             attempts++;
           }
 
           if (runStatus.status === 'completed') {
             console.log('💬 [CHAT] Run completed successfully');
             // Get messages
-            const messages = await openai.beta.threads.messages.list(thread.id);
+            const messages = await openai.beta.threads.messages.list(threadId);
             const lastMessage = messages.data[0];
             
             if (lastMessage.content[0].type === 'text') {
@@ -6170,10 +6233,15 @@ Use this store information to provide context-aware responses. When helping draf
             throw new Error('Assistant run did not complete successfully');
           }
 
+          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
           // Clean up assistant
           console.log('💬 [CHAT] Cleaning up assistant...');
           await openai.beta.assistants.del(assistant.id);
           console.log('💬 [CHAT] Assistant deleted');
+          */
+
+          // OPTIMIZED: Don't delete assistant - reuse it next time
+          console.log('💬 [CHAT] Assistant retained for future use (performance optimization)');
         } catch (error: any) {
           console.error('💬 [CHAT] ⚠️ Assistants API error:', error.message);
           console.log('💬 [CHAT] Falling back to regular chat completion...');
