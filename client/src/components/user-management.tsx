@@ -51,9 +51,10 @@ export function UserManagement() {
   });
 
   // Fetch available categories for user creation
-  const { data: categories } = useQuery<Array<{id: string, name: string}>>({
-    queryKey: ['/api/categories'],
+  const { data: categoriesData } = useQuery<{categories: Array<{id: string, name: string}>}>({
+    queryKey: ['/api/categories/active'],
   });
+  const categories = categoriesData?.categories;
 
   // Create user mutation
   const createUserMutation = useMutation({
