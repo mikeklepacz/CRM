@@ -139,6 +139,10 @@ export default function MapSearch() {
   const [newPlaceType, setNewPlaceType] = useState("");
   const [activeKeywords, setActiveKeywords] = useState<string[]>([]);
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
+  
+  // Post-search filtering state
+  const [postSearchKeywords, setPostSearchKeywords] = useState<string[]>([]);
+  const [newPostSearchKeyword, setNewPostSearchKeyword] = useState("");
 
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
     queryKey: ["/api/categories/active"],
@@ -303,6 +307,9 @@ export default function MapSearch() {
       setNextPageToken(data.nextPageToken || null);
       setDuplicateCount(data.duplicateCount || 0);
       const excludedCount = data.excludedCount || 0;
+      
+      // Clear post-search filters when new search is initiated
+      setPostSearchKeywords([]);
       
       // Save the selected category as the last used category
       if (category) {
@@ -608,9 +615,69 @@ export default function MapSearch() {
     return `https://www.google.com/maps/place/?q=place_id:${place.place_id}`;
   };
 
-  const filteredResults = searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL');
+  // Add post-search keyword handler
+  const handleAddPostSearchKeyword = () => {
+    const keyword = newPostSearchKeyword.trim();
+    if (keyword && !postSearchKeywords.includes(keyword.toLowerCase())) {
+      // Add to post-search keywords
+      const newKeywords = [...postSearchKeywords, keyword.toLowerCase()];
+      setPostSearchKeywords(newKeywords);
+      
+      // Remove any selected places that match this new keyword
+      const filteredPlaceIds = searchResults
+        .filter(p => !newKeywords.some(k => p.name.toLowerCase().includes(k)))
+        .map(p => p.place_id);
+      
+      setSelectedPlaces(prev => {
+        const newSet = new Set<string>();
+        prev.forEach(id => {
+          if (filteredPlaceIds.includes(id)) {
+            newSet.add(id);
+          }
+        });
+        return newSet;
+      });
+      
+      // Save to API for future searches
+      addExclusionMutation.mutate({
+        type: 'keyword',
+        value: keyword.toLowerCase(),
+      });
+      
+      // Clear input
+      setNewPostSearchKeyword("");
+      
+      // Show toast
+      toast({
+        title: "Filter added and saved for future searches",
+        description: `"${keyword}" will be filtered from current and future searches`,
+      });
+    }
+  };
+
+  // Remove individual post-search keyword
+  const removePostSearchKeyword = (keyword: string) => {
+    setPostSearchKeywords(prev => prev.filter(k => k !== keyword));
+    // Note: We don't need to update selectedPlaces when removing a filter
+    // because previously hidden items becoming visible shouldn't auto-select them
+  };
+
+  // Clear all post-search keywords
+  const clearAllPostSearchKeywords = () => {
+    setPostSearchKeywords([]);
+  };
+
+  // Compute filtered results with both closed business filter and post-search keywords
+  const filteredResults = searchResults
+    .filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL')
+    .filter(p => !postSearchKeywords.some(keyword => p.name.toLowerCase().includes(keyword)));
+  
   const showCheckboxes = searchResults.length >= 2;
   const allSelected = filteredResults.length > 0 && filteredResults.every(p => selectedPlaces.has(p.place_id));
+  
+  // Count of results hidden by post-search filters
+  const resultsWithoutClosedFilter = searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL');
+  const hiddenByPostSearchFilters = resultsWithoutClosedFilter.length - filteredResults.length;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -1047,13 +1114,99 @@ export default function MapSearch() {
           </CardContent>
         </Card>
 
+        {/* Post-Search Filter Card */}
+        {searchResults.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Filter Current Results</CardTitle>
+              <CardDescription>
+                Hide businesses containing these keywords
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Filter Input */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., petmart, petland"
+                  value={newPostSearchKeyword}
+                  onChange={(e) => setNewPostSearchKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddPostSearchKeyword();
+                    }
+                  }}
+                  data-testid="input-post-search-filter"
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddPostSearchKeyword}
+                  disabled={!newPostSearchKeyword.trim() || addExclusionMutation.isPending}
+                  data-testid="button-add-filter"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Filter
+                </Button>
+              </div>
+
+              {/* Active Filters */}
+              {postSearchKeywords.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">
+                      Active Filters ({postSearchKeywords.length})
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAllPostSearchKeywords}
+                      data-testid="button-clear-filters"
+                    >
+                      Clear All Filters
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {postSearchKeywords.map((keyword) => (
+                      <Badge
+                        key={keyword}
+                        variant="secondary"
+                        className="flex items-center gap-1"
+                        data-testid={`badge-filter-${keyword}`}
+                      >
+                        {keyword}
+                        <X
+                          className="h-3 w-3 cursor-pointer hover:text-destructive"
+                          onClick={() => removePostSearchKeyword(keyword)}
+                        />
+                      </Badge>
+                    ))}
+                  </div>
+                  {hiddenByPostSearchFilters > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Filtering {hiddenByPostSearchFilters} result{hiddenByPostSearchFilters > 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {searchResults.length > 0 && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>
-                    Search Results ({filteredResults.length})
+                    Search Results
+                    {hiddenByPostSearchFilters > 0 ? (
+                      <span className="text-sm font-normal ml-2">
+                        (Showing {filteredResults.length} of {resultsWithoutClosedFilter.length} results, {hiddenByPostSearchFilters} hidden by filters)
+                      </span>
+                    ) : (
+                      <span className="text-sm font-normal ml-2">({filteredResults.length})</span>
+                    )}
                     {duplicateCount > 0 && (
                       <span className="text-sm font-normal text-muted-foreground ml-2">
                         ({duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''} filtered)
