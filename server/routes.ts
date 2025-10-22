@@ -7809,6 +7809,36 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Get selected category for CRM filtering
+  app.get('/api/user/selected-category', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const selectedCategory = await storage.getSelectedCategory(userId);
+      res.json({ category: selectedCategory });
+    } catch (error: any) {
+      console.error('Error fetching selected category:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch selected category' });
+    }
+  });
+
+  // Set selected category for CRM filtering
+  app.post('/api/user/selected-category', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { category } = req.body;
+      
+      if (!category) {
+        return res.status(400).json({ message: 'Category is required' });
+      }
+      
+      await storage.setSelectedCategory(userId, category);
+      res.json({ message: 'Selected category saved successfully', category });
+    } catch (error: any) {
+      console.error('Error saving selected category:', error);
+      res.status(500).json({ message: error.message || 'Failed to save selected category' });
+    }
+  });
+
   // Search for places using Google Maps API
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {
