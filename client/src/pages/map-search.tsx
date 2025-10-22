@@ -710,7 +710,7 @@ export default function MapSearch() {
   const hiddenByKeywordFilters = resultsWithoutClosedFilter.length - filteredResults.length;
 
   return (
-    <div className="relative w-full h-[95vh] overflow-hidden" data-testid="map-container">
+    <div className="relative w-full h-[88vh] overflow-hidden" data-testid="map-container">
       {/* Full-screen Google Map Background */}
       <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}>
         <GoogleMap
