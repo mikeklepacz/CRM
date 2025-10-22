@@ -91,6 +91,8 @@ export interface IStorage {
   saveUserPreferences(userId: string, preferences: Partial<InsertUserPreferences>): Promise<UserPreferences>;
   getLastCategory(userId: string): Promise<string | null>;
   setLastCategory(userId: string, category: string): Promise<UserPreferences>;
+  getSelectedCategory(userId: string): Promise<string | null>;
+  setSelectedCategory(userId: string, category: string): Promise<UserPreferences>;
 
   // Client operations
   getAllClients(): Promise<Client[]>;
@@ -373,6 +375,15 @@ export class DatabaseStorage implements IStorage {
 
   async setLastCategory(userId: string, category: string): Promise<UserPreferences> {
     return await this.saveUserPreferences(userId, { lastCategory: category });
+  }
+
+  async getSelectedCategory(userId: string): Promise<string | null> {
+    const preferences = await this.getUserPreferences(userId);
+    return preferences?.selectedCategory || null;
+  }
+
+  async setSelectedCategory(userId: string, category: string): Promise<UserPreferences> {
+    return await this.saveUserPreferences(userId, { selectedCategory: category });
   }
 
   // Client operations
