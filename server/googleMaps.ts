@@ -44,29 +44,62 @@ export interface PlaceDetails {
   types: string[];
 }
 
-export async function searchPlaces(query: string, location?: string): Promise<PlaceSearchResult[]> {
+export async function searchPlaces(
+  query: string, 
+  location?: string, 
+  excludedTypes?: string[]
+): Promise<PlaceSearchResult[]> {
   if (!GOOGLE_MAPS_API_KEY) {
     throw new Error('Google Maps API key not configured');
   }
 
   try {
-    let searchQuery = query;
-    if (location) {
-      searchQuery = `${query} in ${location}`;
+    const textQuery = location ? `${query} in ${location}` : query;
+    
+    const requestBody: any = {
+      textQuery,
+      maxResultCount: 20
+    };
+
+    if (excludedTypes && excludedTypes.length > 0) {
+      requestBody.excludedTypes = excludedTypes;
     }
 
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${GOOGLE_MAPS_API_KEY}`;
-    
-    const response = await fetch(url);
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.businessStatus,places.rating,places.userRatingCount'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
     const data: any = await response.json();
 
-    if (data.status === 'OK') {
-      return data.results || [];
-    } else if (data.status === 'ZERO_RESULTS') {
-      return [];
-    } else {
-      throw new Error(`Google Maps API error: ${data.status} - ${data.error_message || 'Unknown error'}`);
+    if (!response.ok) {
+      throw new Error(`Google Places API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
     }
+
+    if (!data.places || data.places.length === 0) {
+      return [];
+    }
+
+    return data.places.map((place: any) => ({
+      place_id: place.id.replace('places/', ''),
+      name: place.displayName?.text || '',
+      formatted_address: place.formattedAddress || '',
+      geometry: {
+        location: {
+          lat: place.location?.latitude || 0,
+          lng: place.location?.longitude || 0
+        }
+      },
+      types: place.types || [],
+      business_status: place.businessStatus || 'OPERATIONAL',
+      rating: place.rating,
+      user_ratings_total: place.userRatingCount
+    }));
   } catch (error: any) {
     console.error('Error searching places:', error);
     throw error;
@@ -79,19 +112,45 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
   }
 
   try {
-    const fields = 'place_id,name,formatted_address,formatted_phone_number,international_phone_number,website,url,geometry,opening_hours,business_status,types';
-    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&key=${GOOGLE_MAPS_API_KEY}`;
-    
-    const response = await fetch(url);
+    const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,googleMapsUri,location,currentOpeningHours,businessStatus,types'
+      }
+    });
+
     const data: any = await response.json();
 
-    if (data.status === 'OK' && data.result) {
-      return data.result;
-    } else if (data.status === 'ZERO_RESULTS' || data.status === 'NOT_FOUND') {
-      return null;
-    } else {
-      throw new Error(`Google Maps API error: ${data.status} - ${data.error_message || 'Unknown error'}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`Google Places API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
     }
+
+    return {
+      place_id: data.id?.replace('places/', '') || placeId,
+      name: data.displayName?.text || '',
+      formatted_address: data.formattedAddress || '',
+      formatted_phone_number: data.nationalPhoneNumber,
+      international_phone_number: data.internationalPhoneNumber,
+      website: data.websiteUri,
+      url: data.googleMapsUri || '',
+      geometry: {
+        location: {
+          lat: data.location?.latitude || 0,
+          lng: data.location?.longitude || 0
+        }
+      },
+      opening_hours: data.currentOpeningHours ? {
+        open_now: data.currentOpeningHours.openNow,
+        weekday_text: data.currentOpeningHours.weekdayDescriptions
+      } : undefined,
+      business_status: data.businessStatus || 'OPERATIONAL',
+      types: data.types || []
+    };
   } catch (error: any) {
     console.error('Error fetching place details:', error);
     throw error;
