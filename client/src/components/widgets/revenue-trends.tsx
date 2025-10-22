@@ -80,9 +80,9 @@ export function RevenueTrendsWidget() {
         </CardTitle>
         <CardDescription>Time-based revenue analysis</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 space-y-4">
+      <CardContent className="flex-1 min-h-0 flex flex-col gap-4">
         {/* Time Range Selector */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-shrink-0">
           <Select value={timeRange} onValueChange={setTimeRange}>
             <SelectTrigger className="w-40" data-testid="select-time-range">
               <SelectValue />
@@ -97,7 +97,7 @@ export function RevenueTrendsWidget() {
         </div>
 
         {/* Chart */}
-        <div className="h-full min-h-[200px]">
+        <div className="flex-1 min-h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data.trends} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
