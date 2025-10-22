@@ -805,7 +805,8 @@ export default function MapSearch() {
           options={{ 
             disableDefaultUI: false, 
             zoomControl: true,
-            fullscreenControl: false
+            fullscreenControl: false,
+            styles: actualTheme === 'dark' ? DARK_MAP_STYLES : undefined
           }}
         >
           {selectedLocation && <Marker position={selectedLocation} />}
