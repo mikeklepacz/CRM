@@ -4076,22 +4076,48 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                     <QuickReminder
                       onSave={async (reminderData) => {
                         try {
-                          await apiRequest('POST', '/api/reminders', {
-                            storeId: row.link,
-                            storeName: formData.name,
+                          console.log('[REMINDER] Creating reminder:', {
+                            date: reminderData.date,
+                            time: reminderData.time,
                             note: reminderData.note,
-                            scheduledAtUtc: reminderData.date.toISOString(),
-                            scheduledTime: reminderData.time,
+                            useCustomerTimezone: reminderData.useCustomerTimezone,
+                            customerTimezone: reminderData.customerTimezone,
+                            agentTimezone: reminderData.agentTimezone,
+                          });
+
+                          const response = await apiRequest('POST', '/api/reminders', {
+                            title: `Follow up: ${formData.name}`,
+                            description: reminderData.note,
+                            reminderDate: reminderData.date.toISOString(),
+                            reminderTime: reminderData.time,
+                            storeMetadata: {
+                              sheetId: trackerSheetId,
+                              uniqueIdentifier: row.link,
+                              storeName: formData.name,
+                              address: formData.address,
+                              city: formData.city,
+                              state: formData.state,
+                            },
                             useCustomerTimezone: reminderData.useCustomerTimezone,
                             customerTimezone: reminderData.customerTimezone,
                             agentTimezone: reminderData.agentTimezone,
                           });
                           
+                          console.log('[REMINDER] Response:', response);
+
                           toast({
                             title: "Reminder Created",
-                            description: "Your reminder has been saved successfully.",
+                            description: response.warning 
+                              ? response.warning.message 
+                              : "Your reminder has been saved successfully.",
+                            variant: response.warning ? "default" : "default",
                           });
+
+                          // Update the form data to reflect the changes
+                          handleInputChange('follow_up_date', format(reminderData.date, 'M/d/yyyy'));
+                          handleInputChange('next_action', reminderData.note);
                         } catch (error: any) {
+                          console.error('[REMINDER] Error:', error);
                           toast({
                             title: "Error",
                             description: error.message || "Failed to create reminder",

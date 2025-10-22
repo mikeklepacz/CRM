@@ -6813,9 +6813,11 @@ Use this store information to provide context-aware responses. When helping draf
       const naiveDateTimeStr = `${dateStr}T${reminderTime}:00`;
       
       // Convert local time to UTC using date-fns-tz
-      // Pass the string directly - zonedTimeToUtc will treat it as wall-clock time in the specified timezone
-      const { zonedTimeToUtc } = await import('date-fns-tz');
-      const utcTriggerDate = zonedTimeToUtc(naiveDateTimeStr, effectiveTimezone);
+      // Parse as Date and adjust for timezone offset
+      const { getTimezoneOffset } = await import('date-fns-tz');
+      const naiveDate = new Date(naiveDateTimeStr);
+      const offset = getTimezoneOffset(effectiveTimezone, naiveDate);
+      const utcTriggerDate = new Date(naiveDate.getTime() - offset);
 
       // Check for existing reminders at the same time (conflict detection)
       const existingReminders = await storage.getRemindersByUser(userId);
