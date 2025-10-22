@@ -3122,7 +3122,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   
   // Fetch user preferences for timezone and time format
   const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string; timeFormat?: string }>({
-    queryKey: ['/api/preferences'],
+    queryKey: ['/api/user/preferences'],
   });
 
   const [formData, setFormData] = useState({
