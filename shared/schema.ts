@@ -223,6 +223,7 @@ export const userPreferences = pgTable("user_preferences", {
   activeExcludedKeywords: text("active_excluded_keywords").array().default(sql`ARRAY[]::text[]`), // Keywords to filter out from Map Search results
   activeExcludedTypes: text("active_excluded_types").array().default(sql`ARRAY[]::text[]`), // Place types to exclude from Map Search API calls
   lastCategory: varchar("last_category", { length: 100 }), // Last selected category for Map Search (defaults to 'pet')
+  selectedCategory: varchar("selected_category", { length: 100 }), // Category filter for CRM dashboard - users only see stores from this category
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
