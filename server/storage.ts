@@ -19,6 +19,7 @@ import {
   conversations,
   templates,
   categories,
+  importedPlaces,
   type User,
   type UpsertUser,
   type Client,
@@ -1002,6 +1003,25 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(categories)
       .where(eq(categories.id, id));
+  }
+
+  // Imported Places operations - for duplicate detection in Map Search
+  async checkImportedPlaces(placeIds: string[]): Promise<Set<string>> {
+    if (placeIds.length === 0) return new Set();
+    
+    const results = await db
+      .select({ placeId: importedPlaces.placeId })
+      .from(importedPlaces)
+      .where(inArray(importedPlaces.placeId, placeIds));
+    
+    return new Set(results.map(r => r.placeId));
+  }
+
+  async recordImportedPlace(placeId: string): Promise<void> {
+    await db
+      .insert(importedPlaces)
+      .values({ placeId })
+      .onConflictDoNothing(); // Ignore if already exists
   }
 }
 
