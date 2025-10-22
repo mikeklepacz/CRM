@@ -591,23 +591,42 @@ export default function MapSearch() {
 
                         <CollapsibleContent>
                           {/* Add new keyword */}
-                          <form onSubmit={handleAddKeyword} className="flex gap-2 mb-3">
+                          <div className="flex gap-2 mb-3">
                             <Input
                               placeholder="Add keyword to exclude..."
                               value={newKeyword}
                               onChange={(e) => setNewKeyword(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (newKeyword.trim()) {
+                                    addExclusionMutation.mutate({
+                                      type: 'keyword',
+                                      value: newKeyword.trim(),
+                                    });
+                                  }
+                                }
+                              }}
                               data-testid="input-new-keyword"
                             />
                             <Button
-                              type="submit"
+                              type="button"
                               size="sm"
                               disabled={!newKeyword.trim() || addExclusionMutation.isPending}
+                              onClick={() => {
+                                if (newKeyword.trim()) {
+                                  addExclusionMutation.mutate({
+                                    type: 'keyword',
+                                    value: newKeyword.trim(),
+                                  });
+                                }
+                              }}
                               data-testid="button-add-keyword"
                             >
                               <Plus className="h-4 w-4 mr-1" />
                               Add
                             </Button>
-                          </form>
+                          </div>
 
                           {/* Keyword checkboxes */}
                           <div className="space-y-2 max-h-[200px] overflow-y-auto">
@@ -663,23 +682,42 @@ export default function MapSearch() {
 
                         <CollapsibleContent>
                           {/* Add new place type */}
-                          <form onSubmit={handleAddPlaceType} className="flex gap-2 mb-3">
+                          <div className="flex gap-2 mb-3">
                             <Input
                               placeholder="Add place type to exclude..."
                               value={newPlaceType}
                               onChange={(e) => setNewPlaceType(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (newPlaceType.trim()) {
+                                    addExclusionMutation.mutate({
+                                      type: 'place_type',
+                                      value: newPlaceType.trim().toLowerCase().replace(/\s+/g, '_'),
+                                    });
+                                  }
+                                }
+                              }}
                               data-testid="input-new-place-type"
                             />
                             <Button
-                              type="submit"
+                              type="button"
                               size="sm"
                               disabled={!newPlaceType.trim() || addExclusionMutation.isPending}
+                              onClick={() => {
+                                if (newPlaceType.trim()) {
+                                  addExclusionMutation.mutate({
+                                    type: 'place_type',
+                                    value: newPlaceType.trim().toLowerCase().replace(/\s+/g, '_'),
+                                  });
+                                }
+                              }}
                               data-testid="button-add-place-type"
                             >
                               <Plus className="h-4 w-4 mr-1" />
                               Add
                             </Button>
-                          </form>
+                          </div>
 
                           {/* Place type checkboxes */}
                           <div className="space-y-2 max-h-[200px] overflow-y-auto">
