@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { formatInTimeZone, getTimezoneOffset } from "date-fns-tz";
-import { Calendar as CalendarIcon, MapPin } from "lucide-react";
+import { Calendar as CalendarIcon, MapPin, User, Mail, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
@@ -33,6 +33,11 @@ interface QuickReminderProps {
   userTimezone?: string | null;
   defaultTimezoneMode?: string | null;
   timeFormat?: string | null;
+  pointOfContact?: string | null;
+  pocEmail?: string | null;
+  pocPhone?: string | null;
+  defaultEmail?: string | null;
+  defaultPhone?: string | null;
 }
 
 export function QuickReminder({ 
@@ -45,7 +50,12 @@ export function QuickReminder({
   storeState,
   userTimezone,
   defaultTimezoneMode = "agent",
-  timeFormat = "12hr"
+  timeFormat = "12hr",
+  pointOfContact,
+  pocEmail,
+  pocPhone,
+  defaultEmail,
+  defaultPhone
 }: QuickReminderProps) {
   const [note, setNote] = useState(defaultNote);
   const [date, setDate] = useState<Date | undefined>(defaultDate);
@@ -120,8 +130,57 @@ export function QuickReminder({
 
   const timePreview = getTimeConversionPreview();
 
+  // Determine which contact info to display
+  const displayEmail = pocEmail || defaultEmail;
+  const displayPhone = pocPhone || defaultPhone;
+  const hasContactInfo = pointOfContact || displayEmail || displayPhone;
+
   return (
     <div className="space-y-4" data-testid="quick-reminder-form">
+      {hasContactInfo && (
+        <div className="p-3 rounded-md bg-muted/50 space-y-2" data-testid="contact-info-display">
+          <div className="font-medium text-sm text-foreground">Contact Information</div>
+          <div className="space-y-1.5 text-sm">
+            {pointOfContact && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <User className="h-3.5 w-3.5 shrink-0" />
+                <span>{pointOfContact}</span>
+              </div>
+            )}
+            {displayEmail && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Mail className="h-3.5 w-3.5 shrink-0" />
+                <a 
+                  href={`mailto:${displayEmail}`}
+                  className="hover:text-foreground hover:underline"
+                  data-testid="link-contact-email"
+                >
+                  {displayEmail}
+                </a>
+                {!pocEmail && defaultEmail && (
+                  <span className="text-xs opacity-70">(default)</span>
+                )}
+              </div>
+            )}
+            {displayPhone && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Phone className="h-3.5 w-3.5 shrink-0" />
+                <a 
+                  href={`tel:${displayPhone}`}
+                  className="hover:text-foreground hover:underline"
+                  data-testid="link-contact-phone"
+                >
+                  {displayPhone}
+                </a>
+                {!pocPhone && defaultPhone && (
+                  <span className="text-xs opacity-70">(default)</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
       {customerTimezone && (
         <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-muted-foreground text-sm" data-testid="timezone-indicator">
           <MapPin className="h-4 w-4" />

@@ -4131,6 +4131,11 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                       userTimezone={userPreferences?.timezone}
                       defaultTimezoneMode={userPreferences?.defaultTimezoneMode}
                       timeFormat={userPreferences?.timeFormat}
+                      pointOfContact={formData.point_of_contact}
+                      pocEmail={formData.poc_email}
+                      pocPhone={formData.poc_phone}
+                      defaultEmail={formData.email}
+                      defaultPhone={formData.phone}
                     />
                   </div>
                 </div>
