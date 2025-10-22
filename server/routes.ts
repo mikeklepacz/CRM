@@ -5382,6 +5382,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
           const endTime = new Date(utcTriggerDate.getTime() + 30 * 60 * 1000); // 30 min duration
 
+          // Get calendar reminders from request or use default
+          const calendarReminders = req.body.calendarReminders || [{ method: 'popup', minutes: 10 }];
+
           const event = {
             summary: title,
             description: eventDescription,
@@ -5396,9 +5399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
             reminders: {
               useDefault: false,
-              overrides: [
-                { method: 'popup' as const, minutes: 10 }
-              ],
+              overrides: calendarReminders.map((r: any) => ({ method: r.method, minutes: r.minutes })),
             },
           };
 
@@ -5423,6 +5424,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (calendarError: any) {
         // Log error but don't fail the request
         console.error('[Calendar] Failed to create calendar event:', calendarError.message);
+      }
+
+      // Smart default: Update user preferences if calendar reminders differ from current defaults
+      try {
+        const calendarReminders = req.body.calendarReminders;
+        if (calendarReminders && Array.isArray(calendarReminders)) {
+          const userPreferences = await storage.getUserPreferences(userId);
+          const currentDefaults = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 0 }];
+          
+          // Compare calendar reminders with current defaults (handle empty arrays)
+          const normalize = (arr: any[]) => JSON.stringify(
+            arr.sort((a: any, b: any) => a.method.localeCompare(b.method) || a.minutes - b.minutes)
+          );
+          const remindersChanged = normalize(calendarReminders) !== normalize(currentDefaults);
+          
+          if (remindersChanged) {
+            // Update user's default calendar reminders (including empty array for "no reminders")
+            await storage.updateUserPreferences(userId, {
+              defaultCalendarReminders: calendarReminders
+            });
+            console.log(`[Smart Default] Updated calendar reminder defaults for user ${userId}`, 
+              calendarReminders.length === 0 ? '(no reminders)' : `(${calendarReminders.length} reminder(s))`);
+          }
+        }
+      } catch (prefsError: any) {
+        // Don't fail the request if preference update fails
+        console.error('[Smart Default] Failed to update calendar reminder preferences:', prefsError.message);
       }
 
       // Include conflict warning in response
@@ -5508,6 +5536,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!integration?.googleCalendarAccessToken) {
         return res.status(400).json({ message: 'Google Calendar not connected. Please connect in Settings.' });
       }
+
+      // Get user preferences for calendar reminders
+      const userPreferences = await storage.getUserPreferences(userId);
+      const defaultCalendarReminders = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }];
 
       // Get all active reminders for this user
       const reminders = await storage.getRemindersByUser(userId);
@@ -5611,9 +5643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
             reminders: {
               useDefault: false,
-              overrides: [
-                { method: 'popup' as const, minutes: 10 }
-              ],
+              overrides: defaultCalendarReminders.map((r: any) => ({ method: r.method, minutes: r.minutes })),
             },
           };
 

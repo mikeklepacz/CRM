@@ -25,6 +25,7 @@ import { Link } from "wouter";
 import { Integrations } from "@/components/integrations";
 import { TimezoneAutocomplete } from "@/components/timezone-autocomplete";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -102,6 +103,7 @@ export default function Settings() {
     timezone?: string;
     defaultTimezoneMode?: string;
     timeFormat?: string;
+    defaultCalendarReminders?: Array<{method: 'popup' | 'email', minutes: number}>;
   }>({
     queryKey: ['/api/user/preferences'],
   });
@@ -114,6 +116,10 @@ export default function Settings() {
   const [timeFormat, setTimeFormat] = useState<string>(
     userPreferences?.timeFormat || "12hr"
   );
+  
+  // Calendar reminders state
+  const [calendarReminderTimes, setCalendarReminderTimes] = useState<number[]>([0]);
+  const [calendarReminderMethods, setCalendarReminderMethods] = useState<('popup' | 'email')[]>(['popup']);
 
   // Update state when preferences load
   useEffect(() => {
@@ -125,6 +131,13 @@ export default function Settings() {
     }
     if (userPreferences?.timeFormat) {
       setTimeFormat(userPreferences.timeFormat);
+    }
+    if (userPreferences?.defaultCalendarReminders) {
+      // Extract unique times and methods from preferences
+      const times = Array.from(new Set(userPreferences.defaultCalendarReminders.map(r => r.minutes)));
+      const methods = Array.from(new Set(userPreferences.defaultCalendarReminders.map(r => r.method))) as ('popup' | 'email')[];
+      setCalendarReminderTimes(times);
+      setCalendarReminderMethods(methods);
     }
   }, [userPreferences]);
 
@@ -307,7 +320,12 @@ export default function Settings() {
   });
 
   const updateTimezoneMutation = useMutation({
-    mutationFn: async (data: { timezone: string; defaultTimezoneMode: string }) => {
+    mutationFn: async (data: { 
+      timezone: string; 
+      defaultTimezoneMode: string; 
+      timeFormat: string;
+      defaultCalendarReminders: Array<{method: 'popup' | 'email', minutes: number}>;
+    }) => {
       return await apiRequest("PUT", "/api/user/preferences", data);
     },
     onSuccess: () => {
@@ -335,7 +353,18 @@ export default function Settings() {
       });
       return;
     }
-    updateTimezoneMutation.mutate({ timezone, defaultTimezoneMode, timeFormat });
+    
+    // Build calendar reminders array from selected times and methods
+    const defaultCalendarReminders = calendarReminderTimes.flatMap(minutes =>
+      calendarReminderMethods.map(method => ({ method, minutes }))
+    );
+    
+    updateTimezoneMutation.mutate({ 
+      timezone, 
+      defaultTimezoneMode, 
+      timeFormat,
+      defaultCalendarReminders
+    });
   };
 
   const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -688,6 +717,94 @@ export default function Settings() {
                     </Label>
                   </div>
                 </RadioGroup>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <Label>Google Calendar Reminder Defaults</Label>
+                <p className="text-sm text-muted-foreground">
+                  When reminders are synced to Google Calendar, these alert times will be used by default
+                </p>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Reminder Times</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: 0, label: 'At event time' },
+                      { value: 5, label: '5 minutes before' },
+                      { value: 10, label: '10 minutes before' },
+                      { value: 15, label: '15 minutes before' },
+                      { value: 30, label: '30 minutes before' },
+                      { value: 60, label: '1 hour before' },
+                    ].map(({ value, label }) => (
+                      <div key={value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`reminder-time-${value}`}
+                          checked={calendarReminderTimes.includes(value)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setCalendarReminderTimes([...calendarReminderTimes, value]);
+                            } else {
+                              setCalendarReminderTimes(calendarReminderTimes.filter(t => t !== value));
+                            }
+                          }}
+                          data-testid={`checkbox-reminder-time-${value}`}
+                        />
+                        <Label 
+                          htmlFor={`reminder-time-${value}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {label}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Reminder Type</Label>
+                  <div className="flex gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="reminder-method-popup"
+                        checked={calendarReminderMethods.includes('popup')}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setCalendarReminderMethods([...calendarReminderMethods, 'popup']);
+                          } else {
+                            setCalendarReminderMethods(calendarReminderMethods.filter(m => m !== 'popup'));
+                          }
+                        }}
+                        data-testid="checkbox-reminder-popup"
+                      />
+                      <Label 
+                        htmlFor="reminder-method-popup"
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        Popup notification
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="reminder-method-email"
+                        checked={calendarReminderMethods.includes('email')}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setCalendarReminderMethods([...calendarReminderMethods, 'email']);
+                          } else {
+                            setCalendarReminderMethods(calendarReminderMethods.filter(m => m !== 'email'));
+                          }
+                        }}
+                        data-testid="checkbox-reminder-email"
+                      />
+                      <Label 
+                        htmlFor="reminder-method-email"
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        Email reminder
+                      </Label>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <Button

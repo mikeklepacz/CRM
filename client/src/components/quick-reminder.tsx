@@ -23,6 +23,7 @@ interface QuickReminderProps {
     useCustomerTimezone: boolean;
     customerTimezone: string | null;
     agentTimezone: string;
+    calendarReminders: Array<{ method: string; minutes: number }>;
   }) => void;
   isSaving?: boolean;
   defaultNote?: string;
@@ -38,6 +39,7 @@ interface QuickReminderProps {
   pocPhone?: string | null;
   defaultEmail?: string | null;
   defaultPhone?: string | null;
+  defaultCalendarReminders?: Array<{ method: string; minutes: number }>;
 }
 
 export function QuickReminder({ 
@@ -55,12 +57,14 @@ export function QuickReminder({
   pocEmail,
   pocPhone,
   defaultEmail,
-  defaultPhone
+  defaultPhone,
+  defaultCalendarReminders = [{ method: 'popup', minutes: 10 }]
 }: QuickReminderProps) {
   const [note, setNote] = useState(defaultNote);
   const [date, setDate] = useState<Date | undefined>(defaultDate);
   const [time, setTime] = useState("09:00");
   const [useCustomerTimezone, setUseCustomerTimezone] = useState(defaultTimezoneMode === "customer");
+  const [calendarReminders, setCalendarReminders] = useState(defaultCalendarReminders);
   
   // Auto-detect customer timezone from address
   const customerTimezone = detectTimezoneFromAddress(storeAddress, storeCity, storeState);
@@ -82,6 +86,13 @@ export function QuickReminder({
     setUseCustomerTimezone(defaultTimezoneMode === "customer");
   }, [defaultTimezoneMode]);
 
+  // Update calendar reminders when defaults change (async load from preferences)
+  useEffect(() => {
+    if (defaultCalendarReminders) {
+      setCalendarReminders(defaultCalendarReminders);
+    }
+  }, [defaultCalendarReminders]);
+
   const handleSave = () => {
     if (!note.trim() || !date) return;
     onSave({ 
@@ -90,7 +101,8 @@ export function QuickReminder({
       time, 
       useCustomerTimezone: useCustomerTimezone && !!customerTimezone,
       customerTimezone,
-      agentTimezone 
+      agentTimezone,
+      calendarReminders
     });
   };
 
@@ -269,6 +281,100 @@ export function QuickReminder({
           Customer timezone could not be detected. Reminder will use your timezone ({formatTimezoneDisplay(agentTimezone)})
         </p>
       )}
+
+      <div className="space-y-3 pt-2 border-t">
+        <Label className="text-sm font-medium">Calendar Reminders</Label>
+        <p className="text-sm text-muted-foreground">
+          Choose when you want to be reminded in Google Calendar
+        </p>
+        
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Reminder Times</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: 0, label: 'At event time' },
+              { value: 5, label: '5 mins before' },
+              { value: 10, label: '10 mins before' },
+              { value: 15, label: '15 mins before' },
+              { value: 30, label: '30 mins before' },
+              { value: 60, label: '1 hour before' },
+            ].map(({ value, label }) => {
+              const isChecked = calendarReminders.some(r => r.minutes === value);
+              return (
+                <div key={value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`quick-reminder-time-${value}`}
+                    checked={isChecked}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        // Add this time for all selected methods
+                        const methods = Array.from(new Set(calendarReminders.map(r => r.method))) as ('popup' | 'email')[];
+                        const newReminders = [...calendarReminders];
+                        methods.forEach(method => {
+                          if (!newReminders.some(r => r.minutes === value && r.method === method)) {
+                            newReminders.push({ method, minutes: value });
+                          }
+                        });
+                        setCalendarReminders(newReminders);
+                      } else {
+                        // Remove this time for all methods
+                        setCalendarReminders(calendarReminders.filter(r => r.minutes !== value));
+                      }
+                    }}
+                    data-testid={`checkbox-quick-reminder-time-${value}`}
+                  />
+                  <Label 
+                    htmlFor={`quick-reminder-time-${value}`}
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    {label}
+                  </Label>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Reminder Type</Label>
+          <div className="flex gap-3">
+            {(['popup', 'email'] as const).map((method) => {
+              const isChecked = calendarReminders.some(r => r.method === method);
+              return (
+                <div key={method} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`quick-reminder-method-${method}`}
+                    checked={isChecked}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        // Add this method for all selected times
+                        const times = Array.from(new Set(calendarReminders.map(r => r.minutes)));
+                        const newReminders = [...calendarReminders];
+                        times.forEach(minutes => {
+                          if (!newReminders.some(r => r.minutes === minutes && r.method === method)) {
+                            newReminders.push({ method, minutes });
+                          }
+                        });
+                        setCalendarReminders(newReminders);
+                      } else {
+                        // Remove this method for all times
+                        setCalendarReminders(calendarReminders.filter(r => r.method !== method));
+                      }
+                    }}
+                    data-testid={`checkbox-quick-reminder-${method}`}
+                  />
+                  <Label 
+                    htmlFor={`quick-reminder-method-${method}`}
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    {method === 'popup' ? 'Popup' : 'Email'}
+                  </Label>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       <Button
         onClick={handleSave}

@@ -4083,6 +4083,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                             useCustomerTimezone: reminderData.useCustomerTimezone,
                             customerTimezone: reminderData.customerTimezone,
                             agentTimezone: reminderData.agentTimezone,
+                            calendarReminders: reminderData.calendarReminders,
                           });
 
                           const response = await apiRequest('POST', '/api/reminders', {
@@ -4104,6 +4105,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                             useCustomerTimezone: reminderData.useCustomerTimezone,
                             customerTimezone: reminderData.customerTimezone,
                             agentTimezone: reminderData.agentTimezone,
+                            calendarReminders: reminderData.calendarReminders,
                           });
                           
                           console.log('[REMINDER] Response:', response);
@@ -4139,6 +4141,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                       pocPhone={formData.poc_phone}
                       defaultEmail={formData.email}
                       defaultPhone={formData.phone}
+                      defaultCalendarReminders={userPreferences?.defaultCalendarReminders}
                     />
                   </div>
                 </div>
