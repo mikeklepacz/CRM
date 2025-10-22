@@ -144,6 +144,13 @@ export default function MapSearch() {
   const [postSearchKeywords, setPostSearchKeywords] = useState<string[]>([]);
   const [newPostSearchKeyword, setNewPostSearchKeyword] = useState("");
 
+  // Export progress state
+  const [exportProgress, setExportProgress] = useState<{
+    current: number;
+    total: number;
+    failed: number;
+  } | null>(null);
+
   const { data: categoriesData } = useQuery<{ categories: Category[] }>({
     queryKey: ["/api/categories/active"],
   });
@@ -376,53 +383,72 @@ export default function MapSearch() {
     },
   });
 
-  // Export to CRM functionality
-  const exportToCRMMutation = useMutation({
-    mutationFn: async () => {
-      const placeIds = Array.from(selectedPlaces);
+  // Export to CRM functionality with batched processing
+  const handleExportSelected = async () => {
+    if (!category) {
+      toast({ title: "Category required", variant: "destructive" });
+      return;
+    }
+
+    const selectedArray = Array.from(selectedPlaces);
+    const total = selectedArray.length;
+    
+    setExportProgress({ current: 0, total, failed: 0 });
+
+    const BATCH_SIZE = 5;
+    let successCount = 0;
+    let failedCount = 0;
+
+    // Process in batches of 5
+    for (let i = 0; i < selectedArray.length; i += BATCH_SIZE) {
+      const batch = selectedArray.slice(i, i + BATCH_SIZE);
       
-      // Call save-to-sheet for each selected place in parallel
+      // Process current batch in parallel
       const results = await Promise.allSettled(
-        placeIds.map(placeId => 
-          apiRequest("POST", "/api/maps/save-to-sheet", {
-            placeId,
-            category: category || "Pets",
-          })
+        batch.map(placeId =>
+          apiRequest("POST", "/api/maps/save-to-sheet", { placeId, category })
         )
       );
-      
-      return results;
-    },
-    onSuccess: (results) => {
-      const successCount = results.filter(r => r.status === 'fulfilled').length;
-      const failureCount = results.filter(r => r.status === 'rejected').length;
-      
-      if (successCount > 0) {
-        toast({
-          title: "Export Complete",
-          description: `${successCount} business${successCount > 1 ? 'es' : ''} saved to Store Database${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
-        });
-      }
-      
-      if (failureCount > 0 && successCount === 0) {
-        toast({
-          title: "Export Failed",
-          description: `Failed to save ${failureCount} business${failureCount > 1 ? 'es' : ''}`,
-          variant: "destructive",
-        });
-      }
-      
-      // Clear selection after export
-      setSelectedPlaces(new Set());
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Export failed",
-        description: error.message,
-        variant: "destructive",
+
+      // Count successes and failures
+      results.forEach(result => {
+        if (result.status === 'fulfilled') {
+          successCount++;
+        } else {
+          failedCount++;
+        }
       });
-    },
-  });
+
+      // Update progress after each batch
+      setExportProgress({
+        current: i + batch.length,
+        total,
+        failed: failedCount
+      });
+    }
+
+    // Clear progress and show final toast
+    setExportProgress(null);
+    
+    if (failedCount === 0) {
+      toast({
+        title: "Export Complete",
+        description: `Successfully exported ${successCount} stores to CRM`
+      });
+    } else {
+      toast({
+        title: "Export Complete with Errors",
+        description: `${successCount} exported successfully, ${failedCount} failed`,
+        variant: failedCount === total ? "destructive" : "default"
+      });
+    }
+
+    // Clear selections
+    setSelectedPlaces(new Set());
+    
+    // Invalidate the search results query to refresh imported status
+    queryClient.invalidateQueries({ queryKey: ['/api/maps/search'] });
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1361,19 +1387,19 @@ export default function MapSearch() {
             </Badge>
             
             <Button
-              onClick={() => exportToCRMMutation.mutate()}
-              disabled={selectedPlaces.size === 0 || exportToCRMMutation.isPending}
+              onClick={handleExportSelected}
+              disabled={selectedPlaces.size === 0 || exportProgress !== null}
               data-testid="button-export-crm"
             >
-              {exportToCRMMutation.isPending ? (
+              {exportProgress ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Exporting...
+                  Exporting {exportProgress.current}/{exportProgress.total}...
                 </>
               ) : (
                 <>
                   <Download className="mr-2 h-4 w-4" />
-                  Export to CRM
+                  Export to CRM ({selectedPlaces.size})
                 </>
               )}
             </Button>
