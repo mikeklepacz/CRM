@@ -292,20 +292,8 @@ export const widgetLayouts = pgTable("widget_layouts", {
   userId: varchar("user_id").notNull().references(() => users.id),
   dashboardType: varchar("dashboard_type", { length: 50 }).notNull().default('sales'), // 'sales', 'analytics', 'custom'
   layoutName: varchar("layout_name", { length: 100 }),
-  layoutConfig: jsonb("layout_config").notNull().$type<{
-    widgets: Array<{
-      id: string;
-      type: string;
-      x: number;
-      y: number;
-      w: number;
-      h: number;
-      minW?: number;
-      minH?: number;
-      maxW?: number;
-      maxH?: number;
-    }>;
-  }>(),
+  layoutConfig: jsonb("layout_config").notNull(),
+  visibleWidgets: jsonb("visible_widgets").$type<string[]>(),
   isDefault: boolean("is_default").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

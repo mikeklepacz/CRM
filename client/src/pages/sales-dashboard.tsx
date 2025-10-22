@@ -2,7 +2,17 @@ import { useState, useEffect } from "react";
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lock, Unlock, RotateCcw, Settings2 } from "lucide-react";
+import { Lock, Unlock, RotateCcw, Settings2, Eye, EyeOff } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { RevenueOverviewWidget } from "@/components/widgets/revenue-overview";
 import { CommissionBreakdownWidget } from "@/components/widgets/commission-breakdown";
 import { PortfolioMetricsWidget } from "@/components/widgets/portfolio-metrics";
@@ -16,6 +26,18 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
+
+// Widget definitions for easy management
+const AVAILABLE_WIDGETS = [
+  { id: "revenue-overview", name: "Revenue Overview", description: "Total earnings and monthly averages" },
+  { id: "commission-breakdown", name: "Commission Breakdown", description: "25% vs 10% tier earnings" },
+  { id: "commission-status", name: "Commission Status", description: "Recent commission activity" },
+  { id: "portfolio-metrics", name: "Portfolio Metrics", description: "Client portfolio statistics" },
+  { id: "revenue-trends", name: "Revenue Trends", description: "Time-based revenue analysis" },
+  { id: "action-alerts", name: "Action Alerts", description: "Important follow-ups and alerts" },
+  { id: "reminders", name: "Reminders", description: "Upcoming reminders and tasks" },
+  { id: "top-clients", name: "Top Clients", description: "Highest earning clients" },
+];
 
 // Default layout configuration for widgets
 const defaultLayouts = {
@@ -54,8 +76,12 @@ const defaultLayouts = {
 export default function SalesDashboard() {
   const [layouts, setLayouts] = useState(defaultLayouts);
   const [isLocked, setIsLocked] = useState(true);
+  const [visibleWidgets, setVisibleWidgets] = useState<Set<string>>(
+    new Set(AVAILABLE_WIDGETS.map(w => w.id))
+  );
+  const [customizeDialogOpen, setCustomizeDialogOpen] = useState(false);
 
-  // Load saved layout on mount
+  // Load saved layout and visibility on mount
   useEffect(() => {
     const loadLayout = async () => {
       try {
@@ -64,8 +90,13 @@ export default function SalesDashboard() {
         });
         if (response.ok) {
           const data = await response.json();
-          if (data.layout && data.layout.layoutData) {
-            setLayouts(data.layout.layoutData);
+          if (data.layout) {
+            if (data.layout.layoutConfig) {
+              setLayouts(data.layout.layoutConfig);
+            }
+            if (data.layout.visibleWidgets) {
+              setVisibleWidgets(new Set(data.layout.visibleWidgets));
+            }
           }
         }
       } catch (error) {
@@ -84,11 +115,13 @@ export default function SalesDashboard() {
     }
   };
 
-  const saveLayout = async (layoutData: any) => {
+  const saveLayout = async (layoutConfig: any, visibility?: string[]) => {
     try {
       await apiRequest('POST', '/api/widget-layout', {
         dashboardType: 'sales',
-        layoutData
+        layoutConfig,
+        visibleWidgets: visibility || Array.from(visibleWidgets),
+        isDefault: true
       });
     } catch (error) {
       console.error('Failed to save widget layout:', error);
@@ -97,8 +130,21 @@ export default function SalesDashboard() {
 
   const resetLayout = async () => {
     setLayouts(defaultLayouts);
+    const allVisible = new Set(AVAILABLE_WIDGETS.map(w => w.id));
+    setVisibleWidgets(allVisible);
     // Clear layout on backend by saving default
-    await saveLayout(defaultLayouts);
+    await saveLayout(defaultLayouts, Array.from(allVisible));
+  };
+
+  const toggleWidgetVisibility = (widgetId: string) => {
+    const newVisible = new Set(visibleWidgets);
+    if (newVisible.has(widgetId)) {
+      newVisible.delete(widgetId);
+    } else {
+      newVisible.add(widgetId);
+    }
+    setVisibleWidgets(newVisible);
+    saveLayout(layouts, Array.from(newVisible));
   };
 
   return (
@@ -115,6 +161,50 @@ export default function SalesDashboard() {
         </div>
         
         <div className="flex items-center gap-2">
+          <Dialog open={customizeDialogOpen} onOpenChange={setCustomizeDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="button-customize-widgets"
+              >
+                <Settings2 className="h-4 w-4 mr-2" />
+                Customize Widgets
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md" data-testid="dialog-customize-widgets">
+              <DialogHeader>
+                <DialogTitle>Customize Dashboard Widgets</DialogTitle>
+                <DialogDescription>
+                  Choose which widgets to display on your dashboard
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                {AVAILABLE_WIDGETS.map((widget) => (
+                  <div key={widget.id} className="flex items-start space-x-3">
+                    <Checkbox
+                      id={`widget-${widget.id}`}
+                      checked={visibleWidgets.has(widget.id)}
+                      onCheckedChange={() => toggleWidgetVisibility(widget.id)}
+                      data-testid={`checkbox-widget-${widget.id}`}
+                    />
+                    <div className="grid gap-1.5 leading-none flex-1">
+                      <Label
+                        htmlFor={`widget-${widget.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {widget.name}
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        {widget.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+          
           <Button
             variant="outline"
             size="sm"
@@ -158,45 +248,53 @@ export default function SalesDashboard() {
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
       >
-        {/* Revenue Overview Widget */}
-        <div key="revenue-overview">
-          <RevenueOverviewWidget />
-        </div>
+        {visibleWidgets.has("revenue-overview") && (
+          <div key="revenue-overview">
+            <RevenueOverviewWidget />
+          </div>
+        )}
 
-        {/* Commission Breakdown Widget */}
-        <div key="commission-breakdown">
-          <CommissionBreakdownWidget />
-        </div>
+        {visibleWidgets.has("commission-breakdown") && (
+          <div key="commission-breakdown">
+            <CommissionBreakdownWidget />
+          </div>
+        )}
 
-        {/* Commission Status Widget */}
-        <div key="commission-status">
-          <CommissionStatusWidget />
-        </div>
+        {visibleWidgets.has("commission-status") && (
+          <div key="commission-status">
+            <CommissionStatusWidget />
+          </div>
+        )}
 
-        {/* Portfolio Metrics Widget */}
-        <div key="portfolio-metrics">
-          <PortfolioMetricsWidget />
-        </div>
+        {visibleWidgets.has("portfolio-metrics") && (
+          <div key="portfolio-metrics">
+            <PortfolioMetricsWidget />
+          </div>
+        )}
 
-        {/* Revenue Trends Widget */}
-        <div key="revenue-trends">
-          <RevenueTrendsWidget />
-        </div>
+        {visibleWidgets.has("revenue-trends") && (
+          <div key="revenue-trends">
+            <RevenueTrendsWidget />
+          </div>
+        )}
 
-        {/* Action Alerts Widget */}
-        <div key="action-alerts">
-          <ActionAlertsWidget />
-        </div>
+        {visibleWidgets.has("action-alerts") && (
+          <div key="action-alerts">
+            <ActionAlertsWidget />
+          </div>
+        )}
 
-        {/* Reminders Widget */}
-        <div key="reminders">
-          <RemindersWidget />
-        </div>
+        {visibleWidgets.has("reminders") && (
+          <div key="reminders">
+            <RemindersWidget />
+          </div>
+        )}
 
-        {/* Top Clients Widget */}
-        <div key="top-clients">
-          <TopClientsWidget />
-        </div>
+        {visibleWidgets.has("top-clients") && (
+          <div key="top-clients">
+            <TopClientsWidget />
+          </div>
+        )}
       </ResponsiveGridLayout>
     </div>
   );
