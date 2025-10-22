@@ -3246,6 +3246,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // ============================================================================
+      // CRITICAL: Filter by Selected Category
+      // ============================================================================
+      // Purpose:
+      // Filter stores by the user's selected category preference
+      //
+      // This ensures users only see stores from their chosen category (e.g., "Pets" or "Cannabis")
+      // enabling complete data segregation between different sales teams
+      //
+      // Column Lookup:
+      // - Case-insensitive search for "Category" column in Store Database
+      //
+      // Filter Logic:
+      // - If user has selectedCategory preference, show only matching stores
+      // - If no category selected, show all stores (no filtering)
+      // ============================================================================
+      const selectedCategory = await storage.getSelectedCategory(userId);
+      const storeCategoryColumnName = storeHeaders.find(h => 
+        h.toLowerCase().trim() === 'category'
+      );
+      
+      if (selectedCategory && storeCategoryColumnName) {
+        const beforeFilterCount = filteredStoreData.length;
+        filteredStoreData = filteredStoreData.filter(row => {
+          const rowCategory = row[storeCategoryColumnName];
+          // Case-insensitive category match
+          return rowCategory && rowCategory.toLowerCase().trim() === selectedCategory.toLowerCase().trim();
+        });
+        const afterFilterCount = filteredStoreData.length;
+        console.log(`Category filter applied: "${selectedCategory}" - ${afterFilterCount} stores shown (${beforeFilterCount - afterFilterCount} filtered out)`);
+      } else if (selectedCategory && !storeCategoryColumnName) {
+        console.log(`WARNING: User has selectedCategory "${selectedCategory}" but "Category" column not found in sheet`);
+      }
+
+      // ============================================================================
       // CRITICAL: Filter Out Closed Listings (Open = FALSE)
       // ============================================================================
       // Purpose:
