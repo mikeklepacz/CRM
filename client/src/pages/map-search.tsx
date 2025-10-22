@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X, Settings2 } from "lucide-react";
+import { Search, MapPin, Plus, Loader2, Check, ChevronsUpDown, ChevronRight, ChevronLeft, X, Settings2, Bone, ExternalLink, Download } from "lucide-react";
 import { Link } from "wouter";
 import {
   Table,
@@ -60,6 +60,7 @@ interface PlaceResult {
   business_status?: string;
   rating?: number;
   user_ratings_total?: number;
+  website?: string;
 }
 
 interface Category {
@@ -84,6 +85,14 @@ interface SearchHistory {
   country: string;
   searchCount: number;
   searchedAt: string;
+}
+
+interface LastSearchParams {
+  query: string;
+  location: string;
+  excludedKeywords: string[];
+  excludedTypes: string[];
+  category?: string;
 }
 
 const US_STATES = [
@@ -114,6 +123,15 @@ export default function MapSearch() {
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
   const [hideClosedBusinesses, setHideClosedBusinesses] = useState(true);
   const [duplicateCount, setDuplicateCount] = useState(0);
+  
+  // Pagination state
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedPlaces, setSelectedPlaces] = useState<Set<string>>(new Set());
+  const [lastSearchParams, setLastSearchParams] = useState<LastSearchParams | null>(null);
+  
+  // Ref for scroll container
+  const resultsContainerRef = useRef<HTMLDivElement>(null);
   
   // Filters panel state
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -182,6 +200,25 @@ export default function MapSearch() {
     }
   }, [activeKeywords, activeTypes, preferencesData]);
 
+  // Infinite scroll implementation
+  useEffect(() => {
+    const container = resultsContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+      // Trigger load more when within 200px of bottom
+      if (distanceFromBottom < 200 && nextPageToken && !loadingMore) {
+        loadMoreMutation.mutate();
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [nextPageToken, loadingMore]);
+
   // Mutation to add new exclusion
   const addExclusionMutation = useMutation({
     mutationFn: async (params: { type: 'keyword' | 'place_type', value: string }) => {
@@ -211,19 +248,59 @@ export default function MapSearch() {
     },
   });
 
+  // Load more mutation for pagination
+  const loadMoreMutation = useMutation({
+    mutationFn: async () => {
+      if (!lastSearchParams || !nextPageToken) return;
+      
+      setLoadingMore(true);
+      return await apiRequest("POST", "/api/maps/search", {
+        ...lastSearchParams,
+        pageToken: nextPageToken,
+      });
+    },
+    onSuccess: (data) => {
+      if (data) {
+        // Append new results to existing
+        setSearchResults(prev => [...prev, ...(data.results || [])]);
+        setNextPageToken(data.nextPageToken || null);
+        setLoadingMore(false);
+      }
+    },
+    onError: (error: Error) => {
+      setLoadingMore(false);
+      toast({
+        title: "Failed to load more",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const searchMutation = useMutation({
     mutationFn: async () => {
       const location = [city, state, country].filter(Boolean).join(", ");
-      return await apiRequest("POST", "/api/maps/search", {
+      const params = {
         query: businessType,
         location,
         excludedKeywords: activeKeywords,
         excludedTypes: activeTypes,
         category: category || undefined,
-      });
+      };
+      
+      // Store search params for pagination
+      setLastSearchParams(params);
+      
+      // Reset state for new search
+      setSearchResults([]);
+      setNextPageToken(null);
+      setSelectedPlaces(new Set());
+      
+      return await apiRequest("POST", "/api/maps/search", params);
     },
     onSuccess: async (data) => {
       setSearchResults(data.results || []);
+      setNextPageToken(data.nextPageToken || null);
       setDuplicateCount(data.duplicateCount || 0);
       const excludedCount = data.excludedCount || 0;
       
@@ -292,6 +369,54 @@ export default function MapSearch() {
     },
   });
 
+  // Export to CRM functionality
+  const exportToCRMMutation = useMutation({
+    mutationFn: async () => {
+      const placeIds = Array.from(selectedPlaces);
+      
+      // Call save-to-sheet for each selected place in parallel
+      const results = await Promise.allSettled(
+        placeIds.map(placeId => 
+          apiRequest("POST", "/api/maps/save-to-sheet", {
+            placeId,
+            category: category || "Pets",
+          })
+        )
+      );
+      
+      return results;
+    },
+    onSuccess: (results) => {
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failureCount = results.filter(r => r.status === 'rejected').length;
+      
+      if (successCount > 0) {
+        toast({
+          title: "Export Complete",
+          description: `${successCount} business${successCount > 1 ? 'es' : ''} saved to Store Database${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
+        });
+      }
+      
+      if (failureCount > 0 && successCount === 0) {
+        toast({
+          title: "Export Failed",
+          description: `Failed to save ${failureCount} business${failureCount > 1 ? 'es' : ''}`,
+          variant: "destructive",
+        });
+      }
+      
+      // Clear selection after export
+      setSelectedPlaces(new Set());
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Export failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -344,6 +469,33 @@ export default function MapSearch() {
       return;
     }
     saveToSheetMutation.mutate({ placeId, category });
+  };
+
+  // Toggle place selection
+  const togglePlaceSelection = (placeId: string) => {
+    setSelectedPlaces(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(placeId)) {
+        newSet.delete(placeId);
+      } else {
+        newSet.add(placeId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle select all
+  const toggleSelectAll = () => {
+    const filteredResults = searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL');
+    const allSelected = filteredResults.every(p => selectedPlaces.has(p.place_id));
+    
+    if (allSelected) {
+      // Deselect all
+      setSelectedPlaces(new Set());
+    } else {
+      // Select all
+      setSelectedPlaces(new Set(filteredResults.map(p => p.place_id)));
+    }
   };
 
   // Toggle keyword exclusion
@@ -448,6 +600,18 @@ export default function MapSearch() {
     }, 100);
   };
 
+  // Get business link (website or Google Maps)
+  const getBusinessLink = (place: PlaceResult) => {
+    if (place.website) {
+      return place.website;
+    }
+    return `https://www.google.com/maps/place/?q=place_id:${place.place_id}`;
+  };
+
+  const filteredResults = searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL');
+  const showCheckboxes = searchResults.length >= 2;
+  const allSelected = filteredResults.length > 0 && filteredResults.every(p => selectedPlaces.has(p.place_id));
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="p-6 border-b">
@@ -460,7 +624,7 @@ export default function MapSearch() {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6" ref={resultsContainerRef}>
         <div className="mb-6">
           <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
         </div>
@@ -889,7 +1053,7 @@ export default function MapSearch() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>
-                    Search Results ({searchResults.filter(p => !hideClosedBusinesses || p.business_status === 'OPERATIONAL').length})
+                    Search Results ({filteredResults.length})
                     {duplicateCount > 0 && (
                       <span className="text-sm font-normal text-muted-foreground ml-2">
                         ({duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''} filtered)
@@ -897,7 +1061,9 @@ export default function MapSearch() {
                     )}
                   </CardTitle>
                   <CardDescription>
-                    Click "Add to Database" to save a business to your Store Database sheet
+                    {showCheckboxes 
+                      ? "Select businesses and use the export bar to save to your database" 
+                      : "Click 'Add to Database' to save a business to your Store Database sheet"}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -918,22 +1084,43 @@ export default function MapSearch() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {showCheckboxes && <TableHead className="w-12">Select</TableHead>}
                       <TableHead>Name & Rating</TableHead>
                       <TableHead>Address</TableHead>
                       <TableHead>Location</TableHead>
-                      <TableHead>Action</TableHead>
+                      {!showCheckboxes && <TableHead>Action</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {searchResults
-                      .filter(place => !hideClosedBusinesses || place.business_status === 'OPERATIONAL')
-                      .map((place) => {
+                    {filteredResults.map((place) => {
                       const { city: placeCity, state: placeState } = parseCityState(place.formatted_address);
+                      const businessLink = getBusinessLink(place);
+                      
                       return (
                         <TableRow key={place.place_id} data-testid={`row-place-${place.place_id}`}>
+                          {showCheckboxes && (
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedPlaces.has(place.place_id)}
+                                onCheckedChange={() => togglePlaceSelection(place.place_id)}
+                                data-testid={`checkbox-place-${place.place_id}`}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell className="font-medium">
                             <div className="flex flex-col gap-1">
-                              <span className="text-base">{place.name}</span>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={businessLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-base hover:underline flex items-center gap-1"
+                                  data-testid={`link-place-${place.place_id}`}
+                                >
+                                  {place.name}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </div>
                               {place.rating ? (
                                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                   <span className="text-yellow-500">★</span>
@@ -954,23 +1141,32 @@ export default function MapSearch() {
                               <span className="text-muted-foreground">{placeState}</span>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              onClick={() => handleSavePlace(place.place_id)}
-                              disabled={saveToSheetMutation.isPending}
-                              data-testid={`button-save-${place.place_id}`}
-                            >
-                              <Plus className="mr-1 h-3 w-3" />
-                              Add to Database
-                            </Button>
-                          </TableCell>
+                          {!showCheckboxes && (
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                onClick={() => handleSavePlace(place.place_id)}
+                                disabled={saveToSheetMutation.isPending}
+                                data-testid={`button-save-${place.place_id}`}
+                              >
+                                <Plus className="mr-1 h-3 w-3" />
+                                Add to Database
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })}
                   </TableBody>
                 </Table>
               </div>
+              
+              {/* Dog Bone Loading Indicator */}
+              {loadingMore && (
+                <div className="flex justify-center items-center py-8" data-testid="loading-more-indicator">
+                  <Bone className="h-8 w-8 text-primary animate-pulse" />
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -987,6 +1183,50 @@ export default function MapSearch() {
           </Card>
         )}
       </div>
+
+      {/* Sticky Bottom-Right Export Bar */}
+      {showCheckboxes && (
+        <div 
+          className="fixed bottom-4 right-4 z-50 bg-card/95 backdrop-blur-sm border rounded-lg shadow-lg p-4"
+          data-testid="export-bar"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="select-all"
+                checked={allSelected}
+                onCheckedChange={toggleSelectAll}
+                data-testid="checkbox-select-all"
+              />
+              <Label htmlFor="select-all" className="cursor-pointer text-sm font-medium">
+                Select All
+              </Label>
+            </div>
+            
+            <Badge variant="secondary" data-testid="badge-selected-count">
+              {selectedPlaces.size} selected
+            </Badge>
+            
+            <Button
+              onClick={() => exportToCRMMutation.mutate()}
+              disabled={selectedPlaces.size === 0 || exportToCRMMutation.isPending}
+              data-testid="button-export-crm"
+            >
+              {exportToCRMMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export to CRM
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
