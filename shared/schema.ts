@@ -229,11 +229,21 @@ export const reminders = pgTable("reminders", {
   lastTriggered: timestamp("last_triggered"),
   nextTrigger: timestamp("next_trigger"),
   isActive: boolean("is_active").default(true),
+  isCompleted: boolean("is_completed").default(false),
+  completedAt: timestamp("completed_at"),
   sendEmail: boolean("send_email").default(true),
   addToCalendar: boolean("add_to_calendar").default(false),
   emailTemplate: varchar("email_template", { length: 50 }).default('default'), // 'default', 'follow_up', 'check_in', 'custom'
   customEmailSubject: varchar("custom_email_subject", { length: 200 }),
   customEmailBody: text("custom_email_body"),
+  googleCalendarEventId: varchar("google_calendar_event_id"), // Google Calendar event ID for sync
+  storeMetadata: jsonb("store_metadata").$type<{
+    storeName?: string;
+    storeLink?: string;
+    uniqueIdentifier?: string; // For linking back to Google Sheets
+    sheetId?: string; // Which Google Sheet this reminder relates to
+    [key: string]: any;
+  }>(), // Store-related metadata for display and Google Sheets sync
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
