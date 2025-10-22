@@ -7812,7 +7812,7 @@ Use this store information to provide context-aware responses. When helping draf
   // Search for places using Google Maps API
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { query, location, excludedKeywords, excludedTypes, category } = req.body;
+      const { query, location, excludedKeywords, excludedTypes, category, pageToken } = req.body;
 
       if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
@@ -7850,19 +7850,21 @@ Use this store information to provide context-aware responses. When helping draf
           .filter((k: string) => k.length > 0);
       }
 
-      // Record this search in history
-      await storage.recordSearch(query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
+      // Record this search in history only for new searches (not pagination)
+      if (!pageToken) {
+        await storage.recordSearch(query, city, state, country, excludedKeywordsArray, excludedTypesArray, category);
+      }
 
-      // Get search results from Google Maps with API-level type filtering
-      const results = await googleMaps.searchPlaces(query, location, excludedTypesArray);
+      // Get search results from Google Maps with API-level type filtering and pagination
+      const searchResponse = await googleMaps.searchPlaces(query, location, excludedTypesArray, pageToken);
       
       // Check which place_ids are already imported
-      const placeIds = results.map(r => r.place_id);
+      const placeIds = searchResponse.results.map(r => r.place_id);
       const importedPlaceIds = await storage.checkImportedPlaces(placeIds);
       
       // Filter out already imported places
-      let filteredResults = results.filter(r => !importedPlaceIds.has(r.place_id));
-      const duplicateCount = results.length - filteredResults.length;
+      let filteredResults = searchResponse.results.filter(r => !importedPlaceIds.has(r.place_id));
+      const duplicateCount = searchResponse.results.length - filteredResults.length;
       
       // Filter out results containing excluded keywords (backend filtering)
       let excludedCount = 0;
@@ -7878,9 +7880,10 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json({ 
         results: filteredResults,
-        totalResults: results.length,
+        totalResults: searchResponse.results.length,
         duplicateCount,
-        excludedCount
+        excludedCount,
+        nextPageToken: searchResponse.nextPageToken
       });
     } catch (error: any) {
       console.error('Error searching places:', error);
