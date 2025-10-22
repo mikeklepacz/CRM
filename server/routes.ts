@@ -6803,6 +6803,8 @@ Use this store information to provide context-aware responses. When helping draf
         agentTimezone 
       } = req.body;
 
+      console.log('[REMINDER API] Request body:', JSON.stringify(req.body, null, 2));
+
       // Determine which timezone to use
       const effectiveTimezone = useCustomerTimezone && customerTimezone 
         ? customerTimezone 
@@ -6818,6 +6820,8 @@ Use this store information to provide context-aware responses. When helping draf
       const naiveDate = new Date(naiveDateTimeStr);
       const offset = getTimezoneOffset(effectiveTimezone, naiveDate);
       const utcTriggerDate = new Date(naiveDate.getTime() - offset);
+
+      console.log('[REMINDER API] UTC trigger date:', utcTriggerDate.toISOString());
 
       // Check for existing reminders at the same time (conflict detection)
       const existingReminders = await storage.getRemindersByUser(userId);
@@ -6850,11 +6854,16 @@ Use this store information to provide context-aware responses. When helping draf
         storeMetadata: enhancedStoreMetadata,
       };
 
+      console.log('[REMINDER API] Reminder data before validation:', JSON.stringify(reminderData, null, 2));
+
       // Validate with schema
       const validation = insertReminderSchema.safeParse(reminderData);
       if (!validation.success) {
+        console.error('[REMINDER API] Validation failed:', validation.error.errors);
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
+
+      console.log('[REMINDER API] Validated data:', JSON.stringify(validation.data, null, 2));
 
       // Create the reminder
       const reminder = await storage.createReminder(validation.data);
