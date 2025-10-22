@@ -222,6 +222,7 @@ export const userPreferences = pgTable("user_preferences", {
   defaultCalendarReminders: jsonb("default_calendar_reminders").$type<Array<{method: 'popup' | 'email', minutes: number}>>().default(sql`'[{"method":"popup","minutes":0}]'::jsonb`), // Default Google Calendar reminder settings
   activeExcludedKeywords: text("active_excluded_keywords").array().default(sql`ARRAY[]::text[]`), // Keywords to filter out from Map Search results
   activeExcludedTypes: text("active_excluded_types").array().default(sql`ARRAY[]::text[]`), // Place types to exclude from Map Search API calls
+  lastCategory: varchar("last_category", { length: 100 }), // Last selected category for Map Search (defaults to 'pet')
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -422,10 +423,13 @@ export const searchHistory = pgTable(
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     businessType: text("business_type").notNull(),
+    category: varchar("category", { length: 100 }), // Category used for this search (e.g., 'pet', 'food', etc.)
+    radius: integer("radius"), // Search radius in miles
     city: text("city").notNull(),
     state: text("state").notNull(),
     country: text("country").notNull(),
     excludedKeywords: text("excluded_keywords").array().default(sql`ARRAY[]::text[]`), // Keywords to exclude from results
+    excludedTypes: text("excluded_types").array().default(sql`ARRAY[]::text[]`), // Place types to exclude from API calls
     searchedAt: timestamp("searched_at").defaultNow(),
     searchCount: integer("search_count").notNull().default(1),
   },

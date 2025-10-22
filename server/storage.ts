@@ -89,6 +89,8 @@ export interface IStorage {
   // User preferences operations
   getUserPreferences(userId: string): Promise<UserPreferences | undefined>;
   saveUserPreferences(userId: string, preferences: Partial<InsertUserPreferences>): Promise<UserPreferences>;
+  getLastCategory(userId: string): Promise<string | null>;
+  setLastCategory(userId: string, category: string): Promise<UserPreferences>;
 
   // Client operations
   getAllClients(): Promise<Client[]>;
@@ -203,7 +205,7 @@ export interface IStorage {
   
   // Search History operations
   getAllSearchHistory(): Promise<SearchHistory[]>;
-  recordSearch(businessType: string, city: string, state: string, country: string, excludedKeywords?: string[]): Promise<SearchHistory>;
+  recordSearch(businessType: string, city: string, state: string, country: string, excludedKeywords?: string[], excludedTypes?: string[], category?: string, radius?: number): Promise<SearchHistory>;
   deleteSearchHistory(id: string): Promise<void>;
   
   // Saved Exclusions operations
@@ -362,6 +364,15 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created[0];
     }
+  }
+
+  async getLastCategory(userId: string): Promise<string | null> {
+    const preferences = await this.getUserPreferences(userId);
+    return preferences?.lastCategory || null;
+  }
+
+  async setLastCategory(userId: string, category: string): Promise<UserPreferences> {
+    return await this.saveUserPreferences(userId, { lastCategory: category });
   }
 
   // Client operations
@@ -1061,7 +1072,9 @@ export class DatabaseStorage implements IStorage {
     state: string, 
     country: string,
     excludedKeywords: string[] = [],
-    excludedTypes: string[] = []
+    excludedTypes: string[] = [],
+    category?: string,
+    radius?: number
   ): Promise<SearchHistory> {
     // Check if this exact search already exists
     const [existing] = await db
@@ -1077,7 +1090,7 @@ export class DatabaseStorage implements IStorage {
       );
 
     if (existing) {
-      // Update existing entry: increment count, update timestamp, and update excluded keywords/types
+      // Update existing entry: increment count, update timestamp, and update excluded keywords/types, category, and radius
       const [updated] = await db
         .update(searchHistory)
         .set({
@@ -1085,6 +1098,8 @@ export class DatabaseStorage implements IStorage {
           searchCount: existing.searchCount + 1,
           excludedKeywords: excludedKeywords.length > 0 ? excludedKeywords : existing.excludedKeywords,
           excludedTypes: excludedTypes.length > 0 ? excludedTypes : existing.excludedTypes,
+          category: category || existing.category,
+          radius: radius !== undefined ? radius : existing.radius,
         })
         .where(eq(searchHistory.id, existing.id))
         .returning();
@@ -1100,6 +1115,8 @@ export class DatabaseStorage implements IStorage {
           country,
           excludedKeywords,
           excludedTypes,
+          category,
+          radius,
           searchCount: 1,
         })
         .returning();

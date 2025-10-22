@@ -47,7 +47,8 @@ export interface PlaceDetails {
 export async function searchPlaces(
   query: string, 
   location?: string, 
-  excludedTypes?: string[]
+  excludedTypes?: string[],
+  radiusMeters?: number
 ): Promise<PlaceSearchResult[]> {
   if (!GOOGLE_MAPS_API_KEY) {
     throw new Error('Google Maps API key not configured');
@@ -64,6 +65,12 @@ export async function searchPlaces(
     if (excludedTypes && excludedTypes.length > 0) {
       requestBody.excludedTypes = excludedTypes;
     }
+
+    // Note: radius parameter is accepted for future implementation
+    // To properly use locationBias with a radius, we would need to:
+    // 1. Geocode the location string to get lat/lng coordinates
+    // 2. Add locationBias: { circle: { center: { latitude, longitude }, radius: radiusMeters } }
+    // For now, the textQuery (which includes location) provides natural location biasing
 
     const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',

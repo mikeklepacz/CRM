@@ -105,6 +105,8 @@ const COUNTRIES = [
 export default function MapSearch() {
   const { toast } = useToast();
   const [businessType, setBusinessType] = useState("");
+  const [category, setCategory] = useState("");
+  const [radius, setRadius] = useState<string>("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [country, setCountry] = useState("United States");
@@ -140,6 +142,18 @@ export default function MapSearch() {
   const { data: searchHistoryData } = useQuery<{ history: SearchHistory[] }>({
     queryKey: ["/api/maps/search-history"],
   });
+
+  // Fetch last selected category
+  const { data: lastCategoryData } = useQuery<{ category: string }>({
+    queryKey: ["/api/maps/last-category"],
+  });
+
+  // Initialize category from last selection (defaults to 'pet' if never chosen)
+  useEffect(() => {
+    if (lastCategoryData?.category) {
+      setCategory(lastCategoryData.category);
+    }
+  }, [lastCategoryData]);
 
   // Initialize active exclusions from user preferences
   useEffect(() => {
@@ -204,12 +218,23 @@ export default function MapSearch() {
         location,
         excludedKeywords: activeKeywords,
         excludedTypes: activeTypes,
+        category: category || undefined,
+        radius: radius ? parseFloat(radius) : undefined,
       });
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setSearchResults(data.results || []);
       setDuplicateCount(data.duplicateCount || 0);
       const excludedCount = data.excludedCount || 0;
+      
+      // Save the selected category as the last used category
+      if (category) {
+        try {
+          await apiRequest("POST", "/api/maps/last-category", { category });
+        } catch (error) {
+          console.error("Failed to save last category:", error);
+        }
+      }
       
       if (!data.results || data.results.length === 0) {
         toast({
@@ -449,7 +474,8 @@ export default function MapSearch() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSearch} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Row 1: Business Type, Category, Radius */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Business Type *</Label>
                   <Popover open={businessTypeOpen} onOpenChange={setBusinessTypeOpen}>
@@ -514,15 +540,47 @@ export default function MapSearch() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="city">City *</Label>
+                  <Label htmlFor="category">Category</Label>
                   <Input
-                    id="city"
-                    placeholder="e.g., Denver, Portland"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    required
-                    data-testid="input-city"
+                    id="category"
+                    placeholder="e.g., pet, food, retail"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    data-testid="input-category"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="radius">Radius (miles)</Label>
+                  <Input
+                    id="radius"
+                    type="number"
+                    placeholder="e.g., 5, 10, 25"
+                    value={radius}
+                    onChange={(e) => setRadius(e.target.value)}
+                    min="1"
+                    step="1"
+                    data-testid="input-radius"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Country, State, City */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="country">Country</Label>
+                  <Select value={country} onValueChange={setCountry}>
+                    <SelectTrigger data-testid="select-country">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRIES.map((countryName) => (
+                        <SelectItem key={countryName} value={countryName}>
+                          {countryName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -579,35 +637,15 @@ export default function MapSearch() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="country">Country</Label>
-                  <Select value={country} onValueChange={setCountry}>
-                    <SelectTrigger data-testid="select-country">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COUNTRIES.map((countryName) => (
-                        <SelectItem key={countryName} value={countryName}>
-                          {countryName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category *</Label>
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger data-testid="select-category">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categoriesData?.categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.name}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="city">City *</Label>
+                  <Input
+                    id="city"
+                    placeholder="e.g., Denver, Portland"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    required
+                    data-testid="input-city"
+                  />
                 </div>
               </div>
 

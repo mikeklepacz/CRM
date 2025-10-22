@@ -7779,10 +7779,40 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Get last selected category for Map Search
+  app.get('/api/maps/last-category', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const lastCategory = await storage.getLastCategory(userId);
+      res.json({ category: lastCategory || 'pet' }); // Default to 'pet'
+    } catch (error: any) {
+      console.error('Error fetching last category:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch last category' });
+    }
+  });
+
+  // Set last selected category for Map Search
+  app.post('/api/maps/last-category', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { category } = req.body;
+      
+      if (!category) {
+        return res.status(400).json({ message: 'Category is required' });
+      }
+      
+      await storage.setLastCategory(userId, category);
+      res.json({ message: 'Last category saved successfully', category });
+    } catch (error: any) {
+      console.error('Error saving last category:', error);
+      res.status(500).json({ message: error.message || 'Failed to save last category' });
+    }
+  });
+
   // Search for places using Google Maps API
   app.post('/api/maps/search', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { query, location, excludedKeywords, excludedTypes } = req.body;
+      const { query, location, excludedKeywords, excludedTypes, category, radius } = req.body;
 
       if (!query) {
         return res.status(400).json({ message: 'Search query is required' });
@@ -7820,11 +7850,14 @@ Use this store information to provide context-aware responses. When helping draf
           .filter((k: string) => k.length > 0);
       }
 
-      // Record this search in history
-      await storage.recordSearch(query, city, state, country, excludedKeywordsArray, excludedTypesArray);
+      // Convert radius from miles to meters if provided
+      const radiusMeters = radius ? Math.round(radius * 1609.34) : undefined;
 
-      // Get search results from Google Maps with API-level type filtering
-      const results = await googleMaps.searchPlaces(query, location, excludedTypesArray);
+      // Record this search in history
+      await storage.recordSearch(query, city, state, country, excludedKeywordsArray, excludedTypesArray, category, radius);
+
+      // Get search results from Google Maps with API-level type filtering and radius
+      const results = await googleMaps.searchPlaces(query, location, excludedTypesArray, radiusMeters);
       
       // Check which place_ids are already imported
       const placeIds = results.map(r => r.place_id);
