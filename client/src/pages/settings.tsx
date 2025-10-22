@@ -20,7 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug, Mail, Clock, Tag } from "lucide-react";
+import { User, ShoppingCart, FileSpreadsheet, ArrowLeft, Plug, Mail, Clock, Tag, Filter } from "lucide-react";
 import { Link } from "wouter";
 import { Integrations } from "@/components/integrations";
 import { TimezoneAutocomplete } from "@/components/timezone-autocomplete";
@@ -109,8 +109,19 @@ export default function Settings() {
     queryKey: ['/api/user/preferences'],
   });
 
+  // Fetch available categories
+  const { data: categories } = useQuery<Array<{id: string, name: string}>>({
+    queryKey: ['/api/categories'],
+  });
+
+  // Fetch user's selected category for CRM filtering
+  const { data: selectedCategoryData } = useQuery<{ category: string | null }>({
+    queryKey: ['/api/user/selected-category'],
+  });
+
   // Timezone and time format state
   const [timezone, setTimezone] = useState<string>(userPreferences?.timezone || "");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [defaultTimezoneMode, setDefaultTimezoneMode] = useState<string>(
     userPreferences?.defaultTimezoneMode || "agent"
   );
@@ -141,6 +152,13 @@ export default function Settings() {
       setCalendarReminderMethods(methods);
     }
   }, [userPreferences]);
+
+  // Update selected category state when data loads
+  useEffect(() => {
+    if (selectedCategoryData?.category) {
+      setSelectedCategory(selectedCategoryData.category);
+    }
+  }, [selectedCategoryData]);
 
   const profileForm = useForm({
     resolver: zodResolver(profileSchema),
@@ -220,6 +238,27 @@ export default function Settings() {
       toast({
         title: "Success",
         description: "Password updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateSelectedCategoryMutation = useMutation({
+    mutationFn: async (category: string) => {
+      return await apiRequest("POST", "/api/user/selected-category", { category });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/selected-category'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
+      toast({
+        title: "Success",
+        description: "CRM category filter updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -436,6 +475,10 @@ export default function Settings() {
           <TabsTrigger value="timezone" data-testid="tab-timezone">
             <Clock className="mr-2 h-4 w-4" />
             Timezone
+          </TabsTrigger>
+          <TabsTrigger value="crm-filter" data-testid="tab-crm-filter">
+            <Filter className="mr-2 h-4 w-4" />
+            CRM Filter
           </TabsTrigger>
           {user.role === 'admin' && (
             <>
@@ -818,6 +861,48 @@ export default function Settings() {
                 data-testid="button-save-timezone"
               >
                 {updateTimezoneMutation.isPending ? "Saving..." : "Save Timezone Settings"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="crm-filter" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>CRM Category Filter</CardTitle>
+              <CardDescription>
+                Select which category of stores to view in your CRM dashboard. You can only view one category at a time.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Active Category</Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Your CRM will only show stores from the selected category. This keeps different sales teams (e.g., Pets, Cannabis) completely separate.
+                </p>
+                <RadioGroup value={selectedCategory} onValueChange={setSelectedCategory}>
+                  {categories?.map((category) => (
+                    <div key={category.id} className="flex items-center space-x-2">
+                      <RadioGroupItem value={category.name} id={category.id} data-testid={`radio-category-${category.name.toLowerCase()}`} />
+                      <Label htmlFor={category.id} className="font-normal cursor-pointer">
+                        {category.name}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+                {!categories || categories.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No categories available. Ask your admin to create categories.
+                  </p>
+                )}
+              </div>
+
+              <Button
+                onClick={() => updateSelectedCategoryMutation.mutate(selectedCategory)}
+                disabled={updateSelectedCategoryMutation.isPending || !selectedCategory}
+                data-testid="button-save-category-filter"
+              >
+                {updateSelectedCategoryMutation.isPending ? "Saving..." : "Save Category Filter"}
               </Button>
             </CardContent>
           </Card>
