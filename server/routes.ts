@@ -14,6 +14,7 @@ import {
   insertConversationSchema,
   insertProjectSchema,
   insertTemplateSchema,
+  insertReminderSchema,
 } from "@shared/schema";
 
 // Helper function for fuzzy string matching (Levenshtein distance)
@@ -6770,6 +6771,119 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error deleting template:', error);
       res.status(500).json({ message: error.message || 'Failed to delete template' });
+    }
+  });
+
+  // Reminder routes
+  app.get('/api/reminders', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const reminders = await storage.getRemindersByUser(userId);
+      res.json(reminders);
+    } catch (error: any) {
+      console.error('Error fetching reminders:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch reminders' });
+    }
+  });
+
+  app.post('/api/reminders', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { title, description, reminderDate, reminderTime, storeMetadata } = req.body;
+
+      // Combine date and time into a timestamp
+      const dateStr = new Date(reminderDate).toISOString().split('T')[0];
+      const triggerDate = new Date(`${dateStr}T${reminderTime}:00`);
+
+      // Create reminder data
+      const reminderData = {
+        userId,
+        title,
+        description: description || null,
+        reminderType: 'one_time' as const,
+        triggerDate,
+        nextTrigger: triggerDate,
+        isActive: true,
+        addToCalendar: false,
+        storeMetadata: storeMetadata || null,
+      };
+
+      // Validate with schema
+      const validation = insertReminderSchema.safeParse(reminderData);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      // Create the reminder
+      const reminder = await storage.createReminder(validation.data);
+
+      // Update Google Sheets if store metadata is provided
+      if (storeMetadata?.sheetId && storeMetadata?.uniqueIdentifier) {
+        try {
+          const sheet = await storage.getGoogleSheetById(storeMetadata.sheetId);
+          if (sheet) {
+            const { spreadsheetId, sheetName } = sheet;
+            
+            // Read headers and data
+            const dataRange = `${sheetName}!A:ZZ`;
+            const rows = await googleSheets.readSheetData(userId, spreadsheetId, dataRange);
+            const headers = rows[0] || [];
+            
+            // Find the row by unique identifier
+            const uniqueIdColIndex = headers.findIndex((h: string) => 
+              h.toLowerCase() === sheet.uniqueIdentifierColumn.toLowerCase()
+            );
+            
+            if (uniqueIdColIndex !== -1) {
+              const rowIndex = rows.findIndex((row: any[], idx: number) => 
+                idx > 0 && row[uniqueIdColIndex] === storeMetadata.uniqueIdentifier
+              );
+              
+              if (rowIndex !== -1) {
+                // Find Follow-up Date and Next Action columns
+                const followUpColIndex = headers.findIndex((h: string) => 
+                  h.toLowerCase() === 'follow-up date' || h.toLowerCase() === 'followup'
+                );
+                const nextActionColIndex = headers.findIndex((h: string) => 
+                  h.toLowerCase() === 'next action'
+                );
+                
+                // Prepare updates
+                const updates: any[] = [];
+                if (followUpColIndex !== -1) {
+                  const colLetter = String.fromCharCode(65 + followUpColIndex);
+                  const cellRange = `${sheetName}!${colLetter}${rowIndex + 1}`;
+                  updates.push({
+                    range: cellRange,
+                    values: [[new Date(reminderDate).toLocaleDateString('en-US')]]
+                  });
+                }
+                if (nextActionColIndex !== -1) {
+                  const colLetter = String.fromCharCode(65 + nextActionColIndex);
+                  const cellRange = `${sheetName}!${colLetter}${rowIndex + 1}`;
+                  updates.push({
+                    range: cellRange,
+                    values: [[title]]
+                  });
+                }
+                
+                // Update the cells
+                for (const update of updates) {
+                  await googleSheets.writeSheetData(userId, spreadsheetId, update.range, update.values);
+                }
+              }
+            }
+          }
+        } catch (sheetError) {
+          console.error('Error updating Google Sheets for reminder:', sheetError);
+          // Don't fail the whole request if Google Sheets update fails
+        }
+      }
+
+      res.json(reminder);
+    } catch (error: any) {
+      console.error('Error creating reminder:', error);
+      res.status(500).json({ message: error.message || 'Failed to create reminder' });
     }
   });
 

@@ -8,11 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { format } from "date-fns";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { QuickReminder } from "@/components/quick-reminder";
 
 interface ContactActionDialogProps {
   open: boolean;
@@ -48,12 +47,11 @@ export function ContactActionDialog({
   const queryClient = useQueryClient();
 
   const [status, setStatus] = useState(row.Status || row.status || '');
-  const [followUpDate, setFollowUpDate] = useState<Date | undefined>(undefined);
-  const [nextAction, setNextAction] = useState('');
   const [notes, setNotes] = useState('');
   const [pointOfContact, setPointOfContact] = useState('');
   const [email, setEmail] = useState(contactType === 'email' ? contactValue : (row.Email || row.email || ''));
   const [phone, setPhone] = useState(contactType === 'phone' ? contactValue : (row.Phone || row.phone || ''));
+  const [reminderData, setReminderData] = useState<{ note: string; date: Date; time: string } | null>(null);
 
   // Trigger phone call or email when dialog opens
   useEffect(() => {
@@ -69,6 +67,8 @@ export function ContactActionDialog({
   const saveMutation = useMutation({
     mutationFn: async () => {
       const linkValue = row[joinColumn];
+      const followUpDate = reminderData?.date ? format(reminderData.date, 'M/d/yyyy') : '';
+      const nextAction = reminderData?.note || '';
 
       // If row doesn't have tracker data, claim it first
       if (!row._trackerRowIndex) {
@@ -77,7 +77,7 @@ export function ContactActionDialog({
           joinColumn,
           agent: userEmail,
           status,
-          followUpDate: followUpDate ? format(followUpDate, 'M/d/yyyy') : '',
+          followUpDate,
           nextAction,
           notes,
           pointOfContact,
@@ -87,7 +87,7 @@ export function ContactActionDialog({
         return await apiRequest("PUT", `/api/sheets/${trackerSheetId}/update-contact-action`, {
           rowIndex: row._trackerRowIndex,
           status,
-          followUpDate: followUpDate ? format(followUpDate, 'M/d/yyyy') : '',
+          followUpDate,
           nextAction,
           notes,
           pointOfContact,
@@ -119,6 +119,40 @@ export function ContactActionDialog({
       });
     },
   });
+
+  const handleReminderSave = async (data: { note: string; date: Date; time: string }) => {
+    setReminderData(data);
+    
+    // Create reminder via API
+    const storeName = row['Store Name'] || row['store name'] || row.storeName || '';
+    const storeLink = row[joinColumn] || '';
+    
+    try {
+      await apiRequest("POST", "/api/reminders", {
+        title: data.note,
+        description: null,
+        reminderDate: data.date,
+        reminderTime: data.time,
+        storeMetadata: {
+          storeName,
+          storeLink,
+          uniqueIdentifier: storeLink,
+          sheetId: trackerSheetId,
+        },
+      });
+
+      toast({
+        title: "Reminder created",
+        description: "Your reminder has been saved",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create reminder",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSave = () => {
     saveMutation.mutate();
@@ -167,39 +201,17 @@ export function ContactActionDialog({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="followup">Follow-up Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="followup"
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {followUpDate ? format(followUpDate, 'PPP') : 'Pick a date'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={followUpDate}
-                  onSelect={setFollowUpDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="next-action">Next Action</Label>
-            <Input
-              id="next-action"
-              value={nextAction}
-              onChange={(e) => setNextAction(e.target.value)}
-              placeholder="What should happen next?"
-            />
-          </div>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Set Reminder</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <QuickReminder 
+                onSave={handleReminderSave}
+                isSaving={false}
+              />
+            </CardContent>
+          </Card>
 
           <div className="space-y-2">
             <Label htmlFor="point-of-contact">Point of Contact</Label>
