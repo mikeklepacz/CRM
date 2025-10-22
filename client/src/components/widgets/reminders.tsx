@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings2, Bell, Clock, Plus, Check, Download, Store, Globe } from "lucide-react";
+import { Settings2, Bell, Clock, Plus, Check, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -254,6 +254,41 @@ export function RemindersWidget() {
                       <p className="text-xs text-muted-foreground line-clamp-2">
                         {reminder.description}
                       </p>
+                    )}
+                    {/* Contact Information */}
+                    {reminder.storeMetadata && (reminder.storeMetadata.pointOfContact || reminder.storeMetadata.pocEmail || reminder.storeMetadata.pocPhone) && (
+                      <div className="flex flex-col gap-1 mt-1.5 text-xs">
+                        {reminder.storeMetadata.pointOfContact && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <User className="h-3 w-3 shrink-0" />
+                            <span>{reminder.storeMetadata.pointOfContact}</span>
+                          </div>
+                        )}
+                        {reminder.storeMetadata.pocEmail && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <a 
+                              href={`mailto:${reminder.storeMetadata.pocEmail}`}
+                              className="hover:text-primary hover:underline"
+                              data-testid={`link-email-${reminder.id}`}
+                            >
+                              {reminder.storeMetadata.pocEmail}
+                            </a>
+                          </div>
+                        )}
+                        {reminder.storeMetadata.pocPhone && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            <a 
+                              href={`tel:${reminder.storeMetadata.pocPhone}`}
+                              className="hover:text-primary hover:underline"
+                              data-testid={`link-phone-${reminder.id}`}
+                            >
+                              {reminder.storeMetadata.pocPhone}
+                            </a>
+                          </div>
+                        )}
+                      </div>
                     )}
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Badge 
