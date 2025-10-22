@@ -728,9 +728,10 @@ export default function MapSearch() {
         </GoogleMap>
       </LoadScript>
 
-      {/* Floating Search Form Card (Top) */}
-      <div className="absolute top-4 left-4 right-4 z-10 max-w-xl max-h-[65vh]">
-        <Card className="backdrop-blur-md bg-background/80 flex flex-col max-h-full overflow-hidden">
+      {/* Combined Container for Search Form and History */}
+      <div className="absolute top-4 left-4 right-4 z-10 max-w-xl space-y-4">
+        {/* Search Businesses Card */}
+        <Card className="backdrop-blur-md bg-background/80 flex flex-col max-h-[65vh] overflow-hidden">
           <CardHeader className="flex-shrink-0 p-4 pb-2">
             <CardTitle className="text-lg">Search Businesses</CardTitle>
             <CardDescription className="text-sm">
@@ -746,7 +747,7 @@ export default function MapSearch() {
                 data-testid="checkbox-show-history"
               />
               <Label htmlFor="show-search-history" className="cursor-pointer text-sm">
-                Show Search History
+                Show Map Search History
               </Label>
             </div>
             <form onSubmit={handleSearch} className="space-y-3">
@@ -1158,27 +1159,25 @@ export default function MapSearch() {
             </form>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Floating Search History Card (Bottom) - conditionally shown */}
-      {showSearchHistory && (
-        <div className="absolute bottom-4 left-4 right-4 z-10 max-w-xl">
+        {/* Map Search History Card - conditionally shown */}
+        {showSearchHistory && (
           <Card className="backdrop-blur-md bg-background/80">
             <CardHeader className="p-4 pb-2">
               <div className="flex items-center gap-2 mb-1">
                 <MapPin className="w-5 h-5 text-primary" />
-                <h1 className="text-xl font-semibold" data-testid="text-page-title">Map Search</h1>
+                <h1 className="text-xl font-semibold" data-testid="text-page-title">Map Search History</h1>
               </div>
               <p className="text-sm text-muted-foreground">
-                Search for businesses and add them to your Store Database
+                Global history of all Map Search queries
               </p>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <SearchHistoryComponent onSearchAgain={handleSearchAgain} />
             </CardContent>
           </Card>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Slide-in Results Panel (Right) - only visible when searchResults exist */}
       {searchResults.length > 0 && (

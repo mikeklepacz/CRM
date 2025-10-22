@@ -38,7 +38,7 @@ export function SearchHistoryComponent({ onSearchAgain }: SearchHistoryProps) {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Search className="w-5 h-5" />
-              Search History
+              Map Search History
               <span className="text-sm font-normal text-muted-foreground">
                 ({history.length} {history.length === 1 ? 'search' : 'searches'})
               </span>
