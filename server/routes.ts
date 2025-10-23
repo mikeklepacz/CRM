@@ -1160,6 +1160,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get filtered clients (for vCard export and dashboard)
+  app.post('/api/clients/filtered', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
+    try {
+      const { search, states, status, category } = req.body;
+      const user = req.currentUser;
+      
+      // Build filters
+      const filters: any = {
+        search,
+        states,
+        status,
+        category,
+      };
+
+      // If user is an agent (not admin), only show their clients
+      if (user.role !== 'admin') {
+        filters.agentId = user.id;
+      }
+
+      const clients = await storage.getFilteredClients(filters);
+      res.json(clients);
+    } catch (error: any) {
+      console.error("Error fetching filtered clients:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch filtered clients" });
+    }
+  });
+
   // Claim client
   app.post('/api/clients/:id/claim', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {

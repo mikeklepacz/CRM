@@ -97,6 +97,7 @@ export interface IStorage {
   // Client operations
   getAllClients(): Promise<Client[]>;
   getClientsByAgent(agentId: string): Promise<Client[]>;
+  getFilteredClients(filters: { search?: string; states?: string[]; status?: string; category?: string; agentId?: string }): Promise<Client[]>;
   getClient(id: string): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
   updateClient(id: string, updates: Partial<InsertClient>): Promise<Client>;
@@ -399,6 +400,59 @@ export class DatabaseStorage implements IStorage {
       .from(clients)
       .where(eq(clients.assignedAgent, agentId))
       .orderBy(clients.createdAt);
+  }
+
+  async getFilteredClients(filters: { search?: string; states?: string[]; status?: string; category?: string; agentId?: string }): Promise<Client[]> {
+    let query = db.select().from(clients);
+    const conditions: any[] = [];
+
+    // Filter by agent (for agents seeing only their clients)
+    if (filters.agentId) {
+      conditions.push(eq(clients.assignedAgent, filters.agentId));
+    }
+
+    // Filter by category
+    if (filters.category) {
+      conditions.push(eq(clients.category, filters.category));
+    }
+
+    // Filter by status
+    if (filters.status) {
+      conditions.push(eq(clients.status, filters.status));
+    }
+
+    // Filter by states (check JSONB data.State field)
+    if (filters.states && filters.states.length > 0) {
+      const stateConditions = filters.states.map(state =>
+        sql`${clients.data}->>'State' = ${state} OR ${clients.data}->>'state' = ${state}`
+      );
+      conditions.push(sql`(${sql.join(stateConditions, sql` OR `)})`);
+    }
+
+    // Search filter (check multiple JSONB fields)
+    if (filters.search && filters.search.trim()) {
+      const searchTerm = `%${filters.search.toLowerCase()}%`;
+      conditions.push(
+        sql`(
+          LOWER(${clients.data}->>'Name') LIKE ${searchTerm} OR
+          LOWER(${clients.data}->>'name') LIKE ${searchTerm} OR
+          LOWER(${clients.data}->>'Email') LIKE ${searchTerm} OR
+          LOWER(${clients.data}->>'email') LIKE ${searchTerm} OR
+          LOWER(${clients.data}->>'Phone') LIKE ${searchTerm} OR
+          LOWER(${clients.data}->>'phone') LIKE ${searchTerm} OR
+          LOWER(${clients.data}->>'City') LIKE ${searchTerm} OR
+          LOWER(${clients.data}->>'city') LIKE ${searchTerm}
+        )`
+      );
+    }
+
+    // Apply all conditions
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    const results = await query.orderBy(clients.createdAt);
+    return results;
   }
 
   async getClient(id: string): Promise<Client | undefined> {
