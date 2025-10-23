@@ -3340,9 +3340,9 @@ export default function ClientDashboard() {
                     credentials: 'include',
                     body: JSON.stringify({
                       search: searchTerm,
-                      states: selectedStates,
-                      status: selectedStatus,
-                      category: null, // TODO: Add category filter if needed
+                      states: Array.from(selectedStates),
+                      status: Array.from(selectedStatuses),
+                      category: null,
                     }),
                   });
 
