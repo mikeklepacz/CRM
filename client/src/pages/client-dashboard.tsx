@@ -18,8 +18,9 @@ import { Slider } from "@/components/ui/slider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store, Bot, Download } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store, Bot, Download, ChevronDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -3325,6 +3326,9 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     allLocations: any[];
   } | null>(null);
 
+  // State for collapsible reminder section
+  const [reminderSectionOpen, setReminderSectionOpen] = useState(false);
+
   // Query all stores for multi-location picker - LAZY LOAD (only when search has 2+ chars)
   const { data: allStores, isLoading: isLoadingStores } = useQuery<any[]>({
     queryKey: [`/api/stores/all/${storeSheetId}`],
@@ -4230,79 +4234,91 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                     </Select>
                   </div>
 
-                  {/* Smart Reminder Box */}
-                  <div className="pt-4 border-t">
-                    <QuickReminder
-                      onSave={async (reminderData) => {
-                        try {
-                          console.log('[REMINDER] Creating reminder:', {
-                            date: reminderData.date,
-                            time: reminderData.time,
-                            note: reminderData.note,
-                            useCustomerTimezone: reminderData.useCustomerTimezone,
-                            customerTimezone: reminderData.customerTimezone,
-                            agentTimezone: reminderData.agentTimezone,
-                            calendarReminders: reminderData.calendarReminders,
-                          });
+                  {/* Smart Reminder Box - Collapsible */}
+                  <Collapsible open={reminderSectionOpen} onOpenChange={setReminderSectionOpen} className="pt-4 border-t">
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-between p-3 h-auto"
+                        data-testid="button-toggle-reminder"
+                      >
+                        <span className="font-medium">Set Reminder</span>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${reminderSectionOpen ? "rotate-180" : ""}`} />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-2">
+                      <QuickReminder
+                        onSave={async (reminderData) => {
+                          try {
+                            console.log('[REMINDER] Creating reminder:', {
+                              date: reminderData.date,
+                              time: reminderData.time,
+                              note: reminderData.note,
+                              useCustomerTimezone: reminderData.useCustomerTimezone,
+                              customerTimezone: reminderData.customerTimezone,
+                              agentTimezone: reminderData.agentTimezone,
+                              calendarReminders: reminderData.calendarReminders,
+                            });
 
-                          const response = await apiRequest('POST', '/api/reminders', {
-                            title: `Follow up: ${formData.name}`,
-                            description: reminderData.note,
-                            reminderDate: reminderData.date.toISOString(),
-                            reminderTime: reminderData.time,
-                            storeMetadata: {
-                              sheetId: trackerSheetId,
-                              uniqueIdentifier: row.link,
-                              storeName: formData.name,
-                              address: formData.address,
-                              city: formData.city,
-                              state: formData.state,
-                              pointOfContact: formData.point_of_contact,
-                              pocEmail: formData.poc_email || formData.email,
-                              pocPhone: formData.poc_phone || formData.phone,
-                            },
-                            useCustomerTimezone: reminderData.useCustomerTimezone,
-                            customerTimezone: reminderData.customerTimezone,
-                            agentTimezone: reminderData.agentTimezone,
-                            calendarReminders: reminderData.calendarReminders,
-                          });
-                          
-                          console.log('[REMINDER] Response:', response);
+                            const response = await apiRequest('POST', '/api/reminders', {
+                              title: `Follow up: ${formData.name}`,
+                              description: reminderData.note,
+                              reminderDate: reminderData.date.toISOString(),
+                              reminderTime: reminderData.time,
+                              storeMetadata: {
+                                sheetId: trackerSheetId,
+                                uniqueIdentifier: row.link,
+                                storeName: formData.name,
+                                address: formData.address,
+                                city: formData.city,
+                                state: formData.state,
+                                pointOfContact: formData.point_of_contact,
+                                pocEmail: formData.poc_email || formData.email,
+                                pocPhone: formData.poc_phone || formData.phone,
+                              },
+                              useCustomerTimezone: reminderData.useCustomerTimezone,
+                              customerTimezone: reminderData.customerTimezone,
+                              agentTimezone: reminderData.agentTimezone,
+                              calendarReminders: reminderData.calendarReminders,
+                            });
+                            
+                            console.log('[REMINDER] Response:', response);
 
-                          toast({
-                            title: "Reminder Created",
-                            description: response.warning 
-                              ? response.warning.message 
-                              : "Your reminder has been saved successfully.",
-                            variant: response.warning ? "default" : "default",
-                          });
+                            toast({
+                              title: "Reminder Created",
+                              description: response.warning 
+                                ? response.warning.message 
+                                : "Your reminder has been saved successfully.",
+                              variant: response.warning ? "default" : "default",
+                            });
 
-                          // Update the form data to reflect the changes
-                          handleInputChange('follow_up_date', format(reminderData.date, 'M/d/yyyy'));
-                          handleInputChange('next_action', reminderData.note);
-                        } catch (error: any) {
-                          console.error('[REMINDER] Error:', error);
-                          toast({
-                            title: "Error",
-                            description: error.message || "Failed to create reminder",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
-                      storeAddress={formData.address}
-                      storeCity={formData.city}
-                      storeState={formData.state}
-                      userTimezone={userPreferences?.timezone}
-                      defaultTimezoneMode={userPreferences?.defaultTimezoneMode}
-                      timeFormat={userPreferences?.timeFormat}
-                      pointOfContact={formData.point_of_contact}
-                      pocEmail={formData.poc_email}
-                      pocPhone={formData.poc_phone}
-                      defaultEmail={formData.email}
-                      defaultPhone={formData.phone}
-                      defaultCalendarReminders={userPreferences?.defaultCalendarReminders}
-                    />
-                  </div>
+                            // Update the form data to reflect the changes
+                            handleInputChange('follow_up_date', format(reminderData.date, 'M/d/yyyy'));
+                            handleInputChange('next_action', reminderData.note);
+                          } catch (error: any) {
+                            console.error('[REMINDER] Error:', error);
+                            toast({
+                              title: "Error",
+                              description: error.message || "Failed to create reminder",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        storeAddress={formData.address}
+                        storeCity={formData.city}
+                        storeState={formData.state}
+                        userTimezone={userPreferences?.timezone}
+                        defaultTimezoneMode={userPreferences?.defaultTimezoneMode}
+                        timeFormat={userPreferences?.timeFormat}
+                        pointOfContact={formData.point_of_contact}
+                        pocEmail={formData.poc_email}
+                        pocPhone={formData.poc_phone}
+                        defaultEmail={formData.email}
+                        defaultPhone={formData.phone}
+                        defaultCalendarReminders={userPreferences?.defaultCalendarReminders}
+                      />
+                    </CollapsibleContent>
+                  </Collapsible>
                 </div>
               </AccordionContent>
             </AccordionItem>
