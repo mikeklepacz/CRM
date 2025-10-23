@@ -1334,10 +1334,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
           </DialogHeader>
           
           <Tabs value={templateBuilderTab} onValueChange={setTemplateBuilderTab} className="flex-1 flex flex-col min-h-0">
-            <TabsList className="mx-6 mt-4 w-fit">
-              <TabsTrigger value="build" data-testid="tab-build">BUILD</TabsTrigger>
-              <TabsTrigger value="browse" data-testid="tab-browse">My Templates</TabsTrigger>
-            </TabsList>
+            {/* Tabs header with search aligned */}
+            <div className="flex items-center justify-between gap-4 px-6 mt-4">
+              <TabsList className="w-fit">
+                <TabsTrigger value="build" data-testid="tab-build">BUILD</TabsTrigger>
+                <TabsTrigger value="browse" data-testid="tab-browse">My Templates</TabsTrigger>
+              </TabsList>
+              
+              {/* Search bar - visible on both tabs */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search templates..."
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  className="pl-8"
+                  data-testid="input-search-templates-builder"
+                />
+              </div>
+            </div>
 
             {/* BUILD Tab */}
             <TabsContent value="build" className="flex-1 flex flex-col min-h-0 px-6 pb-6">
