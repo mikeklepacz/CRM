@@ -395,6 +395,7 @@ export const templates = pgTable("templates", {
   userId: varchar("user_id").notNull().references(() => users.id),
   title: varchar("title", { length: 200 }).notNull(),
   content: text("content").notNull(),
+  type: varchar("type", { length: 20 }).default('Email'), // 'Email' or 'Script'
   tags: text("tags").array().default(sql`ARRAY[]::text[]`), // e.g., ['email', 'follow-up', 'objection-handler']
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

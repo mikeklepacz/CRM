@@ -193,6 +193,7 @@ export interface IStorage {
   createTemplate(template: InsertTemplate): Promise<Template>;
   updateTemplate(id: string, updates: Partial<InsertTemplate>): Promise<Template>;
   deleteTemplate(id: string): Promise<void>;
+  getAllTemplateTags(): Promise<string[]>; // Get all unique tags across all templates
   
   // Category operations
   getAllCategories(): Promise<Category[]>;
@@ -1010,6 +1011,23 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(templates)
       .where(eq(templates.id, id));
+  }
+
+  async getAllTemplateTags(): Promise<string[]> {
+    const allTemplates = await db.select().from(templates);
+    const tagsSet = new Set<string>();
+    
+    allTemplates.forEach(template => {
+      if (template.tags && Array.isArray(template.tags)) {
+        template.tags.forEach(tag => {
+          if (tag && tag.trim()) {
+            tagsSet.add(tag.trim());
+          }
+        });
+      }
+    });
+    
+    return Array.from(tagsSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   }
 
   // Category operations

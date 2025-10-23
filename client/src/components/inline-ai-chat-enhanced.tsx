@@ -17,6 +17,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -125,6 +132,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   // Template builder state
   const [builderTitle, setBuilderTitle] = useState("");
   const [builderContent, setBuilderContent] = useState("");
+  const [builderType, setBuilderType] = useState<"Email" | "Script">("Email");
   const [builderTags, setBuilderTags] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
@@ -345,6 +353,10 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     queryKey: ["/api/templates"],
   });
 
+  const { data: allTags = [] } = useQuery<string[]>({
+    queryKey: ["/api/templates/tags"],
+  });
+
   const { data: messages = [], isLoading: messagesLoading } = useQuery<ChatMessageType[]>({
     queryKey: ["/api/conversations", selectedConversationId, "messages"],
     enabled: !!selectedConversationId,
@@ -498,16 +510,18 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   });
 
   const createTemplateMutation = useMutation({
-    mutationFn: async (template: { title: string; content: string; tags: string[] }) => {
+    mutationFn: async (template: { title: string; content: string; type: string; tags: string[] }) => {
       return await apiRequest("POST", "/api/templates", template);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/tags"] });
       setNewTemplateTitle("");
       setNewTemplateContent("");
       setNewTemplateTags("");
       setBuilderTitle("");
       setBuilderContent("");
+      setBuilderType("Email");
       setBuilderTags("");
       setEditingTemplateId(null);
       toast({ title: "Success", description: "Template saved" });
@@ -515,13 +529,15 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   });
 
   const updateTemplateMutation = useMutation({
-    mutationFn: async ({ id, template }: { id: string; template: { title: string; content: string; tags: string[] } }) => {
+    mutationFn: async ({ id, template }: { id: string; template: { title: string; content: string; type: string; tags: string[] } }) => {
       return await apiRequest("PATCH", `/api/templates/${id}`, template);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/tags"] });
       setBuilderTitle("");
       setBuilderContent("");
+      setBuilderType("Email");
       setBuilderTags("");
       setEditingTemplateId(null);
       toast({ title: "Success", description: "Template updated" });
@@ -534,6 +550,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/tags"] });
       toast({ title: "Success", description: "Template deleted" });
     },
   });
@@ -1125,6 +1142,22 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-sm font-semibold">Type</label>
+                    <Select
+                      value={builderType}
+                      onValueChange={(value: "Email" | "Script") => setBuilderType(value)}
+                    >
+                      <SelectTrigger data-testid="select-builder-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Email">Email</SelectItem>
+                        <SelectItem value="Script">Script</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-semibold">Content</label>
                       <div className="flex gap-2">
@@ -1329,6 +1362,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   onClick={() => {
                     setBuilderTitle("");
                     setBuilderContent("");
+                    setBuilderType("Email");
                     setBuilderTags("");
                     setEditingTemplateId(null);
                     setTemplateBuilderOpen(false);
@@ -1354,6 +1388,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                     const templateData = {
                       title: builderTitle,
                       content: builderContent,
+                      type: builderType,
                       tags,
                     };
 
@@ -1442,6 +1477,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                                 onClick={() => {
                                   setBuilderTitle(template.title);
                                   setBuilderContent(template.content);
+                                  setBuilderType((template as any).type || "Email");
                                   setBuilderTags(template.tags?.join(", ") || "");
                                   setEditingTemplateId(template.id);
                                   setTemplateBuilderTab("build");
@@ -1468,15 +1504,18 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                           <p className="text-sm text-muted-foreground line-clamp-3 mb-2 font-mono">
                             {template.content}
                           </p>
-                          {template.tags && template.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {template.tags.map((tag, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {(template as any).type && (
+                              <Badge variant="default" className="text-xs">
+                                {(template as any).type}
+                              </Badge>
+                            )}
+                            {template.tags && template.tags.map((tag, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     {templates.length === 0 && (

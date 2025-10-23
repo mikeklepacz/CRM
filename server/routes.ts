@@ -7377,6 +7377,7 @@ Use this store information to provide context-aware responses. When helping draf
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
         content: z.string().optional(),
+        type: z.enum(['Email', 'Script']).optional(),
         tags: z.array(z.string()).optional(),
       });
       
@@ -7412,6 +7413,17 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error deleting template:', error);
       res.status(500).json({ message: error.message || 'Failed to delete template' });
+    }
+  });
+
+  // Get all unique tags across all templates (alphabetically)
+  app.get('/api/templates/tags', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const allTags = await storage.getAllTemplateTags();
+      res.json(allTags);
+    } catch (error: any) {
+      console.error('Error fetching template tags:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch template tags' });
     }
   });
 
