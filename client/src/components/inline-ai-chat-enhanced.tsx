@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
+  ArrowLeft,
   Bot,
   Calendar,
   ChevronDown,
@@ -42,6 +43,7 @@ import {
   FileText,
   Folder,
   FolderPlus,
+  Library,
   Loader2,
   Mail,
   MessageSquarePlus,
@@ -184,7 +186,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [templateBuilderOpen, setTemplateBuilderOpen] = useState(false);
-  const [templateBuilderTab, setTemplateBuilderTab] = useState("build");
+  const [templateBuilderView, setTemplateBuilderView] = useState<"builder" | "library">("builder");
   
   // Template builder state
   const [builderTitle, setBuilderTitle] = useState("");
@@ -382,7 +384,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     setBuilderTags("");
     setEditingTemplateId(null);
     setTemplateBuilderOpen(true);
-    setTemplateBuilderTab("build");
+    setTemplateBuilderView("builder");
     
     toast({ 
       title: "Template created", 
@@ -1331,32 +1333,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       <Dialog open={templateBuilderOpen} onOpenChange={setTemplateBuilderOpen}>
         <DialogContent className="max-w-full w-screen h-screen max-h-screen m-0 rounded-none p-0 flex flex-col" data-testid="dialog-template-builder">
           <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle>Template Builder</DialogTitle>
+            <div className="flex items-center gap-4">
+              {templateBuilderView === "library" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTemplateBuilderView("builder")}
+                  data-testid="button-back-to-builder"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+              )}
+              <DialogTitle>{templateBuilderView === "builder" ? "Template Builder" : "My Templates"}</DialogTitle>
+            </div>
           </DialogHeader>
           
-          <Tabs value={templateBuilderTab} onValueChange={setTemplateBuilderTab} className="flex-1 flex flex-col min-h-0">
-            {/* Tabs header with search aligned */}
-            <div className="flex items-center justify-between gap-4 px-6 mt-4">
-              <TabsList className="w-fit">
-                <TabsTrigger value="build" data-testid="tab-build">BUILD</TabsTrigger>
-                <TabsTrigger value="browse" data-testid="tab-browse">My Templates</TabsTrigger>
-              </TabsList>
-              
-              {/* Search bar - visible on both tabs */}
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search templates..."
-                  value={templateSearch}
-                  onChange={(e) => setTemplateSearch(e.target.value)}
-                  className="pl-8"
-                  data-testid="input-search-templates-builder"
-                />
-              </div>
-            </div>
-
-            {/* BUILD Tab */}
-            <TabsContent value="build" className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
+          {/* Builder View */}
+          {templateBuilderView === "builder" && (
+            <div className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
               <div className="space-y-4 flex-1">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold">Title</label>
@@ -1716,10 +1711,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   {editingTemplateId ? "Update Template" : "Save Template"}
                 </Button>
               </div>
-            </TabsContent>
+              
+              {/* My Templates Button */}
+              <div className="flex gap-2 mt-4 pt-4 border-t flex-shrink-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setTemplateBuilderView("library")}
+                  className="flex-1"
+                  data-testid="button-goto-templates"
+                >
+                  <Library className="h-4 w-4 mr-2" />
+                  View My Templates
+                </Button>
+              </div>
+            </div>
+          )}
 
-            {/* BROWSE Tab */}
-            <TabsContent value="browse" className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
+          {/* Library View */}
+          {templateBuilderView === "library" && (
+            <div className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
               <div className="flex flex-col flex-1 gap-4 overflow-hidden">
                 {/* Type and Tag Filters */}
                 <div className="flex flex-wrap gap-2">
@@ -1808,7 +1818,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                                   setBuilderType((template as any).type || "Email");
                                   setBuilderTags(template.tags?.join(", ") || "");
                                   setEditingTemplateId(template.id);
-                                  setTemplateBuilderTab("build");
+                                  setTemplateBuilderView("builder");
                                 }}
                                 data-testid={`button-edit-template-${template.id}`}
                               >
@@ -1849,14 +1859,28 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                     {templates.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground">
                         <p>No templates yet</p>
-                        <p className="text-sm">Switch to BUILD tab to create your first template</p>
+                        <p className="text-sm">Go back to builder to create your first template</p>
                       </div>
                     )}
                   </div>
                 </ScrollArea>
+                
+                {/* Search Bar */}
+                <div className="flex gap-4 mt-4 pt-4 border-t flex-shrink-0">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search templates..."
+                      value={templateSearch}
+                      onChange={(e) => setTemplateSearch(e.target.value)}
+                      className="pl-8"
+                      data-testid="input-search-templates-library"
+                    />
+                  </div>
+                </div>
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
