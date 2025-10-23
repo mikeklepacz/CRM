@@ -833,6 +833,23 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Template Builder Dialog */}
+      <Dialog open={templateBuilderOpen} onOpenChange={setTemplateBuilderOpen}>
+        <DialogContent className="max-w-full w-screen h-screen max-h-screen m-0 rounded-none" data-testid="dialog-template-builder">
+          <DialogHeader>
+            <DialogTitle>Template Builder</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-muted-foreground">Template builder interface coming soon...</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setTemplateBuilderOpen(false)} data-testid="button-close-template-builder">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
