@@ -3790,39 +3790,31 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     saveMutation.mutate({ closeDialog: true });
   };
 
-  // AI Assistant toggle - load from localStorage per-store
-  // Use the stable store link as unique identifier
-  const getStorageKey = () => {
-    const storeLink = row?.link || row?.Link || 'unknown';
-    return `store-ai-assistant-${storeLink}`;
-  };
+  // AI Assistant toggle - global setting (applies to all stores)
+  const GLOBAL_AI_ASSISTANT_KEY = 'show-ai-assistant';
   
   const [showAssistant, setShowAssistant] = useState(() => {
-    if (typeof window !== 'undefined' && row) {
-      const saved = localStorage.getItem(getStorageKey());
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(GLOBAL_AI_ASSISTANT_KEY);
       return saved === 'true';
     }
     return false;
   });
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
 
-  // Re-sync showAssistant from localStorage when store changes
+  // Re-sync showAssistant from localStorage when dialog opens
   useEffect(() => {
-    if (typeof window !== 'undefined' && row) {
-      const key = getStorageKey();
-      const saved = localStorage.getItem(key);
+    if (typeof window !== 'undefined' && open) {
+      const saved = localStorage.getItem(GLOBAL_AI_ASSISTANT_KEY);
       setShowAssistant(saved === 'true');
-    } else {
-      setShowAssistant(false);
     }
-  }, [row?.link, row?.Link]);
+  }, [open]);
 
   // Handler to update showAssistant and persist to localStorage
   const handleShowAssistantChange = (checked: boolean) => {
     setShowAssistant(checked);
-    if (typeof window !== 'undefined' && row) {
-      const key = getStorageKey();
-      localStorage.setItem(key, String(checked));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(GLOBAL_AI_ASSISTANT_KEY, String(checked));
     }
   };
 
