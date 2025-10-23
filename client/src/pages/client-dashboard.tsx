@@ -3331,36 +3331,12 @@ export default function ClientDashboard() {
               Cancel
             </Button>
             <Button 
-              onClick={async () => {
+              onClick={() => {
                 try {
-                  // Fetch filtered clients from PostgreSQL using current dashboard filters
-                  // NOTE: Export should ONLY export what's visible in the table
-                  // Only use: search, nameFilter, cityFilter, states, cities, status
-                  const response = await fetch('/api/clients/filtered', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                      search: searchTerm.trim(),
-                      nameFilter: nameFilter.trim(),
-                      cityFilter: cityFilter.trim(),
-                      states: Array.from(selectedStates),
-                      cities: Array.from(selectedCities),
-                      status: Array.from(selectedStatuses),
-                    }),
-                  });
-
-                  if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('vCard Export Error:', response.status, errorText);
-                    throw new Error(`Failed to fetch clients: ${response.status}`);
-                  }
-
-                  const clients = await response.json();
-                  console.log('✅ Fetched clients for vCard:', clients.length);
-
+                  console.log('📤 Exporting vCard for filtered data:', filteredData.length);
+                  
                   generateAndDownloadVCard(
-                    clients,
+                    filteredData,
                     vCardExportFields,
                     vCardListName || "Hemp Wick Contacts",
                     vCardPlatform
@@ -3368,13 +3344,13 @@ export default function ClientDashboard() {
                   setExportVCardDialogOpen(false);
                   toast({
                     title: "Export Complete",
-                    description: `Exported ${clients.length} contacts to vCard`,
+                    description: `Exported ${filteredData.length} contacts to vCard`,
                   });
                 } catch (error) {
                   console.error('vCard Export Error:', error);
                   toast({
                     title: "Export Failed",
-                    description: error instanceof Error ? error.message : "Failed to fetch clients from database",
+                    description: error instanceof Error ? error.message : "Failed to export contacts",
                     variant: "destructive",
                   });
                 }
