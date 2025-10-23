@@ -203,6 +203,7 @@ export interface IStorage {
   getUserTags(userId: string): Promise<UserTag[]>;
   addUserTag(userId: string, tag: string): Promise<UserTag>;
   removeUserTag(userId: string, tag: string): Promise<void>;
+  removeUserTagById(userId: string, id: string): Promise<void>;
   
   // Category operations
   getAllCategories(): Promise<Category[]>;
@@ -1188,6 +1189,12 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(userTags)
       .where(and(eq(userTags.userId, userId), eq(userTags.tag, tag.trim().toLowerCase())));
+  }
+
+  async removeUserTagById(userId: string, id: string): Promise<void> {
+    await db
+      .delete(userTags)
+      .where(and(eq(userTags.userId, userId), eq(userTags.id, id)));
   }
 
   // Category operations

@@ -7513,6 +7513,19 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  app.delete('/api/user-tags/by-id/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      
+      await storage.removeUserTagById(userId, id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting user tag by ID:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete user tag' });
+    }
+  });
+
   // Webhook endpoint for Google Calendar push notifications
   app.post('/api/webhooks/google-calendar', async (req, res) => {
     try {
