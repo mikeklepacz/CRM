@@ -1356,7 +1356,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
             </div>
 
             {/* BUILD Tab */}
-            <TabsContent value="build" className="flex-1 flex flex-col min-h-0 px-6 pb-6">
+            <TabsContent value="build" className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
               <div className="space-y-4 flex-1">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold">Title</label>
