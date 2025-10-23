@@ -67,7 +67,9 @@ type GoogleOAuthSettings = {
   clientId: string;
   clientSecret: string;
   googleEmail?: string | null;
-  gmailEmail?: string | null;
+  connected: boolean;
+  connectedByEmail?: string | null;
+  connectedAt?: string | null;
 };
 
 type IntegrationStatus = {
@@ -91,7 +93,7 @@ export default function Settings() {
 
   // Fetch Google OAuth settings (admin only)
   const { data: googleSettings } = useQuery<GoogleOAuthSettings>({
-    queryKey: ["/api/google/settings"],
+    queryKey: ["/api/auth/google/sheets/settings"],
     enabled: user?.role === 'admin',
   });
 
@@ -296,13 +298,13 @@ export default function Settings() {
 
   const updateGoogleMutation = useMutation({
     mutationFn: async (data: z.infer<typeof googleOAuthSchema>) => {
-      return await apiRequest("PUT", "/api/google/settings", data);
+      return await apiRequest("PUT", "/api/auth/google/sheets/settings", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/google/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/google/sheets/settings"] });
       toast({
         title: "Success",
-        description: "Google OAuth settings updated successfully",
+        description: "Google Sheets settings updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -316,7 +318,7 @@ export default function Settings() {
 
   const connectGoogleOAuthMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("GET", "/api/google/oauth-url");
+      return await apiRequest("GET", "/api/auth/google/sheets/oauth-url");
     },
     onSuccess: (data: { url: string }) => {
       // Open OAuth popup
@@ -326,13 +328,33 @@ export default function Settings() {
       const top = window.screen.height / 2 - height / 2;
       window.open(
         data.url,
-        "Google OAuth",
+        "Google Sheets OAuth",
         `width=${width},height=${height},left=${left},top=${top}`
       );
       
       toast({
-        title: "Opening Google Authentication",
+        title: "Opening Google Sheets Authentication",
         description: "Please complete the authorization in the popup window",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const disconnectGoogleSheetsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("DELETE", "/api/auth/google/sheets/disconnect");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/google/sheets/settings"] });
+      toast({
+        title: "Success",
+        description: "Google Sheets disconnected successfully",
       });
     },
     onError: (error: Error) => {
@@ -1029,9 +1051,9 @@ export default function Settings() {
             <TabsContent value="google-sheets">
               <Card>
                 <CardHeader>
-                  <CardTitle>Google Sheets Integration</CardTitle>
+                  <CardTitle>Google Sheets Integration (System-Wide)</CardTitle>
                   <CardDescription>
-                    Configure your Google OAuth credentials and connect to Google Sheets
+                    Configure system-wide Google OAuth credentials. All agents will use these credentials to access Google Sheets.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -1091,7 +1113,7 @@ export default function Settings() {
                   <div className="border-t pt-6">
                     <h3 className="text-sm font-medium mb-3">Connection Status</h3>
                     
-                    {googleSettings?.googleEmail ? (
+                    {googleSettings?.connected && googleSettings?.googleEmail ? (
                       <div className="mb-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
                         <div className="flex items-center gap-2 mb-1">
                           <div className="h-2 w-2 bg-green-500 rounded-full"></div>
@@ -1102,6 +1124,16 @@ export default function Settings() {
                         <p className="text-sm text-green-600 dark:text-green-500">
                           Connected as: {googleSettings.googleEmail}
                         </p>
+                        {googleSettings.connectedByEmail && (
+                          <p className="text-sm text-green-600 dark:text-green-500 mt-1">
+                            Connected by: {googleSettings.connectedByEmail}
+                          </p>
+                        )}
+                        {googleSettings.connectedAt && (
+                          <p className="text-xs text-green-500 dark:text-green-600 mt-1">
+                            Connected at: {new Date(googleSettings.connectedAt).toLocaleString()}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground mb-4">
@@ -1110,15 +1142,27 @@ export default function Settings() {
                     )}
                     
                     {googleSettings?.clientId ? (
-                      <Button
-                        variant={googleSettings?.googleEmail ? "outline" : "default"}
-                        onClick={() => connectGoogleOAuthMutation.mutate()}
-                        disabled={connectGoogleOAuthMutation.isPending}
-                        data-testid="button-connect-google-oauth"
-                      >
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        {connectGoogleOAuthMutation.isPending ? "Opening..." : googleSettings?.googleEmail ? "Reconnect Google Sheets" : "Connect Google Sheets"}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={googleSettings?.connected ? "outline" : "default"}
+                          onClick={() => connectGoogleOAuthMutation.mutate()}
+                          disabled={connectGoogleOAuthMutation.isPending}
+                          data-testid="button-connect-google-oauth"
+                        >
+                          <FileSpreadsheet className="mr-2 h-4 w-4" />
+                          {connectGoogleOAuthMutation.isPending ? "Opening..." : googleSettings?.connected ? "Reconnect Google Sheets" : "Connect Google Sheets"}
+                        </Button>
+                        {googleSettings?.connected && (
+                          <Button
+                            variant="destructive"
+                            onClick={() => disconnectGoogleSheetsMutation.mutate()}
+                            disabled={disconnectGoogleSheetsMutation.isPending}
+                            data-testid="button-disconnect-google-sheets"
+                          >
+                            {disconnectGoogleSheetsMutation.isPending ? "Disconnecting..." : "Disconnect"}
+                          </Button>
+                        )}
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">
                         Please save your Client ID and Secret first
