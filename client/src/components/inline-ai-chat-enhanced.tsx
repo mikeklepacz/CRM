@@ -1719,8 +1719,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
             </TabsContent>
 
             {/* BROWSE Tab */}
-            <TabsContent value="browse" className="flex-1 flex flex-col min-h-0 px-6 pb-6">
-              <div className="flex flex-col h-full gap-4">
+            <TabsContent value="browse" className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
+              <div className="flex flex-col flex-1 gap-4 overflow-hidden">
                 {/* Type and Tag Filters */}
                 <div className="flex flex-wrap gap-2">
                   {/* Type Filters First */}
