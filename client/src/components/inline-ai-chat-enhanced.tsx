@@ -806,6 +806,17 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   };
 
   const handleEmailTemplate = (template: Template) => {
+    // Check if email context exists
+    const email = storeContext?.poc_email || storeContext?.email;
+    if (!email) {
+      toast({
+        title: "No Email Found",
+        description: "Please add an email address or POC email to the store details first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Fill template variables
     const filledContent = replaceTemplateVariables(template.content, storeContext, user);
     
@@ -813,23 +824,23 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     const emailData = parseEmailFromMessage(filledContent);
     
     if (emailData) {
+      // Validate that the parsed email is not empty
+      if (!emailData.to || emailData.to.trim() === '') {
+        toast({
+          title: "Invalid Email",
+          description: "The email address could not be determined. Please check the store details.",
+          variant: "destructive",
+        });
+        return;
+      }
       // Create Gmail draft
       createGmailDraftMutation.mutate(emailData);
     } else {
-      // Fallback: try to use store email or show error
-      const email = storeContext?.poc_email || storeContext?.email;
-      if (email) {
-        const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(
-          template.title
-        )}&body=${encodeURIComponent(filledContent)}`;
-        window.location.href = mailtoLink;
-      } else {
-        toast({
-          title: "Error",
-          description: "No email format detected and no recipient email available",
-          variant: "destructive",
-        });
-      }
+      // Fallback: try to use store email
+      const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(
+        template.title
+      )}&body=${encodeURIComponent(filledContent)}`;
+      window.location.href = mailtoLink;
     }
   };
 
@@ -1099,7 +1110,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                           </div>
                         )}
                         <div className="flex gap-1">
-                          {template.type === "Email" && (
+                          {template.type === "Email" && (storeContext?.email || storeContext?.poc_email) && (
                             <Button
                               variant="default"
                               size="sm"
