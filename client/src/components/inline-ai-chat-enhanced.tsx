@@ -192,6 +192,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const [builderType, setBuilderType] = useState<"Email" | "Script">("Email");
   const [builderTags, setBuilderTags] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<"Email" | "Script" | null>(null);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
@@ -1719,28 +1720,41 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
             {/* BROWSE Tab */}
             <TabsContent value="browse" className="flex-1 flex flex-col min-h-0 px-6 pb-6">
-              <div className="space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search templates..."
-                    value={templateSearch}
-                    onChange={(e) => setTemplateSearch(e.target.value)}
-                    className="pl-8"
-                    data-testid="input-search-templates-builder"
-                  />
-                </div>
-
-                {/* Tag Filter */}
+              <div className="flex flex-col h-full gap-4">
+                {/* Type and Tag Filters */}
                 <div className="flex flex-wrap gap-2">
+                  {/* Type Filters First */}
                   <Badge
-                    variant={selectedTagFilter === null ? "default" : "outline"}
+                    variant={selectedTypeFilter === null ? "default" : "outline"}
                     className="cursor-pointer hover-elevate"
-                    onClick={() => setSelectedTagFilter(null)}
-                    data-testid="tag-filter-all"
+                    onClick={() => setSelectedTypeFilter(null)}
+                    data-testid="type-filter-all"
                   >
                     All
                   </Badge>
+                  <Badge
+                    variant={selectedTypeFilter === "Email" ? "default" : "outline"}
+                    className="cursor-pointer hover-elevate"
+                    onClick={() => setSelectedTypeFilter("Email")}
+                    data-testid="type-filter-email"
+                  >
+                    Email
+                  </Badge>
+                  <Badge
+                    variant={selectedTypeFilter === "Script" ? "default" : "outline"}
+                    className="cursor-pointer hover-elevate"
+                    onClick={() => setSelectedTypeFilter("Script")}
+                    data-testid="type-filter-script"
+                  >
+                    Script
+                  </Badge>
+                  
+                  {/* Separator */}
+                  {Array.from(new Set(templates.flatMap((t) => t.tags || []))).length > 0 && (
+                    <div className="w-px h-6 bg-border mx-1" />
+                  )}
+                  
+                  {/* Tag Filters */}
                   {Array.from(new Set(templates.flatMap((t) => t.tags || []))).map((tag) => (
                     <Badge
                       key={tag}
@@ -1754,7 +1768,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   ))}
                 </div>
 
-                <ScrollArea className="flex-1">
+                {/* Scrollable Templates List */}
+                <ScrollArea className="flex-1 min-h-0">
                   <div className="space-y-2 pr-4">
                     {templates
                       .filter(
@@ -1764,6 +1779,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                           template.tags?.some((tag) =>
                             tag.toLowerCase().includes(templateSearch.toLowerCase())
                           )) &&
+                          (selectedTypeFilter === null || (template as any).type === selectedTypeFilter) &&
                           (selectedTagFilter === null || template.tags?.includes(selectedTagFilter))
                       )
                       .map((template) => (
