@@ -4852,6 +4852,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       
+      // Get current user details for agent filtering
+      const currentUser = await storage.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
@@ -4887,6 +4893,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
+      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
+      
+      // Determine agent filtering
+      const isAgent = currentUser.role === 'agent';
+      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
       // Calculate metrics
       const now = new Date();
@@ -4909,8 +4920,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const dateStr = row[dateIndex] || '';
         const amountStr = row[amountIndex] || '0';
         const commissionType = row[commissionTypeIndex] || '';
+        const rowAgent = row[agentIndex] || '';
 
-        console.log(`[DASHBOARD-SUMMARY] Row ${i}:`, { dateStr, amountStr, commissionType });
+        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
+        if (isAgent && agentIndex !== -1) {
+          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
+            continue; // Skip this row - it belongs to a different agent
+          }
+        }
+
+        console.log(`[DASHBOARD-SUMMARY] Row ${i}:`, { dateStr, amountStr, commissionType, rowAgent });
 
         // Parse amount
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
@@ -5006,6 +5025,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       
+      // Get current user details for agent filtering
+      const currentUser = await storage.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
@@ -5035,6 +5060,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
+      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
+      
+      // Determine agent filtering
+      const isAgent = currentUser.role === 'agent';
+      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
       // Track unique stores and earnings by tier
       const tier25Stores = new Set<string>();
@@ -5047,6 +5077,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const link = row[linkIndex] || '';
         const amountStr = row[amountIndex] || '0';
         const commissionType = row[commissionTypeIndex] || '';
+        const rowAgent = row[agentIndex] || '';
+
+        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
+        if (isAgent && agentIndex !== -1) {
+          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
+            continue;
+          }
+        }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         if (amount === 0) continue;
