@@ -1680,6 +1680,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   Cancel
                 </Button>
                 <Button
+                  variant="outline"
+                  onClick={() => setTemplateBuilderView("library")}
+                  data-testid="button-goto-templates"
+                >
+                  <Library className="h-4 w-4 mr-2" />
+                  View My Templates
+                </Button>
+                <Button
                   className="flex-1"
                   disabled={
                     !builderTitle.trim() || 
@@ -1709,19 +1717,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   data-testid="button-save-template-builder"
                 >
                   {editingTemplateId ? "Update Template" : "Save Template"}
-                </Button>
-              </div>
-              
-              {/* My Templates Button */}
-              <div className="flex gap-2 mt-4 pt-4 border-t flex-shrink-0">
-                <Button
-                  variant="outline"
-                  onClick={() => setTemplateBuilderView("library")}
-                  className="flex-1"
-                  data-testid="button-goto-templates"
-                >
-                  <Library className="h-4 w-4 mr-2" />
-                  View My Templates
                 </Button>
               </div>
             </div>
