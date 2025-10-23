@@ -19,7 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store, Bot } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store, Bot, Download } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -411,6 +411,19 @@ export default function ClientDashboard() {
   // Franchise finder dialog state
   const [franchiseFinderOpen, setFranchiseFinderOpen] = useState(false);
   const [selectedFranchise, setSelectedFranchise] = useState<FranchiseGroup | null>(null);
+
+  // Export vCard dialog state
+  const [exportVCardDialogOpen, setExportVCardDialogOpen] = useState(false);
+  const [vCardExportFields, setVCardExportFields] = useState({
+    phone: true,
+    email: true,
+    website: true,
+    address: true,
+    salesSummary: true,
+    storeHours: true
+  });
+  const [vCardListName, setVCardListName] = useState("");
+  const [vCardPlatform, setVCardPlatform] = useState<"ios" | "android">("ios");
 
   // Use global theme hook for colors
   const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus, updateStatusEntry } = useCustomTheme();
@@ -1557,6 +1570,157 @@ export default function ClientDashboard() {
     return row['Company'] || row['company'] || row['Business Name'] || row['name'] || 'Unknown';
   };
 
+  // vCard generation and download function
+  const generateAndDownloadVCard = (
+    stores: any[],
+    fields: typeof vCardExportFields,
+    listName: string,
+    platform: "ios" | "android"
+  ) => {
+    // Helper to extract phone numbers from notes
+    const extractPhone = (text: string): string | null => {
+      if (!text) return null;
+      const phoneMatch = text.match(/(\+?1?\s*\(?[0-9]{3}\)?[\s.-]?[0-9]{3}[\s.-]?[0-9]{4})/);
+      return phoneMatch ? phoneMatch[1].replace(/[\s.-]/g, '') : null;
+    };
+
+    // Helper to extract email from notes
+    const extractEmail = (text: string): string | null => {
+      if (!text) return null;
+      const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      return emailMatch ? emailMatch[1] : null;
+    };
+
+    // Helper to parse notes for specific sections
+    const parseNotes = (notes: string, section: 'summary' | 'hours'): string => {
+      if (!notes) return '';
+      
+      if (section === 'summary') {
+        // Extract everything between "Sales Summary:" and "Store hours:" or end
+        const summaryMatch = notes.match(/Sales Summary:(.*?)(?=Store hours:|$)/is);
+        return summaryMatch ? summaryMatch[1].trim() : '';
+      } else if (section === 'hours') {
+        // Extract everything after "Store hours:"
+        const hoursMatch = notes.match(/Store hours:(.*)/is);
+        return hoursMatch ? hoursMatch[1].trim() : '';
+      }
+      return '';
+    };
+
+    // Generate vCard content
+    const version = platform === "ios" ? "3.0" : "2.1";
+    let vCardContent = "";
+
+    stores.forEach((store) => {
+      // Start vCard
+      vCardContent += `BEGIN:VCARD\r\n`;
+      vCardContent += `VERSION:${version}\r\n`;
+
+      // Extract POC info
+      const pocName = store['POC'] || store['poc'] || store['Point of Contact'] || '';
+      const pocPhone = store['POC Phone'] || store['poc phone'] || '';
+      const pocEmail = store['POC Email'] || store['poc email'] || '';
+      
+      // Fallback to standard fields
+      const storeName = getCompanyName(store);
+      const notes = store['Notes'] || store['notes'] || '';
+      const standardPhone = extractPhone(notes);
+      const standardEmail = extractEmail(notes);
+
+      // Determine contact name and company
+      const contactName = pocName || storeName;
+      const companyName = storeName;
+
+      // FN (Full Name) - required field
+      vCardContent += `FN:${contactName}\r\n`;
+      
+      // N (Structured Name) - required in vCard 3.0
+      if (version === "3.0") {
+        // Format: Family;Given;Additional;Prefix;Suffix
+        vCardContent += `N:${contactName};;;;\r\n`;
+      }
+
+      // ORG (Organization)
+      vCardContent += `ORG:${companyName}\r\n`;
+
+      // TEL (Phone) - always include
+      const phoneToUse = pocPhone || standardPhone;
+      if (phoneToUse && fields.phone) {
+        vCardContent += `TEL;TYPE=WORK,VOICE:${phoneToUse}\r\n`;
+      }
+
+      // EMAIL
+      const emailToUse = pocEmail || standardEmail;
+      if (emailToUse && fields.email) {
+        vCardContent += `EMAIL;TYPE=WORK:${emailToUse}\r\n`;
+      }
+
+      // URL (Website)
+      const website = store['Website'] || store['website'] || store['URL'] || store['url'] || '';
+      if (website && fields.website) {
+        vCardContent += `URL:${website}\r\n`;
+      }
+
+      // ADR (Address)
+      if (fields.address) {
+        const address = store['Address'] || store['address'] || '';
+        const city = store['City'] || store['city'] || '';
+        const state = store['State'] || store['state'] || '';
+        const zip = store['Zip'] || store['zip'] || store['ZIP'] || '';
+        
+        // Format: ;;Street;City;State;Zip;Country
+        if (address || city || state) {
+          vCardContent += `ADR;TYPE=WORK:;;${address};${city};${state};${zip};USA\r\n`;
+        }
+      }
+
+      // NOTE (combine Notes, Sales Summary, Store Hours)
+      const noteParts: string[] = [];
+      
+      if (notes) {
+        noteParts.push(`Notes: ${notes}`);
+      }
+      
+      if (fields.salesSummary) {
+        const summary = parseNotes(notes, 'summary');
+        if (summary) {
+          noteParts.push(`Sales Summary: ${summary}`);
+        }
+      }
+      
+      if (fields.storeHours) {
+        const hours = parseNotes(notes, 'hours');
+        if (hours) {
+          noteParts.push(`Store Hours: ${hours}`);
+        }
+      }
+
+      if (noteParts.length > 0) {
+        const noteContent = noteParts.join('\\n\\n').replace(/\r?\n/g, '\\n');
+        vCardContent += `NOTE:${noteContent}\r\n`;
+      }
+
+      // CATEGORIES (List/Group name)
+      if (listName) {
+        vCardContent += `CATEGORIES:${listName}\r\n`;
+      }
+
+      // End vCard
+      vCardContent += `END:VCARD\r\n`;
+    });
+
+    // Create blob and download
+    const blob = new Blob([vCardContent], { type: 'text/vcard;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${listName.replace(/[^a-z0-9]/gi, '_')}.vcf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Show full-page loading state until data is ready
   if (isLoadingSheets || isLoading || !preferencesLoaded) {
     return (
@@ -2334,6 +2498,20 @@ export default function ClientDashboard() {
                     </div>
                   </PopoverContent>
                 </Popover>
+
+                {/* Export vCard Button */}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setVCardListName("");
+                    setExportVCardDialogOpen(true);
+                  }}
+                  data-testid="button-export-vcard"
+                  style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export vCard
+                </Button>
               </div>
             </>
           )}
@@ -4373,6 +4551,131 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           </Button>
         </DialogFooter>
         )}
+      </DialogContent>
+    </Dialog>
+
+    {/* Export vCard Dialog */}
+    <Dialog open={exportVCardDialogOpen} onOpenChange={setExportVCardDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Export Contacts to Phone</DialogTitle>
+          <DialogDescription>
+            Select which fields to include and choose your platform
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Export count */}
+          <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
+            Exporting <span className="font-semibold">{filteredData.length}</span> stores
+          </div>
+
+          {/* Field selection */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Include Fields</Label>
+            <div className="space-y-2">
+              {Object.entries({
+                phone: "Phone",
+                email: "Email",
+                website: "Website",
+                address: "Address",
+                salesSummary: "Sales Summary",
+                storeHours: "Store Hours"
+              }).map(([key, label]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`vcard-${key}`}
+                    checked={vCardExportFields[key as keyof typeof vCardExportFields]}
+                    onCheckedChange={(checked) => 
+                      setVCardExportFields(prev => ({ ...prev, [key]: checked === true }))
+                    }
+                    data-testid={`checkbox-vcard-${key}`}
+                  />
+                  <Label htmlFor={`vcard-${key}`} className="text-sm cursor-pointer">
+                    {label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* List name input */}
+          <div className="space-y-2">
+            <Label htmlFor="vcard-list-name" className="text-sm font-medium">
+              List/Group Name
+            </Label>
+            <Input
+              id="vcard-list-name"
+              placeholder="e.g., Hemp Wick - Sample Sent"
+              value={vCardListName}
+              onChange={(e) => setVCardListName(e.target.value)}
+              data-testid="input-vcard-list-name"
+            />
+          </div>
+
+          {/* Platform selection */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Platform</Label>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  id="platform-ios"
+                  checked={vCardPlatform === "ios"}
+                  onChange={() => setVCardPlatform("ios")}
+                  className="cursor-pointer"
+                  data-testid="radio-platform-ios"
+                />
+                <Label htmlFor="platform-ios" className="text-sm cursor-pointer">
+                  iOS
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  id="platform-android"
+                  checked={vCardPlatform === "android"}
+                  onChange={() => setVCardPlatform("android")}
+                  className="cursor-pointer"
+                  data-testid="radio-platform-android"
+                />
+                <Label htmlFor="platform-android" className="text-sm cursor-pointer">
+                  Android
+                </Label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setExportVCardDialogOpen(false)}
+            data-testid="button-cancel-vcard-export"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              generateAndDownloadVCard(
+                filteredData,
+                vCardExportFields,
+                vCardListName || "Hemp Wick Contacts",
+                vCardPlatform
+              );
+              setExportVCardDialogOpen(false);
+              toast({
+                title: "Export Complete",
+                description: `Exported ${filteredData.length} contacts to vCard`,
+              });
+            }}
+            disabled={filteredData.length === 0}
+            data-testid="button-export-vcard-confirm"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
 
