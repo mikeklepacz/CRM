@@ -524,11 +524,22 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
   const createTemplateMutation = useMutation({
     mutationFn: async (template: { title: string; content: string; type: string; tags: string[] }) => {
-      return await apiRequest("POST", "/api/templates", template);
+      const result = await apiRequest("POST", "/api/templates", template);
+      
+      // Auto-add new tags to user's personal collection
+      for (const tag of template.tags) {
+        const existingTag = userTags.find(ut => ut.tag.toLowerCase() === tag.toLowerCase());
+        if (!existingTag) {
+          await apiRequest("POST", "/api/user-tags", { tag });
+        }
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/templates/tags"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user-tags"] });
       setNewTemplateTitle("");
       setNewTemplateContent("");
       setNewTemplateTags("");
@@ -543,11 +554,22 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
   const updateTemplateMutation = useMutation({
     mutationFn: async ({ id, template }: { id: string; template: { title: string; content: string; type: string; tags: string[] } }) => {
-      return await apiRequest("PATCH", `/api/templates/${id}`, template);
+      const result = await apiRequest("PATCH", `/api/templates/${id}`, template);
+      
+      // Auto-add new tags to user's personal collection
+      for (const tag of template.tags) {
+        const existingTag = userTags.find(ut => ut.tag.toLowerCase() === tag.toLowerCase());
+        if (!existingTag) {
+          await apiRequest("POST", "/api/user-tags", { tag });
+        }
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/templates/tags"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user-tags"] });
       setBuilderTitle("");
       setBuilderContent("");
       setBuilderType("Email");
