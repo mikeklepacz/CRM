@@ -5125,6 +5125,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
+      // Get current user details for agent filtering
+      const currentUser = await storage.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
       // Get both sheets
       const sheets = await storage.getAllActiveGoogleSheets();
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
@@ -5139,10 +5145,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Read Store Database to get total unique stores
-      const storeRange = `${storeSheet.sheetName}!A:A`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-      const totalClients = Math.max(0, storeRows.length - 1); // Exclude header row
+      // Determine agent filtering
+      const isAgent = currentUser.role === 'agent';
+      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
+
+      // Read Store Database to get total clients for this agent
+      let totalClients = 0;
+      if (isAgent) {
+        // For agents, count only stores assigned to them
+        const storeRange = `${storeSheet.sheetName}!A:Z`;
+        const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+        if (storeRows.length > 1) {
+          const storeHeaders = storeRows[0];
+          const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent');
+          if (storeAgentIndex !== -1) {
+            totalClients = storeRows.slice(1).filter(row => {
+              const rowAgent = row[storeAgentIndex] || '';
+              return rowAgent.toLowerCase().trim() === agentName.toLowerCase().trim();
+            }).length;
+          }
+        }
+      } else {
+        // For admins, count all stores
+        const storeRange = `${storeSheet.sheetName}!A:A`;
+        const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+        totalClients = Math.max(0, storeRows.length - 1);
+      }
 
       // Read Commission Tracker to calculate active clients and repeat order rate
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
@@ -5162,6 +5190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
+      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
 
       // Track transactions per store
       const storeTransactions: { [link: string]: { count: number; totalAmount: number; lastTransactionDate: Date | null } } = {};
@@ -5173,6 +5202,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const link = row[linkIndex] || '';
         const amountStr = row[amountIndex] || '0';
         const dateStr = row[dateIndex] || '';
+        const rowAgent = row[agentIndex] || '';
+        
+        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
+        if (isAgent && agentIndex !== -1) {
+          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
+            continue;
+          }
+        }
         
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         if (!link || amount === 0) continue;
@@ -5237,6 +5274,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { range = 'last6months' } = req.query;
 
+      // Get current user details for agent filtering
+      const currentUser = await storage.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
@@ -5255,6 +5298,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = trackerRows[0];
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
+      
+      // Determine agent filtering
+      const isAgent = currentUser.role === 'agent';
+      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
       const monthlyData: { [key: string]: { commission: number; transactions: number } } = {};
 
@@ -5263,6 +5311,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const row = trackerRows[i];
         const dateStr = row[dateIndex] || '';
         const amountStr = row[amountIndex] || '0';
+        const rowAgent = row[agentIndex] || '';
+
+        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
+        if (isAgent && agentIndex !== -1) {
+          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
+            continue;
+          }
+        }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         if (amount === 0) continue;
@@ -5333,6 +5389,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { limit = '10' } = req.query;
       const topN = parseInt(limit as string);
 
+      // Get current user details for agent filtering
+      const currentUser = await storage.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
       // Get both Commission Tracker and Store Database sheets
       const sheets = await storage.getAllActiveGoogleSheets();
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
@@ -5354,6 +5416,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trackerHeaders = trackerRows[0];
       const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const amountIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'amount');
+      const agentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent');
+      
+      // Determine agent filtering
+      const isAgent = currentUser.role === 'agent';
+      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
       // Aggregate commissions by store Link
       const storeCommissions: { [link: string]: { totalCommission: number; transactionCount: number } } = {};
@@ -5362,6 +5429,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const row = trackerRows[i];
         const link = row[linkIndex] || '';
         const amountStr = row[amountIndex] || '0';
+        const rowAgent = row[agentIndex] || '';
+
+        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
+        if (isAgent && agentIndex !== -1) {
+          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
+            continue;
+          }
+        }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         if (amount === 0 || !link) continue;
