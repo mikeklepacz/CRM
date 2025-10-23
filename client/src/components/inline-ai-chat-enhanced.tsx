@@ -107,6 +107,63 @@ function parseEmailFromMessage(content: string): { to: string; subject: string; 
   return null;
 }
 
+// Helper function to replace template variables with actual values
+function replaceTemplateVariables(
+  content: string,
+  storeContext?: {
+    name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    phone?: string;
+    website?: string;
+    email?: string;
+    point_of_contact?: string;
+    poc_email?: string;
+    poc_phone?: string;
+  },
+  user?: any
+) {
+  let result = content;
+  
+  // Get user data (agent info)
+  const agentName = user?.username || "Your Name";
+  const agentEmail = user?.email || "your@email.com";
+  const agentPhone = (user as any)?.phone || "";
+  const agentMeetingLink = (user as any)?.meetingLink || "";
+  
+  // Replace store-related variables
+  if (storeContext) {
+    // Smart email fallback: Check POC email first, then fall back to general email
+    const smartEmail = storeContext.poc_email || storeContext.email || "";
+    
+    result = result.replace(/\{\{storeName\}\}/g, storeContext.name || "");
+    result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || "");
+    result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || "");
+    result = result.replace(/\{\{storeState\}\}/g, storeContext.state || "");
+    result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || "");
+    result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || "");
+    result = result.replace(/\{\{pocName\}\}/g, storeContext.point_of_contact || "");
+    // Both pocEmail and email use smart fallback
+    result = result.replace(/\{\{pocEmail\}\}/g, smartEmail);
+    result = result.replace(/\{\{email\}\}/g, smartEmail);
+    result = result.replace(/\{\{pocPhone\}\}/g, storeContext.poc_phone || "");
+  }
+  
+  // Replace agent variables
+  result = result.replace(/\{\{agentName\}\}/g, agentName);
+  result = result.replace(/\{\{agentEmail\}\}/g, agentEmail);
+  result = result.replace(/\{\{agentPhone\}\}/g, agentPhone);
+  result = result.replace(/\{\{agentMeetingLink\}\}/g, agentMeetingLink);
+  
+  // Replace date/time variables
+  const now = new Date();
+  result = result.replace(/\{\{currentDate\}\}/g, now.toLocaleDateString());
+  result = result.replace(/\{\{currentTime\}\}/g, now.toLocaleTimeString());
+  
+  return result;
+}
+
 export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: InlineAIChatEnhancedProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -656,6 +713,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     },
   });
 
+  const createGmailDraftMutation = useMutation({
+    mutationFn: async ({ to, subject, body }: { to: string; subject: string; body: string }) => {
+      return await apiRequest("POST", "/api/gmail/create-draft", { to, subject, body });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: data.message || "Gmail draft created successfully!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create Gmail draft. Make sure Gmail is connected in Settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSendMessage = async () => {
     if (!messageInput.trim() || isSending) return;
 
@@ -714,9 +790,47 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     });
   };
 
-  const handleCopyTemplate = (content: string) => {
-    navigator.clipboard.writeText(content);
-    toast({ title: "Copied", description: "Template copied to clipboard" });
+  const handleCopyTemplate = async (template: Template) => {
+    // Fill template variables before copying
+    const filledContent = replaceTemplateVariables(template.content, storeContext, user);
+    try {
+      await navigator.clipboard.writeText(filledContent);
+      toast({ title: "Success", description: "Template copied to clipboard" });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEmailTemplate = (template: Template) => {
+    // Fill template variables
+    const filledContent = replaceTemplateVariables(template.content, storeContext, user);
+    
+    // Try to parse email format
+    const emailData = parseEmailFromMessage(filledContent);
+    
+    if (emailData) {
+      // Create Gmail draft
+      createGmailDraftMutation.mutate(emailData);
+    } else {
+      // Fallback: try to use store email or show error
+      const email = storeContext?.poc_email || storeContext?.email;
+      if (email) {
+        const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(
+          template.title
+        )}&body=${encodeURIComponent(filledContent)}`;
+        window.location.href = mailtoLink;
+      } else {
+        toast({
+          title: "Error",
+          description: "No email format detected and no recipient email available",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   // Group conversations by project
@@ -958,42 +1072,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   {/* Template List */}
                   <div className="space-y-2">
                     {filteredTemplates.map((template) => (
-                      <div key={template.id} className="p-2 border rounded-md hover-elevate cursor-pointer bg-card" onClick={() => handleCopyTemplate(template.content)} data-testid={`template-${template.id}`}>
+                      <div key={template.id} className="p-2 border rounded-md bg-card" data-testid={`template-${template.id}`}>
                         <div className="flex items-start justify-between mb-1">
                           <h5 className="text-xs font-semibold">{template.title}</h5>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopyTemplate(template.content);
-                              }}
-                              data-testid={`button-copy-template-${template.id}`}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteTemplateMutation.mutate(template.id);
-                              }}
-                              disabled={deleteTemplateMutation.isPending}
-                              data-testid={`button-delete-template-${template.id}`}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 text-destructive"
+                            onClick={() => deleteTemplateMutation.mutate(template.id)}
+                            disabled={deleteTemplateMutation.isPending}
+                            data-testid={`button-delete-template-${template.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mb-1">
+                        <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
                           {template.content}
                         </p>
                         {template.tags && template.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 mb-2">
                             {template.tags.map((tag, idx) => (
                               <Badge key={idx} variant="outline" className="text-xs py-0">
                                 {tag}
@@ -1001,6 +1098,30 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                             ))}
                           </div>
                         )}
+                        <div className="flex gap-1">
+                          {template.tags && template.tags.includes("Email") && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => handleEmailTemplate(template)}
+                              data-testid={`button-email-template-${template.id}`}
+                            >
+                              <Mail className="h-3 w-3 mr-1" />
+                              Email
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleCopyTemplate(template)}
+                            data-testid={`button-copy-template-${template.id}`}
+                          >
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copy
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
