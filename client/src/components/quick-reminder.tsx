@@ -98,28 +98,39 @@ export function QuickReminder({
     
     // Calculate the actual time to send based on timezone selection
     let finalTime = time;
+    let finalDate = date;
+    
     if (useCustomerTimezone && customerTimezone) {
-      // Convert customer's local time to agent's (Warsaw) time
+      // User picked time in customer's timezone, convert to agent's timezone
       const dateStr = format(date, 'yyyy-MM-dd');
-      const [year, month, day] = dateStr.split('-').map(Number);
       const [hours, minutes] = time.split(':').map(Number);
       
-      const customerDateStr = `${dateStr}T${time}:00`;
-      const customerOffset = getTimezoneOffset(customerTimezone, new Date(customerDateStr));
+      // Create a date string in customer's timezone
+      const customerDateTimeStr = `${dateStr}T${time}:00`;
       
-      // Convert to UTC then to agent's timezone
-      const utcTimestamp = Date.UTC(year, month - 1, day, hours, minutes, 0) - customerOffset;
+      // Parse this as a date in the customer's timezone and get UTC timestamp
+      const customerDate = new Date(customerDateTimeStr);
+      const customerOffset = getTimezoneOffset(customerTimezone, customerDate);
+      
+      // Get UTC timestamp: take the naive date and subtract customer's offset
+      const utcTimestamp = customerDate.getTime() - customerOffset;
       const utcDate = new Date(utcTimestamp);
       
-      // Get the time in agent's timezone (this is what backend expects)
+      // Now convert this UTC time to agent's timezone
+      const agentOffset = getTimezoneOffset(agentTimezone, utcDate);
+      const agentTimestamp = utcTimestamp + agentOffset;
+      const agentDate = new Date(agentTimestamp);
+      
+      // Extract the date and time in agent's timezone
+      finalDate = agentDate;
       finalTime = formatInTimeZone(utcDate, agentTimezone, 'HH:mm');
     }
     
     onSave({ 
       note, 
-      date, 
-      time: finalTime, // Send Warsaw time
-      useCustomerTimezone: false, // Don't let backend do conversion
+      date: finalDate, // May change if timezone conversion crosses day boundary
+      time: finalTime, // Time in Warsaw timezone
+      useCustomerTimezone: false, // Don't let backend do conversion - we already did it
       customerTimezone,
       agentTimezone,
       calendarReminders
@@ -145,32 +156,35 @@ export function QuickReminder({
     
     try {
       // When "Use customer timezone" is checked, the picker shows customer's local time
-      // We need to show what that time is in the agent's (Warsaw) timezone
       const dateStr = format(date, 'yyyy-MM-dd');
-      const [year, month, day] = dateStr.split('-').map(Number);
-      const [hours, minutes] = time.split(':').map(Number);
+      const customerDateTimeStr = `${dateStr}T${time}:00`;
       
-      // Create a date in the customer's timezone
-      const customerDateStr = `${dateStr}T${time}:00`;
-      const customerOffset = getTimezoneOffset(customerTimezone, new Date(customerDateStr));
+      // Create a naive date and get the customer timezone offset
+      const customerDate = new Date(customerDateTimeStr);
+      const customerOffset = getTimezoneOffset(customerTimezone, customerDate);
       
-      // Convert customer's local time to UTC
-      const utcTimestamp = Date.UTC(year, month - 1, day, hours, minutes, 0) - customerOffset;
+      // Convert to UTC: subtract the customer's offset from the naive timestamp
+      const utcTimestamp = customerDate.getTime() - customerOffset;
       const utcDate = new Date(utcTimestamp);
       
-      // Format in agent's timezone (this is what will be sent to backend)
+      // Format the UTC time in agent's timezone
       const agentTime = formatInTimeZone(
         utcDate,
         agentTimezone,
-        'h:mm a'
+        timeFormat === '24hr' ? 'HH:mm' : 'h:mm a'
       );
       
       // Get friendly names
       const customerTzName = getFriendlyTimezoneName(customerTimezone);
       const agentTzName = getFriendlyTimezoneName(agentTimezone);
       
-      return `${time} ${customerTzName} = ${agentTime} ${agentTzName}`;
+      // Format customer time based on preference
+      const customerTimeFormatted = timeFormat === '24hr' ? time : 
+        formatInTimeZone(utcDate, customerTimezone, 'h:mm a');
+      
+      return `${customerTimeFormatted} ${customerTzName} = ${agentTime} ${agentTzName}`;
     } catch (error) {
+      console.error('Error calculating timezone preview:', error);
       return null;
     }
   };
