@@ -216,7 +216,7 @@ function generateVCardEntry(
     }
     
     if (fields.salesSummary) {
-      const salesSummary = store['Sales Summary'] || store['sales_summary'];
+      const salesSummary = store['Sales-ready Summary'] || store['sales_summary'] || store['Sales Summary'];
       if (salesSummary) {
         noteFields.push(`Sales Summary: ${salesSummary}`);
       }
