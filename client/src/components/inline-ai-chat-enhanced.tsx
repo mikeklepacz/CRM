@@ -465,7 +465,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     // Auto-detect and replace common placeholders
     const contentWithPlaceholders = autoDetectPlaceholders(content);
     
-    setBuilderContent(contentWithPlaceholders);
+    // Try to parse as email format first
+    const parsed = parseEmailTemplate(contentWithPlaceholders);
+    if (parsed) {
+      // It's an email format
+      setBuilderType("Email");
+      setEmailTo(parsed.to);
+      setEmailSubject(parsed.subject);
+      setEmailBody(parsed.body);
+      setBuilderContent(""); // Clear script content
+    } else {
+      // It's a script/general content
+      setBuilderType("Script");
+      setBuilderContent(contentWithPlaceholders);
+      // Clear email fields
+      setEmailTo("{{email}}");
+      setEmailSubject("");
+      setEmailBody("");
+    }
+    
     setBuilderTitle("");
     setBuilderTags("");
     setEditingTemplateId(null);
@@ -2439,10 +2457,32 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                                 size="sm"
                                 onClick={() => {
                                   setBuilderTitle(template.title);
-                                  setBuilderContent(template.content);
-                                  setBuilderType((template as any).type || "Email");
+                                  const templateType = (template as any).type || "Email";
+                                  setBuilderType(templateType);
                                   setBuilderTags(template.tags?.join(", ") || "");
                                   setEditingTemplateId(template.id);
+                                  
+                                  // Parse content based on type
+                                  if (templateType === "Email") {
+                                    const parsed = parseEmailTemplate(template.content);
+                                    if (parsed) {
+                                      setEmailTo(parsed.to);
+                                      setEmailSubject(parsed.subject);
+                                      setEmailBody(parsed.body);
+                                      setBuilderContent(""); // Clear script content
+                                    } else {
+                                      // Fallback if parsing fails
+                                      setBuilderContent(template.content);
+                                    }
+                                  } else {
+                                    // Script type
+                                    setBuilderContent(template.content);
+                                    // Clear email fields
+                                    setEmailTo("{{email}}");
+                                    setEmailSubject("");
+                                    setEmailBody("");
+                                  }
+                                  
                                   setTemplateBuilderView("builder");
                                 }}
                                 data-testid={`button-edit-template-${template.id}`}
