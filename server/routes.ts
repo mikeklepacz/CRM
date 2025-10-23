@@ -3082,8 +3082,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // List all connected Google Sheets
-  app.get('/api/sheets', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  // List all connected Google Sheets (accessible by all authenticated users including agents)
+  app.get('/api/sheets', isAuthenticatedCustom, async (req, res) => {
     try {
       const sheets = await storage.getAllActiveGoogleSheets();
       res.json({ sheets });
@@ -3093,8 +3093,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get raw data from a specific Google Sheet
-  app.get('/api/sheets/:id/data', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // Get raw data from a specific Google Sheet (accessible by all authenticated users including agents)
+  app.get('/api/sheets/:id/data', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
