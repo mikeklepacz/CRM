@@ -1571,9 +1571,9 @@ export default function ClientDashboard() {
     return row['Company'] || row['company'] || row['Business Name'] || row['name'] || 'Unknown';
   };
 
-  // vCard generation and download function - reads directly from CRM columns
+  // vCard generation and download function - reads from PostgreSQL client.data JSONB
   const generateAndDownloadVCard = (
-    stores: any[],
+    clients: any[],
     fields: typeof vCardExportFields,
     listName: string,
     platform: "ios" | "android"
@@ -1582,20 +1582,23 @@ export default function ClientDashboard() {
     const version = platform === "ios" ? "3.0" : "2.1";
     let vCardContent = "";
 
-    stores.forEach((store) => {
+    clients.forEach((client) => {
+      // Read from client.data JSONB (PostgreSQL stores original column names)
+      const data = client.data || {};
+
       // Start vCard
       vCardContent += `BEGIN:VCARD\r\n`;
       vCardContent += `VERSION:${version}\r\n`;
 
-      // Read directly from CRM columns
-      const storeName = store['Name'] || store['name'] || 'Unknown';
-      const pocName = store['Point of Contact'] || store['POC'] || '';
-      const pocPhone = store['POC Phone'] || '';
-      const pocEmail = store['POC Email'] || '';
+      // Read directly from data JSONB - try both cases
+      const storeName = data['Name'] || data['name'] || 'Unknown';
+      const pocName = data['Point of Contact'] || data['POC'] || data['poc'] || '';
+      const pocPhone = data['POC Phone'] || data['poc phone'] || '';
+      const pocEmail = data['POC Email'] || data['poc email'] || '';
       
       // Store's direct phone and email from CRM columns
-      const storePhone = store['Phone'] || '';
-      const storeEmail = store['Email'] || '';
+      const storePhone = data['Phone'] || data['phone'] || '';
+      const storeEmail = data['Email'] || data['email'] || '';
       
       // Use POC name if available, otherwise use store name
       const contactName = pocName || storeName;
@@ -1626,17 +1629,17 @@ export default function ClientDashboard() {
       }
 
       // URL (Website)
-      const website = store['Website'] || '';
+      const website = data['Website'] || data['website'] || '';
       if (website && fields.website) {
         vCardContent += `URL:${website}\r\n`;
       }
 
       // ADR (Address)
       if (fields.address) {
-        const address = store['Address'] || '';
-        const city = store['City'] || '';
-        const state = store['State'] || '';
-        const zip = store['Zip'] || store['ZIP'] || '';
+        const address = data['Address'] || data['address'] || '';
+        const city = data['City'] || data['city'] || '';
+        const state = data['State'] || data['state'] || '';
+        const zip = data['Zip'] || data['zip'] || data['ZIP'] || '';
         
         // Format: ;;Street;City;State;Zip;Country
         if (address || city || state) {
@@ -1644,12 +1647,12 @@ export default function ClientDashboard() {
         }
       }
 
-      // NOTE - Read directly from CRM columns
+      // NOTE - Read directly from data JSONB
       const noteParts: string[] = [];
       
       // Add Sales-ready Summary if field is selected
       if (fields.salesSummary) {
-        const summary = store['Sales-ready Summary'] || store['Sales-Ready Summary'] || '';
+        const summary = data['Sales-ready Summary'] || data['Sales-Ready Summary'] || data['sales-ready summary'] || '';
         if (summary) {
           noteParts.push(`Sales Summary: ${summary}`);
         }
@@ -1657,14 +1660,14 @@ export default function ClientDashboard() {
       
       // Add Hours if field is selected
       if (fields.storeHours) {
-        const hours = store['Hours'] || '';
+        const hours = data['Hours'] || data['hours'] || '';
         if (hours) {
           noteParts.push(`Store Hours: ${hours}`);
         }
       }
       
       // Add regular Notes field if it exists
-      const notes = store['Notes'] || '';
+      const notes = data['Notes'] || data['notes'] || '';
       if (notes) {
         noteParts.push(`Notes: ${notes}`);
       }
@@ -3328,18 +3331,45 @@ export default function ClientDashboard() {
               Cancel
             </Button>
             <Button 
-              onClick={() => {
-                generateAndDownloadVCard(
-                  filteredData,
-                  vCardExportFields,
-                  vCardListName || "Hemp Wick Contacts",
-                  vCardPlatform
-                );
-                setExportVCardDialogOpen(false);
-                toast({
-                  title: "Export Complete",
-                  description: `Exported ${filteredData?.length || 0} contacts to vCard`,
-                });
+              onClick={async () => {
+                try {
+                  // Fetch filtered clients from PostgreSQL
+                  const response = await fetch('/api/clients/filtered', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                      search: searchQuery,
+                      states: selectedStates,
+                      status: selectedStatus,
+                      category: null, // TODO: Add category filter if needed
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    throw new Error('Failed to fetch clients');
+                  }
+
+                  const clients = await response.json();
+
+                  generateAndDownloadVCard(
+                    clients,
+                    vCardExportFields,
+                    vCardListName || "Hemp Wick Contacts",
+                    vCardPlatform
+                  );
+                  setExportVCardDialogOpen(false);
+                  toast({
+                    title: "Export Complete",
+                    description: `Exported ${clients.length} contacts to vCard`,
+                  });
+                } catch (error) {
+                  toast({
+                    title: "Export Failed",
+                    description: "Failed to fetch clients from database",
+                    variant: "destructive",
+                  });
+                }
               }}
               disabled={(filteredData?.length || 0) === 0}
               data-testid="button-export-vcard-confirm"
