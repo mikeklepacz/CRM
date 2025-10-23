@@ -1651,17 +1651,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       await googleSheets.writeSheetData(trackerSheet.spreadsheetId, statusRange, [['7 – Warm']]);
                     }
 
-                    // Clear Agent Name in Store Database
-                    if (storeLinkIndex !== -1 && storeAgentNameIndex !== -1) {
-                      for (let j = 1; j < storeDbRows.length; j++) {
-                        if (storeDbRows[j][storeLinkIndex] === link) {
-                          const storeAgentColumn = String.fromCharCode(65 + storeAgentNameIndex);
-                          const storeAgentRange = `${storeDbSheet.sheetName}!${storeAgentColumn}${j + 1}`;
-                          await googleSheets.writeSheetData(storeDbSheet.spreadsheetId, storeAgentRange, [['']]);
-                          break;
-                        }
-                      }
-                    }
+                    // Note: Agent Name in Store Database is now synced automatically from Commission Tracker via Google Sheets
+                    // No need to manually clear it here
 
                     releasedCount++;
                   } else {
