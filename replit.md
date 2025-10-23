@@ -33,11 +33,16 @@ The application is built around a client dashboard that unifies data from two Go
       - Slide-out panel from left edge (max 1/3 screen width, capped at 500px) with ChatGPT-style conversation management
       - Projects (folders) for organizing conversations
       - Shared template library with tags and search
+      - Personal tag management system: Each user maintains their own tags that auto-populate from template usage
       - Email preview with mailto: link generation
       - Context-aware: automatically reads store details from current page
       - Knowledge base file upload and management (admin only)
       - Chat history persistence across sessions
       - OpenAI API integration using Assistants API with file search capability
+      - **Template Variables**: Smart placeholder system with intelligent fallbacks:
+        - `{{email}}` and `{{pocEmail}}` both use smart fallback: check POC email first, then fall back to general store email
+        - Auto-detection properly handles store names with hyphens (e.g., "Chronic Therapy - Cortez" → {{storeName}})
+        - Available variables: storeName, storeAddress, storeCity, storeState, storePhone, storeWebsite, email, pocName, pocEmail, pocPhone, agentName, agentEmail, agentPhone, agentMeetingLink, currentDate, currentTime
 - **System Design Choices**:
     - A PostgreSQL database (Neon) is used for user management and preference storage.
     - The backend is powered by Express.js and Node.js.
