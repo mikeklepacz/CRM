@@ -95,11 +95,31 @@ export function QuickReminder({
 
   const handleSave = () => {
     if (!note.trim() || !date) return;
+    
+    // Calculate the actual time to send based on timezone selection
+    let finalTime = time;
+    if (useCustomerTimezone && customerTimezone) {
+      // Convert customer's local time to agent's (Warsaw) time
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
+      
+      const customerDateStr = `${dateStr}T${time}:00`;
+      const customerOffset = getTimezoneOffset(customerTimezone, new Date(customerDateStr));
+      
+      // Convert to UTC then to agent's timezone
+      const utcTimestamp = Date.UTC(year, month - 1, day, hours, minutes, 0) - customerOffset;
+      const utcDate = new Date(utcTimestamp);
+      
+      // Get the time in agent's timezone (this is what backend expects)
+      finalTime = formatInTimeZone(utcDate, agentTimezone, 'HH:mm');
+    }
+    
     onSave({ 
       note, 
       date, 
-      time, 
-      useCustomerTimezone: useCustomerTimezone && !!customerTimezone,
+      time: finalTime, // Send Warsaw time
+      useCustomerTimezone: false, // Don't let backend do conversion
       customerTimezone,
       agentTimezone,
       calendarReminders
@@ -124,41 +144,23 @@ export function QuickReminder({
     if (!date || !useCustomerTimezone || !customerTimezone) return null;
     
     try {
-      // When "Use customer timezone" is checked, the time picker shows the customer's local time
-      // So if user picks 9:00 AM, that IS 9:00 AM in the customer's timezone
+      // When "Use customer timezone" is checked, the picker shows customer's local time
+      // We need to show what that time is in the agent's (Warsaw) timezone
       const dateStr = format(date, 'yyyy-MM-dd');
       const [year, month, day] = dateStr.split('-').map(Number);
       const [hours, minutes] = time.split(':').map(Number);
       
-      // Create a "naive" UTC timestamp representing the wall-clock time
-      const naiveUtcTimestamp = Date.UTC(year, month - 1, day, hours, minutes, 0);
-      const naiveDate = new Date(naiveUtcTimestamp);
+      // Create a date in the customer's timezone
+      const customerDateStr = `${dateStr}T${time}:00`;
+      const customerOffset = getTimezoneOffset(customerTimezone, new Date(customerDateStr));
       
-      // Get the offset for the customer's timezone
-      const customerOffset = getTimezoneOffset(customerTimezone, naiveDate);
+      // Convert customer's local time to UTC
+      const utcTimestamp = Date.UTC(year, month - 1, day, hours, minutes, 0) - customerOffset;
+      const utcDate = new Date(utcTimestamp);
       
-      // Convert to actual UTC time
-      const actualUtcTimestamp = naiveUtcTimestamp - customerOffset;
-      const actualUtcDate = new Date(actualUtcTimestamp);
-      
-      console.log('[TIMEZONE DEBUG]', {
-        pickerTime: time,
-        customerTimezone,
-        naiveUtcTimestamp,
-        customerOffset,
-        actualUtcTimestamp,
-        actualUtcDate: actualUtcDate.toISOString()
-      });
-      
-      // Format the time in both timezones
-      const customerTime = formatInTimeZone(
-        actualUtcDate,
-        customerTimezone,
-        'h:mm a'
-      );
-      
+      // Format in agent's timezone (this is what will be sent to backend)
       const agentTime = formatInTimeZone(
-        actualUtcDate,
+        utcDate,
         agentTimezone,
         'h:mm a'
       );
@@ -167,7 +169,7 @@ export function QuickReminder({
       const customerTzName = getFriendlyTimezoneName(customerTimezone);
       const agentTzName = getFriendlyTimezoneName(agentTimezone);
       
-      return `${customerTime} ${customerTzName} = ${agentTime} ${agentTzName}`;
+      return `${time} ${customerTzName} = ${agentTime} ${agentTzName}`;
     } catch (error) {
       return null;
     }
