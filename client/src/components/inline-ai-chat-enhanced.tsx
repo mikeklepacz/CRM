@@ -194,9 +194,17 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const [builderType, setBuilderType] = useState<"Email" | "Script">("Email");
   const [builderTags, setBuilderTags] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  
+  // Email-specific builder state
+  const [emailTo, setEmailTo] = useState("{{email}}");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<"Email" | "Script" | null>(null);
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const emailToRef = useRef<HTMLInputElement>(null);
+  const emailSubjectRef = useRef<HTMLInputElement>(null);
+  const emailBodyRef = useRef<HTMLTextAreaElement>(null);
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ title: string; content: string } | null>(null);
   
@@ -224,24 +232,81 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     { name: "currentTime", description: "Current time" },
   ];
 
-  const insertVariable = (variableName: string) => {
-    if (!contentTextareaRef.current) return;
-    
-    const textarea = contentTextareaRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = builderContent;
-    const before = text.substring(0, start);
-    const after = text.substring(end);
+  const insertVariable = (variableName: string, targetField?: 'to' | 'subject' | 'body') => {
     const variable = `{{${variableName}}}`;
     
-    setBuilderContent(before + variable + after);
-    
-    // Set cursor position after inserted variable
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + variable.length, start + variable.length);
-    }, 0);
+    // For Email type, insert into the specified field or the currently focused field
+    if (builderType === "Email") {
+      let ref = targetField === 'to' ? emailToRef 
+               : targetField === 'subject' ? emailSubjectRef 
+               : targetField === 'body' ? emailBodyRef 
+               : null;
+      
+      // If no target specified, try to find the focused field
+      if (!ref) {
+        if (document.activeElement === emailToRef.current) ref = emailToRef;
+        else if (document.activeElement === emailSubjectRef.current) ref = emailSubjectRef;
+        else if (document.activeElement === emailBodyRef.current) ref = emailBodyRef;
+        else ref = emailBodyRef; // Default to body
+      }
+      
+      if (!ref.current) return;
+      
+      if (ref === emailToRef) {
+        const input = ref.current;
+        const start = input.selectionStart || 0;
+        const end = input.selectionEnd || 0;
+        const text = emailTo;
+        const before = text.substring(0, start);
+        const after = text.substring(end);
+        setEmailTo(before + variable + after);
+        setTimeout(() => {
+          input.focus();
+          input.setSelectionRange(start + variable.length, start + variable.length);
+        }, 0);
+      } else if (ref === emailSubjectRef) {
+        const input = ref.current;
+        const start = input.selectionStart || 0;
+        const end = input.selectionEnd || 0;
+        const text = emailSubject;
+        const before = text.substring(0, start);
+        const after = text.substring(end);
+        setEmailSubject(before + variable + after);
+        setTimeout(() => {
+          input.focus();
+          input.setSelectionRange(start + variable.length, start + variable.length);
+        }, 0);
+      } else if (ref === emailBodyRef) {
+        const textarea = ref.current;
+        const start = textarea.selectionStart || 0;
+        const end = textarea.selectionEnd || 0;
+        const text = emailBody;
+        const before = text.substring(0, start);
+        const after = text.substring(end);
+        setEmailBody(before + variable + after);
+        setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + variable.length, start + variable.length);
+        }, 0);
+      }
+    } else {
+      // For Script type, use the original logic
+      if (!contentTextareaRef.current) return;
+      
+      const textarea = contentTextareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = builderContent;
+      const before = text.substring(0, start);
+      const after = text.substring(end);
+      
+      setBuilderContent(before + variable + after);
+      
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + variable.length, start + variable.length);
+      }, 0);
+    }
   };
 
   const insertTag = (tag: string) => {
@@ -261,6 +326,27 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       newSelected.add(tagId);
     }
     setSelectedTagIds(newSelected);
+  };
+
+  // Format email fields into proper email template format
+  const formatEmailTemplate = (to: string, subject: string, body: string): string => {
+    return `To: ${to}\nSubject: ${subject}\n\nBody:\n${body}`;
+  };
+
+  // Parse email template back into fields
+  const parseEmailTemplate = (content: string): { to: string; subject: string; body: string } | null => {
+    const toMatch = content.match(/^To:\s*(.+?)$/m);
+    const subjectMatch = content.match(/^Subject:\s*(.+?)$/m);
+    const bodyMatch = content.match(/^Body:\s*\n([\s\S]+)$/m);
+
+    if (toMatch && subjectMatch && bodyMatch) {
+      return {
+        to: toMatch[1].trim(),
+        subject: subjectMatch[1].trim(),
+        body: bodyMatch[1].trim(),
+      };
+    }
+    return null;
   };
 
   const handleDeleteSelectedTags = () => {
@@ -1321,16 +1407,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
           {templateBuilderView === "builder" && (
             <div className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
               <div className="space-y-4 flex-1">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">Title</label>
-                  <Input
-                    placeholder="Template name..."
-                    value={builderTitle}
-                    onChange={(e) => setBuilderTitle(e.target.value)}
-                    data-testid="input-builder-title"
-                  />
-                </div>
-
+                {/* Type Selector - FIRST */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold">Type</label>
                   <Select
@@ -1345,6 +1422,17 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                       <SelectItem value="Script">Script</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Title */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold">Title</label>
+                  <Input
+                    placeholder="Template name..."
+                    value={builderTitle}
+                    onChange={(e) => setBuilderTitle(e.target.value)}
+                    data-testid="input-builder-title"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -1445,10 +1533,15 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   <p className="text-xs text-muted-foreground">Comma-separated tags</p>
                 </div>
 
-                <div className="space-y-2 flex-1 flex flex-col">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold">Content</label>
-                      <div className="flex gap-2">
+                {/* Conditional Content Based on Type */}
+                {builderType === "Email" ? (
+                  // Email Builder
+                  <div className="space-y-4 flex-1 flex flex-col">
+                    {/* To Field */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold">To</label>
+                        <div className="flex gap-2">
                         {/* Store Info Variables */}
                         <Popover>
                           <PopoverTrigger asChild>
@@ -1618,18 +1711,578 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                         </Popover>
                       </div>
                     </div>
-                  <Textarea
-                    ref={contentTextareaRef}
-                    placeholder="Template content with {{variables}}..."
-                    value={builderContent}
-                    onChange={(e) => setBuilderContent(e.target.value)}
-                    className="flex-1 min-h-[200px] font-mono"
-                    data-testid="textarea-builder-content"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Use variables like: {`{{storeName}}, {{pocName}}, {{pocEmail}}`}
-                  </p>
-                </div>
+                      <Input
+                        ref={emailToRef}
+                        placeholder="{{email}}"
+                        value={emailTo}
+                        onChange={(e) => setEmailTo(e.target.value)}
+                        className="font-mono"
+                        data-testid="input-email-to"
+                      />
+                    </div>
+
+                    {/* Subject Field */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold">Subject</label>
+                        <div className="flex gap-2">
+                          {/* Store Info Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-store-variable-subject"
+                              >
+                                <Store className="h-4 w-4 mr-1" />
+                                Store
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Store className="h-4 w-4" />
+                                  Store Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['storeName', 'storeAddress', 'storeCity', 'storeState', 'storeWebsite', 'storePhone'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name, 'subject')}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-subject-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Contact Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-contact-variable-subject"
+                              >
+                                <Mail className="h-4 w-4 mr-1" />
+                                Contact
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Mail className="h-4 w-4" />
+                                  Contact Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['email', 'pocName', 'pocEmail', 'pocPhone'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name, 'subject')}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-subject-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Agent Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-agent-variable-subject"
+                              >
+                                <UserIcon className="h-4 w-4 mr-1" />
+                                Agent
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <UserIcon className="h-4 w-4" />
+                                  Agent Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['agentName', 'agentEmail', 'agentPhone', 'agentMeetingLink'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name, 'subject')}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-subject-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Date/Time Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-datetime-variable-subject"
+                              >
+                                <Calendar className="h-4 w-4 mr-1" />
+                                Date/Time
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Calendar className="h-4 w-4" />
+                                  Date & Time
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['currentDate', 'currentTime'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name, 'subject')}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-subject-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                      <Input
+                        ref={emailSubjectRef}
+                        placeholder="Email subject..."
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        className="font-mono"
+                        data-testid="input-email-subject"
+                      />
+                    </div>
+
+                    {/* Body Field */}
+                    <div className="space-y-2 flex-1 flex flex-col">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold">Body</label>
+                        <div className="flex gap-2">
+                          {/* Store Info Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-store-variable-body"
+                              >
+                                <Store className="h-4 w-4 mr-1" />
+                                Store
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Store className="h-4 w-4" />
+                                  Store Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['storeName', 'storeAddress', 'storeCity', 'storeState', 'storeWebsite', 'storePhone'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name, 'body')}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-body-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Contact Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-contact-variable-body"
+                              >
+                                <Mail className="h-4 w-4 mr-1" />
+                                Contact
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Mail className="h-4 w-4" />
+                                  Contact Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['email', 'pocName', 'pocEmail', 'pocPhone'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name, 'body')}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-body-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Agent Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-agent-variable-body"
+                              >
+                                <UserIcon className="h-4 w-4 mr-1" />
+                                Agent
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <UserIcon className="h-4 w-4" />
+                                  Agent Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['agentName', 'agentEmail', 'agentPhone', 'agentMeetingLink'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name, 'body')}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-body-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Date/Time Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-datetime-variable-body"
+                              >
+                                <Calendar className="h-4 w-4 mr-1" />
+                                Date/Time
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Calendar className="h-4 w-4" />
+                                  Date & Time
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['currentDate', 'currentTime'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name, 'body')}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-body-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                      <Textarea
+                        ref={emailBodyRef}
+                        placeholder="Email body with {{variables}}..."
+                        value={emailBody}
+                        onChange={(e) => setEmailBody(e.target.value)}
+                        className="flex-1 min-h-[200px] font-mono"
+                        data-testid="textarea-email-body"
+                      />
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Use variables like: {`{{storeName}}, {{pocName}}, {{email}}`}
+                    </p>
+                  </div>
+                ) : (
+                  // Script Builder
+                  <div className="space-y-4 flex-1 flex flex-col">
+                    <div className="space-y-2 flex-1 flex flex-col">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold">Content</label>
+                        <div className="flex gap-2">
+                          {/* Store Info Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-store-variable"
+                              >
+                                <Store className="h-4 w-4 mr-1" />
+                                Store
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Store className="h-4 w-4" />
+                                  Store Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['storeName', 'storeAddress', 'storeCity', 'storeState', 'storeWebsite', 'storePhone'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name)}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Contact Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-contact-variable"
+                              >
+                                <Mail className="h-4 w-4 mr-1" />
+                                Contact
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Mail className="h-4 w-4" />
+                                  Contact Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['email', 'pocName', 'pocEmail', 'pocPhone'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name)}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Agent Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-agent-variable"
+                              >
+                                <UserIcon className="h-4 w-4 mr-1" />
+                                Agent
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <UserIcon className="h-4 w-4" />
+                                  Agent Information
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['agentName', 'agentEmail', 'agentPhone', 'agentMeetingLink'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name)}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Date/Time Variables */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid="button-insert-datetime-variable"
+                              >
+                                <Calendar className="h-4 w-4 mr-1" />
+                                Date/Time
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-72" align="end">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                  <Calendar className="h-4 w-4" />
+                                  Date & Time
+                                </h4>
+                                <div className="space-y-1">
+                                  {availableVariables
+                                    .filter(v => ['currentDate', 'currentTime'].includes(v.name))
+                                    .map((variable) => (
+                                      <button
+                                        key={variable.name}
+                                        onClick={() => insertVariable(variable.name)}
+                                        className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                        data-testid={`insert-variable-${variable.name}`}
+                                      >
+                                        <div className="font-mono text-sm text-primary">
+                                          {`{{${variable.name}}}`}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {variable.description}
+                                        </div>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                      <Textarea
+                        ref={contentTextareaRef}
+                        placeholder="Template content with {{variables}}..."
+                        value={builderContent}
+                        onChange={(e) => setBuilderContent(e.target.value)}
+                        className="flex-1 min-h-[200px] font-mono"
+                        data-testid="textarea-builder-content"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Use variables like: {`{{storeName}}, {{pocName}}, {{pocEmail}}`}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 mt-4 pt-4 border-t flex-shrink-0">
@@ -1640,6 +2293,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                     setBuilderContent("");
                     setBuilderType("Email");
                     setBuilderTags("");
+                    setEmailTo("{{email}}");
+                    setEmailSubject("");
+                    setEmailBody("");
                     setEditingTemplateId(null);
                     setTemplateBuilderOpen(false);
                   }}
@@ -1659,7 +2315,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   className="flex-1"
                   disabled={
                     !builderTitle.trim() || 
-                    !builderContent.trim() || 
+                    (builderType === "Email" 
+                      ? (!emailTo.trim() || !emailSubject.trim() || !emailBody.trim())
+                      : !builderContent.trim()) ||
                     createTemplateMutation.isPending || 
                     updateTemplateMutation.isPending
                   }
@@ -1669,9 +2327,13 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                       .map((tag) => tag.trim())
                       .filter((tag) => tag.length > 0);
 
+                    const content = builderType === "Email" 
+                      ? formatEmailTemplate(emailTo, emailSubject, emailBody)
+                      : builderContent;
+
                     const templateData = {
                       title: builderTitle,
-                      content: builderContent,
+                      content,
                       type: builderType,
                       tags,
                     };
