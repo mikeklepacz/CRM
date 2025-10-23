@@ -140,6 +140,10 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ title: string; content: string } | null>(null);
   
+  // Tag management state
+  const [tagEditMode, setTagEditMode] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  
   // Available variables for templates
   const availableVariables = [
     { name: "storeName", description: "Store/business name" },
@@ -186,6 +190,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       setBuilderTags(`${currentTags}, ${tag}`);
     } else {
       setBuilderTags(tag);
+    }
+  };
+
+  const toggleTagSelection = (tagId: string) => {
+    const newSelected = new Set(selectedTagIds);
+    if (newSelected.has(tagId)) {
+      newSelected.delete(tagId);
+    } else {
+      newSelected.add(tagId);
+    }
+    setSelectedTagIds(newSelected);
+  };
+
+  const handleDeleteSelectedTags = () => {
+    if (selectedTagIds.size === 0) return;
+    
+    const tagCount = selectedTagIds.size;
+    if (window.confirm(`Delete ${tagCount} selected tag${tagCount > 1 ? 's' : ''}?`)) {
+      deleteTagsMutation.mutate(Array.from(selectedTagIds));
     }
   };
 
@@ -615,6 +638,21 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       toast({ title: "Success", description: "Conversation moved" });
+    },
+  });
+
+  const deleteTagsMutation = useMutation({
+    mutationFn: async (tagIds: string[]) => {
+      // Delete tags one by one
+      for (const id of tagIds) {
+        await apiRequest("DELETE", `/api/user-tags/by-id/${id}`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user-tags"] });
+      setSelectedTagIds(new Set());
+      setTagEditMode(false);
+      toast({ title: "Success", description: "Tags deleted" });
     },
   });
 
@@ -1215,10 +1253,42 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                       </PopoverTrigger>
                       <PopoverContent className="w-72" align="end">
                         <div className="space-y-2">
-                          <h4 className="font-semibold text-sm flex items-center gap-2">
-                            <Tag className="h-4 w-4" />
-                            Your Personal Tags
-                          </h4>
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-semibold text-sm flex items-center gap-2">
+                              <Tag className="h-4 w-4" />
+                              Your Personal Tags
+                            </h4>
+                            {userTags.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setTagEditMode(!tagEditMode);
+                                  if (tagEditMode) {
+                                    setSelectedTagIds(new Set());
+                                  }
+                                }}
+                                data-testid="button-edit-tags"
+                              >
+                                {tagEditMode ? "Done" : "Edit"}
+                              </Button>
+                            )}
+                          </div>
+                          
+                          {tagEditMode && selectedTagIds.size > 0 && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="w-full"
+                              onClick={handleDeleteSelectedTags}
+                              disabled={deleteTagsMutation.isPending}
+                              data-testid="button-delete-selected-tags"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete {selectedTagIds.size} tag{selectedTagIds.size > 1 ? 's' : ''}
+                            </Button>
+                          )}
+
                           {userTags.length === 0 ? (
                             <p className="text-xs text-muted-foreground py-4 text-center">
                               No tags yet. Tags you use in templates will appear here.
@@ -1228,12 +1298,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                               {userTags.map((userTag) => (
                                 <button
                                   key={userTag.id}
-                                  onClick={() => insertTag(userTag.tag)}
+                                  onClick={() => tagEditMode ? toggleTagSelection(userTag.id) : insertTag(userTag.tag)}
                                   className="w-full text-left p-2 rounded hover-elevate flex items-center justify-between group"
-                                  data-testid={`insert-tag-${userTag.tag}`}
+                                  data-testid={`${tagEditMode ? 'toggle' : 'insert'}-tag-${userTag.tag}`}
                                 >
-                                  <span className="text-sm">{userTag.tag}</span>
-                                  <Badge variant="outline" className="text-xs">Click to add</Badge>
+                                  <div className="flex items-center gap-2">
+                                    {tagEditMode && (
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedTagIds.has(userTag.id)}
+                                        onChange={() => toggleTagSelection(userTag.id)}
+                                        className="h-4 w-4"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    )}
+                                    <span className="text-sm">{userTag.tag}</span>
+                                  </div>
+                                  {!tagEditMode && (
+                                    <Badge variant="outline" className="text-xs">Click to add</Badge>
+                                  )}
                                 </button>
                               ))}
                             </div>
