@@ -1099,7 +1099,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                           </div>
                         )}
                         <div className="flex gap-1">
-                          {template.tags && template.tags.includes("Email") && (
+                          {template.type === "Email" && (
                             <Button
                               variant="default"
                               size="sm"
