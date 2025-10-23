@@ -148,8 +148,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     { name: "storeState", description: "State" },
     { name: "storePhone", description: "Store phone number" },
     { name: "storeWebsite", description: "Store website" },
+    { name: "email", description: "Email (smart: POC email or store email)" },
     { name: "pocName", description: "Point of contact name" },
-    { name: "pocEmail", description: "POC email address" },
+    { name: "pocEmail", description: "POC email (smart: POC email or store email)" },
     { name: "pocPhone", description: "POC phone number" },
     { name: "agentName", description: "Your name" },
     { name: "agentEmail", description: "Your email" },
@@ -211,8 +212,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       const escaped = escapeRegex(trimmedValue);
       
       // Boundary characters: whitespace, newline, or punctuation/delimiters that typically separate values
-      // Includes: brackets <>[]{}, parentheses (), quotes "'`, punctuation .,!?;:, slashes /\, hyphens -
-      const boundary = `(?:^|[\\s\\n,.!?;:'"<>\\[\\]{}()\\/\\\\-]|$)`;
+      // Includes: brackets <>[]{}, parentheses (), quotes "'`, punctuation .,!?;:, slashes /\
+      // Note: Hyphens removed from boundaries to allow detection of names like "Chronic Therapy - Cortez"
+      const boundary = `(?:^|[\\s\\n,.!?;:'"<>\\[\\]{}()\\/\\\\]|$)`;
       
       // Create regex that matches the value when surrounded by boundaries
       // Using non-capturing groups and allowing the boundary chars to remain
@@ -318,6 +320,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     
     // Replace store-related variables
     if (storeContext) {
+      // Smart email fallback: Check POC email first, then fall back to general email
+      const smartEmail = storeContext.poc_email || storeContext.email || "";
+      
       result = result.replace(/\{\{storeName\}\}/g, storeContext.name || "");
       result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || "");
       result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || "");
@@ -325,7 +330,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || "");
       result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || "");
       result = result.replace(/\{\{pocName\}\}/g, storeContext.point_of_contact || "");
-      result = result.replace(/\{\{pocEmail\}\}/g, storeContext.poc_email || "");
+      // Both pocEmail and email use smart fallback
+      result = result.replace(/\{\{pocEmail\}\}/g, smartEmail);
+      result = result.replace(/\{\{email\}\}/g, smartEmail);
       result = result.replace(/\{\{pocPhone\}\}/g, storeContext.poc_phone || "");
     }
     
@@ -1311,7 +1318,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                               </h4>
                               <div className="space-y-1">
                                 {availableVariables
-                                  .filter(v => ['pocName', 'pocEmail', 'pocPhone'].includes(v.name))
+                                  .filter(v => ['email', 'pocName', 'pocEmail', 'pocPhone'].includes(v.name))
                                   .map((variable) => (
                                     <button
                                       key={variable.name}
