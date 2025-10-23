@@ -1516,7 +1516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-      const trackerRows = await googleSheets.readSheetData(adminUserId, trackerSheet.spreadsheetId, trackerRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       if (trackerRows.length === 0) {
         return res.json({
@@ -1598,7 +1598,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (trackerSheet && storeDbSheet) {
         // Read tracker data
         const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-        const trackerRows = await googleSheets.readSheetData(adminUserId, trackerSheet.spreadsheetId, trackerRange);
+        const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
         if (trackerRows.length > 0) {
           const headers = trackerRows[0];
@@ -1610,7 +1610,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (agentNameIndex !== -1 && linkIndex !== -1) {
             // Read Store Database
             const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
-            const storeDbRows = await googleSheets.readSheetData(adminUserId, storeDbSheet.spreadsheetId, storeDbRange);
+            const storeDbRows = await googleSheets.readSheetData(storeDbSheet.spreadsheetId, storeDbRange);
 
             if (storeDbRows.length > 0) {
               const storeHeaders = storeDbRows[0];
@@ -1633,14 +1633,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     if (agentNameIndex !== -1) {
                       const agentColumn = String.fromCharCode(65 + agentNameIndex);
                       const agentRange = `${trackerSheet.sheetName}!${agentColumn}${rowIndex}`;
-                      await googleSheets.writeSheetData(adminUserId, trackerSheet.spreadsheetId, agentRange, [['']]);
+                      await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentRange, [['']]);
                     }
 
                     // Set status to "7 – Warm" in tracker
                     if (statusIndex !== -1) {
                       const statusColumn = String.fromCharCode(65 + statusIndex);
                       const statusRange = `${trackerSheet.sheetName}!${statusColumn}${rowIndex}`;
-                      await googleSheets.writeSheetData(adminUserId, trackerSheet.spreadsheetId, statusRange, [['7 – Warm']]);
+                      await googleSheets.writeSheetData(trackerSheet.spreadsheetId, statusRange, [['7 – Warm']]);
                     }
 
                     // Clear Agent Name in Store Database
@@ -1649,7 +1649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         if (storeDbRows[j][storeLinkIndex] === link) {
                           const storeAgentColumn = String.fromCharCode(65 + storeAgentNameIndex);
                           const storeAgentRange = `${storeDbSheet.sheetName}!${storeAgentColumn}${j + 1}`;
-                          await googleSheets.writeSheetData(adminUserId, storeDbSheet.spreadsheetId, storeAgentRange, [['']]);
+                          await googleSheets.writeSheetData(storeDbSheet.spreadsheetId, storeAgentRange, [['']]);
                           break;
                         }
                       }
@@ -1714,7 +1714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (trackerSheet) {
         try {
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-          const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+          const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
           console.log('[GET /api/orders] Tracker rows read:', trackerRows.length);
           
           if (trackerRows.length > 0) {
@@ -1782,7 +1782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (trackerSheet) {
         try {
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-          const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+          const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
           
           if (trackerRows.length > 0) {
             const trackerHeaders = trackerRows[0];
@@ -1808,7 +1808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read all store data
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
       if (storeRows.length === 0) {
         return res.json({ order, suggestions: [], matchedStoreLinks });
@@ -1959,7 +1959,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read Store Database to find stores and update DBA
       const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
-      const storeDbRows = await googleSheets.readSheetData(userId, storeDbSheet.spreadsheetId, storeDbRange);
+      const storeDbRows = await googleSheets.readSheetData(storeDbSheet.spreadsheetId, storeDbRange);
       
       if (storeDbRows.length === 0) {
         return res.status(400).json({ message: 'Store Database sheet is empty' });
@@ -1977,7 +1977,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read tracker data to check if stores already have rows
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       if (trackerRows.length === 0) {
         return res.status(400).json({ message: 'Commission Tracker sheet is empty' });
@@ -2020,21 +2020,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (dba && storeDbDbaIndex !== -1) {
             const dbaColumn = String.fromCharCode(65 + storeDbDbaIndex);
             const dbaRange = `${storeDbSheet.sheetName}!${dbaColumn}${storeDbRowIndex}`;
-            await googleSheets.writeSheetData(userId, storeDbSheet.spreadsheetId, dbaRange, [[dba]]);
+            await googleSheets.writeSheetData(storeDbSheet.spreadsheetId, dbaRange, [[dba]]);
           }
           
           // Update Agent Name if provided
           if (agentName && storeDbAgentNameIndex !== -1) {
             const agentColumn = String.fromCharCode(65 + storeDbAgentNameIndex);
             const agentRange = `${storeDbSheet.sheetName}!${agentColumn}${storeDbRowIndex}`;
-            await googleSheets.writeSheetData(userId, storeDbSheet.spreadsheetId, agentRange, [[agentName]]);
+            await googleSheets.writeSheetData(storeDbSheet.spreadsheetId, agentRange, [[agentName]]);
           }
           
           // Update Email if provided
           if (order.billingEmail && storeDbEmailIndex !== -1) {
             const emailColumn = String.fromCharCode(65 + storeDbEmailIndex);
             const emailRange = `${storeDbSheet.sheetName}!${emailColumn}${storeDbRowIndex}`;
-            await googleSheets.writeSheetData(userId, storeDbSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
+            await googleSheets.writeSheetData(storeDbSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
           }
         }
         
@@ -2052,32 +2052,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (orderIdIndex !== -1) {
             const orderIdColumn = String.fromCharCode(65 + orderIdIndex);
             const updateRange = `${trackerSheet.sheetName}!${orderIdColumn}${existingTrackerRowIndex}`;
-            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, updateRange, [[order.orderNumber]]);
+            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, updateRange, [[order.orderNumber]]);
           }
           
           if (transactionIdIndex !== -1) {
             const txIdColumn = String.fromCharCode(65 + transactionIdIndex);
             const txRange = `${trackerSheet.sheetName}!${txIdColumn}${existingTrackerRowIndex}`;
-            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, txRange, [[order.id]]);
+            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, txRange, [[order.id]]);
           }
           
           if (agentNameIndex !== -1 && agentName) {
             const agentColumn = String.fromCharCode(65 + agentNameIndex);
             const agentRange = `${trackerSheet.sheetName}!${agentColumn}${existingTrackerRowIndex}`;
-            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, agentRange, [[agentName]]);
+            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentRange, [[agentName]]);
           }
           
           if (trackerDateIndex !== -1 && order.orderDate) {
             const dateColumn = String.fromCharCode(65 + trackerDateIndex);
             const dateRange = `${trackerSheet.sheetName}!${dateColumn}${existingTrackerRowIndex}`;
             const formattedDate = new Date(order.orderDate).toLocaleDateString('en-US');
-            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, dateRange, [[formattedDate]]);
+            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, dateRange, [[formattedDate]]);
           }
           
           if (trackerPocEmailIndex !== -1 && order.billingEmail) {
             const emailColumn = String.fromCharCode(65 + trackerPocEmailIndex);
             const emailRange = `${trackerSheet.sheetName}!${emailColumn}${existingTrackerRowIndex}`;
-            await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
+            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
           }
           
           rowsProcessed++;
@@ -2111,7 +2111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Append new row to Commission Tracker
           const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
-          await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newRow]);
+          await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
           
           rowsProcessed++;
           results.push({ link: storeLink, name: storeName, action: 'created' });
@@ -2172,7 +2172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Read tracker headers
         const headerRange = `${sheetName}!1:1`;
-        const headerData = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+        const headerData = await googleSheets.readSheetData(spreadsheetId, headerRange);
         
         if (headerData.length > 0) {
           const headers = headerData[0];
@@ -2186,7 +2186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Read all existing rows
           const allDataRange = `${sheetName}!A:ZZ`;
-          const allRows = await googleSheets.readSheetData(userId, spreadsheetId, allDataRange);
+          const allRows = await googleSheets.readSheetData(spreadsheetId, allDataRange);
           const existingRows = allRows.slice(1);
           console.log(`Read ${existingRows.length} data rows from sheet`);
 
@@ -2279,7 +2279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
               for (const update of updates) {
                 console.log(`Writing to Google Sheets: ${update.range}`, update.values);
-                await googleSheets.writeSheetData(userId, spreadsheetId, update.range, update.values);
+                await googleSheets.writeSheetData(spreadsheetId, update.range, update.values);
                 console.log(`Successfully wrote: ${update.range}`);
               }
               
@@ -2654,7 +2654,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (trackerSheet && storeDbSheet) {
           // Read Store Database to find claimed stores
           const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
-          const storeDbRows = await googleSheets.readSheetData(userId, storeDbSheet.spreadsheetId, storeDbRange);
+          const storeDbRows = await googleSheets.readSheetData(storeDbSheet.spreadsheetId, storeDbRange);
           
           if (storeDbRows.length > 0) {
             const storeDbHeaders = storeDbRows[0];
@@ -2665,7 +2665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             // Read Commission Tracker
             const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-            const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+            const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
             
             if (trackerRows.length > 0) {
               const trackerHeaders = trackerRows[0];
@@ -2724,7 +2724,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       if (agentNameIndex !== -1 && salesAgentName) newRow[agentNameIndex] = salesAgentName;
 
                       const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
-                      await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newRow]);
+                      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
                       
                       autoMatched++;
                       console.log(`Auto-matched order ${order.id} to store ${storeLink}`);
@@ -2790,7 +2790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read tracker headers to understand column structure
       const headerRange = `${sheetName}!1:1`;
-      const headerData = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+      const headerData = await googleSheets.readSheetData(spreadsheetId, headerRange);
       if (headerData.length === 0) {
         return res.status(400).json({ message: "Commission Tracker sheet is empty" });
       }
@@ -2816,7 +2816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read all existing tracker rows once for duplicate detection
       const allDataRange = `${sheetName}!A:ZZ`;
-      const allRows = await googleSheets.readSheetData(userId, spreadsheetId, allDataRange);
+      const allRows = await googleSheets.readSheetData(spreadsheetId, allDataRange);
       const existingRows = allRows.slice(1); // Skip header
 
       let written = 0;
@@ -2860,7 +2860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (storeSheet) {
             // Read Store Database headers
             const storeHeaderRange = `${storeSheet.sheetName}!1:1`;
-            const storeHeaderData = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeHeaderRange);
+            const storeHeaderData = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeHeaderRange);
             
             if (storeHeaderData.length > 0) {
               const storeHeaders = storeHeaderData[0];
@@ -2879,7 +2879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if ('dba' in storeColumnMap) newStoreRow[storeColumnMap['dba']] = order.billingCompany || '';
               
               // Append to Store Database
-              await googleSheets.appendSheetData(userId, storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:A`, [newStoreRow]);
+              await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:A`, [newStoreRow]);
               console.log(`Created new store in Store Database with Link: ${linkValue}`);
             }
           }
@@ -2969,7 +2969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         rowData[columnMap['amount']] = amount.toFixed(2);
 
         // Append row to tracker sheet
-        await googleSheets.appendSheetData(userId, spreadsheetId, `${sheetName}!A:A`, [rowData]);
+        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:A`, [rowData]);
         written++;
         console.log(`Written order ${order.orderNumber} to tracker: ${salesAgentName} - $${amount.toFixed(2)}`);
       }
@@ -2994,7 +2994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/sheets/list', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const sheets = await googleSheets.listSpreadsheets(userId);
+      const sheets = await googleSheets.listSpreadsheets();
       res.json(sheets);
     } catch (error: any) {
       console.error("Error listing sheets:", error);
@@ -3007,7 +3007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { spreadsheetId } = req.params;
-      const info = await googleSheets.getSpreadsheetInfo(userId, spreadsheetId);
+      const info = await googleSheets.getSpreadsheetInfo(spreadsheetId);
       res.json(info);
     } catch (error: any) {
       console.error("Error getting sheet info:", error);
@@ -3038,7 +3038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify sheet exists and has the identifier column
       const range = `${sheetName}!A1:ZZ1`;
-      const headers = await googleSheets.readSheetData(userId, spreadsheetId, range);
+      const headers = await googleSheets.readSheetData(spreadsheetId, range);
 
       if (!headers || headers.length === 0) {
         return res.status(400).json({ message: "Sheet is empty or not found" });
@@ -3098,7 +3098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { spreadsheetId, sheetName } = sheet;
       const range = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
 
       if (rows.length === 0) {
         return res.json({ headers: [], data: [] });
@@ -3152,8 +3152,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
 
-      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
-      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       console.log('=== MERGED DATA DEBUG ===');
       console.log('Store rows read from Google Sheets:', storeRows.length);
@@ -3525,7 +3525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read headers to find column index (case-insensitive)
       const headerRange = `${sheetName}!1:1`;
-      const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+      const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
       const headers = headerRows[0] || [];
       const columnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
 
@@ -3538,7 +3538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
 
       // Update the cell
-      await googleSheets.writeSheetData(userId, spreadsheetId, cellRange, [[value]]);
+      await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
 
       res.json({ message: "Cell updated successfully" });
     } catch (error: any) {
@@ -3575,7 +3575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read entire tracker sheet
       const range = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
 
       if (rows.length === 0) {
         return res.status(400).json({ message: "Tracker sheet is empty (no headers)" });
@@ -3609,7 +3609,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (colIndex !== -1) {
             const columnLetter = String.fromCharCode(65 + colIndex);
             const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
-            await googleSheets.writeSheetData(userId, spreadsheetId, cellRange, [[value]]);
+            await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
           }
         }
 
@@ -3643,7 +3643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Append new row
-        await googleSheets.appendSheetData(userId, spreadsheetId, `${sheetName}!A:ZZ`, [newRow]);
+        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:ZZ`, [newRow]);
 
         res.json({ message: "Tracker row created successfully", claimed: true });
       }
@@ -3674,7 +3674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read all data to find headers and next empty row
       const dataRange = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(userId, spreadsheetId, dataRange);
+      const rows = await googleSheets.readSheetData(spreadsheetId, dataRange);
       const headers = rows[0] || [];
 
       // Create a new row with empty values for all columns
@@ -3700,7 +3700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Append the row to the sheet
       const appendRange = `${sheetName}!A:ZZ`;
-      await googleSheets.appendSheetData(userId, spreadsheetId, appendRange, [newRow]);
+      await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
 
       res.json({ message: "Store claimed successfully" });
     } catch (error: any) {
@@ -3729,7 +3729,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read headers
       const dataRange = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(userId, spreadsheetId, dataRange);
+      const rows = await googleSheets.readSheetData(spreadsheetId, dataRange);
       const headers = rows[0] || [];
 
       // Create a new row with empty values
@@ -3754,7 +3754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Append the row
       const appendRange = `${sheetName}!A:ZZ`;
-      await googleSheets.appendSheetData(userId, spreadsheetId, appendRange, [newRow]);
+      await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
 
       res.json({ message: "Contact action saved and store claimed" });
     } catch (error: any) {
@@ -3783,7 +3783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read headers
       const headerRange = `${sheetName}!1:1`;
-      const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+      const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
       const headers = headerRows[0] || [];
 
       // Update each field
@@ -3792,7 +3792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (columnIndex !== -1 && value) {
           const columnLetter = String.fromCharCode(65 + columnIndex);
           const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
-          await googleSheets.writeSheetData(userId, spreadsheetId, cellRange, [[value]]);
+          await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
         }
       };
 
@@ -3835,7 +3835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
       const range = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
 
       if (rows.length === 0) {
         return res.status(400).json({ message: "Sheet is empty" });
@@ -3902,7 +3902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read the current sheet to find the header row
       const range = `${sheetName}!1:1`;
-      const headerData = await googleSheets.readSheetData(userId, spreadsheetId, range);
+      const headerData = await googleSheets.readSheetData(spreadsheetId, range);
 
       if (headerData.length === 0) {
         return res.status(400).json({ message: "Could not read sheet headers" });
@@ -3976,7 +3976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (updates.length > 0) {
         for (const update of updates) {
-          await googleSheets.writeSheetData(userId, spreadsheetId, update.range, update.values);
+          await googleSheets.writeSheetData(spreadsheetId, update.range, update.values);
         }
       }
 
@@ -4002,7 +4002,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get headers from sheet
       const headerRange = `${sheetName}!A1:ZZ1`;
-      const headerRows = await googleSheets.readSheetData(userId, spreadsheetId, headerRange);
+      const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
 
       if (!headerRows || headerRows.length === 0) {
         return res.status(400).json({ message: "Cannot read sheet headers" });
@@ -4019,7 +4019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update existing row
           const range = `${sheetName}!A${client.googleSheetRowId}`;
           const row = googleSheets.convertObjectsToSheetRows(headers, [client.data])[0];
-          await googleSheets.writeSheetData(userId, spreadsheetId, range, [row]);
+          await googleSheets.writeSheetData(spreadsheetId, range, [row]);
         }
       }
 
@@ -4050,7 +4050,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // STEP 1: Import from sheet
       const range = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(userId, spreadsheetId, range);
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
 
       if (rows.length === 0) {
         return res.status(400).json({ message: "Sheet is empty" });
@@ -4121,7 +4121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read data from store sheet
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
       if (storeRows.length === 0) {
         return res.status(404).json({ message: 'Store sheet is empty' });
@@ -4147,7 +4147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If tracker sheet exists, merge in tracker data (Notes, POC fields)
       if (trackerSheet) {
         const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-        const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+        const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
         if (trackerRows.length > 0) {
           const trackerHeaders = trackerRows[0];
@@ -4219,7 +4219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read data from store sheet to find the row
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
       if (storeRows.length === 0) {
         return res.status(404).json({ message: 'Store sheet is empty' });
@@ -4292,7 +4292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Execute batch update for Store Database
       if (storeBatchUpdates.length > 0) {
         for (const update of storeBatchUpdates) {
-          await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, update.range, update.values);
+          await googleSheets.writeSheetData(storeSheet.spreadsheetId, update.range, update.values);
         }
       }
 
@@ -4307,7 +4307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (trackerSheet) {
           // Read Commission Tracker data
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-          const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+          const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
           if (trackerRows.length > 0) {
             const trackerHeaders = trackerRows[0];
@@ -4344,7 +4344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               // Append the new row
               const appendRange = `${trackerSheet.sheetName}!A${newRowIndex}`;
-              await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newRow]);
+              await googleSheets.writeSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
               
               rowIndex = newRowIndex;
             }
@@ -4371,7 +4371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Execute batch update for Commission Tracker
               if (trackerBatchUpdates.length > 0) {
                 for (const update of trackerBatchUpdates) {
-                  await googleSheets.writeSheetData(userId, trackerSheet.spreadsheetId, update.range, update.values);
+                  await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
                 }
               }
             }
@@ -4399,7 +4399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read all store data
       const range = `${sheet.sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(userId, sheet.spreadsheetId, range);
+      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, range);
 
       if (rows.length === 0) {
         return res.json([]);
@@ -4451,7 +4451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read all store data
       const range = `${sheet.sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(userId, sheet.spreadsheetId, range);
+      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, range);
 
       if (rows.length === 0) {
         return res.json([]);
@@ -4524,7 +4524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read Store Database to find stores
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
       if (storeRows.length === 0) {
         return res.status(404).json({ message: 'Store Database is empty' });
@@ -4544,7 +4544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read Commission Tracker to check for existing rows
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       const trackerHeaders = trackerRows.length > 0 ? trackerRows[0] : [];
       const trackerLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
@@ -4593,7 +4593,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[CLAIM-MULTIPLE] Writing DBA "${dbaName}" to Store Database cell: ${cellRange}`);
           console.log(`[CLAIM-MULTIPLE] Spreadsheet ID: ${storeSheet.spreadsheetId}`);
           try {
-            await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[dbaName]]);
+            await googleSheets.writeSheetData(storeSheet.spreadsheetId, cellRange, [[dbaName]]);
             console.log(`[CLAIM-MULTIPLE] ✓ DBA write successful`);
           } catch (error: any) {
             console.error(`[CLAIM-MULTIPLE] ✗ DBA write failed:`, error.message);
@@ -4609,7 +4609,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[CLAIM-MULTIPLE] Writing Agent "${agentName}" to Store Database cell: ${cellRange}`);
           console.log(`[CLAIM-MULTIPLE] Spreadsheet ID: ${storeSheet.spreadsheetId}`);
           try {
-            await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, cellRange, [[agentName]]);
+            await googleSheets.writeSheetData(storeSheet.spreadsheetId, cellRange, [[agentName]]);
             console.log(`[CLAIM-MULTIPLE] ✓ Agent write successful`);
             updatedStoreCount++;
           } catch (error: any) {
@@ -4644,7 +4644,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[CLAIM-MULTIPLE] Appending 1 tracker row to Commission Tracker`);
           console.log(`[CLAIM-MULTIPLE] Append range: ${appendRange}`);
           console.log(`[CLAIM-MULTIPLE] Tracker headers:`, trackerHeaders);
-          await googleSheets.appendSheetData(userId, trackerSheet.spreadsheetId, appendRange, [newTrackerRow]);
+          await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newTrackerRow]);
           console.log(`[CLAIM-MULTIPLE] ✓ Commission Tracker append successful`);
           createdTrackerCount = 1;
         } else {
@@ -4694,7 +4694,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read all store data
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
       if (storeRows.length === 0) {
         return res.json({ stores: [] });
@@ -4778,7 +4778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read all store data
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
       if (storeRows.length === 0) {
         return res.status(404).json({ message: 'Store sheet is empty' });
@@ -4818,7 +4818,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Execute all updates
       if (batchUpdates.length > 0) {
         for (const update of batchUpdates) {
-          await googleSheets.writeSheetData(userId, storeSheet.spreadsheetId, update.range, update.values);
+          await googleSheets.writeSheetData(storeSheet.spreadsheetId, update.range, update.values);
         }
       }
 
@@ -4860,7 +4860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
-      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
       
       if (trackerRows.length <= 1) {
         return res.json({
@@ -5011,7 +5011,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
-      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
       
       if (trackerRows.length <= 1) {
         return res.json({
@@ -5095,12 +5095,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read Store Database to get total unique stores
       const storeRange = `${storeSheet.sheetName}!A:A`;
-      const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
       const totalClients = Math.max(0, storeRows.length - 1); // Exclude header row
 
       // Read Commission Tracker to calculate active clients and repeat order rate
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
-      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
       
       if (trackerRows.length <= 1) {
         return res.json({
@@ -5199,7 +5199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
-      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
       
       if (trackerRows.length <= 1) {
         return res.json({ trends: [] });
@@ -5298,7 +5298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
-      const trackerRows = await googleSheets.readSheetData(userId, trackerSheet.spreadsheetId, trackerRange);
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
       
       if (trackerRows.length <= 1) {
         return res.json({ topClients: [] });
@@ -5333,7 +5333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (storeSheet) {
         try {
           const storeRange = `${storeSheet.sheetName}!A:D`;
-          const storeRows = await googleSheets.readSheetData(userId, storeSheet.spreadsheetId, storeRange);
+          const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
           
           if (storeRows.length > 0) {
             const storeHeaders = storeRows[0];
@@ -8252,7 +8252,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Append to Google Sheet (A through S = 19 columns)
       const range = `${storeSheet.sheetName}!A:S`;
-      await googleSheets.appendSheetData(userId, storeSheet.spreadsheetId, range, [row]);
+      await googleSheets.appendSheetData(storeSheet.spreadsheetId, range, [row]);
 
       // Record this place_id to prevent duplicates in future searches
       await storage.recordImportedPlace(placeId);

@@ -1,11 +1,224 @@
 import { google } from 'googleapis';
 import { storage } from './storage';
 
-async function getAccessToken(userId: string) {
+// In-memory cache for system access token
+interface TokenCache {
+  accessToken: string;
+  expiryTime: number;
+}
+
+let systemTokenCache: TokenCache | null = null;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getSystemAccessToken() {
+  const integration = await storage.getSystemIntegration('google_sheets');
+  
+  if (!integration?.googleAccessToken || !integration?.googleRefreshToken) {
+    throw new Error('Google Sheets not configured. Admin must connect Google Sheets in Admin Dashboard.');
+  }
+
+  // Check if cached token is still valid (with 5-minute buffer)
+  const now = Date.now();
+  if (systemTokenCache && systemTokenCache.expiryTime > now + CACHE_TTL) {
+    return systemTokenCache.accessToken;
+  }
+
+  // Check if stored token is expired
+  const expiryTime = integration.googleTokenExpiry || 0;
+  const isExpired = expiryTime <= now + CACHE_TTL;
+
+  if (isExpired && integration.googleRefreshToken && integration.googleClientId && integration.googleClientSecret) {
+    // Refresh the token
+    const oauth2Client = new google.auth.OAuth2(
+      integration.googleClientId,
+      integration.googleClientSecret
+    );
+
+    oauth2Client.setCredentials({
+      refresh_token: integration.googleRefreshToken
+    });
+
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      
+      const newAccessToken = credentials.access_token!;
+      const newExpiryTime = credentials.expiry_date || (Date.now() + 3600000);
+
+      // Update database
+      await storage.updateSystemIntegration('google_sheets', {
+        googleAccessToken: newAccessToken,
+        googleTokenExpiry: newExpiryTime
+      });
+
+      // Update cache
+      systemTokenCache = {
+        accessToken: newAccessToken,
+        expiryTime: newExpiryTime
+      };
+
+      console.log('✅ Successfully refreshed system Google Sheets access token');
+      return newAccessToken;
+    } catch (error) {
+      console.error('❌ Failed to refresh Google Sheets access token:', error);
+      throw new Error('Failed to refresh Google Sheets access token. Admin must reconnect in Admin Dashboard.');
+    }
+  }
+
+  // Update cache with current token
+  systemTokenCache = {
+    accessToken: integration.googleAccessToken,
+    expiryTime: integration.googleTokenExpiry || (Date.now() + 3600000)
+  };
+
+  return integration.googleAccessToken;
+}
+
+// WARNING: Never cache this client.
+// Access tokens expire, so a new client must be created each time.
+// Always call this function again to get a fresh client.
+export async function getSystemGoogleSheetClient() {
+  const accessToken = await getSystemAccessToken();
+
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({
+    access_token: accessToken
+  });
+
+  return google.sheets({ version: 'v4', auth: oauth2Client });
+}
+
+// Check if system Google Sheets integration is configured
+export async function isSystemGoogleSheetsConfigured(): Promise<boolean> {
+  const integration = await storage.getSystemIntegration('google_sheets');
+  return !!(integration?.googleAccessToken && integration?.googleRefreshToken);
+}
+
+// Get system integration status (for admin UI)
+export async function getSystemGoogleSheetsStatus() {
+  const integration = await storage.getSystemIntegration('google_sheets');
+  
+  if (!integration?.googleAccessToken) {
+    return {
+      connected: false,
+      connectedByUserId: null,
+      connectedByEmail: null,
+      connectedAt: null
+    };
+  }
+
+  return {
+    connected: true,
+    connectedByUserId: integration.connectedByUserId,
+    connectedByEmail: integration.connectedByEmail,
+    connectedAt: integration.createdAt
+  };
+}
+
+// Clear cache (useful for testing or manual invalidation)
+export function clearSystemTokenCache() {
+  systemTokenCache = null;
+}
+
+// Read data from Google Sheet (system-wide)
+export async function readSheetData(spreadsheetId: string, range: string) {
+  const sheets = await getSystemGoogleSheetClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+  });
+  return response.data.values || [];
+}
+
+// Write data to Google Sheet (system-wide)
+export async function writeSheetData(spreadsheetId: string, range: string, values: any[][]) {
+  const sheets = await getSystemGoogleSheetClient();
+  const response = await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range,
+    valueInputOption: 'RAW',
+    requestBody: {
+      values,
+    },
+  });
+  return response.data;
+}
+
+// Append data to Google Sheet (system-wide)
+export async function appendSheetData(spreadsheetId: string, range: string, values: any[][]) {
+  const sheets = await getSystemGoogleSheetClient();
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values,
+    },
+  });
+  return response.data;
+}
+
+// Get spreadsheet metadata (sheet names, etc.) (system-wide)
+export async function getSpreadsheetInfo(spreadsheetId: string) {
+  const sheets = await getSystemGoogleSheetClient();
+  const response = await sheets.spreadsheets.get({
+    spreadsheetId,
+  });
+  return response.data;
+}
+
+// List spreadsheets (system-wide)
+export async function listSpreadsheets() {
+  const accessToken = await getSystemAccessToken();
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({
+    access_token: accessToken
+  });
+
+  const drive = google.drive({ version: 'v3', auth: oauth2Client });
+  const response = await drive.files.list({
+    q: "mimeType='application/vnd.google-apps.spreadsheet'",
+    pageSize: 100,
+    fields: 'files(id, name, modifiedTime)',
+    orderBy: 'modifiedTime desc',
+  });
+
+  return response.data.files || [];
+}
+
+// Batch get multiple ranges (system-wide)
+export async function batchGetSheetData(spreadsheetId: string, ranges: string[]) {
+  const sheets = await getSystemGoogleSheetClient();
+  const response = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId,
+    ranges,
+  });
+  return response.data.valueRanges || [];
+}
+
+// Batch update multiple ranges (system-wide)
+export async function batchUpdateSheetData(spreadsheetId: string, data: Array<{ range: string; values: any[][] }>) {
+  const sheets = await getSystemGoogleSheetClient();
+  const response = await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: data.map(item => ({
+        range: item.range,
+        values: item.values
+      }))
+    }
+  });
+  return response.data;
+}
+
+// --- Legacy per-user functions (for Gmail/Calendar that remain per-user) ---
+
+async function getUserAccessToken(userId: string) {
   const integration = await storage.getUserIntegration(userId);
   
   if (!integration?.googleAccessToken || !integration?.googleRefreshToken) {
-    throw new Error('Google OAuth not configured. Please connect Google Sheets in Settings.');
+    throw new Error('Google OAuth not configured. Please connect Google in Settings.');
   }
 
   // Check if token is expired (with 5-minute buffer)
@@ -14,7 +227,7 @@ async function getAccessToken(userId: string) {
   const isExpired = expiryTime <= now + (5 * 60 * 1000);
 
   if (isExpired && integration.googleRefreshToken && integration.googleClientId && integration.googleClientSecret) {
-    // Refresh the token (no redirect URI needed for refresh)
+    // Refresh the token
     const oauth2Client = new google.auth.OAuth2(
       integration.googleClientId,
       integration.googleClientSecret
@@ -33,143 +246,28 @@ async function getAccessToken(userId: string) {
         googleTokenExpiry: credentials.expiry_date || (Date.now() + 3600000)
       });
 
-      console.log('Successfully refreshed Google access token for user:', userId);
+      console.log('✅ Successfully refreshed user Google access token for user:', userId);
       return credentials.access_token!;
     } catch (error) {
-      console.error('Failed to refresh Google access token:', error);
-      throw new Error('Failed to refresh Google access token. Please reconnect Google Sheets in Settings.');
+      console.error('❌ Failed to refresh user Google access token:', error);
+      throw new Error('Failed to refresh Google access token. Please reconnect Google in Settings.');
     }
   }
 
   return integration.googleAccessToken;
 }
 
-// WARNING: Never cache this client.
-// Access tokens expire, so a new client must be created each time.
-// Always call this function again to get a fresh client.
-export async function getUncachableGoogleSheetClient(userId: string) {
-  const accessToken = await getAccessToken(userId);
+export async function getUserGoogleClient(userId: string) {
+  const accessToken = await getUserAccessToken(userId);
 
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({
     access_token: accessToken
   });
 
-  return google.sheets({ version: 'v4', auth: oauth2Client });
-}
-
-// Read data from Google Sheet
-export async function readSheetData(userId: string, spreadsheetId: string, range: string) {
-  const sheets = await getUncachableGoogleSheetClient(userId);
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range,
-  });
-  return response.data.values || [];
-}
-
-// Write data to Google Sheet
-export async function writeSheetData(userId: string, spreadsheetId: string, range: string, values: any[][]) {
-  const sheets = await getUncachableGoogleSheetClient(userId);
-  const response = await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range,
-    valueInputOption: 'RAW',
-    requestBody: {
-      values,
-    },
-  });
-  return response.data;
-}
-
-// Append data to Google Sheet
-export async function appendSheetData(userId: string, spreadsheetId: string, range: string, values: any[][]) {
-  const sheets = await getUncachableGoogleSheetClient(userId);
-  const response = await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: {
-      values,
-    },
-  });
-  return response.data;
-}
-
-// Get spreadsheet metadata (sheet names, etc.)
-export async function getSpreadsheetInfo(userId: string, spreadsheetId: string) {
-  const sheets = await getUncachableGoogleSheetClient(userId);
-  const response = await sheets.spreadsheets.get({
-    spreadsheetId,
-  });
-  return response.data;
-}
-
-// List user's spreadsheets
-export async function listSpreadsheets(userId: string) {
-  const accessToken = await getAccessToken(userId);
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: accessToken
-  });
-
-  const drive = google.drive({ version: 'v3', auth: oauth2Client });
-  const response = await drive.files.list({
-    q: "mimeType='application/vnd.google-apps.spreadsheet'",
-    pageSize: 100,
-    fields: 'files(id, name, modifiedTime)',
-    orderBy: 'modifiedTime desc',
-  });
-
-  return response.data.files || [];
-}
-
-// Parse sheet data into objects based on headers
-export function parseSheetDataToObjects(rows: any[][], uniqueIdentifierColumn: string) {
-  if (rows.length === 0) return [];
-  
-  const headers = rows[0];
-  const uniqueIdIndex = headers.findIndex((h: string) => h.toLowerCase() === uniqueIdentifierColumn.toLowerCase());
-  
-  if (uniqueIdIndex === -1) {
-    throw new Error(`Column "${uniqueIdentifierColumn}" not found in sheet headers`);
-  }
-
-  const data: Array<{ uniqueId: string; rowIndex: number; data: Record<string, any> }> = [];
-  
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const obj: Record<string, any> = {};
-    
-    headers.forEach((header: string, index: number) => {
-      obj[header] = row[index] || '';
-    });
-
-    const uniqueId = row[uniqueIdIndex];
-    if (uniqueId) {
-      data.push({
-        uniqueId,
-        rowIndex: i + 1, // 1-indexed for Google Sheets
-        data: obj,
-      });
-    }
-  }
-
-  return data;
-}
-
-// Convert objects back to sheet rows
-export function convertObjectsToSheetRows(headers: string[], objects: Array<Record<string, any>>) {
-  const rows: any[][] = [];
-  
-  objects.forEach(obj => {
-    const row: any[] = [];
-    headers.forEach(header => {
-      row.push(obj[header] || '');
-    });
-    rows.push(row);
-  });
-
-  return rows;
+  return {
+    gmail: google.gmail({ version: 'v1', auth: oauth2Client }),
+    calendar: google.calendar({ version: 'v3', auth: oauth2Client }),
+    oauth2Client
+  };
 }
