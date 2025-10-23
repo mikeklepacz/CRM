@@ -7471,6 +7471,48 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // User Tags routes - personal tag collection
+  app.get('/api/user-tags', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const tags = await storage.getUserTags(userId);
+      res.json(tags);
+    } catch (error: any) {
+      console.error('Error fetching user tags:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch user tags' });
+    }
+  });
+
+  app.post('/api/user-tags', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { tag } = req.body;
+      
+      if (!tag || typeof tag !== 'string' || !tag.trim()) {
+        return res.status(400).json({ message: 'Tag is required' });
+      }
+      
+      const newTag = await storage.addUserTag(userId, tag);
+      res.json(newTag);
+    } catch (error: any) {
+      console.error('Error adding user tag:', error);
+      res.status(500).json({ message: error.message || 'Failed to add user tag' });
+    }
+  });
+
+  app.delete('/api/user-tags/:tag', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { tag } = req.params;
+      
+      await storage.removeUserTag(userId, decodeURIComponent(tag));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting user tag:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete user tag' });
+    }
+  });
+
   // Webhook endpoint for Google Calendar push notifications
   app.post('/api/webhooks/google-calendar', async (req, res) => {
     try {

@@ -18,6 +18,7 @@ import {
   projects,
   conversations,
   templates,
+  userTags,
   categories,
   importedPlaces,
   searchHistory,
@@ -57,6 +58,8 @@ import {
   type InsertConversation,
   type Template,
   type InsertTemplate,
+  type UserTag,
+  type InsertUserTag,
   type Category,
   type InsertCategory,
   type SearchHistory,
@@ -195,6 +198,11 @@ export interface IStorage {
   updateTemplate(id: string, updates: Partial<InsertTemplate>): Promise<Template>;
   deleteTemplate(id: string): Promise<void>;
   getAllTemplateTags(): Promise<string[]>; // Get all unique tags across all templates
+  
+  // User Tag operations
+  getUserTags(userId: string): Promise<UserTag[]>;
+  addUserTag(userId: string, tag: string): Promise<UserTag>;
+  removeUserTag(userId: string, tag: string): Promise<void>;
   
   // Category operations
   getAllCategories(): Promise<Category[]>;
@@ -1145,6 +1153,41 @@ export class DatabaseStorage implements IStorage {
     });
     
     return Array.from(tagsSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  }
+
+  // User Tag operations
+  async getUserTags(userId: string): Promise<UserTag[]> {
+    return await db
+      .select()
+      .from(userTags)
+      .where(eq(userTags.userId, userId))
+      .orderBy(userTags.tag);
+  }
+
+  async addUserTag(userId: string, tag: string): Promise<UserTag> {
+    const trimmedTag = tag.trim().toLowerCase();
+    
+    const existing = await db
+      .select()
+      .from(userTags)
+      .where(and(eq(userTags.userId, userId), eq(userTags.tag, trimmedTag)))
+      .limit(1);
+    
+    if (existing.length > 0) {
+      return existing[0];
+    }
+    
+    const [newTag] = await db
+      .insert(userTags)
+      .values({ userId, tag: trimmedTag })
+      .returning();
+    return newTag;
+  }
+
+  async removeUserTag(userId: string, tag: string): Promise<void> {
+    await db
+      .delete(userTags)
+      .where(and(eq(userTags.userId, userId), eq(userTags.tag, tag.trim().toLowerCase())));
   }
 
   // Category operations
