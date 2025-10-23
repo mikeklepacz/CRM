@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useChatPanel } from "@/hooks/useChatPanel";
 import { getPageContext } from "@/hooks/usePageContext";
+import { useAuth } from "@/hooks/useAuth";
 import { ConversationContextMenu } from "./conversation-context-menu";
 import {
   Bot,
@@ -59,9 +60,102 @@ import type {
   ChatMessage as ChatMessageType,
 } from "@shared/schema";
 
-export function ChatPanelGlobal() {
+// Helper function to detect and parse email content from AI messages
+function parseEmailFromMessage(content: string): { to: string; subject: string; body: string } | null {
+  // Look for email pattern: To:, Subject:, and Body: (or Message:)
+  const toMatch = content.match(/To:\s*(.+?)(?:\n|$)/i);
+  const subjectMatch = content.match(/Subject:\s*(.+?)(?:\n|$)/i);
+  
+  // Match body from "Body:" or "Message:" to the end of content (captures multi-paragraph emails)
+  const bodyMatch = content.match(/(?:Body|Message):\s*\n([\s\S]+)$/i);
+
+  if (toMatch && subjectMatch && bodyMatch) {
+    return {
+      to: toMatch[1].trim(),
+      subject: subjectMatch[1].trim(),
+      body: bodyMatch[1].trim(),
+    };
+  }
+  return null;
+}
+
+// Helper function to replace template variables with actual values
+function replaceTemplateVariables(
+  content: string,
+  storeContext?: {
+    name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    phone?: string;
+    website?: string;
+    email?: string;
+    point_of_contact?: string;
+    poc_email?: string;
+    poc_phone?: string;
+  },
+  user?: any
+) {
+  let result = content;
+  
+  // Get user data (agent info)
+  const agentName = user?.username || "Your Name";
+  const agentEmail = user?.email || "your@email.com";
+  const agentPhone = (user as any)?.phone || "";
+  const agentMeetingLink = (user as any)?.meetingLink || "";
+  
+  // Replace store-related variables
+  if (storeContext) {
+    // Smart email fallback: Check POC email first, then fall back to general email
+    const smartEmail = storeContext.poc_email || storeContext.email || "";
+    
+    result = result.replace(/\{\{storeName\}\}/g, storeContext.name || "");
+    result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || "");
+    result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || "");
+    result = result.replace(/\{\{storeState\}\}/g, storeContext.state || "");
+    result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || "");
+    result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || "");
+    result = result.replace(/\{\{pocName\}\}/g, storeContext.point_of_contact || "");
+    // Both pocEmail and email use smart fallback
+    result = result.replace(/\{\{pocEmail\}\}/g, smartEmail);
+    result = result.replace(/\{\{email\}\}/g, smartEmail);
+    result = result.replace(/\{\{pocPhone\}\}/g, storeContext.poc_phone || "");
+  }
+  
+  // Replace agent variables
+  result = result.replace(/\{\{agentName\}\}/g, agentName);
+  result = result.replace(/\{\{agentEmail\}\}/g, agentEmail);
+  result = result.replace(/\{\{agentPhone\}\}/g, agentPhone);
+  result = result.replace(/\{\{agentMeetingLink\}\}/g, agentMeetingLink);
+  
+  // Replace date/time variables
+  const now = new Date();
+  result = result.replace(/\{\{currentDate\}\}/g, now.toLocaleDateString());
+  result = result.replace(/\{\{currentTime\}\}/g, now.toLocaleTimeString());
+  
+  return result;
+}
+
+export function ChatPanelGlobal({ storeContext: propStoreContext }: {
+  storeContext?: {
+    name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    phone?: string;
+    website?: string;
+    email?: string;
+    point_of_contact?: string;
+    poc_email?: string;
+    poc_phone?: string;
+  };
+} = {}) {
   const { isPanelOpen, closePanel } = useChatPanel();
   const { toast } = useToast();
+  const { user } = useAuth();
+  
+  // Get storeContext from prop or page context
+  const storeContext = propStoreContext || getPageContext();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -208,6 +302,25 @@ export function ChatPanelGlobal() {
     },
   });
 
+  const createGmailDraftMutation = useMutation({
+    mutationFn: async ({ to, subject, body }: { to: string; subject: string; body: string }) => {
+      return await apiRequest("POST", "/api/gmail/create-draft", { to, subject, body });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: data.message || "Gmail draft created successfully!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create Gmail draft. Make sure Gmail is connected in Settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const createTemplateMutation = useMutation({
     mutationFn: async (template: { title: string; content: string; tags: string[] }) => {
       return await apiRequest("POST", "/api/templates", template);
@@ -266,8 +379,10 @@ export function ChatPanelGlobal() {
   };
 
   const handleCopyTemplate = async (content: string) => {
+    // Fill template variables before copying
+    const filledContent = replaceTemplateVariables(content, storeContext, user);
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(filledContent);
       toast({ title: "Success", description: "Template copied to clipboard" });
     } catch {
       toast({
@@ -275,6 +390,34 @@ export function ChatPanelGlobal() {
         description: "Failed to copy to clipboard",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleEmailTemplate = (template: Template) => {
+    // Fill template variables
+    const filledContent = replaceTemplateVariables(template.content, storeContext, user);
+    
+    // Try to parse email format
+    const emailData = parseEmailFromMessage(filledContent);
+    
+    if (emailData) {
+      // Create Gmail draft
+      createGmailDraftMutation.mutate(emailData);
+    } else {
+      // Fallback: try to use store email or show error
+      const email = storeContext?.poc_email || storeContext?.email;
+      if (email) {
+        const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(
+          template.title
+        )}&body=${encodeURIComponent(filledContent)}`;
+        window.location.href = mailtoLink;
+      } else {
+        toast({
+          title: "Error",
+          description: "No email format detected and no recipient email available",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -677,42 +820,56 @@ export function ChatPanelGlobal() {
 
                       {/* Templates List */}
                       <div className="space-y-2">
-                        {filteredTemplates.map((template) => (
-                          <div
-                            key={template.id}
-                            className="p-3 border rounded-lg hover-elevate cursor-pointer"
-                            onClick={() => handleCopyTemplate(template.content)}
-                            data-testid={`template-item-${template.id}`}
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <h5 className="font-semibold text-sm">{template.title}</h5>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCopyTemplate(template.content);
-                                }}
-                                className="h-6 w-6"
-                                data-testid={`button-copy-template-${template.id}`}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                              {template.content}
-                            </p>
-                            {template.tags && template.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {template.tags.map((tag, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
+                        {filteredTemplates.map((template) => {
+                          const isEmailType = template.tags?.includes("Email");
+                          return (
+                            <div
+                              key={template.id}
+                              className="p-3 border rounded-lg"
+                              data-testid={`template-item-${template.id}`}
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <h5 className="font-semibold text-sm">{template.title}</h5>
                               </div>
-                            )}
-                          </div>
-                        ))}
+                              <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                                {template.content}
+                              </p>
+                              {template.tags && template.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                  {template.tags.map((tag, idx) => (
+                                    <Badge key={idx} variant="outline" className="text-xs">
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="flex gap-2">
+                                {isEmailType && (
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => handleEmailTemplate(template)}
+                                    className="flex-1"
+                                    data-testid={`button-email-template-${template.id}`}
+                                  >
+                                    <Mail className="h-3 w-3 mr-1" />
+                                    Email
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCopyTemplate(template.content)}
+                                  className="flex-1"
+                                  data-testid={`button-copy-template-${template.id}`}
+                                >
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Copy
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </CollapsibleContent>
