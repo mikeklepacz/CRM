@@ -1166,6 +1166,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { search, nameFilter, cityFilter, states, cities, status, showMyStoresOnly, category } = req.body;
       const user = req.currentUser;
       
+      // DEBUG: Log received filters
+      console.log('🔍 [EXPORT FILTERS RECEIVED]:', JSON.stringify({
+        search,
+        nameFilter,
+        cityFilter,
+        states,
+        cities,
+        status,
+        showMyStoresOnly,
+        category
+      }, null, 2));
+      
       // Build filters
       const filters: any = {
         search,
@@ -1184,6 +1196,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const clients = await storage.getFilteredClients(filters);
+      console.log(`✅ [EXPORT RESULTS]: Returning ${clients.length} clients`);
+      if (clients.length <= 5) {
+        console.log('📋 [EXPORT CLIENT NAMES]:', clients.map(c => c.data?.Name || c.data?.name || 'Unknown'));
+      }
       res.json(clients);
     } catch (error: any) {
       console.error("Error fetching filtered clients:", error);
