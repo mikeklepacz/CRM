@@ -15,7 +15,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Bot,
@@ -90,6 +98,7 @@ function parseEmailFromMessage(content: string): { to: string; subject: string; 
 
 export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: InlineAIChatEnhancedProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -114,6 +123,103 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const [builderContent, setBuilderContent] = useState("");
   const [builderTags, setBuilderTags] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<{ title: string; content: string } | null>(null);
+  
+  // Available variables for templates
+  const availableVariables = [
+    { name: "storeName", description: "Store/business name" },
+    { name: "storeAddress", description: "Store address" },
+    { name: "storeCity", description: "City" },
+    { name: "storeState", description: "State" },
+    { name: "storePhone", description: "Store phone number" },
+    { name: "storeWebsite", description: "Store website" },
+    { name: "pocName", description: "Point of contact name" },
+    { name: "pocEmail", description: "POC email address" },
+    { name: "pocPhone", description: "POC phone number" },
+    { name: "agentName", description: "Your name" },
+    { name: "agentEmail", description: "Your email" },
+    { name: "agentPhone", description: "Your phone" },
+    { name: "currentDate", description: "Current date" },
+    { name: "currentTime", description: "Current time" },
+  ];
+
+  const insertVariable = (variableName: string) => {
+    if (!contentTextareaRef.current) return;
+    
+    const textarea = contentTextareaRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = builderContent;
+    const before = text.substring(0, start);
+    const after = text.substring(end);
+    const variable = `{{${variableName}}}`;
+    
+    setBuilderContent(before + variable + after);
+    
+    // Set cursor position after inserted variable
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + variable.length, start + variable.length);
+    }, 0);
+  };
+
+  const copyMessageToClipboard = (content: string) => {
+    navigator.clipboard.writeText(content);
+    toast({ title: "Copied", description: "Message copied to clipboard" });
+  };
+
+  const makeTemplateFromMessage = (content: string) => {
+    setBuilderContent(content);
+    setBuilderTitle("");
+    setBuilderTags("");
+    setEditingTemplateId(null);
+    setTemplateBuilderOpen(true);
+    setTemplateBuilderTab("build");
+    toast({ title: "Template started", description: "Edit and save your template" });
+  };
+
+  const replaceTemplateVariables = (content: string) => {
+    let result = content;
+    
+    // Get user data (agent info)
+    const agentName = user?.username || "Your Name";
+    const agentEmail = user?.email || "your@email.com";
+    const agentPhone = ""; // Not available in user object
+    
+    // Replace store-related variables
+    if (storeContext) {
+      result = result.replace(/\{\{storeName\}\}/g, storeContext.name || "");
+      result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || "");
+      result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || "");
+      result = result.replace(/\{\{storeState\}\}/g, storeContext.state || "");
+      result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || "");
+      result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || "");
+      result = result.replace(/\{\{pocName\}\}/g, storeContext.point_of_contact || "");
+      result = result.replace(/\{\{pocEmail\}\}/g, storeContext.poc_email || "");
+      result = result.replace(/\{\{pocPhone\}\}/g, storeContext.poc_phone || "");
+    }
+    
+    // Replace agent variables
+    result = result.replace(/\{\{agentName\}\}/g, agentName);
+    result = result.replace(/\{\{agentEmail\}\}/g, agentEmail);
+    result = result.replace(/\{\{agentPhone\}\}/g, agentPhone);
+    
+    // Replace date/time variables
+    const now = new Date();
+    result = result.replace(/\{\{currentDate\}\}/g, now.toLocaleDateString());
+    result = result.replace(/\{\{currentTime\}\}/g, now.toLocaleTimeString());
+    
+    return result;
+  };
+
+  const useTemplate = (template: { title: string; content: string }) => {
+    const renderedContent = replaceTemplateVariables(template.content);
+    setPreviewTemplate({ title: template.title, content: renderedContent });
+    setTemplatePreviewOpen(true);
+  };
 
   // Queries
   const { data: projects = [] } = useQuery<Project[]>({
@@ -289,7 +395,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       setNewTemplateTitle("");
       setNewTemplateContent("");
       setNewTemplateTags("");
+      setBuilderTitle("");
+      setBuilderContent("");
+      setBuilderTags("");
+      setEditingTemplateId(null);
       toast({ title: "Success", description: "Template saved" });
+    },
+  });
+
+  const updateTemplateMutation = useMutation({
+    mutationFn: async ({ id, template }: { id: string; template: { title: string; content: string; tags: string[] } }) => {
+      return await apiRequest("PATCH", `/api/templates/${id}`, template);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      setBuilderTitle("");
+      setBuilderContent("");
+      setBuilderTags("");
+      setEditingTemplateId(null);
+      toast({ title: "Success", description: "Template updated" });
     },
   });
 
@@ -753,15 +877,35 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                         msg.role === "user" ? "w-full" : ""
                       }`}
                     >
-                      <div
-                        className={`rounded-lg p-3 ${
-                          msg.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        }`}
-                      >
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      </div>
+                      {msg.role === "assistant" ? (
+                        <ContextMenu>
+                          <ContextMenuTrigger>
+                            <div className="rounded-lg p-3 bg-muted">
+                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            </div>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem
+                              onClick={() => copyMessageToClipboard(msg.content)}
+                              data-testid="context-menu-copy"
+                            >
+                              <Copy className="mr-2 h-4 w-4" />
+                              Copy
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              onClick={() => makeTemplateFromMessage(msg.content)}
+                              data-testid="context-menu-make-template"
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              Make Template
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
+                      ) : (
+                        <div className="rounded-lg p-3 bg-primary text-primary-foreground">
+                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        </div>
+                      )}
                       {emailData && (
                         <EmailPreview
                           to={emailData.to}
@@ -872,15 +1016,42 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-semibold">Content</label>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-testid="button-insert-variable"
-                      >
-                        Insert Variable
-                      </Button>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="button-insert-variable"
+                          >
+                            Insert Variable
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80" align="end">
+                          <div className="space-y-2">
+                            <h4 className="font-semibold text-sm">Available Variables</h4>
+                            <div className="max-h-80 overflow-y-auto space-y-1">
+                              {availableVariables.map((variable) => (
+                                <button
+                                  key={variable.name}
+                                  onClick={() => insertVariable(variable.name)}
+                                  className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                  data-testid={`insert-variable-${variable.name}`}
+                                >
+                                  <div className="font-mono text-sm text-primary">
+                                    {`{{${variable.name}}}`}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {variable.description}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <Textarea
+                      ref={contentTextareaRef}
                       placeholder="Template content with {{variables}}..."
                       value={builderContent}
                       onChange={(e) => setBuilderContent(e.target.value)}
@@ -921,7 +1092,30 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                 </Button>
                 <Button
                   className="flex-1"
-                  disabled={!builderTitle.trim() || !builderContent.trim()}
+                  disabled={
+                    !builderTitle.trim() || 
+                    !builderContent.trim() || 
+                    createTemplateMutation.isPending || 
+                    updateTemplateMutation.isPending
+                  }
+                  onClick={() => {
+                    const tags = builderTags
+                      .split(",")
+                      .map((tag) => tag.trim())
+                      .filter((tag) => tag.length > 0);
+
+                    const templateData = {
+                      title: builderTitle,
+                      content: builderContent,
+                      tags,
+                    };
+
+                    if (editingTemplateId) {
+                      updateTemplateMutation.mutate({ id: editingTemplateId, template: templateData });
+                    } else {
+                      createTemplateMutation.mutate(templateData);
+                    }
+                  }}
                   data-testid="button-save-template-builder"
                 >
                   {editingTemplateId ? "Update Template" : "Save Template"}
@@ -943,16 +1137,40 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   />
                 </div>
 
+                {/* Tag Filter */}
+                <div className="flex flex-wrap gap-2">
+                  <Badge
+                    variant={selectedTagFilter === null ? "default" : "outline"}
+                    className="cursor-pointer hover-elevate"
+                    onClick={() => setSelectedTagFilter(null)}
+                    data-testid="tag-filter-all"
+                  >
+                    All
+                  </Badge>
+                  {Array.from(new Set(templates.flatMap((t) => t.tags || []))).map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant={selectedTagFilter === tag ? "default" : "outline"}
+                      className="cursor-pointer hover-elevate"
+                      onClick={() => setSelectedTagFilter(tag)}
+                      data-testid={`tag-filter-${tag}`}
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+
                 <ScrollArea className="flex-1">
                   <div className="space-y-2 pr-4">
                     {templates
                       .filter(
                         (template) =>
-                          template.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                          (template.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
                           template.content.toLowerCase().includes(templateSearch.toLowerCase()) ||
                           template.tags?.some((tag) =>
                             tag.toLowerCase().includes(templateSearch.toLowerCase())
-                          )
+                          )) &&
+                          (selectedTagFilter === null || template.tags?.includes(selectedTagFilter))
                       )
                       .map((template) => (
                         <div
@@ -966,6 +1184,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                onClick={() => useTemplate(template)}
                                 data-testid={`button-use-template-${template.id}`}
                               >
                                 Use
@@ -973,6 +1192,13 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                onClick={() => {
+                                  setBuilderTitle(template.title);
+                                  setBuilderContent(template.content);
+                                  setBuilderTags(template.tags?.join(", ") || "");
+                                  setEditingTemplateId(template.id);
+                                  setTemplateBuilderTab("build");
+                                }}
                                 data-testid={`button-edit-template-${template.id}`}
                               >
                                 Edit
@@ -1017,6 +1243,52 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
               </div>
             </TabsContent>
           </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Preview Dialog */}
+      <Dialog open={templatePreviewOpen} onOpenChange={setTemplatePreviewOpen}>
+        <DialogContent className="max-w-3xl" data-testid="dialog-template-preview">
+          <DialogHeader>
+            <DialogTitle>{previewTemplate?.title || "Template Preview"}</DialogTitle>
+            <DialogDescription>
+              Rendered template with your store context data
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 border rounded-lg bg-muted">
+              <p className="text-sm whitespace-pre-wrap">{previewTemplate?.content}</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setTemplatePreviewOpen(false)}
+              data-testid="button-close-preview"
+            >
+              Close
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (previewTemplate) {
+                  navigator.clipboard.writeText(previewTemplate.content);
+                  toast({ title: "Copied", description: "Template content copied to clipboard" });
+                }
+              }}
+              data-testid="button-copy-preview"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copy
+            </Button>
+            {previewTemplate && parseEmailFromMessage(previewTemplate.content) && (
+              <EmailPreview
+                to={parseEmailFromMessage(previewTemplate.content)!.to}
+                subject={parseEmailFromMessage(previewTemplate.content)!.subject}
+                body={parseEmailFromMessage(previewTemplate.content)!.body}
+              />
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
