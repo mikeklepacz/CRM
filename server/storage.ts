@@ -402,7 +402,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(clients.createdAt);
   }
 
-  async getFilteredClients(filters: { search?: string; states?: string[]; status?: string[]; category?: string; agentId?: string }): Promise<Client[]> {
+  async getFilteredClients(filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; status?: string[]; category?: string; agentId?: string }): Promise<Client[]> {
     let query = db.select().from(clients);
     const conditions: any[] = [];
 
@@ -432,7 +432,29 @@ export class DatabaseStorage implements IStorage {
       conditions.push(sql`(${sql.join(stateConditions, sql` OR `)})`);
     }
 
-    // Search filter (check multiple JSONB fields)
+    // Filter by name (check JSONB data.Name field)
+    if (filters.nameFilter && filters.nameFilter.trim()) {
+      const nameTerm = `%${filters.nameFilter.toLowerCase()}%`;
+      conditions.push(
+        sql`(
+          LOWER(${clients.data}->>'Name') LIKE ${nameTerm} OR
+          LOWER(${clients.data}->>'name') LIKE ${nameTerm}
+        )`
+      );
+    }
+
+    // Filter by city (check JSONB data.City field)
+    if (filters.cityFilter && filters.cityFilter.trim()) {
+      const cityTerm = `%${filters.cityFilter.toLowerCase()}%`;
+      conditions.push(
+        sql`(
+          LOWER(${clients.data}->>'City') LIKE ${cityTerm} OR
+          LOWER(${clients.data}->>'city') LIKE ${cityTerm}
+        )`
+      );
+    }
+
+    // Global search filter (check multiple JSONB fields)
     if (filters.search && filters.search.trim()) {
       const searchTerm = `%${filters.search.toLowerCase()}%`;
       conditions.push(
