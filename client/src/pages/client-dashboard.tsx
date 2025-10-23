@@ -2005,14 +2005,19 @@ export default function ClientDashboard() {
                       <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
                         <Checkbox
                           id="canada-toggle"
-                          checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state))}
+                          checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state)) && 
+                                   allStates.filter(state => !isCanadianProvince(state)).every(state => !selectedStates.has(state))}
                           onCheckedChange={(checked) => {
                             const canadianStates = allStates.filter(isCanadianProvince);
-                            const newSelected = new Set(selectedStates);
+                            const usStates = allStates.filter(state => !isCanadianProvince(state));
+                            const newSelected = new Set<string>();
+                            
                             if (checked) {
+                              // Show only Canada, hide US
                               canadianStates.forEach(state => newSelected.add(state));
                             } else {
-                              canadianStates.forEach(state => newSelected.delete(state));
+                              // Show only US, hide Canada
+                              usStates.forEach(state => newSelected.add(state));
                             }
                             setSelectedStates(newSelected);
                           }}
