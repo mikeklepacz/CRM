@@ -402,7 +402,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(clients.createdAt);
   }
 
-  async getFilteredClients(filters: { search?: string; states?: string[]; status?: string; category?: string; agentId?: string }): Promise<Client[]> {
+  async getFilteredClients(filters: { search?: string; states?: string[]; status?: string[]; category?: string; agentId?: string }): Promise<Client[]> {
     let query = db.select().from(clients);
     const conditions: any[] = [];
 
@@ -416,9 +416,12 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(clients.category, filters.category));
     }
 
-    // Filter by status
-    if (filters.status) {
-      conditions.push(eq(clients.status, filters.status));
+    // Filter by status (check JSONB data.Status field, handle as array)
+    if (filters.status && Array.isArray(filters.status) && filters.status.length > 0) {
+      const statusConditions = filters.status.map(status =>
+        sql`${clients.data}->>'Status' = ${status} OR ${clients.data}->>'status' = ${status}`
+      );
+      conditions.push(sql`(${sql.join(statusConditions, sql` OR `)})`);
     }
 
     // Filter by states (check JSONB data.State field)
