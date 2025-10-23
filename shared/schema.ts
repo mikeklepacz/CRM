@@ -401,6 +401,16 @@ export const templates = pgTable("templates", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// User Tags table - personal tag collection per user for template organization
+export const userTags = pgTable("user_tags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  tag: varchar("tag", { length: 100 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_user_tags_user_id").on(table.userId),
+]);
+
 // Categories table - global categories for Map Search filtering
 export const categories = pgTable("categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -452,6 +462,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   conversations: many(conversations),
   chatMessages: many(chatMessages),
   templatesCreated: many(templates),
+  userTags: many(userTags),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -488,6 +499,13 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
 export const templatesRelations = relations(templates, ({ one }) => ({
   user: one(users, {
     fields: [templates.userId],
+    references: [users.id],
+  }),
+}));
+
+export const userTagsRelations = relations(userTags, ({ one }) => ({
+  user: one(users, {
+    fields: [userTags.userId],
     references: [users.id],
   }),
 }));
@@ -660,6 +678,11 @@ export const insertTemplateSchema = createInsertSchema(templates).omit({
   updatedAt: true,
 });
 
+export const insertUserTagSchema = createInsertSchema(userTags).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
   createdAt: true,
@@ -713,6 +736,8 @@ export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type Template = typeof templates.$inferSelect;
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
+export type UserTag = typeof userTags.$inferSelect;
+export type InsertUserTag = z.infer<typeof insertUserTagSchema>;
 export type Category = typeof categories.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type SearchHistory = typeof searchHistory.$inferSelect;
