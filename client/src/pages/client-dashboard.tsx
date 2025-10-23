@@ -3347,10 +3347,13 @@ export default function ClientDashboard() {
                   });
 
                   if (!response.ok) {
-                    throw new Error('Failed to fetch clients');
+                    const errorText = await response.text();
+                    console.error('vCard Export Error:', response.status, errorText);
+                    throw new Error(`Failed to fetch clients: ${response.status}`);
                   }
 
                   const clients = await response.json();
+                  console.log('✅ Fetched clients for vCard:', clients.length);
 
                   generateAndDownloadVCard(
                     clients,
@@ -3364,9 +3367,10 @@ export default function ClientDashboard() {
                     description: `Exported ${clients.length} contacts to vCard`,
                   });
                 } catch (error) {
+                  console.error('vCard Export Error:', error);
                   toast({
                     title: "Export Failed",
-                    description: "Failed to fetch clients from database",
+                    description: error instanceof Error ? error.message : "Failed to fetch clients from database",
                     variant: "destructive",
                   });
                 }
