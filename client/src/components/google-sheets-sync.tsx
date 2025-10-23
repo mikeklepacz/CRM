@@ -139,17 +139,28 @@ export function GoogleSheetsSync() {
 
   const importMutation = useMutation({
     mutationFn: async (sheetId: string) => {
-      return await apiRequest("POST", `/api/sheets/${sheetId}/sync/import`, {});
+      console.log('🔄 Starting import for sheet:', sheetId);
+      const result = await apiRequest("POST", `/api/sheets/${sheetId}/sync/import`, {});
+      console.log('✅ Import completed:', result);
+      return result;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      toast({
-        title: "Import Complete",
-        description: "Data imported from Google Sheets successfully",
-      });
+    onSuccess: (data) => {
+      console.log('🎉 Import mutation onSuccess triggered with data:', data);
+      try {
+        queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+        console.log('✅ Queries invalidated, showing toast');
+        toast({
+          title: "Import Complete",
+          description: "Data imported from Google Sheets successfully",
+        });
+        console.log('✅ Toast displayed');
+      } catch (error) {
+        console.error('❌ Error in onSuccess callback:', error);
+      }
     },
     onError: (error: Error) => {
+      console.error('❌ Import mutation error:', error);
       toast({
         title: "Error",
         description: error.message,
