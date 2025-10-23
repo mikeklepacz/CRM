@@ -1355,8 +1355,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
       
-      // Create username from email
-      const username = email.split('@')[0];
+      // Use email as username
+      const username = email;
       
       const newUser = await storage.createUser({
         email,
