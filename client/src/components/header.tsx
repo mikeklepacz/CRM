@@ -38,7 +38,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-6">
-            <h1 className="text-lg font-semibold text-foreground">Hemp Wick CRM</h1>
+            <h1 className="text-lg font-semibold text-foreground">NMU CRM</h1>
             
             <nav className="flex items-center gap-1">
               <Link href={user.role === 'admin' ? '/admin' : '/agent'}>
