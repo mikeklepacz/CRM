@@ -3333,14 +3333,15 @@ export default function ClientDashboard() {
             <Button 
               onClick={async () => {
                 try {
-                  // Fetch ALL clients from PostgreSQL (no filters for export)
+                  // Fetch filtered clients from PostgreSQL using current dashboard filters
+                  const searchQuery = [searchTerm, nameFilter, cityFilter].filter(s => s.trim()).join(' ').trim();
                   const response = await fetch('/api/clients/filtered', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({
-                      search: '',
-                      states: [],
+                      search: searchQuery,
+                      states: Array.from(selectedStates),
                       status: [],
                       category: null,
                     }),
