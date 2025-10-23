@@ -5658,9 +5658,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const integration = await storage.getUserIntegration(userId);
         if (integration?.googleCalendarAccessToken) {
+          console.log('[Calendar] Starting calendar event creation for reminder:', reminder.id);
+          
           // Check if token needs refresh
           let accessToken = integration.googleCalendarAccessToken;
           if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
+            console.log('[Calendar] Token expired, refreshing...');
             // Token expired, refresh it
             if (integration.googleCalendarRefreshToken && integration.googleClientId && integration.googleClientSecret) {
               const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -5681,7 +5684,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   googleCalendarAccessToken: tokens.access_token,
                   googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
                 });
+                console.log('[Calendar] Token refreshed successfully');
+              } else {
+                const error = await tokenResponse.text();
+                console.error('[Calendar] Token refresh failed:', error);
+                throw new Error('Token refresh failed');
               }
+            } else {
+              console.error('[Calendar] Missing OAuth credentials for token refresh');
+              throw new Error('Missing OAuth credentials');
             }
           }
 
@@ -5715,10 +5726,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             location = addressParts.join(', ');
           }
 
-          // Create OAuth2 client with credentials
+          // Get system-wide OAuth credentials
+          const systemIntegration = await storage.getSystemIntegration('google_sheets');
+          if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+            console.error('[Calendar] System-wide Google OAuth not configured');
+            throw new Error('Google OAuth not configured');
+          }
+
+          // Create OAuth2 client with system-wide credentials
           const oauth2Client = new google.auth.OAuth2(
-            integration.googleClientId,
-            integration.googleClientSecret
+            systemIntegration.googleClientId,
+            systemIntegration.googleClientSecret
           );
           
           oauth2Client.setCredentials({
@@ -5751,6 +5769,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           };
 
+          console.log('[Calendar] Creating event with payload:', JSON.stringify(event, null, 2));
+
           const createdEvent = await calendar.events.insert({
             calendarId: 'primary',
             requestBody: event,
@@ -5767,11 +5787,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
 
-          console.log(`[Calendar] Created event ${createdEvent.data.id} for reminder ${reminder.id}`);
+          console.log(`[Calendar] ✅ Created event ${createdEvent.data.id} for reminder ${reminder.id}`);
+        } else {
+          console.log('[Calendar] Skipping - Google Calendar not connected');
         }
       } catch (calendarError: any) {
         // Log error but don't fail the request
-        console.error('[Calendar] Failed to create calendar event:', calendarError.message);
+        console.error('[Calendar] ❌ Failed to create calendar event:', calendarError.message);
+        if (calendarError.response?.data) {
+          console.error('[Calendar] Error details:', calendarError.response.data);
+        }
       }
 
       // Smart default: Update user preferences if calendar reminders differ from current defaults
@@ -5789,7 +5814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (remindersChanged) {
             // Update user's default calendar reminders (including empty array for "no reminders")
-            await storage.updateUserPreferences(userId, {
+            await storage.saveUserPreferences(userId, {
               defaultCalendarReminders: calendarReminders
             });
             console.log(`[Smart Default] Updated calendar reminder defaults for user ${userId}`, 
