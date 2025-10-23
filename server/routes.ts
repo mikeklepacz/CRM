@@ -1163,7 +1163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get filtered clients (for vCard export and dashboard)
   app.post('/api/clients/filtered', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
-      const { search, nameFilter, cityFilter, states, cities, status, showMyStoresOnly, category } = req.body;
+      const { search, nameFilter, cityFilter, states, cities, status } = req.body;
       const user = req.currentUser;
       
       // DEBUG: Log received filters
@@ -1173,12 +1173,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cityFilter,
         states,
         cities,
-        status,
-        showMyStoresOnly,
-        category
+        status
       }, null, 2));
       
-      // Build filters
+      // Build filters - ONLY visual filters, no category or agent filtering
       const filters: any = {
         search,
         nameFilter,
@@ -1186,12 +1184,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         states,
         cities,
         status,
-        showMyStoresOnly,
-        category,
       };
 
-      // Only apply agent filtering when explicitly requested via showMyStoresOnly
-      // This ensures exports get exactly what's visible in the filtered table
+      // Export endpoint NEVER filters by agent or category
+      // It ONLY exports what is visually filtered in the CRMxactly what's visible in the filtered table
       if (user.role !== 'admin' && showMyStoresOnly) {
         filters.agentId = user.id;
       }

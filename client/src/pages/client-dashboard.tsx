@@ -3335,7 +3335,7 @@ export default function ClientDashboard() {
                 try {
                   // Fetch filtered clients from PostgreSQL using current dashboard filters
                   // NOTE: Export should ONLY export what's visible in the table
-                  // Do NOT include showMyStoresOnly or agent filters
+                  // Only use: search, nameFilter, cityFilter, states, cities, status
                   const response = await fetch('/api/clients/filtered', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3347,8 +3347,6 @@ export default function ClientDashboard() {
                       states: Array.from(selectedStates),
                       cities: Array.from(selectedCities),
                       status: Array.from(selectedStatuses),
-                      showMyStoresOnly: false, // Export should never filter by agent
-                      category: null,
                     }),
                   });
 
