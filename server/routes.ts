@@ -1943,35 +1943,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      // Find both Store Database and Commission Tracker sheets
+      // Find Commission Tracker sheet (Store Database syncs from Tracker via Google Sheets)
       const sheets = await storage.getAllActiveGoogleSheets();
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-      const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
-      
-      if (!storeDbSheet) {
-        return res.status(404).json({ message: 'Store Database sheet not found' });
-      }
-
-      // Read Store Database to find stores and update DBA
-      const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
-      const storeDbRows = await googleSheets.readSheetData(storeDbSheet.spreadsheetId, storeDbRange);
-      
-      if (storeDbRows.length === 0) {
-        return res.status(400).json({ message: 'Store Database sheet is empty' });
-      }
-      
-      const storeDbHeaders = storeDbRows[0];
-      const storeDbLinkIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'link');
-      const storeDbDbaIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'dba');
-      const storeDbAgentNameIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'agent name');
-      const storeDbEmailIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'email');
-      
-      if (storeDbLinkIndex === -1) {
-        return res.status(400).json({ message: 'Store Database must have a "Link" column' });
       }
 
       // Read tracker data to check if stores already have rows
@@ -2004,40 +1981,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const store of storeLinks) {
         const { link: storeLink, name: storeName } = store;
         
-        // 1. Update DBA and Agent Name in Store Database
-        // Find the store in Store Database
-        let storeDbRowIndex = -1;
-        for (let i = 1; i < storeDbRows.length; i++) {
-          if (normalizeLink(storeDbRows[i][storeDbLinkIndex]) === normalizeLink(storeLink)) {
-            storeDbRowIndex = i + 1; // +1 for 1-indexed Google Sheets
-            break;
-          }
-        }
+        // Note: Store Database (DBA, Agent Name, Email) is now synced automatically from Commission Tracker via Google Sheets
+        // We only write to Commission Tracker and let the sync handle the Store Database updates
         
-        if (storeDbRowIndex > 0) {
-          // Update DBA if provided
-          if (dba && storeDbDbaIndex !== -1) {
-            const dbaColumn = String.fromCharCode(65 + storeDbDbaIndex);
-            const dbaRange = `${storeDbSheet.sheetName}!${dbaColumn}${storeDbRowIndex}`;
-            await googleSheets.writeSheetData(storeDbSheet.spreadsheetId, dbaRange, [[dba]]);
-          }
-          
-          // Update Agent Name if provided
-          if (agentName && storeDbAgentNameIndex !== -1) {
-            const agentColumn = String.fromCharCode(65 + storeDbAgentNameIndex);
-            const agentRange = `${storeDbSheet.sheetName}!${agentColumn}${storeDbRowIndex}`;
-            await googleSheets.writeSheetData(storeDbSheet.spreadsheetId, agentRange, [[agentName]]);
-          }
-          
-          // Update Email if provided
-          if (order.billingEmail && storeDbEmailIndex !== -1) {
-            const emailColumn = String.fromCharCode(65 + storeDbEmailIndex);
-            const emailRange = `${storeDbSheet.sheetName}!${emailColumn}${storeDbRowIndex}`;
-            await googleSheets.writeSheetData(storeDbSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
-          }
-        }
-        
-        // 2. Update or create row in Commission Tracker
+        // Update or create row in Commission Tracker
         let existingTrackerRowIndex = -1;
         for (let i = 1; i < trackerRows.length; i++) {
           if (normalizeLink(trackerRows[i][linkIndex]) === normalizeLink(storeLink)) {
