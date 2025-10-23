@@ -483,59 +483,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/google/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // ===== SYSTEM-WIDE GOOGLE SHEETS OAUTH (ADMIN ONLY) =====
+  app.get('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const integration = await storage.getUserIntegration(userId);
+      const integration = await storage.getSystemIntegration('google_sheets');
+      const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
 
       res.json({
         clientId: integration?.googleClientId || "",
         clientSecret: integration?.googleClientSecret || "",
-        googleEmail: integration?.googleEmail || null
+        googleEmail: integration?.googleEmail || null,
+        connected: !!(integration?.googleAccessToken && integration?.googleRefreshToken),
+        connectedByEmail: integration?.connectedByEmail || null,
+        connectedAt: integration?.createdAt || null
       });
     } catch (error: any) {
-      console.error("Error fetching Google OAuth settings:", error);
+      console.error("❌ Error fetching Google Sheets settings:", error);
       res.status(500).json({ message: error.message || "Failed to fetch settings" });
     }
   });
 
-  app.put('/api/google/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.put('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const validation = googleOAuthSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { clientId, clientSecret } = validation.data;
 
-      await storage.updateUserIntegration(userId, {
+      await storage.updateSystemIntegration('google_sheets', {
         googleClientId: clientId,
         googleClientSecret: clientSecret
       });
 
-      res.json({ message: "Google OAuth settings updated successfully" });
+      console.log('✅ Google Sheets OAuth settings updated successfully');
+      res.json({ message: "Google Sheets OAuth settings updated successfully" });
     } catch (error: any) {
-      console.error("Error updating Google OAuth settings:", error);
+      console.error("❌ Error updating Google Sheets OAuth settings:", error);
       res.status(500).json({ message: error.message || "Failed to update settings" });
     }
   });
 
-  app.get('/api/google/oauth-url', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.get('/api/auth/google/sheets/oauth-url', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const integration = await storage.getUserIntegration(userId);
-
-      console.log('OAuth URL request - userId:', userId);
-      console.log('Integration found:', !!integration);
-      console.log('Client ID:', integration?.googleClientId ? 'present' : 'missing');
+      const integration = await storage.getSystemIntegration('google_sheets');
 
       if (!integration?.googleClientId) {
-        return res.status(400).json({ message: "Please configure Google OAuth credentials first" });
+        return res.status(400).json({ message: "Please configure Google Sheets OAuth credentials first in Admin Dashboard" });
       }
 
-      const redirectUri = `${req.protocol}://${req.get('host')}/api/google/callback`;
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/sheets/callback`;
       const scope = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly';
+
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
 
       const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       oauthUrl.searchParams.set('client_id', integration.googleClientId);
@@ -544,32 +546,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       oauthUrl.searchParams.set('scope', scope);
       oauthUrl.searchParams.set('access_type', 'offline');
       oauthUrl.searchParams.set('prompt', 'consent');
-      oauthUrl.searchParams.set('state', userId); // Pass userId as state
+      oauthUrl.searchParams.set('state', JSON.stringify({ userId, email: user?.email }));
 
-      const response = { url: oauthUrl.toString() };
-      console.log('Sending OAuth URL response:', response);
-      return res.json(response);
+      console.log('✅ Generated Google Sheets OAuth URL for admin');
+      return res.json({ url: oauthUrl.toString() });
     } catch (error: any) {
-      console.error("Error generating OAuth URL:", error);
+      console.error("❌ Error generating Google Sheets OAuth URL:", error);
       return res.status(500).json({ message: error.message || "Failed to generate OAuth URL" });
     }
   });
 
-  app.get('/api/google/callback', async (req: any, res) => {
+  app.get('/api/auth/google/sheets/callback', async (req: any, res) => {
     try {
-      const { code, state: userId } = req.query;
+      const { code, state } = req.query;
 
-      if (!code || !userId) {
+      if (!code || !state) {
         return res.send('<script>window.close();</script>');
       }
 
-      const integration = await storage.getUserIntegration(userId);
+      const { userId, email } = JSON.parse(state as string);
+      const integration = await storage.getSystemIntegration('google_sheets');
+
       if (!integration?.googleClientId || !integration?.googleClientSecret) {
         return res.send('<script>alert("OAuth credentials not configured"); window.close();</script>');
       }
 
       // Exchange code for tokens
-      const redirectUri = `${req.protocol}://${req.get('host')}/api/google/callback`;
+      const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/sheets/callback`;
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -584,7 +587,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!tokenResponse.ok) {
         const error = await tokenResponse.text();
-        console.error('Token exchange failed:', error);
+        console.error('❌ Google Sheets token exchange failed:', error);
         return res.send('<script>alert("Authentication failed"); window.close();</script>');
       }
 
@@ -596,46 +599,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const userinfo = await userinfoResponse.json();
 
-      // Store tokens - convert expiry to Unix timestamp (milliseconds)
+      // Store system-wide tokens
       const expiryTimestamp = Date.now() + (tokens.expires_in * 1000);
-      await storage.updateUserIntegration(userId, {
+      await storage.updateSystemIntegration('google_sheets', {
         googleAccessToken: tokens.access_token,
         googleRefreshToken: tokens.refresh_token,
         googleTokenExpiry: expiryTimestamp,
         googleEmail: userinfo.email,
-        googleConnectedAt: new Date()
+        connectedByUserId: userId,
+        connectedByEmail: email
       });
 
-      res.send('<script>alert("Google Sheets connected successfully!"); window.close();</script>');
+      console.log('✅ Google Sheets connected successfully (system-wide)');
+      res.send('<script>alert("Google Sheets connected successfully! All agents can now access client data."); window.close();</script>');
     } catch (error: any) {
-      console.error("OAuth callback error:", error);
+      console.error("❌ Google Sheets OAuth callback error:", error);
       res.send('<script>alert("Connection failed"); window.close();</script>');
     }
   });
 
-  // Gmail OAuth - Available to all users
+  app.delete('/api/auth/google/sheets/disconnect', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      await storage.deleteSystemIntegration('google_sheets');
+      console.log('✅ Google Sheets disconnected successfully');
+      res.json({ message: "Google Sheets disconnected successfully" });
+    } catch (error: any) {
+      console.error("❌ Error disconnecting Google Sheets:", error);
+      res.status(500).json({ message: error.message || "Failed to disconnect" });
+    }
+  });
+
+  // ===== PER-USER GOOGLE SERVICES OAUTH (GMAIL/CALENDAR - ALL USERS) =====
   app.get('/api/gmail/oauth-url', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const integration = await storage.getUserIntegration(userId);
-
-      // Use shared Google OAuth credentials (same as Sheets)
-      if (!integration?.googleClientId) {
-        return res.status(400).json({ message: "Please contact admin to configure Google OAuth credentials" });
+      
+      // Use system-wide Google OAuth credentials for client ID/secret
+      const systemIntegration = await storage.getSystemIntegration('google_sheets');
+      if (!systemIntegration?.googleClientId) {
+        return res.status(400).json({ message: "Google OAuth not configured. Please contact admin." });
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
       const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar';
 
-      // Debug logging for OAuth setup
-      console.log('[Gmail OAuth] Generating OAuth URL');
-      console.log('[Gmail OAuth] Protocol:', req.protocol);
-      console.log('[Gmail OAuth] Host:', req.get('host'));
-      console.log('[Gmail OAuth] Redirect URI:', redirectUri);
-      console.log('[Gmail OAuth] X-Forwarded-Proto:', req.get('x-forwarded-proto'));
+      console.log('[Gmail OAuth] Generating OAuth URL for user:', userId);
 
       const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      oauthUrl.searchParams.set('client_id', integration.googleClientId);
+      oauthUrl.searchParams.set('client_id', systemIntegration.googleClientId);
       oauthUrl.searchParams.set('redirect_uri', redirectUri);
       oauthUrl.searchParams.set('response_type', 'code');
       oauthUrl.searchParams.set('scope', scope);
@@ -645,7 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ url: oauthUrl.toString() });
     } catch (error: any) {
-      console.error("Error generating Gmail OAuth URL:", error);
+      console.error("❌ Error generating Gmail OAuth URL:", error);
       res.status(500).json({ message: error.message || "Failed to generate OAuth URL" });
     }
   });
@@ -658,19 +669,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.send('<script>alert("Authorization failed"); window.close();</script>');
       }
 
-      const integration = await storage.getUserIntegration(userId as string);
-      if (!integration?.googleClientId || !integration?.googleClientSecret) {
+      // Use system-wide OAuth credentials
+      const systemIntegration = await storage.getSystemIntegration('google_sheets');
+      if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
         return res.send('<script>alert("Missing OAuth credentials"); window.close();</script>');
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
-
-      // Debug logging for OAuth callback
-      console.log('[Gmail OAuth Callback] Processing callback');
-      console.log('[Gmail OAuth Callback] Protocol:', req.protocol);
-      console.log('[Gmail OAuth Callback] Host:', req.get('host'));
-      console.log('[Gmail OAuth Callback] Redirect URI:', redirectUri);
-      console.log('[Gmail OAuth Callback] Code received:', !!code);
+      console.log('[Gmail OAuth Callback] Processing callback for user:', userId);
 
       // Exchange code for tokens
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -678,8 +684,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           code: code as string,
-          client_id: integration.googleClientId,
-          client_secret: integration.googleClientSecret,
+          client_id: systemIntegration.googleClientId,
+          client_secret: systemIntegration.googleClientSecret,
           redirect_uri: redirectUri,
           grant_type: 'authorization_code'
         })
@@ -687,7 +693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!tokenResponse.ok) {
         const error = await tokenResponse.text();
-        console.error('Gmail token exchange failed:', error);
+        console.error('❌ Gmail token exchange failed:', error);
         return res.send('<script>alert("Authentication failed"); window.close();</script>');
       }
 
@@ -699,9 +705,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const userinfo = await userinfoResponse.json();
 
-      // Store Gmail tokens separately from Sheets tokens
+      // Store per-user Gmail/Calendar tokens (but use system client ID/secret for refreshing)
       const expiryTimestamp = Date.now() + (tokens.expires_in * 1000);
       await storage.updateUserIntegration(userId as string, {
+        googleClientId: systemIntegration.googleClientId,
+        googleClientSecret: systemIntegration.googleClientSecret,
         googleCalendarAccessToken: tokens.access_token,
         googleCalendarRefreshToken: tokens.refresh_token,
         googleCalendarTokenExpiry: expiryTimestamp,
