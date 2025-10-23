@@ -3791,10 +3791,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   };
 
   // AI Assistant toggle - load from localStorage per-store
-  // Use a unique identifier for each store (combination of store and tracker row indexes)
+  // Use the stable store link as unique identifier
   const getStorageKey = () => {
-    const storeId = row?._storeRowIndex || row?._trackerRowIndex || row?.Name || 'unknown';
-    return `store-ai-assistant-${storeId}`;
+    const storeLink = row?.link || row?.Link || 'unknown';
+    return `store-ai-assistant-${storeLink}`;
   };
   
   const [showAssistant, setShowAssistant] = useState(() => {
@@ -3815,7 +3815,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     } else {
       setShowAssistant(false);
     }
-  }, [row?._storeRowIndex, row?._trackerRowIndex, row?.Name]);
+  }, [row?.link, row?.Link]);
 
   // Handler to update showAssistant and persist to localStorage
   const handleShowAssistantChange = (checked: boolean) => {
