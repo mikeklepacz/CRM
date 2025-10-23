@@ -3490,11 +3490,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Define editable columns (case-insensitive)
       const agentCol = trackerHeaders.find(h => h.toLowerCase() === 'agent');
       const excludedCols = [agentCol, joinColumn].filter(Boolean).map(c => c?.toLowerCase());
-      const editableColumns = [
+      
+      // Columns that agents cannot edit (read-only for agents, editable for admins)
+      const agentReadOnlyColumns = ['order id', 'commission type', 'amount', 'transaction id'];
+      
+      // Base editable columns for all users
+      let editableColumns = [
         ...trackerHeaders.filter(h => !excludedCols.includes(h.toLowerCase())), // All tracker columns except agent and join column
         'additional phone', 'additional email', // Editable store columns (main phone/email are clickable links)
         'dba', 'agent name', // Corporate name and agent assignment for multi-location tracking
       ].filter(col => allHeaders.some(h => h.toLowerCase() === col.toLowerCase())); // Only include if they exist
+      
+      // For agents (non-admins), remove the read-only columns
+      if (user?.role !== 'admin') {
+        editableColumns = editableColumns.filter(col => 
+          !agentReadOnlyColumns.includes(col.toLowerCase())
+        );
+      }
 
       res.json({
         headers: allHeaders,

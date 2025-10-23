@@ -17,7 +17,7 @@ The application is built around a client dashboard that unifies data from two Go
 - **Technical Implementations**:
     - **Authentication**: Replit Auth with distinct 'admin' and 'agent' roles.
     - **Google Sheets Integration**: Direct read/write access to specified Google Sheets for data management.
-    - **Inline Editing**: Allows direct modification of cell data within the dashboard, with changes reflecting in Google Sheets.
+    - **Inline Editing**: Allows direct modification of cell data within the dashboard, with changes reflecting in Google Sheets. Agents have read-only access to commission-critical columns (Order ID, Commission Type, Amount, Transaction ID) while admins can edit all columns.
     - **Row-Level Security**: Agents only see unclaimed stores and their own claimed stores based on the "Agent" column in the Commission Tracker sheet.
     - **WooCommerce Sync**: Fetches orders, matches them to stores, calculates commissions, and updates the Commission Tracker.
     - **Sales Reports**: Generates professional PDF commission reports for accountants and agents, with options for full company or individual agent reports and batch downloads.
