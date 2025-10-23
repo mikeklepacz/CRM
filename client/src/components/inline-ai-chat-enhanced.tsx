@@ -1037,40 +1037,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                     Template Builder
                   </Button>
 
-                  {/* Add Template Form */}
-                  <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
-                    <h4 className="font-semibold text-xs">Save New Template</h4>
-                    <Input
-                      placeholder="Template title..."
-                      value={newTemplateTitle}
-                      onChange={(e) => setNewTemplateTitle(e.target.value)}
-                      data-testid="input-template-title"
-                    />
-                    <Textarea
-                      placeholder="Paste content here..."
-                      value={newTemplateContent}
-                      onChange={(e) => setNewTemplateContent(e.target.value)}
-                      className="min-h-[60px]"
-                      data-testid="textarea-template-content"
-                    />
-                    <Input
-                      placeholder="Tags (comma-separated)..."
-                      value={newTemplateTags}
-                      onChange={(e) => setNewTemplateTags(e.target.value)}
-                      data-testid="input-template-tags"
-                    />
-                    <Button
-                      onClick={handleSaveTemplate}
-                      disabled={createTemplateMutation.isPending}
-                      className="w-full"
-                      size="sm"
-                      data-testid="button-save-template"
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Save Template
-                    </Button>
-                  </div>
-
                   {/* Search Templates */}
                   <div className="relative">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -1084,7 +1050,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   </div>
 
                   {/* Template List */}
-                  <div className="space-y-2">
+                  <ScrollArea className="flex-1 min-h-0">
+                    <div className="space-y-2 pr-3">
                     {filteredTemplates.map((template) => (
                       <div key={template.id} className="p-2 border rounded-md bg-card" data-testid={`template-${template.id}`}>
                         <div className="flex items-start justify-between mb-1">
@@ -1138,7 +1105,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                         </div>
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  </ScrollArea>
                 </div>
               </CollapsibleContent>
             </div>
