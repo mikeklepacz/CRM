@@ -1164,35 +1164,87 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
             {/* BUILD Tab */}
             <TabsContent value="build" className="flex-1 flex flex-col min-h-0 px-6 pb-6">
-              <ScrollArea className="flex-1">
-                <div className="space-y-4 pr-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Title</label>
-                    <Input
-                      placeholder="Template name..."
-                      value={builderTitle}
-                      onChange={(e) => setBuilderTitle(e.target.value)}
-                      data-testid="input-builder-title"
-                    />
-                  </div>
+              <div className="space-y-4 flex-1">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold">Title</label>
+                  <Input
+                    placeholder="Template name..."
+                    value={builderTitle}
+                    onChange={(e) => setBuilderTitle(e.target.value)}
+                    data-testid="input-builder-title"
+                  />
+                </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Type</label>
-                    <Select
-                      value={builderType}
-                      onValueChange={(value: "Email" | "Script") => setBuilderType(value)}
-                    >
-                      <SelectTrigger data-testid="select-builder-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Email">Email</SelectItem>
-                        <SelectItem value="Script">Script</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold">Type</label>
+                  <Select
+                    value={builderType}
+                    onValueChange={(value: "Email" | "Script") => setBuilderType(value)}
+                  >
+                    <SelectTrigger data-testid="select-builder-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Email">Email</SelectItem>
+                      <SelectItem value="Script">Script</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  <div className="space-y-2">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold">Tags</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="button-insert-tag"
+                        >
+                          <Tag className="h-4 w-4 mr-1" />
+                          My Tags
+                          <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72" align="end">
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm flex items-center gap-2">
+                            <Tag className="h-4 w-4" />
+                            Your Personal Tags
+                          </h4>
+                          {userTags.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-4 text-center">
+                              No tags yet. Tags you use in templates will appear here.
+                            </p>
+                          ) : (
+                            <div className="space-y-1 max-h-64 overflow-y-auto">
+                              {userTags.map((userTag) => (
+                                <button
+                                  key={userTag.id}
+                                  onClick={() => insertTag(userTag.tag)}
+                                  className="w-full text-left p-2 rounded hover-elevate flex items-center justify-between group"
+                                  data-testid={`insert-tag-${userTag.tag}`}
+                                >
+                                  <span className="text-sm">{userTag.tag}</span>
+                                  <Badge variant="outline" className="text-xs">Click to add</Badge>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <Input
+                    placeholder="email, follow-up, introduction..."
+                    value={builderTags}
+                    onChange={(e) => setBuilderTags(e.target.value)}
+                    data-testid="input-builder-tags"
+                  />
+                  <p className="text-xs text-muted-foreground">Comma-separated tags</p>
+                </div>
+
+                <div className="space-y-2 flex-1 flex flex-col">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-semibold">Content</label>
                       <div className="flex gap-2">
@@ -1365,75 +1417,21 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                         </Popover>
                       </div>
                     </div>
-                    <Textarea
-                      ref={contentTextareaRef}
-                      placeholder="Template content with {{variables}}..."
-                      value={builderContent}
-                      onChange={(e) => setBuilderContent(e.target.value)}
-                      className="min-h-[300px] font-mono"
-                      data-testid="textarea-builder-content"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Use variables like: {`{{storeName}}, {{pocName}}, {{pocEmail}}`}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold">Tags</label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            data-testid="button-insert-tag"
-                          >
-                            <Tag className="h-4 w-4 mr-1" />
-                            My Tags
-                            <ChevronDown className="h-3 w-3 ml-1" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-72" align="end">
-                          <div className="space-y-2">
-                            <h4 className="font-semibold text-sm flex items-center gap-2">
-                              <Tag className="h-4 w-4" />
-                              Your Personal Tags
-                            </h4>
-                            {userTags.length === 0 ? (
-                              <p className="text-xs text-muted-foreground py-4 text-center">
-                                No tags yet. Tags you use in templates will appear here.
-                              </p>
-                            ) : (
-                              <div className="space-y-1 max-h-64 overflow-y-auto">
-                                {userTags.map((userTag) => (
-                                  <button
-                                    key={userTag.id}
-                                    onClick={() => insertTag(userTag.tag)}
-                                    className="w-full text-left p-2 rounded hover-elevate flex items-center justify-between group"
-                                    data-testid={`insert-tag-${userTag.tag}`}
-                                  >
-                                    <span className="text-sm">{userTag.tag}</span>
-                                    <Badge variant="outline" className="text-xs">Click to add</Badge>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <Input
-                      placeholder="email, follow-up, introduction..."
-                      value={builderTags}
-                      onChange={(e) => setBuilderTags(e.target.value)}
-                      data-testid="input-builder-tags"
-                    />
-                    <p className="text-xs text-muted-foreground">Comma-separated tags</p>
-                  </div>
+                  <Textarea
+                    ref={contentTextareaRef}
+                    placeholder="Template content with {{variables}}..."
+                    value={builderContent}
+                    onChange={(e) => setBuilderContent(e.target.value)}
+                    className="flex-1 min-h-[200px] font-mono"
+                    data-testid="textarea-builder-content"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use variables like: {`{{storeName}}, {{pocName}}, {{pocEmail}}`}
+                  </p>
                 </div>
-              </ScrollArea>
+              </div>
 
-              <div className="flex gap-2 mt-4 pt-4 border-t">
+              <div className="flex gap-2 mt-4 pt-4 border-t flex-shrink-0">
                 <Button
                   variant="outline"
                   onClick={() => {
