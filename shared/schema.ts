@@ -124,6 +124,23 @@ export const orders = pgTable("orders", {
   syncedAt: timestamp("synced_at").defaultNow(),
 });
 
+// System integrations - system-wide credentials (e.g., Google Sheets for CRM data)
+export const systemIntegrations = pgTable("system_integrations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  provider: varchar("provider", { length: 50 }).notNull().unique(), // 'google_sheets'
+  // Google Sheets OAuth credentials (system-wide, managed by admin)
+  googleClientId: varchar("google_client_id"),
+  googleClientSecret: varchar("google_client_secret"),
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiry: bigint("google_token_expiry", { mode: "number" }),
+  googleEmail: varchar("google_email"),
+  connectedBy: varchar("connected_by").references(() => users.id), // Which admin connected it
+  connectedAt: timestamp("connected_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // User integrations - per-user integration credentials
 export const userIntegrations = pgTable("user_integrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -133,15 +150,7 @@ export const userIntegrations = pgTable("user_integrations", {
   wooConsumerKey: text("woo_consumer_key"),
   wooConsumerSecret: text("woo_consumer_secret"),
   wooLastSyncedAt: timestamp("woo_last_synced_at"),
-  // Google OAuth credentials (for Google Sheets)
-  googleClientId: varchar("google_client_id"),
-  googleClientSecret: varchar("google_client_secret"),
-  googleAccessToken: text("google_access_token"),
-  googleRefreshToken: text("google_refresh_token"),
-  googleTokenExpiry: bigint("google_token_expiry", { mode: "number" }),
-  googleEmail: varchar("google_email"),
-  googleConnectedAt: timestamp("google_connected_at"),
-  // Google Calendar/Gmail OAuth credentials (separate account)
+  // Google Calendar/Gmail OAuth credentials (personal account per user)
   googleCalendarAccessToken: text("google_calendar_access_token"),
   googleCalendarRefreshToken: text("google_calendar_refresh_token"),
   googleCalendarTokenExpiry: bigint("google_calendar_token_expiry", { mode: "number" }),
@@ -609,6 +618,12 @@ export const insertGoogleSheetSchema = createInsertSchema(googleSheets).omit({
   createdAt: true,
 });
 
+export const insertSystemIntegrationSchema = createInsertSchema(systemIntegrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertUserIntegrationSchema = createInsertSchema(userIntegrations).omit({
   id: true,
   createdAt: true,
@@ -712,6 +727,8 @@ export type CsvUpload = typeof csvUploads.$inferSelect;
 export type InsertCsvUpload = z.infer<typeof insertCsvUploadSchema>;
 export type GoogleSheet = typeof googleSheets.$inferSelect;
 export type InsertGoogleSheet = z.infer<typeof insertGoogleSheetSchema>;
+export type SystemIntegration = typeof systemIntegrations.$inferSelect;
+export type InsertSystemIntegration = z.infer<typeof insertSystemIntegrationSchema>;
 export type UserIntegration = typeof userIntegrations.$inferSelect;
 export type InsertUserIntegration = z.infer<typeof insertUserIntegrationSchema>;
 export type DashboardCard = typeof dashboardCards.$inferSelect;

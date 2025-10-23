@@ -6,6 +6,7 @@ import {
   orders,
   csvUploads,
   googleSheets,
+  systemIntegrations,
   userIntegrations,
   dashboardCards,
   userPreferences,
@@ -35,6 +36,8 @@ import {
   type InsertCsvUpload,
   type GoogleSheet,
   type InsertGoogleSheet,
+  type SystemIntegration,
+  type InsertSystemIntegration,
   type UserIntegration,
   type InsertUserIntegration,
   type DashboardCard,
@@ -83,6 +86,11 @@ export interface IStorage {
   updateUserRole(id: string, role: string): Promise<User>;
   updateUser(id: string, updates: Partial<UpsertUser>): Promise<User>;
   getAgents(): Promise<User[]>;
+
+  // System integrations operations
+  getSystemIntegration(provider: string): Promise<SystemIntegration | undefined>;
+  updateSystemIntegration(provider: string, updates: Partial<InsertSystemIntegration>): Promise<SystemIntegration>;
+  deleteSystemIntegration(provider: string): Promise<void>;
 
   // User integrations operations
   getUserIntegration(userId: string): Promise<UserIntegration | undefined>;
@@ -296,6 +304,40 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return updated;
+  }
+
+  // System integrations operations
+  async getSystemIntegration(provider: string): Promise<SystemIntegration | undefined> {
+    const [integration] = await db
+      .select()
+      .from(systemIntegrations)
+      .where(eq(systemIntegrations.provider, provider));
+    return integration;
+  }
+
+  async updateSystemIntegration(provider: string, updates: Partial<InsertSystemIntegration>): Promise<SystemIntegration> {
+    const existing = await this.getSystemIntegration(provider);
+
+    if (existing) {
+      const [updated] = await db
+        .update(systemIntegrations)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(systemIntegrations.provider, provider))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(systemIntegrations)
+        .values({ provider, ...updates })
+        .returning();
+      return created;
+    }
+  }
+
+  async deleteSystemIntegration(provider: string): Promise<void> {
+    await db
+      .delete(systemIntegrations)
+      .where(eq(systemIntegrations.provider, provider));
   }
 
   // User integrations operations
