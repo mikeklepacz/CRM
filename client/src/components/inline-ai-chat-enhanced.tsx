@@ -172,14 +172,112 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     toast({ title: "Copied", description: "Message copied to clipboard" });
   };
 
+  const autoDetectPlaceholders = (content: string): string => {
+    let result = content;
+    
+    // Track what we've replaced to avoid double-replacements
+    const replacements: Array<{ pattern: RegExp; variable: string; priority: number }> = [];
+    
+    // Email addresses (To: line and in body)
+    replacements.push({
+      pattern: /To:\s*([\w.-]+@[\w.-]+\.\w+)/gi,
+      variable: 'To: {{recipientEmail}}',
+      priority: 1
+    });
+    
+    // Other email addresses in body
+    replacements.push({
+      pattern: /\b([\w.-]+@[\w.-]+\.\w+)\b/g,
+      variable: '{{email}}',
+      priority: 2
+    });
+    
+    // Names after greetings (Hi/Hello/Dear Name,)
+    const greetingMatch = result.match(/(?:Hi|Hello|Dear)\s+([A-Z][a-z]+),/);
+    if (greetingMatch) {
+      result = result.replace(
+        new RegExp(`(Hi|Hello|Dear)\\s+${greetingMatch[1]},`, 'g'),
+        '$1 {{pocName}},'
+      );
+    }
+    
+    // Phone numbers - common formats
+    replacements.push({
+      pattern: /\b\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
+      variable: '{{phoneNumber}}',
+      priority: 3
+    });
+    
+    // Company/Store names - look for capitalized multi-word phrases
+    // This is tricky, but we can try to detect repeated capitalized names
+    const capitalizedPhrases = result.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g);
+    if (capitalizedPhrases) {
+      // Find the most frequent capitalized phrase (likely store/company name)
+      const frequencyMap = new Map<string, number>();
+      capitalizedPhrases.forEach(phrase => {
+        const count = frequencyMap.get(phrase) || 0;
+        frequencyMap.set(phrase, count + 1);
+      });
+      
+      // Get most frequent phrase that appears more than once
+      let mostFrequent: string | null = null;
+      let maxCount = 1;
+      frequencyMap.forEach((count, phrase) => {
+        if (count > maxCount && phrase.length > 3) { // Avoid short words
+          mostFrequent = phrase;
+          maxCount = count;
+        }
+      });
+      
+      if (mostFrequent) {
+        result = result.replace(new RegExp(mostFrequent, 'g'), '{{storeName}}');
+      }
+    }
+    
+    // Apply email replacements
+    result = result.replace(
+      /To:\s*([\w.-]+@[\w.-]+\.\w+)/gi,
+      'To: {{recipientEmail}}'
+    );
+    
+    result = result.replace(
+      /\b([\w.-]+@[\w.-]+\.\w+)\b/g,
+      '{{email}}'
+    );
+    
+    // Apply phone number replacement
+    result = result.replace(
+      /\b\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
+      '{{phoneNumber}}'
+    );
+    
+    // Agent name in signature (usually at the end after "Best regards," or similar)
+    const signatureMatch = result.match(/(?:Best regards,|Sincerely,|Thanks,|Cheers,)\s*\n([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+    if (signatureMatch) {
+      result = result.replace(
+        signatureMatch[1],
+        '{{agentName}}'
+      );
+    }
+    
+    return result;
+  };
+
   const makeTemplateFromMessage = (content: string) => {
-    setBuilderContent(content);
+    // Auto-detect and replace common placeholders
+    const contentWithPlaceholders = autoDetectPlaceholders(content);
+    
+    setBuilderContent(contentWithPlaceholders);
     setBuilderTitle("");
     setBuilderTags("");
     setEditingTemplateId(null);
     setTemplateBuilderOpen(true);
     setTemplateBuilderTab("build");
-    toast({ title: "Template started", description: "Edit and save your template" });
+    
+    toast({ 
+      title: "Template created", 
+      description: "Common placeholders detected and converted to variables" 
+    });
   };
 
   const replaceTemplateVariables = (content: string) => {
