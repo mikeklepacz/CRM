@@ -97,7 +97,7 @@ export interface IStorage {
   // Client operations
   getAllClients(): Promise<Client[]>;
   getClientsByAgent(agentId: string): Promise<Client[]>;
-  getFilteredClients(filters: { search?: string; states?: string[]; status?: string[]; category?: string; agentId?: string }): Promise<Client[]>;
+  getFilteredClients(filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; status?: string[]; category?: string; agentId?: string }): Promise<Client[]>;
   getClient(id: string): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
   updateClient(id: string, updates: Partial<InsertClient>): Promise<Client>;
