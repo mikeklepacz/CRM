@@ -203,7 +203,7 @@ function generateVCardEntry(
     }
   }
   
-  // NOTE - combine selected fields
+  // NOTE - combine selected fields in order: Notes, Hours, Sales Summary
   const noteFields: string[] = [];
   
   if (notes && !fields.salesSummary && !fields.storeHours) {
@@ -215,17 +215,17 @@ function generateVCardEntry(
       noteFields.push(`Notes: ${notes}`);
     }
     
-    if (fields.salesSummary) {
-      const salesSummary = store['Sales-ready Summary'] || store['sales_summary'] || store['Sales Summary'];
-      if (salesSummary) {
-        noteFields.push(`Sales Summary: ${salesSummary}`);
-      }
-    }
-    
     if (fields.storeHours) {
       const storeHours = store['Store Hours'] || store['store_hours'] || store['Hours'] || store['hours'];
       if (storeHours) {
         noteFields.push(`Store Hours: ${storeHours}`);
+      }
+    }
+    
+    if (fields.salesSummary) {
+      const salesSummary = store['Sales-ready Summary'] || store['sales_summary'] || store['Sales Summary'];
+      if (salesSummary) {
+        noteFields.push(`Sales Summary: ${salesSummary}`);
       }
     }
   }
