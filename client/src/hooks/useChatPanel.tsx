@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
-import { ChatPanelGlobal } from '@/components/chat-panel-global';
 
 interface ChatPanelContextType {
   isPanelOpen: boolean;
@@ -20,7 +19,6 @@ export function ChatPanelProvider({ children }: { children: ReactNode }) {
   return (
     <ChatPanelContext.Provider value={{ isPanelOpen, openPanel, closePanel, togglePanel }}>
       {children}
-      <ChatPanelGlobal />
     </ChatPanelContext.Provider>
   );
 }
