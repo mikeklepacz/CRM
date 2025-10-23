@@ -3339,7 +3339,7 @@ export default function ClientDashboard() {
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({
-                      search: searchQuery,
+                      search: searchTerm,
                       states: selectedStates,
                       status: selectedStatus,
                       category: null, // TODO: Add category filter if needed
