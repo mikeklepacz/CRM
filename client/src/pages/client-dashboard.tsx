@@ -2504,11 +2504,8 @@ export default function ClientDashboard() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    console.log("🔵 Export vCard button clicked");
-                    console.log("🔵 filteredData length:", filteredData?.length || 0);
                     setVCardListName("");
                     setExportVCardDialogOpen(true);
-                    console.log("🔵 Dialog should now be open");
                   }}
                   data-testid="button-export-vcard"
                   style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
@@ -3257,10 +3254,7 @@ export default function ClientDashboard() {
       )}
 
       {/* Export vCard Dialog */}
-      <Dialog open={exportVCardDialogOpen} onOpenChange={(open) => {
-        console.log("🟢 Dialog onOpenChange called, open=", open);
-        setExportVCardDialogOpen(open);
-      }}>
+      <Dialog open={exportVCardDialogOpen} onOpenChange={setExportVCardDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Export Contacts to Phone</DialogTitle>
@@ -3362,11 +3356,6 @@ export default function ClientDashboard() {
             </Button>
             <Button 
               onClick={() => {
-                console.log("🟢 Export vCard confirm clicked");
-                console.log("🟢 filteredData:", filteredData?.length || 0, "stores");
-                console.log("🟢 fields:", vCardExportFields);
-                console.log("🟢 listName:", vCardListName);
-                console.log("🟢 platform:", vCardPlatform);
                 generateAndDownloadVCard(
                   filteredData,
                   vCardExportFields,
@@ -3384,128 +3373,6 @@ export default function ClientDashboard() {
             >
               <Download className="mr-2 h-4 w-4" />
               Export
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Store Search Dialog for Multi-Location Selection */}
-      <Dialog open={storeSearchDialog} onOpenChange={setStoreSearchDialog}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>Select Multiple Locations</DialogTitle>
-            <DialogDescription>
-              Search and select multiple stores to claim with the DBA name
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="store_search">Search Stores (type 2+ letters to search)</Label>
-              <Input
-                id="store_search"
-                data-testid="input-store-search"
-                value={storeSearch}
-                onChange={(e) => setStoreSearch(e.target.value)}
-                placeholder="Search by name, city, state, or address..."
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                {selectedStores.length} location{selectedStores.length !== 1 ? 's' : ''} selected
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (filteredStores.length > 0) {
-                      setSelectedStores(filteredStores.map((store: any) => ({ link: store.link, name: store.name })));
-                    }
-                  }}
-                  disabled={filteredStores.length === 0}
-                  data-testid="button-select-all"
-                >
-                  Select All ({filteredStores.length})
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedStores([])}
-                  disabled={selectedStores.length === 0}
-                  data-testid="button-select-none"
-                >
-                  Clear All
-                </Button>
-              </div>
-            </div>
-
-            <ScrollArea className="h-96 border rounded-md">
-              <div className="p-4 space-y-2">
-                {storeSearch.length < 2 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    Type 2 or more letters to search for stores...
-                  </p>
-                ) : isLoadingStores ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
-                    Loading stores...
-                  </p>
-                ) : filteredStores.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    No stores found matching "{storeSearch}"
-                  </p>
-                ) : (
-                  filteredStores.map((store: any) => {
-                    const isSelected = selectedStores.some(s => s.link === store.link);
-
-                    const toggleStore = () => {
-                      setSelectedStores(prev => {
-                        const alreadySelected = prev.some(s => s.link === store.link);
-                        if (alreadySelected) {
-                          return prev.filter(s => s.link !== store.link);
-                        } else {
-                          return [...prev, { link: store.link, name: store.name }];
-                        }
-                      });
-                    };
-
-                    return (
-                      <div
-                        key={store.link}
-                        className={`flex items-start space-x-3 p-3 rounded-md border cursor-pointer hover-elevate ${
-                          isSelected ? 'bg-primary/10 border-primary' : ''
-                        }`}
-                        onClick={toggleStore}
-                        data-testid={`store-option-${store.link}`}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          data-testid={`checkbox-store-${store.link}`}
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium">{store.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {store.city && store.state ? `${store.city}, ${store.state}` : store.city || store.state || ''}
-                          </div>
-                          {store.address && (
-                            <div className="text-xs text-muted-foreground">{store.address}</div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStoreSearchDialog(false)} data-testid="button-cancel-search">
-              Done
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4810,6 +4677,128 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           </Button>
         </DialogFooter>
         )}
+      </DialogContent>
+    </Dialog>
+
+    {/* Store Search Dialog for Multi-Location Selection */}
+    <Dialog open={storeSearchDialog} onOpenChange={setStoreSearchDialog}>
+      <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle>Select Multiple Locations</DialogTitle>
+          <DialogDescription>
+            Search and select multiple stores to claim with the DBA name
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="store_search">Search Stores (type 2+ letters to search)</Label>
+            <Input
+              id="store_search"
+              data-testid="input-store-search"
+              value={storeSearch}
+              onChange={(e) => setStoreSearch(e.target.value)}
+              placeholder="Search by name, city, state, or address..."
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {selectedStores.length} location{selectedStores.length !== 1 ? 's' : ''} selected
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (filteredStores.length > 0) {
+                    setSelectedStores(filteredStores.map((store: any) => ({ link: store.link, name: store.name })));
+                  }
+                }}
+                disabled={filteredStores.length === 0}
+                data-testid="button-select-all"
+              >
+                Select All ({filteredStores.length})
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedStores([])}
+                disabled={selectedStores.length === 0}
+                data-testid="button-select-none"
+              >
+                Clear All
+              </Button>
+            </div>
+          </div>
+
+          <ScrollArea className="h-96 border rounded-md">
+            <div className="p-4 space-y-2">
+              {storeSearch.length < 2 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Type 2 or more letters to search for stores...
+                </p>
+              ) : isLoadingStores ? (
+                <p className="text-center text-muted-foreground py-8">
+                  <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
+                  Loading stores...
+                </p>
+              ) : filteredStores.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No stores found matching "{storeSearch}"
+                </p>
+              ) : (
+                filteredStores.map((store: any) => {
+                  const isSelected = selectedStores.some(s => s.link === store.link);
+
+                  const toggleStore = () => {
+                    setSelectedStores(prev => {
+                      const alreadySelected = prev.some(s => s.link === store.link);
+                      if (alreadySelected) {
+                        return prev.filter(s => s.link !== store.link);
+                      } else {
+                        return [...prev, { link: store.link, name: store.name }];
+                      }
+                    });
+                  };
+
+                  return (
+                    <div
+                      key={store.link}
+                      className={`flex items-start space-x-3 p-3 rounded-md border cursor-pointer hover-elevate ${
+                        isSelected ? 'bg-primary/10 border-primary' : ''
+                      }`}
+                      onClick={toggleStore}
+                      data-testid={`store-option-${store.link}`}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        data-testid={`checkbox-store-${store.link}`}
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">{store.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {store.city && store.state ? `${store.city}, ${store.state}` : store.city || store.state || ''}
+                        </div>
+                        {store.address && (
+                          <div className="text-xs text-muted-foreground">{store.address}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setStoreSearchDialog(false)} data-testid="button-cancel-search">
+            Done
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
     </>
