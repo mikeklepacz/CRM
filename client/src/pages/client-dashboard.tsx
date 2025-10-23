@@ -1571,43 +1571,13 @@ export default function ClientDashboard() {
     return row['Company'] || row['company'] || row['Business Name'] || row['name'] || 'Unknown';
   };
 
-  // vCard generation and download function
+  // vCard generation and download function - reads directly from CRM columns
   const generateAndDownloadVCard = (
     stores: any[],
     fields: typeof vCardExportFields,
     listName: string,
     platform: "ios" | "android"
   ) => {
-    // Helper to extract phone numbers from notes
-    const extractPhone = (text: string): string | null => {
-      if (!text) return null;
-      const phoneMatch = text.match(/(\+?1?\s*\(?[0-9]{3}\)?[\s.-]?[0-9]{3}[\s.-]?[0-9]{4})/);
-      return phoneMatch ? phoneMatch[1].replace(/[\s.-]/g, '') : null;
-    };
-
-    // Helper to extract email from notes
-    const extractEmail = (text: string): string | null => {
-      if (!text) return null;
-      const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-      return emailMatch ? emailMatch[1] : null;
-    };
-
-    // Helper to parse notes for specific sections
-    const parseNotes = (notes: string, section: 'summary' | 'hours'): string => {
-      if (!notes) return '';
-      
-      if (section === 'summary') {
-        // Extract everything between "Sales Summary:" and "Store hours:" or end
-        const summaryMatch = notes.match(/Sales Summary:(.*?)(?=Store hours:|$)/is);
-        return summaryMatch ? summaryMatch[1].trim() : '';
-      } else if (section === 'hours') {
-        // Extract everything after "Store hours:"
-        const hoursMatch = notes.match(/Store hours:(.*)/is);
-        return hoursMatch ? hoursMatch[1].trim() : '';
-      }
-      return '';
-    };
-
     // Generate vCard content
     const version = platform === "ios" ? "3.0" : "2.1";
     let vCardContent = "";
@@ -1617,18 +1587,17 @@ export default function ClientDashboard() {
       vCardContent += `BEGIN:VCARD\r\n`;
       vCardContent += `VERSION:${version}\r\n`;
 
-      // Extract POC info
-      const pocName = store['POC'] || store['poc'] || store['Point of Contact'] || '';
-      const pocPhone = store['POC Phone'] || store['poc phone'] || '';
-      const pocEmail = store['POC Email'] || store['poc email'] || '';
+      // Read directly from CRM columns
+      const storeName = store['Name'] || store['name'] || 'Unknown';
+      const pocName = store['Point of Contact'] || store['POC'] || '';
+      const pocPhone = store['POC Phone'] || '';
+      const pocEmail = store['POC Email'] || '';
       
-      // Fallback to standard fields
-      const storeName = getCompanyName(store);
-      const notes = store['Notes'] || store['notes'] || '';
-      const standardPhone = extractPhone(notes);
-      const standardEmail = extractEmail(notes);
-
-      // Determine contact name and company
+      // Store's direct phone and email from CRM columns
+      const storePhone = store['Phone'] || '';
+      const storeEmail = store['Email'] || '';
+      
+      // Use POC name if available, otherwise use store name
       const contactName = pocName || storeName;
       const companyName = storeName;
 
@@ -1644,30 +1613,30 @@ export default function ClientDashboard() {
       // ORG (Organization)
       vCardContent += `ORG:${companyName}\r\n`;
 
-      // TEL (Phone) - always include
-      const phoneToUse = pocPhone || standardPhone;
+      // TEL (Phone) - Use POC phone if available, otherwise use store phone
+      const phoneToUse = pocPhone || storePhone;
       if (phoneToUse && fields.phone) {
         vCardContent += `TEL;TYPE=WORK,VOICE:${phoneToUse}\r\n`;
       }
 
-      // EMAIL
-      const emailToUse = pocEmail || standardEmail;
+      // EMAIL - Use POC email if available, otherwise use store email
+      const emailToUse = pocEmail || storeEmail;
       if (emailToUse && fields.email) {
         vCardContent += `EMAIL;TYPE=WORK:${emailToUse}\r\n`;
       }
 
       // URL (Website)
-      const website = store['Website'] || store['website'] || store['URL'] || store['url'] || '';
+      const website = store['Website'] || '';
       if (website && fields.website) {
         vCardContent += `URL:${website}\r\n`;
       }
 
       // ADR (Address)
       if (fields.address) {
-        const address = store['Address'] || store['address'] || '';
-        const city = store['City'] || store['city'] || '';
-        const state = store['State'] || store['state'] || '';
-        const zip = store['Zip'] || store['zip'] || store['ZIP'] || '';
+        const address = store['Address'] || '';
+        const city = store['City'] || '';
+        const state = store['State'] || '';
+        const zip = store['Zip'] || store['ZIP'] || '';
         
         // Format: ;;Street;City;State;Zip;Country
         if (address || city || state) {
@@ -1675,25 +1644,29 @@ export default function ClientDashboard() {
         }
       }
 
-      // NOTE (combine Notes, Sales Summary, Store Hours)
+      // NOTE - Read directly from CRM columns
       const noteParts: string[] = [];
       
-      if (notes) {
-        noteParts.push(`Notes: ${notes}`);
-      }
-      
+      // Add Sales-ready Summary if field is selected
       if (fields.salesSummary) {
-        const summary = parseNotes(notes, 'summary');
+        const summary = store['Sales-ready Summary'] || store['Sales-Ready Summary'] || '';
         if (summary) {
           noteParts.push(`Sales Summary: ${summary}`);
         }
       }
       
+      // Add Hours if field is selected
       if (fields.storeHours) {
-        const hours = parseNotes(notes, 'hours');
+        const hours = store['Hours'] || '';
         if (hours) {
           noteParts.push(`Store Hours: ${hours}`);
         }
+      }
+      
+      // Add regular Notes field if it exists
+      const notes = store['Notes'] || '';
+      if (notes) {
+        noteParts.push(`Notes: ${notes}`);
       }
 
       if (noteParts.length > 0) {
