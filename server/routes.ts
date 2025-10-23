@@ -2407,14 +2407,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Calculate commission if client is claimed
+        let commission = 0;
+        let commissionRate = 0;
+        let commissionType = '';
+        
         if (client.assignedAgent && client.claimDate) {
           const monthsSinceClaim = differenceInMonths(orderDate, new Date(client.claimDate));
           const rate = monthsSinceClaim < 6 ? 0.25 : 0.10;
-          const commission = orderTotal * rate;
+          commission = orderTotal * rate;
+          commissionRate = rate;
+          commissionType = monthsSinceClaim < 6 ? '25%' : '10%';
           updates.commissionTotal = (parseFloat(client.commissionTotal || '0') + commission).toString();
         }
 
         await storage.updateClient(client.id, updates);
+
+        // Write to Commission Tracker Google Sheet - ONLY if client has an assigned agent
+        // This ensures we don't create incomplete commission records for unclaimed stores
+        if (client.assignedAgent && commission > 0) {
+          try {
+            const sheetsConfig = await storage.getSheetsConfig();
+            if (sheetsConfig?.spreadsheetId && sheetsConfig?.commissionTrackerSheetName) {
+              console.log('[Webhook] Writing order to Commission Tracker:', {
+                orderId: order.id,
+                client: client.name,
+                agent: client.assignedAgent,
+                commission
+              });
+
+              // Get existing data to find next empty row
+              const existingData = await googleSheets.readSheetData(
+                sheetsConfig.spreadsheetId,
+                `${sheetsConfig.commissionTrackerSheetName}!A:A`
+              );
+              const nextRow = (existingData?.length || 1) + 1;
+
+              // Map WooCommerce status to our status system
+              let orderStatus = 'Closed Won';
+              if (order.status === 'processing') {
+                orderStatus = '4 – Follow-Up'; // Processing orders need follow-up
+              } else if (order.status === 'refunded' || order.status === 'cancelled') {
+                orderStatus = '6 – Closed Lost';
+              }
+
+              // Prepare row data matching Commission Tracker columns
+              // Columns: Link, Transaction ID, Date, Agent Name, Order ID, Commission Type, Amount, Status, Follow-Up Date, Next Action, Notes, Point of Contact, POC EMAIL, POC Phone
+              const rowData = [
+                client.link || '',                          // Link
+                order.transaction_id || '',                 // Transaction ID
+                format(orderDate, 'MM/dd/yyyy'),           // Date
+                client.assignedAgent,                      // Agent Name
+                order.id.toString(),                       // Order ID
+                commissionType,                            // Commission Type (25% or 10%)
+                commission.toFixed(2),                     // Amount
+                orderStatus,                               // Status (based on WooCommerce order status)
+                '',                                        // Follow-Up Date
+                '',                                        // Next Action
+                `WooCommerce order #${order.number || order.id} - $${orderTotal.toFixed(2)}`, // Notes
+                client.pocName || '',                      // Point of Contact
+                client.pocEmail || email || '',            // POC EMAIL
+                client.pocPhone || ''                      // POC Phone
+              ];
+
+              await googleSheets.writeSheetData(
+                sheetsConfig.spreadsheetId,
+                `${sheetsConfig.commissionTrackerSheetName}!A${nextRow}:N${nextRow}`,
+                [rowData]
+              );
+
+              console.log('[Webhook] ✅ Successfully wrote to Commission Tracker row', nextRow);
+            }
+          } catch (sheetsError: any) {
+            console.error('[Webhook] ❌ Failed to write to Commission Tracker:', sheetsError.message);
+            // Don't fail the webhook - order is still processed in database
+          }
+        } else if (client.assignedAgent) {
+          console.log('[Webhook] Skipping Commission Tracker write - no commission calculated (order may be outside commission period)');
+        } else {
+          console.log('[Webhook] Skipping Commission Tracker write - client has no assigned agent');
+        }
       }
 
       console.log('Webhook processed successfully:', { orderId: order.id, matched: !!client });
