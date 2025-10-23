@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
-import { getTimezoneOffset } from "date-fns-tz";
+import { getTimezoneOffset, zonedTimeToUtc } from "date-fns-tz";
 import axios from "axios";
 import bcrypt from "bcrypt";
 import * as client from "openid-client";
@@ -5565,18 +5565,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? customerTimezone 
         : agentTimezone || 'UTC';
 
-      // Parse the date and time in the effective timezone
-      const [year, month, day] = reminderDate.split('T')[0].split('-').map(Number);
-      const [hours, minutes] = reminderTime.split(':').map(Number);
-
-      // Create date in the effective timezone
-      const tempDate = new Date(year, month - 1, day, hours, minutes, 0);
-
-      // Get timezone offset
-      const offset = getTimezoneOffset(effectiveTimezone, tempDate);
+      // Extract date from ISO string and combine with time
+      const dateOnly = reminderDate.split('T')[0]; // e.g., "2025-10-24"
+      const dateTimeString = `${dateOnly} ${reminderTime}`; // e.g., "2025-10-24 09:00"
       
-      // Convert to UTC
-      const utcTriggerDate = new Date(tempDate.getTime() - offset);
+      // Parse the date-time string in the effective timezone and convert to UTC
+      // zonedTimeToUtc interprets the date-time as being in the specified timezone
+      const utcTriggerDate = zonedTimeToUtc(dateTimeString, effectiveTimezone);
       
       // Check if date is in the past (AFTER UTC conversion)
       const now = new Date();
