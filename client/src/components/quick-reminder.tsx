@@ -124,24 +124,32 @@ export function QuickReminder({
     if (!date || !useCustomerTimezone || !customerTimezone) return null;
     
     try {
-      // Create naive datetime string (wall-clock time in customer's timezone)
+      // When "Use customer timezone" is checked, the time picker shows the customer's local time
+      // So if user picks 9:00 AM, that IS 9:00 AM in the customer's timezone
       const dateStr = format(date, 'yyyy-MM-dd');
-      const naiveDateTimeStr = `${dateStr}T${time}:00`;
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
       
-      // Parse as Date and adjust for timezone offset
-      const naiveDate = new Date(naiveDateTimeStr);
-      const offset = getTimezoneOffset(customerTimezone, naiveDate);
-      const utcTime = new Date(naiveDate.getTime() - offset);
+      // Create a "naive" UTC timestamp representing the wall-clock time
+      const naiveUtcTimestamp = Date.UTC(year, month - 1, day, hours, minutes, 0);
+      const naiveDate = new Date(naiveUtcTimestamp);
       
-      // Format time in both timezones (without the timezone abbreviation)
+      // Get the offset for the customer's timezone
+      const customerOffset = getTimezoneOffset(customerTimezone, naiveDate);
+      
+      // Convert to actual UTC time
+      const actualUtcTimestamp = naiveUtcTimestamp - customerOffset;
+      const actualUtcDate = new Date(actualUtcTimestamp);
+      
+      // Format the time in both timezones
       const customerTime = formatInTimeZone(
-        utcTime,
+        actualUtcDate,
         customerTimezone,
         'h:mm a'
       );
       
       const agentTime = formatInTimeZone(
-        utcTime,
+        actualUtcDate,
         agentTimezone,
         'h:mm a'
       );
