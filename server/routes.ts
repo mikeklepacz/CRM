@@ -1163,14 +1163,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get filtered clients (for vCard export and dashboard)
   app.post('/api/clients/filtered', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
-      const { search, states, status, category } = req.body;
+      const { search, nameFilter, cityFilter, states, cities, status, showMyStoresOnly, category } = req.body;
       const user = req.currentUser;
       
       // Build filters
       const filters: any = {
         search,
+        nameFilter,
+        cityFilter,
         states,
+        cities,
         status,
+        showMyStoresOnly,
         category,
       };
 
