@@ -402,13 +402,16 @@ export class DatabaseStorage implements IStorage {
       .orderBy(clients.createdAt);
   }
 
-  async getFilteredClients(filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; status?: string[]; category?: string; agentId?: string }): Promise<Client[]> {
+  async getFilteredClients(filters: { search?: string; nameFilter?: string; cityFilter?: string; states?: string[]; cities?: string[]; status?: string[]; showMyStoresOnly?: boolean; category?: string; agentId?: string }): Promise<Client[]> {
     let query = db.select().from(clients);
     const conditions: any[] = [];
 
-    // Filter by agent (for agents seeing only their clients)
-    if (filters.agentId) {
-      conditions.push(eq(clients.assignedAgent, filters.agentId));
+    // Filter by agent (for agents seeing only their clients or when showMyStoresOnly is enabled)
+    if (filters.agentId || filters.showMyStoresOnly) {
+      const agentId = filters.agentId;
+      if (agentId) {
+        conditions.push(eq(clients.assignedAgent, agentId));
+      }
     }
 
     // Filter by category
@@ -430,6 +433,14 @@ export class DatabaseStorage implements IStorage {
         sql`${clients.data}->>'State' = ${state} OR ${clients.data}->>'state' = ${state}`
       );
       conditions.push(sql`(${sql.join(stateConditions, sql` OR `)})`);
+    }
+
+    // Filter by cities (check JSONB data.City field)
+    if (filters.cities && filters.cities.length > 0) {
+      const cityConditions = filters.cities.map(city =>
+        sql`${clients.data}->>'City' = ${city} OR ${clients.data}->>'city' = ${city}`
+      );
+      conditions.push(sql`(${sql.join(cityConditions, sql` OR `)})`);
     }
 
     // Filter by name (check JSONB data.Name field)
