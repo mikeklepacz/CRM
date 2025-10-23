@@ -369,6 +369,7 @@ export default function ClientDashboard() {
   const [citySearchTerm, setCitySearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [showMyStoresOnly, setShowMyStoresOnly] = useState<boolean>(false);
+  const [showCanadaOnly, setShowCanadaOnly] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
   const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
   const [resizingColumn, setResizingColumn] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
@@ -2005,21 +2006,9 @@ export default function ClientDashboard() {
                       <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
                         <Checkbox
                           id="canada-toggle"
-                          checked={allStates.filter(isCanadianProvince).every(state => selectedStates.has(state)) && 
-                                   allStates.filter(state => !isCanadianProvince(state)).every(state => !selectedStates.has(state))}
+                          checked={showCanadaOnly}
                           onCheckedChange={(checked) => {
-                            const canadianStates = allStates.filter(isCanadianProvince);
-                            const usStates = allStates.filter(state => !isCanadianProvince(state));
-                            const newSelected = new Set<string>();
-                            
-                            if (checked) {
-                              // Show only Canada, hide US
-                              canadianStates.forEach(state => newSelected.add(state));
-                            } else {
-                              // Show only US, hide Canada
-                              usStates.forEach(state => newSelected.add(state));
-                            }
-                            setSelectedStates(newSelected);
+                            setShowCanadaOnly(!!checked);
                           }}
                           data-testid="checkbox-canada-toggle"
                         />
@@ -2036,7 +2025,9 @@ export default function ClientDashboard() {
 
                       <ScrollArea className="h-64">
                         <div className="space-y-2">
-                          {allStates.map((state: string) => (
+                          {allStates
+                            .filter(state => showCanadaOnly ? isCanadianProvince(state) : !isCanadianProvince(state))
+                            .map((state: string) => (
                             <div key={state} className="flex items-center gap-2">
                               <Checkbox
                                 id={`state-${state}`}
