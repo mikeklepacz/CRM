@@ -2504,8 +2504,11 @@ export default function ClientDashboard() {
                 <Button
                   variant="outline"
                   onClick={() => {
+                    console.log("🔵 Export vCard button clicked");
+                    console.log("🔵 filteredData length:", filteredData?.length || 0);
                     setVCardListName("");
                     setExportVCardDialogOpen(true);
+                    console.log("🔵 Dialog should now be open");
                   }}
                   data-testid="button-export-vcard"
                   style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
@@ -4556,7 +4559,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     </Dialog>
 
     {/* Export vCard Dialog */}
-    <Dialog open={exportVCardDialogOpen} onOpenChange={setExportVCardDialogOpen}>
+    <Dialog open={exportVCardDialogOpen} onOpenChange={(open) => {
+      console.log("🟢 Dialog onOpenChange called, open=", open);
+      setExportVCardDialogOpen(open);
+    }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Export Contacts to Phone</DialogTitle>
@@ -4568,7 +4574,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         <div className="space-y-4">
           {/* Export count */}
           <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
-            Exporting <span className="font-semibold">{filteredData.length}</span> stores
+            Exporting <span className="font-semibold">{filteredData?.length || 0}</span> stores
           </div>
 
           {/* Field selection */}
@@ -4658,6 +4664,11 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           </Button>
           <Button 
             onClick={() => {
+              console.log("🟢 Export vCard confirm clicked");
+              console.log("🟢 filteredData:", filteredData?.length || 0, "stores");
+              console.log("🟢 fields:", vCardExportFields);
+              console.log("🟢 listName:", vCardListName);
+              console.log("🟢 platform:", vCardPlatform);
               generateAndDownloadVCard(
                 filteredData,
                 vCardExportFields,
@@ -4667,10 +4678,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
               setExportVCardDialogOpen(false);
               toast({
                 title: "Export Complete",
-                description: `Exported ${filteredData.length} contacts to vCard`,
+                description: `Exported ${filteredData?.length || 0} contacts to vCard`,
               });
             }}
-            disabled={filteredData.length === 0}
+            disabled={(filteredData?.length || 0) === 0}
             data-testid="button-export-vcard-confirm"
           >
             <Download className="mr-2 h-4 w-4" />
