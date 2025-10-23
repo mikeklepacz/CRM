@@ -559,6 +559,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
               </CollapsibleTrigger>
               <CollapsibleContent className="flex-1 overflow-y-auto min-h-0">
                 <div className="p-2 space-y-3 h-full">
+                  {/* Template Builder Button */}
+                  <Button
+                    onClick={() => setTemplateBuilderOpen(true)}
+                    className="w-full"
+                    variant="default"
+                    data-testid="button-template-builder"
+                  >
+                    Template Builder
+                  </Button>
+
                   {/* Add Template Form */}
                   <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
                     <h4 className="font-semibold text-xs">Save New Template</h4>
