@@ -27,6 +27,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Bot,
+  Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -35,11 +36,13 @@ import {
   Folder,
   FolderPlus,
   Loader2,
+  Mail,
   MessageSquarePlus,
   Plus,
   Search,
   Send,
   Sparkles,
+  Store,
   Tag,
   Trash2,
   User as UserIcon,
@@ -1117,39 +1120,175 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-semibold">Content</label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            data-testid="button-insert-variable"
-                          >
-                            Insert Variable
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-80" align="end">
-                          <div className="space-y-2">
-                            <h4 className="font-semibold text-sm">Available Variables</h4>
-                            <div className="max-h-80 overflow-y-auto space-y-1">
-                              {availableVariables.map((variable) => (
-                                <button
-                                  key={variable.name}
-                                  onClick={() => insertVariable(variable.name)}
-                                  className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
-                                  data-testid={`insert-variable-${variable.name}`}
-                                >
-                                  <div className="font-mono text-sm text-primary">
-                                    {`{{${variable.name}}}`}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {variable.description}
-                                  </div>
-                                </button>
-                              ))}
+                      <div className="flex gap-2">
+                        {/* Store Info Variables */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-testid="button-insert-store-variable"
+                            >
+                              <Store className="h-4 w-4 mr-1" />
+                              Store
+                              <ChevronDown className="h-3 w-3 ml-1" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72" align="end">
+                            <div className="space-y-2">
+                              <h4 className="font-semibold text-sm flex items-center gap-2">
+                                <Store className="h-4 w-4" />
+                                Store Information
+                              </h4>
+                              <div className="space-y-1">
+                                {availableVariables
+                                  .filter(v => ['storeName', 'storeAddress', 'storeCity', 'storeState', 'storeWebsite', 'storePhone'].includes(v.name))
+                                  .map((variable) => (
+                                    <button
+                                      key={variable.name}
+                                      onClick={() => insertVariable(variable.name)}
+                                      className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                      data-testid={`insert-variable-${variable.name}`}
+                                    >
+                                      <div className="font-mono text-sm text-primary">
+                                        {`{{${variable.name}}}`}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {variable.description}
+                                      </div>
+                                    </button>
+                                  ))}
+                              </div>
                             </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                          </PopoverContent>
+                        </Popover>
+
+                        {/* Contact Variables */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-testid="button-insert-contact-variable"
+                            >
+                              <Mail className="h-4 w-4 mr-1" />
+                              Contact
+                              <ChevronDown className="h-3 w-3 ml-1" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72" align="end">
+                            <div className="space-y-2">
+                              <h4 className="font-semibold text-sm flex items-center gap-2">
+                                <Mail className="h-4 w-4" />
+                                Contact Information
+                              </h4>
+                              <div className="space-y-1">
+                                {availableVariables
+                                  .filter(v => ['pocName', 'pocEmail', 'pocPhone'].includes(v.name))
+                                  .map((variable) => (
+                                    <button
+                                      key={variable.name}
+                                      onClick={() => insertVariable(variable.name)}
+                                      className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                      data-testid={`insert-variable-${variable.name}`}
+                                    >
+                                      <div className="font-mono text-sm text-primary">
+                                        {`{{${variable.name}}}`}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {variable.description}
+                                      </div>
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+
+                        {/* Agent Variables */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-testid="button-insert-agent-variable"
+                            >
+                              <UserIcon className="h-4 w-4 mr-1" />
+                              Agent
+                              <ChevronDown className="h-3 w-3 ml-1" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72" align="end">
+                            <div className="space-y-2">
+                              <h4 className="font-semibold text-sm flex items-center gap-2">
+                                <UserIcon className="h-4 w-4" />
+                                Agent Information
+                              </h4>
+                              <div className="space-y-1">
+                                {availableVariables
+                                  .filter(v => ['agentName', 'agentEmail', 'agentPhone'].includes(v.name))
+                                  .map((variable) => (
+                                    <button
+                                      key={variable.name}
+                                      onClick={() => insertVariable(variable.name)}
+                                      className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                      data-testid={`insert-variable-${variable.name}`}
+                                    >
+                                      <div className="font-mono text-sm text-primary">
+                                        {`{{${variable.name}}}`}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {variable.description}
+                                      </div>
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+
+                        {/* Date/Time Variables */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-testid="button-insert-datetime-variable"
+                            >
+                              <Calendar className="h-4 w-4 mr-1" />
+                              Date/Time
+                              <ChevronDown className="h-3 w-3 ml-1" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72" align="end">
+                            <div className="space-y-2">
+                              <h4 className="font-semibold text-sm flex items-center gap-2">
+                                <Calendar className="h-4 w-4" />
+                                Date & Time
+                              </h4>
+                              <div className="space-y-1">
+                                {availableVariables
+                                  .filter(v => ['currentDate', 'currentTime'].includes(v.name))
+                                  .map((variable) => (
+                                    <button
+                                      key={variable.name}
+                                      onClick={() => insertVariable(variable.name)}
+                                      className="w-full text-left p-2 rounded hover-elevate flex flex-col gap-1"
+                                      data-testid={`insert-variable-${variable.name}`}
+                                    >
+                                      <div className="font-mono text-sm text-primary">
+                                        {`{{${variable.name}}}`}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {variable.description}
+                                      </div>
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
                     <Textarea
                       ref={contentTextareaRef}
