@@ -420,14 +420,20 @@ export function GoogleSheetsSync() {
 
                 <div className="grid grid-cols-3 gap-2">
                   <Button
-                    onClick={() => importMutation.mutate(sheet.id)}
+                    onClick={() => {
+                      console.log('🔘 Import button clicked for sheet:', sheet.spreadsheetName, sheet.id);
+                      console.log('📊 importMutation.isPending:', importMutation.isPending);
+                      console.log('📊 importMutation.isError:', importMutation.isError);
+                      console.log('📊 importMutation.isSuccess:', importMutation.isSuccess);
+                      importMutation.mutate(sheet.id);
+                    }}
                     disabled={importMutation.isPending}
                     variant="outline"
                     size="sm"
                     data-testid={`button-import-${sheet.id}`}
                   >
                     <Download className="mr-2 h-4 w-4" />
-                    Import
+                    {importMutation.isPending ? "Importing..." : "Import"}
                   </Button>
                   <Button
                     onClick={() => exportMutation.mutate(sheet.id)}
