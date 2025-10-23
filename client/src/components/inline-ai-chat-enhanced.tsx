@@ -179,6 +179,15 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     }, 0);
   };
 
+  const insertTag = (tag: string) => {
+    const currentTags = builderTags.trim();
+    if (currentTags) {
+      setBuilderTags(`${currentTags}, ${tag}`);
+    } else {
+      setBuilderTags(tag);
+    }
+  };
+
   const copyMessageToClipboard = (content: string) => {
     navigator.clipboard.writeText(content);
     toast({ title: "Copied", description: "Message copied to clipboard" });
@@ -355,6 +364,10 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
   const { data: allTags = [] } = useQuery<string[]>({
     queryKey: ["/api/templates/tags"],
+  });
+
+  const { data: userTags = [] } = useQuery<Array<{ id: string; userId: string; tag: string; createdAt: Date }>>({
+    queryKey: ["/api/user-tags"],
   });
 
   const { data: messages = [], isLoading: messagesLoading } = useQuery<ChatMessageType[]>({
@@ -1344,7 +1357,49 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold">Tags</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold">Tags</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="button-insert-tag"
+                          >
+                            <Tag className="h-4 w-4 mr-1" />
+                            My Tags
+                            <ChevronDown className="h-3 w-3 ml-1" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72" align="end">
+                          <div className="space-y-2">
+                            <h4 className="font-semibold text-sm flex items-center gap-2">
+                              <Tag className="h-4 w-4" />
+                              Your Personal Tags
+                            </h4>
+                            {userTags.length === 0 ? (
+                              <p className="text-xs text-muted-foreground py-4 text-center">
+                                No tags yet. Tags you use in templates will appear here.
+                              </p>
+                            ) : (
+                              <div className="space-y-1 max-h-64 overflow-y-auto">
+                                {userTags.map((userTag) => (
+                                  <button
+                                    key={userTag.id}
+                                    onClick={() => insertTag(userTag.tag)}
+                                    className="w-full text-left p-2 rounded hover-elevate flex items-center justify-between group"
+                                    data-testid={`insert-tag-${userTag.tag}`}
+                                  >
+                                    <span className="text-sm">{userTag.tag}</span>
+                                    <Badge variant="outline" className="text-xs">Click to add</Badge>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                     <Input
                       placeholder="email, follow-up, introduction..."
                       value={builderTags}
