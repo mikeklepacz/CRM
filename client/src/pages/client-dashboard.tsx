@@ -3375,7 +3375,6 @@ export default function ClientDashboard() {
                   });
                 }
               }}
-              disabled={(filteredData?.length || 0) === 0}
               data-testid="button-export-vcard-confirm"
             >
               <Download className="mr-2 h-4 w-4" />
