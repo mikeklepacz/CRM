@@ -105,6 +105,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   // Dialog states
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [templateBuilderOpen, setTemplateBuilderOpen] = useState(false);
 
   // Queries
   const { data: projects = [] } = useQuery<Project[]>({
