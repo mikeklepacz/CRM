@@ -29,6 +29,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useCustomTheme, defaultLightColors, defaultDarkColors } from "@/hooks/use-custom-theme";
 import { debug } from "@/lib/debug";
 import { format, parse, isValid } from "date-fns";
+import { generateAndDownloadVCard } from "@/lib/vcard-utils";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
 import { Loader2 } from "lucide-react";
 import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
