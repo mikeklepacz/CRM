@@ -1190,8 +1190,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category,
       };
 
-      // If user is an agent (not admin), only show their clients
-      if (user.role !== 'admin') {
+      // Only apply agent filtering when explicitly requested via showMyStoresOnly
+      // This ensures exports get exactly what's visible in the filtered table
+      if (user.role !== 'admin' && showMyStoresOnly) {
         filters.agentId = user.id;
       }
 
