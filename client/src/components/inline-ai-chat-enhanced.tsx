@@ -462,26 +462,52 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   };
 
   const makeTemplateFromMessage = (content: string) => {
-    // Auto-detect and replace common placeholders
-    const contentWithPlaceholders = autoDetectPlaceholders(content);
+    // Try to parse as email format first (with To:/Subject:/Body: headers)
+    const parsed = parseEmailTemplate(content);
     
-    // Try to parse as email format first
-    const parsed = parseEmailTemplate(contentWithPlaceholders);
     if (parsed) {
-      // It's an email format
+      // It's an email format - apply placeholder detection to each field separately
       setBuilderType("Email");
-      setEmailTo(parsed.to);
-      setEmailSubject(parsed.subject);
-      setEmailBody(parsed.body);
+      setEmailTo(autoDetectPlaceholders(parsed.to));
+      setEmailSubject(autoDetectPlaceholders(parsed.subject));
+      setEmailBody(autoDetectPlaceholders(parsed.body));
       setBuilderContent(""); // Clear script content
     } else {
-      // It's a script/general content
-      setBuilderType("Script");
-      setBuilderContent(contentWithPlaceholders);
-      // Clear email fields
-      setEmailTo("{{email}}");
-      setEmailSubject("");
-      setEmailBody("");
+      // Intelligent email detection: Look for email-like patterns
+      const emailPattern = /^(hi|hey|hello|dear|greetings)/i;
+      const signaturePattern = /(best|regards|thanks|sincerely|cheers)/i;
+      const hasEmailStructure = emailPattern.test(content.trim()) || signaturePattern.test(content);
+      
+      if (hasEmailStructure) {
+        // It looks like an email, even without explicit headers
+        setBuilderType("Email");
+        
+        // Try to extract a subject from the first line if it's short
+        const lines = content.trim().split('\n').filter(l => l.trim());
+        const firstLine = lines[0] || "";
+        const isSubjectLine = firstLine.length < 80 && !emailPattern.test(firstLine);
+        
+        if (isSubjectLine && lines.length > 1) {
+          // First line is probably the subject
+          setEmailTo(autoDetectPlaceholders("{{email}}"));
+          setEmailSubject(autoDetectPlaceholders(firstLine));
+          setEmailBody(autoDetectPlaceholders(lines.slice(1).join('\n')));
+        } else {
+          // No clear subject, put everything in body
+          setEmailTo(autoDetectPlaceholders("{{email}}"));
+          setEmailSubject("");
+          setEmailBody(autoDetectPlaceholders(content));
+        }
+        setBuilderContent(""); // Clear script content
+      } else {
+        // It's a script/general content
+        setBuilderType("Script");
+        setBuilderContent(autoDetectPlaceholders(content));
+        // Clear email fields
+        setEmailTo("{{email}}");
+        setEmailSubject("");
+        setEmailBody("");
+      }
     }
     
     setBuilderTitle("");
