@@ -141,6 +141,15 @@ export function QuickReminder({
       const actualUtcTimestamp = naiveUtcTimestamp - customerOffset;
       const actualUtcDate = new Date(actualUtcTimestamp);
       
+      console.log('[TIMEZONE DEBUG]', {
+        pickerTime: time,
+        customerTimezone,
+        naiveUtcTimestamp,
+        customerOffset,
+        actualUtcTimestamp,
+        actualUtcDate: actualUtcDate.toISOString()
+      });
+      
       // Format the time in both timezones
       const customerTime = formatInTimeZone(
         actualUtcDate,
