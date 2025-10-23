@@ -107,6 +107,18 @@ export function QuickReminder({
   };
 
 
+  // Get friendly timezone name for display
+  const getFriendlyTimezoneName = (timezone: string): string => {
+    // Extract just the city/region name from IANA timezone
+    const parts = timezone.split('/');
+    if (parts.length >= 2) {
+      // Convert "America/Los_Angeles" -> "Los Angeles"
+      // Convert "Europe/Warsaw" -> "Warsaw"
+      return parts[parts.length - 1].replace(/_/g, ' ');
+    }
+    return timezone;
+  };
+
   // Calculate time conversion preview
   const getTimeConversionPreview = () => {
     if (!date || !useCustomerTimezone || !customerTimezone) return null;
@@ -121,20 +133,24 @@ export function QuickReminder({
       const offset = getTimezoneOffset(customerTimezone, naiveDate);
       const utcTime = new Date(naiveDate.getTime() - offset);
       
-      // Format in both timezones for preview
+      // Format time in both timezones (without the timezone abbreviation)
       const customerTime = formatInTimeZone(
         utcTime,
         customerTimezone,
-        'h:mm a zzz'
+        'h:mm a'
       );
       
       const agentTime = formatInTimeZone(
         utcTime,
         agentTimezone,
-        'h:mm a zzz'
+        'h:mm a'
       );
       
-      return `${customerTime} = ${agentTime}`;
+      // Get friendly names
+      const customerTzName = getFriendlyTimezoneName(customerTimezone);
+      const agentTzName = getFriendlyTimezoneName(agentTimezone);
+      
+      return `${customerTime} ${customerTzName} = ${agentTime} ${agentTzName}`;
     } catch (error) {
       return null;
     }

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
-import { getTimezoneOffset, zonedTimeToUtc } from "date-fns-tz";
+import { getTimezoneOffset } from "date-fns-tz";
 import axios from "axios";
 import bcrypt from "bcrypt";
 import * as client from "openid-client";
@@ -5565,13 +5565,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? customerTimezone 
         : agentTimezone || 'UTC';
 
-      // Extract date from ISO string and combine with time
+      // Extract date components
       const dateOnly = reminderDate.split('T')[0]; // e.g., "2025-10-24"
-      const dateTimeString = `${dateOnly} ${reminderTime}`; // e.g., "2025-10-24 09:00"
+      const [year, month, day] = dateOnly.split('-').map(Number);
+      const [hours, minutes] = reminderTime.split(':').map(Number);
       
-      // Parse the date-time string in the effective timezone and convert to UTC
-      // zonedTimeToUtc interprets the date-time as being in the specified timezone
-      const utcTriggerDate = zonedTimeToUtc(dateTimeString, effectiveTimezone);
+      // Create a "naive" date in UTC (wall-clock time, but stored as UTC)
+      // This represents the time the user selected, but in UTC milliseconds
+      const naiveUtcTimestamp = Date.UTC(year, month - 1, day, hours, minutes, 0);
+      const naiveDate = new Date(naiveUtcTimestamp);
+      
+      // Get the timezone offset for the target timezone at this date/time
+      // This tells us how many milliseconds this timezone is offset from UTC
+      const offset = getTimezoneOffset(effectiveTimezone, naiveDate);
+      
+      // Convert to actual UTC: subtract the offset
+      // If user selects 9:00 AM PST (UTC-8), and offset is -28800000ms (8 hours)
+      // We want 9:00 AM PST = 5:00 PM UTC, so: 9:00 UTC - (-8 hours) = 17:00 UTC
+      const utcTriggerDate = new Date(naiveUtcTimestamp - offset);
       
       // Check if date is in the past (AFTER UTC conversion)
       const now = new Date();
