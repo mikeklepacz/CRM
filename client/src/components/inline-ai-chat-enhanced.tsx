@@ -175,89 +175,91 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const autoDetectPlaceholders = (content: string): string => {
     let result = content;
     
-    // Track what we've replaced to avoid double-replacements
-    const replacements: Array<{ pattern: RegExp; variable: string; priority: number }> = [];
+    // Helper function to escape regex special characters
+    const escapeRegex = (str: string): string => {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
     
-    // Email addresses (To: line and in body)
-    replacements.push({
-      pattern: /To:\s*([\w.-]+@[\w.-]+\.\w+)/gi,
-      variable: 'To: {{recipientEmail}}',
-      priority: 1
-    });
+    // Helper function to replace all occurrences of a value with a variable
+    const replaceValue = (value: string | null | undefined, variable: string) => {
+      if (!value || value.trim().length < 2) return; // Skip empty or very short values
+      const trimmedValue = value.trim();
+      
+      // Define boundaries: start/end of string, whitespace, or common punctuation/delimiters
+      // This allows values with embedded punctuation while preventing substring matches
+      const escaped = escapeRegex(trimmedValue);
+      
+      // Boundary characters: whitespace, newline, or punctuation/delimiters that typically separate values
+      // Includes: brackets <>[]{}, parentheses (), quotes "'`, punctuation .,!?;:, slashes /\, hyphens -
+      const boundary = `(?:^|[\\s\\n,.!?;:'"<>\\[\\]{}()\\/\\\\-]|$)`;
+      
+      // Create regex that matches the value when surrounded by boundaries
+      // Using non-capturing groups and allowing the boundary chars to remain
+      const regex = new RegExp(`(${boundary})${escaped}(${boundary})`, 'g');
+      
+      // Replace but keep the boundary characters
+      result = result.replace(regex, `$1{{${variable}}}$2`);
+    };
     
-    // Other email addresses in body
-    replacements.push({
-      pattern: /\b([\w.-]+@[\w.-]+\.\w+)\b/g,
-      variable: '{{email}}',
-      priority: 2
-    });
+    // Get agent data
+    const agentName = user?.username || "";
+    const agentEmail = user?.email || "";
     
-    // Names after greetings (Hi/Hello/Dear Name,)
-    const greetingMatch = result.match(/(?:Hi|Hello|Dear)\s+([A-Z][a-z]+),/);
-    if (greetingMatch) {
-      result = result.replace(
-        new RegExp(`(Hi|Hello|Dear)\\s+${greetingMatch[1]},`, 'g'),
-        '$1 {{pocName}},'
-      );
+    // Build a list of replacements ordered by specificity (longer/more specific first)
+    // This prevents partial replacements
+    const replacements: Array<{ value: string; variable: string }> = [];
+    
+    // Store data (if available)
+    if (storeContext) {
+      // Add all store fields that might appear in the content
+      if (storeContext.name) replacements.push({ value: storeContext.name, variable: 'storeName' });
+      if (storeContext.address) replacements.push({ value: storeContext.address, variable: 'storeAddress' });
+      if (storeContext.city) replacements.push({ value: storeContext.city, variable: 'storeCity' });
+      if (storeContext.state) replacements.push({ value: storeContext.state, variable: 'storeState' });
+      if (storeContext.phone) replacements.push({ value: storeContext.phone, variable: 'storePhone' });
+      if (storeContext.website) replacements.push({ value: storeContext.website, variable: 'storeWebsite' });
+      if (storeContext.point_of_contact) replacements.push({ value: storeContext.point_of_contact, variable: 'pocName' });
+      if (storeContext.poc_email) replacements.push({ value: storeContext.poc_email, variable: 'pocEmail' });
+      if (storeContext.poc_phone) replacements.push({ value: storeContext.poc_phone, variable: 'pocPhone' });
     }
     
-    // Phone numbers - common formats
-    replacements.push({
-      pattern: /\b\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
-      variable: '{{phoneNumber}}',
-      priority: 3
+    // Agent data
+    if (agentName) replacements.push({ value: agentName, variable: 'agentName' });
+    if (agentEmail) replacements.push({ value: agentEmail, variable: 'agentEmail' });
+    
+    // Sort by length (descending) to replace longer strings first
+    // This prevents "John Smith" from being partially replaced as just "John"
+    replacements.sort((a, b) => (b.value?.length || 0) - (a.value?.length || 0));
+    
+    // Apply all replacements
+    replacements.forEach(({ value, variable }) => {
+      replaceValue(value, variable);
     });
     
-    // Company/Store names - look for capitalized multi-word phrases
-    // This is tricky, but we can try to detect repeated capitalized names
-    const capitalizedPhrases = result.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g);
-    if (capitalizedPhrases) {
-      // Find the most frequent capitalized phrase (likely store/company name)
-      const frequencyMap = new Map<string, number>();
-      capitalizedPhrases.forEach(phrase => {
-        const count = frequencyMap.get(phrase) || 0;
-        frequencyMap.set(phrase, count + 1);
-      });
-      
-      // Get most frequent phrase that appears more than once
-      let mostFrequent: string | null = null;
-      let maxCount = 1;
-      frequencyMap.forEach((count, phrase) => {
-        if (count > maxCount && phrase.length > 3) { // Avoid short words
-          mostFrequent = phrase;
-          maxCount = count;
-        }
-      });
-      
-      if (mostFrequent) {
-        result = result.replace(new RegExp(mostFrequent, 'g'), '{{storeName}}');
+    // Special handling for date/time patterns (if the AI generated today's date)
+    const today = new Date();
+    const todayString = today.toLocaleDateString();
+    const todayTimeString = today.toLocaleTimeString();
+    
+    // Try various date formats
+    const dateFormats = [
+      today.toLocaleDateString(),
+      today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+      today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      today.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
+    ];
+    
+    dateFormats.forEach(dateFormat => {
+      if (result.includes(dateFormat)) {
+        const escaped = escapeRegex(dateFormat);
+        result = result.replace(new RegExp(escaped, 'g'), '{{currentDate}}');
       }
-    }
+    });
     
-    // Apply email replacements
-    result = result.replace(
-      /To:\s*([\w.-]+@[\w.-]+\.\w+)/gi,
-      'To: {{recipientEmail}}'
-    );
-    
-    result = result.replace(
-      /\b([\w.-]+@[\w.-]+\.\w+)\b/g,
-      '{{email}}'
-    );
-    
-    // Apply phone number replacement
-    result = result.replace(
-      /\b\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
-      '{{phoneNumber}}'
-    );
-    
-    // Agent name in signature (usually at the end after "Best regards," or similar)
-    const signatureMatch = result.match(/(?:Best regards,|Sincerely,|Thanks,|Cheers,)\s*\n([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-    if (signatureMatch) {
-      result = result.replace(
-        signatureMatch[1],
-        '{{agentName}}'
-      );
+    // Handle time if present
+    if (result.includes(todayTimeString)) {
+      const escaped = escapeRegex(todayTimeString);
+      result = result.replace(new RegExp(escaped, 'g'), '{{currentTime}}');
     }
     
     return result;
