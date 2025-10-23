@@ -31,6 +31,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  FileText,
   Folder,
   FolderPlus,
   Loader2,
@@ -996,7 +997,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
           <Tabs value={templateBuilderTab} onValueChange={setTemplateBuilderTab} className="flex-1 flex flex-col min-h-0">
             <TabsList className="mx-6 mt-4 w-fit">
               <TabsTrigger value="build" data-testid="tab-build">BUILD</TabsTrigger>
-              <TabsTrigger value="browse" data-testid="tab-browse">BROWSE</TabsTrigger>
+              <TabsTrigger value="browse" data-testid="tab-browse">My Templates</TabsTrigger>
             </TabsList>
 
             {/* BUILD Tab */}
