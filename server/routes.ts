@@ -625,7 +625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
-      const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/calendar';
+      const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar';
 
       // Debug logging for OAuth setup
       console.log('[Gmail OAuth] Generating OAuth URL');
