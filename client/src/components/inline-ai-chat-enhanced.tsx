@@ -145,7 +145,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     { name: "pocPhone", description: "POC phone number" },
     { name: "agentName", description: "Your name" },
     { name: "agentEmail", description: "Your email" },
-    { name: "agentPhone", description: "Your phone" },
+    { name: "agentPhone", description: "Your phone number" },
+    { name: "agentMeetingLink", description: "Your meeting/calendar link" },
     { name: "currentDate", description: "Current date" },
     { name: "currentTime", description: "Current time" },
   ];
@@ -207,6 +208,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     // Get agent data
     const agentName = user?.username || "";
     const agentEmail = user?.email || "";
+    const agentPhone = (user as any)?.phone || "";
+    const agentMeetingLink = (user as any)?.meetingLink || "";
     
     // Build a list of replacements ordered by specificity (longer/more specific first)
     // This prevents partial replacements
@@ -229,6 +232,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     // Agent data
     if (agentName) replacements.push({ value: agentName, variable: 'agentName' });
     if (agentEmail) replacements.push({ value: agentEmail, variable: 'agentEmail' });
+    if (agentPhone) replacements.push({ value: agentPhone, variable: 'agentPhone' });
+    if (agentMeetingLink) replacements.push({ value: agentMeetingLink, variable: 'agentMeetingLink' });
     
     // Sort by length (descending) to replace longer strings first
     // This prevents "John Smith" from being partially replaced as just "John"
@@ -291,7 +296,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     // Get user data (agent info)
     const agentName = user?.username || "Your Name";
     const agentEmail = user?.email || "your@email.com";
-    const agentPhone = ""; // Not available in user object
+    const agentPhone = (user as any)?.phone || "";
+    const agentMeetingLink = (user as any)?.meetingLink || "";
     
     // Replace store-related variables
     if (storeContext) {
@@ -310,6 +316,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     result = result.replace(/\{\{agentName\}\}/g, agentName);
     result = result.replace(/\{\{agentEmail\}\}/g, agentEmail);
     result = result.replace(/\{\{agentPhone\}\}/g, agentPhone);
+    result = result.replace(/\{\{agentMeetingLink\}\}/g, agentMeetingLink);
     
     // Replace date/time variables
     const now = new Date();
@@ -1226,7 +1233,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                               </h4>
                               <div className="space-y-1">
                                 {availableVariables
-                                  .filter(v => ['agentName', 'agentEmail', 'agentPhone'].includes(v.name))
+                                  .filter(v => ['agentName', 'agentEmail', 'agentPhone', 'agentMeetingLink'].includes(v.name))
                                   .map((variable) => (
                                     <button
                                       key={variable.name}

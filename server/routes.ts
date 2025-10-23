@@ -238,6 +238,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     lastName: z.string().min(1, "Last name is required"),
     email: z.string().email("Invalid email address"),
     agentName: z.string().optional(),
+    phone: z.string().optional(),
+    meetingLink: z.string().url("Invalid URL").optional().or(z.literal("")),
   });
 
   const passwordSchema = z.object({
@@ -270,9 +272,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { firstName, lastName, email, agentName } = validation.data;
+      const { firstName, lastName, email, agentName, phone, meetingLink } = validation.data;
 
-      const updated = await storage.updateUser(userId, { firstName, lastName, email, agentName });
+      const updated = await storage.updateUser(userId, { firstName, lastName, email, agentName, phone, meetingLink });
       res.json(updated);
     } catch (error: any) {
       console.error("Error updating profile:", error);

@@ -33,6 +33,8 @@ const profileSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
   agentName: z.string().optional(),
+  phone: z.string().optional(),
+  meetingLink: z.string().url("Invalid URL").optional().or(z.literal("")),
 });
 
 const passwordSchema = z.object({
@@ -168,6 +170,8 @@ export default function Settings() {
       lastName: user?.lastName || "",
       email: user?.email || "",
       agentName: user?.agentName || "",
+      phone: (user as any)?.phone || "",
+      meetingLink: (user as any)?.meetingLink || "",
     },
   });
 
@@ -558,6 +562,38 @@ export default function Settings() {
                         </FormControl>
                         <FormDescription>
                           This name must match exactly with WooCommerce and Google Sheets
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="e.g., (555) 123-4567" data-testid="input-agent-phone" />
+                        </FormControl>
+                        <FormDescription>
+                          Your phone number for email templates
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="meetingLink"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Meeting Link</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="e.g., https://calendly.com/yourname" data-testid="input-meeting-link" />
+                        </FormControl>
+                        <FormDescription>
+                          Your calendar/meeting link (Calendly, Google Meet, etc.)
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
