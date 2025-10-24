@@ -770,8 +770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (webhookError: any) {
         console.error('[Calendar Webhook] ❌ FAILED to register webhook:', {
           error: webhookError.message,
-          userId,
-          webhookUrl
+          userId
         });
         // Continue with connection - user can still use calendar features without webhooks
         // But log prominently so we know sync will be one-way only
