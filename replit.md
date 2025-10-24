@@ -79,3 +79,38 @@ The application is built around a client dashboard that unifies data from two Go
       - Handles midnight rollover using Date.UTC for timezone-neutral date advancement
       - Eliminates double timezone conversion bugs by avoiding server timezone assumptions
       - Webhook handler parses Google's datetime to extract local date/time components for bidirectional sync
+
+## Google Sheets Schema
+
+### Store Database Sheet
+The Store Database contains client information with the following columns:
+- Store Name
+- Address
+- City
+- State
+- Phone
+- Website
+- Email
+- POC (Point of Contact) Name
+- POC Email
+- POC Phone
+- Status
+- Agent
+- Notes
+- Last Contact Date
+
+### Commission Tracker Sheet
+The Commission Tracker records sales commissions with the following columns (column letters may vary):
+- **Column A**: Link (store website URL)
+- **Column B**: Agent Name (sales agent assigned to commission)
+- **Column C**: Transaction ID
+- **Column D**: Date (commission date)
+- **Column E**: Order Number
+- **Column F**: Commission Type ("Flat", "25%", "10%")
+- **Column G**: Amount (commission amount in dollars)
+- **Column H**: Status (commission status)
+
+**Important Notes:**
+- Backend code searches for columns using case-insensitive matching: `headers.findIndex(h => h.toLowerCase() === 'agent name')`
+- The "Agent Name" column (not just "Agent") is used for role-based analytics filtering
+- Analytics endpoints filter commission data by agent name for security (agents see only their own data)

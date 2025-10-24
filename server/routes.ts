@@ -5141,7 +5141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
-      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
+      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
 
       // Calculate metrics
       const now = new Date();
@@ -5342,7 +5342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
-      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
+      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
 
       // Track unique stores and earnings by tier
       const tier25Stores = new Set<string>();
@@ -5520,7 +5520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
-      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
+      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
 
       // Track transactions per store
       const storeTransactions: { [link: string]: { count: number; totalAmount: number; lastTransactionDate: Date | null } } = {};
@@ -5661,7 +5661,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = trackerRows[0];
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
-      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
+      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
 
       const monthlyData: { [key: string]: { commission: number; transactions: number } } = {};
 
