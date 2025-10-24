@@ -11,10 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { TicketDialog } from "./ticket-dialog";
 
 interface HeaderProps {
   colorPresets?: Array<{name: string, color: string}>;
@@ -25,6 +28,16 @@ interface HeaderProps {
 export function Header({ colorPresets = [], setColorPresets = () => {}, deleteColorPreset = () => {} }: HeaderProps) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
+
+  // Get unread ticket count (admin only)
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ['/api/tickets/unread-count'],
+    enabled: user?.role === 'admin',
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  const unreadCount = unreadData?.count || 0;
 
   if (!user) return null;
 
@@ -76,6 +89,28 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
           
           <div className="flex items-center gap-3">
             <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
+            
+            {/* Support Ticket Icon */}
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setTicketDialogOpen(true)}
+                data-testid="button-support"
+              >
+                <Mail className="h-5 w-5" />
+              </Button>
+              {unreadCount > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-xs"
+                  data-testid="badge-unread-count"
+                >
+                  {unreadCount}
+                </Badge>
+              )}
+            </div>
+            
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -111,6 +146,8 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
           </div>
         </div>
       </div>
+      
+      <TicketDialog open={ticketDialogOpen} onOpenChange={setTicketDialogOpen} />
     </header>
   );
 }
