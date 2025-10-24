@@ -480,10 +480,6 @@ export default function ClientDashboard() {
   const customColors = actualTheme === 'dark' ? darkModeColors : lightModeColors;
   const setCustomColors = actualTheme === 'dark' ? setDarkModeColors : setLightModeColors;
 
-  // colorPresets are now available from the useCustomTheme hook called above
-  const [presetName, setPresetName] = useState("");
-  const [activeColorField, setActiveColorField] = useState<string | null>(null);
-
   // Initialize local state from hook values only once (when preferences load)
   // Don't continuously sync to allow editing before saving
   useEffect(() => {
