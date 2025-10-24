@@ -39,6 +39,7 @@ import { SharedColorPicker } from "@/components/shared-color-picker";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 import { useChatPanel } from "@/hooks/useChatPanel";
 import { QuickReminder } from "@/components/quick-reminder";
+import { normalizeLink } from "@shared/linkUtils";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -577,13 +578,37 @@ export default function ClientDashboard() {
         value,
       });
     },
-    onSuccess: async (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
-      toast({
-        title: "Success",
-        description: "Cell updated successfully",
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["merged-data"] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(["merged-data"]);
+
+      // Optimistically update the cache
+      queryClient.setQueryData(["merged-data"], (old: any) => {
+        if (!old || !old.rows) return old;
+        
+        return {
+          ...old,
+          rows: old.rows.map((row: any) => {
+            // Match the row being updated (by store row index or tracker row index)
+            const isMatchingRow = 
+              (row._storeRowIndex === variables.rowIndex && row._storeSheetId === variables.sheetId) ||
+              (row._trackerRowIndex === variables.rowIndex && row._trackerSheetId === variables.sheetId);
+            
+            if (isMatchingRow) {
+              return { ...row, [variables.column]: variables.value };
+            }
+            return row;
+          })
+        };
       });
 
+      // Return context with the snapshot so we can rollback on error
+      return { previousData };
+    },
+    onSuccess: async (data, variables) => {
       // Auto-claim unclaimed stores after successfully editing a store column
       if (variables.shouldAutoClaimRow && variables.linkValue && trackerSheetId) {
         try {
@@ -593,20 +618,26 @@ export default function ClientDashboard() {
             value: "",  // Empty value, just claiming
             joinColumn,
           });
-          // Silently refresh data after claiming
-          queryClient.invalidateQueries({ queryKey: ["merged-data"] });
         } catch (error) {
           // Soft error - don't block the user
           console.error("Auto-claim failed:", error);
         }
       }
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables, context: any) => {
+      // Rollback to the previous value on error
+      if (context?.previousData) {
+        queryClient.setQueryData(["merged-data"], context.previousData);
+      }
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to sync with server
+      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
     },
   });
 
@@ -668,13 +699,34 @@ export default function ClientDashboard() {
         updates,
       });
     },
-    onSuccess: async (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
-      toast({
-        title: "Success",
-        description: "Cell updated successfully",
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["merged-data"] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(["merged-data"]);
+
+      // Optimistically update the cache
+      queryClient.setQueryData(["merged-data"], (old: any) => {
+        if (!old || !old.rows) return old;
+        
+        return {
+          ...old,
+          rows: old.rows.map((row: any) => {
+            // Match the row by link value
+            const rowLink = getLinkValue(row);
+            if (rowLink && normalizeLink(rowLink) === normalizeLink(variables.link)) {
+              return { ...row, ...variables.updates };
+            }
+            return row;
+          })
+        };
       });
 
+      // Return context with the snapshot so we can rollback on error
+      return { previousData };
+    },
+    onSuccess: async (data, variables) => {
       // Auto-claim unclaimed stores after successfully creating tracker row
       if (variables.shouldAutoClaim && variables.link && variables.trackerSheetId) {
         try {
@@ -684,20 +736,26 @@ export default function ClientDashboard() {
             value: "",  // Empty value, just claiming
             joinColumn: variables.joinColumn,
           });
-          // Silently refresh data after claiming
-          queryClient.invalidateQueries({ queryKey: ["merged-data"] });
         } catch (error) {
           // Soft error - don't block the user
           console.error("Auto-claim failed:", error);
         }
       }
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables, context: any) => {
+      // Rollback to the previous value on error
+      if (context?.previousData) {
+        queryClient.setQueryData(["merged-data"], context.previousData);
+      }
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to sync with server
+      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
     },
   });
 
@@ -910,6 +968,16 @@ export default function ClientDashboard() {
       const currentWidths = { ...columnWidths };
       const currentOrder = [...columnOrder];
       const hiddenColumns = ['title', 'error']; // Columns to hide by default
+      
+      // Hide Agent column for non-admin users (since auto-claiming manages it)
+      const isAgentColumn = (col: string) => 
+        col.toLowerCase() === 'agent' || col.toLowerCase() === 'agent name';
+      const shouldHideColumn = (col: string) => {
+        if (isAgentColumn(col) && currentUser?.role !== 'admin') {
+          return true;
+        }
+        return hiddenColumns.includes(col.toLowerCase());
+      };
 
       // Check if we have saved preferences (only on first load)
       if (userPreferences && !preferencesLoaded) {
@@ -917,11 +985,11 @@ export default function ClientDashboard() {
         if (userPreferences.visibleColumns) {
           // Merge saved preferences with new headers (in case new columns were added)
           headers.forEach((header: string) => {
-            currentVisible[header] = userPreferences.visibleColumns![header] ?? !hiddenColumns.includes(header.toLowerCase());
+            currentVisible[header] = userPreferences.visibleColumns![header] ?? !shouldHideColumn(header);
           });
         } else {
           headers.forEach((header: string) => {
-            currentVisible[header] = !hiddenColumns.includes(header.toLowerCase());
+            currentVisible[header] = !shouldHideColumn(header);
           });
         }
 
@@ -929,9 +997,16 @@ export default function ClientDashboard() {
           // Use saved column order, adding any new columns at the end
           const savedOrder = userPreferences.columnOrder.filter((col: string) => headers.includes(col));
           const newColumns = headers.filter((h: string) => !savedOrder.includes(h));
-          setColumnOrder([...savedOrder, ...newColumns]);
+          // Filter out Agent column for non-admin users
+          const finalOrder = [...savedOrder, ...newColumns].filter(col => 
+            currentUser?.role === 'admin' || !isAgentColumn(col)
+          );
+          setColumnOrder(finalOrder);
         } else {
-          setColumnOrder(headers);
+          const finalOrder = headers.filter(col => 
+            currentUser?.role === 'admin' || !isAgentColumn(col)
+          );
+          setColumnOrder(finalOrder);
         }
 
         if (userPreferences.columnWidths) {
@@ -982,11 +1057,14 @@ export default function ClientDashboard() {
       } else if (!preferencesLoaded) {
         // No saved preferences, use defaults (only on first load)
         headers.forEach((header: string) => {
-          currentVisible[header] = !hiddenColumns.includes(header.toLowerCase());
+          currentVisible[header] = !shouldHideColumn(header);
           currentWidths[header] = 200;
         });
         setVisibleColumns(currentVisible);
-        setColumnOrder(headers);
+        const finalOrder = headers.filter(col => 
+          currentUser?.role === 'admin' || !isAgentColumn(col)
+        );
+        setColumnOrder(finalOrder);
         setColumnWidths(currentWidths);
         setFontSize(14);
         setRowHeight(48);
@@ -1001,13 +1079,16 @@ export default function ClientDashboard() {
         const newHeaders = headers.filter((h: string) => !currentOrder.includes(h));
         if (newHeaders.length > 0) {
           console.log('New headers detected:', newHeaders);
-          // Add new headers to column order
-          setColumnOrder([...currentOrder, ...newHeaders]);
+          // Add new headers to column order (filtering out Agent for non-admins)
+          const headersToAdd = newHeaders.filter(col => 
+            currentUser?.role === 'admin' || !isAgentColumn(col)
+          );
+          setColumnOrder([...currentOrder, ...headersToAdd]);
 
           // Add new headers to visible columns (visible by default unless in hiddenColumns)
           const updatedVisible = { ...currentVisible };
           newHeaders.forEach((header: string) => {
-            updatedVisible[header] = !hiddenColumns.includes(header.toLowerCase());
+            updatedVisible[header] = !shouldHideColumn(header);
           });
           setVisibleColumns(updatedVisible);
 
@@ -1020,7 +1101,7 @@ export default function ClientDashboard() {
         }
       }
     }
-  }, [headers, userPreferences, preferencesQueryFetched, preferencesLoaded]);
+  }, [headers, userPreferences, preferencesQueryFetched, preferencesLoaded, currentUser?.role]);
 
 
   const toggleColumn = (column: string) => {
@@ -3814,16 +3895,38 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       }
 
       await Promise.all(promises);
-      return { closeDialog };
+      return { closeDialog, storeChanges, trackerChanges };
+    },
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["merged-data"] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(["merged-data"]);
+
+      // Optimistically update the cache with the new formData values
+      queryClient.setQueryData(["merged-data"], (old: any) => {
+        if (!old || !old.rows) return old;
+        
+        return {
+          ...old,
+          rows: old.rows.map((r: any) => {
+            // Match the row being edited
+            const rowLink = getLinkValue(r);
+            const currentRowLink = getLinkValue(row);
+            if (rowLink && currentRowLink && normalizeLink(rowLink) === normalizeLink(currentRowLink)) {
+              // Apply all formData changes to this row
+              return { ...r, ...formData };
+            }
+            return r;
+          })
+        };
+      });
+
+      // Return context with the snapshot so we can rollback on error
+      return { previousData };
     },
     onSuccess: async (data) => {
-      toast({
-        title: "Success",
-        description: "Store information updated successfully",
-      });
-      // Invalidate and refetch to update the table immediately
-      await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
-      await refetch();
       setInitialData(formData); // Update initial data so changes are no longer "unsaved"
       
       // Auto-claim unclaimed stores after successfully saving (if not already claimed via tracker upsert)
@@ -3839,8 +3942,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             value: "",  // Empty value, just claiming
             joinColumn,
           });
-          // Silently refresh data after claiming
-          await queryClient.invalidateQueries({ queryKey: ["merged-data"] });
         } catch (error) {
           // Soft error - don't block the user
           console.error("Auto-claim failed:", error);
@@ -3857,12 +3958,20 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         onOpenChange(false);
       }
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables, context: any) => {
+      // Rollback to the previous value on error
+      if (context?.previousData) {
+        queryClient.setQueryData(["merged-data"], context.previousData);
+      }
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Always refetch after error or success to sync with server
+      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
     },
   });
 
@@ -3914,44 +4023,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   };
 
   const handleSave = () => {
-    // Check if any tracker fields are being changed
-    const trackerFieldsChanged = Object.keys(formData).some((key) => {
-      const typedKey = key as keyof typeof formData;
-      const mapping = fieldToSheetMapping[key];
-      return mapping?.sheet === 'tracker' && formData[typedKey] !== initialData[typedKey];
-    });
-
-    // If tracker fields are being changed, follow_up_date is mandatory
-    if (trackerFieldsChanged && !formData.follow_up_date) {
-      toast({
-        title: "Validation Error",
-        description: "Follow-Up Date is required when updating sales tracking information.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     saveMutation.mutate({ closeDialog: false });
   };
 
   const handleSaveAndExit = () => {
-    // Check if any tracker fields are being changed
-    const trackerFieldsChanged = Object.keys(formData).some((key) => {
-      const typedKey = key as keyof typeof formData;
-      const mapping = fieldToSheetMapping[key];
-      return mapping?.sheet === 'tracker' && formData[typedKey] !== initialData[typedKey];
-    });
-
-    // If tracker fields are being changed, follow_up_date is mandatory
-    if (trackerFieldsChanged && !formData.follow_up_date) {
-      toast({
-        title: "Validation Error",
-        description: "Follow-Up Date is required when updating sales tracking information.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     saveMutation.mutate({ closeDialog: true });
   };
 
