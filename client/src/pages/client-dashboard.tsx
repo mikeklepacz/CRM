@@ -721,6 +721,7 @@ export default function ClientDashboard() {
     // colorPresets now managed by useCustomTheme hook
     freezeFirstColumn?: boolean;
     showMyStoresOnly?: boolean;
+    autoLoadScript?: boolean;
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
@@ -2907,12 +2908,15 @@ export default function ClientDashboard() {
                                               allLocations: selectedFranchise.locations
                                             } : undefined
                                           });
-                                          // Open AI Assistant with default script
-                                          const saved = localStorage.getItem(`storeDetailsShowAssistant`);
-                                          if (saved !== 'true') {
-                                            localStorage.setItem(`storeDetailsShowAssistant`, 'true');
+                                          // Open AI Assistant with default script (only if autoLoadScript preference is enabled)
+                                          const autoLoadEnabled = userPreferences?.autoLoadScript ?? true;
+                                          if (autoLoadEnabled) {
+                                            const saved = localStorage.getItem(`storeDetailsShowAssistant`);
+                                            if (saved !== 'true') {
+                                              localStorage.setItem(`storeDetailsShowAssistant`, 'true');
+                                            }
+                                            setLoadDefaultScriptTrigger(prev => prev + 1);
                                           }
-                                          setLoadDefaultScriptTrigger(prev => prev + 1);
                                         }}
                                         className="flex items-center gap-1 hover:underline"
                                         style={{ color: customColors.primary }}
@@ -3293,7 +3297,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   const { data: currentUser } = useQuery<{ email: string; role: string; agentName?: string }>({ queryKey: ['/api/auth/user'] });
   
   // Fetch user preferences for timezone and time format
-  const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string; timeFormat?: string }>({
+  const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string; timeFormat?: string; autoLoadScript?: boolean }>({
     queryKey: ['/api/user/preferences'],
   });
 
@@ -3829,6 +3833,38 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     }
   };
 
+  // Auto Load Script preference (from database)
+  const [autoLoadScript, setAutoLoadScript] = useState<boolean>(true);
+
+  // Load autoLoadScript from userPreferences
+  useEffect(() => {
+    if (userPreferences) {
+      setAutoLoadScript(userPreferences.autoLoadScript ?? true);
+    }
+  }, [userPreferences]);
+
+  // Mutation to update autoLoadScript preference
+  const updateAutoLoadScriptMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoLoadScript: enabled }),
+      });
+      if (!response.ok) throw new Error('Failed to update preference');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+    },
+  });
+
+  // Handler to update autoLoadScript and persist to database
+  const handleAutoLoadScriptChange = (checked: boolean) => {
+    setAutoLoadScript(checked);
+    updateAutoLoadScriptMutation.mutate(checked);
+  };
+
   // Handle close with unsaved changes warning
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
 
@@ -3869,20 +3905,36 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         <DialogHeader>
           <DialogTitle className="text-center">Store Details</DialogTitle>
           <div className="flex items-center justify-between gap-4 pt-2">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="show-assistant"
-                checked={showAssistant}
-                onCheckedChange={(checked) => handleShowAssistantChange(!!checked)}
-                data-testid="checkbox-show-assistant"
-              />
-              <Label 
-                htmlFor="show-assistant" 
-                className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
-              >
-                <Sparkles className="h-3 w-3" />
-                Show AI Assistant
-              </Label>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-assistant"
+                  checked={showAssistant}
+                  onCheckedChange={(checked) => handleShowAssistantChange(!!checked)}
+                  data-testid="checkbox-show-assistant"
+                />
+                <Label 
+                  htmlFor="show-assistant" 
+                  className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Show AI Assistant
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="auto-load-script"
+                  checked={autoLoadScript}
+                  onCheckedChange={(checked) => handleAutoLoadScriptChange(!!checked)}
+                  data-testid="checkbox-auto-load-script"
+                />
+                <Label 
+                  htmlFor="auto-load-script" 
+                  className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
+                >
+                  Auto Load Script
+                </Label>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox
