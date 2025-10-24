@@ -3116,6 +3116,8 @@ export default function ClientDashboard() {
           currentColors={currentColors}
           statusOptions={statusOptions}
           statusColors={statusColors}
+          contextUpdateTrigger={contextUpdateTrigger}
+          loadDefaultScriptTrigger={loadDefaultScriptTrigger}
         />
       )}
 
@@ -3277,7 +3279,7 @@ export default function ClientDashboard() {
 }
 
 // Store Details Dialog Component
-function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors }: { 
+function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, loadDefaultScriptTrigger }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
   row: any;
@@ -3291,6 +3293,8 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   };
   statusOptions: string[];
   statusColors: { [status: string]: { background: string; text: string } };
+  contextUpdateTrigger: number;
+  loadDefaultScriptTrigger: number;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
