@@ -630,6 +630,59 @@ export default function ClientDashboard() {
     },
   });
 
+  // Mutation to upsert tracker row (create if doesn't exist, update if it does)
+  const upsertTrackerMutation = useMutation({
+    mutationFn: async ({
+      trackerSheetId,
+      link,
+      updates,
+      shouldAutoClaim,
+      joinColumn,
+    }: {
+      trackerSheetId: string;
+      link: string;
+      updates: Record<string, any>;
+      shouldAutoClaim?: boolean;
+      joinColumn: string;
+    }) => {
+      return await apiRequest("POST", "/api/sheets/tracker/upsert", {
+        link,
+        updates,
+      });
+    },
+    onSuccess: async (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+      toast({
+        title: "Success",
+        description: "Cell updated successfully",
+      });
+
+      // Auto-claim unclaimed stores after successfully creating tracker row
+      if (variables.shouldAutoClaim && variables.link && variables.trackerSheetId) {
+        try {
+          await apiRequest("POST", `/api/sheets/${variables.trackerSheetId}/claim-store`, {
+            linkValue: variables.link,
+            column: "Agent",  // Claim with Agent column
+            value: "",  // Empty value, just claiming
+            joinColumn: variables.joinColumn,
+          });
+          // Silently refresh data after claiming
+          queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+        } catch (error) {
+          // Soft error - don't block the user
+          console.error("Auto-claim failed:", error);
+        }
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Mutation to save color preferences
   const saveColorsMutation = useMutation({
     mutationFn: async ({ lightModeColors, darkModeColors }: any) => {
@@ -671,12 +724,24 @@ export default function ClientDashboard() {
       rowIndex = row._trackerRowIndex;
       updateCellMutation.mutate({ sheetId, rowIndex, column, value });
     } else if (isTrackerColumn && isUnclaimed) {
-      // Don't allow editing tracker columns on unclaimed stores
-      // User must claim the store first by editing a store column
-      toast({
-        title: "Cannot Edit",
-        description: "Please edit a store column first to claim this store, then you can edit tracker columns.",
-        variant: "destructive",
+      // Use tracker upsert for unclaimed stores - creates row + claims
+      const linkValue = row[joinColumn];
+      if (!linkValue || !trackerSheetId) {
+        toast({
+          title: "Error",
+          description: "Cannot update tracker column: Missing link value",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Use upsert mutation which creates tracker row and updates value
+      upsertTrackerMutation.mutate({
+        trackerSheetId,
+        link: linkValue,
+        updates: { [column]: value },
+        shouldAutoClaim: true,
+        joinColumn
       });
     } else if (isStoreColumn && row._storeSheetId && row._storeRowIndex) {
       // Update store sheet - will auto-claim if unclaimed
@@ -1318,13 +1383,13 @@ export default function ClientDashboard() {
     const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
     const rowLink = row.link || row.Link || `row-${rowIndex}`;
 
-    if (!sheetId || !rowIndex) return;
+    if (!sheetId) return; // Only check sheetId, allow editing even if rowIndex is undefined (unclaimed stores)
 
     // Use a stable unique key based on row link (not index) for virtual scrolling
     const key = `${rowLink}-${column}-${sheetId}`;
     setEditedCells(prev => ({
       ...prev,
-      [key]: { link: rowLink, rowIndex, column, value, sheetId },
+      [key]: { link: rowLink, rowIndex, column, value, sheetId, isUnclaimed: !rowIndex },
     }));
   };
 
