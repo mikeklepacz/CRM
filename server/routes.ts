@@ -279,6 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const gmailSettingsSchema = z.object({
     signature: z.string().nullable().optional(),
     gmailLabels: z.array(z.string()).nullable().optional(),
+    emailPreference: z.enum(["gmail_draft", "mailto"]).optional(),
   });
 
   // User settings endpoints
@@ -337,9 +338,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { signature, gmailLabels } = validation.data;
+      const { signature, gmailLabels, emailPreference } = validation.data;
 
-      const updated = await storage.updateUser(userId, { signature, gmailLabels });
+      const updated = await storage.updateUser(userId, { signature, gmailLabels, emailPreference });
       res.json(updated);
     } catch (error: any) {
       console.error("Error updating Gmail settings:", error);
