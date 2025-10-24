@@ -3110,7 +3110,13 @@ export default function ClientDashboard() {
       {storeDetailsDialog && (
         <StoreDetailsDialog
           open={storeDetailsDialog.open}
-          onOpenChange={(open) => !open && setStoreDetailsDialog(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setStoreDetailsDialog(null);
+              // Reset script trigger so it doesn't auto-load when reopening via name link
+              setLoadDefaultScriptTrigger(0);
+            }
+          }}
           row={storeDetailsDialog.row}
           trackerSheetId={trackerSheetId}
           storeSheetId={storeSheetId}
