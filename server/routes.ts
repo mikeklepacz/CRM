@@ -8302,18 +8302,6 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Reminder routes
-  app.get('/api/reminders', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const reminders = await storage.getRemindersByUser(userId);
-      res.json(reminders);
-    } catch (error: any) {
-      console.error('Error fetching reminders:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch reminders' });
-    }
-  });
-
   // Automatic webhook renewal system - runs daily
   async function renewWebhooksIfNeeded() {
     try {
