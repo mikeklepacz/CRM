@@ -101,10 +101,24 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
 
         // Build timezone-aware datetime string (YYYY-MM-DDTHH:MM:SS format)
         const startDateTime = `${reminder.scheduledDate}T${reminder.scheduledTime}:00`;
-        const startDate = new Date(startDateTime);
-        const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 minutes later
-        const endDateTime = endDate.toISOString().split('T')[0] + 'T' + 
-                           endDate.toISOString().split('T')[1].substring(0, 8);
+        
+        // Calculate end time by adding 30 minutes, handling midnight rollover
+        const [hours, minutes] = reminder.scheduledTime.split(':').map(Number);
+        const totalMinutes = hours * 60 + minutes + 30;
+        const endHours = Math.floor(totalMinutes / 60) % 24;
+        const endMinutes = totalMinutes % 60;
+        const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+        
+        // Check if we crossed midnight (need to advance date)
+        let endDate = reminder.scheduledDate;
+        if (totalMinutes >= 1440) { // 24 * 60 = 1440 minutes in a day
+          // Use Date.UTC to avoid server timezone issues
+          const [year, month, day] = reminder.scheduledDate.split('-').map(Number);
+          const nextDayMs = Date.UTC(year, month - 1, day + 1);
+          const nextDay = new Date(nextDayMs);
+          endDate = nextDay.toISOString().split('T')[0]; // YYYY-MM-DD
+        }
+        const endDateTime = `${endDate}T${endTime}:00`;
 
         // Create calendar event with timezone-aware datetime
         const event = {

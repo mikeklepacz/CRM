@@ -5726,11 +5726,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Build timezone-aware datetime strings (YYYY-MM-DDTHH:MM:SS format)
           const startDateTime = `${scheduledDate}T${scheduledTime}:00`;
-          const startDate = new Date(startDateTime);
-          const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 minutes later
-          const hours = String(endDate.getHours()).padStart(2, '0');
-          const minutes = String(endDate.getMinutes()).padStart(2, '0');
-          const endDateTime = `${scheduledDate}T${hours}:${minutes}:00`;
+          
+          // Calculate end time by adding 30 minutes, handling midnight rollover
+          const [hours, minutes] = scheduledTime.split(':').map(Number);
+          const totalMinutes = hours * 60 + minutes + 30;
+          const endHours = Math.floor(totalMinutes / 60) % 24;
+          const endMinutes = totalMinutes % 60;
+          const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+          
+          // Check if we crossed midnight (need to advance date)
+          let endDate = scheduledDate;
+          if (totalMinutes >= 1440) { // 24 * 60 = 1440 minutes in a day
+            // Use Date.UTC to avoid server timezone issues
+            const [year, month, day] = scheduledDate.split('-').map(Number);
+            const nextDayMs = Date.UTC(year, month - 1, day + 1);
+            const nextDay = new Date(nextDayMs);
+            endDate = nextDay.toISOString().split('T')[0]; // YYYY-MM-DD
+          }
+          const endDateTime = `${endDate}T${endTime}:00`;
 
           // Get calendar reminders from request or use default
           const calendarReminders = req.body.calendarReminders || [{ method: 'popup', minutes: 10 }];
