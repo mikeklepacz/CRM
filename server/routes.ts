@@ -5781,19 +5781,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Aggregate commissions by store Link
       const storeCommissions: { [link: string]: { totalCommission: number; transactionCount: number } } = {};
       
+      console.log('[TOP-CLIENTS] allowedAgentNames:', allowedAgentNames);
+      console.log('[TOP-CLIENTS] Processing', trackerRows.length - 1, 'tracker rows');
+      
       for (let i = 1; i < trackerRows.length; i++) {
         const row = trackerRows[i];
         const link = row[linkIndex] || '';
         const amountStr = row[amountIndex] || '0';
         const rowAgent = row[agentIndex] || '';
 
-        // Filter by allowed agent names
+        // Filter by allowed agent names - MUST have matching agent name
         if (agentIndex !== -1 && allowedAgentNames.length > 0) {
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
           );
-          if (!isAllowed) continue;
+          console.log(`[TOP-CLIENTS] Row ${i}: rowAgent="${rowAgent}", normalized="${rowAgentNormalized}", isAllowed=${isAllowed}`);
+          if (!isAllowed) {
+            console.log(`[TOP-CLIENTS] Row ${i}: SKIPPING - not allowed`);
+            continue;
+          }
         }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
