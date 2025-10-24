@@ -4613,17 +4613,37 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                             
                             console.log('[REMINDER] Response:', response);
 
+                            // Update the form data to reflect the changes
+                            const followUpDate = format(reminderData.date, 'M/d/yyyy');
+                            handleInputChange('follow_up_date', followUpDate);
+                            handleInputChange('next_action', reminderData.note);
+
+                            // Automatically save Follow-Up Date and Next Action to tracker sheet
+                            try {
+                              const link = formData.link || getLinkValue(row);
+                              if (link) {
+                                await apiRequest('POST', '/api/sheets/tracker/upsert', {
+                                  link,
+                                  updates: {
+                                    'Follow-Up Date': followUpDate,
+                                    'Next Action': reminderData.note,
+                                  }
+                                });
+                                
+                                // Invalidate cache to reflect the changes
+                                queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+                              }
+                            } catch (saveError) {
+                              console.error('[REMINDER] Failed to save Follow-Up Date:', saveError);
+                            }
+
                             toast({
                               title: "Reminder Created",
                               description: response.warning 
                                 ? response.warning.message 
-                                : "Your reminder has been saved successfully.",
+                                : "Your reminder has been saved and Follow-Up Date updated.",
                               variant: response.warning ? "default" : "default",
                             });
-
-                            // Update the form data to reflect the changes
-                            handleInputChange('follow_up_date', format(reminderData.date, 'M/d/yyyy'));
-                            handleInputChange('next_action', reminderData.note);
                           } catch (error: any) {
                             console.error('[REMINDER] Error:', error);
                             toast({
