@@ -26,7 +26,7 @@ The application is built around a client dashboard that unifies data from two Go
     - **Sales Assistant AI**: OpenAI-powered ChatGPT-like assistant with knowledge base integration for sales scripts, product info, and objection handlers. Accessible as a dedicated page or slide-out panel from anywhere in the app.
 - **Feature Specifications**:
     - **Client Dashboard**: Unified view of both Google Sheets with extensive customization options for display and filtering (search, states filter with Canada toggle).
-    - **Store Details Popup**: Comprehensive, collapsible view of store information, including sales info, contact details, and additional specifics.
+    - **Store Details Popup**: Comprehensive, collapsible view of store information, including sales info, contact details, and additional specifics. Phone numbers throughout the application (CRM, Reminders widget, Sales Analytics) navigate to the store details page when clicked, while still allowing the tel: link to function.
     - **Call/Email Logging**: Integrated logging system that records interactions, updates store status, and claims stores.
     - **Sales Assist**: AI-powered chat interface providing on-demand help with sales techniques, product information, and objection handling. Features include:
       - Dedicated Sales Assistant page accessible via navigation
