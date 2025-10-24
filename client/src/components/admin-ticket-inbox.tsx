@@ -57,9 +57,7 @@ export function AdminTicketInbox() {
   // Mark as read mutation
   const markReadMutation = useMutation({
     mutationFn: async (ticketId: string) => {
-      return await apiRequest(`/api/tickets/${ticketId}/mark-read`, {
-        method: 'POST',
-      });
+      return await apiRequest('POST', `/api/tickets/${ticketId}/mark-read`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tickets/admin'] });
@@ -73,10 +71,7 @@ export function AdminTicketInbox() {
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ ticketId, status }: { ticketId: string; status: string }) => {
-      return await apiRequest(`/api/tickets/${ticketId}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      });
+      return await apiRequest('PATCH', `/api/tickets/${ticketId}/status`, { status });
     },
     onSuccess: () => {
       toast({
@@ -100,10 +95,7 @@ export function AdminTicketInbox() {
   // Reply mutation
   const replyMutation = useMutation({
     mutationFn: async (data: { ticketId: string; message: string }) => {
-      return await apiRequest(`/api/tickets/${data.ticketId}/reply`, {
-        method: 'POST',
-        body: JSON.stringify({ message: data.message }),
-      });
+      return await apiRequest('POST', `/api/tickets/${data.ticketId}/reply`, { message: data.message });
     },
     onSuccess: () => {
       toast({
