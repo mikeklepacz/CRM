@@ -56,6 +56,7 @@ import {
   Tag,
   Trash2,
   User as UserIcon,
+  X,
 } from "lucide-react";
 import type {
   Conversation,
@@ -585,15 +586,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const useTemplate = (template: { title: string; content: string; type?: string }) => {
     const filledContent = replaceTemplateVariables(template.content, storeContext, user);
     
-    // For Script templates, load into message input for review and sending
+    // For Script templates, add to the display area
     if ((template as any).type === 'Script') {
-      // Prepend script marker for distinct styling in chat
-      const scriptContent = `[SCRIPT: ${template.title}]\n\n${filledContent}`;
-      setMessageInput(scriptContent);
+      setLoadedScripts(prev => [...prev, { title: template.title, content: filledContent }]);
       setTemplateBuilderOpen(false); // Close template builder
+      setTemplatesOpen(false); // Switch to chat view
       toast({ 
         title: "Script Loaded", 
-        description: `"${template.title}" ready to send` 
+        description: `"${template.title}" added to display` 
       });
     } else {
       // For Email templates, show preview dialog
@@ -1367,21 +1367,35 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
         {/* Header */}
         <div className="p-3 border-b flex items-center justify-between flex-shrink-0">
-          {!sidebarOpen && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(true)}
-              className="h-7 w-7"
-              data-testid="button-open-sidebar"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          )}
           <div className="flex items-center gap-2">
+            {!sidebarOpen && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen(true)}
+                className="h-7 w-7"
+                data-testid="button-open-sidebar"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
             <Bot className="h-5 w-5" />
             <h2 className="font-semibold">Sales Assistant</h2>
           </div>
+          {loadedScripts.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLoadedScripts([]);
+                toast({ title: "Scripts Cleared", description: "Script display reset" });
+              }}
+              data-testid="button-clear-scripts"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear Scripts
+            </Button>
+          )}
         </div>
 
         {/* Context Indicator - only show when there's actual store context */}
