@@ -17,6 +17,16 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
 
   const handleCreateDraft = async () => {
     try {
+      // Validate that fields don't contain placeholders
+      if (!to || to.includes('{{') || to.includes('[recipient') || to.includes('[email') || !to.includes('@')) {
+        toast({
+          title: "Invalid Email Address",
+          description: "Please replace the placeholder with an actual email address before creating a draft.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setIsCreatingDraft(true);
       const response = await apiRequest("POST", "/api/gmail/create-draft", {
         to,

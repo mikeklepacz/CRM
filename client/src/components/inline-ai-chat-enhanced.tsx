@@ -95,7 +95,7 @@ function parseEmailFromMessage(content: string): { to: string; subject: string; 
   // Look for email pattern: To:, Subject:, and Body: (or Message:)
   const toMatch = content.match(/To:\s*(.+?)(?:\n|$)/i);
   const subjectMatch = content.match(/Subject:\s*(.+?)(?:\n|$)/i);
-  
+
   // Match body from "Body:" or "Message:" to the end of content (captures multi-paragraph emails)
   const bodyMatch = content.match(/(?:Body|Message):\s*\n([\s\S]+)$/i);
 
@@ -127,42 +127,46 @@ function replaceTemplateVariables(
   user?: any
 ) {
   let result = content;
-  
+
   // Get user data (agent info)
   const agentName = user?.username || "Your Name";
   const agentEmail = user?.email || "your@email.com";
   const agentPhone = (user as any)?.phone || "";
   const agentMeetingLink = (user as any)?.meetingLink || "";
-  
+
   // Replace store-related variables
   if (storeContext) {
-    // Smart email fallback: Check POC email first, then fall back to general email
-    const smartEmail = storeContext.poc_email || storeContext.email || "";
-    
-    result = result.replace(/\{\{storeName\}\}/g, storeContext.name || "");
-    result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || "");
-    result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || "");
-    result = result.replace(/\{\{storeState\}\}/g, storeContext.state || "");
-    result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || "");
-    result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || "");
-    result = result.replace(/\{\{pocName\}\}/g, storeContext.point_of_contact || "");
-    // Both pocEmail and email use smart fallback
+    // Smart email replacement: try POC Email first, fall back to Email
+    // Handle both "POC EMAIL" and "poc_email" field names
+    const pocEmail = storeContext['POC EMAIL'] || storeContext.poc_email || storeContext.pocEmail || "";
+    const generalEmail = storeContext['Email'] || storeContext.email || "";
+    const smartEmail = pocEmail || generalEmail || "";
+
+    result = result.replace(/\{\{storeName\}\}/g, storeContext.name || storeContext.Name || "");
+    result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || storeContext.Address || "");
+    result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || storeContext.City || "");
+    result = result.replace(/\{\{storeState\}\}/g, storeContext.state || storeContext.State || "");
+    result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || storeContext.Phone || "");
+    result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || storeContext.Website || "");
+    result = result.replace(/\{\{pocName\}\}/g, storeContext['Point of Contact'] || storeContext.poc_name || storeContext.pocName || "");
+
+    // Both {{email}} and {{pocEmail}} use smart fallback logic (POC EMAIL → Email)
     result = result.replace(/\{\{pocEmail\}\}/g, smartEmail);
     result = result.replace(/\{\{email\}\}/g, smartEmail);
-    result = result.replace(/\{\{pocPhone\}\}/g, storeContext.poc_phone || "");
+    result = result.replace(/\{\{pocPhone\}\}/g, storeContext['POC Phone'] || storeContext.poc_phone || storeContext.pocPhone || "");
   }
-  
+
   // Replace agent variables
   result = result.replace(/\{\{agentName\}\}/g, agentName);
   result = result.replace(/\{\{agentEmail\}\}/g, agentEmail);
   result = result.replace(/\{\{agentPhone\}\}/g, agentPhone);
   result = result.replace(/\{\{agentMeetingLink\}\}/g, agentMeetingLink);
-  
+
   // Replace date/time variables
   const now = new Date();
   result = result.replace(/\{\{currentDate\}\}/g, now.toLocaleDateString());
   result = result.replace(/\{\{currentTime\}\}/g, now.toLocaleTimeString());
-  
+
   return result;
 }
 
@@ -187,14 +191,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const [newProjectName, setNewProjectName] = useState("");
   const [templateBuilderOpen, setTemplateBuilderOpen] = useState(false);
   const [templateBuilderView, setTemplateBuilderView] = useState<"builder" | "library">("builder");
-  
+
   // Template builder state
   const [builderTitle, setBuilderTitle] = useState("");
   const [builderContent, setBuilderContent] = useState("");
   const [builderType, setBuilderType] = useState<"Email" | "Script">("Email");
   const [builderTags, setBuilderTags] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
-  
+
   // Email-specific builder state
   const [emailTo, setEmailTo] = useState("{{email}}");
   const [emailSubject, setEmailSubject] = useState("");
@@ -207,11 +211,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const emailBodyRef = useRef<HTMLTextAreaElement>(null);
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<{ title: string; content: string } | null>(null);
-  
+
   // Tag management state
   const [tagEditMode, setTagEditMode] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
-  
+
   // Available variables for templates
   const availableVariables = [
     { name: "storeName", description: "Store/business name" },
@@ -234,14 +238,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
   const insertVariable = (variableName: string, targetField?: 'to' | 'subject' | 'body') => {
     const variable = `{{${variableName}}}`;
-    
+
     // For Email type, insert into the specified field or the currently focused field
     if (builderType === "Email") {
       let ref = targetField === 'to' ? emailToRef 
                : targetField === 'subject' ? emailSubjectRef 
                : targetField === 'body' ? emailBodyRef 
                : null;
-      
+
       // If no target specified, try to find the focused field
       if (!ref) {
         if (document.activeElement === emailToRef.current) ref = emailToRef;
@@ -249,9 +253,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
         else if (document.activeElement === emailBodyRef.current) ref = emailBodyRef;
         else ref = emailBodyRef; // Default to body
       }
-      
+
       if (!ref.current) return;
-      
+
       if (ref === emailToRef) {
         const input = ref.current;
         const start = input.selectionStart || 0;
@@ -292,16 +296,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
     } else {
       // For Script type, use the original logic
       if (!contentTextareaRef.current) return;
-      
+
       const textarea = contentTextareaRef.current;
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
       const text = builderContent;
       const before = text.substring(0, start);
       const after = text.substring(end);
-      
+
       setBuilderContent(before + variable + after);
-      
+
       setTimeout(() => {
         textarea.focus();
         textarea.setSelectionRange(start + variable.length, start + variable.length);
@@ -351,7 +355,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
   const handleDeleteSelectedTags = () => {
     if (selectedTagIds.size === 0) return;
-    
+
     const tagCount = selectedTagIds.size;
     if (window.confirm(`Delete ${tagCount} selected tag${tagCount > 1 ? 's' : ''}?`)) {
       deleteTagsMutation.mutate(Array.from(selectedTagIds));
@@ -365,44 +369,44 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
   const autoDetectPlaceholders = (content: string): string => {
     let result = content;
-    
+
     // Helper function to escape regex special characters
     const escapeRegex = (str: string): string => {
       return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     };
-    
+
     // Helper function to replace all occurrences of a value with a variable
     const replaceValue = (value: string | null | undefined, variable: string) => {
       if (!value || value.trim().length < 2) return; // Skip empty or very short values
       const trimmedValue = value.trim();
-      
+
       // Define boundaries: start/end of string, whitespace, or common punctuation/delimiters
       // This allows values with embedded punctuation while preventing substring matches
       const escaped = escapeRegex(trimmedValue);
-      
+
       // Boundary characters: whitespace, newline, or punctuation/delimiters that typically separate values
       // Includes: brackets <>[]{}, parentheses (), quotes "'`, punctuation .,!?;:, slashes /\
       // Note: Hyphens removed from boundaries to allow detection of names like "Chronic Therapy - Cortez"
       const boundary = `(?:^|[\\s\\n,.!?;:'"<>\\[\\]{}()\\/\\\\]|$)`;
-      
+
       // Create regex that matches the value when surrounded by boundaries
       // Using non-capturing groups and allowing the boundary chars to remain
       const regex = new RegExp(`(${boundary})${escaped}(${boundary})`, 'g');
-      
+
       // Replace but keep the boundary characters
       result = result.replace(regex, `$1{{${variable}}}$2`);
     };
-    
+
     // Get agent data
     const agentName = user?.username || "";
     const agentEmail = user?.email || "";
     const agentPhone = (user as any)?.phone || "";
     const agentMeetingLink = (user as any)?.meetingLink || "";
-    
+
     // Build a list of replacements ordered by specificity (longer/more specific first)
     // This prevents partial replacements
     const replacements: Array<{ value: string; variable: string }> = [];
-    
+
     // Store data (if available)
     if (storeContext) {
       // Add all store fields that might appear in the content
@@ -416,27 +420,27 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       if (storeContext.poc_email) replacements.push({ value: storeContext.poc_email, variable: 'pocEmail' });
       if (storeContext.poc_phone) replacements.push({ value: storeContext.poc_phone, variable: 'pocPhone' });
     }
-    
+
     // Agent data
     if (agentName) replacements.push({ value: agentName, variable: 'agentName' });
     if (agentEmail) replacements.push({ value: agentEmail, variable: 'agentEmail' });
     if (agentPhone) replacements.push({ value: agentPhone, variable: 'agentPhone' });
     if (agentMeetingLink) replacements.push({ value: agentMeetingLink, variable: 'agentMeetingLink' });
-    
+
     // Sort by length (descending) to replace longer strings first
     // This prevents "John Smith" from being partially replaced as just "John"
     replacements.sort((a, b) => (b.value?.length || 0) - (a.value?.length || 0));
-    
+
     // Apply all replacements
     replacements.forEach(({ value, variable }) => {
       replaceValue(value, variable);
     });
-    
+
     // Special handling for date/time patterns (if the AI generated today's date)
     const today = new Date();
     const todayString = today.toLocaleDateString();
     const todayTimeString = today.toLocaleTimeString();
-    
+
     // Try various date formats
     const dateFormats = [
       today.toLocaleDateString(),
@@ -444,27 +448,27 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       today.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
     ];
-    
+
     dateFormats.forEach(dateFormat => {
       if (result.includes(dateFormat)) {
         const escaped = escapeRegex(dateFormat);
         result = result.replace(new RegExp(escaped, 'g'), '{{currentDate}}');
       }
     });
-    
+
     // Handle time if present
     if (result.includes(todayTimeString)) {
       const escaped = escapeRegex(todayTimeString);
       result = result.replace(new RegExp(escaped, 'g'), '{{currentTime}}');
     }
-    
+
     return result;
   };
 
   const makeTemplateFromMessage = (content: string) => {
     // Try to parse as email format first (with To:/Subject:/Body: headers)
     const parsed = parseEmailTemplate(content);
-    
+
     if (parsed) {
       // It's an email format - apply placeholder detection to each field separately
       setBuilderType("Email");
@@ -477,16 +481,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       const emailPattern = /^(hi|hey|hello|dear|greetings)/i;
       const signaturePattern = /(best|regards|thanks|sincerely|cheers)/i;
       const hasEmailStructure = emailPattern.test(content.trim()) || signaturePattern.test(content);
-      
+
       if (hasEmailStructure) {
         // It looks like an email, even without explicit headers
         setBuilderType("Email");
-        
+
         // Try to extract a subject from the first line if it's short
         const lines = content.trim().split('\n').filter(l => l.trim());
         const firstLine = lines[0] || "";
         const isSubjectLine = firstLine.length < 80 && !emailPattern.test(firstLine);
-        
+
         if (isSubjectLine && lines.length > 1) {
           // First line is probably the subject
           setEmailTo(autoDetectPlaceholders("{{email}}"));
@@ -509,63 +513,69 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
         setEmailBody("");
       }
     }
-    
+
     setBuilderTitle("");
     setBuilderTags("");
     setEditingTemplateId(null);
     setTemplateBuilderOpen(true);
     setTemplateBuilderView("builder");
-    
+
     toast({ 
       title: "Template created", 
       description: "Common placeholders detected and converted to variables" 
     });
   };
 
+  // Function to replace template variables with actual values - kept for consistency, though the one above is used in `useTemplate`
   const replaceTemplateVariables = (content: string) => {
     let result = content;
-    
+
     // Get user data (agent info)
     const agentName = user?.username || "Your Name";
     const agentEmail = user?.email || "your@email.com";
     const agentPhone = (user as any)?.phone || "";
     const agentMeetingLink = (user as any)?.meetingLink || "";
-    
+
     // Replace store-related variables
     if (storeContext) {
-      // Smart email fallback: Check POC email first, then fall back to general email
-      const smartEmail = storeContext.poc_email || storeContext.email || "";
-      
-      result = result.replace(/\{\{storeName\}\}/g, storeContext.name || "");
-      result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || "");
-      result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || "");
-      result = result.replace(/\{\{storeState\}\}/g, storeContext.state || "");
-      result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || "");
-      result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || "");
-      result = result.replace(/\{\{pocName\}\}/g, storeContext.point_of_contact || "");
-      // Both pocEmail and email use smart fallback
+      // Smart email replacement: try POC Email first, fall back to Email
+      // Handle both "POC EMAIL" and "poc_email" field names
+      const pocEmail = storeContext['POC EMAIL'] || storeContext.poc_email || storeContext.pocEmail || "";
+      const generalEmail = storeContext['Email'] || storeContext.email || "";
+      const smartEmail = pocEmail || generalEmail || "";
+
+      result = result.replace(/\{\{storeName\}\}/g, storeContext.name || storeContext.Name || "");
+      result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || storeContext.Address || "");
+      result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || storeContext.City || "");
+      result = result.replace(/\{\{storeState\}\}/g, storeContext.state || storeContext.State || "");
+      result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || storeContext.Phone || "");
+      result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || storeContext.Website || "");
+      result = result.replace(/\{\{pocName\}\}/g, storeContext['Point of Contact'] || storeContext.poc_name || storeContext.pocName || "");
+
+      // Both {{email}} and {{pocEmail}} use smart fallback logic (POC EMAIL → Email)
       result = result.replace(/\{\{pocEmail\}\}/g, smartEmail);
       result = result.replace(/\{\{email\}\}/g, smartEmail);
-      result = result.replace(/\{\{pocPhone\}\}/g, storeContext.poc_phone || "");
+      result = result.replace(/\{\{pocPhone\}\}/g, storeContext['POC Phone'] || storeContext.poc_phone || storeContext.pocPhone || "");
     }
-    
+
     // Replace agent variables
     result = result.replace(/\{\{agentName\}\}/g, agentName);
     result = result.replace(/\{\{agentEmail\}\}/g, agentEmail);
     result = result.replace(/\{\{agentPhone\}\}/g, agentPhone);
     result = result.replace(/\{\{agentMeetingLink\}\}/g, agentMeetingLink);
-    
+
     // Replace date/time variables
     const now = new Date();
     result = result.replace(/\{\{currentDate\}\}/g, now.toLocaleDateString());
     result = result.replace(/\{\{currentTime\}\}/g, now.toLocaleTimeString());
-    
+
     return result;
   };
 
+
   const useTemplate = (template: { title: string; content: string }) => {
-    const renderedContent = replaceTemplateVariables(template.content);
-    setPreviewTemplate({ title: template.title, content: renderedContent });
+    const filledContent = replaceTemplateVariables(template.content, storeContext, user); // Use the updated replaceTemplateVariables
+    setPreviewTemplate({ title: template.title, content: filledContent });
     setTemplatePreviewOpen(true);
   };
 
@@ -665,7 +675,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
         email: storeContext.email,
         website: storeContext.website,
       } : {};
-      
+
       return await apiRequest("POST", "/api/conversations", {
         title: storeContext?.name ? `Chat about ${storeContext.name}` : "New Chat",
         contextData,
@@ -745,7 +755,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const createTemplateMutation = useMutation({
     mutationFn: async (template: { title: string; content: string; type: string; tags: string[] }) => {
       const result = await apiRequest("POST", "/api/templates", template);
-      
+
       // Auto-add new tags to user's personal collection
       for (const tag of template.tags) {
         const existingTag = userTags.find(ut => ut.tag.toLowerCase() === tag.toLowerCase());
@@ -753,7 +763,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
           await apiRequest("POST", "/api/user-tags", { tag });
         }
       }
-      
+
       return result;
     },
     onSuccess: () => {
@@ -775,7 +785,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const updateTemplateMutation = useMutation({
     mutationFn: async ({ id, template }: { id: string; template: { title: string; content: string; type: string; tags: string[] } }) => {
       const result = await apiRequest("PATCH", `/api/templates/${id}`, template);
-      
+
       // Auto-add new tags to user's personal collection
       for (const tag of template.tags) {
         const existingTag = userTags.find(ut => ut.tag.toLowerCase() === tag.toLowerCase());
@@ -783,7 +793,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
           await apiRequest("POST", "/api/user-tags", { tag });
         }
       }
-      
+
       return result;
     },
     onSuccess: () => {
@@ -952,10 +962,10 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
 
     // Fill template variables
     const filledContent = replaceTemplateVariables(template.content, storeContext, user);
-    
+
     // Try to parse email format
     const emailData = parseEmailFromMessage(filledContent);
-    
+
     if (emailData) {
       // Validate that the parsed email is not empty
       if (!emailData.to || emailData.to.trim() === '') {
@@ -1300,7 +1310,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
             <div className="space-y-4">
               {messages.map((msg) => {
                 const emailData = msg.role === "assistant" ? parseEmailFromMessage(msg.content) : null;
-                
+
                 return (
                   <div
                     key={msg.id}
@@ -1446,7 +1456,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
               <DialogTitle>{templateBuilderView === "builder" ? "Template Builder" : "My Templates"}</DialogTitle>
             </div>
           </DialogHeader>
-          
+
           {/* Builder View */}
           {templateBuilderView === "builder" && (
             <div className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
@@ -1517,7 +1527,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                               </Button>
                             )}
                           </div>
-                          
+
                           {tagEditMode && selectedTagIds.size > 0 && (
                             <Button
                               variant="destructive"
@@ -2084,12 +2094,12 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   >
                     Script
                   </Badge>
-                  
+
                   {/* Separator */}
                   {Array.from(new Set(templates.flatMap((t) => t.tags || []))).length > 0 && (
                     <div className="w-px h-6 bg-border mx-1" />
                   )}
-                  
+
                   {/* Tag Filters */}
                   {Array.from(new Set(templates.flatMap((t) => t.tags || []))).map((tag) => (
                     <Badge
@@ -2144,7 +2154,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                                   setBuilderType(templateType);
                                   setBuilderTags(template.tags?.join(", ") || "");
                                   setEditingTemplateId(template.id);
-                                  
+
                                   // Parse content based on type
                                   if (templateType === "Email") {
                                     const parsed = parseEmailTemplate(template.content);
@@ -2165,7 +2175,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                                     setEmailSubject("");
                                     setEmailBody("");
                                   }
-                                  
+
                                   setTemplateBuilderView("builder");
                                 }}
                                 data-testid={`button-edit-template-${template.id}`}
@@ -2212,7 +2222,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                     )}
                   </div>
                 </ScrollArea>
-                
+
                 {/* Search Bar */}
                 <div className="flex gap-4 mt-4 pt-4 border-t flex-shrink-0">
                   <div className="relative flex-1">
