@@ -3743,6 +3743,27 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       await refetch();
       setInitialData(formData); // Update initial data so changes are no longer "unsaved"
       
+      // Auto-claim unclaimed stores after successfully saving (if not already claimed via tracker upsert)
+      const isUnclaimed = !row._trackerRowIndex;
+      const linkValue = formData.link || row.link || row.Link;
+      const joinColumn = "link";
+      
+      if (isUnclaimed && linkValue && trackerSheetId) {
+        try {
+          await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
+            linkValue,
+            column: "Agent",  // Claim with Agent column
+            value: "",  // Empty value, just claiming
+            joinColumn,
+          });
+          // Silently refresh data after claiming
+          await queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+        } catch (error) {
+          // Soft error - don't block the user
+          console.error("Auto-claim failed:", error);
+        }
+      }
+      
       // If AI Assistant is open, trigger context update with latest field values
       if (showAssistant) {
         setContextUpdateTrigger(prev => prev + 1);
