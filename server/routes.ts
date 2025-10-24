@@ -20,6 +20,7 @@ import {
   insertCategorySchema,
 } from "@shared/schema";
 import { google } from "googleapis";
+import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
 
 // Helper function for fuzzy string matching (Levenshtein distance)
 function stringSimilarity(str1: string, str2: string): number {
@@ -225,6 +226,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
+      
+      // Background sync: Create missing calendar events and renew watch channel if needed
+      setImmediate(async () => {
+        try {
+          // Sync any reminders that don't have calendar events yet
+          const syncResult = await syncRemindersToCalendar(userId);
+          if (syncResult.created > 0) {
+            console.log(`[LoginSync] Created ${syncResult.created} calendar events for user ${userId}`);
+          }
+          
+          // Renew watch channel if close to expiry
+          await renewCalendarWatchIfNeeded(userId);
+        } catch (error: any) {
+          console.error('[LoginSync] Background sync failed:', error.message);
+        }
+      });
+      
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -723,58 +741,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleCalendarConnectedAt: new Date()
       });
 
-      // Register Google Calendar webhook for push notifications
-      try {
-        // Use forwarded protocol for HTTPS (required by Google)
-        const protocol = req.get('x-forwarded-proto') || req.protocol;
-        const webhookUrl = `${protocol}://${req.get('host')}/api/webhooks/google-calendar`;
-        const channelId = `calendar-${userId}-${Date.now()}`;
-        const expiration = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days from now
-
-        console.log('[Calendar Webhook] Registering webhook:', { webhookUrl, channelId, protocol });
-
-        const oauth2Client = new google.auth.OAuth2(
-          integration.googleClientId,
-          integration.googleClientSecret
-        );
-        
-        oauth2Client.setCredentials({
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token
-        });
-
-        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-        const watchResponse = await calendar.events.watch({
-          calendarId: 'primary',
-          requestBody: {
-            id: channelId,
-            type: 'web_hook',
-            address: webhookUrl,
-            expiration: expiration.toString(),
-          },
-        });
-
-        // Save webhook details
-        await storage.updateUserIntegration(userId as string, {
-          googleCalendarWebhookChannelId: channelId,
-          googleCalendarWebhookResourceId: watchResponse.data.resourceId || undefined,
-          googleCalendarWebhookExpiry: expiration,
-        });
-
-        console.log('[Calendar Webhook] ✅ Successfully registered webhook:', {
-          channelId,
-          resourceId: watchResponse.data.resourceId,
-          expiration: new Date(expiration).toISOString()
-        });
-      } catch (webhookError: any) {
-        console.error('[Calendar Webhook] ❌ FAILED to register webhook:', {
-          error: webhookError.message,
-          userId
-        });
-        // Continue with connection - user can still use calendar features without webhooks
-        // But log prominently so we know sync will be one-way only
-      }
+      // Set up Google Calendar watch channel for push notifications  
+      setImmediate(async () => {
+        try {
+          const success = await setupCalendarWatch(userId as string);
+          if (success) {
+            console.log(`[CalendarWatch] Successfully set up watch channel for user ${userId}`);
+          }
+        } catch (error: any) {
+          console.error('[CalendarWatch] Failed to setup watch:', error.message);
+        }
+      });
 
       res.send('<script>alert("Gmail and Calendar connected successfully!"); window.close();</script>');
     } catch (error: any) {
@@ -7796,19 +7773,24 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = userIntegration.userId;
       console.log('[Webhook] Processing calendar changes for user:', userId);
 
+      // Get system OAuth credentials for token refresh
+      const systemIntegration = await storage.getSystemIntegration('google_sheets');
+      if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+        console.error('[Webhook] System OAuth not configured');
+        return;
+      }
+
       // Check if token needs refresh
       let accessToken = userIntegration.googleCalendarAccessToken;
       if (userIntegration.googleCalendarTokenExpiry && 
           userIntegration.googleCalendarTokenExpiry < Date.now()) {
-        if (userIntegration.googleCalendarRefreshToken && 
-            userIntegration.googleClientId && 
-            userIntegration.googleClientSecret) {
+        if (userIntegration.googleCalendarRefreshToken) {
           const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
-              client_id: userIntegration.googleClientId,
-              client_secret: userIntegration.googleClientSecret,
+              client_id: systemIntegration.googleClientId,
+              client_secret: systemIntegration.googleClientSecret,
               refresh_token: userIntegration.googleCalendarRefreshToken,
               grant_type: 'refresh_token'
             })
@@ -7827,8 +7809,8 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Fetch recent calendar events to detect changes
       const oauth2Client = new google.auth.OAuth2(
-        userIntegration.googleClientId,
-        userIntegration.googleClientSecret
+        systemIntegration.googleClientId,
+        systemIntegration.googleClientSecret
       );
       
       oauth2Client.setCredentials({
