@@ -43,6 +43,7 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").notNull().default(true), // Active/Inactive status for deactivating agents
   signature: text("signature"), // Custom email signature for AI-generated emails
   gmailLabels: text("gmail_labels").array(), // Gmail labels to auto-apply to drafts
+  emailPreference: varchar("email_preference", { length: 20 }).default('mailto'), // 'gmail_draft' or 'mailto'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
