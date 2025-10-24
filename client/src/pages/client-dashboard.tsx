@@ -90,6 +90,24 @@ const isCanadianProvince = (state: string): boolean => {
   return CANADIAN_PROVINCES.has(state);
 };
 
+// Helper function: Case-insensitive lookup for link value
+const getLinkValue = (row: any): string | undefined => {
+  if (!row) return undefined;
+  
+  // Iterate over all row keys and find the one that matches "link" (case-insensitive)
+  for (const key in row) {
+    if (key.toLowerCase().trim() === "link") {
+      const value = row[key];
+      // Return the value if it's a non-empty string
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+  
+  return undefined;
+};
+
 interface GoogleSheet {
   id: string;
   spreadsheetName: string;
@@ -608,7 +626,7 @@ export default function ClientDashboard() {
       joinColumn: string;
     }) => {
       return await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
-        linkValue: storeRow[joinColumn],
+        linkValue: getLinkValue(storeRow),
         column,
         value,
         joinColumn,
@@ -725,7 +743,7 @@ export default function ClientDashboard() {
       updateCellMutation.mutate({ sheetId, rowIndex, column, value });
     } else if (isTrackerColumn && isUnclaimed) {
       // Use tracker upsert for unclaimed stores - creates row + claims
-      const linkValue = row[joinColumn];
+      const linkValue = getLinkValue(row);
       if (!linkValue || !trackerSheetId) {
         toast({
           title: "Error",
@@ -747,7 +765,7 @@ export default function ClientDashboard() {
       // Update store sheet - will auto-claim if unclaimed
       sheetId = row._storeSheetId;
       rowIndex = row._storeRowIndex;
-      const linkValue = row[joinColumn];
+      const linkValue = getLinkValue(row);
       
       updateCellMutation.mutate({ 
         sheetId, 
@@ -3785,7 +3803,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
       // Save tracker changes (create row if needed)
       if (Object.keys(trackerChanges).length > 0) {
-        const link = formData.link || row.link || row.Link;
+        const link = formData.link || getLinkValue(row);
         if (!link) {
           throw new Error("Cannot save tracker fields: Store link is missing");
         }
@@ -3810,7 +3828,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       
       // Auto-claim unclaimed stores after successfully saving (if not already claimed via tracker upsert)
       const isUnclaimed = !row._trackerRowIndex;
-      const linkValue = formData.link || row.link || row.Link;
+      const linkValue = formData.link || getLinkValue(row);
       const joinColumn = "link";
       
       if (isUnclaimed && linkValue && trackerSheetId) {
