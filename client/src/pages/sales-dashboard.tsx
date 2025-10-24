@@ -28,6 +28,8 @@ import { ActionAlertsWidget } from "@/components/widgets/action-alerts";
 import { RevenueTrendsWidget } from "@/components/widgets/revenue-trends";
 import { RemindersWidget } from "@/components/widgets/reminders";
 import { apiRequest } from "@/lib/queryClient";
+import { AgentFilterProvider } from "@/contexts/agent-filter-context";
+import { AdminAgentToolbar } from "@/components/admin-agent-toolbar";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -183,17 +185,18 @@ export default function SalesDashboard() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground" data-testid="heading-sales-dashboard">
-            Sales Analytics
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Track your earnings, commissions, and client portfolio performance
-          </p>
-        </div>
+    <AgentFilterProvider>
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Page Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground" data-testid="heading-sales-dashboard">
+              Sales Analytics
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Track your earnings, commissions, and client portfolio performance
+            </p>
+          </div>
         
         <div className="flex items-center gap-2">
           <Dialog open={customizeDialogOpen} onOpenChange={setCustomizeDialogOpen}>
@@ -270,6 +273,9 @@ export default function SalesDashboard() {
           </Button>
         </div>
       </div>
+
+      {/* Admin Agent Filter Toolbar */}
+      <AdminAgentToolbar />
 
       {/* Widget Grid */}
       <ResponsiveGridLayout
@@ -380,5 +386,6 @@ export default function SalesDashboard() {
         )}
       </ResponsiveGridLayout>
     </div>
+    </AgentFilterProvider>
   );
 }
