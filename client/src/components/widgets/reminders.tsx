@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { formatTimezoneDisplay } from "@shared/timezoneUtils";
 
 interface Reminder {
@@ -115,24 +115,19 @@ export function RemindersWidget() {
   const getReminderDate = (reminder: Reminder) => {
     // If using new date format
     if (reminder.scheduledDate && reminder.scheduledTime && reminder.timezone) {
-      // Construct ISO datetime string in the reminder's timezone
-      const dateTimeStr = `${reminder.scheduledDate}T${reminder.scheduledTime}:00`;
-      
-      // Parse the datetime string as if it's in the reminder's timezone
-      // We'll create a Date object by parsing it in that timezone context
       try {
-        // Create a date object treating the string as local to the reminder's timezone
-        // This is a workaround since JS Date doesn't natively support timezone-aware parsing
-        const [year, month, day] = reminder.scheduledDate.split('-').map(Number);
-        const [hours, minutes] = reminder.scheduledTime.split(':').map(Number);
+        // Construct ISO datetime string representing the local time
+        const dateTimeStr = `${reminder.scheduledDate}T${reminder.scheduledTime}:00`;
         
-        // Create a date object in UTC, then we'll adjust for display
-        // Note: This creates the date as if the time is in the local browser timezone
-        const date = new Date(year, month - 1, day, hours, minutes, 0);
-        return date;
+        // Convert from the reminder's timezone to UTC
+        // This interprets the dateTimeStr as local time in reminder.timezone and returns UTC Date
+        const utcDate = fromZonedTime(dateTimeStr, reminder.timezone);
+        return utcDate;
       } catch (e) {
         console.error('Error parsing reminder date:', e);
-        return new Date();
+        // Fallback: parse as ISO string (will use browser timezone)
+        const dateTimeStr = `${reminder.scheduledDate}T${reminder.scheduledTime}:00`;
+        return new Date(dateTimeStr);
       }
     }
     
