@@ -3849,6 +3849,57 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     next_action: { sheet: 'tracker', column: 'Next Action' },
   };
 
+  // Mutation to upsert tracker fields (for reminder auto-save)
+  const upsertTrackerFieldsMutation = useMutation({
+    mutationFn: async ({
+      link,
+      updates,
+    }: {
+      link: string;
+      updates: Record<string, string>;
+    }) => {
+      return await apiRequest('POST', '/api/sheets/tracker/upsert', {
+        link,
+        updates,
+      });
+    },
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["merged-data"] });
+      
+      // Snapshot previous data
+      const previousData = queryClient.getQueryData(["merged-data"]);
+      
+      // Optimistically update cache
+      queryClient.setQueryData(["merged-data"], (old: any) => {
+        if (!old || !old.rows) return old;
+        
+        return {
+          ...old,
+          rows: old.rows.map((r: any) => {
+            const rowLink = getLinkValue(r);
+            if (rowLink && normalizeLink(rowLink) === normalizeLink(variables.link)) {
+              return { ...r, ...variables.updates };
+            }
+            return r;
+          })
+        };
+      });
+      
+      return { previousData };
+    },
+    onError: (error: Error, variables, context: any) => {
+      // Rollback on error
+      if (context?.previousData) {
+        queryClient.setQueryData(["merged-data"], context.previousData);
+      }
+    },
+    onSettled: () => {
+      // Always refetch to sync with server
+      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+    },
+  });
+
   // Save mutation - update cells directly
   const saveMutation = useMutation({
     mutationFn: async ({ closeDialog }: { closeDialog: boolean }) => {
@@ -4618,11 +4669,11 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                             handleInputChange('follow_up_date', followUpDate);
                             handleInputChange('next_action', reminderData.note);
 
-                            // Automatically save Follow-Up Date and Next Action to tracker sheet
+                            // Automatically save Follow-Up Date and Next Action to tracker sheet using mutation
                             try {
                               const link = formData.link || getLinkValue(row);
-                              if (link) {
-                                await apiRequest('POST', '/api/sheets/tracker/upsert', {
+                              if (link && trackerSheetId) {
+                                await upsertTrackerFieldsMutation.mutateAsync({
                                   link,
                                   updates: {
                                     'Follow-Up Date': followUpDate,
@@ -4630,20 +4681,37 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                                   }
                                 });
                                 
-                                // Invalidate cache to reflect the changes
-                                queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+                                // Update initialData to prevent "unsaved changes" indicator
+                                setInitialData(prev => ({
+                                  ...prev,
+                                  follow_up_date: followUpDate,
+                                  next_action: reminderData.note,
+                                }));
+                                
+                                toast({
+                                  title: "Reminder Created",
+                                  description: response.warning 
+                                    ? response.warning.message 
+                                    : "Your reminder has been saved and Follow-Up Date updated.",
+                                  variant: response.warning ? "default" : "default",
+                                });
+                              } else {
+                                toast({
+                                  title: "Reminder Created",
+                                  description: response.warning 
+                                    ? response.warning.message 
+                                    : "Your reminder has been saved but Follow-Up Date could not be updated (missing link or tracker sheet).",
+                                  variant: response.warning ? "default" : "default",
+                                });
                               }
-                            } catch (saveError) {
+                            } catch (saveError: any) {
                               console.error('[REMINDER] Failed to save Follow-Up Date:', saveError);
+                              toast({
+                                title: "Partial Success",
+                                description: "Reminder created but Follow-Up Date could not be saved: " + (saveError.message || "Unknown error"),
+                                variant: "destructive",
+                              });
                             }
-
-                            toast({
-                              title: "Reminder Created",
-                              description: response.warning 
-                                ? response.warning.message 
-                                : "Your reminder has been saved and Follow-Up Date updated.",
-                              variant: response.warning ? "default" : "default",
-                            });
                           } catch (error: any) {
                             console.error('[REMINDER] Error:', error);
                             toast({
