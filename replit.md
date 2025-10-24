@@ -72,3 +72,10 @@ The application is built around a client dashboard that unifies data from two Go
 - **OpenAI API**: For AI-powered Sales Assistant with knowledge base file search. Admins configure their own API key via the Admin Dashboard.
 - **Gmail API**: Manual OAuth integration (not using Replit connector) for creating email drafts from AI-generated content. Users can connect their Gmail account via Settings > Gmail tab to enable "Create Gmail Draft" functionality in the Sales Assistant.
 - **Google Calendar API**: Per-user OAuth integration for creating calendar events from reminders. Each agent connects their own Google account to enable automatic calendar event creation when setting reminders.
+    - **Timezone Architecture**: Reminders store local datetime + IANA timezone without UTC conversion. System uses simplified timezone handling:
+      - Stores `scheduledDate` (YYYY-MM-DD), `scheduledTime` (HH:MM), and `timezone` (IANA identifier) as user entered them
+      - Sends timezone-aware datetime strings to Google Calendar API (e.g., "2025-10-24T23:00:00" with timeZone="Europe/Warsaw")
+      - Calculates event end times using pure string arithmetic (add 30 minutes to time string)
+      - Handles midnight rollover using Date.UTC for timezone-neutral date advancement
+      - Eliminates double timezone conversion bugs by avoiding server timezone assumptions
+      - Webhook handler parses Google's datetime to extract local date/time components for bidirectional sync
