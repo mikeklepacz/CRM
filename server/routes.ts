@@ -3659,9 +3659,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const headers = rows[0];
-      console.log('=== TRACKER UPSERT DEBUG ===');
+      console.log('\n=== TRACKER UPSERT DEBUG ===');
+      console.log('Input link:', JSON.stringify(link));
       console.log('Tracker sheet headers:', headers);
       console.log('Updates requested:', updates);
+      console.log('Total rows in sheet (including header):', rows.length);
       
       const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
       const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
@@ -3670,16 +3672,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Link column not found in tracker sheet" });
       }
 
+      console.log('Link column index:', linkIndex);
+
       // Check if row exists with this link (using normalized comparison)
       let existingRowIndex = -1;
-      const normalizedInputLink = normalizeLink(link);
+      const normalizedInputLink = normalizeLink(link.trim());
+      console.log('Normalized input link:', JSON.stringify(normalizedInputLink));
+      console.log('\nSearching for existing row...');
+      
       for (let i = 1; i < rows.length; i++) {
         const rowLink = rows[i][linkIndex];
-        if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
+        const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+        
+        console.log(`  Row ${i}: raw="${JSON.stringify(rowLink)}", normalized="${JSON.stringify(normalizedRowLink)}", match=${normalizedRowLink === normalizedInputLink}`);
+        
+        if (rowLink && normalizedRowLink === normalizedInputLink) {
           existingRowIndex = i + 1; // +1 because sheets are 1-indexed
+          console.log(`  ✓ MATCH FOUND at row ${i + 1}`);
           break;
         }
       }
+      
+      if (existingRowIndex === -1) {
+        console.log('  ✗ NO MATCH FOUND - will create new row');
+      }
+      console.log('=== END DEBUG ===\n');
 
       if (existingRowIndex !== -1) {
         // Row exists - update it
