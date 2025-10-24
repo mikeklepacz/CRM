@@ -47,6 +47,7 @@ import {
   Loader2,
   Mail,
   MessageSquarePlus,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -1218,7 +1219,19 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                 <div className="p-2 space-y-3 h-full">
                   {/* Template Builder Button */}
                   <Button
-                    onClick={() => setTemplateBuilderOpen(true)}
+                    onClick={() => {
+                      // Reset all builder state for a new template
+                      setBuilderTitle("");
+                      setBuilderContent("");
+                      setBuilderType("Email");
+                      setBuilderTags("");
+                      setBuilderIsDefault(false);
+                      setEditingTemplateId(null);
+                      setEmailTo("{{email}}");
+                      setEmailSubject("");
+                      setEmailBody("");
+                      setTemplateBuilderOpen(true);
+                    }}
                     className="w-full"
                     variant="default"
                     data-testid="button-template-builder"
@@ -1245,16 +1258,59 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                       <div key={template.id} className="p-2 border rounded-md bg-card" data-testid={`template-${template.id}`}>
                         <div className="flex items-start justify-between mb-1">
                           <h5 className="text-xs font-semibold">{template.title}</h5>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 text-destructive"
-                            onClick={() => deleteTemplateMutation.mutate(template.id)}
-                            disabled={deleteTemplateMutation.isPending}
-                            data-testid={`button-delete-template-${template.id}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5"
+                              onClick={() => {
+                                setBuilderTitle(template.title);
+                                const templateType = (template as any).type || "Email";
+                                setBuilderType(templateType);
+                                setBuilderTags(template.tags?.join(", ") || "");
+                                setEditingTemplateId(template.id);
+                                
+                                // Set isDefault based on whether this template is the default
+                                setBuilderIsDefault((template as any).isDefault || false);
+
+                                // Parse content based on type
+                                if (templateType === "Email") {
+                                  const parsed = parseEmailTemplate(template.content);
+                                  if (parsed) {
+                                    setEmailTo(parsed.to);
+                                    setEmailSubject(parsed.subject);
+                                    setEmailBody(parsed.body);
+                                    setBuilderContent(""); // Clear script content
+                                  } else {
+                                    // Fallback if parsing fails
+                                    setBuilderContent(template.content);
+                                  }
+                                } else {
+                                  // Script type
+                                  setBuilderContent(template.content);
+                                  // Clear email fields
+                                  setEmailTo("{{email}}");
+                                  setEmailSubject("");
+                                  setEmailBody("");
+                                }
+
+                                setTemplateBuilderOpen(true);
+                              }}
+                              data-testid={`button-edit-template-${template.id}`}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-destructive"
+                              onClick={() => deleteTemplateMutation.mutate(template.id)}
+                              disabled={deleteTemplateMutation.isPending}
+                              data-testid={`button-delete-template-${template.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
                           {template.content}
@@ -2248,6 +2304,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                                   setBuilderType(templateType);
                                   setBuilderTags(template.tags?.join(", ") || "");
                                   setEditingTemplateId(template.id);
+                                  
+                                  // Set isDefault based on whether this template is the default
+                                  setBuilderIsDefault((template as any).isDefault || false);
 
                                   // Parse content based on type
                                   if (templateType === "Email") {
