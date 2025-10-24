@@ -3828,32 +3828,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rows = await googleSheets.readSheetData(spreadsheetId, dataRange);
       const headers = rows[0] || [];
 
-      // Create a new row with empty values for all columns
-      const newRow = headers.map(() => '');
-
-      // Set the join column (case-insensitive)
+      // Find the link column index
       const linkColumnIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
-      if (linkColumnIndex !== -1) {
+      if (linkColumnIndex === -1) {
+        return res.status(400).json({ message: "Link column not found in sheet" });
+      }
+
+      // Check if row already exists with this link (using normalized comparison)
+      const normalizedInputLink = normalizeLink(linkValue.trim());
+      let existingRowIndex = -1;
+      
+      for (let i = 1; i < rows.length; i++) {
+        const rowLink = rows[i][linkColumnIndex];
+        const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+        
+        if (rowLink && normalizedRowLink === normalizedInputLink) {
+          existingRowIndex = i + 1; // +1 because sheets are 1-indexed
+          break;
+        }
+      }
+
+      if (existingRowIndex !== -1) {
+        // Row already exists - update the specific column instead of creating duplicate
+        const editColumnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
+        if (editColumnIndex !== -1 && value) {
+          const columnLetter = String.fromCharCode(65 + editColumnIndex);
+          const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
+          await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
+        }
+
+        // Also update agent if not set
+        const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
+        if (agentColumnIndex !== -1 && user?.email) {
+          const agentColLetter = String.fromCharCode(65 + agentColumnIndex);
+          const agentCellRange = `${sheetName}!${agentColLetter}${existingRowIndex}`;
+          await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.email]]);
+        }
+
+        res.json({ message: "Store updated successfully", existingRow: true });
+      } else {
+        // Row doesn't exist - create new row
+        const newRow = headers.map(() => '');
+
+        // Set the join column
         newRow[linkColumnIndex] = linkValue;
+
+        // Set the agent column to current user's email
+        const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
+        if (agentColumnIndex !== -1 && user?.email) {
+          newRow[agentColumnIndex] = user.email;
+        }
+
+        // Set the column being edited
+        const editColumnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
+        if (editColumnIndex !== -1) {
+          newRow[editColumnIndex] = value;
+        }
+
+        // Append the row to the sheet
+        const appendRange = `${sheetName}!A:ZZ`;
+        await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
+
+        res.json({ message: "Store claimed successfully", newRow: true });
       }
-
-      // Set the agent column to current user's email (case-insensitive)
-      const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
-      if (agentColumnIndex !== -1 && user?.email) {
-        newRow[agentColumnIndex] = user.email;
-      }
-
-      // Set the column being edited (case-insensitive)
-      const editColumnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
-      if (editColumnIndex !== -1) {
-        newRow[editColumnIndex] = value;
-      }
-
-      // Append the row to the sheet
-      const appendRange = `${sheetName}!A:ZZ`;
-      await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
-
-      res.json({ message: "Store claimed successfully" });
     } catch (error: any) {
       console.error("Error claiming store:", error);
       res.status(500).json({ message: error.message || "Failed to claim store" });
