@@ -4,7 +4,6 @@ import { Bell, Clock, Plus, Download, Store, Globe, User, Mail, Phone } from "lu
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { formatInTimeZone } from "date-fns-tz";
@@ -167,7 +166,7 @@ export function RemindersWidget() {
         </CardTitle>
         <CardDescription>Custom alerts and notifications</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 space-y-4">
+      <CardContent className="flex-1 min-h-0 flex flex-col space-y-4">
         {/* Add Reminder Button */}
         <Button variant="outline" className="w-full" size="sm" data-testid="button-add-reminder">
           <Plus className="h-4 w-4 mr-2" />
@@ -180,7 +179,7 @@ export function RemindersWidget() {
             No active reminders
           </div>
         ) : (
-          <ScrollArea className="flex-1 pr-4 max-h-[400px]">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-2">
             <div className="space-y-3">
               {activeReminders.map((reminder) => (
                 <div
@@ -279,7 +278,7 @@ export function RemindersWidget() {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         )}
       </CardContent>
     </Card>
