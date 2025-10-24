@@ -16,6 +16,7 @@ interface Ticket {
   userId: string;
   subject: string;
   message: string;
+  category: string;
   status: string;
   priority: string;
   isUnreadByAdmin: boolean;
@@ -36,11 +37,25 @@ interface TicketReply {
   userEmail?: string;
 }
 
+const TICKET_CATEGORIES = [
+  'Bug Report',
+  'Feature Request',
+  'Technical Support',
+  'Account Issue',
+  'Billing Question',
+  'Data Issue',
+  'Performance Problem',
+  'Integration Help',
+  'General Question',
+  'Other',
+] as const;
+
 export function AdminTicketInbox() {
   const { toast } = useToast();
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   // Fetch all tickets
   const { data: ticketsData, isLoading: ticketsLoading } = useQuery<{ tickets: Ticket[] }>({
@@ -137,9 +152,11 @@ export function AdminTicketInbox() {
   };
 
   const tickets = ticketsData?.tickets || [];
-  const filteredTickets = statusFilter === 'all' 
-    ? tickets 
-    : tickets.filter(t => t.status === statusFilter);
+  const filteredTickets = tickets.filter(t => {
+    const statusMatch = statusFilter === 'all' || t.status === statusFilter;
+    const categoryMatch = categoryFilter === 'all' || t.category === categoryFilter;
+    return statusMatch && categoryMatch;
+  });
   const ticketDetail = ticketDetailData?.ticket;
   const replies = ticketDetailData?.replies || [];
 
@@ -159,7 +176,7 @@ export function AdminTicketInbox() {
             )}
             {unreadCount === 0 && <span>All tickets read</span>}
           </CardDescription>
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger data-testid="select-status-filter">
                 <SelectValue placeholder="Filter by status" />
@@ -169,6 +186,19 @@ export function AdminTicketInbox() {
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="in-progress">In Progress</SelectItem>
                 <SelectItem value="closed">Closed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger data-testid="select-category-filter">
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {TICKET_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -196,11 +226,19 @@ export function AdminTicketInbox() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-medium text-sm truncate">{ticket.subject}</h4>
                           {ticket.isUnreadByAdmin && (
                             <Badge variant="destructive" className="text-xs">New</Badge>
                           )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Badge variant="outline" className="text-xs">
+                            {ticket.category}
+                          </Badge>
+                          <Badge variant={ticket.status === 'closed' ? 'secondary' : 'default'} className="text-xs">
+                            {ticket.status}
+                          </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           From: {ticket.userName || ticket.userEmail}
@@ -209,9 +247,6 @@ export function AdminTicketInbox() {
                           {format(new Date(ticket.createdAt), 'MMM d, h:mm a')}
                         </p>
                       </div>
-                      <Badge variant={ticket.status === 'closed' ? 'secondary' : 'default'} className="text-xs">
-                        {ticket.status}
-                      </Badge>
                     </div>
                   </div>
                 ))
@@ -230,7 +265,12 @@ export function AdminTicketInbox() {
           {ticketDetail && (
             <CardDescription>
               <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <Badge variant="outline" className="text-xs">
+                      {ticketDetail.category}
+                    </Badge>
+                  </div>
                   <p>From: {ticketDetail.userName || ticketDetail.userEmail}</p>
                   <p className="text-xs">
                     Created: {format(new Date(ticketDetail.createdAt), 'MMM d, yyyy h:mm a')}
