@@ -872,10 +872,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Gmail not connected. Please connect Gmail in Settings." });
       }
 
+      // Get system-wide OAuth credentials (needed for token refresh)
+      const systemIntegration = await storage.getSystemIntegration('google_sheets');
+      if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+        return res.status(500).json({ message: "System OAuth not configured. Please contact administrator." });
+      }
+
       // Check if token needs refresh
       let accessToken = integration.googleCalendarAccessToken;
       if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
-        // Token expired, refresh it
+        // Token expired, refresh it using system OAuth credentials
         if (!integration.googleCalendarRefreshToken) {
           return res.status(400).json({ message: "Gmail token expired. Please reconnect Gmail in Settings." });
         }
@@ -884,14 +890,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
-            client_id: integration.googleClientId!,
-            client_secret: integration.googleClientSecret!,
+            client_id: systemIntegration.googleClientId,
+            client_secret: systemIntegration.googleClientSecret,
             refresh_token: integration.googleCalendarRefreshToken,
             grant_type: 'refresh_token'
           })
         });
 
         if (!refreshResponse.ok) {
+          const errorText = await refreshResponse.text();
+          console.error('[Gmail] Token refresh failed:', {
+            status: refreshResponse.status,
+            error: errorText
+          });
           return res.status(400).json({ message: "Failed to refresh Gmail token. Please reconnect Gmail in Settings." });
         }
 
