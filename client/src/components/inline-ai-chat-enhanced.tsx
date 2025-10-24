@@ -527,47 +527,49 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   };
 
   // Function to replace template variables with actual values - kept for consistency, though the one above is used in `useTemplate`
-  const replaceTemplateVariables = (content: string) => {
+  const replaceTemplateVariables = (content: string, storeData: any, currentUser: any) => {
     let result = content;
 
-    // Get user data (agent info)
-    const agentName = user?.username || "Your Name";
-    const agentEmail = user?.email || "your@email.com";
-    const agentPhone = (user as any)?.phone || "";
-    const agentMeetingLink = (user as any)?.meetingLink || "";
+    // Replace store variables
+    const storeReplacements: Record<string, string> = {
+      "{{store.name}}": storeData?.name || storeData?.Name || "",
+      "{{store.city}}": storeData?.city || storeData?.City || "",
+      "{{store.state}}": storeData?.state || storeData?.State || "",
+      "{{store.address}}": storeData?.address || storeData?.Address || "",
+      "{{store.phone}}": storeData?.phone || storeData?.Phone || "",
+      "{{store.email}}": storeData?.email || storeData?.Email || "",
+      "{{store.website}}": storeData?.website || storeData?.Website || "",
+      "{{store.poc}}": storeData?.['Point of Contact'] || storeData?.pointOfContact || "",
+      "{{store.poc_email}}": storeData?.['POC Email'] || storeData?.pocEmail || "",
+      "{{store.poc_phone}}": storeData?.['POC Phone'] || storeData?.pocPhone || "",
+    };
 
-    // Replace store-related variables
-    if (storeContext) {
-      // Smart email replacement: try POC Email first, fall back to Email
-      // Handle both "POC EMAIL" and "poc_email" field names
-      const pocEmail = storeContext['POC EMAIL'] || storeContext.poc_email || storeContext.pocEmail || "";
-      const generalEmail = storeContext['Email'] || storeContext.email || "";
-      const smartEmail = pocEmail || generalEmail || "";
+    Object.entries(storeReplacements).forEach(([key, value]) => {
+      result = result.replace(new RegExp(key, 'g'), value);
+    });
 
-      result = result.replace(/\{\{storeName\}\}/g, storeContext.name || storeContext.Name || "");
-      result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || storeContext.Address || "");
-      result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || storeContext.City || "");
-      result = result.replace(/\{\{storeState\}\}/g, storeContext.state || storeContext.State || "");
-      result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || storeContext.Phone || "");
-      result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || storeContext.Website || "");
-      result = result.replace(/\{\{pocName\}\}/g, storeContext['Point of Contact'] || storeContext.poc_name || storeContext.pocName || "");
+    // Replace user variables
+    const userReplacements: Record<string, string> = {
+      "{{user.name}}": currentUser?.firstName && currentUser?.lastName 
+        ? `${currentUser.firstName} ${currentUser.lastName}` 
+        : currentUser?.email || "",
+      "{{user.firstName}}": currentUser?.firstName || "",
+      "{{user.lastName}}": currentUser?.lastName || "",
+      "{{user.email}}": currentUser?.email || "",
+      "{{user.phone}}": currentUser?.phone || "",
+      "{{user.agentName}}": currentUser?.agentName || "",
+      "{{user.meetingLink}}": currentUser?.meetingLink || "",
+    };
 
-      // Both {{email}} and {{pocEmail}} use smart fallback logic (POC EMAIL → Email)
-      result = result.replace(/\{\{pocEmail\}\}/g, smartEmail);
-      result = result.replace(/\{\{email\}\}/g, smartEmail);
-      result = result.replace(/\{\{pocPhone\}\}/g, storeContext['POC Phone'] || storeContext.poc_phone || storeContext.pocPhone || "");
+    Object.entries(userReplacements).forEach(([key, value]) => {
+      result = result.replace(new RegExp(key, 'g'), value);
+    });
+
+    // Append signature ONLY if user has one configured
+    const signature = currentUser?.signature || "";
+    if (signature && !result.includes(signature)) {
+      result += `\n\n${signature}`;
     }
-
-    // Replace agent variables
-    result = result.replace(/\{\{agentName\}\}/g, agentName);
-    result = result.replace(/\{\{agentEmail\}\}/g, agentEmail);
-    result = result.replace(/\{\{agentPhone\}\}/g, agentPhone);
-    result = result.replace(/\{\{agentMeetingLink\}\}/g, agentMeetingLink);
-
-    // Replace date/time variables
-    const now = new Date();
-    result = result.replace(/\{\{currentDate\}\}/g, now.toLocaleDateString());
-    result = result.replace(/\{\{currentTime\}\}/g, now.toLocaleTimeString());
 
     return result;
   };
