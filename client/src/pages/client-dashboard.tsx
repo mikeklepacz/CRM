@@ -2894,14 +2894,22 @@ export default function ClientDashboard() {
                                   <div className="flex items-center gap-2">
                                     {isPhoneColumn && cellValue ? (
                                       <button
-                                        onClick={() => setStoreDetailsDialog({
-                                          open: true,
-                                          row: row,
-                                          franchiseContext: selectedFranchise ? {
-                                            brandName: selectedFranchise.brandName,
-                                            allLocations: selectedFranchise.locations
-                                          } : undefined
-                                        })}
+                                        onClick={() => {
+                                          setStoreDetailsDialog({
+                                            open: true,
+                                            row: row,
+                                            franchiseContext: selectedFranchise ? {
+                                              brandName: selectedFranchise.brandName,
+                                              allLocations: selectedFranchise.locations
+                                            } : undefined
+                                          });
+                                          // Open AI Assistant with default script
+                                          const saved = localStorage.getItem(`storeDetailsShowAssistant`);
+                                          if (saved !== 'true') {
+                                            localStorage.setItem(`storeDetailsShowAssistant`, 'true');
+                                          }
+                                          setLoadDefaultScriptTrigger(prev => prev + 1);
+                                        }}
                                         className="flex items-center gap-1 hover:underline"
                                         style={{ color: customColors.primary }}
                                         data-testid={`link-phone-${rowKey}-${header}`}
@@ -3801,6 +3809,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     return false;
   });
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
+  const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
 
   // Re-sync showAssistant from localStorage when dialog opens
   useEffect(() => {
@@ -3916,6 +3925,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                   website: formData.website,
                 }}
                 contextUpdateTrigger={contextUpdateTrigger}
+                loadDefaultScriptTrigger={loadDefaultScriptTrigger}
               />
             </div>
           )}

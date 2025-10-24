@@ -88,6 +88,7 @@ interface InlineAIChatEnhancedProps {
     website?: string;
   };
   contextUpdateTrigger?: number;
+  loadDefaultScriptTrigger?: number;
 }
 
 // Helper function to detect and parse email content from AI messages
@@ -170,7 +171,7 @@ function replaceTemplateVariables(
   return result;
 }
 
-export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: InlineAIChatEnhancedProps) {
+export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadDefaultScriptTrigger }: InlineAIChatEnhancedProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -576,10 +577,24 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   };
 
 
-  const useTemplate = (template: { title: string; content: string }) => {
-    const filledContent = replaceTemplateVariables(template.content, storeContext, user); // Use the updated replaceTemplateVariables
-    setPreviewTemplate({ title: template.title, content: filledContent });
-    setTemplatePreviewOpen(true);
+  const useTemplate = (template: { title: string; content: string; type?: string }) => {
+    const filledContent = replaceTemplateVariables(template.content, storeContext, user);
+    
+    // For Script templates, load into message input for review and sending
+    if ((template as any).type === 'Script') {
+      // Prepend script marker for distinct styling in chat
+      const scriptContent = `[SCRIPT: ${template.title}]\n\n${filledContent}`;
+      setMessageInput(scriptContent);
+      setTemplateBuilderOpen(false); // Close template builder
+      toast({ 
+        title: "Script Loaded", 
+        description: `"${template.title}" ready to send` 
+      });
+    } else {
+      // For Email templates, show preview dialog
+      setPreviewTemplate({ title: template.title, content: filledContent });
+      setTemplatePreviewOpen(true);
+    }
   };
 
   // Queries
@@ -654,6 +669,36 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       updateContext();
     }
   }, [contextUpdateTrigger, selectedConversationId]);
+
+  // Handle loading default script when phone number is clicked
+  useEffect(() => {
+    if (loadDefaultScriptTrigger && loadDefaultScriptTrigger > 0 && templates.length > 0) {
+      const defaultScript = templates.find(t => t.type === 'Script' && t.isDefault);
+      if (defaultScript && storeContext) {
+        const filledContent = replaceTemplateVariables(defaultScript.content, storeContext, user);
+        
+        // Prepend script marker for distinct styling in chat
+        const scriptContent = `[SCRIPT: ${defaultScript.title}]\n\n${filledContent}`;
+        
+        // Set the message input with the filled script content
+        setMessageInput(scriptContent);
+        
+        // Switch to chat view
+        setTemplatesOpen(false);
+        
+        toast({ 
+          title: "Default Script Loaded", 
+          description: `"${defaultScript.title}" ready for your call` 
+        });
+      } else if (!defaultScript) {
+        toast({ 
+          title: "No Default Script", 
+          description: "Set a default script in the Template Builder",
+          variant: "destructive"
+        });
+      }
+    }
+  }, [loadDefaultScriptTrigger, templates, storeContext]);
 
   // Mutations
   const createConversationMutation = useMutation({
@@ -1357,7 +1402,20 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                           </ContextMenuContent>
                         </ContextMenu>
                       ) : (
-                        <div className="rounded-lg p-3 bg-primary text-primary-foreground">
+                        // User messages with special styling for script references
+                        <div className={`rounded-lg p-3 ${
+                          msg.content.startsWith('[SCRIPT:') 
+                            ? 'bg-blue-50 dark:bg-blue-950/30 border-2 border-blue-300 dark:border-blue-700 text-foreground' 
+                            : 'bg-primary text-primary-foreground'
+                        }`}>
+                          {msg.content.startsWith('[SCRIPT:') && (
+                            <div className="flex items-center gap-2 mb-2 pb-2 border-b border-blue-300 dark:border-blue-700">
+                              <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                Script Reference
+                              </span>
+                            </div>
+                          )}
                           <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                         </div>
                       )}
