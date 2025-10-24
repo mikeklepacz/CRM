@@ -5156,6 +5156,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let commission10Earnings = 0;
       const monthlyEarnings: { [key: string]: number } = {};
 
+      console.log('[DASHBOARD-SUMMARY] allowedAgentNames:', allowedAgentNames);
+      console.log('[DASHBOARD-SUMMARY] agentIndex:', agentIndex);
       console.log('[DASHBOARD-SUMMARY] Processing', trackerRows.length - 1, 'tracker rows');
       
       // Process each tracker row
