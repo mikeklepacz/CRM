@@ -3555,6 +3555,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: `Column "${column}" not found in sheet` });
       }
 
+      // Auto-claim store when editing any field (agents only)
+      const user = await storage.getUser(userId);
+      if (user && user.role !== 'admin' && user.agentName) {
+        // Read the row to get the link value for claiming
+        const rowRange = `${sheetName}!A${rowIndex}:ZZ${rowIndex}`;
+        const rowData = await googleSheets.readSheetData(spreadsheetId, rowRange);
+        if (rowData.length > 0) {
+          const row = rowData[0];
+          const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+          if (linkIndex !== -1 && row[linkIndex]) {
+            const linkValue = row[linkIndex];
+            
+            // Find Commission Tracker and claim the store
+            const sheets = await storage.getAllActiveGoogleSheets();
+            const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+            
+            if (trackerSheet) {
+              const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+              const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+              
+              if (trackerRows.length > 0) {
+                const trackerHeaders = trackerRows[0];
+                const trackerLinkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+                const trackerAgentIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+                
+                // Check if row exists in tracker
+                let existingTrackerRow = -1;
+                for (let i = 1; i < trackerRows.length; i++) {
+                  if (trackerRows[i][trackerLinkIndex] === linkValue) {
+                    existingTrackerRow = i + 1; // 1-indexed
+                    break;
+                  }
+                }
+                
+                if (existingTrackerRow > 0) {
+                  // Update existing row with agent name
+                  if (trackerAgentIndex !== -1) {
+                    const agentColLetter = String.fromCharCode(65 + trackerAgentIndex);
+                    const agentCellRange = `${trackerSheet.sheetName}!${agentColLetter}${existingTrackerRow}`;
+                    await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentCellRange, [[user.agentName]]);
+                  }
+                } else {
+                  // Create new row in tracker
+                  const newTrackerRow = new Array(trackerHeaders.length).fill('');
+                  if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = linkValue;
+                  if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = user.agentName;
+                  await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+                }
+              }
+            }
+          }
+        }
+      }
+
       // Convert column index to letter (A, B, C, etc.)
       const columnLetter = String.fromCharCode(65 + columnIndex);
       const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
