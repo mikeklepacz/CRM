@@ -5074,11 +5074,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { agentIds } = req.query;
       
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
+      }
+
+      // SECURITY: Determine which agents' data to show
+      let allowedAgentNames: string[] = [];
+      const isAgent = currentUser.role === 'agent';
+      
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
+        const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
+        allowedAgentNames = [currentAgentName];
+      } else {
+        // Admin: Use agentIds from query params or default to current user
+        const requestedAgentIds = agentIds 
+          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
+          : [userId];
+        
+        // Fetch user details for requested agent IDs to get their names
+        const agentUsers = await Promise.all(
+          requestedAgentIds.map(id => storage.getUserById(id as string))
+        );
+        
+        allowedAgentNames = agentUsers
+          .filter(Boolean)
+          .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
       }
       
       // Get Commission Tracker sheet
@@ -5117,10 +5142,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
       const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
-      
-      // Determine agent filtering
-      const isAgent = currentUser.role === 'agent';
-      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
       // Calculate metrics
       const now = new Date();
@@ -5145,11 +5166,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const commissionType = row[commissionTypeIndex] || '';
         const rowAgent = row[agentIndex] || '';
 
-        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
-        if (isAgent && agentIndex !== -1) {
-          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
-            continue; // Skip this row - it belongs to a different agent
-          }
+        // Filter by allowed agent names
+        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+          const rowAgentNormalized = rowAgent.toLowerCase().trim();
+          const isAllowed = allowedAgentNames.some(name => 
+            name.toLowerCase().trim() === rowAgentNormalized
+          );
+          if (!isAllowed) continue;
         }
 
         console.log(`[DASHBOARD-SUMMARY] Row ${i}:`, { dateStr, amountStr, commissionType, rowAgent });
@@ -5247,11 +5270,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { agentIds } = req.query;
       
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // SECURITY: Determine which agents' data to show
+      let allowedAgentNames: string[] = [];
+      const isAgent = currentUser.role === 'agent';
+
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
+        const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
+        allowedAgentNames = [currentAgentName];
+      } else {
+        // Admin: Use agentIds from query params or default to current user
+        const requestedAgentIds = agentIds 
+          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
+          : [userId];
+        
+        // Fetch user details for requested agent IDs to get their names
+        const agentUsers = await Promise.all(
+          requestedAgentIds.map(id => storage.getUserById(id as string))
+        );
+        
+        allowedAgentNames = agentUsers
+          .filter(Boolean)
+          .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
       }
       
       // Get Commission Tracker sheet
@@ -5284,10 +5332,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
       const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
-      
-      // Determine agent filtering
-      const isAgent = currentUser.role === 'agent';
-      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
       // Track unique stores and earnings by tier
       const tier25Stores = new Set<string>();
@@ -5302,11 +5346,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const commissionType = row[commissionTypeIndex] || '';
         const rowAgent = row[agentIndex] || '';
 
-        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
-        if (isAgent && agentIndex !== -1) {
-          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
-            continue;
-          }
+        // Filter by allowed agent names
+        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+          const rowAgentNormalized = rowAgent.toLowerCase().trim();
+          const isAllowed = allowedAgentNames.some(name => 
+            name.toLowerCase().trim() === rowAgentNormalized
+          );
+          if (!isAllowed) continue;
         }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
@@ -5347,11 +5393,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { agentIds } = req.query;
 
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
+      }
+
+      // SECURITY: Determine which agents' data to show
+      let allowedAgentNames: string[] = [];
+      const isAgent = currentUser.role === 'agent';
+
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
+        const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
+        allowedAgentNames = [currentAgentName];
+      } else {
+        // Admin: Use agentIds from query params or default to current user
+        const requestedAgentIds = agentIds 
+          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
+          : [userId];
+        
+        // Fetch user details for requested agent IDs to get their names
+        const agentUsers = await Promise.all(
+          requestedAgentIds.map(id => storage.getUserById(id as string))
+        );
+        
+        allowedAgentNames = agentUsers
+          .filter(Boolean)
+          .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
       }
 
       // Get both sheets
@@ -5368,10 +5439,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Determine agent filtering
-      const isAgent = currentUser.role === 'agent';
-      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
-
       // Read Store Database to get total clients for this agent
       let totalClients = 0;
       if (isAgent) {
@@ -5384,15 +5451,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (storeAgentIndex !== -1) {
             totalClients = storeRows.slice(1).filter(row => {
               const rowAgent = row[storeAgentIndex] || '';
-              return rowAgent.toLowerCase().trim() === agentName.toLowerCase().trim();
+              const rowAgentNormalized = rowAgent.toLowerCase().trim();
+              return allowedAgentNames.some(name => 
+                name.toLowerCase().trim() === rowAgentNormalized
+              );
             }).length;
           }
         }
       } else {
-        // For admins, count all stores
-        const storeRange = `${storeSheet.sheetName}!A:A`;
-        const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-        totalClients = Math.max(0, storeRows.length - 1);
+        // For admins with agentIds filter, count only stores for those agents
+        if (allowedAgentNames.length > 0) {
+          const storeRange = `${storeSheet.sheetName}!A:Z`;
+          const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+          if (storeRows.length > 1) {
+            const storeHeaders = storeRows[0];
+            const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent');
+            if (storeAgentIndex !== -1) {
+              totalClients = storeRows.slice(1).filter(row => {
+                const rowAgent = row[storeAgentIndex] || '';
+                const rowAgentNormalized = rowAgent.toLowerCase().trim();
+                return allowedAgentNames.some(name => 
+                  name.toLowerCase().trim() === rowAgentNormalized
+                );
+              }).length;
+            }
+          }
+        } else {
+          // No filter, count all stores
+          const storeRange = `${storeSheet.sheetName}!A:A`;
+          const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+          totalClients = Math.max(0, storeRows.length - 1);
+        }
       }
 
       // Read Commission Tracker to calculate active clients and repeat order rate
@@ -5427,11 +5516,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const dateStr = row[dateIndex] || '';
         const rowAgent = row[agentIndex] || '';
         
-        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
-        if (isAgent && agentIndex !== -1) {
-          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
-            continue;
-          }
+        // Filter by allowed agent names
+        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+          const rowAgentNormalized = rowAgent.toLowerCase().trim();
+          const isAllowed = allowedAgentNames.some(name => 
+            name.toLowerCase().trim() === rowAgentNormalized
+          );
+          if (!isAllowed) continue;
         }
         
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
@@ -5495,12 +5586,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { range = 'last6months' } = req.query;
+      const { range = 'last6months', agentIds } = req.query;
 
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
+      }
+
+      // SECURITY: Determine which agents' data to show
+      let allowedAgentNames: string[] = [];
+      const isAgent = currentUser.role === 'agent';
+
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
+        const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
+        allowedAgentNames = [currentAgentName];
+      } else {
+        // Admin: Use agentIds from query params or default to current user
+        const requestedAgentIds = agentIds 
+          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
+          : [userId];
+        
+        // Fetch user details for requested agent IDs to get their names
+        const agentUsers = await Promise.all(
+          requestedAgentIds.map(id => storage.getUserById(id as string))
+        );
+        
+        allowedAgentNames = agentUsers
+          .filter(Boolean)
+          .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
       }
 
       // Get Commission Tracker sheet
@@ -5522,10 +5637,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
-      
-      // Determine agent filtering
-      const isAgent = currentUser.role === 'agent';
-      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
       const monthlyData: { [key: string]: { commission: number; transactions: number } } = {};
 
@@ -5536,11 +5647,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amountStr = row[amountIndex] || '0';
         const rowAgent = row[agentIndex] || '';
 
-        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
-        if (isAgent && agentIndex !== -1) {
-          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
-            continue;
-          }
+        // Filter by allowed agent names
+        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+          const rowAgentNormalized = rowAgent.toLowerCase().trim();
+          const isAllowed = allowedAgentNames.some(name => 
+            name.toLowerCase().trim() === rowAgentNormalized
+          );
+          if (!isAllowed) continue;
         }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
@@ -5609,13 +5722,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { limit = '10' } = req.query;
+      const { limit = '10', agentIds } = req.query;
       const topN = parseInt(limit as string);
 
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
+      }
+
+      // SECURITY: Determine which agents' data to show
+      let allowedAgentNames: string[] = [];
+      const isAgent = currentUser.role === 'agent';
+      
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
+        const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
+        allowedAgentNames = [currentAgentName];
+      } else {
+        // Admin: Use agentIds from query params or default to current user
+        const requestedAgentIds = agentIds 
+          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
+          : [userId];
+        
+        // Fetch user details for requested agent IDs to get their names
+        const agentUsers = await Promise.all(
+          requestedAgentIds.map(id => storage.getUserById(id as string))
+        );
+        
+        allowedAgentNames = agentUsers
+          .filter(Boolean)
+          .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
       }
 
       // Get both Commission Tracker and Store Database sheets
@@ -5640,10 +5777,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const amountIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'amount');
       const agentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent');
-      
-      // Determine agent filtering
-      const isAgent = currentUser.role === 'agent';
-      const agentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
 
       // Aggregate commissions by store Link
       const storeCommissions: { [link: string]: { totalCommission: number; transactionCount: number } } = {};
@@ -5654,11 +5787,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amountStr = row[amountIndex] || '0';
         const rowAgent = row[agentIndex] || '';
 
-        // Agent filtering: Skip rows that don't belong to this agent (unless admin)
-        if (isAgent && agentIndex !== -1) {
-          if (rowAgent.toLowerCase().trim() !== agentName.toLowerCase().trim()) {
-            continue;
-          }
+        // Filter by allowed agent names
+        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+          const rowAgentNormalized = rowAgent.toLowerCase().trim();
+          const isAllowed = allowedAgentNames.some(name => 
+            name.toLowerCase().trim() === rowAgentNormalized
+          );
+          if (!isAllowed) continue;
         }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
