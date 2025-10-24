@@ -257,10 +257,21 @@ export const reminders = pgTable("reminders", {
   title: varchar("title", { length: 200 }).notNull(),
   description: text("description"),
   reminderType: varchar("reminder_type", { length: 50 }).notNull(), // 'one_time', 'recurring', '6_month_warning', 're_order'
+  
+  // Simplified timezone handling: store local datetime as user sees it + IANA timezone
+  scheduledDate: varchar("scheduled_date", { length: 10 }).notNull(), // YYYY-MM-DD in user's timezone
+  scheduledTime: varchar("scheduled_time", { length: 5 }).notNull(), // HH:MM in 24hr format in user's timezone
+  timezone: varchar("timezone", { length: 100 }).notNull(), // IANA timezone (e.g., "Europe/Warsaw", "America/New_York")
+  
+  // Legacy fields - kept for backward compatibility
   triggerDate: timestamp("trigger_date"),
   intervalDays: integer("interval_days"), // For recurring reminders
   lastTriggered: timestamp("last_triggered"),
   nextTrigger: timestamp("next_trigger"),
+  scheduledAtUtc: timestamp("scheduled_at_utc"), // Deprecated - use scheduledDate/scheduledTime/timezone instead
+  reminderTimeZone: varchar("reminder_time_zone", { length: 100 }), // Deprecated
+  dueDate: timestamp("due_date"), // Deprecated
+  
   isActive: boolean("is_active").default(true),
   isCompleted: boolean("is_completed").default(false),
   completedAt: timestamp("completed_at"),
@@ -270,9 +281,6 @@ export const reminders = pgTable("reminders", {
   customEmailSubject: varchar("custom_email_subject", { length: 200 }),
   customEmailBody: text("custom_email_body"),
   googleCalendarEventId: varchar("google_calendar_event_id"), // Google Calendar event ID for sync
-  scheduledAtUtc: timestamp("scheduled_at_utc"), // When the reminder should trigger in UTC
-  reminderTimeZone: varchar("reminder_time_zone", { length: 100 }), // Timezone used when creating reminder
-  dueDate: timestamp("due_date"), // Legacy field - kept for compatibility, new reminders use scheduledAtUtc
   storeMetadata: jsonb("store_metadata").$type<{
     storeName?: string;
     storeLink?: string;
