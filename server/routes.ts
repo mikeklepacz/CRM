@@ -19,6 +19,8 @@ import {
   insertReminderSchema,
   insertCategorySchema,
   insertStatusSchema,
+  insertTicketSchema,
+  insertTicketReplySchema,
 } from "@shared/schema";
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
@@ -8836,6 +8838,171 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error saving place to sheet:', error);
       res.status(500).json({ message: error.message || 'Failed to save place to sheet' });
+    }
+  });
+
+  // Ticket Routes
+  
+  // Get unread ticket count (admin only)
+  app.get('/api/tickets/unread-count', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.json({ count: 0 });
+      }
+      
+      const count = await storage.getUnreadAdminCount();
+      res.json({ count });
+    } catch (error: any) {
+      console.error('Error getting unread count:', error);
+      res.status(500).json({ message: error.message || 'Failed to get unread count' });
+    }
+  });
+  
+  // Get all tickets (admin) or user's tickets (regular users)
+  app.get('/api/tickets', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      let tickets;
+      if (user?.role === 'admin') {
+        tickets = await storage.getAllTickets();
+      } else {
+        tickets = await storage.getUserTickets(userId);
+      }
+      
+      res.json({ tickets });
+    } catch (error: any) {
+      console.error('Error fetching tickets:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
+    }
+  });
+  
+  // Get single ticket with replies
+  app.get('/api/tickets/:id', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const ticketId = req.params.id;
+      
+      const ticket = await storage.getTicket(ticketId);
+      if (!ticket) {
+        return res.status(404).json({ message: 'Ticket not found' });
+      }
+      
+      // Check access: admin can see all, users can only see their own
+      if (user?.role !== 'admin' && ticket.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const replies = await storage.getTicketReplies(ticketId);
+      
+      // Mark as read
+      if (user?.role === 'admin') {
+        await storage.markTicketReadByAdmin(ticketId);
+      } else {
+        await storage.markTicketReadByUser(ticketId);
+      }
+      
+      res.json({ ticket, replies });
+    } catch (error: any) {
+      console.error('Error fetching ticket:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch ticket' });
+    }
+  });
+  
+  // Create new ticket
+  app.post('/api/tickets', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const validated = insertTicketSchema.parse({
+        ...req.body,
+        userId,
+      });
+      
+      const ticket = await storage.createTicket(validated);
+      
+      // TODO: Send email notification to admin (michael@naturalmaterials.eu)
+      
+      res.json({ ticket });
+    } catch (error: any) {
+      console.error('Error creating ticket:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid ticket data', errors: error.errors });
+      }
+      res.status(500).json({ message: error.message || 'Failed to create ticket' });
+    }
+  });
+  
+  // Reply to ticket
+  app.post('/api/tickets/:id/reply', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const ticketId = req.params.id;
+      
+      const ticket = await storage.getTicket(ticketId);
+      if (!ticket) {
+        return res.status(404).json({ message: 'Ticket not found' });
+      }
+      
+      // Check access
+      if (user?.role !== 'admin' && ticket.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const validated = insertTicketReplySchema.parse({
+        ticketId,
+        userId,
+        message: req.body.message,
+      });
+      
+      const reply = await storage.createTicketReply(validated);
+      
+      // Mark ticket as having new reply
+      if (user?.role === 'admin') {
+        await storage.updateTicket(ticketId, { isUnreadByUser: true });
+      } else {
+        await storage.updateTicket(ticketId, { isUnreadByAdmin: true });
+      }
+      
+      // TODO: Send email notification (admin reply -> user email, user reply -> michael@naturalmaterials.eu)
+      
+      res.json({ reply });
+    } catch (error: any) {
+      console.error('Error creating reply:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid reply data', errors: error.errors });
+      }
+      res.status(500).json({ message: error.message || 'Failed to create reply' });
+    }
+  });
+  
+  // Update ticket status (admin only)
+  app.patch('/api/tickets/:id/status', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+      
+      const ticketId = req.params.id;
+      const { status } = req.body;
+      
+      if (!['open', 'replied', 'closed'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status' });
+      }
+      
+      const ticket = await storage.updateTicket(ticketId, { status });
+      res.json({ ticket });
+    } catch (error: any) {
+      console.error('Error updating ticket status:', error);
+      res.status(500).json({ message: error.message || 'Failed to update ticket status' });
     }
   });
 
