@@ -7809,7 +7809,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       // Fetch each event to check for updates/deletions
       for (const reminder of reminders) {
-        const calendarEventId = reminder.storeMetadata?.calendarEventId;
+        const calendarEventId = reminder.googleCalendarEventId;
         if (!calendarEventId) continue;
 
         try {
@@ -7827,17 +7827,29 @@ Use this store information to provide context-aware responses. When helping draf
             console.log(`[Webhook] Calendar event ${calendarEventId} deleted, deleting reminder ${reminder.id}`);
             await storage.deleteReminder(reminder.id);
           } else if (event.updated) {
-            // Event was updated, sync the changes
-            const updatedTime = new Date(event.start?.dateTime || event.start?.date || '');
-            const currentTime = new Date(reminder.scheduledAtUtc || reminder.triggerDate || '');
+            // Event was updated, sync the changes from Google Calendar
+            // Google returns ISO datetime with timezone, parse it in the event's timezone
+            const eventStartDateTime = event.start?.dateTime;
+            const eventTimeZone = event.start?.timeZone || reminder.timezone;
             
-            if (updatedTime.getTime() !== currentTime.getTime()) {
-              console.log(`[Webhook] Calendar event ${calendarEventId} time changed, updating reminder ${reminder.id}`);
-              await storage.updateReminder(reminder.id, {
-                scheduledAtUtc: updatedTime,
-                nextTrigger: updatedTime,
-                triggerDate: updatedTime
-              });
+            if (eventStartDateTime && eventTimeZone) {
+              // Parse Google's datetime to extract local date and time components
+              // eventStartDateTime format: "2025-10-24T23:00:00+02:00" or "2025-10-24T23:00:00"
+              const dateTimeParts = eventStartDateTime.split('T');
+              const newScheduledDate = dateTimeParts[0]; // YYYY-MM-DD
+              const timePart = dateTimeParts[1].split('+')[0].split('-')[0].split('Z')[0]; // Remove timezone suffix
+              const newScheduledTime = timePart.substring(0, 5); // HH:MM
+              
+              // Check if date or time changed
+              if (newScheduledDate !== reminder.scheduledDate || newScheduledTime !== reminder.scheduledTime) {
+                console.log(`[Webhook] Calendar event ${calendarEventId} time changed, updating reminder ${reminder.id}`);
+                console.log(`[Webhook] Old: ${reminder.scheduledDate} ${reminder.scheduledTime}, New: ${newScheduledDate} ${newScheduledTime}`);
+                await storage.updateReminder(reminder.id, {
+                  scheduledDate: newScheduledDate,
+                  scheduledTime: newScheduledTime,
+                  timezone: eventTimeZone
+                });
+              }
             }
             
             // Update title if changed
