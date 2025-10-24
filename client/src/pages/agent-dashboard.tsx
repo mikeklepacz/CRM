@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClientFilters } from "@/components/client-filters";
@@ -13,6 +14,7 @@ import type { Client } from "@shared/schema";
 export default function AgentDashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   
   const [search, setSearch] = useState("");
   const [state, setState] = useState("all");
@@ -215,7 +217,12 @@ export default function AgentDashboard() {
       {/* Right Column - Reminders Widget (hidden on mobile/tablet, visible on large screens) */}
       <div className="hidden lg:block lg:w-96 border-l overflow-y-auto">
         <div className="p-4 h-full">
-          <RemindersWidget />
+          <RemindersWidget 
+            onPhoneClick={(storeIdentifier) => {
+              // Navigate to store details page
+              setLocation(`/store/${encodeURIComponent(storeIdentifier)}`);
+            }}
+          />
         </div>
       </div>
     </div>

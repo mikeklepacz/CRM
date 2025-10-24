@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Responsive, WidthProvider, Layout } from "react-grid-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,6 +112,7 @@ function WidgetWithContextMenu({
 }
 
 export default function SalesDashboard() {
+  const [, setLocation] = useLocation();
   const [layouts, setLayouts] = useState(defaultLayouts);
   const [isLocked, setIsLocked] = useState(true);
   const [visibleWidgets, setVisibleWidgets] = useState<Set<string>>(
@@ -368,7 +370,12 @@ export default function SalesDashboard() {
               widgetName="Reminders"
               onHide={() => toggleWidgetVisibility("reminders")}
             >
-              <RemindersWidget />
+              <RemindersWidget 
+                onPhoneClick={(storeIdentifier) => {
+                  // Navigate to store details page
+                  setLocation(`/store/${encodeURIComponent(storeIdentifier)}`);
+                }}
+              />
             </WidgetWithContextMenu>
           </div>
         )}

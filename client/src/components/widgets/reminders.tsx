@@ -32,7 +32,11 @@ interface Reminder {
   };
 }
 
-export function RemindersWidget() {
+interface RemindersWidgetProps {
+  onPhoneClick?: (storeIdentifier: string) => void;
+}
+
+export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
   const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<{ reminders: Reminder[] }>({
@@ -291,6 +295,13 @@ export function RemindersWidget() {
                               href={`tel:${reminder.storeMetadata.pocPhone}`}
                               className="hover:text-primary hover:underline"
                               data-testid={`link-phone-${reminder.id}`}
+                              onClick={(e) => {
+                                // Don't prevent default - let tel: link work
+                                // But also open the store details modal if callback provided
+                                if (onPhoneClick && reminder.storeMetadata.uniqueIdentifier) {
+                                  onPhoneClick(reminder.storeMetadata.uniqueIdentifier);
+                                }
+                              }}
                             >
                               {reminder.storeMetadata.pocPhone}
                             </a>
