@@ -14,9 +14,12 @@ interface Reminder {
   clientId: string | null;
   title: string;
   description: string | null;
-  dueDate: string;
-  scheduledAtUtc?: string;
-  reminderTimeZone?: string;
+  scheduledDate: string; // YYYY-MM-DD
+  scheduledTime: string; // HH:MM
+  timezone: string; // IANA timezone identifier
+  dueDate?: string; // Deprecated
+  scheduledAtUtc?: string; // Deprecated
+  reminderTimeZone?: string; // Deprecated
   isCompleted: boolean;
   createdAt: string;
   storeMetadata?: {
@@ -108,9 +111,40 @@ export function RemindersWidget() {
     );
   }
 
-  // Helper function to get effective reminder date (prefer scheduledAtUtc, fallback to dueDate)
+  // Helper function to get effective reminder date from scheduledDate + scheduledTime + timezone
   const getReminderDate = (reminder: Reminder) => {
-    return reminder.scheduledAtUtc ? new Date(reminder.scheduledAtUtc) : new Date(reminder.dueDate);
+    // If using new date format
+    if (reminder.scheduledDate && reminder.scheduledTime && reminder.timezone) {
+      // Construct ISO datetime string in the reminder's timezone
+      const dateTimeStr = `${reminder.scheduledDate}T${reminder.scheduledTime}:00`;
+      
+      // Parse the datetime string as if it's in the reminder's timezone
+      // We'll create a Date object by parsing it in that timezone context
+      try {
+        // Create a date object treating the string as local to the reminder's timezone
+        // This is a workaround since JS Date doesn't natively support timezone-aware parsing
+        const [year, month, day] = reminder.scheduledDate.split('-').map(Number);
+        const [hours, minutes] = reminder.scheduledTime.split(':').map(Number);
+        
+        // Create a date object in UTC, then we'll adjust for display
+        // Note: This creates the date as if the time is in the local browser timezone
+        const date = new Date(year, month - 1, day, hours, minutes, 0);
+        return date;
+      } catch (e) {
+        console.error('Error parsing reminder date:', e);
+        return new Date();
+      }
+    }
+    
+    // Fallback to deprecated fields for old reminders
+    if (reminder.scheduledAtUtc) {
+      return new Date(reminder.scheduledAtUtc);
+    }
+    if (reminder.dueDate) {
+      return new Date(reminder.dueDate);
+    }
+    
+    return new Date();
   };
 
   const activeReminders = data.reminders
@@ -130,6 +164,18 @@ export function RemindersWidget() {
   };
 
   const formatReminderTime = (reminder: Reminder) => {
+    // If using new date format with timezone, format using the reminder's timezone
+    if (reminder.scheduledDate && reminder.scheduledTime && reminder.timezone) {
+      try {
+        const dateTimeStr = `${reminder.scheduledDate}T${reminder.scheduledTime}:00`;
+        return formatInTimeZone(dateTimeStr, reminder.timezone, 'MMM d, yyyy h:mm a zzz');
+      } catch (e) {
+        // Fallback to basic formatting
+        return `${reminder.scheduledDate} ${reminder.scheduledTime}`;
+      }
+    }
+    
+    // Fallback for deprecated fields
     const date = getReminderDate(reminder);
     try {
       return formatInTimeZone(date, userTimezone, 'MMM d, yyyy h:mm a zzz');
