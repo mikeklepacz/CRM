@@ -5759,6 +5759,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get reminders for a specific date
+  app.get('/api/reminders/by-date/:date', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { date } = req.params; // Expected format: YYYY-MM-DD
+      
+      // Get all user's reminders
+      const allReminders = await storage.getRemindersByUser(userId);
+      
+      // Filter by date
+      const dateReminders = allReminders.filter(r => r.scheduledDate === date && r.isActive);
+      
+      // Sort by time
+      const sortedReminders = dateReminders.sort((a, b) => {
+        if (a.scheduledTime && b.scheduledTime) {
+          return a.scheduledTime.localeCompare(b.scheduledTime);
+        }
+        return 0;
+      });
+      
+      res.json({ reminders: sortedReminders });
+    } catch (error: any) {
+      console.error('Error fetching reminders by date:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch reminders by date' });
+    }
+  });
+
   // Create a new reminder
   app.post('/api/reminders', async (req, res) => {
     try {
@@ -6085,21 +6116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('[Smart Default] Failed to update calendar reminder preferences:', prefsError.message);
       }
 
-      // Include conflict warning in response
-      const response: any = { reminder };
-      if (conflictingReminder) {
-        response.warning = {
-          type: 'duplicate_time',
-          message: `You already have a reminder scheduled at this time: "${conflictingReminder.title}"`,
-          existingReminder: {
-            id: conflictingReminder.id,
-            title: conflictingReminder.title,
-            scheduledAt: conflictingReminder.scheduledAtUtc
-          }
-        };
-      }
-
-      res.json(response);
+      res.json({ reminder });
     } catch (error: any) {
       console.error('Error creating reminder:', error);
       res.status(500).json({ message: error.message || 'Failed to create reminder' });
