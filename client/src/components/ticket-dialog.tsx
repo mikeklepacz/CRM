@@ -63,10 +63,7 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
   // Create ticket mutation
   const createMutation = useMutation({
     mutationFn: async (data: { subject: string; message: string }) => {
-      return await apiRequest('/api/tickets', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return await apiRequest('POST', '/api/tickets', data);
     },
     onSuccess: () => {
       toast({
@@ -90,10 +87,7 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
   // Reply mutation
   const replyMutation = useMutation({
     mutationFn: async (data: { ticketId: string; message: string }) => {
-      return await apiRequest(`/api/tickets/${data.ticketId}/reply`, {
-        method: 'POST',
-        body: JSON.stringify({ message: data.message }),
-      });
+      return await apiRequest('POST', `/api/tickets/${data.ticketId}/reply`, { message: data.message });
     },
     onSuccess: () => {
       toast({
