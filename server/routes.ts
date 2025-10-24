@@ -705,11 +705,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const userinfo = await userinfoResponse.json();
 
-      // Store per-user Gmail/Calendar tokens (but use system client ID/secret for refreshing)
+      // Store per-user Gmail/Calendar tokens (both fields for Gmail and Calendar)
       const expiryTimestamp = Date.now() + (tokens.expires_in * 1000);
       await storage.updateUserIntegration(userId as string, {
         googleClientId: systemIntegration.googleClientId,
         googleClientSecret: systemIntegration.googleClientSecret,
+        // Gmail fields (used by getUserAccessToken)
+        googleAccessToken: tokens.access_token,
+        googleRefreshToken: tokens.refresh_token,
+        googleTokenExpiry: expiryTimestamp,
+        googleEmail: userinfo.email,
+        // Calendar fields (used by direct calendar access)
         googleCalendarAccessToken: tokens.access_token,
         googleCalendarRefreshToken: tokens.refresh_token,
         googleCalendarTokenExpiry: expiryTimestamp,

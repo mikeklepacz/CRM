@@ -240,10 +240,14 @@ async function getUserAccessToken(userId: string) {
     try {
       const { credentials } = await oauth2Client.refreshAccessToken();
       
-      // Update tokens in database
+      const newExpiryTime = credentials.expiry_date || (Date.now() + 3600000);
+      
+      // Update tokens in database (both Gmail and Calendar fields)
       await storage.updateUserIntegration(userId, {
         googleAccessToken: credentials.access_token!,
-        googleTokenExpiry: credentials.expiry_date || (Date.now() + 3600000)
+        googleTokenExpiry: newExpiryTime,
+        googleCalendarAccessToken: credentials.access_token!,
+        googleCalendarTokenExpiry: newExpiryTime
       });
 
       console.log('✅ Successfully refreshed user Google access token for user:', userId);
