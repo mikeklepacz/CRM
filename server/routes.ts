@@ -6962,6 +6962,16 @@ When drafting emails or communications, ALWAYS prioritize POC (Point of Contact)
 2. If POC Phone is available, use it instead of the general Phone field
 3. If Point of Contact name is available, address communications to that person specifically
 
+EMAIL GENERATION PROTOCOL:
+When the user asks you to draft an email:
+1. FIRST: Check if POC Email exists → If yes, use it and mention: "I'll address this to [POC Email]"
+2. SECOND: If no POC Email, check if general Email exists → If yes, use it and mention: "I'll address this to [Email]"
+3. THIRD: If NEITHER email exists → Ask the user: "I don't have an email address for this contact. Would you like me to generate a template email that you can customize with the recipient later?"
+   - Only proceed with email generation if the user confirms
+   - If they confirm, generate the email with placeholder recipient and make it clear they need to add the recipient
+
+IMPORTANT: Never silently generate emails with missing recipient information. Always be transparent about which email you're using or ask for confirmation if none is available.
+
 Use this store information to provide context-aware responses. When helping draft emails or communications, reference specific details about this store.`;
         systemInstructions += contextString;
         console.log('💬 [CHAT] Store context appended (length:', contextString.length, ')');
