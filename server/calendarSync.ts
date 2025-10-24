@@ -64,8 +64,8 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
     // Get all reminders for this user without calendar events
-    const reminders = await storage.getReminders(userId);
-    const remindersToSync = reminders.filter(r => !r.storeMetadata?.calendarEventId && !r.isCompleted);
+    const reminders = await storage.getRemindersByUser(userId);
+    const remindersToSync = reminders.filter(r => !r.googleCalendarEventId && !r.isCompleted);
 
     console.log(`[CalendarSync] Found ${remindersToSync.length} reminders to sync for user ${userId}`);
 
@@ -99,18 +99,25 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
           location = addressParts.join(', ');
         }
 
-        // Create calendar event
+        // Build timezone-aware datetime string (YYYY-MM-DDTHH:MM:SS format)
+        const startDateTime = `${reminder.scheduledDate}T${reminder.scheduledTime}:00`;
+        const startDate = new Date(startDateTime);
+        const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 minutes later
+        const endDateTime = endDate.toISOString().split('T')[0] + 'T' + 
+                           endDate.toISOString().split('T')[1].substring(0, 8);
+
+        // Create calendar event with timezone-aware datetime
         const event = {
           summary: reminder.title,
           description: eventDescription,
           location: location || undefined,
           start: {
-            dateTime: new Date(reminder.scheduledAtUtc).toISOString(),
-            timeZone: reminder.reminderTimeZone || 'UTC',
+            dateTime: startDateTime,
+            timeZone: reminder.timezone,
           },
           end: {
-            dateTime: new Date(new Date(reminder.scheduledAtUtc).getTime() + 30 * 60000).toISOString(),
-            timeZone: reminder.reminderTimeZone || 'UTC',
+            dateTime: endDateTime,
+            timeZone: reminder.timezone,
           },
         };
 
@@ -121,12 +128,8 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
 
         // Update reminder with calendar event ID
         if (createdEvent.data.id) {
-          const updatedMetadata = {
-            ...(reminder.storeMetadata || {}),
-            calendarEventId: createdEvent.data.id
-          };
           await storage.updateReminder(reminder.id, {
-            storeMetadata: updatedMetadata
+            googleCalendarEventId: createdEvent.data.id
           });
           created++;
           console.log(`[CalendarSync] Created event ${createdEvent.data.id} for reminder ${reminder.id}`);
