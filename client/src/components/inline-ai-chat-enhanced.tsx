@@ -181,6 +181,10 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const [messageInput, setMessageInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Script display state - for showing scripts in the chat area
+  const [loadedScripts, setLoadedScripts] = useState<Array<{ title: string; content: string }>>([]);
+  const [lastLoadTrigger, setLastLoadTrigger] = useState(0);
 
   // Template form state
   const [newTemplateTitle, setNewTemplateTitle] = useState("");
@@ -673,19 +677,19 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
   // Handle loading default script when phone number is clicked
   useEffect(() => {
-    if (loadDefaultScriptTrigger && loadDefaultScriptTrigger > 0 && templates.length > 0) {
+    if (loadDefaultScriptTrigger && loadDefaultScriptTrigger > 0 && loadDefaultScriptTrigger !== lastLoadTrigger && templates.length > 0) {
       const defaultScript = templates.find(t => t.type === 'Script' && t.isDefault);
       if (defaultScript && storeContext) {
         const filledContent = replaceTemplateVariables(defaultScript.content, storeContext, user);
         
-        // Prepend script marker for distinct styling in chat
-        const scriptContent = `[SCRIPT: ${defaultScript.title}]\n\n${filledContent}`;
-        
-        // Set the message input with the filled script content
-        setMessageInput(scriptContent);
+        // Add script to loaded scripts array (displays in chat area)
+        setLoadedScripts([{ title: defaultScript.title, content: filledContent }]);
         
         // Switch to chat view
         setTemplatesOpen(false);
+        
+        // Update last trigger to prevent duplicate loads
+        setLastLoadTrigger(loadDefaultScriptTrigger);
         
         toast({ 
           title: "Default Script Loaded", 
@@ -699,7 +703,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         });
       }
     }
-  }, [loadDefaultScriptTrigger, templates, storeContext]);
+  }, [loadDefaultScriptTrigger, templates, storeContext, lastLoadTrigger]);
 
   // Mutations
   const createConversationMutation = useMutation({
@@ -1395,7 +1399,102 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
         {/* Messages */}
         <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
-          {!selectedConversationId ? (
+          {/* Script Display Area */}
+          {loadedScripts.length > 0 ? (
+            <div className="space-y-4">
+              {loadedScripts.map((script, index) => (
+                <div key={index} className="border-2 border-primary/30 rounded-lg bg-card p-4">
+                  <div className="flex items-center gap-2 mb-3 pb-2 border-b">
+                    <FileText className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold text-lg">{script.title}</h3>
+                  </div>
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{script.content}</p>
+                  </div>
+                </div>
+              ))}
+              
+              {/* Divider between scripts and chat */}
+              {selectedConversationId && messages.length > 0 && (
+                <div className="border-t my-4 pt-4">
+                  <p className="text-xs text-muted-foreground text-center mb-4">Chat Messages</p>
+                </div>
+              )}
+              
+              {/* Chat messages below scripts */}
+              {selectedConversationId && messages.length > 0 && (
+                <div className="space-y-4">
+                  {messages.map((msg) => {
+                    const emailData = msg.role === "assistant" ? parseEmailFromMessage(msg.content) : null;
+
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
+                      >
+                        {msg.role === "assistant" && (
+                          <div className="flex-shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Bot className="h-4 w-4 text-primary" />
+                            </div>
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[80%] ${
+                            msg.role === "user" ? "w-full" : ""
+                          }`}
+                        >
+                          {msg.role === "assistant" ? (
+                            <ContextMenu>
+                              <ContextMenuTrigger>
+                                <div className="rounded-lg p-3 bg-muted">
+                                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                </div>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent>
+                                <ContextMenuItem
+                                  onClick={() => copyMessageToClipboard(msg.content)}
+                                  data-testid="context-menu-copy"
+                                >
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copy
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                  onClick={() => makeTemplateFromMessage(msg.content)}
+                                  data-testid="context-menu-make-template"
+                                >
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Make Template
+                                </ContextMenuItem>
+                              </ContextMenuContent>
+                            </ContextMenu>
+                          ) : (
+                            <div className="rounded-lg p-3 bg-primary text-primary-foreground">
+                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            </div>
+                          )}
+                          {emailData && (
+                            <EmailPreview
+                              to={emailData.to}
+                              subject={emailData.subject}
+                              body={emailData.body}
+                            />
+                          )}
+                        </div>
+                        {msg.role === "user" && (
+                          <div className="flex-shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
+                              <UserIcon className="h-4 w-4" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : !selectedConversationId ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <Bot className="h-16 w-16 mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-lg font-semibold mb-2">Welcome to Sales Assistant</h3>
@@ -1411,7 +1510,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
-          ) : (
+          ) : messages.length > 0 ? (
             <div className="space-y-4">
               {messages.map((msg) => {
                 const emailData = msg.role === "assistant" ? parseEmailFromMessage(msg.content) : null;
@@ -1458,20 +1557,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                           </ContextMenuContent>
                         </ContextMenu>
                       ) : (
-                        // User messages with special styling for script references
-                        <div className={`rounded-lg p-3 ${
-                          msg.content.startsWith('[SCRIPT:') 
-                            ? 'bg-blue-50 dark:bg-blue-950/30 border-2 border-blue-300 dark:border-blue-700 text-foreground' 
-                            : 'bg-primary text-primary-foreground'
-                        }`}>
-                          {msg.content.startsWith('[SCRIPT:') && (
-                            <div className="flex items-center gap-2 mb-2 pb-2 border-b border-blue-300 dark:border-blue-700">
-                              <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                                Script Reference
-                              </span>
-                            </div>
-                          )}
+                        <div className="rounded-lg p-3 bg-primary text-primary-foreground">
                           <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                         </div>
                       )}
@@ -1494,7 +1580,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                 );
               })}
             </div>
-          )}
+          ) : null}
         </ScrollArea>
 
         {/* Input */}
