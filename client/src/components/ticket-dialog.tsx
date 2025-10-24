@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +40,19 @@ interface TicketDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const TICKET_CATEGORIES = [
+  'Bug Report',
+  'Feature Request',
+  'Technical Support',
+  'Account Issue',
+  'Billing Question',
+  'Data Issue',
+  'Performance Problem',
+  'Integration Help',
+  'General Question',
+  'Other',
+] as const;
 
 export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
   const { user } = useAuth();
@@ -120,7 +134,7 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
       });
       return;
     }
-    createMutation.mutate({ subject, message });
+    createMutation.mutate({ subject, message, category });
   };
 
   const handleReply = (e: React.FormEvent) => {
@@ -220,6 +234,22 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
                   placeholder="Brief description of your issue..."
                   data-testid="input-subject"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger id="category" data-testid="select-category">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TICKET_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
