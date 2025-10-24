@@ -25,8 +25,14 @@ import {
   searchHistory,
   savedExclusions,
   statuses,
+  tickets,
+  ticketReplies,
   type User,
   type UpsertUser,
+  type Ticket,
+  type InsertTicket,
+  type TicketReply,
+  type InsertTicketReply,
   type Client,
   type InsertClient,
   type Note,
@@ -247,6 +253,20 @@ export interface IStorage {
   createStatus(status: InsertStatus): Promise<Status>;
   updateStatus(id: string, updates: Partial<InsertStatus>): Promise<Status>;
   deleteStatus(id: string): Promise<void>;
+  
+  // Ticket operations
+  getAllTickets(): Promise<Ticket[]>;
+  getUserTickets(userId: string): Promise<Ticket[]>;
+  getTicket(id: string): Promise<Ticket | undefined>;
+  createTicket(ticket: InsertTicket): Promise<Ticket>;
+  updateTicket(id: string, updates: Partial<InsertTicket>): Promise<Ticket>;
+  getUnreadAdminCount(): Promise<number>;
+  markTicketReadByAdmin(id: string): Promise<Ticket>;
+  markTicketReadByUser(id: string): Promise<Ticket>;
+  
+  // Ticket Reply operations
+  getTicketReplies(ticketId: string): Promise<TicketReply[]>;
+  createTicketReply(reply: InsertTicketReply): Promise<TicketReply>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1503,6 +1523,104 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStatus(id: string): Promise<void> {
     await db.delete(statuses).where(eq(statuses.id, id));
+  }
+
+  // Ticket operations
+  async getAllTickets(): Promise<Ticket[]> {
+    return await db
+      .select()
+      .from(tickets)
+      .orderBy(desc(tickets.createdAt));
+  }
+
+  async getUserTickets(userId: string): Promise<Ticket[]> {
+    return await db
+      .select()
+      .from(tickets)
+      .where(eq(tickets.userId, userId))
+      .orderBy(desc(tickets.createdAt));
+  }
+
+  async getTicket(id: string): Promise<Ticket | undefined> {
+    const [ticket] = await db
+      .select()
+      .from(tickets)
+      .where(eq(tickets.id, id));
+    return ticket;
+  }
+
+  async createTicket(ticket: InsertTicket): Promise<Ticket> {
+    const [newTicket] = await db
+      .insert(tickets)
+      .values(ticket)
+      .returning();
+    return newTicket;
+  }
+
+  async updateTicket(id: string, updates: Partial<InsertTicket>): Promise<Ticket> {
+    const [updated] = await db
+      .update(tickets)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(tickets.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getUnreadAdminCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tickets)
+      .where(eq(tickets.isUnreadByAdmin, true));
+    return result[0]?.count || 0;
+  }
+
+  async markTicketReadByAdmin(id: string): Promise<Ticket> {
+    const [updated] = await db
+      .update(tickets)
+      .set({ isUnreadByAdmin: false })
+      .where(eq(tickets.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markTicketReadByUser(id: string): Promise<Ticket> {
+    const [updated] = await db
+      .update(tickets)
+      .set({ isUnreadByUser: false })
+      .where(eq(tickets.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Ticket Reply operations
+  async getTicketReplies(ticketId: string): Promise<TicketReply[]> {
+    return await db
+      .select()
+      .from(ticketReplies)
+      .where(eq(ticketReplies.ticketId, ticketId))
+      .orderBy(ticketReplies.createdAt);
+  }
+
+  async createTicketReply(reply: InsertTicketReply): Promise<TicketReply> {
+    const [newReply] = await db
+      .insert(ticketReplies)
+      .values(reply)
+      .returning();
+    
+    // Update the ticket's lastReplyAt and mark as replied
+    await db
+      .update(tickets)
+      .set({
+        lastReplyAt: new Date(),
+        status: 'replied',
+        updatedAt: new Date(),
+      })
+      .where(eq(tickets.id, reply.ticketId));
+    
+    return newReply;
   }
 }
 
