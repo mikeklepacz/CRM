@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Phone, Calendar, DollarSign, Loader2, MoreVertical, UserCheck } from "lucide-react";
@@ -27,6 +27,14 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [notesClientId, setNotesClientId] = useState<string | null>(null);
+
+  // Fetch Gmail connection status
+  const { data: integrationStatus } = useQuery<{
+    googleCalendarConnected: boolean;
+    googleSheetsConnected: boolean;
+  }>({
+    queryKey: ["/api/integrations/status"],
+  });
 
   const claimMutation = useMutation({
     mutationFn: async (clientId: string) => {
@@ -106,12 +114,59 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
     },
   });
 
-  const handleContactClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
-    // Don't prevent default - let the link open
+  const createGmailDraftMutation = useMutation({
+    mutationFn: async ({ to, subject }: { to: string; subject: string }) => {
+      return await apiRequest("POST", "/api/gmail/create-draft", {
+        to,
+        subject,
+        body: "",
+      });
+    },
+    onSuccess: (data: any) => {
+      if (data?.draftUrl) {
+        window.open(data.draftUrl, '_blank');
+      }
+      toast({
+        title: "Draft Created",
+        description: "Gmail draft has been created and opened in a new tab",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Create Draft",
+        description: error.message || "Could not create Gmail draft. Using default email client instead.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handlePhoneClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
+    // Don't prevent default - let the phone link open
     // Just trigger auto-claim silently in the background
     if (link && currentUser.role !== 'admin') {
       autoClaimMutation.mutate(link);
     }
+  };
+
+  const handleEmailClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string, email: string, companyName: string) => {
+    // Trigger auto-claim
+    if (link && currentUser.role !== 'admin') {
+      autoClaimMutation.mutate(link);
+    }
+
+    // Check if user prefers Gmail drafts and Gmail is connected
+    const emailPreference = (currentUser as any).emailPreference || 'mailto';
+    const gmailConnected = integrationStatus?.googleCalendarConnected || false;
+
+    if (emailPreference === 'gmail_draft' && gmailConnected) {
+      // Prevent default mailto and create Gmail draft instead
+      e.preventDefault();
+      createGmailDraftMutation.mutate({
+        to: email,
+        subject: `Re: ${companyName}`,
+      });
+    }
+    // Otherwise, let the default mailto: link work
   };
 
   const getCommissionRate = (client: Client) => {
@@ -173,6 +228,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                 const email = getEmail(client);
                 const phone = getPhone(client);
                 const link = getLink(client);
+                const companyName = getCompanyName(client);
                 const canClaim = !client.assignedAgent && currentUser.role === 'agent';
                 const canUnclaim = currentUser.role === 'admin';
                 const commissionRate = getCommissionRate(client);
@@ -184,7 +240,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                   <TableRow key={client.id} className="hover-elevate">
                     <TableCell className="font-medium align-middle">
                       <div className="space-y-1">
-                        <div data-testid={`text-company-${client.id}`}>{getCompanyName(client)}</div>
+                        <div data-testid={`text-company-${client.id}`}>{companyName}</div>
                         {client.assignedAgent && (
                           <Badge variant="secondary" className="text-xs" data-testid={`badge-agent-${client.id}`}>
                             <UserCheck className="h-3 w-3 mr-1" />
@@ -200,7 +256,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                             href={`mailto:${email}`} 
                             className="flex items-center gap-1 text-primary hover:underline"
                             data-testid={`link-email-${client.id}`}
-                            onClick={(e) => handleContactClick(e, link)}
+                            onClick={(e) => handleEmailClick(e, link, email, companyName)}
                           >
                             <Mail className="h-3 w-3" />
                             {email}
@@ -211,7 +267,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                             href={`tel:${phone}`} 
                             className="flex items-center gap-1 text-primary hover:underline"
                             data-testid={`link-phone-${client.id}`}
-                            onClick={(e) => handleContactClick(e, link)}
+                            onClick={(e) => handlePhoneClick(e, link)}
                           >
                             <Phone className="h-3 w-3" />
                             {phone}
