@@ -2898,8 +2898,11 @@ export default function ClientDashboard() {
                                 ) : (
                                   <div className="flex items-center gap-2">
                                     {isPhoneColumn && cellValue ? (
-                                      <button
-                                        onClick={() => {
+                                      <a
+                                        href={`tel:${cellValue}`}
+                                        onClick={(e) => {
+                                          // Don't prevent default - let tel: link work
+                                          // But also open the dialog
                                           setStoreDetailsDialog({
                                             open: true,
                                             row: row,
@@ -2924,7 +2927,7 @@ export default function ClientDashboard() {
                                       >
                                         <Phone className="h-4 w-4" />
                                         <span>{displayValue}</span>
-                                      </button>
+                                      </a>
                                     ) : isEmailColumn && cellValue ? (
                                       <button
                                         onClick={() => setStoreDetailsDialog({
