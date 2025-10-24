@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bell, Clock, Plus, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
+import { Bell, Clock, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -212,12 +212,6 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
         <CardDescription>Custom alerts and notifications</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col space-y-4">
-        {/* Add Reminder Button */}
-        <Button variant="outline" className="w-full" size="sm" data-testid="button-add-reminder">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Reminder
-        </Button>
-
         {/* Reminders List */}
         {activeReminders.length === 0 ? (
           <div className="text-center py-8 text-sm text-muted-foreground">
