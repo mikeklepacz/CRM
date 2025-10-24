@@ -5168,13 +5168,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const commissionType = row[commissionTypeIndex] || '';
         const rowAgent = row[agentIndex] || '';
 
-        // Filter by allowed agent names
-        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+        // SECURITY: Filter by allowed agent names
+        if (allowedAgentNames.length > 0) {
+          // If Agent column doesn't exist, agents see ZERO data
+          if (agentIndex === -1) {
+            console.log(`[DASHBOARD-SUMMARY] Row ${i}: SKIPPING - Agent column missing, security requires filtering`);
+            continue;
+          }
+          
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
           );
-          if (!isAllowed) continue;
+          if (!isAllowed) {
+            console.log(`[DASHBOARD-SUMMARY] Row ${i}: SKIPPING - rowAgent="${rowAgent}" not in allowedAgentNames`);
+            continue;
+          }
         }
 
         console.log(`[DASHBOARD-SUMMARY] Row ${i}:`, { dateStr, amountStr, commissionType, rowAgent });
@@ -5348,13 +5357,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const commissionType = row[commissionTypeIndex] || '';
         const rowAgent = row[agentIndex] || '';
 
-        // Filter by allowed agent names
-        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+        // SECURITY: Filter by allowed agent names
+        if (allowedAgentNames.length > 0) {
+          // If Agent column doesn't exist, agents see ZERO data
+          if (agentIndex === -1) {
+            continue;  // Skip this row - no Agent column means agents see nothing
+          }
+          
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
           );
-          if (!isAllowed) continue;
+          if (!isAllowed) {
+            continue;  // Skip this row - doesn't match agent's name
+          }
         }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
@@ -5518,13 +5534,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const dateStr = row[dateIndex] || '';
         const rowAgent = row[agentIndex] || '';
         
-        // Filter by allowed agent names
-        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+        // SECURITY: Filter by allowed agent names
+        if (allowedAgentNames.length > 0) {
+          // If Agent column doesn't exist, agents see ZERO data
+          if (agentIndex === -1) {
+            continue;  // Skip this row - no Agent column means agents see nothing
+          }
+          
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
           );
-          if (!isAllowed) continue;
+          if (!isAllowed) {
+            continue;  // Skip this row - doesn't match agent's name
+          }
         }
         
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
@@ -5649,13 +5672,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amountStr = row[amountIndex] || '0';
         const rowAgent = row[agentIndex] || '';
 
-        // Filter by allowed agent names
-        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+        // SECURITY: Filter by allowed agent names
+        if (allowedAgentNames.length > 0) {
+          // If Agent column doesn't exist, agents see ZERO data
+          if (agentIndex === -1) {
+            continue;  // Skip this row - no Agent column means agents see nothing
+          }
+          
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
           );
-          if (!isAllowed) continue;
+          if (!isAllowed) {
+            continue;  // Skip this row - doesn't match agent's name
+          }
         }
 
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
@@ -5792,8 +5822,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amountStr = row[amountIndex] || '0';
         const rowAgent = row[agentIndex] || '';
 
-        // Filter by allowed agent names - MUST have matching agent name
-        if (agentIndex !== -1 && allowedAgentNames.length > 0) {
+        // SECURITY: Filter by allowed agent names
+        if (allowedAgentNames.length > 0) {
+          // If Agent column doesn't exist, agents see ZERO data
+          if (agentIndex === -1) {
+            continue;  // Skip this row - no Agent column means agents see nothing
+          }
+          
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
