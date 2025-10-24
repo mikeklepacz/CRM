@@ -16,7 +16,8 @@ The application is built around a client dashboard that unifies data from two Go
 - **UI/UX Decisions**: The frontend utilizes React, Tailwind CSS, and Shadcn UI for a modern and responsive user experience. User preferences for dashboard layout, including column visibility, order, width, font size, row height, and theme colors, are persistent and sync across devices. Text wrapping is selectively applied to verbose columns, while terse columns remain single-line to maintain layout stability.
 - **Technical Implementations**:
     - **Authentication**: Replit Auth with distinct 'admin' and 'agent' roles.
-    - **Google Sheets Integration**: Direct read/write access to specified Google Sheets for data management.
+    - **Google Sheets Integration**: System-wide Google Sheets OAuth connection (admin setup) provides read/write access to Store Database and Commission Tracker for all users.
+    - **Per-User Google Services**: Individual sales agents connect their own Google accounts (Gmail/Calendar) via OAuth for personalized features. Tokens stored in both `google*` and `googleCalendar*` fields for compatibility. System OAuth client credentials are shared with all users for token refresh.
     - **Inline Editing**: Allows direct modification of cell data within the dashboard, with changes reflecting in Google Sheets. Agents have read-only access to commission-critical columns (Order ID, Commission Type, Amount, Transaction ID) while admins can edit all columns.
     - **Row-Level Security**: Agents only see unclaimed stores and their own claimed stores based on the "Agent" column in the Commission Tracker sheet.
     - **WooCommerce Sync**: Fetches orders, matches them to stores, calculates commissions, and updates the Commission Tracker.
@@ -58,4 +59,4 @@ The application is built around a client dashboard that unifies data from two Go
 - **PostgreSQL (Neon)**: The primary database for user data, preferences, and potentially other application-specific data.
 - **OpenAI API**: For AI-powered Sales Assistant with knowledge base file search. Admins configure their own API key via the Admin Dashboard.
 - **Gmail API**: Manual OAuth integration (not using Replit connector) for creating email drafts from AI-generated content. Users can connect their Gmail account via Settings > Gmail tab to enable "Create Gmail Draft" functionality in the Sales Assistant.
-- **Google Calendar API** (Deferred): Integration prepared but not yet activated. Reminder system is built to support Google Calendar event creation when the user is ready to authorize the OAuth connection.
+- **Google Calendar API**: Per-user OAuth integration for creating calendar events from reminders. Each agent connects their own Google account to enable automatic calendar event creation when setting reminders.
