@@ -95,7 +95,7 @@ const isCanadianProvince = (state: string): boolean => {
 // Helper function: Case-insensitive lookup for link value
 const getLinkValue = (row: any): string | undefined => {
   if (!row) return undefined;
-  
+
   // Iterate over all row keys and find the one that matches "link" (case-insensitive)
   for (const key in row) {
     if (key.toLowerCase().trim() === "link") {
@@ -106,7 +106,7 @@ const getLinkValue = (row: any): string | undefined => {
       }
     }
   }
-  
+
   return undefined;
 };
 
@@ -154,7 +154,7 @@ function StatusEditorPopover({
   const [localColors, setLocalColors] = useState(statusColors);
   const [isSaving, setIsSaving] = useState(false);
   const [statusManagementOpen, setStatusManagementOpen] = useState(false);
-  
+
   const isAdmin = currentUser?.role === 'admin';
 
   // Update local state when props change
@@ -173,7 +173,7 @@ function StatusEditorPopover({
         const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
         await updateStatusEntry(i, statusName, colors.background, colors.text);
       }
-      
+
       toast({
         title: "Success",
         description: "Status colors saved successfully",
@@ -311,7 +311,7 @@ function StatusEditorPopover({
                       onDeletePreset={deleteColorPreset}
                       testId={`input-status-bg-${index}`}
                     />
-                    
+
                     {/* Text Color */}
                     <SharedColorPicker
                       label="Text"
@@ -379,7 +379,7 @@ function StatusEditorPopover({
           </div>
         </div>
       </PopoverContent>
-      
+
       <StatusManagementDialog
         open={statusManagementOpen}
         onOpenChange={setStatusManagementOpen}
@@ -422,7 +422,7 @@ export default function ClientDashboard() {
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
   const [freezeFirstColumn, setFreezeFirstColumn] = useState<boolean>(false);
-  
+
   // AI Assistant states
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
   const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
@@ -569,7 +569,7 @@ export default function ClientDashboard() {
     return hslToString(hsl.h, hsl.s, newL);
   };
 
-  // Mutation to update a cell in Google Sheets
+  // Update a cell in Google Sheets with optimistic updates
   const updateCellMutation = useMutation({
     mutationFn: async ({
       sheetId,
@@ -602,7 +602,7 @@ export default function ClientDashboard() {
       // Optimistically update the cache
       queryClient.setQueryData(["merged-data"], (old: any) => {
         if (!old || !old.rows) return old;
-        
+
         return {
           ...old,
           rows: old.rows.map((row: any) => {
@@ -610,7 +610,7 @@ export default function ClientDashboard() {
             const isMatchingRow = 
               (row._storeRowIndex === variables.rowIndex && row._storeSheetId === variables.sheetId) ||
               (row._trackerRowIndex === variables.rowIndex && row._trackerSheetId === variables.sheetId);
-            
+
             if (isMatchingRow) {
               return { ...row, [variables.column]: variables.value };
             }
@@ -693,7 +693,7 @@ export default function ClientDashboard() {
     },
   });
 
-  // Mutation to upsert tracker row (create if doesn't exist, update if it does)
+  // Update or create tracker row with optimistic updates
   const upsertTrackerMutation = useMutation({
     mutationFn: async ({
       trackerSheetId,
@@ -723,7 +723,7 @@ export default function ClientDashboard() {
       // Optimistically update the cache
       queryClient.setQueryData(["merged-data"], (old: any) => {
         if (!old || !old.rows) return old;
-        
+
         return {
           ...old,
           rows: old.rows.map((row: any) => {
@@ -770,6 +770,90 @@ export default function ClientDashboard() {
     onSettled: () => {
       // Always refetch after error or success to sync with server
       queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+    },
+  });
+
+  // Claim store with contact action - optimistic updates
+  const claimStoreWithContactMutation = useMutation({
+    mutationFn: async ({ 
+      sheetId, 
+      linkValue, 
+      joinColumn, 
+      agent, 
+      status, 
+      followUpDate, 
+      nextAction, 
+      notes,
+      pointOfContact 
+    }: { 
+      sheetId: string; 
+      linkValue: string; 
+      joinColumn: string; 
+      agent: string; 
+      status: string; 
+      followUpDate: string; 
+      nextAction: string; 
+      notes: string;
+      pointOfContact: string;
+    }) => {
+      return await apiRequest('POST', `/api/sheets/${sheetId}/claim-store-with-contact`, {
+        linkValue,
+        joinColumn,
+        agent,
+        status,
+        followUpDate,
+        nextAction,
+        notes,
+        pointOfContact,
+      });
+    },
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ['/api/sheets/merged-data'] });
+      const previousData = queryClient.getQueryData(['/api/sheets/merged-data']);
+
+      // Optimistically update the row
+      queryClient.setQueryData(['/api/sheets/merged-data'], (old: any) => {
+        if (!old?.data) return old;
+
+        return {
+          ...old,
+          data: old.data.map((row: any) => {
+            if (normalizeLink(row.Link || row.link) === normalizeLink(variables.linkValue)) {
+              return { 
+                ...row, 
+                Status: variables.status,
+                'Follow-Up Date': variables.followUpDate,
+                'Next Action': variables.nextAction,
+                Notes: variables.notes,
+                'Point of Contact': variables.pointOfContact
+              };
+            }
+            return row;
+          })
+        };
+      });
+
+      return { previousData };
+    },
+    onSuccess: () => {
+      setContactDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Contact action saved successfully",
+      });
+    },
+    onError: (error: Error, variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(['/api/sheets/merged-data'], context.previousData);
+      }
+      toast({
+        title: "Failed to save",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sheets/merged-data'] });
     },
   });
 
@@ -824,7 +908,7 @@ export default function ClientDashboard() {
         });
         return;
       }
-      
+
       // Use upsert mutation which creates tracker row and updates value
       upsertTrackerMutation.mutate({
         trackerSheetId,
@@ -838,7 +922,7 @@ export default function ClientDashboard() {
       sheetId = row._storeSheetId;
       rowIndex = row._storeRowIndex;
       const linkValue = getLinkValue(row);
-      
+
       updateCellMutation.mutate({ 
         sheetId, 
         rowIndex, 
@@ -982,7 +1066,7 @@ export default function ClientDashboard() {
       const currentWidths = { ...columnWidths };
       const currentOrder = [...columnOrder];
       const hiddenColumns = ['title', 'error']; // Columns to hide by default
-      
+
       // Hide Agent column for non-admin users (since auto-claiming manages it)
       const isAgentColumn = (col: string) => 
         col.toLowerCase() === 'agent' || col.toLowerCase() === 'agent name';
@@ -3444,7 +3528,7 @@ export default function ClientDashboard() {
               onClick={() => {
                 try {
                   console.log('📤 Exporting vCard for filtered data:', filteredData.length);
-                  
+
                   generateAndDownloadVCard(
                     filteredData,
                     vCardExportFields,
@@ -3518,7 +3602,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: currentUser } = useQuery<{ email: string; role: string; agentName?: string }>({ queryKey: ['/api/auth/user'] });
-  
+
   // Fetch user preferences for timezone and time format
   const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string; timeFormat?: string; autoLoadScript?: boolean }>({
     queryKey: ['/api/user/preferences'],
@@ -3921,10 +4005,10 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       // Optimistically update the cache with the new formData values
       queryClient.setQueryData(["merged-data"], (old: any) => {
         if (!old || !old.rows) return old;
-        
+
         return {
           ...old,
-          rows: old.rows.map((r: any) => {
+          data: old.data.map((r: any) => {
             // Match the row being edited
             const rowLink = getLinkValue(r);
             const currentRowLink = getLinkValue(row);
@@ -3942,12 +4026,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     },
     onSuccess: async (data) => {
       setInitialData(formData); // Update initial data so changes are no longer "unsaved"
-      
+
       // Auto-claim unclaimed stores after successfully saving (if not already claimed via tracker upsert)
       const isUnclaimed = !row._trackerRowIndex;
       const linkValue = formData.link || getLinkValue(row);
       const joinColumn = "link";
-      
+
       if (isUnclaimed && linkValue && trackerSheetId) {
         try {
           await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
@@ -3961,12 +4045,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           console.error("Auto-claim failed:", error);
         }
       }
-      
+
       // If AI Assistant is open, trigger context update with latest field values
       if (showAssistant) {
         setContextUpdateTrigger(prev => prev + 1);
       }
-      
+
       // Only close if requested
       if (data.closeDialog) {
         onOpenChange(false);
@@ -4046,7 +4130,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
   // AI Assistant toggle - global setting (applies to all stores)
   const GLOBAL_AI_ASSISTANT_KEY = 'show-ai-assistant';
-  
+
   const [showAssistant, setShowAssistant] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(GLOBAL_AI_ASSISTANT_KEY);
@@ -4476,7 +4560,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                         type="email"
                         value={formData.poc_email}
                         onChange={(e) => handleInputChange('poc_email', e.target.value)}
-                        placeholder="contact@email.com"
+                        placeholder="contact@store.com"
                       />
                     </div>
                     <div className="space-y-2">
@@ -4575,7 +4659,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               agentTimezone: reminderData.agentTimezone,
                               calendarReminders: reminderData.calendarReminders,
                             });
-                            
+
                             console.log('[REMINDER] Response:', response);
 
                             toast({
@@ -4752,7 +4836,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             </AccordionItem>
           </Accordion>
               </div>
-              
+
               {/* Sticky Save/Cancel Buttons - Only shown when AI Assistant is visible */}
               {showAssistant && (
                 <div className="sticky bottom-0 bg-background border-t pt-4 mt-4 flex justify-end gap-2">
