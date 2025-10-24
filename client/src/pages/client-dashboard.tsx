@@ -40,6 +40,7 @@ import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 import { useChatPanel } from "@/hooks/useChatPanel";
 import { QuickReminder } from "@/components/quick-reminder";
 import { normalizeLink } from "@shared/linkUtils";
+import { StatusManagementDialog } from "@/components/status-management-dialog";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -152,6 +153,7 @@ function StatusEditorPopover({
   const [localStatuses, setLocalStatuses] = useState(statusOptions);
   const [localColors, setLocalColors] = useState(statusColors);
   const [isSaving, setIsSaving] = useState(false);
+  const [statusManagementOpen, setStatusManagementOpen] = useState(false);
   
   const isAdmin = currentUser?.role === 'admin';
 
@@ -218,6 +220,20 @@ function StatusEditorPopover({
           <p className="text-xs text-muted-foreground">
             Customize status colors{isAdmin ? ' and names' : ''}. Changes apply everywhere.
           </p>
+
+          {/* Edit Statuses Button (Admin only) */}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStatusManagementOpen(true)}
+              className="w-full"
+              data-testid="button-edit-statuses"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Edit Statuses
+            </Button>
+          )}
 
           {/* Color Rows by Status Checkbox */}
           <div className="flex items-center gap-2 p-3 rounded-md border">
@@ -363,6 +379,11 @@ function StatusEditorPopover({
           </div>
         </div>
       </PopoverContent>
+      
+      <StatusManagementDialog
+        open={statusManagementOpen}
+        onOpenChange={setStatusManagementOpen}
+      />
     </Popover>
   );
 }
@@ -406,16 +427,17 @@ export default function ClientDashboard() {
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
   const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
 
-  // Status options state (customizable)
-  const [statusOptions, setStatusOptions] = useState<string[]>([
-    '1 – Contacted',
-    '2 – Interested',
-    '3 – Sample Sent',
-    '4 – Follow-Up',
-    '5 – Closed Won',
-    '6 – Closed Lost',
-    '7 – Warm',
-  ]);
+  // Use global theme hook for colors and statuses
+  const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus, updateStatusEntry } = useCustomTheme();
+
+  // Derive statusOptions from API-fetched statusColors
+  const statusOptions = useMemo(() => {
+    return Object.keys(statusColors).sort((a, b) => {
+      const numA = parseInt(a.split(' – ')[0]);
+      const numB = parseInt(b.split(' – ')[0]);
+      return numA - numB;
+    });
+  }, [statusColors]);
 
   // Address edit dialog state
   const [addressEditDialog, setAddressEditDialog] = useState<{
@@ -450,9 +472,6 @@ export default function ClientDashboard() {
   const [vCardListName, setVCardListName] = useState("");
   const [vCardPlatform, setVCardPlatform] = useState<"ios" | "android">("ios");
 
-  // Use global theme hook for colors
-  const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus, updateStatusEntry } = useCustomTheme();
-
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
   const [lightModeColors, setLightModeColors] = useState(lightColors);
@@ -461,8 +480,7 @@ export default function ClientDashboard() {
   const customColors = actualTheme === 'dark' ? darkModeColors : lightModeColors;
   const setCustomColors = actualTheme === 'dark' ? setDarkModeColors : setLightModeColors;
 
-  // Get color presets from useCustomTheme hook (now managed globally)
-  const { colorPresets, setColorPresets, deleteColorPreset } = useCustomTheme();
+  // colorPresets are now available from the useCustomTheme hook called above
   const [presetName, setPresetName] = useState("");
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
 

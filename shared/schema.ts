@@ -442,6 +442,20 @@ export const categories = pgTable("categories", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Statuses table - system-wide status definitions with colors for light/dark modes
+export const statuses = pgTable("statuses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  displayOrder: integer("display_order").notNull(),
+  lightBgColor: varchar("light_bg_color", { length: 7 }).notNull(), // Hex color e.g. #dbeafe
+  lightTextColor: varchar("light_text_color", { length: 7 }).notNull(), // Hex color e.g. #1e40af
+  darkBgColor: varchar("dark_bg_color", { length: 7 }).notNull(), // Hex color e.g. #1e3a8a
+  darkTextColor: varchar("dark_text_color", { length: 7 }).notNull(), // Hex color e.g. #bfdbfe
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Imported Places table - tracks Google Maps place_ids to prevent duplicates
 export const importedPlaces = pgTable(
   "imported_places",
@@ -725,6 +739,17 @@ export const insertSavedExclusionSchema = createInsertSchema(savedExclusions).om
   createdAt: true,
 });
 
+export const insertStatusSchema = createInsertSchema(statuses, {
+  lightBgColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+  lightTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+  darkBgColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+  darkTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -772,3 +797,5 @@ export type SearchHistory = typeof searchHistory.$inferSelect;
 export type InsertSearchHistory = z.infer<typeof insertSearchHistorySchema>;
 export type SavedExclusion = typeof savedExclusions.$inferSelect;
 export type InsertSavedExclusion = z.infer<typeof insertSavedExclusionSchema>;
+export type Status = typeof statuses.$inferSelect;
+export type InsertStatus = z.infer<typeof insertStatusSchema>;

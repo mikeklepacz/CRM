@@ -4,6 +4,7 @@ import { useTheme } from "@/components/theme-provider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { debug } from "@/lib/debug";
+import type { SelectStatus } from "@shared/schema";
 
 interface ThemeColors {
   background: string;
@@ -123,6 +124,36 @@ export function useCustomTheme() {
   const { actualTheme } = useTheme();
   const { toast } = useToast();
 
+  // Fetch statuses from API
+  const { data: statusesData } = useQuery<{ statuses: SelectStatus[] }>({
+    queryKey: ['/api/statuses'],
+    retry: false,
+  });
+
+  // Build status colors from API data
+  const apiStatusColors = useMemo(() => {
+    const lightColors: { [key: string]: { background: string; text: string } } = {};
+    const darkColors: { [key: string]: { background: string; text: string } } = {};
+    
+    const statuses = statusesData?.statuses || [];
+    statuses
+      .filter(s => s.isActive)
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .forEach(status => {
+        const key = `${status.displayOrder} – ${status.name}`;
+        lightColors[key] = {
+          background: status.lightBgColor,
+          text: status.lightTextColor
+        };
+        darkColors[key] = {
+          background: status.darkBgColor,
+          text: status.darkTextColor
+        };
+      });
+    
+    return { light: lightColors, dark: darkColors };
+  }, [statusesData]);
+
   // Fetch user preferences (only when authenticated to avoid 401 errors)
   const { data: userPreferences, isLoading } = useQuery<UserPreferences | null>({
     queryKey: ['/api/user/preferences'],
@@ -224,13 +255,21 @@ export function useCustomTheme() {
 
   // Then use those stable strings as dependencies for the merged objects
   const lightColors = useMemo(
-    () => ({ ...defaultLightColors, ...userPreferences?.lightModeColors }),
-    [lightColorsStr]
+    () => ({
+      ...defaultLightColors,
+      statusColors: apiStatusColors.light,
+      ...userPreferences?.lightModeColors
+    }),
+    [lightColorsStr, apiStatusColors]
   );
 
   const darkColors = useMemo(
-    () => ({ ...defaultDarkColors, ...userPreferences?.darkModeColors }),
-    [darkColorsStr]
+    () => ({
+      ...defaultDarkColors,
+      statusColors: apiStatusColors.dark,
+      ...userPreferences?.darkModeColors
+    }),
+    [darkColorsStr, apiStatusColors]
   );
 
   // Finally, currentColors only depends on theme and the stable color objects

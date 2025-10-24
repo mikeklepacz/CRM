@@ -24,6 +24,7 @@ import {
   importedPlaces,
   searchHistory,
   savedExclusions,
+  statuses,
   type User,
   type UpsertUser,
   type Client,
@@ -69,6 +70,8 @@ import {
   type InsertSearchHistory,
   type SavedExclusion,
   type InsertSavedExclusion,
+  type Status,
+  type InsertStatus,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -236,6 +239,14 @@ export interface IStorage {
   createSavedExclusion(exclusion: InsertSavedExclusion): Promise<SavedExclusion>;
   deleteSavedExclusion(id: string): Promise<void>;
   updateUserActiveExclusions(userId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences>;
+  
+  // Status operations
+  getAllStatuses(): Promise<Status[]>;
+  getActiveStatuses(): Promise<Status[]>;
+  getStatus(id: string): Promise<Status | undefined>;
+  createStatus(status: InsertStatus): Promise<Status>;
+  updateStatus(id: string, updates: Partial<InsertStatus>): Promise<Status>;
+  deleteStatus(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1442,6 +1453,56 @@ export class DatabaseStorage implements IStorage {
     }
 
     return prefs;
+  }
+
+  // Status operations
+  async getAllStatuses(): Promise<Status[]> {
+    const allStatuses = await db
+      .select()
+      .from(statuses)
+      .orderBy(statuses.displayOrder);
+    return allStatuses;
+  }
+
+  async getActiveStatuses(): Promise<Status[]> {
+    const activeStatuses = await db
+      .select()
+      .from(statuses)
+      .where(eq(statuses.isActive, true))
+      .orderBy(statuses.displayOrder);
+    return activeStatuses;
+  }
+
+  async getStatus(id: string): Promise<Status | undefined> {
+    const [status] = await db
+      .select()
+      .from(statuses)
+      .where(eq(statuses.id, id));
+    return status;
+  }
+
+  async createStatus(status: InsertStatus): Promise<Status> {
+    const [newStatus] = await db
+      .insert(statuses)
+      .values(status)
+      .returning();
+    return newStatus;
+  }
+
+  async updateStatus(id: string, updates: Partial<InsertStatus>): Promise<Status> {
+    const [updated] = await db
+      .update(statuses)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(statuses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStatus(id: string): Promise<void> {
+    await db.delete(statuses).where(eq(statuses.id, id));
   }
 }
 

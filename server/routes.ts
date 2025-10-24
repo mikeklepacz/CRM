@@ -18,6 +18,7 @@ import {
   insertTemplateSchema,
   insertReminderSchema,
   insertCategorySchema,
+  insertStatusSchema,
 } from "@shared/schema";
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
@@ -8288,6 +8289,174 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error deleting category:', error);
       res.status(500).json({ message: error.message || 'Failed to delete category' });
+    }
+  });
+
+  // ============================================================================
+  // STATUS MANAGEMENT ROUTES
+  // ============================================================================
+
+  // Get all statuses (all authenticated users)
+  app.get('/api/statuses', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const statuses = await storage.getAllStatuses();
+      res.json({ statuses });
+    } catch (error: any) {
+      console.error('Error fetching statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch statuses' });
+    }
+  });
+
+  // Get active statuses (all authenticated users)
+  app.get('/api/statuses/active', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const statuses = await storage.getActiveStatuses();
+      res.json({ statuses });
+    } catch (error: any) {
+      console.error('Error fetching active statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch statuses' });
+    }
+  });
+
+  // Create status (admin only)
+  app.post('/api/statuses', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const validation = insertStatusSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: 'Validation failed',
+          errors: validation.error.errors 
+        });
+      }
+
+      const status = await storage.createStatus(validation.data);
+      res.json({ status });
+    } catch (error: any) {
+      console.error('Error creating status:', error);
+      res.status(500).json({ message: error.message || 'Failed to create status' });
+    }
+  });
+
+  // Update status (admin only)
+  app.put('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      // Require all fields when updating - all 4 color fields must be provided
+      const validation = insertStatusSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: 'Validation failed',
+          errors: validation.error.errors 
+        });
+      }
+
+      const status = await storage.updateStatus(id, validation.data);
+      res.json({ status });
+    } catch (error: any) {
+      console.error('Error updating status:', error);
+      res.status(500).json({ message: error.message || 'Failed to update status' });
+    }
+  });
+
+  // Delete status (admin only)
+  app.delete('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteStatus(id);
+      res.json({ message: 'Status deleted successfully' });
+    } catch (error: any) {
+      console.error('Error deleting status:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete status' });
+    }
+  });
+
+  // Seed default statuses (admin only) - one-time setup
+  app.post('/api/statuses/seed', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const existingStatuses = await storage.getAllStatuses();
+      if (existingStatuses.length > 0) {
+        return res.status(400).json({ message: 'Statuses already exist. Clear the database first if you want to re-seed.' });
+      }
+
+      const defaultStatuses = [
+        {
+          name: '1 – Contacted',
+          displayOrder: 1,
+          lightBgColor: '#dbeafe',
+          lightTextColor: '#1e40af',
+          darkBgColor: '#1e3a8a',
+          darkTextColor: '#bfdbfe',
+          isActive: true,
+        },
+        {
+          name: '2 – Interested',
+          displayOrder: 2,
+          lightBgColor: '#fef3c7',
+          lightTextColor: '#92400e',
+          darkBgColor: '#78350f',
+          darkTextColor: '#fef3c7',
+          isActive: true,
+        },
+        {
+          name: '3 – Sample Sent',
+          displayOrder: 3,
+          lightBgColor: '#e0e7ff',
+          lightTextColor: '#3730a3',
+          darkBgColor: '#312e81',
+          darkTextColor: '#c7d2fe',
+          isActive: true,
+        },
+        {
+          name: '4 – Follow-Up',
+          displayOrder: 4,
+          lightBgColor: '#fed7aa',
+          lightTextColor: '#9a3412',
+          darkBgColor: '#7c2d12',
+          darkTextColor: '#fed7aa',
+          isActive: true,
+        },
+        {
+          name: '5 – Closed Won',
+          displayOrder: 5,
+          lightBgColor: '#d1fae5',
+          lightTextColor: '#065f46',
+          darkBgColor: '#064e3b',
+          darkTextColor: '#a7f3d0',
+          isActive: true,
+        },
+        {
+          name: '6 – Closed Lost',
+          displayOrder: 6,
+          lightBgColor: '#fee2e2',
+          lightTextColor: '#991b1b',
+          darkBgColor: '#7f1d1d',
+          darkTextColor: '#fecaca',
+          isActive: true,
+        },
+        {
+          name: '7 – Warm',
+          displayOrder: 7,
+          lightBgColor: '#fef9c3',
+          lightTextColor: '#854d0e',
+          darkBgColor: '#78350f',
+          darkTextColor: '#fef9c3',
+          isActive: true,
+        },
+      ];
+
+      const createdStatuses = [];
+      for (const statusData of defaultStatuses) {
+        const status = await storage.createStatus(statusData);
+        createdStatuses.push(status);
+      }
+
+      res.json({ 
+        message: 'Default statuses seeded successfully',
+        statuses: createdStatuses 
+      });
+    } catch (error: any) {
+      console.error('Error seeding statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to seed statuses' });
     }
   });
 
