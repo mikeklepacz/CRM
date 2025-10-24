@@ -18,10 +18,18 @@ export function TimeSpinner({ value, onChange, format = '12hr', className }: Tim
   // Parse incoming value (always in 24hr format: "09:00" or "21:30")
   useEffect(() => {
     const [h, m] = value.split(':').map(Number);
-    setHours(h);
+    
+    if (format === '12hr') {
+      // Convert 24hr to 12hr for display
+      const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      setHours(hour12);
+      setPeriod(h >= 12 ? 'PM' : 'AM');
+    } else {
+      setHours(h);
+    }
+    
     setMinutes(m);
-    setPeriod(h >= 12 ? 'PM' : 'AM');
-  }, [value]);
+  }, [value, format]);
 
   // Convert to 24hr format for output
   const updateTime = (newHours: number, newMinutes: number, newPeriod: 'AM' | 'PM') => {
@@ -32,6 +40,10 @@ export function TimeSpinner({ value, onChange, format = '12hr', className }: Tim
         hour24 = newHours + 12;
       } else if (newPeriod === 'AM' && newHours === 12) {
         hour24 = 0;
+      } else if (newPeriod === 'AM') {
+        hour24 = newHours;
+      } else {
+        hour24 = 12;
       }
     }
     
@@ -41,14 +53,16 @@ export function TimeSpinner({ value, onChange, format = '12hr', className }: Tim
 
   const incrementHours = () => {
     const maxHours = format === '12hr' ? 12 : 23;
-    const newHours = hours >= maxHours ? (format === '12hr' ? 1 : 0) : hours + 1;
+    const minHours = format === '12hr' ? 1 : 0;
+    const newHours = hours >= maxHours ? minHours : hours + 1;
     setHours(newHours);
     updateTime(newHours, minutes, period);
   };
 
   const decrementHours = () => {
     const maxHours = format === '12hr' ? 12 : 23;
-    const newHours = hours <= (format === '12hr' ? 1 : 0) ? maxHours : hours - 1;
+    const minHours = format === '12hr' ? 1 : 0;
+    const newHours = hours <= minHours ? maxHours : hours - 1;
     setHours(newHours);
     updateTime(newHours, minutes, period);
   };
@@ -71,10 +85,42 @@ export function TimeSpinner({ value, onChange, format = '12hr', className }: Tim
     updateTime(hours, minutes, newPeriod);
   };
 
-  // Display hours in the chosen format
-  const displayHours = format === '12hr' 
-    ? (hours === 0 ? 12 : hours > 12 ? hours - 12 : hours)
-    : hours;
+  // Handle manual hour input
+  const handleHoursChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === '') {
+      setHours(format === '12hr' ? 12 : 0);
+      return;
+    }
+    
+    const num = parseInt(val, 10);
+    if (isNaN(num)) return;
+    
+    const maxHours = format === '12hr' ? 12 : 23;
+    const minHours = format === '12hr' ? 1 : 0;
+    
+    if (num >= minHours && num <= maxHours) {
+      setHours(num);
+      updateTime(num, minutes, period);
+    }
+  };
+
+  // Handle manual minute input
+  const handleMinutesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === '') {
+      setMinutes(0);
+      return;
+    }
+    
+    const num = parseInt(val, 10);
+    if (isNaN(num)) return;
+    
+    if (num >= 0 && num <= 59) {
+      setMinutes(num);
+      updateTime(hours, num, period);
+    }
+  };
 
   return (
     <div className={cn("flex items-center gap-2", className)} data-testid="time-spinner">
@@ -90,9 +136,15 @@ export function TimeSpinner({ value, onChange, format = '12hr', className }: Tim
         >
           <ChevronUp className="h-4 w-4" />
         </Button>
-        <div className="flex items-center justify-center w-12 h-10 text-lg font-semibold border rounded-md" data-testid="text-hours">
-          {displayHours.toString().padStart(2, '0')}
-        </div>
+        <input
+          type="number"
+          value={hours.toString().padStart(2, '0')}
+          onChange={handleHoursChange}
+          className="w-12 h-10 text-lg font-semibold border rounded-md text-center bg-background"
+          min={format === '12hr' ? 1 : 0}
+          max={format === '12hr' ? 12 : 23}
+          data-testid="input-hours"
+        />
         <Button
           type="button"
           variant="ghost"
@@ -119,9 +171,15 @@ export function TimeSpinner({ value, onChange, format = '12hr', className }: Tim
         >
           <ChevronUp className="h-4 w-4" />
         </Button>
-        <div className="flex items-center justify-center w-12 h-10 text-lg font-semibold border rounded-md" data-testid="text-minutes">
-          {minutes.toString().padStart(2, '0')}
-        </div>
+        <input
+          type="number"
+          value={minutes.toString().padStart(2, '0')}
+          onChange={handleMinutesChange}
+          className="w-12 h-10 text-lg font-semibold border rounded-md text-center bg-background"
+          min={0}
+          max={59}
+          data-testid="input-minutes"
+        />
         <Button
           type="button"
           variant="ghost"
