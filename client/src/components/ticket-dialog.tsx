@@ -18,6 +18,7 @@ interface Ticket {
   userId: string;
   subject: string;
   message: string;
+  category: string;
   status: string;
   priority: string;
   isUnreadByAdmin: boolean;
@@ -46,6 +47,7 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [category, setCategory] = useState('General Question');
   const [replyMessage, setReplyMessage] = useState('');
 
   // Fetch user's tickets
@@ -62,7 +64,7 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
 
   // Create ticket mutation
   const createMutation = useMutation({
-    mutationFn: async (data: { subject: string; message: string }) => {
+    mutationFn: async (data: { subject: string; message: string; category: string }) => {
       return await apiRequest('POST', '/api/tickets', data);
     },
     onSuccess: () => {
@@ -72,6 +74,7 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
       });
       setSubject('');
       setMessage('');
+      setCategory('General Question');
       setView('list');
       queryClient.invalidateQueries({ queryKey: ['/api/tickets'] });
     },

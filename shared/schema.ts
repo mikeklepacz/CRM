@@ -756,7 +756,8 @@ export const tickets = pgTable("tickets", {
   userId: varchar("user_id").notNull().references(() => users.id),
   subject: varchar("subject", { length: 255 }).notNull(),
   message: text("message").notNull(),
-  status: varchar("status", { length: 20 }).notNull().default('open'), // 'open', 'replied', 'closed'
+  category: varchar("category", { length: 50 }).notNull().default('General Question'), // 'Bug Report', 'Feature Request', 'Technical Support', 'Account Issue', 'General Question', 'Other'
+  status: varchar("status", { length: 20 }).notNull().default('open'), // 'open', 'in_progress', 'closed'
   priority: varchar("priority", { length: 20 }).default('normal'), // 'low', 'normal', 'high'
   lastReplyAt: timestamp("last_reply_at"),
   isUnreadByAdmin: boolean("is_unread_by_admin").notNull().default(true),
