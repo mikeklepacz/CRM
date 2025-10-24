@@ -5579,42 +5579,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? customerTimezone 
         : agentTimezone || 'UTC';
 
-      // Extract date components
-      const dateOnly = reminderDate.split('T')[0]; // e.g., "2025-10-24"
-      const [year, month, day] = dateOnly.split('-').map(Number);
-      const [hours, minutes] = reminderTime.split(':').map(Number);
+      // Extract date and time (simplified - no double conversion)
+      const scheduledDate = reminderDate.split('T')[0]; // YYYY-MM-DD
+      const scheduledTime = reminderTime; // HH:MM in 24hr format
       
-      // Create a "naive" date in UTC (wall-clock time, but stored as UTC)
-      // This represents the time the user selected, but in UTC milliseconds
-      const naiveUtcTimestamp = Date.UTC(year, month - 1, day, hours, minutes, 0);
-      const naiveDate = new Date(naiveUtcTimestamp);
+      // Build local datetime string for validation (YYYY-MM-DDTHH:MM:SS)
+      const localDateTimeStr = `${scheduledDate}T${scheduledTime}:00`;
       
-      // Get the timezone offset for the target timezone at this date/time
-      // This tells us how many milliseconds this timezone is offset from UTC
-      const offset = getTimezoneOffset(effectiveTimezone, naiveDate);
+      // For past validation: convert to user's timezone and compare
+      const nowInUserTZ = new Date().toLocaleString('en-US', { timeZone: effectiveTimezone });
+      const userNow = new Date(nowInUserTZ);
+      const reminderDateTime = new Date(localDateTimeStr);
       
-      // Convert to actual UTC: subtract the offset
-      // If user selects 9:00 AM PST (UTC-8), and offset is -28800000ms (8 hours)
-      // We want 9:00 AM PST = 5:00 PM UTC, so: 9:00 UTC - (-8 hours) = 17:00 UTC
-      const utcTriggerDate = new Date(naiveUtcTimestamp - offset);
-      
-      // Check if date is in the past (AFTER UTC conversion)
-      const now = new Date();
-      if (utcTriggerDate <= now) {
+      // Simple check: compare year/month/day/hour/minute
+      if (reminderDateTime <= userNow) {
         return res.status(400).json({ 
           message: 'Cannot create reminder in the past. Please select a future date and time.' 
         });
       }
-
-      // Check for existing reminders at the same time (conflict detection)
-      const existingReminders = await storage.getRemindersByUser(userId);
-      const conflictingReminder = existingReminders.find((r: any) => {
-        if (!r.scheduledAtUtc || r.isCompleted) return false;
-        const existing = new Date(r.scheduledAtUtc).getTime();
-        const newTime = utcTriggerDate.getTime();
-        // Consider reminders within 1 minute window as conflicting
-        return Math.abs(existing - newTime) < 60000;
-      });
 
       // Prepare store metadata with customer timezone if applicable
       const enhancedStoreMetadata = storeMetadata ? {
@@ -5622,16 +5604,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerTimeZone: useCustomerTimezone && customerTimezone ? customerTimezone : undefined
       } : null;
 
-      // Create reminder data with Drizzle schema field names
+      // Create reminder data with simplified timezone handling
       const reminderData = {
         userId,
         title,
         description: description || null,
         reminderType: 'one_time' as const,
-        triggerDate: utcTriggerDate,
-        nextTrigger: utcTriggerDate,
-        scheduledAtUtc: utcTriggerDate,
-        reminderTimeZone: effectiveTimezone,
+        scheduledDate,
+        scheduledTime,
+        timezone: effectiveTimezone,
         isActive: true,
         addToCalendar: false,
         storeMetadata: enhancedStoreMetadata,
@@ -5740,9 +5721,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             refresh_token: integration.googleCalendarRefreshToken || undefined
           });
 
-          // Create calendar event
+          // Create calendar event with timezone-aware datetime
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-          const endTime = new Date(utcTriggerDate.getTime() + 30 * 60 * 1000); // 30 min duration
+          
+          // Build timezone-aware datetime strings (YYYY-MM-DDTHH:MM:SS format)
+          const startDateTime = `${scheduledDate}T${scheduledTime}:00`;
+          const startDate = new Date(startDateTime);
+          const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 minutes later
+          const hours = String(endDate.getHours()).padStart(2, '0');
+          const minutes = String(endDate.getMinutes()).padStart(2, '0');
+          const endDateTime = `${scheduledDate}T${hours}:${minutes}:00`;
 
           // Get calendar reminders from request or use default
           const calendarReminders = req.body.calendarReminders || [{ method: 'popup', minutes: 10 }];
@@ -5752,11 +5740,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: eventDescription,
             location: location || undefined,
             start: {
-              dateTime: utcTriggerDate.toISOString(),
+              dateTime: startDateTime,
               timeZone: effectiveTimezone,
             },
             end: {
-              dateTime: endTime.toISOString(),
+              dateTime: endDateTime,
               timeZone: effectiveTimezone,
             },
             reminders: {
@@ -5772,14 +5760,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             requestBody: event,
           });
 
-          // Save calendar event ID to reminder metadata
+          // Save calendar event ID to reminder
           if (createdEvent.data.id) {
-            const updatedMetadata = {
-              ...enhancedStoreMetadata,
-              calendarEventId: createdEvent.data.id
-            };
             await storage.updateReminder(reminder.id, {
-              storeMetadata: updatedMetadata
+              googleCalendarEventId: createdEvent.data.id
             });
           }
 
