@@ -8862,6 +8862,37 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
   
+  // Get all tickets with user info (admin only)
+  app.get('/api/tickets/admin', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+      
+      const allTickets = await storage.getAllTickets();
+      const ticketsWithUserInfo = await Promise.all(
+        allTickets.map(async (ticket) => {
+          const ticketUser = await storage.getUser(ticket.userId);
+          return {
+            ...ticket,
+            userEmail: ticketUser?.email,
+            userName: ticketUser?.firstName && ticketUser?.lastName
+              ? `${ticketUser.firstName} ${ticketUser.lastName}`
+              : undefined,
+          };
+        })
+      );
+      
+      res.json({ tickets: ticketsWithUserInfo });
+    } catch (error: any) {
+      console.error('Error fetching admin tickets:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
+    }
+  });
+  
   // Get all tickets (admin) or user's tickets (regular users)
   app.get('/api/tickets', isAuthenticatedCustom, async (req, res) => {
     try {
@@ -8901,6 +8932,20 @@ Use this store information to provide context-aware responses. When helping draf
       
       const replies = await storage.getTicketReplies(ticketId);
       
+      // Add user info to replies
+      const repliesWithUserInfo = await Promise.all(
+        replies.map(async (reply) => {
+          const replyUser = await storage.getUser(reply.userId);
+          return {
+            ...reply,
+            userEmail: replyUser?.email,
+            userName: replyUser?.firstName && replyUser?.lastName
+              ? `${replyUser.firstName} ${replyUser.lastName}`
+              : undefined,
+          };
+        })
+      );
+      
       // Mark as read
       if (user?.role === 'admin') {
         await storage.markTicketReadByAdmin(ticketId);
@@ -8908,7 +8953,7 @@ Use this store information to provide context-aware responses. When helping draf
         await storage.markTicketReadByUser(ticketId);
       }
       
-      res.json({ ticket, replies });
+      res.json({ ticket, replies: repliesWithUserInfo });
     } catch (error: any) {
       console.error('Error fetching ticket:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch ticket' });
