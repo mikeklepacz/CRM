@@ -24,6 +24,7 @@ import {
 } from "@shared/schema";
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
+import { notifyNewTicket, notifyTicketReply } from "./gmail";
 
 // Helper function for fuzzy string matching (Levenshtein distance)
 function stringSimilarity(str1: string, str2: string): number {
@@ -8925,7 +8926,17 @@ Use this store information to provide context-aware responses. When helping draf
       
       const ticket = await storage.createTicket(validated);
       
-      // TODO: Send email notification to admin (michael@naturalmaterials.eu)
+      // Send email notification to admin
+      const user = await storage.getUser(userId);
+      if (user) {
+        notifyNewTicket(
+          ticket.id,
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'User',
+          user.email || 'no-email',
+          ticket.subject,
+          ticket.message
+        ).catch(err => console.error('Failed to send new ticket email:', err));
+      }
       
       res.json({ ticket });
     } catch (error: any) {
@@ -8965,11 +8976,26 @@ Use this store information to provide context-aware responses. When helping draf
       // Mark ticket as having new reply
       if (user?.role === 'admin') {
         await storage.updateTicket(ticketId, { isUnreadByUser: true });
+        // Admin replied - notify the ticket creator
+        const ticketOwner = await storage.getUser(ticket.userId);
+        if (ticketOwner?.email) {
+          notifyTicketReply(
+            ticketOwner.email,
+            ticket.subject,
+            req.body.message
+          ).catch(err => console.error('Failed to send reply email:', err));
+        }
       } else {
         await storage.updateTicket(ticketId, { isUnreadByAdmin: true });
+        // User replied - notify admin (this is a follow-up message)
+        notifyNewTicket(
+          ticket.id,
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'User',
+          user.email || 'no-email',
+          `Follow-up: ${ticket.subject}`,
+          req.body.message
+        ).catch(err => console.error('Failed to send follow-up email:', err));
       }
-      
-      // TODO: Send email notification (admin reply -> user email, user reply -> michael@naturalmaterials.eu)
       
       res.json({ reply });
     } catch (error: any) {
