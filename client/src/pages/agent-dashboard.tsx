@@ -212,8 +212,8 @@ export default function AgentDashboard() {
         </div>
       </div>
 
-      {/* Right Column - Reminders Widget */}
-      <div className="w-96 border-l overflow-y-auto">
+      {/* Right Column - Reminders Widget (hidden on mobile/tablet, visible on large screens) */}
+      <div className="hidden lg:block lg:w-96 border-l overflow-y-auto">
         <div className="p-4 h-full">
           <RemindersWidget />
         </div>
