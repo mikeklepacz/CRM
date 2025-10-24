@@ -1168,7 +1168,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                               key={conv.id}
                               conversationId={conv.id}
                               onRename={() => {
-                                /* TODO: implement rename */
+                                setRenamingConversationId(conv.id);
+                                setNewConversationTitle(conv.title);
+                                setRenameDialogOpen(true);
                               }}
                               onDelete={() => deleteConversationMutation.mutate(conv.id)}
                               onMove={(projectId) => moveConversationMutation.mutate({ conversationId: conv.id, projectId })}
@@ -1206,7 +1208,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                               key={conv.id}
                               conversationId={conv.id}
                               onRename={() => {
-                                /* TODO: implement rename */
+                                setRenamingConversationId(conv.id);
+                                setNewConversationTitle(conv.title);
+                                setRenameDialogOpen(true);
                               }}
                               onDelete={() => deleteConversationMutation.mutate(conv.id)}
                               onMove={(projectId) => moveConversationMutation.mutate({ conversationId: conv.id, projectId })}
@@ -1694,6 +1698,60 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
               data-testid="button-create-project"
             >
               Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Conversation Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent data-testid="dialog-rename-conversation">
+          <DialogHeader>
+            <DialogTitle>Rename Conversation</DialogTitle>
+            <DialogDescription>Enter a new name for this conversation</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newConversationTitle}
+            onChange={(e) => setNewConversationTitle(e.target.value)}
+            placeholder="Conversation title..."
+            data-testid="input-conversation-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newConversationTitle.trim() && renamingConversationId) {
+                renameConversationMutation.mutate({
+                  conversationId: renamingConversationId,
+                  title: newConversationTitle.trim(),
+                });
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setRenameDialogOpen(false);
+              setRenamingConversationId(null);
+              setNewConversationTitle("");
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (renamingConversationId) {
+                  renameConversationMutation.mutate({
+                    conversationId: renamingConversationId,
+                    title: newConversationTitle.trim(),
+                  });
+                }
+              }}
+              disabled={renameConversationMutation.isPending || !newConversationTitle.trim()}
+              data-testid="button-save-rename"
+            >
+              {renameConversationMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
