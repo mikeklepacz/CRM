@@ -7,6 +7,7 @@ import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { UserManagement } from "@/components/user-management";
 import { SalesReports } from "@/components/sales-reports";
 import { OpenAIManagement } from "@/components/openai-management";
+import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -37,6 +38,7 @@ export default function AdminDashboard() {
       <Tabs defaultValue="users" className="space-y-6">
         <TabsList>
           <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
+          <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
           <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
@@ -45,6 +47,10 @@ export default function AdminDashboard() {
 
         <TabsContent value="users">
           <UserManagement />
+        </TabsContent>
+
+        <TabsContent value="tickets">
+          <AdminTicketInbox />
         </TabsContent>
 
         <TabsContent value="reports">
