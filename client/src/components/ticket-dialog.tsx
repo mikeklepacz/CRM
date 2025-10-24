@@ -126,10 +126,10 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject.trim() || !message.trim()) {
+    if (!subject.trim() || !message.trim() || !category.trim()) {
       toast({
         title: "Missing Information",
-        description: "Please provide both a subject and message",
+        description: "Please provide a subject, category, and message",
         variant: "destructive",
       });
       return;
@@ -198,11 +198,19 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <h4 className="font-medium text-sm truncate">{ticket.subject}</h4>
                               {ticket.isUnreadByUser && user?.role !== 'admin' && (
                                 <Badge variant="destructive" className="text-xs">New</Badge>
                               )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <Badge variant="outline" className="text-xs">
+                                {ticket.category}
+                              </Badge>
+                              <Badge variant={ticket.status === 'closed' ? 'secondary' : 'default'} className="text-xs">
+                                {ticket.status}
+                              </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                               {ticket.message}
@@ -211,9 +219,6 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
                               {format(new Date(ticket.createdAt), 'MMM d, yyyy h:mm a')}
                             </p>
                           </div>
-                          <Badge variant={ticket.status === 'closed' ? 'secondary' : 'default'} className="text-xs">
-                            {ticket.status}
-                          </Badge>
                         </div>
                       </div>
                     ))
@@ -288,15 +293,20 @@ export function TicketDialog({ open, onOpenChange }: TicketDialogProps) {
           {view === 'detail' && ticketDetail && (
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="flex-1">
                   <h3 className="font-medium">{ticketDetail.subject}</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <Badge variant="outline" className="text-xs">
+                      {ticketDetail.category}
+                    </Badge>
+                    <Badge variant={ticketDetail.status === 'closed' ? 'secondary' : 'default'} className="text-xs">
+                      {ticketDetail.status}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
                     {format(new Date(ticketDetail.createdAt), 'MMM d, yyyy h:mm a')}
                   </p>
                 </div>
-                <Badge variant={ticketDetail.status === 'closed' ? 'secondary' : 'default'}>
-                  {ticketDetail.status}
-                </Badge>
               </div>
 
               <ScrollArea className="h-[300px] border rounded-md p-4">
