@@ -543,11 +543,15 @@ export default function ClientDashboard() {
       rowIndex,
       column,
       value,
+      shouldAutoClaimRow,
+      linkValue,
     }: {
       sheetId: string;
       rowIndex: number;
       column: string;
       value: any;
+      shouldAutoClaimRow?: boolean;
+      linkValue?: string;
     }) => {
       return await apiRequest("PUT", `/api/sheets/${sheetId}/update`, {
         rowIndex,
@@ -555,12 +559,29 @@ export default function ClientDashboard() {
         value,
       });
     },
-    onSuccess: () => {
+    onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["merged-data"] });
       toast({
         title: "Success",
         description: "Cell updated successfully",
       });
+
+      // Auto-claim unclaimed stores after successfully editing a store column
+      if (variables.shouldAutoClaimRow && variables.linkValue && trackerSheetId) {
+        try {
+          await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
+            linkValue: variables.linkValue,
+            column: "Agent",  // Claim with Agent column
+            value: "",  // Empty value, just claiming
+            joinColumn,
+          });
+          // Silently refresh data after claiming
+          queryClient.invalidateQueries({ queryKey: ["merged-data"] });
+        } catch (error) {
+          // Soft error - don't block the user
+          console.error("Auto-claim failed:", error);
+        }
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -639,29 +660,38 @@ export default function ClientDashboard() {
     // Determine which sheet to update based on which headers contain this column (case-insensitive)
     const isStoreColumn = mergedData?.storeHeaders?.some((h: string) => h.toLowerCase() === column.toLowerCase());
     const isTrackerColumn = mergedData?.trackerHeaders?.some((h: string) => h.toLowerCase() === column.toLowerCase());
+    const isUnclaimed = !row._trackerRowIndex;
 
     let sheetId: string | undefined;
     let rowIndex: number | undefined;
 
     if (isTrackerColumn && row._trackerSheetId && row._trackerRowIndex) {
-      // Update existing tracker row
+      // Update existing tracker row (claimed store)
       sheetId = row._trackerSheetId;
       rowIndex = row._trackerRowIndex;
       updateCellMutation.mutate({ sheetId, rowIndex, column, value });
-    } else if (isTrackerColumn && trackerSheetId && !row._trackerRowIndex) {
-      // Need to create a new tracker row for this unclaimed store (auto-claim)
-      claimStoreMutation.mutate({
-        trackerSheetId,
-        storeRow: row,
-        column,
-        value,
-        joinColumn
+    } else if (isTrackerColumn && isUnclaimed) {
+      // Don't allow editing tracker columns on unclaimed stores
+      // User must claim the store first by editing a store column
+      toast({
+        title: "Cannot Edit",
+        description: "Please edit a store column first to claim this store, then you can edit tracker columns.",
+        variant: "destructive",
       });
     } else if (isStoreColumn && row._storeSheetId && row._storeRowIndex) {
-      // Update store sheet
+      // Update store sheet - will auto-claim if unclaimed
       sheetId = row._storeSheetId;
       rowIndex = row._storeRowIndex;
-      updateCellMutation.mutate({ sheetId, rowIndex, column, value });
+      const linkValue = row[joinColumn];
+      
+      updateCellMutation.mutate({ 
+        sheetId, 
+        rowIndex, 
+        column, 
+        value,
+        shouldAutoClaimRow: isUnclaimed && !!linkValue,
+        linkValue: linkValue
+      });
     } else {
       toast({
         title: "Error",
