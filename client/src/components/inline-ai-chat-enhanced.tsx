@@ -197,6 +197,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   const [builderContent, setBuilderContent] = useState("");
   const [builderType, setBuilderType] = useState<"Email" | "Script">("Email");
   const [builderTags, setBuilderTags] = useState("");
+  const [builderIsDefault, setBuilderIsDefault] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
   // Email-specific builder state
@@ -755,7 +756,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
   });
 
   const createTemplateMutation = useMutation({
-    mutationFn: async (template: { title: string; content: string; type: string; tags: string[] }) => {
+    mutationFn: async (template: { title: string; content: string; type: string; tags: string[]; isDefault?: boolean }) => {
       const result = await apiRequest("POST", "/api/templates", template);
 
       // Auto-add new tags to user's personal collection
@@ -779,13 +780,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
       setBuilderContent("");
       setBuilderType("Email");
       setBuilderTags("");
+      setBuilderIsDefault(false);
       setEditingTemplateId(null);
       toast({ title: "Success", description: "Template saved" });
     },
   });
 
   const updateTemplateMutation = useMutation({
-    mutationFn: async ({ id, template }: { id: string; template: { title: string; content: string; type: string; tags: string[] } }) => {
+    mutationFn: async ({ id, template }: { id: string; template: { title: string; content: string; type: string; tags: string[]; isDefault?: boolean } }) => {
       const result = await apiRequest("PATCH", `/api/templates/${id}`, template);
 
       // Auto-add new tags to user's personal collection
@@ -1589,6 +1591,37 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                   <p className="text-xs text-muted-foreground">Comma-separated tags</p>
                 </div>
 
+                {/* Default Script Checkbox - Only for Script type */}
+                {builderType === "Script" && (
+                  <div className="space-y-2">
+                    <div 
+                      className={`flex items-center gap-2 p-3 rounded border ${
+                        !templates.some(t => t.type === 'Script' && t.isDefault) 
+                          ? 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700' 
+                          : 'border-border'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        id="builder-is-default"
+                        checked={builderIsDefault}
+                        onChange={(e) => setBuilderIsDefault(e.target.checked)}
+                        className="h-4 w-4"
+                        data-testid="checkbox-is-default"
+                      />
+                      <label htmlFor="builder-is-default" className="text-sm font-medium cursor-pointer flex-1">
+                        Set as Default Script
+                      </label>
+                      {!templates.some(t => t.type === 'Script' && t.isDefault) && (
+                        <span className="text-xs text-yellow-700 dark:text-yellow-500">No default set</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Default script automatically loads when you click a phone number
+                    </p>
+                  </div>
+                )}
+
                 {/* Conditional Content Based on Type */}
                 {builderType === "Email" ? (
                   // Email Builder - Compact Layout
@@ -2049,6 +2082,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger }: Inl
                       content,
                       type: builderType,
                       tags,
+                      isDefault: builderIsDefault,
                     };
 
                     if (editingTemplateId) {

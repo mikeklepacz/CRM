@@ -7584,6 +7584,16 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
       
+      // If setting this as default Script, unset other defaults first
+      if (validation.data.isDefault && validation.data.type === 'Script') {
+        const existingTemplates = await storage.getUserTemplates(userId);
+        for (const existing of existingTemplates) {
+          if (existing.isDefault && existing.type === 'Script' && existing.id !== validation.data.id) {
+            await storage.updateTemplate(existing.id, { isDefault: false });
+          }
+        }
+      }
+      
       const template = await storage.createTemplate(validation.data);
       res.json(template);
     } catch (error: any) {
@@ -7611,11 +7621,25 @@ Use this store information to provide context-aware responses. When helping draf
         content: z.string().optional(),
         type: z.enum(['Email', 'Script']).optional(),
         tags: z.array(z.string()).optional(),
+        isDefault: z.boolean().optional(),
       });
       
       const validation = updateSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+      
+      // Determine the template type after update
+      const updatedType = validation.data.type || template.type;
+      
+      // If setting this as default Script, unset other defaults first
+      if (validation.data.isDefault && updatedType === 'Script') {
+        const existingTemplates = await storage.getUserTemplates(userId);
+        for (const existing of existingTemplates) {
+          if (existing.isDefault && existing.type === 'Script' && existing.id !== id) {
+            await storage.updateTemplate(existing.id, { isDefault: false });
+          }
+        }
       }
       
       const updated = await storage.updateTemplate(id, validation.data);

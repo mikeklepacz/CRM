@@ -406,6 +406,7 @@ export const templates = pgTable("templates", {
   content: text("content").notNull(),
   type: varchar("type", { length: 20 }).default('Email'), // 'Email' or 'Script'
   tags: text("tags").array().default(sql`ARRAY[]::text[]`), // e.g., ['email', 'follow-up', 'objection-handler']
+  isDefault: boolean("is_default").default(false), // Only one Script template can be default (auto-loads when phone clicked)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
