@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar, FileSpreadsheet, CheckCircle2, XCircle, Loader2, Mail } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,6 +35,7 @@ export function Integrations() {
   const { user } = useAuth();
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [signature, setSignature] = useState("");
+  const [emailPreference, setEmailPreference] = useState<"gmail_draft" | "mailto">("mailto");
 
   const { data: integrationStatus, isLoading } = useQuery<IntegrationStatusResponse>({
     queryKey: ['/api/integrations/status'],
@@ -51,6 +53,9 @@ export function Integrations() {
       const data = userData as any;
       if (data.signature) {
         setSignature(data.signature);
+      }
+      if (data.emailPreference) {
+        setEmailPreference(data.emailPreference);
       }
     }
   }, [userData]);
@@ -153,6 +158,7 @@ export function Integrations() {
       return await apiRequest('PUT', '/api/user/gmail-settings', {
         signature: signature || null,
         gmailLabels: null,
+        emailPreference,
       });
     },
     onSuccess: () => {
@@ -357,6 +363,35 @@ export function Integrations() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email-preference" data-testid="label-email-preference">
+                Email Link Preference
+              </Label>
+              <RadioGroup
+                id="email-preference"
+                value={emailPreference}
+                onValueChange={(value) => setEmailPreference(value as "gmail_draft" | "mailto")}
+                className="flex flex-col space-y-2"
+                data-testid="radio-email-preference"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="gmail_draft" id="gmail-draft" data-testid="radio-gmail-draft" />
+                  <Label htmlFor="gmail-draft" className="font-normal cursor-pointer">
+                    Create Gmail Draft (opens draft in Gmail)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="mailto" id="mailto" data-testid="radio-mailto" />
+                  <Label htmlFor="mailto" className="font-normal cursor-pointer">
+                    Default Email Client (mailto: link)
+                  </Label>
+                </div>
+              </RadioGroup>
+              <p className="text-xs text-muted-foreground">
+                Choose how email links work in the Client Dashboard and AI Assistant
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="signature" data-testid="label-signature">
                 Email Signature
