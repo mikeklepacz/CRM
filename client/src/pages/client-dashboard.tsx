@@ -800,6 +800,16 @@ export default function ClientDashboard() {
   });
 
   const handleCellUpdate = (row: MergedDataRow, column: string, value: any) => {
+    // Only admins can edit CRM table cells - sales agents must use Store Details dialog
+    if (currentUser?.role !== 'admin') {
+      toast({
+        title: "Editing Restricted",
+        description: "Please use the Store Details popup to make changes.",
+        variant: "default",
+      });
+      return;
+    }
+
     // Determine which sheet to update based on which headers contain this column (case-insensitive)
     const isStoreColumn = mergedData?.storeHeaders?.some((h: string) => h.toLowerCase() === column.toLowerCase());
     const isTrackerColumn = mergedData?.trackerHeaders?.some((h: string) => h.toLowerCase() === column.toLowerCase());
@@ -935,6 +945,9 @@ export default function ClientDashboard() {
   const { data: currentUser } = useQuery<{ id: string; email?: string; role?: string; agentName?: string }>({
     queryKey: ['/api/auth/user'],
   });
+
+  // Check if user is admin - only admins can edit CRM table directly
+  const isAdmin = currentUser?.role === 'admin';
 
   const { data: mergedData, isLoading, refetch } = useQuery({
     queryKey: ['merged-data', storeSheetId, trackerSheetId, joinColumn],
@@ -1490,6 +1503,16 @@ export default function ClientDashboard() {
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
+    // Only admins can edit CRM table cells - sales agents must use Store Details dialog
+    if (currentUser?.role !== 'admin') {
+      toast({
+        title: "Editing Restricted",
+        description: "Please use the Store Details popup to make changes.",
+        variant: "default",
+      });
+      return;
+    }
+
     // Determine which sheet this column belongs to (case-insensitive)
     const isTrackerColumn = trackerHeaders.some((h: string) => h.toLowerCase() === column.toLowerCase());
     const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
@@ -2878,14 +2901,15 @@ export default function ClientDashboard() {
                               >
                                 {isEditable ? (
                                   hasData ? (
-                                    // Has data: Show value with edit controls - always allow editing
+                                    // Has data: Show value with edit controls - admins only
                                     isDateColumn ? (
-                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                      <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
                                           <Button
                                             variant="outline"
                                             className="w-full justify-start text-left font-normal"
                                             data-testid={`button-date-${rowKey}-${header}`}
+                                            disabled={!isAdmin}
                                           >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
                                             {cellValue || "Pick a date"}
@@ -2916,10 +2940,12 @@ export default function ClientDashboard() {
                                       <Select
                                         value={cellValue || ""}
                                         onValueChange={(value) => handleCellUpdate(row, header, value)}
+                                        disabled={!isAdmin}
                                       >
                                         <SelectTrigger
                                           className="w-full"
                                           data-testid={`button-status-${rowKey}-${header}`}
+                                          disabled={!isAdmin}
                                           style={cellValue && (customColors.statusColors as any)?.[cellValue] ? {
                                             backgroundColor: (customColors.statusColors as any)[cellValue].background,
                                             color: (customColors.statusColors as any)[cellValue].text,
@@ -2947,7 +2973,7 @@ export default function ClientDashboard() {
                                         </SelectContent>
                                       </Select>
                                     ) : isStateColumn ? (
-                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                      <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
                                           <Button
                                             variant="outline"
@@ -2955,6 +2981,7 @@ export default function ClientDashboard() {
                                             aria-expanded={openCombobox === comboboxKey}
                                             className="w-full justify-between"
                                             data-testid={`button-state-${rowKey}-${header}`}
+                                            disabled={!isAdmin}
                                           >
                                             {cellValue || "Select state..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -2993,17 +3020,20 @@ export default function ClientDashboard() {
                                         onChange={(e) => handleCellEdit(row, header, e.target.value)}
                                         className="w-full"
                                         data-testid={`input-cell-${rowKey}-${header}`}
+                                        disabled={!isAdmin}
+                                        readOnly={!isAdmin}
                                       />
                                     )
                                   ) : (
-                                    // Empty cell: Allow inline editing for new data
+                                    // Empty cell: Allow inline editing for new data - admins only
                                     isDateColumn ? (
-                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                      <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
                                           <Button
                                             variant="outline"
                                             className="w-full justify-start text-left font-normal"
                                             data-testid={`button-date-${rowKey}-${header}`}
+                                            disabled={!isAdmin}
                                           >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
                                             Pick a date
@@ -3026,10 +3056,12 @@ export default function ClientDashboard() {
                                       <Select
                                         value={cellValue || ""}
                                         onValueChange={(value) => handleCellUpdate(row, header, value)}
+                                        disabled={!isAdmin}
                                       >
                                         <SelectTrigger
                                           className="w-full"
                                           data-testid={`button-status-${rowKey}-${header}`}
+                                          disabled={!isAdmin}
                                         >
                                           <SelectValue placeholder="Select status..." />
                                         </SelectTrigger>
@@ -3053,7 +3085,7 @@ export default function ClientDashboard() {
                                         </SelectContent>
                                       </Select>
                                     ) : isStateColumn ? (
-                                      <Popover open={openCombobox === comboboxKey} onOpenChange={(open) => setOpenCombobox(open ? comboboxKey : null)}>
+                                      <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
                                         <PopoverTrigger asChild>
                                           <Button
                                             variant="outline"
@@ -3061,6 +3093,7 @@ export default function ClientDashboard() {
                                             aria-expanded={openCombobox === comboboxKey}
                                             className="w-full justify-between"
                                             data-testid={`button-state-${rowKey}-${header}`}
+                                            disabled={!isAdmin}
                                           >
                                             {cellValue || "Select state..."}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -3100,6 +3133,8 @@ export default function ClientDashboard() {
                                         placeholder="Enter value..."
                                         className="w-full"
                                         data-testid={`input-cell-${rowKey}-${header}`}
+                                        disabled={!isAdmin}
+                                        readOnly={!isAdmin}
                                       />
                                     )
                                   )
