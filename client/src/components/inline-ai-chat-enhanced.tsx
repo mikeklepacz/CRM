@@ -198,6 +198,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const [newProjectName, setNewProjectName] = useState("");
   const [templateBuilderOpen, setTemplateBuilderOpen] = useState(false);
   const [templateBuilderView, setTemplateBuilderView] = useState<"builder" | "library">("builder");
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
+  const [newConversationTitle, setNewConversationTitle] = useState("");
 
   // Template builder state
   const [builderTitle, setBuilderTitle] = useState("");
@@ -892,6 +895,29 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       toast({ title: "Success", description: "Conversation moved" });
+    },
+  });
+
+  const renameConversationMutation = useMutation({
+    mutationFn: async ({ conversationId, title }: { conversationId: string; title: string }) => {
+      return await apiRequest("PATCH", `/api/conversations/${conversationId}`, { title });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      toast({
+        title: "Success",
+        description: "Conversation renamed successfully",
+      });
+      setRenameDialogOpen(false);
+      setRenamingConversationId(null);
+      setNewConversationTitle("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to rename conversation",
+        variant: "destructive",
+      });
     },
   });
 
