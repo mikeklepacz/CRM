@@ -44,6 +44,10 @@ The application is built around a client dashboard that unifies data from two Go
         - `{{email}}` and `{{pocEmail}}` both use smart fallback: check POC email first, then fall back to general store email
         - Auto-detection properly handles store names with hyphens (e.g., "Chronic Therapy - Cortez" → {{storeName}})
         - Available variables: storeName, storeAddress, storeCity, storeState, storePhone, storeWebsite, email, pocName, pocEmail, pocPhone, agentName, agentEmail, agentPhone, agentMeetingLink, currentDate, currentTime
+      - **Email Generation Protocol**: AI follows explicit priority when drafting emails:
+        1. Uses POC Email if available (with transparency: "I'll address this to [POC Email]")
+        2. Falls back to general Email if POC Email missing
+        3. Asks user confirmation if neither email exists: "Would you like me to generate a template email that you can customize with the recipient later?"
 - **System Design Choices**:
     - A PostgreSQL database (Neon) is used for user management and preference storage.
     - The backend is powered by Express.js and Node.js.
