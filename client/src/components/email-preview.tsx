@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, ExternalLink, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
 
 interface EmailPreviewProps {
   subject: string;
@@ -13,7 +15,20 @@ interface EmailPreviewProps {
 
 export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isCreatingDraft, setIsCreatingDraft] = useState(false);
+
+  // Fetch Gmail connection status
+  const { data: integrationStatus } = useQuery<{
+    googleCalendarConnected: boolean;
+    googleSheetsConnected: boolean;
+  }>({
+    queryKey: ["/api/integrations/status"],
+  });
+
+  // Get user's email preference (default to mailto)
+  const emailPreference = (user as any)?.emailPreference || 'mailto';
+  const gmailConnected = integrationStatus?.googleCalendarConnected || false;
 
   const handleCreateDraft = async () => {
     try {
@@ -86,35 +101,62 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
           </div>
         </div>
         <div className="flex gap-2 pt-2">
-          <Button
-            onClick={handleCreateDraft}
-            disabled={isCreatingDraft}
-            className="flex-1"
-            data-testid="button-create-gmail-draft"
-          >
-            {isCreatingDraft ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating Draft...
-              </>
-            ) : (
-              <>
+          {emailPreference === 'gmail_draft' && gmailConnected ? (
+            <Button
+              onClick={handleCreateDraft}
+              disabled={isCreatingDraft}
+              className="flex-1"
+              data-testid="button-create-gmail-draft"
+            >
+              {isCreatingDraft ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating Draft...
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Create Gmail Draft
+                </>
+              )}
+            </Button>
+          ) : emailPreference === 'gmail_draft' && !gmailConnected ? (
+            <>
+              <Button
+                onClick={handleCreateDraft}
+                disabled={true}
+                className="flex-1"
+                data-testid="button-create-gmail-draft"
+                title="Gmail not connected - Connect Gmail in Settings"
+              >
                 <Mail className="h-4 w-4 mr-2" />
-                Create Gmail Draft
-              </>
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            asChild
-            className="flex-1"
-            data-testid="button-open-mailto"
-          >
-            <a href={mailtoLink} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Open in Email Client
-            </a>
-          </Button>
+                Create Gmail Draft (Unavailable)
+              </Button>
+              <Button
+                variant="outline"
+                asChild
+                className="flex-1"
+                data-testid="button-open-mailto"
+              >
+                <a href={mailtoLink} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open in Email Client
+                </a>
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              asChild
+              className="flex-1"
+              data-testid="button-open-mailto"
+            >
+              <a href={mailtoLink} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open in Email Client
+              </a>
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
