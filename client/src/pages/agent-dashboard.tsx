@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClientFilters } from "@/components/client-filters";
 import { ClientsTable } from "@/components/clients-table";
+import { RemindersWidget } from "@/components/widgets/reminders";
 import { Users, DollarSign, TrendingUp, Calendar } from "lucide-react";
 import type { Client } from "@shared/schema";
 
@@ -82,128 +83,140 @@ export default function AgentDashboard() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">My Dashboard</h2>
-        <p className="text-muted-foreground">Track your claimed clients and commissions</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Clients</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="text-my-clients">{clients.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Claimed by you
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="text-my-sales">
-              ${totalSales.toFixed(2)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              From your clients
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Commission Earned</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="text-my-commission">
-              ${totalCommission.toFixed(2)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Your earnings
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Needs Follow-up</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="text-inactive-clients">
-              {inactive90Days}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              90+ days inactive
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={inactivityDays === "90" ? "default" : "outline"}
-              size="sm"
-              onClick={() => quickFilter("90")}
-              data-testid="button-filter-90"
-            >
-              90+ Days Inactive
-            </Button>
-            <Button
-              variant={inactivityDays === "180" ? "default" : "outline"}
-              size="sm"
-              onClick={() => quickFilter("180")}
-              data-testid="button-filter-180"
-            >
-              180+ Days Inactive
-            </Button>
-            <Button
-              variant={inactivityDays === "365" ? "default" : "outline"}
-              size="sm"
-              onClick={() => quickFilter("365")}
-              data-testid="button-filter-365"
-            >
-              365+ Days Inactive
-            </Button>
+    <div className="h-[calc(100vh-4rem)] flex">
+      {/* Left Column - Main Dashboard Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="container mx-auto px-4 py-6 space-y-6">
+          <div>
+            <h2 className="text-2xl font-semibold text-foreground">My Dashboard</h2>
+            <p className="text-muted-foreground">Track your claimed clients and commissions</p>
           </div>
-        </CardContent>
-      </Card>
 
-      <div className="space-y-6">
-        <ClientFilters
-          search={search}
-          onSearchChange={setSearch}
-          state={state}
-          onStateChange={setState}
-          status={status}
-          onStatusChange={setStatus}
-          assignedAgent="all"
-          onAssignedAgentChange={() => {}}
-          inactivityDays={inactivityDays}
-          onInactivityDaysChange={setInactivityDays}
-          onClearFilters={clearFilters}
-          states={states}
-          showAgentFilter={false}
-        />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">My Clients</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold" data-testid="text-my-clients">{clients.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  Claimed by you
+                </p>
+              </CardContent>
+            </Card>
 
-        <ClientsTable
-          clients={filteredClients}
-          currentUser={user}
-          isLoading={clientsLoading}
-        />
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold" data-testid="text-my-sales">
+                  ${totalSales.toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  From your clients
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Commission Earned</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold" data-testid="text-my-commission">
+                  ${totalCommission.toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your earnings
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Needs Follow-up</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold" data-testid="text-inactive-clients">
+                  {inactive90Days}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  90+ days inactive
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Filters</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={inactivityDays === "90" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => quickFilter("90")}
+                  data-testid="button-filter-90"
+                >
+                  90+ Days Inactive
+                </Button>
+                <Button
+                  variant={inactivityDays === "180" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => quickFilter("180")}
+                  data-testid="button-filter-180"
+                >
+                  180+ Days Inactive
+                </Button>
+                <Button
+                  variant={inactivityDays === "365" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => quickFilter("365")}
+                  data-testid="button-filter-365"
+                >
+                  365+ Days Inactive
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            <ClientFilters
+              search={search}
+              onSearchChange={setSearch}
+              state={state}
+              onStateChange={setState}
+              status={status}
+              onStatusChange={setStatus}
+              assignedAgent="all"
+              onAssignedAgentChange={() => {}}
+              inactivityDays={inactivityDays}
+              onInactivityDaysChange={setInactivityDays}
+              onClearFilters={clearFilters}
+              states={states}
+              showAgentFilter={false}
+            />
+
+            <ClientsTable
+              clients={filteredClients}
+              currentUser={user}
+              isLoading={clientsLoading}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column - Reminders Widget */}
+      <div className="w-96 border-l overflow-y-auto">
+        <div className="p-4 h-full">
+          <RemindersWidget />
+        </div>
       </div>
     </div>
   );
