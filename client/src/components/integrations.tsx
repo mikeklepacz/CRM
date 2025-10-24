@@ -34,13 +34,12 @@ export function Integrations() {
   const { user } = useAuth();
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [signature, setSignature] = useState("");
-  const [gmailLabelsInput, setGmailLabelsInput] = useState("");
 
   const { data: integrationStatus, isLoading } = useQuery<IntegrationStatusResponse>({
     queryKey: ['/api/integrations/status'],
   });
 
-  // Load signature and labels from user data
+  // Load signature from user data
   const { data: userData } = useQuery({
     queryKey: ['/api/auth/user'],
     enabled: !!user,
@@ -52,9 +51,6 @@ export function Integrations() {
       const data = userData as any;
       if (data.signature) {
         setSignature(data.signature);
-      }
-      if (data.gmailLabels && Array.isArray(data.gmailLabels)) {
-        setGmailLabelsInput(data.gmailLabels.join(", "));
       }
     }
   }, [userData]);
@@ -154,15 +150,9 @@ export function Integrations() {
 
   const updateGmailSettingsMutation = useMutation({
     mutationFn: async () => {
-      // Parse comma-separated labels and trim whitespace
-      const labelsArray = gmailLabelsInput
-        .split(',')
-        .map(label => label.trim())
-        .filter(label => label.length > 0);
-      
       return await apiRequest('PUT', '/api/user/gmail-settings', {
         signature: signature || null,
-        gmailLabels: labelsArray.length > 0 ? labelsArray : null,
+        gmailLabels: null,
       });
     },
     onSuccess: () => {
@@ -361,7 +351,7 @@ export function Integrations() {
               <div>
                 <CardTitle className="text-base">Gmail Settings</CardTitle>
                 <CardDescription>
-                  Customize your email signature and auto-applied labels for AI-generated emails
+                  Customize your email signature for AI-generated emails
                 </CardDescription>
               </div>
             </div>
@@ -382,22 +372,6 @@ export function Integrations() {
               />
               <p className="text-xs text-muted-foreground">
                 This signature will be used in all AI-generated emails. Use plain text or simple formatting.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="gmail-labels" data-testid="label-gmail-labels">
-                Auto-Apply Gmail Labels
-              </Label>
-              <Input
-                id="gmail-labels"
-                placeholder="[Awaiting Reply], Sales Outreach, Follow-up"
-                value={gmailLabelsInput}
-                onChange={(e) => setGmailLabelsInput(e.target.value)}
-                data-testid="input-gmail-labels"
-              />
-              <p className="text-xs text-muted-foreground">
-                Comma-separated list of labels. If a label doesn't exist, it will be created automatically in your Gmail account.
               </p>
             </div>
 
