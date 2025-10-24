@@ -382,6 +382,10 @@ export default function ClientDashboard() {
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
   const [freezeFirstColumn, setFreezeFirstColumn] = useState<boolean>(false);
+  
+  // AI Assistant states
+  const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
+  const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
 
   // Status options state (customizable)
   const [statusOptions, setStatusOptions] = useState<string[]>([
@@ -3808,8 +3812,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     }
     return false;
   });
-  const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
-  const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
 
   // Re-sync showAssistant from localStorage when dialog opens
   useEffect(() => {
