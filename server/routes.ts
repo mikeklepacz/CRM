@@ -3729,6 +3729,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Auto-claim store by link (simple endpoint for phone/email clicks)
+  app.post('/api/stores/auto-claim', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { link } = req.body;
+
+      if (!link) {
+        return res.status(400).json({ message: "Link is required" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user || !user.agentName) {
+        return res.status(400).json({ message: "Agent name not set in profile" });
+      }
+
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: "Commission Tracker sheet not found" });
+      }
+
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      if (trackerRows.length === 0) {
+        return res.status(400).json({ message: "Tracker sheet is empty" });
+      }
+
+      const trackerHeaders = trackerRows[0];
+      const trackerLinkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+      const trackerAgentIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+
+      if (trackerLinkIndex === -1) {
+        return res.status(400).json({ message: "Link column not found in tracker" });
+      }
+
+      // Check if row exists in tracker
+      let existingTrackerRow = -1;
+      for (let i = 1; i < trackerRows.length; i++) {
+        if (trackerRows[i][trackerLinkIndex] === link) {
+          existingTrackerRow = i + 1; // 1-indexed
+          break;
+        }
+      }
+
+      if (existingTrackerRow > 0) {
+        // Update existing row with agent name
+        if (trackerAgentIndex !== -1) {
+          const agentColLetter = String.fromCharCode(65 + trackerAgentIndex);
+          const agentCellRange = `${trackerSheet.sheetName}!${agentColLetter}${existingTrackerRow}`;
+          await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentCellRange, [[user.agentName]]);
+        }
+        res.json({ message: "Store claimed successfully", claimed: true });
+      } else {
+        // Create new row in tracker
+        const newTrackerRow = new Array(trackerHeaders.length).fill('');
+        if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = link;
+        if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = user.agentName;
+        await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+        res.json({ message: "Store claimed successfully", claimed: true });
+      }
+    } catch (error: any) {
+      console.error("Error auto-claiming store:", error);
+      res.status(500).json({ message: error.message || "Failed to auto-claim store" });
+    }
+  });
+
   // Claim a store by creating a new tracker row
   app.post('/api/sheets/:id/claim-store', isAuthenticatedCustom, async (req: any, res) => {
     try {

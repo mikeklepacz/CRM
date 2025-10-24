@@ -92,6 +92,28 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
     },
   });
 
+  const autoClaimMutation = useMutation({
+    mutationFn: async (link: string) => {
+      return await apiRequest("POST", `/api/stores/auto-claim`, { link });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients/my"] });
+    },
+    onError: (error: Error) => {
+      // Silent fail for auto-claim - don't show errors to user
+      console.error('Auto-claim failed:', error.message);
+    },
+  });
+
+  const handleContactClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
+    // Don't prevent default - let the link open
+    // Just trigger auto-claim silently in the background
+    if (link && currentUser.role !== 'admin') {
+      autoClaimMutation.mutate(link);
+    }
+  };
+
   const getCommissionRate = (client: Client) => {
     if (!client.claimDate) return 0;
     const monthsSinceClaim = differenceInMonths(new Date(), new Date(client.claimDate));
@@ -108,6 +130,10 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
 
   const getPhone = (client: Client) => {
     return client.data?.['Phone'] || client.data?.['phone'] || client.data?.['Contact Phone'] || '';
+  };
+
+  const getLink = (client: Client) => {
+    return client.data?.['Link'] || client.data?.['link'] || '';
   };
 
   if (isLoading) {
@@ -146,6 +172,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
               {clients.map((client) => {
                 const email = getEmail(client);
                 const phone = getPhone(client);
+                const link = getLink(client);
                 const canClaim = !client.assignedAgent && currentUser.role === 'agent';
                 const canUnclaim = currentUser.role === 'admin';
                 const commissionRate = getCommissionRate(client);
@@ -173,6 +200,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                             href={`mailto:${email}`} 
                             className="flex items-center gap-1 text-primary hover:underline"
                             data-testid={`link-email-${client.id}`}
+                            onClick={(e) => handleContactClick(e, link)}
                           >
                             <Mail className="h-3 w-3" />
                             {email}
@@ -183,6 +211,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                             href={`tel:${phone}`} 
                             className="flex items-center gap-1 text-primary hover:underline"
                             data-testid={`link-phone-${client.id}`}
+                            onClick={(e) => handleContactClick(e, link)}
                           >
                             <Phone className="h-3 w-3" />
                             {phone}
