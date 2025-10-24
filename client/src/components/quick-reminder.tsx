@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { formatInTimeZone, getTimezoneOffset } from "date-fns-tz";
-import { Calendar as CalendarIcon, MapPin, User, Mail, Phone } from "lucide-react";
+import { Calendar as CalendarIcon, MapPin, User, Mail, Phone, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,6 +14,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { detectTimezoneFromAddress, formatTimezoneDisplay } from "@shared/timezoneUtils";
 import { TimeSpinner } from "@/components/time-spinner";
+import { useQuery } from "@tanstack/react-query";
 
 interface QuickReminderProps {
   onSave: (data: {
@@ -70,19 +71,21 @@ export function QuickReminder({
   const customerTimezone = detectTimezoneFromAddress(storeAddress, storeCity, storeState);
   const agentTimezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  // Debug logging
-  useEffect(() => {
-    console.log('[QuickReminder] Props received:', {
-      defaultTimezoneMode,
-      useCustomerTimezone,
-      customerTimezone,
-      agentTimezone
-    });
-  }, [defaultTimezoneMode, useCustomerTimezone, customerTimezone, agentTimezone]);
+  // Fetch reminders for selected date
+  const selectedDateStr = date ? format(date, 'yyyy-MM-dd') : null;
+  const { data: dateReminders, isLoading: isLoadingReminders, error: remindersError, refetch: refetchReminders } = useQuery({
+    queryKey: ['/api/reminders/by-date', selectedDateStr],
+    queryFn: async () => {
+      if (!selectedDateStr) return { reminders: [] };
+      const response = await fetch(`/api/reminders/by-date/${selectedDateStr}`);
+      if (!response.ok) throw new Error('Failed to fetch reminders');
+      return response.json();
+    },
+    enabled: !!selectedDateStr,
+  });
 
   // Update checkbox default when defaultTimezoneMode changes
   useEffect(() => {
-    console.log('[QuickReminder] Setting useCustomerTimezone based on defaultTimezoneMode:', defaultTimezoneMode, '->', defaultTimezoneMode === "customer");
     setUseCustomerTimezone(defaultTimezoneMode === "customer");
   }, [defaultTimezoneMode]);
 
@@ -128,23 +131,19 @@ export function QuickReminder({
     
     onSave({ 
       note, 
-      date: finalDate, // May change if timezone conversion crosses day boundary
-      time: finalTime, // Time in Warsaw timezone
-      useCustomerTimezone: false, // Don't let backend do conversion - we already did it
+      date: finalDate,
+      time: finalTime,
+      useCustomerTimezone: false,
       customerTimezone,
       agentTimezone,
       calendarReminders
     });
   };
 
-
   // Get friendly timezone name for display
   const getFriendlyTimezoneName = (timezone: string): string => {
-    // Extract just the city/region name from IANA timezone
     const parts = timezone.split('/');
     if (parts.length >= 2) {
-      // Convert "America/Los_Angeles" -> "Los Angeles"
-      // Convert "Europe/Warsaw" -> "Warsaw"
       return parts[parts.length - 1].replace(/_/g, ' ');
     }
     return timezone;
@@ -155,30 +154,24 @@ export function QuickReminder({
     if (!date || !useCustomerTimezone || !customerTimezone) return null;
     
     try {
-      // When "Use customer timezone" is checked, the picker shows customer's local time
       const dateStr = format(date, 'yyyy-MM-dd');
       const customerDateTimeStr = `${dateStr}T${time}:00`;
       
-      // Create a naive date and get the customer timezone offset
       const customerDate = new Date(customerDateTimeStr);
       const customerOffset = getTimezoneOffset(customerTimezone, customerDate);
       
-      // Convert to UTC: subtract the customer's offset from the naive timestamp
       const utcTimestamp = customerDate.getTime() - customerOffset;
       const utcDate = new Date(utcTimestamp);
       
-      // Format the UTC time in agent's timezone
       const agentTime = formatInTimeZone(
         utcDate,
         agentTimezone,
         timeFormat === '24hr' ? 'HH:mm' : 'h:mm a'
       );
       
-      // Get friendly names
       const customerTzName = getFriendlyTimezoneName(customerTimezone);
       const agentTzName = getFriendlyTimezoneName(agentTimezone);
       
-      // Format customer time based on preference
       const customerTimeFormatted = timeFormat === '24hr' ? time : 
         formatInTimeZone(utcDate, customerTimezone, 'h:mm a');
       
@@ -195,6 +188,16 @@ export function QuickReminder({
   const displayEmail = pocEmail || defaultEmail;
   const displayPhone = pocPhone || defaultPhone;
   const hasContactInfo = pointOfContact || displayEmail || displayPhone;
+
+  // Format time for display
+  const formatReminderTime = (time: string) => {
+    if (!time) return '';
+    if (timeFormat === '24hr') return time;
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
 
   return (
     <div className="space-y-4" data-testid="quick-reminder-form">
@@ -261,169 +264,223 @@ export function QuickReminder({
         />
       </div>
 
+      {/* New two-column layout */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Date</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-start text-left font-normal"
-                data-testid="button-select-date"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {date ? format(date, "PPP") : "Pick a date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                initialFocus
-                disabled={(date) => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  return date < today;
-                }}
-              />
-            </PopoverContent>
-          </Popover>
+        {/* Left column: Date, Time, Calendar Reminders */}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left font-normal"
+                  data-testid="button-select-date"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date ? format(date, "MMMM do, yyyy") : "Pick a date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  initialFocus
+                  disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return date < today;
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Time</Label>
+            <TimeSpinner
+              value={time}
+              onChange={setTime}
+              format={timeFormat === '24hr' ? '24hr' : '12hr'}
+            />
+          </div>
+
+          <div className="space-y-3 pt-2 border-t">
+            <Label className="text-sm font-medium">Calendar Reminders</Label>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Reminder Times</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { value: 0, label: 'At event time' },
+                  { value: 5, label: '5 mins before' },
+                  { value: 10, label: '10 mins before' },
+                  { value: 15, label: '15 mins before' },
+                  { value: 30, label: '30 mins before' },
+                  { value: 60, label: '1 hour before' },
+                ].map(({ value, label }) => {
+                  const isChecked = calendarReminders.some(r => r.minutes === value);
+                  return (
+                    <div key={value} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`quick-reminder-time-${value}`}
+                        checked={isChecked}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            const methods = Array.from(new Set(calendarReminders.map(r => r.method))) as ('popup' | 'email')[];
+                            const newReminders = [...calendarReminders];
+                            methods.forEach(method => {
+                              if (!newReminders.some(r => r.minutes === value && r.method === method)) {
+                                newReminders.push({ method, minutes: value });
+                              }
+                            });
+                            setCalendarReminders(newReminders);
+                          } else {
+                            setCalendarReminders(calendarReminders.filter(r => r.minutes !== value));
+                          }
+                        }}
+                        data-testid={`checkbox-quick-reminder-time-${value}`}
+                      />
+                      <Label 
+                        htmlFor={`quick-reminder-time-${value}`}
+                        className="text-xs font-normal cursor-pointer"
+                      >
+                        {label}
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>Time</Label>
-          <TimeSpinner
-            value={time}
-            onChange={setTime}
-            format={timeFormat === '24hr' ? '24hr' : '12hr'}
-          />
+        {/* Right column: Customer timezone, Reminder Type, Day view */}
+        <div className="space-y-4">
+          {customerTimezone && (
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="use-customer-timezone"
+                  checked={useCustomerTimezone}
+                  onCheckedChange={(checked) => setUseCustomerTimezone(!!checked)}
+                  data-testid="checkbox-customer-timezone"
+                />
+                <Label
+                  htmlFor="use-customer-timezone"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Use customer timezone ({formatTimezoneDisplay(customerTimezone)})
+                </Label>
+              </div>
+              {timePreview && useCustomerTimezone && (
+                <p className="text-sm text-muted-foreground" data-testid="timezone-preview">
+                  {timePreview}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Reminder Type</Label>
+            <div className="flex gap-4">
+              {(['popup', 'email'] as const).map((method) => {
+                const isChecked = calendarReminders.some(r => r.method === method);
+                return (
+                  <div key={method} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`quick-reminder-method-${method}`}
+                      checked={isChecked}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          const times = Array.from(new Set(calendarReminders.map(r => r.minutes)));
+                          const newReminders = [...calendarReminders];
+                          times.forEach(minutes => {
+                            if (!newReminders.some(r => r.minutes === minutes && r.method === method)) {
+                              newReminders.push({ method, minutes });
+                            }
+                          });
+                          setCalendarReminders(newReminders);
+                        } else {
+                          setCalendarReminders(calendarReminders.filter(r => r.method !== method));
+                        }
+                      }}
+                      data-testid={`checkbox-quick-reminder-${method}`}
+                    />
+                    <Label 
+                      htmlFor={`quick-reminder-method-${method}`}
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      {method === 'popup' ? 'Popup' : 'Email'}
+                    </Label>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Day view panel */}
+          <div className="flex-1 p-4 rounded-md bg-primary/10 border border-primary/20 min-h-[180px]" data-testid="day-view-panel">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                <Clock className="h-4 w-4" />
+                <span>
+                  {date ? `Reminders for ${format(date, "MMMM do")}` : 'Select a date'}
+                </span>
+              </div>
+              {date && (
+                <div className="space-y-1.5 mt-3">
+                  {isLoadingReminders ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-sm text-muted-foreground">Loading reminders...</div>
+                    </div>
+                  ) : remindersError ? (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-destructive mb-2">Failed to load reminders</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refetchReminders()}
+                        data-testid="button-retry-reminders"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  ) : dateReminders?.reminders && dateReminders.reminders.length > 0 ? (
+                    dateReminders.reminders.map((reminder: any) => (
+                      <div 
+                        key={reminder.id} 
+                        className="flex items-start gap-2 text-sm p-2 rounded bg-background/50"
+                        data-testid={`reminder-item-${reminder.id}`}
+                      >
+                        <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-foreground">
+                            {formatReminderTime(reminder.scheduledTime)}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {reminder.title}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No reminders scheduled
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-
-      {customerTimezone && (
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="use-customer-timezone"
-              checked={useCustomerTimezone}
-              onCheckedChange={(checked) => setUseCustomerTimezone(!!checked)}
-              data-testid="checkbox-customer-timezone"
-            />
-            <Label
-              htmlFor="use-customer-timezone"
-              className="text-sm font-normal cursor-pointer"
-            >
-              Use customer timezone ({formatTimezoneDisplay(customerTimezone)})
-            </Label>
-          </div>
-          {timePreview && useCustomerTimezone && (
-            <p className="text-sm text-muted-foreground ml-6" data-testid="timezone-preview">
-              {timePreview}
-            </p>
-          )}
-        </div>
-      )}
 
       {!customerTimezone && (
         <p className="text-sm text-muted-foreground">
           Customer timezone could not be detected. Reminder will use your timezone ({formatTimezoneDisplay(agentTimezone)})
         </p>
       )}
-
-      <div className="space-y-3 pt-2 border-t">
-        <Label className="text-sm font-medium">Calendar Reminders</Label>
-        <p className="text-sm text-muted-foreground">
-          Choose when you want to be reminded in Google Calendar
-        </p>
-        
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Reminder Times</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { value: 0, label: 'At event time' },
-              { value: 5, label: '5 mins before' },
-              { value: 10, label: '10 mins before' },
-              { value: 15, label: '15 mins before' },
-              { value: 30, label: '30 mins before' },
-              { value: 60, label: '1 hour before' },
-            ].map(({ value, label }) => {
-              const isChecked = calendarReminders.some(r => r.minutes === value);
-              return (
-                <div key={value} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`quick-reminder-time-${value}`}
-                    checked={isChecked}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        // Add this time for all selected methods
-                        const methods = Array.from(new Set(calendarReminders.map(r => r.method))) as ('popup' | 'email')[];
-                        const newReminders = [...calendarReminders];
-                        methods.forEach(method => {
-                          if (!newReminders.some(r => r.minutes === value && r.method === method)) {
-                            newReminders.push({ method, minutes: value });
-                          }
-                        });
-                        setCalendarReminders(newReminders);
-                      } else {
-                        // Remove this time for all methods
-                        setCalendarReminders(calendarReminders.filter(r => r.minutes !== value));
-                      }
-                    }}
-                    data-testid={`checkbox-quick-reminder-time-${value}`}
-                  />
-                  <Label 
-                    htmlFor={`quick-reminder-time-${value}`}
-                    className="text-xs font-normal cursor-pointer"
-                  >
-                    {label}
-                  </Label>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Reminder Type</Label>
-          <div className="flex gap-3">
-            {(['popup', 'email'] as const).map((method) => {
-              const isChecked = calendarReminders.some(r => r.method === method);
-              return (
-                <div key={method} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`quick-reminder-method-${method}`}
-                    checked={isChecked}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        // Add this method for all selected times
-                        const times = Array.from(new Set(calendarReminders.map(r => r.minutes)));
-                        const newReminders = [...calendarReminders];
-                        times.forEach(minutes => {
-                          if (!newReminders.some(r => r.minutes === minutes && r.method === method)) {
-                            newReminders.push({ method, minutes });
-                          }
-                        });
-                        setCalendarReminders(newReminders);
-                      } else {
-                        // Remove this method for all times
-                        setCalendarReminders(calendarReminders.filter(r => r.method !== method));
-                      }
-                    }}
-                    data-testid={`checkbox-quick-reminder-${method}`}
-                  />
-                  <Label 
-                    htmlFor={`quick-reminder-method-${method}`}
-                    className="text-xs font-normal cursor-pointer"
-                  >
-                    {method === 'popup' ? 'Popup' : 'Email'}
-                  </Label>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
 
       <Button
         onClick={handleSave}
