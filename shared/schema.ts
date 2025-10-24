@@ -750,6 +750,42 @@ export const insertStatusSchema = createInsertSchema(statuses, {
   updatedAt: true,
 });
 
+// Support Tickets table
+export const tickets = pgTable("tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  subject: varchar("subject", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default('open'), // 'open', 'replied', 'closed'
+  priority: varchar("priority", { length: 20 }).default('normal'), // 'low', 'normal', 'high'
+  lastReplyAt: timestamp("last_reply_at"),
+  isUnreadByAdmin: boolean("is_unread_by_admin").notNull().default(true),
+  isUnreadByUser: boolean("is_unread_by_user").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Ticket Replies table
+export const ticketReplies = pgTable("ticket_replies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: varchar("ticket_id").notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTicketSchema = createInsertSchema(tickets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastReplyAt: true,
+});
+
+export const insertTicketReplySchema = createInsertSchema(ticketReplies).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -799,3 +835,7 @@ export type SavedExclusion = typeof savedExclusions.$inferSelect;
 export type InsertSavedExclusion = z.infer<typeof insertSavedExclusionSchema>;
 export type Status = typeof statuses.$inferSelect;
 export type InsertStatus = z.infer<typeof insertStatusSchema>;
+export type Ticket = typeof tickets.$inferSelect;
+export type InsertTicket = z.infer<typeof insertTicketSchema>;
+export type TicketReply = typeof ticketReplies.$inferSelect;
+export type InsertTicketReply = z.infer<typeof insertTicketReplySchema>;
