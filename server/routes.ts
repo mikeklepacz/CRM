@@ -3851,10 +3851,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingRowIndex !== -1) {
         // Row already exists - update the specific column instead of creating duplicate
         const editColumnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
-        if (editColumnIndex !== -1 && value) {
+        if (editColumnIndex !== -1 && value !== undefined) {
           const columnLetter = String.fromCharCode(65 + editColumnIndex);
           const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
-          await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
+          await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value || '']]);
         }
 
         // Also update agent if not set
@@ -3920,31 +3920,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rows = await googleSheets.readSheetData(spreadsheetId, dataRange);
       const headers = rows[0] || [];
 
-      // Create a new row with empty values
-      const newRow = headers.map(() => '');
+      // Find the link column index
+      const linkColumnIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
+      if (linkColumnIndex === -1) {
+        return res.status(400).json({ message: "Link column not found in sheet" });
+      }
 
-      // Set values based on header names (case-insensitive)
-      const setCell = (columnName: string, value: string) => {
-        const index = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
-        if (index !== -1) {
-          newRow[index] = value;
+      // Check if row already exists with this link (using normalized comparison)
+      const normalizedInputLink = normalizeLink(linkValue.trim());
+      let existingRowIndex = -1;
+      
+      for (let i = 1; i < rows.length; i++) {
+        const rowLink = rows[i][linkColumnIndex];
+        const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+        
+        if (rowLink && normalizedRowLink === normalizedInputLink) {
+          existingRowIndex = i + 1; // +1 because sheets are 1-indexed
+          break;
+        }
+      }
+
+      // Helper to update a cell (allows clearing values with empty string)
+      const updateCell = async (columnName: string, value: string) => {
+        const colIndex = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+        if (colIndex !== -1 && value !== undefined) {
+          const columnLetter = String.fromCharCode(65 + colIndex);
+          const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
+          await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value || '']]);
         }
       };
 
-      setCell(joinColumn, linkValue);
-      setCell('agent', agent);
-      setCell('status', status);
-      setCell('follow-up date', followUpDate);
-      setCell('followup', followUpDate);
-      setCell('next action', nextAction);
-      setCell('notes', notes);
-      setCell('point of contact', pointOfContact);
+      if (existingRowIndex !== -1) {
+        // Row already exists - update fields instead of creating duplicate
+        await updateCell('agent', agent);
+        await updateCell('status', status);
+        await updateCell('follow-up date', followUpDate);
+        await updateCell('followup', followUpDate);
+        await updateCell('next action', nextAction);
+        await updateCell('notes', notes);
+        await updateCell('point of contact', pointOfContact);
 
-      // Append the row
-      const appendRange = `${sheetName}!A:ZZ`;
-      await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
+        res.json({ message: "Contact action updated successfully", existingRow: true });
+      } else {
+        // Row doesn't exist - create new row
+        const newRow = headers.map(() => '');
 
-      res.json({ message: "Contact action saved and store claimed" });
+        // Set values based on header names (case-insensitive)
+        const setCell = (columnName: string, value: string) => {
+          const index = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+          if (index !== -1) {
+            newRow[index] = value;
+          }
+        };
+
+        setCell(joinColumn, linkValue);
+        setCell('agent', agent);
+        setCell('status', status);
+        setCell('follow-up date', followUpDate);
+        setCell('followup', followUpDate);
+        setCell('next action', nextAction);
+        setCell('notes', notes);
+        setCell('point of contact', pointOfContact);
+
+        // Append the row
+        const appendRange = `${sheetName}!A:ZZ`;
+        await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
+
+        res.json({ message: "Contact action saved and store claimed", newRow: true });
+      }
     } catch (error: any) {
       console.error("Error saving contact action:", error);
       res.status(500).json({ message: error.message || "Failed to save contact action" });
