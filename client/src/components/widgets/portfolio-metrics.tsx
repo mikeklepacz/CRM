@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, DollarSign, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface PortfolioMetrics {
   activeClients: number;
@@ -11,8 +12,19 @@ interface PortfolioMetrics {
 }
 
 export function PortfolioMetricsWidget() {
+  const { selectedAgentIds } = useAgentFilter();
+
   const { data, isLoading, error} = useQuery<PortfolioMetrics>({
-    queryKey: ['/api/analytics/portfolio-metrics'],
+    queryKey: ['/api/analytics/portfolio-metrics', selectedAgentIds],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedAgentIds.length > 0) {
+        selectedAgentIds.forEach(id => params.append('agentIds', id));
+      }
+      const response = await fetch(`/api/analytics/portfolio-metrics?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch portfolio metrics');
+      return response.json();
+    }
   });
 
   if (isLoading) {

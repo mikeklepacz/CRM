@@ -5,6 +5,7 @@ import { TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface TrendDataPoint {
   period: string;
@@ -14,9 +15,19 @@ interface TrendDataPoint {
 
 export function RevenueTrendsWidget() {
   const [timeRange, setTimeRange] = useState("last6months");
+  const { selectedAgentIds } = useAgentFilter();
 
   const { data, isLoading, error } = useQuery<{ trends: TrendDataPoint[] }>({
-    queryKey: [`/api/analytics/revenue-trends?range=${timeRange}`],
+    queryKey: ['/api/analytics/revenue-trends', timeRange, selectedAgentIds],
+    queryFn: async () => {
+      const params = new URLSearchParams({ range: timeRange });
+      if (selectedAgentIds.length > 0) {
+        selectedAgentIds.forEach(id => params.append('agentIds', id));
+      }
+      const response = await fetch(`/api/analytics/revenue-trends?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch revenue trends');
+      return response.json();
+    }
   });
 
   if (isLoading) {

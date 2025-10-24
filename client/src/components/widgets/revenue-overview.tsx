@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, Calendar } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface DashboardSummary {
   totalEarnings: string;
@@ -20,8 +21,19 @@ interface DashboardSummary {
 }
 
 export function RevenueOverviewWidget() {
+  const { selectedAgentIds } = useAgentFilter();
+
   const { data, isLoading, error } = useQuery<DashboardSummary>({
-    queryKey: ['/api/analytics/dashboard-summary'],
+    queryKey: ['/api/analytics/dashboard-summary', selectedAgentIds],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedAgentIds.length > 0) {
+        selectedAgentIds.forEach(id => params.append('agentIds', id));
+      }
+      const response = await fetch(`/api/analytics/dashboard-summary?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch dashboard summary');
+      return response.json();
+    }
   });
 
   if (isLoading) {

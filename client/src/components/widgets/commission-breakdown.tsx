@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface CommissionBreakdown {
   tier25Percent: {
@@ -18,8 +19,19 @@ interface CommissionBreakdown {
 }
 
 export function CommissionBreakdownWidget() {
+  const { selectedAgentIds } = useAgentFilter();
+
   const { data, isLoading, error } = useQuery<{ breakdown: CommissionBreakdown }>({
-    queryKey: ['/api/analytics/commission-breakdown'],
+    queryKey: ['/api/analytics/commission-breakdown', selectedAgentIds],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedAgentIds.length > 0) {
+        selectedAgentIds.forEach(id => params.append('agentIds', id));
+      }
+      const response = await fetch(`/api/analytics/commission-breakdown?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch commission breakdown');
+      return response.json();
+    }
   });
 
   if (isLoading) {

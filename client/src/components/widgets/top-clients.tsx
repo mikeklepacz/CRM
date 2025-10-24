@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Trophy, ShoppingCart } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface TopClient {
   id: string;
@@ -15,8 +16,19 @@ interface TopClient {
 }
 
 export function TopClientsWidget() {
+  const { selectedAgentIds } = useAgentFilter();
+
   const { data, isLoading, error } = useQuery<{ topClients: TopClient[] }>({
-    queryKey: ['/api/analytics/top-clients'],
+    queryKey: ['/api/analytics/top-clients', selectedAgentIds],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: '10' });
+      if (selectedAgentIds.length > 0) {
+        selectedAgentIds.forEach(id => params.append('agentIds', id));
+      }
+      const response = await fetch(`/api/analytics/top-clients?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch top clients');
+      return response.json();
+    }
   });
 
   if (isLoading) {
