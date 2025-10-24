@@ -40,6 +40,14 @@ The application is built around a client dashboard that unifies data from two Go
       - Knowledge base file upload and management (admin only)
       - Chat history persistence across sessions
       - OpenAI API integration using Assistants API with file search capability
+      - **Default Script System**: 
+        - Only one Script template can be marked as default per user (enforced by backend)
+        - Checkbox in Template Builder highlighted yellow when no default exists
+        - Clicking phone numbers in Client Dashboard auto-opens AI Assistant and loads default script into message input
+        - Race condition resolved: Default script loading waits for templates and store context to fully load
+      - **Script Reference Styling**:
+        - Script templates loaded into chat are prepended with `[SCRIPT: {title}]` marker
+        - Messages with script references display with blue background, border, and "Script Reference" badge for visual distinction
       - **Template Variables**: Smart placeholder system with intelligent fallbacks:
         - `{{email}}` and `{{pocEmail}}` both use smart fallback: check POC email first, then fall back to general store email
         - Auto-detection properly handles store names with hyphens (e.g., "Chronic Therapy - Cortez" → {{storeName}})
