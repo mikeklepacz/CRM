@@ -3670,10 +3670,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Link column not found in tracker sheet" });
       }
 
-      // Check if row exists with this link
+      // Check if row exists with this link (using normalized comparison)
       let existingRowIndex = -1;
+      const normalizedInputLink = normalizeLink(link);
       for (let i = 1; i < rows.length; i++) {
-        if (rows[i][linkIndex] === link) {
+        const rowLink = rows[i][linkIndex];
+        if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
           existingRowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
         }
