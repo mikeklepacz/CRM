@@ -1329,7 +1329,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                           </div>
                         )}
                         <div className="flex gap-1">
-                          {template.type === "Email" && (storeContext?.email || storeContext?.poc_email) && (
+                          {template.type === "Script" ? (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => {
+                                const filledContent = replaceTemplateVariables(template.content, storeContext, user);
+                                setLoadedScripts(prev => [...prev, { title: template.title, content: filledContent }]);
+                                toast({ 
+                                  title: "Script Injected", 
+                                  description: `"${template.title}" added to display` 
+                                });
+                              }}
+                              data-testid={`button-inject-template-${template.id}`}
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              Inject
+                            </Button>
+                          ) : template.type === "Email" && (storeContext?.email || storeContext?.poc_email) ? (
                             <Button
                               variant="default"
                               size="sm"
@@ -1340,7 +1358,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                               <Mail className="h-3 w-3 mr-1" />
                               Email
                             </Button>
-                          )}
+                          ) : null}
                           <Button
                             variant="outline"
                             size="sm"
