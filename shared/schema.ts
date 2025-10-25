@@ -292,7 +292,9 @@ export const reminders = pgTable("reminders", {
   }>(), // Store-related metadata for display and Google Sheets sync
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_reminders_user_scheduled").on(table.userId, table.scheduledDate),
+]);
 
 // Notifications for alerts and reminders
 export const notifications = pgTable("notifications", {
@@ -318,7 +320,9 @@ export const notifications = pgTable("notifications", {
     [key: string]: any;
   }>(), // Flexible metadata for commission warnings and other context
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_notifications_user_created").on(table.userId, table.createdAt),
+]);
 
 // Dashboard widget layouts - save drag-and-drop positions
 export const widgetLayouts = pgTable("widget_layouts", {
@@ -370,7 +374,9 @@ export const projects = pgTable("projects", {
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_projects_user_created").on(table.userId, table.createdAt),
+]);
 
 // Conversations table - ChatGPT-style conversation threads
 export const conversations = pgTable("conversations", {
@@ -389,7 +395,9 @@ export const conversations = pgTable("conversations", {
   threadId: varchar("thread_id"), // OpenAI thread ID for reusing threads (performance optimization)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_conversations_user_updated").on(table.userId, table.updatedAt),
+]);
 
 // Chat history table - stores individual messages within conversations
 export const chatMessages = pgTable("chat_messages", {
@@ -406,7 +414,9 @@ export const chatMessages = pgTable("chat_messages", {
     [key: string]: any;
   }>(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_chat_messages_conversation_created").on(table.conversationId, table.createdAt),
+]);
 
 // Templates table - per-user library of email/script templates
 export const templates = pgTable("templates", {
@@ -419,7 +429,9 @@ export const templates = pgTable("templates", {
   isDefault: boolean("is_default").default(false), // Only one Script template can be default (auto-loads when phone clicked)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_templates_user_created").on(table.userId, table.createdAt),
+]);
 
 // User Tags table - personal tag collection per user for template organization
 export const userTags = pgTable("user_tags", {
