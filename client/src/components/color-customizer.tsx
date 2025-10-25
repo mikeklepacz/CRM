@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,24 +56,27 @@ interface ColorCustomizerProps {
 
 export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPreset }: ColorCustomizerProps) {
   const { actualTheme } = useTheme();
-  const { currentColors, saveColors, resetColors, isSaving } = useCustomTheme();
+  const { currentColors, saveColors, resetColors, isSaving, isLoading } = useCustomTheme();
   const [customColors, setCustomColors] = useState(currentColors);
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
   const [presetName, setPresetName] = useState("");
+  const [hasLoadedInitialColors, setHasLoadedInitialColors] = useState(false);
   const { toast } = useToast();
-  const prevCurrentColorsRef = useRef(currentColors);
 
-  // Sync customColors when theme changes or when currentColors loads/updates from the database
-  // Skip sync during active editing to allow live preview
+  // Sync customColors when preferences finish loading for the first time
   useEffect(() => {
-    const hasChanged = JSON.stringify(prevCurrentColorsRef.current) !== JSON.stringify(currentColors);
-    const isEditing = activeColorField !== null;
-    
-    if (hasChanged && !isEditing) {
+    if (!hasLoadedInitialColors && !isLoading) {
       setCustomColors(currentColors);
-      prevCurrentColorsRef.current = currentColors;
+      setHasLoadedInitialColors(true);
     }
-  }, [actualTheme, currentColors, activeColorField]);
+  }, [isLoading, currentColors, hasLoadedInitialColors]);
+
+  // Sync customColors when theme changes (after initial load)
+  useEffect(() => {
+    if (hasLoadedInitialColors) {
+      setCustomColors(currentColors);
+    }
+  }, [actualTheme, hasLoadedInitialColors]);
 
   const handleSaveColors = () => {
     saveColors(customColors);

@@ -338,8 +338,20 @@ export function useCustomTheme() {
 
   // Callback to save colors
   const saveColors = useCallback((colors: ThemeColors) => {
+    // Validate colors before saving
+    if (!colors || Object.keys(colors).length === 0) {
+      console.error('🎨 [COLOR SAVE] Attempted to save empty/null colors:', colors);
+      toast({
+        title: "Error",
+        description: "Cannot save empty color settings",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('🎨 [COLOR SAVE] Validating colors before save:', colors);
     saveColorsMutation.mutate(colors);
-  }, [saveColorsMutation]);
+  }, [saveColorsMutation, toast]);
 
   // Callback to reset colors to defaults
   const resetColors = useCallback(() => {
