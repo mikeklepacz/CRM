@@ -4704,7 +4704,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               reminderTime: reminderData.time,
                               storeMetadata: {
                                 sheetId: trackerSheetId,
-                                uniqueIdentifier: row.link,
+                                uniqueIdentifier: getLinkValue(row),
                                 storeName: formData.name,
                                 address: formData.address,
                                 city: formData.city,
