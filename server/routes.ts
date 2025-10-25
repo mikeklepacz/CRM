@@ -103,9 +103,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("Session save error:", saveErr);
             return res.status(500).json({ message: "Session save failed" });
           }
-          console.log("Session saved successfully for user:", user.id);
-          console.log("Session ID:", req.sessionID);
-          console.log("Session data:", req.session);
           res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
         });
       });
@@ -146,13 +143,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Custom authentication middleware that supports both Replit Auth and username/password
   const isAuthenticatedCustom = async (req: any, res: any, next: any) => {
-    console.log("Auth check - isAuthenticated:", req.isAuthenticated());
-    console.log("Auth check - session:", req.session);
-    console.log("Auth check - user:", req.user);
-
     // Check if user is authenticated at all
     if (!req.isAuthenticated()) {
-      console.log("Auth failed: not authenticated");
       return res.status(401).json({ message: "Unauthorized" });
     }
 
@@ -160,7 +152,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Check if using password auth - it's valid as long as session exists
     if (user.isPasswordAuth) {
-      console.log("Auth success: password auth user");
       return next();
     }
 
@@ -540,7 +531,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleClientSecret: clientSecret
       });
 
-      console.log('✅ Google Sheets OAuth settings updated successfully');
       res.json({ message: "Google Sheets OAuth settings updated successfully" });
     } catch (error: any) {
       console.error("❌ Error updating Google Sheets OAuth settings:", error);
@@ -571,7 +561,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       oauthUrl.searchParams.set('prompt', 'consent');
       oauthUrl.searchParams.set('state', JSON.stringify({ userId, email: user?.email }));
 
-      console.log('✅ Generated Google Sheets OAuth URL for admin');
       return res.json({ url: oauthUrl.toString() });
     } catch (error: any) {
       console.error("❌ Error generating Google Sheets OAuth URL:", error);
@@ -666,8 +655,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
       const scope = 'https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar';
 
-      console.log('[Gmail OAuth] Generating OAuth URL for user:', userId);
-
       const oauthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       oauthUrl.searchParams.set('client_id', systemIntegration.googleClientId);
       oauthUrl.searchParams.set('redirect_uri', redirectUri);
@@ -699,7 +686,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
-      console.log('[Gmail OAuth Callback] Processing callback for user:', userId);
 
       // Exchange code for tokens
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
