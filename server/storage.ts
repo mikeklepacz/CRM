@@ -378,20 +378,13 @@ export class DatabaseStorage implements IStorage {
     // Delete widget layouts
     await db.delete(widgetLayouts).where(eq(widgetLayouts.userId, id));
     
-    // Delete dashboard cards
-    await db.delete(dashboardCards).where(eq(dashboardCards.userId, id));
+    // Note: dashboardCards, savedExclusions, searchHistory are global tables with no user columns - don't delete
     
-    // Delete search history
-    await db.delete(searchHistory).where(eq(searchHistory.userId, id));
+    // Delete categories created by user (uses createdBy, not userId)
+    await db.delete(categories).where(eq(categories.createdBy, id));
     
-    // Delete saved exclusions
-    await db.delete(savedExclusions).where(eq(savedExclusions.userId, id));
-    
-    // Delete categories created by user
-    await db.delete(categories).where(eq(categories.userId, id));
-    
-    // Delete statuses created by user
-    await db.delete(statuses).where(eq(statuses.userId, id));
+    // Delete statuses created by user (uses createdBy, not userId)
+    await db.delete(statuses).where(eq(statuses.createdBy, id));
     
     // Delete support tickets and replies
     const userTickets = await db.select().from(tickets).where(eq(tickets.userId, id));
