@@ -971,22 +971,6 @@ export default function ClientDashboard() {
   const storeHeaders = mergedData?.storeHeaders || [];
   const trackerHeaders = mergedData?.trackerHeaders || [];
 
-  console.log('=== FRONTEND DEBUG ===');
-  console.log('All headers received:', headers);
-  console.log('Store headers:', storeHeaders);
-  console.log('Tracker headers:', trackerHeaders);
-  console.log('Total rows:', data.length);
-  const rowWithTracker = data.find((r: any) => r._hasTrackerData);
-  if (rowWithTracker) {
-    console.log('Sample row with tracker data:', rowWithTracker);
-    console.log('Tracker field values in frontend:');
-    trackerHeaders.forEach((header: string) => {
-      console.log(`  ${header}: "${rowWithTracker[header]}"`);
-    });
-  }
-  console.log('Column order:', columnOrder);
-  console.log('Visible columns:', visibleColumns);
-
   // Initialize visible columns, column order, and widths (or load from saved preferences)
   // Also update when headers change (e.g., when new tracker columns are added)
   useEffect(() => {
@@ -1105,7 +1089,6 @@ export default function ClientDashboard() {
         // Preferences already loaded - check for new headers
         const newHeaders = headers.filter((h: string) => !currentOrder.includes(h));
         if (newHeaders.length > 0) {
-          console.log('New headers detected:', newHeaders);
           // Add new headers to column order (filtering out Agent for non-admins)
           const headersToAdd = newHeaders.filter(col => 
             currentUser?.role === 'admin' || !isAgentColumn(col)
@@ -1141,10 +1124,6 @@ export default function ClientDashboard() {
     const phoneNumber = urlParams.get('phone');
     
     if (storeIdentifier) {
-      console.log('[Auto-open] Detected store parameter:', storeIdentifier);
-      if (phoneNumber) {
-        console.log('[Auto-open] Phone parameter detected:', phoneNumber);
-      }
       
       // Find the store in the data by matching the link (uniqueIdentifier)
       const matchingStore = data.find((row: any) => {
@@ -1159,8 +1138,6 @@ export default function ClientDashboard() {
       });
       
       if (matchingStore) {
-        console.log('[Auto-open] Found matching store, opening details dialog');
-        
         // Open the store details dialog
         setStoreDetailsDialog({
           open: true,
@@ -1172,9 +1149,7 @@ export default function ClientDashboard() {
         
         // If phone number provided, trigger dial after a delay so user sees the dialog first
         if (phoneNumber) {
-          console.log('[Auto-open] Scheduling delayed phone dial in 800ms...');
           setTimeout(() => {
-            console.log('[Auto-open] Triggering phone dial:', phoneNumber);
             window.location.href = `tel:${phoneNumber}`;
           }, 800);
         }
@@ -1182,8 +1157,6 @@ export default function ClientDashboard() {
         // Clear the URL parameters so it doesn't auto-open again
         const newUrl = window.location.pathname;
         window.history.replaceState({}, '', newUrl);
-      } else {
-        console.log('[Auto-open] No matching store found for identifier:', storeIdentifier);
       }
     }
   }, [data, preferencesLoaded]);
@@ -3535,8 +3508,6 @@ export default function ClientDashboard() {
             <Button 
               onClick={() => {
                 try {
-                  console.log('📤 Exporting vCard for filtered data:', filteredData.length);
-                  
                   generateAndDownloadVCard(
                     filteredData,
                     vCardExportFields,
@@ -3754,14 +3725,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
       // Check if this store has a DBA - if yes, auto-enable Multiple Locations mode
       const existingDba = getValue(['DBA', 'dba']);
-      console.log('[StoreDetails] Checking for existing DBA:', existingDba);
 
       // Use preserved franchise context for consistent behavior during dialog lifecycle
       const activeFranchiseContext = preservedFranchiseContext || franchiseContext;
 
       // Priority 1: Franchise context (from Franchise Finder)
       if (activeFranchiseContext && activeFranchiseContext.allLocations && activeFranchiseContext.allLocations.length > 0) {
-        console.log('[StoreDetails] Franchise context detected:', activeFranchiseContext.brandName, 'with', activeFranchiseContext.allLocations.length, 'locations');
         setMultiLocationMode(true);
         setDbaName(activeFranchiseContext.brandName);
         // Pre-select all franchise locations (with guards for missing data)
@@ -3776,16 +3745,13 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
         if (validLocations.length > 0) {
           setSelectedStores(validLocations);
-          console.log('[StoreDetails] Pre-selected', validLocations.length, 'valid franchise locations');
         } else {
-          console.warn('[StoreDetails] Franchise context had no valid locations with link+name');
           setSelectedStores([]);
         }
         setCurrentDbaStores([]);
       }
       // Priority 2: Existing DBA
       else if (existingDba && existingDba.trim()) {
-        console.log('[StoreDetails] Store has DBA, enabling Multiple Locations mode');
         setMultiLocationMode(true);
         setDbaName(existingDba.trim());
         // Clear both current and selected stores
@@ -3795,7 +3761,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       } 
       // Priority 3: No DBA or franchise
       else {
-        console.log('[StoreDetails] No DBA or franchise found, disabling Multiple Locations mode');
         setMultiLocationMode(false);
         setDbaName("");
         setCurrentDbaStores([]);
@@ -3811,7 +3776,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
   // Auto-populate currentDbaStores when dbaStores query completes
   useEffect(() => {
     if (dbaStores && Array.isArray(dbaStores) && multiLocationMode && activeRowLink && dbaName) {
-      console.log('[StoreDetails] Auto-populating current DBA stores from query:', dbaStores);
       setCurrentDbaStores(dbaStores.map((s: any) => ({ link: s.link, name: s.name })));
       // Clear selectedStores since we're showing existing DBA stores
       setSelectedStores([]);
@@ -4533,8 +4497,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               const storeLinks = selectedStores.map(s => s.link);
                               const isUpdatingExisting = currentDbaStores.length > 0;
 
-                              console.log('[CLAIM-DBA] Claiming locations:', { storeLinks, dbaName, storeSheetId, trackerSheetId, isUpdatingExisting });
-
                               const response = await apiRequest('POST', '/api/stores/claim-multiple', {
                                 storeLinks,
                                 dbaName: dbaName.trim(),
@@ -4542,8 +4504,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                                 trackerSheetId,
                                 isUpdatingExisting
                               });
-
-                              console.log('[CLAIM-DBA] Response:', response);
 
                               const successMessage = isUpdatingExisting 
                                 ? `Added ${response.updatedStoreCount} new store${response.updatedStoreCount !== 1 ? 's' : ''} to DBA "${dbaName}"`
@@ -4579,7 +4539,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               // Close the dialog
                               onOpenChange(false);
                             } catch (error: any) {
-                              console.error('[CLAIM-DBA] Error:', error);
                               toast({
                                 title: "Error",
                                 description: error.message || "Failed to claim locations",
@@ -4687,16 +4646,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                       <QuickReminder
                         onSave={async (reminderData) => {
                           try {
-                            console.log('[REMINDER] Creating reminder:', {
-                              date: reminderData.date,
-                              time: reminderData.time,
-                              note: reminderData.note,
-                              useCustomerTimezone: reminderData.useCustomerTimezone,
-                              customerTimezone: reminderData.customerTimezone,
-                              agentTimezone: reminderData.agentTimezone,
-                              calendarReminders: reminderData.calendarReminders,
-                            });
-
                             const response = await apiRequest('POST', '/api/reminders', {
                               title: `Follow up: ${formData.name}`,
                               description: reminderData.note,
@@ -4718,8 +4667,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                               agentTimezone: reminderData.agentTimezone,
                               calendarReminders: reminderData.calendarReminders,
                             });
-                            
-                            console.log('[REMINDER] Response:', response);
 
                             // Update the form data to reflect the changes
                             const followUpDate = format(reminderData.date, 'M/d/yyyy');
@@ -4762,7 +4709,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                                 });
                               }
                             } catch (saveError: any) {
-                              console.error('[REMINDER] Failed to save Follow-Up Date:', saveError);
                               toast({
                                 title: "Partial Success",
                                 description: "Reminder created but Follow-Up Date could not be saved: " + (saveError.message || "Unknown error"),
