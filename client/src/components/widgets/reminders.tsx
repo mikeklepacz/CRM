@@ -411,52 +411,56 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingReminder} onOpenChange={(open) => !open && setEditingReminder(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Reminder</DialogTitle>
-            <DialogDescription>
-              Update the reminder details below
-            </DialogDescription>
-          </DialogHeader>
-          {editingReminder && (
-            <QuickReminder
-              defaultNote={editingReminder.description || ''}
-              defaultDate={editingReminder.scheduledDate ? parse(editingReminder.scheduledDate, 'yyyy-MM-dd', new Date()) : new Date()}
-              storeAddress={editingReminder.storeMetadata?.address}
-              storeCity={editingReminder.storeMetadata?.city}
-              storeState={editingReminder.storeMetadata?.state}
-              userTimezone={userTimezone}
-              defaultTimezoneMode={editingReminder.storeMetadata?.customerTimeZone ? "customer" : "agent"}
-              timeFormat={userPreferences?.timeFormat || "12hr"}
-              pointOfContact={editingReminder.storeMetadata?.pointOfContact}
-              pocEmail={editingReminder.storeMetadata?.pocEmail}
-              pocPhone={editingReminder.storeMetadata?.pocPhone}
-              defaultEmail={editingReminder.storeMetadata?.email}
-              defaultPhone={editingReminder.storeMetadata?.phone}
-              isSaving={updateMutation.isPending}
-              onSave={async (reminderData) => {
-                // Extract store name from title ("Follow up: StoreName" -> "StoreName")
-                const storeName = editingReminder.title.replace(/^Follow up:\s*/, '');
-                
-                await updateMutation.mutateAsync({
-                  id: editingReminder.id,
-                  updates: {
-                    title: `Follow up: ${storeName}`,
-                    description: reminderData.note,
-                    scheduledDate: format(reminderData.date, 'yyyy-MM-dd'),
-                    scheduledTime: reminderData.time,
-                    timezone: reminderData.useCustomerTimezone && reminderData.customerTimezone 
-                      ? reminderData.customerTimezone 
-                      : reminderData.agentTimezone,
-                    storeMetadata: {
-                      ...editingReminder.storeMetadata,
-                      customerTimeZone: reminderData.customerTimezone,
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
+          <div className="px-6 pt-6">
+            <DialogHeader>
+              <DialogTitle>Edit Reminder</DialogTitle>
+              <DialogDescription>
+                Update the reminder details below
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="overflow-y-auto px-6 pb-6">
+            {editingReminder && (
+              <QuickReminder
+                defaultNote={editingReminder.description || ''}
+                defaultDate={editingReminder.scheduledDate ? parse(editingReminder.scheduledDate, 'yyyy-MM-dd', new Date()) : new Date()}
+                storeAddress={editingReminder.storeMetadata?.address}
+                storeCity={editingReminder.storeMetadata?.city}
+                storeState={editingReminder.storeMetadata?.state}
+                userTimezone={userTimezone}
+                defaultTimezoneMode={editingReminder.storeMetadata?.customerTimeZone ? "customer" : "agent"}
+                timeFormat={userPreferences?.timeFormat || "12hr"}
+                pointOfContact={editingReminder.storeMetadata?.pointOfContact}
+                pocEmail={editingReminder.storeMetadata?.pocEmail}
+                pocPhone={editingReminder.storeMetadata?.pocPhone}
+                defaultEmail={editingReminder.storeMetadata?.email}
+                defaultPhone={editingReminder.storeMetadata?.phone}
+                isSaving={updateMutation.isPending}
+                onSave={async (reminderData) => {
+                  // Extract store name from title ("Follow up: StoreName" -> "StoreName")
+                  const storeName = editingReminder.title.replace(/^Follow up:\s*/, '');
+                  
+                  await updateMutation.mutateAsync({
+                    id: editingReminder.id,
+                    updates: {
+                      title: `Follow up: ${storeName}`,
+                      description: reminderData.note,
+                      scheduledDate: format(reminderData.date, 'yyyy-MM-dd'),
+                      scheduledTime: reminderData.time,
+                      timezone: reminderData.useCustomerTimezone && reminderData.customerTimezone 
+                        ? reminderData.customerTimezone 
+                        : reminderData.agentTimezone,
+                      storeMetadata: {
+                        ...editingReminder.storeMetadata,
+                        customerTimeZone: reminderData.customerTimezone,
+                      },
                     },
-                  },
-                });
-              }}
-            />
-          )}
+                  });
+                }}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
