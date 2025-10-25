@@ -18,6 +18,7 @@ import { ColorCustomizer } from "./color-customizer";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { TicketDialog } from "./ticket-dialog";
+import { WebhookStatusBadge } from "./WebhookStatusBadge";
 
 interface HeaderProps {
   colorPresets?: Array<{name: string, color: string}>;
@@ -111,6 +112,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
               )}
             </div>
             
+            <WebhookStatusBadge />
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

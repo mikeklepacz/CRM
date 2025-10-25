@@ -1068,6 +1068,142 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get current user's webhook status
+  app.get('/api/calendar/webhook-status', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const integration = await storage.getUserIntegration(userId);
+      
+      // Check if user has calendar connected
+      if (!integration?.googleCalendarAccessToken) {
+        return res.json({
+          state: 'disconnected',
+          expiresAt: null,
+          remainingMs: null,
+          reRegisterRecommended: false
+        });
+      }
+
+      // Check webhook registration status
+      if (!integration.googleCalendarWebhookChannelId || 
+          !integration.googleCalendarWebhookExpiry) {
+        return res.json({
+          state: 'missing',
+          expiresAt: null,
+          remainingMs: null,
+          reRegisterRecommended: true
+        });
+      }
+
+      const now = Date.now();
+      const expiresAt = integration.googleCalendarWebhookExpiry;
+      const remainingMs = expiresAt - now;
+
+      // Check if expired
+      if (remainingMs <= 0) {
+        return res.json({
+          state: 'expired',
+          expiresAt,
+          remainingMs: 0,
+          reRegisterRecommended: true
+        });
+      }
+
+      // Check if expiring soon (within 24 hours)
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      if (remainingMs < oneDayMs) {
+        return res.json({
+          state: 'active',
+          expiresAt,
+          remainingMs,
+          reRegisterRecommended: true
+        });
+      }
+
+      // Webhook is active and healthy
+      res.json({
+        state: 'active',
+        expiresAt,
+        remainingMs,
+        reRegisterRecommended: false
+      });
+
+    } catch (error: any) {
+      console.error("Error checking webhook status:", error);
+      res.status(500).json({ message: error.message || "Failed to check webhook status" });
+    }
+  });
+
+  // Re-register user's webhook
+  app.post('/api/calendar/webhook-register', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const integration = await storage.getUserIntegration(userId);
+      
+      // Check if user has calendar connected
+      if (!integration?.googleCalendarAccessToken) {
+        return res.status(400).json({ 
+          message: "Google Calendar not connected. Please connect your calendar first." 
+        });
+      }
+
+      // Stop existing webhook if present
+      if (integration.googleCalendarWebhookChannelId && 
+          integration.googleCalendarWebhookResourceId) {
+        try {
+          const oauth2Client = new google.auth.OAuth2(
+            integration.googleClientId,
+            integration.googleClientSecret
+          );
+          
+          oauth2Client.setCredentials({
+            access_token: integration.googleCalendarAccessToken,
+            refresh_token: integration.googleCalendarRefreshToken || undefined
+          });
+
+          const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+          
+          await calendar.channels.stop({
+            requestBody: {
+              id: integration.googleCalendarWebhookChannelId,
+              resourceId: integration.googleCalendarWebhookResourceId,
+            },
+          });
+          console.log('[Webhook Re-register] Stopped old webhook:', integration.googleCalendarWebhookChannelId);
+        } catch (stopError: any) {
+          console.log('[Webhook Re-register] Failed to stop old webhook (may already be expired):', stopError.message);
+        }
+      }
+
+      // Set up new webhook
+      const success = await setupCalendarWatch(userId);
+      
+      if (!success) {
+        return res.status(500).json({ 
+          message: "Failed to register webhook. Please try again." 
+        });
+      }
+
+      // Get updated integration to return new status
+      const updatedIntegration = await storage.getUserIntegration(userId);
+      
+      res.json({
+        message: "Webhook registered successfully",
+        state: 'active',
+        expiresAt: updatedIntegration?.googleCalendarWebhookExpiry || null,
+        remainingMs: updatedIntegration?.googleCalendarWebhookExpiry 
+          ? updatedIntegration.googleCalendarWebhookExpiry - Date.now()
+          : null
+      });
+
+    } catch (error: any) {
+      console.error("Error re-registering webhook:", error);
+      res.status(500).json({ message: error.message || "Failed to re-register webhook" });
+    }
+  });
+
   // CSV Upload endpoint
   app.post('/api/csv/upload', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
