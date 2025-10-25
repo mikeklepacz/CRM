@@ -635,32 +635,6 @@ export class DatabaseStorage implements IStorage {
 
     const results = await query.orderBy(clients.createdAt);
     
-    // DEBUG: Log detailed info about filtering
-    if (filters.nameFilter && filters.nameFilter.includes('mil')) {
-      console.log('🔍 [DEBUG] Name filter active:', filters.nameFilter);
-      console.log('🔍 [DEBUG] State filter:', filters.states);
-      console.log('🔍 [DEBUG] Cities filter count:', filters.cities?.length);
-      console.log('🔍 [DEBUG] Query returned', results.length, 'stores');
-      results.forEach(r => {
-        console.log('  ✅', r.data?.Name || r.data?.name, 'in', r.data?.City || r.data?.city);
-      });
-      
-      // Check if "1 Mill" exists in database at all
-      const allStores = await db.select().from(clients);
-      const millStores = allStores.filter(s => {
-        const name = (s.data?.Name || s.data?.name || '').toLowerCase();
-        return name.includes('mill');
-      });
-      console.log('🔍 [DEBUG] All stores with "mill" in name:', millStores.length);
-      millStores.forEach(s => {
-        const name = s.data?.Name || s.data?.name;
-        const city = s.data?.City || s.data?.city;
-        const state = s.data?.State || s.data?.state;
-        const inCityList = filters.cities?.includes(city);
-        console.log(`  📋 ${name} | ${city}, ${state} | In city list: ${inCityList}`);
-      });
-    }
-    
     return results;
   }
 
@@ -795,14 +769,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getGoogleSheetByPurpose(purpose: string): Promise<GoogleSheet | null> {
-    console.log(`[Storage] Looking for sheet with purpose: "${purpose}"`);
-    const allSheets = await db.select().from(googleSheets);
-    console.log(`[Storage] All sheets:`, allSheets.map(s => ({
-      id: s.id,
-      purpose: s.sheetPurpose,
-      status: s.syncStatus
-    })));
-    
     const [sheet] = await db
       .select()
       .from(googleSheets)
@@ -811,7 +777,6 @@ export class DatabaseStorage implements IStorage {
         eq(googleSheets.syncStatus, 'active')
       ))
       .limit(1);
-    console.log(`[Storage] Found sheet:`, sheet ? `${sheet.spreadsheetName} / ${sheet.sheetName}` : 'NONE');
     return sheet || null;
   }
 
