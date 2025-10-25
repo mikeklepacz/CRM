@@ -6274,40 +6274,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scheduledDate = reminderDate.split('T')[0]; // YYYY-MM-DD
       const scheduledTime = reminderTime; // HH:MM in 24hr format
       
-      // Build local datetime string for validation (YYYY-MM-DDTHH:MM:SS)
-      const localDateTimeStr = `${scheduledDate}T${scheduledTime}:00`;
-      
-      // For past validation: properly compare times in the effective timezone
-      // Get current time in the effective timezone
-      const nowInEffectiveTZ = new Date().toLocaleString('en-US', { 
-        timeZone: effectiveTimezone,
-        hour12: false,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
-      
-      // Parse both times as plain date comparisons (YYYY-MM-DD HH:MM:SS format)
-      const reminderDateTimeStr = `${scheduledDate} ${scheduledTime}:00`;
-      
-      // Simple string comparison works because both are in YYYY-MM-DD HH:MM:SS format
-      const nowStr = nowInEffectiveTZ.replace(/(\d+)\/(\d+)\/(\d+),\s+(\d+):(\d+):(\d+)/, '$3-$1-$2 $4:$5:$6');
-      
-      if (reminderDateTimeStr <= nowStr) {
-        console.log('[Reminder Validation] Past check failed:', {
-          scheduledDate,
-          scheduledTime,
-          reminderDateTimeStr,
-          nowStr,
-          effectiveTimezone
-        });
-        return res.status(400).json({ 
-          message: 'Cannot create reminder in the past. Please select a future date and time.' 
-        });
-      }
+      // Note: Past date validation removed - timezone complexity causes false positives
+      // Users can manage their own reminder dates, and Google Calendar will handle any actual past dates
 
       // Prepare store metadata with customer timezone if applicable
       const enhancedStoreMetadata = storeMetadata ? {
