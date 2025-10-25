@@ -411,7 +411,7 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingReminder} onOpenChange={(open) => !open && setEditingReminder(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh]">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Reminder</DialogTitle>
             <DialogDescription>
