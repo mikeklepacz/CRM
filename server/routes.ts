@@ -6174,7 +6174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== REMINDER MANAGEMENT ENDPOINTS =====
   
-  // Get all reminders for the current user
+  // Get all reminders for the current user (with optional agent filtering for admins)
   app.get('/api/reminders', async (req, res) => {
     try {
       if (!req.user) {
@@ -6182,8 +6182,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const reminders = await storage.getRemindersByUser(userId);
-      res.json({ reminders });
+      const { agentIds } = req.query;
+      
+      // Get current user details for agent filtering
+      const currentUser = await storage.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // SECURITY: Determine which agents' data to show
+      let allowedUserIds: string[] = [];
+      const isAgent = currentUser.role === 'agent';
+
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own reminders - ignore any agentIds parameter
+        allowedUserIds = [userId];
+      } else {
+        // Admin: Use agentIds from query params or default to current user
+        const requestedAgentIds = agentIds 
+          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
+          : [userId];
+        
+        allowedUserIds = requestedAgentIds;
+      }
+      
+      // Fetch reminders for allowed users
+      let allReminders: any[] = [];
+      for (const uid of allowedUserIds) {
+        const userReminders = await storage.getRemindersByUser(uid);
+        
+        // Fetch user info to add agentName to each reminder
+        const reminderUser = await storage.getUserById(uid);
+        if (!reminderUser) {
+          console.warn(`[Reminders] User ${uid} not found, skipping reminders`);
+          continue; // Skip if user not found
+        }
+        
+        const agentName = reminderUser.agentName || `${reminderUser.firstName || ''} ${reminderUser.lastName || ''}`.trim() || 'Unknown';
+        
+        // Enrich reminders with agent info
+        const enrichedReminders = userReminders.map(r => ({
+          ...r,
+          agentId: uid,
+          agentName
+        }));
+        
+        allReminders = allReminders.concat(enrichedReminders);
+      }
+      
+      // Sort chronologically using proper datetime comparison
+      allReminders.sort((a, b) => {
+        // Construct ISO datetime strings (YYYY-MM-DDTHH:MM format)
+        const aDateTime = `${a.scheduledDate || '9999-12-31'}T${a.scheduledTime || '23:59'}`;
+        const bDateTime = `${b.scheduledDate || '9999-12-31'}T${b.scheduledTime || '23:59'}`;
+        
+        // Compare as Date objects for proper chronological ordering
+        const aDate = new Date(aDateTime);
+        const bDate = new Date(bDateTime);
+        
+        // Handle invalid dates by treating them as far future
+        const aTime = isNaN(aDate.getTime()) ? Infinity : aDate.getTime();
+        const bTime = isNaN(bDate.getTime()) ? Infinity : bDate.getTime();
+        
+        return aTime - bTime;
+      });
+      
+      res.json({ reminders: allReminders });
     } catch (error: any) {
       console.error('Error fetching reminders:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch reminders' });
@@ -6873,7 +6937,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== NOTIFICATION ENDPOINTS =====
   
-  // Get all notifications for the current user
+  // Get all notifications for the current user (with optional agent filtering for admins)
   app.get('/api/notifications', async (req, res) => {
     try {
       if (!req.user) {
@@ -6881,12 +6945,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { unreadOnly = 'false' } = req.query;
-      const notifications = await storage.getNotificationsByUser(userId);
+      const { unreadOnly = 'false', agentIds } = req.query;
+      
+      // Get current user details for agent filtering
+      const currentUser = await storage.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // SECURITY: Determine which agents' data to show
+      let allowedUserIds: string[] = [];
+      const isAgent = currentUser.role === 'agent';
+
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own notifications - ignore any agentIds parameter
+        allowedUserIds = [userId];
+      } else {
+        // Admin: Use agentIds from query params or default to current user
+        const requestedAgentIds = agentIds 
+          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
+          : [userId];
+        
+        allowedUserIds = requestedAgentIds;
+      }
+      
+      // Fetch notifications for allowed users
+      let allNotifications: any[] = [];
+      for (const uid of allowedUserIds) {
+        const userNotifications = await storage.getNotificationsByUser(uid);
+        allNotifications = allNotifications.concat(userNotifications);
+      }
       
       const filtered = unreadOnly === 'true'
-        ? notifications.filter(n => !n.isRead)
-        : notifications;
+        ? allNotifications.filter(n => !n.isRead)
+        : allNotifications;
+
+      // Sort by date (newest first)
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       res.json({ notifications: filtered });
     } catch (error: any) {

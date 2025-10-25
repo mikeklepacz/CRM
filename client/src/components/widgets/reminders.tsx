@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { QuickReminder } from "@/components/quick-reminder";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format, parse } from "date-fns";
+import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface Reminder {
   id: string;
@@ -28,6 +29,8 @@ interface Reminder {
   reminderTimeZone?: string; // Deprecated
   isCompleted: boolean;
   createdAt: string;
+  agentId?: string; // User ID of reminder owner
+  agentName?: string; // Name of reminder owner
   storeMetadata?: {
     storeName?: string;
     storeLink?: string;
@@ -44,11 +47,21 @@ interface RemindersWidgetProps {
 
 export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
   const { toast } = useToast();
+  const { selectedAgentIds } = useAgentFilter();
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
   const [deletingReminder, setDeletingReminder] = useState<Reminder | null>(null);
 
   const { data, isLoading, error } = useQuery<{ reminders: Reminder[] }>({
-    queryKey: ['/api/reminders'],
+    queryKey: ['/api/reminders', selectedAgentIds],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedAgentIds.length > 0) {
+        selectedAgentIds.forEach(id => params.append('agentIds', id));
+      }
+      const response = await fetch(`/api/reminders?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch reminders');
+      return response.json();
+    }
   });
 
   // Fetch user preferences for timezone
@@ -291,9 +304,19 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                   {/* Content */}
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium leading-snug flex-1">
-                        {reminder.title}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium leading-snug">
+                            {reminder.title}
+                          </p>
+                          {reminder.agentName && (
+                            <Badge variant="secondary" className="text-xs" data-testid={`badge-agent-${reminder.id}`}>
+                              <User className="h-3 w-3 mr-1" />
+                              {reminder.agentName}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
                       {/* Action Buttons */}
                       <div className="flex gap-1 flex-shrink-0">
                         <Button

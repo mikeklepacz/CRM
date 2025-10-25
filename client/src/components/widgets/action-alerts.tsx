@@ -4,6 +4,7 @@ import { AlertTriangle, Bell, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface Notification {
   id: string;
@@ -21,8 +22,19 @@ interface Notification {
 }
 
 export function ActionAlertsWidget() {
+  const { selectedAgentIds } = useAgentFilter();
+
   const { data, isLoading, error } = useQuery<{ notifications: Notification[] }>({
-    queryKey: ['/api/notifications'],
+    queryKey: ['/api/notifications', selectedAgentIds],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedAgentIds.length > 0) {
+        selectedAgentIds.forEach(id => params.append('agentIds', id));
+      }
+      const response = await fetch(`/api/notifications?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch notifications');
+      return response.json();
+    }
   });
 
   if (isLoading) {
