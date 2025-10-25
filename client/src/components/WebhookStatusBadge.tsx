@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWebhookStatus, formatRemainingTime } from "@/hooks/useWebhookStatus";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -18,13 +17,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CheckCircle, AlertTriangle, WifiOff, Link as LinkIcon, Clock } from "lucide-react";
-import { useLocation } from "wouter";
 
 const SESSION_STORAGE_KEY = 'webhook-expiry-dismissed';
 
 export function WebhookStatusBadge() {
   const { status, isLoading, reRegister, isReRegistering } = useWebhookStatus();
-  const [, setLocation] = useLocation();
   const [showExpiredDialog, setShowExpiredDialog] = useState(false);
 
   // Check for state degradation and show popup
@@ -134,16 +131,6 @@ export function WebhookStatusBadge() {
     }
   };
 
-  const handleBadgeClick = () => {
-    if (status.state === 'disconnected') {
-      // User needs to go to settings
-      setLocation('/settings');
-    } else if (status.state === 'expired' || status.state === 'missing') {
-      // Re-register webhook
-      reRegister();
-    }
-  };
-
   const badgeContent = getBadgeContent();
 
   return (
@@ -152,8 +139,7 @@ export function WebhookStatusBadge() {
         <TooltipTrigger asChild>
           <Badge
             variant={badgeContent.variant}
-            className={`cursor-pointer gap-1 ${badgeContent.className}`}
-            onClick={handleBadgeClick}
+            className={`gap-1 ${badgeContent.className}`}
             data-testid="badge-webhook-status"
           >
             {badgeContent.icon}
