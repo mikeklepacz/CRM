@@ -6302,8 +6302,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update a reminder
+  // Update a reminder (PUT)
   app.put('/api/reminders/:id', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const existing = await storage.getReminderById(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: 'Reminder not found' });
+      }
+
+      const reminder = await storage.updateReminder(id, req.body);
+      res.json({ reminder });
+    } catch (error: any) {
+      console.error('Error updating reminder:', error);
+      res.status(500).json({ message: error.message || 'Failed to update reminder' });
+    }
+  });
+
+  // Update a reminder (PATCH)
+  app.patch('/api/reminders/:id', async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
