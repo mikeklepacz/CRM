@@ -1433,11 +1433,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const users = await storage.getAllUsers();
       
-      // Debug: Log the first user to see what fields are actually present
-      if (users.length > 0) {
-        console.log('DEBUG - First user from DB:', JSON.stringify(users[0], null, 2));
-      }
-      
       // Get all orders from database to calculate sales metrics
       const allOrders = await storage.getAllOrders();
       
@@ -2353,9 +2348,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { orders: orderUpdates } = req.body;
 
-      console.log('=== SAVE COMMISSIONS DEBUG ===');
-      console.log('Received order updates:', JSON.stringify(orderUpdates, null, 2));
-
       if (!orderUpdates || !Array.isArray(orderUpdates)) {
         return res.status(400).json({ message: "Orders array is required" });
       }
@@ -2505,9 +2497,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log('=== SAVE COMMISSIONS COMPLETE ===');
-      console.log(`DB Updated: ${dbUpdated}, Sheets Written: ${sheetsWritten}`);
-      
       res.json({ 
         message: `Saved ${dbUpdated} commission settings to database` + (sheetsWritten > 0 ? ` and wrote ${sheetsWritten} to Google Sheets` : ''),
         dbUpdated,
@@ -3442,10 +3431,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
-      console.log('=== MERGED DATA DEBUG ===');
-      console.log('Store rows read from Google Sheets:', storeRows.length);
-      console.log('Tracker rows read from Google Sheets:', trackerRows.length);
-
       if (storeRows.length === 0) {
         return res.json({ headers: [], data: [], editableColumns: [] });
       }
@@ -3498,11 +3483,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const actualTrackerJoinColumn = trackerHeaders.find(h => 
         h.toLowerCase() === joinColumn.toLowerCase()
       ) || joinColumn;
-
-      console.log('Join column lookup:');
-      console.log('  Requested:', joinColumn);
-      console.log('  Store actual:', actualStoreJoinColumn);
-      console.log('  Tracker actual:', actualTrackerJoinColumn);
 
       // ============================================================================
       // CRITICAL: Agent-Based Row-Level Security
@@ -3636,40 +3616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Keep if empty (default open) OR not explicitly "FALSE"
           return !openValue || openValue.toLowerCase().trim() !== 'false';
         });
-        const afterFilterCount = filteredStoreData.length;
-        console.log(`Filtered closed listings: ${beforeFilterCount - afterFilterCount} stores removed (Open = FALSE)`);
       }
-
-      // === COMPREHENSIVE MERGE DEBUGGING ===
-      console.log('\n=== LINK NORMALIZATION DEBUG ===');
-      if (filteredTrackerData.length > 0) {
-        const trackerLink = filteredTrackerData[0][actualTrackerJoinColumn];
-        const normalizedTrackerLink = normalizeLink(trackerLink);
-        console.log('Tracker link (raw):', JSON.stringify(trackerLink));
-        console.log('Tracker link (normalized):', JSON.stringify(normalizedTrackerLink));
-        console.log('Tracker link length:', trackerLink?.length);
-        console.log('Normalized tracker link length:', normalizedTrackerLink?.length);
-        
-        // Show a few sample store links
-        console.log('\nSample store links (first 5):');
-        filteredStoreData.slice(0, 5).forEach((sr, i) => {
-          const storeLink = sr[actualStoreJoinColumn];
-          const normalizedStoreLink = normalizeLink(storeLink);
-          console.log(`  Store ${i}: (raw) "${storeLink}" -> (normalized) "${normalizedStoreLink}"`);
-          console.log(`    Match? ${normalizedStoreLink === normalizedTrackerLink}`);
-        });
-        
-        // Check if ANY store link matches
-        const matchingStore = filteredStoreData.find(sr => normalizeLink(sr[actualStoreJoinColumn]) === normalizedTrackerLink);
-        console.log('\nMatching store found?', !!matchingStore);
-        if (matchingStore) {
-          console.log('Matching store link (raw):', JSON.stringify(matchingStore[actualStoreJoinColumn]));
-          console.log('Matching store name:', matchingStore['Name'] || matchingStore['name']);
-        } else {
-          console.log('NO MATCH FOUND - tracker row will be marked as deleted');
-        }
-      }
-      console.log('=== END LINK NORMALIZATION DEBUG ===\n');
 
       // ============================================================================
       // CRITICAL: Two-Sheet Merge Logic
@@ -3734,29 +3681,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const mergedData = Array.from(mergedDataMap.values());
-
-      console.log('=== MERGED DATA DEBUG ===');
-      console.log('Store headers:', storeHeaders);
-      console.log('Tracker headers:', trackerHeaders);
-      console.log('Store data parsed:', storeData.length, 'rows');
-      console.log('Tracker data parsed:', trackerData.length, 'rows');
-      console.log('Filtered tracker data (for agent):', filteredTrackerData.length, 'rows');
-      console.log('Final merged data:', mergedData.length, 'rows');
-      
-      // Log a sample tracker row before merging
-      if (filteredTrackerData.length > 0) {
-        console.log('Sample tracker row (before merge):', JSON.stringify(filteredTrackerData[0], null, 2));
-      }
-      
-      // Log a sample merged row that has tracker data
-      const sampleRowWithTracker = mergedData.find(row => row._hasTrackerData);
-      if (sampleRowWithTracker) {
-        console.log('Sample merged row with tracker data (all keys):', Object.keys(sampleRowWithTracker));
-        console.log('Tracker field values in merged row:');
-        trackerHeaders.forEach(header => {
-          console.log(`  ${header}: "${sampleRowWithTracker[header]}"`);
-        });
-      }
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)
       const allHeaders = [...storeHeaders];
