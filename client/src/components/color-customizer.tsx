@@ -78,6 +78,45 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
     }
   }, [actualTheme, hasLoadedInitialColors]);
 
+  // Apply colors to CSS variables for live preview
+  useEffect(() => {
+    const root = document.documentElement;
+    
+    // Helper function to convert hex to HSL
+    const applyColorVar = (cssVar: string, hexColor: string) => {
+      if (!hexColor) {
+        root.style.removeProperty(cssVar);
+        return;
+      }
+      const hsl = hexToHsl(hexColor);
+      root.style.setProperty(cssVar, `${hsl.h} ${hsl.s}% ${hsl.l}%`);
+    };
+
+    // Apply live preview colors
+    if (customColors.background) {
+      applyColorVar('--card', customColors.background);
+      applyColorVar('--popover', customColors.background);
+    }
+    if (customColors.text) {
+      applyColorVar('--card-foreground', customColors.text);
+      applyColorVar('--popover-foreground', customColors.text);
+    }
+    if (customColors.primary) {
+      applyColorVar('--primary', customColors.primary);
+    }
+    if (customColors.secondary) {
+      applyColorVar('--secondary', customColors.secondary);
+    }
+    if (customColors.accent) {
+      applyColorVar('--accent', customColors.accent);
+    }
+    if (customColors.border) {
+      applyColorVar('--border', customColors.border);
+      applyColorVar('--card-border', customColors.border);
+      applyColorVar('--popover-border', customColors.border);
+    }
+  }, [customColors]);
+
   const handleSaveColors = () => {
     saveColors(customColors);
   };
