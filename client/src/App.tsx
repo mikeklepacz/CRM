@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ChatPanelProvider } from "@/hooks/useChatPanel";
+import { AgentFilterProvider } from "@/contexts/agent-filter-context";
 import { useAuth } from "@/hooks/useAuth";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { Header } from "@/components/header";
@@ -88,10 +89,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="auto">
-        <TooltipProvider>
-          <Router />
-          <Toaster />
-        </TooltipProvider>
+        <AgentFilterProvider>
+          <TooltipProvider>
+            <Router />
+            <Toaster />
+          </TooltipProvider>
+        </AgentFilterProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
