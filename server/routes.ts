@@ -1593,6 +1593,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Deactivate user in database
       await storage.updateUser(userId, { isActive: false });
 
+      // Unregister Google Calendar webhook if exists
+      try {
+        const integration = await storage.getUserIntegration(userId);
+        if (integration?.googleCalendarWebhookChannelId && 
+            integration?.googleCalendarWebhookResourceId &&
+            integration?.googleCalendarAccessToken) {
+          
+          const oauth2Client = new google.auth.OAuth2(
+            integration.googleClientId,
+            integration.googleClientSecret
+          );
+          
+          oauth2Client.setCredentials({
+            access_token: integration.googleCalendarAccessToken,
+            refresh_token: integration.googleCalendarRefreshToken || undefined
+          });
+
+          const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+          
+          await calendar.channels.stop({
+            requestBody: {
+              id: integration.googleCalendarWebhookChannelId,
+              resourceId: integration.googleCalendarWebhookResourceId,
+            },
+          });
+          
+          // Clear webhook fields in database
+          await storage.updateUserIntegration(userId, {
+            googleCalendarWebhookChannelId: undefined,
+            googleCalendarWebhookResourceId: undefined,
+            googleCalendarWebhookExpiry: undefined,
+          });
+          
+          console.log(`[Deactivate] Unregistered Google Calendar webhook for user ${userId}`);
+        }
+      } catch (webhookError: any) {
+        console.error(`[Deactivate] Failed to unregister webhook for user ${userId}:`, webhookError.message);
+        // Continue with deactivation even if webhook unregistration fails
+      }
+
       // Find both sheets
       const sheets = await storage.getAllActiveGoogleSheets();
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
