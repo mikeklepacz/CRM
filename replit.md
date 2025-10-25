@@ -79,6 +79,14 @@ The application is built around a client dashboard that unifies data from two Go
       - Handles midnight rollover using Date.UTC for timezone-neutral date advancement
       - Eliminates double timezone conversion bugs by avoiding server timezone assumptions
       - Webhook handler parses Google's datetime to extract local date/time components for bidirectional sync
+    - **Webhook Management**: Admin dashboard includes comprehensive webhook management interface for Google Calendar push notifications:
+      - Webhooks enable real-time two-way synchronization between reminders and Google Calendar
+      - Webhook URLs automatically use correct domain: REPLIT_DOMAINS for production, REPLIT_DEV_DOMAIN for development
+      - Admin can view all users' webhook status (active, expired, not registered, no calendar connected)
+      - Individual webhook re-registration for specific users
+      - Bulk re-register all webhooks (essential when deploying from development to production)
+      - Webhooks expire after ~7 days and are automatically renewed by the system
+      - Admin dashboard displays: total users, connected calendars, active webhooks, expired/missing webhooks, environment, and webhook URL
 
 ## Google Sheets Schema
 
