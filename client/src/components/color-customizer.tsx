@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,11 +61,19 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
   const [activeColorField, setActiveColorField] = useState<string | null>(null);
   const [presetName, setPresetName] = useState("");
   const { toast } = useToast();
+  const prevCurrentColorsRef = useRef(currentColors);
 
-  // Sync customColors when theme changes (light/dark switch)
+  // Sync customColors when theme changes or when currentColors loads/updates from the database
+  // Skip sync during active editing to allow live preview
   useEffect(() => {
-    setCustomColors(currentColors);
-  }, [actualTheme, currentColors]);
+    const hasChanged = JSON.stringify(prevCurrentColorsRef.current) !== JSON.stringify(currentColors);
+    const isEditing = activeColorField !== null;
+    
+    if (hasChanged && !isEditing) {
+      setCustomColors(currentColors);
+      prevCurrentColorsRef.current = currentColors;
+    }
+  }, [actualTheme, currentColors, activeColorField]);
 
   const handleSaveColors = () => {
     saveColors(customColors);
@@ -73,6 +81,8 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
 
   const handleResetColors = () => {
     resetColors();
+    const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+    setCustomColors(defaultColors);
   };
 
   // Reset individual field to default

@@ -2671,7 +2671,7 @@ export default function ClientDashboard() {
               <div 
                 ref={tableContainerRef}
                 className="h-[600px] w-full overflow-auto" 
-                style={{ backgroundColor: colorRowByStatus ? '#ffffff' : customColors.background }}
+                style={{ backgroundColor: customColors.background }}
               >
                 <Table className="min-w-full" style={{ tableLayout: 'fixed' }}>
                   <TableHeader className="sticky top-0 z-10" style={{ backgroundColor: customColors.headerBackground || customColors.background }}>
