@@ -340,7 +340,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: string): Promise<void> {
     // Cascade delete all user data
-    // Note: Most tables have ON DELETE CASCADE set, but we'll explicitly delete some for safety
+    // Note: Most tables have ON DELETE CASCADE set, but we'll explicitly delete all for safety
     
     // Delete user integrations
     await db.delete(userIntegrations).where(eq(userIntegrations.userId, id));
@@ -367,7 +367,7 @@ export class DatabaseStorage implements IStorage {
     // Delete OpenAI settings
     await db.delete(openaiSettings).where(eq(openaiSettings.userId, id));
     
-    // Delete knowledge base files
+    // Delete knowledge base files (metadata only - actual OpenAI files deleted in route handler)
     await db.delete(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.userId, id));
     
     // Delete projects
@@ -378,6 +378,9 @@ export class DatabaseStorage implements IStorage {
     
     // Delete widget layouts
     await db.delete(widgetLayouts).where(eq(widgetLayouts.userId, id));
+    
+    // Delete dashboard cards
+    await db.delete(dashboardCards).where(eq(dashboardCards.userId, id));
     
     // Delete search history
     await db.delete(searchHistory).where(eq(searchHistory.userId, id));
@@ -391,7 +394,7 @@ export class DatabaseStorage implements IStorage {
     // Delete statuses created by user
     await db.delete(statuses).where(eq(statuses.userId, id));
     
-    // Delete support tickets
+    // Delete support tickets and replies
     const userTickets = await db.select().from(tickets).where(eq(tickets.userId, id));
     for (const ticket of userTickets) {
       await db.delete(ticketReplies).where(eq(ticketReplies.ticketId, ticket.id));
@@ -446,7 +449,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllUserIntegrations(): Promise<UserIntegration[]> {
-    return await db.select().from(userIntegrations);
+    // Only return integrations for active users
+    const results = await db
+      .select({
+        integration: userIntegrations,
+        user: users
+      })
+      .from(userIntegrations)
+      .innerJoin(users, eq(userIntegrations.userId, users.id))
+      .where(eq(users.isActive, true));
+    
+    return results.map(r => r.integration);
   }
 
   async updateUserIntegration(userId: string, updates: Partial<InsertUserIntegration>): Promise<UserIntegration> {

@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { UserPlus, Mail, User as UserIcon, Briefcase, Lock, Shield, DollarSign, TrendingUp, Loader2, UserX, UserCheck } from "lucide-react";
+import { UserPlus, Mail, User as UserIcon, Briefcase, Lock, Shield, DollarSign, TrendingUp, Loader2, UserX, UserCheck, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -34,6 +34,7 @@ export function UserManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
   const [deactivateDialog, setDeactivateDialog] = useState<{ open: boolean; userId: string; analysis: any } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; userId: string; userEmail: string } | null>(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [newUser, setNewUser] = useState({
     email: "",
@@ -130,6 +131,28 @@ export function UserManagement() {
     },
   });
 
+  // Delete user mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest("DELETE", `/api/admin/users/${userId}`, {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setDeleteDialog(null);
+      toast({
+        title: "Success",
+        description: data.message || "User permanently deleted",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateUser = () => {
     if (!newUser.email || !newUser.agentName || !newUser.password) {
       toast({
@@ -173,6 +196,16 @@ export function UserManagement() {
 
   const handleReactivate = (userId: string) => {
     reactivateUserMutation.mutate(userId);
+  };
+
+  const handleDeleteClick = (userId: string, userEmail: string) => {
+    setDeleteDialog({ open: true, userId, userEmail });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteDialog) {
+      deleteUserMutation.mutate(deleteDialog.userId);
+    }
   };
 
   if (isLoading) {
@@ -530,20 +563,36 @@ export function UserManagement() {
                           </TableCell>
                           <TableCell className="text-right">
                             {user.id !== currentUser?.id ? (
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => handleReactivate(user.id)}
-                                disabled={reactivateUserMutation.isPending}
-                                data-testid={`button-reactivate-${user.id}`}
-                              >
-                                {reactivateUserMutation.isPending ? (
-                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                ) : (
-                                  <UserCheck className="h-3 w-3 mr-1" />
-                                )}
-                                Reactivate
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => handleReactivate(user.id)}
+                                  disabled={reactivateUserMutation.isPending || deleteUserMutation.isPending}
+                                  data-testid={`button-reactivate-${user.id}`}
+                                >
+                                  {reactivateUserMutation.isPending ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <UserCheck className="h-3 w-3 mr-1" />
+                                  )}
+                                  Reactivate
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleDeleteClick(user.id, user.email || '')}
+                                  disabled={reactivateUserMutation.isPending || deleteUserMutation.isPending}
+                                  data-testid={`button-delete-${user.id}`}
+                                >
+                                  {deleteUserMutation.isPending ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-3 w-3 mr-1" />
+                                  )}
+                                  Delete
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-sm text-muted-foreground">You</span>
                             )}
@@ -605,6 +654,54 @@ export function UserManagement() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               Deactivate User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog?.open || false} onOpenChange={(open) => !open && setDeleteDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">⚠️ Permanently Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              <div className="space-y-4">
+                <div className="bg-destructive/10 border border-destructive/50 p-4 rounded-md">
+                  <p className="font-bold text-destructive">This action cannot be undone!</p>
+                </div>
+                
+                <p className="font-medium">
+                  You are about to permanently delete user: <span className="font-bold">{deleteDialog?.userEmail}</span>
+                </p>
+                
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">This will permanently delete:</p>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li>All user data and preferences</li>
+                    <li>All reminders and calendar integrations</li>
+                    <li>All AI conversations and chat history</li>
+                    <li>All templates and knowledge base files</li>
+                    <li>All support tickets and messages</li>
+                  </ul>
+                </div>
+                
+                <p className="text-sm font-medium text-destructive">
+                  Are you absolutely sure you want to permanently delete this user?
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteDialog(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteUserMutation.isPending}
+            >
+              {deleteUserMutation.isPending && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              Yes, Permanently Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
