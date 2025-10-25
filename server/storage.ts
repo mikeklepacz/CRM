@@ -94,6 +94,7 @@ export interface IStorage {
   createPasswordUser(userData: any): Promise<User>;
   updateUserRole(id: string, role: string): Promise<User>;
   updateUser(id: string, updates: Partial<UpsertUser>): Promise<User>;
+  deleteUser(id: string): Promise<void>;
   getAgents(): Promise<User[]>;
 
   // System integrations operations
@@ -335,6 +336,70 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    // Cascade delete all user data
+    // Note: Most tables have ON DELETE CASCADE set, but we'll explicitly delete some for safety
+    
+    // Delete user integrations
+    await db.delete(userIntegrations).where(eq(userIntegrations.userId, id));
+    
+    // Delete reminders
+    await db.delete(reminders).where(eq(reminders.userId, id));
+    
+    // Delete conversations and their messages
+    const userConversations = await db.select().from(conversations).where(eq(conversations.userId, id));
+    for (const conv of userConversations) {
+      await db.delete(chatMessages).where(eq(chatMessages.conversationId, conv.id));
+    }
+    await db.delete(conversations).where(eq(conversations.userId, id));
+    
+    // Delete templates
+    await db.delete(templates).where(eq(templates.userId, id));
+    
+    // Delete user tags
+    await db.delete(userTags).where(eq(userTags.userId, id));
+    
+    // Delete user preferences
+    await db.delete(userPreferences).where(eq(userPreferences.userId, id));
+    
+    // Delete OpenAI settings
+    await db.delete(openaiSettings).where(eq(openaiSettings.userId, id));
+    
+    // Delete knowledge base files
+    await db.delete(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.userId, id));
+    
+    // Delete projects
+    await db.delete(projects).where(eq(projects.userId, id));
+    
+    // Delete notifications
+    await db.delete(notifications).where(eq(notifications.userId, id));
+    
+    // Delete widget layouts
+    await db.delete(widgetLayouts).where(eq(widgetLayouts.userId, id));
+    
+    // Delete search history
+    await db.delete(searchHistory).where(eq(searchHistory.userId, id));
+    
+    // Delete saved exclusions
+    await db.delete(savedExclusions).where(eq(savedExclusions.userId, id));
+    
+    // Delete categories created by user
+    await db.delete(categories).where(eq(categories.userId, id));
+    
+    // Delete statuses created by user
+    await db.delete(statuses).where(eq(statuses.userId, id));
+    
+    // Delete support tickets
+    const userTickets = await db.select().from(tickets).where(eq(tickets.userId, id));
+    for (const ticket of userTickets) {
+      await db.delete(ticketReplies).where(eq(ticketReplies.ticketId, ticket.id));
+    }
+    await db.delete(tickets).where(eq(tickets.userId, id));
+    
+    // Finally, delete the user
+    await db.delete(users).where(eq(users.id, id));
   }
 
   // System integrations operations

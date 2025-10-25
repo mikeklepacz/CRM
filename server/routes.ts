@@ -1736,6 +1736,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Permanently delete user and all their data (admin only)
+  app.delete('/api/admin/users/:userId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+
+      // Get user info
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Prevent deleting yourself
+      const adminUserId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      if (userId === adminUserId) {
+        return res.status(400).json({ message: "You cannot delete your own account" });
+      }
+
+      console.log(`[Delete User] Starting permanent deletion of user ${userId} (${user.email})`);
+
+      // 1. Unregister Google Calendar webhook if exists
+      try {
+        const integration = await storage.getUserIntegration(userId);
+        if (integration?.googleCalendarWebhookChannelId && 
+            integration?.googleCalendarWebhookResourceId &&
+            integration?.googleCalendarAccessToken) {
+          
+          const oauth2Client = new google.auth.OAuth2(
+            integration.googleClientId,
+            integration.googleClientSecret
+          );
+          
+          oauth2Client.setCredentials({
+            access_token: integration.googleCalendarAccessToken,
+            refresh_token: integration.googleCalendarRefreshToken || undefined
+          });
+
+          const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+          
+          await calendar.channels.stop({
+            requestBody: {
+              id: integration.googleCalendarWebhookChannelId,
+              resourceId: integration.googleCalendarWebhookResourceId,
+            },
+          });
+          
+          console.log(`[Delete User] Unregistered Google Calendar webhook for user ${userId}`);
+        }
+      } catch (webhookError: any) {
+        console.error(`[Delete User] Failed to unregister webhook:`, webhookError.message);
+        // Continue with deletion even if webhook unregistration fails
+      }
+
+      // 2. Delete OpenAI knowledge base files if they exist
+      try {
+        const openaiSettings = await storage.getOpenAISettings(userId);
+        if (openaiSettings?.apiKey) {
+          const knowledgeBaseFiles = await storage.getKnowledgeBaseFiles(userId);
+          const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+          
+          for (const file of knowledgeBaseFiles) {
+            try {
+              if (file.openaiFileId) {
+                await openai.files.del(file.openaiFileId);
+                console.log(`[Delete User] Deleted OpenAI file ${file.openaiFileId}`);
+              }
+            } catch (fileError: any) {
+              console.error(`[Delete User] Failed to delete OpenAI file ${file.openaiFileId}:`, fileError.message);
+            }
+          }
+        }
+      } catch (openaiError: any) {
+        console.error(`[Delete User] Failed to delete OpenAI files:`, openaiError.message);
+        // Continue with deletion
+      }
+
+      // 3. Cascade delete all user data using storage methods
+      await storage.deleteUser(userId);
+
+      console.log(`[Delete User] ✅ Successfully deleted user ${userId} (${user.email})`);
+
+      res.json({ 
+        message: `User ${user.email} has been permanently deleted along with all their data.`
+      });
+    } catch (error: any) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ message: error.message || "Failed to delete user" });
+    }
+  });
+
   // Get all orders
   app.get('/api/orders', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
