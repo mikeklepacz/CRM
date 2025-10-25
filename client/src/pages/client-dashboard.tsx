@@ -1492,7 +1492,7 @@ export default function ClientDashboard() {
           // colorPresets now managed by useCustomTheme hook
           freezeFirstColumn, // Save freeze column preference
           showMyStoresOnly, // Save My Stores Only preference
-          colorRowByStatus: userPreferences?.colorRowByStatus, // Preserve colorRowByStatus state
+          // colorRowByStatus is managed by useCustomTheme hook - don't save here to avoid race condition
           // Note: Colors are saved separately via useCustomTheme
         });
       } catch (error) {
