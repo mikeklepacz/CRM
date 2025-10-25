@@ -160,6 +160,11 @@ export function useCustomTheme() {
     retry: false, // Don't retry on auth failures
   });
 
+  // Log when colorRowByStatus changes in userPreferences (for debugging)
+  useEffect(() => {
+    console.log('🔴 [QUERY UPDATE] userPreferences.colorRowByStatus changed to:', userPreferences?.colorRowByStatus);
+  }, [userPreferences?.colorRowByStatus]);
+
   useEffect(() => {
     const root = document.documentElement;
 

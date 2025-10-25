@@ -401,6 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const preferences = await storage.getUserPreferences(userId);
+      console.log('🔴 [GET PREFERENCES] colorRowByStatus value being returned:', preferences?.colorRowByStatus);
       res.json(preferences || null);
     } catch (error: any) {
       console.error("Error fetching user preferences:", error);
