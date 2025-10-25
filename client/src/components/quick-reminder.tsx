@@ -327,7 +327,11 @@ export function QuickReminder({
                         checked={isChecked}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            const methods = Array.from(new Set(calendarReminders.map(r => r.method))) as ('popup' | 'email')[];
+                            let methods = Array.from(new Set(calendarReminders.map(r => r.method))) as ('popup' | 'email')[];
+                            // If no methods exist, default to 'popup'
+                            if (methods.length === 0) {
+                              methods = ['popup'];
+                            }
                             const newReminders = [...calendarReminders];
                             methods.forEach(method => {
                               if (!newReminders.some(r => r.minutes === value && r.method === method)) {
@@ -393,7 +397,11 @@ export function QuickReminder({
                       checked={isChecked}
                       onCheckedChange={(checked) => {
                         if (checked) {
-                          const times = Array.from(new Set(calendarReminders.map(r => r.minutes)));
+                          let times = Array.from(new Set(calendarReminders.map(r => r.minutes)));
+                          // If no times exist, default to 10 minutes before
+                          if (times.length === 0) {
+                            times = [10];
+                          }
                           const newReminders = [...calendarReminders];
                           times.forEach(minutes => {
                             if (!newReminders.some(r => r.minutes === minutes && r.method === method)) {
