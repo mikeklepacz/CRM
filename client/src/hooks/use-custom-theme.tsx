@@ -353,11 +353,13 @@ export function useCustomTheme() {
   // Mutation to update colorRowByStatus preference
   const setColorRowByStatusMutation = useMutation({
     mutationFn: async (value: boolean) => {
-      const preferences = userPreferences ? { ...userPreferences } : {};
-      preferences.colorRowByStatus = value;
       console.log('🔴 [MUTATION] mutationFn called with value:', value);
-      console.log('🔴 [MUTATION] Sending to API:', { colorRowByStatus: preferences.colorRowByStatus });
-      const result = await apiRequest('PUT', '/api/user/preferences', preferences);
+      console.log('🔴 [MUTATION] typeof value:', typeof value);
+      console.log('🔴 [MUTATION] Sending to API:', { colorRowByStatus: value });
+      // Send only the field we're updating - backend will merge with existing preferences
+      const result = await apiRequest('PUT', '/api/user/preferences', {
+        colorRowByStatus: value
+      });
       console.log('🔴 [MUTATION] API response:', result);
       return result;
     },
