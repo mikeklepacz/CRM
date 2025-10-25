@@ -1788,21 +1788,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue with deletion even if webhook unregistration fails
       }
 
-      // 2. Delete OpenAI knowledge base files if they exist
+      // 2. Delete OpenAI knowledge base files uploaded by this user
       try {
-        const openaiSettings = await storage.getOpenAISettings(userId);
+        // Get global OpenAI settings (admin's API key)
+        const openaiSettings = await storage.getOpenaiSettings();
         if (openaiSettings?.apiKey) {
-          const knowledgeBaseFiles = await storage.getKnowledgeBaseFiles(userId);
-          const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+          // Get ALL knowledge base files and filter for this user's uploads
+          const allFiles = await storage.getAllKnowledgeBaseFiles();
+          const userFiles = allFiles.filter(file => file.uploadedBy === userId);
           
-          for (const file of knowledgeBaseFiles) {
-            try {
-              if (file.openaiFileId) {
-                await openai.files.del(file.openaiFileId);
-                console.log(`[Delete User] Deleted OpenAI file ${file.openaiFileId}`);
+          if (userFiles.length > 0) {
+            const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+            
+            for (const file of userFiles) {
+              try {
+                if (file.openaiFileId) {
+                  await openai.files.del(file.openaiFileId);
+                  console.log(`[Delete User] Deleted OpenAI file ${file.openaiFileId} (${file.originalName})`);
+                }
+              } catch (fileError: any) {
+                console.error(`[Delete User] Failed to delete OpenAI file ${file.openaiFileId}:`, fileError.message);
+                // Continue with other files
               }
-            } catch (fileError: any) {
-              console.error(`[Delete User] Failed to delete OpenAI file ${file.openaiFileId}:`, fileError.message);
             }
           }
         }

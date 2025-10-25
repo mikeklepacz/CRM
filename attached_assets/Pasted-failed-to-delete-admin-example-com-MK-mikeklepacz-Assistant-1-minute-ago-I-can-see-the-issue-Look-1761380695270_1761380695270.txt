@@ -1,0 +1,45 @@
+failed to delete admin@example.com
+
+MK
+
+mikeklepacz
+Assistant
+1 minute ago
+I can see the issue. Looking at the error logs, there's a SQL syntax error when trying to delete the user. The problem is in the deleteUser method in storage.ts - it's trying to use undefined in a SQL update statement.
+
+The error occurs because the method is trying to set googleCalendarWebhookChannelId to undefined when it should set it to null. Let me fix this:
+
+server/storage.ts
+Fix SQL syntax error in deleteUser by setting webhook fields to null instead of undefined Fix SQL syntax error in deleteUser by setting webhook fields to null instead of undefined Also fix the deleteUser method to call getOpenAISettings correctly Fix SQL syntax error in deleteUser by setting webhook fields to null instead of undefined Also fix the deleteUser method to call getOpenAISettings correctly Fix getKnowledgeBaseFiles call to use correct method signature
+server/routes.ts
+Fix route handler to also use null instead of undefined for webhook fields
+But what does that have to do with deleting the user?
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Looking at the error in the console output:
+
+Error deleting user: error: syntax error at or near "="
+This is a SQL syntax error occurring in the deleteUser function in server/storage.ts. The error is happening because when the code tries to set fields to undefined, Drizzle ORM is generating invalid SQL with bare = operators.
+
+Looking at storage.ts, in the deleteUser function, there's this line:
+
+await storage.updateUserIntegration(userId, {
+  googleCalendarWebhookChannelId: undefined,
+  googleCalendarWebhookResourceId: undefined,
+  googleCalendarWebhookExpiry: undefined,
+});
+The problem is that passing undefined to Drizzle's update function generates malformed SQL. We need to pass null instead to properly clear these fields.
+
+Here's the fix:
+
+server/storage.ts
+Fix SQL syntax error when deleting user by using null instead of undefined Fix SQL syntax error when deleting user by using null instead of undefined Fix method name case for OpenAI settings Fix SQL syntax error when deleting user by using null instead of undefined Fix method name case for OpenAI settings Fix OpenAI file deletion to use correct method Fix SQL syntax error when deleting user by using null instead of undefined Fix method name case for OpenAI settings Fix OpenAI file deletion to use correct method Filter knowledge base files by user
+Also, there's a secondary error about storage.getOpenAISettings is not a function. Looking at the storage interface, the method is actually getOpenaiSettings (lowercase 'ai'), but the delete function is calling it with uppercase 'AI':
+
+However, there's another issue - getOpenaiSettings() doesn't take a userId parameter. We need to fix this logic:
+
+But wait, we need to filter for this user's files only:
