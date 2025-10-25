@@ -364,11 +364,10 @@ export class DatabaseStorage implements IStorage {
     // Delete user preferences
     await db.delete(userPreferences).where(eq(userPreferences.userId, id));
     
-    // Delete OpenAI settings
-    await db.delete(openaiSettings).where(eq(openaiSettings.userId, id));
+    // Note: openaiSettings is a global admin table with no userId - don't delete it per user
     
     // Delete knowledge base files (metadata only - actual OpenAI files deleted in route handler)
-    await db.delete(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.userId, id));
+    await db.delete(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.uploadedBy, id));
     
     // Delete projects
     await db.delete(projects).where(eq(projects.userId, id));
