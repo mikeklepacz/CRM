@@ -949,6 +949,8 @@ export default function ClientDashboard() {
   // Check if user is admin - only admins can edit CRM table directly
   const isAdmin = currentUser?.role === 'admin';
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const { data: mergedData, isLoading, refetch } = useQuery({
     queryKey: ['merged-data', storeSheetId, trackerSheetId, joinColumn],
     queryFn: async () => {
@@ -1160,6 +1162,29 @@ export default function ClientDashboard() {
       }
     }
   }, [data, preferencesLoaded]);
+
+  // Manual refresh handler - clears server cache and refetches
+  const handleManualRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      // Clear server-side cache
+      await fetch('/api/sheets/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      // Refetch data (which will now bypass cache)
+      await refetch();
+    } catch (error) {
+      console.error('Refresh failed:', error);
+      toast({
+        title: "Refresh failed",
+        description: "Could not refresh data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const toggleColumn = (column: string) => {
     setVisibleColumns(prev => ({
@@ -1910,13 +1935,13 @@ export default function ClientDashboard() {
                     />
                     <Button
                       variant="outline"
-                      onClick={() => refetch()}
-                      disabled={isLoading}
+                      onClick={handleManualRefresh}
+                      disabled={isLoading || isRefreshing}
                       data-testid="button-refresh"
                       style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
                     >
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Refresh
+                      <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      {isRefreshing ? 'Refreshing...' : 'Refresh'}
                     </Button>
                   </div>
                   {/* My Stores Only toggle */}

@@ -26,6 +26,59 @@ import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
 import { notifyNewTicket, notifyTicketReply } from "./gmail";
 
+// ============================================================================
+// In-Memory Cache for Google Sheets Data (30-second TTL)
+// ============================================================================
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+const sheetsCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 30000; // 30 seconds
+
+// Generate cache key from request parameters
+function generateCacheKey(userId: string, storeSheetId: string, trackerSheetId: string, category: string | null): string {
+  return `${userId}:${storeSheetId}:${trackerSheetId}:${category || 'all'}`;
+}
+
+// Get cached data if still valid
+function getCachedData(key: string): any | null {
+  const entry = sheetsCache.get(key);
+  if (!entry) return null;
+  
+  const now = Date.now();
+  if (now - entry.timestamp > CACHE_TTL_MS) {
+    // Cache expired
+    sheetsCache.delete(key);
+    return null;
+  }
+  
+  return entry.data;
+}
+
+// Store data in cache
+function setCachedData(key: string, data: any): void {
+  sheetsCache.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+}
+
+// Clear all cache entries (for manual refresh)
+function clearAllCache(): void {
+  sheetsCache.clear();
+}
+
+// Clear cache entries for specific user
+function clearUserCache(userId: string): void {
+  for (const key of sheetsCache.keys()) {
+    if (key.startsWith(`${userId}:`)) {
+      sheetsCache.delete(key);
+    }
+  }
+}
+
 // Helper function for fuzzy string matching (Levenshtein distance)
 function stringSimilarity(str1: string, str2: string): number {
   if (!str1 || !str2) return 0;
@@ -3402,6 +3455,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Store sheet ID, tracker sheet ID, and join column are required" });
       }
 
+      // Get selected category for cache key (lightweight DB query)
+      const selectedCategory = await storage.getSelectedCategory(userId);
+      
+      // Check cache first (30-second TTL)
+      const cacheKey = generateCacheKey(userId, storeSheetId, trackerSheetId, selectedCategory);
+      const cachedData = getCachedData(cacheKey);
+      
+      if (cachedData) {
+        // Cache hit - return immediately
+        return res.json(cachedData);
+      }
+
+      // Cache miss - fetch fresh data from Google Sheets
       // Fetch both sheets
       const storeSheet = await storage.getGoogleSheetById(storeSheetId);
       const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
@@ -3560,7 +3626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // - If user has selectedCategory preference, show only matching stores
       // - If no category selected, show all stores (no filtering)
       // ============================================================================
-      const selectedCategory = await storage.getSelectedCategory(userId);
+      // selectedCategory already fetched earlier for cache key
       const storeCategoryColumnName = storeHeaders.find(h => 
         h.toLowerCase().trim() === 'category'
       );
@@ -3697,7 +3763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
       }
 
-      res.json({
+      const responseData = {
         headers: allHeaders,
         data: mergedData,
         editableColumns,
@@ -3705,14 +3771,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         trackerSheetId,
         storeHeaders,
         trackerHeaders,
-      });
+      };
+
+      // Cache the result for 30 seconds
+      setCachedData(cacheKey, responseData);
+
+      res.json(responseData);
     } catch (error: any) {
       console.error("Error fetching merged data:", error);
       res.status(500).json({ message: error.message || "Failed to fetch merged data" });
     }
   });
 
-
+  // Manual refresh endpoint - clears cache for current user
+  app.post('/api/sheets/refresh', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // Clear cache for this user
+      clearUserCache(userId);
+      
+      res.json({ message: "Cache cleared successfully" });
+    } catch (error: any) {
+      console.error("Error clearing cache:", error);
+      res.status(500).json({ message: error.message || "Failed to clear cache" });
+    }
+  });
 
   // Update a cell in a Google Sheet
   app.put('/api/sheets/:id/update', isAuthenticatedCustom, async (req: any, res) => {
@@ -3805,6 +3889,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update the cell
       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
 
+      // Invalidate cache after successful update
+      clearUserCache(userId);
+
       res.json({ message: "Cell updated successfully" });
     } catch (error: any) {
       console.error("Error updating cell:", error);
@@ -3880,6 +3967,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
+        // Invalidate cache after successful update
+        clearUserCache(userId);
+
         res.json({ message: "Tracker row updated successfully", rowIndex: existingRowIndex });
       } else {
         // Row doesn't exist - create new row
@@ -3908,6 +3998,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Append new row
         await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:ZZ`, [newRow]);
+
+        // Invalidate cache after successful creation
+        clearUserCache(userId);
 
         res.json({ message: "Tracker row created successfully", claimed: true });
       }
@@ -5072,6 +5165,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`  - Created Commission Tracker rows: ${createdTrackerCount}`);
       console.log(`  - Skipped: ${skippedCount}`);
       console.log(`  - Total requested: ${storeLinks.length}`);
+
+      // Invalidate cache after successful updates
+      clearUserCache(userId);
 
       res.json({
         message: "Successfully claimed multiple locations",
