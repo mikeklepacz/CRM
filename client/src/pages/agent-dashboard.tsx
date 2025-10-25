@@ -218,9 +218,15 @@ export default function AgentDashboard() {
       <div className="hidden lg:block lg:w-96 border-l overflow-y-auto">
         <div className="p-4 h-full">
           <RemindersWidget 
-            onPhoneClick={(storeIdentifier) => {
+            onPhoneClick={(storeIdentifier, phoneNumber) => {
+              console.log('[AgentDashboard] onPhoneClick called:', { storeIdentifier, phoneNumber });
               // Navigate to Clients page with store parameter to auto-open details
-              setLocation(`/clients?store=${encodeURIComponent(storeIdentifier)}`);
+              // Phone number will trigger dial after delay
+              const params = new URLSearchParams({ store: storeIdentifier });
+              if (phoneNumber) {
+                params.append('phone', phoneNumber);
+              }
+              setLocation(`/clients?${params.toString()}`);
             }}
           />
         </div>

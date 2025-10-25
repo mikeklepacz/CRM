@@ -371,9 +371,15 @@ export default function SalesDashboard() {
               onHide={() => toggleWidgetVisibility("reminders")}
             >
               <RemindersWidget 
-                onPhoneClick={(storeIdentifier) => {
+                onPhoneClick={(storeIdentifier, phoneNumber) => {
+                  console.log('[SalesDashboard] onPhoneClick called:', { storeIdentifier, phoneNumber });
                   // Navigate to Clients page with store parameter to auto-open details
-                  setLocation(`/clients?store=${encodeURIComponent(storeIdentifier)}`);
+                  // Phone number will trigger dial after delay
+                  const params = new URLSearchParams({ store: storeIdentifier });
+                  if (phoneNumber) {
+                    params.append('phone', phoneNumber);
+                  }
+                  setLocation(`/clients?${params.toString()}`);
                 }}
               />
             </WidgetWithContextMenu>

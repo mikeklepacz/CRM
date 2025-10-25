@@ -1138,9 +1138,13 @@ export default function ClientDashboard() {
     // Check for ?store= URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     const storeIdentifier = urlParams.get('store');
+    const phoneNumber = urlParams.get('phone');
     
     if (storeIdentifier) {
       console.log('[Auto-open] Detected store parameter:', storeIdentifier);
+      if (phoneNumber) {
+        console.log('[Auto-open] Phone parameter detected:', phoneNumber);
+      }
       
       // Find the store in the data by matching the link (uniqueIdentifier)
       const matchingStore = data.find((row: any) => {
@@ -1166,7 +1170,16 @@ export default function ClientDashboard() {
         // Trigger default script loading in AI assistant
         setLoadDefaultScriptTrigger(prev => prev + 1);
         
-        // Clear the URL parameter so it doesn't auto-open again
+        // If phone number provided, trigger dial after a delay so user sees the dialog first
+        if (phoneNumber) {
+          console.log('[Auto-open] Scheduling delayed phone dial in 800ms...');
+          setTimeout(() => {
+            console.log('[Auto-open] Triggering phone dial:', phoneNumber);
+            window.location.href = `tel:${phoneNumber}`;
+          }, 800);
+        }
+        
+        // Clear the URL parameters so it doesn't auto-open again
         const newUrl = window.location.pathname;
         window.history.replaceState({}, '', newUrl);
       } else {

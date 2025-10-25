@@ -33,7 +33,7 @@ interface Reminder {
 }
 
 interface RemindersWidgetProps {
-  onPhoneClick?: (storeIdentifier: string) => void;
+  onPhoneClick?: (storeIdentifier: string, phoneNumber?: string) => void;
 }
 
 export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
@@ -290,10 +290,13 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                               className="hover:text-primary hover:underline"
                               data-testid={`link-phone-${reminder.id}`}
                               onClick={(e) => {
-                                // Don't prevent default - let tel: link work
-                                // But also open the store details modal if callback provided
+                                console.log('[RemindersWidget] Phone clicked:', reminder.storeMetadata.pocPhone);
+                                // Prevent immediate dial to avoid interrupting navigation
+                                e.preventDefault();
+                                // Navigate to store details, phone will dial after delay
                                 if (onPhoneClick && reminder.storeMetadata.uniqueIdentifier) {
-                                  onPhoneClick(reminder.storeMetadata.uniqueIdentifier);
+                                  console.log('[RemindersWidget] Calling onPhoneClick with store:', reminder.storeMetadata.uniqueIdentifier);
+                                  onPhoneClick(reminder.storeMetadata.uniqueIdentifier, reminder.storeMetadata.pocPhone);
                                 }
                               }}
                             >
