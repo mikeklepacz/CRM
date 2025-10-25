@@ -204,33 +204,19 @@ function generateVCardEntry(
   }
   
   // NOTE - combine selected fields in order: Notes, Hours, Sales Summary
-  console.log('📝 [VCARD DEBUG] Starting NOTE field generation');
-  console.log('  Store keys:', Object.keys(store));
-  console.log('  notes variable:', notes);
-  console.log('  store["Notes"]:', store['Notes']);
-  console.log('  store["notes"]:', store['notes']);
-  console.log('  store["Hours"]:', store['Hours']);
-  console.log('  store["Store Hours"]:', store['Store Hours']);
-  console.log('  store["Sales-ready Summary"]:', store['Sales-ready Summary']);
-  console.log('  fields object:', fields);
-  
   const noteFields: string[] = [];
   
   if (notes && !fields.salesSummary && !fields.storeHours) {
-    console.log('  Branch: Only notes (no other fields selected)');
     // If only notes selected or notes exist without other NOTE fields
     noteFields.push(notes);
   } else {
-    console.log('  Branch: Multiple fields or fields selected');
     // Combine multiple fields with real newlines (will be escaped by escapeVCardValue)
     if (notes) {
-      console.log('  Adding Notes:', notes);
       noteFields.push(`Notes: ${notes}`);
     }
     
     if (fields.storeHours) {
       const storeHours = store['Store Hours'] || store['store_hours'] || store['Hours'] || store['hours'];
-      console.log('  storeHours field selected, value:', storeHours);
       if (storeHours) {
         noteFields.push(`Store Hours: ${storeHours}`);
       }
@@ -238,27 +224,18 @@ function generateVCardEntry(
     
     if (fields.salesSummary) {
       const salesSummary = store['Sales-ready Summary'] || store['sales_summary'] || store['Sales Summary'];
-      console.log('  salesSummary field selected, value:', salesSummary);
       if (salesSummary) {
         noteFields.push(`Sales Summary: ${salesSummary}`);
       }
     }
   }
   
-  console.log('  noteFields array:', noteFields);
-  console.log('  noteFields.length:', noteFields.length);
-  
   if (noteFields.length > 0) {
     // Use real newlines - escapeVCardValue will convert them to \n
     const combinedNotes = noteFields.join('\n\n');
-    console.log('  combinedNotes before escape:', combinedNotes);
     const escapedNotes = escapeVCardValue(combinedNotes);
-    console.log('  escapedNotes:', escapedNotes);
     const noteLine = `NOTE:${escapedNotes}`;
-    console.log('  Final NOTE line:', noteLine);
     lines.push(noteLine);
-  } else {
-    console.log('  ⚠️ No NOTE field added (noteFields empty)');
   }
   
   // Categories - creates Lists on iOS or Groups on Android
@@ -269,7 +246,6 @@ function generateVCardEntry(
   lines.push('END:VCARD');
   
   const vCardContent = lines.join('\r\n');
-  console.log('📄 [VCARD DEBUG] Final vCard content:\n', vCardContent);
   
   return vCardContent;
 }
