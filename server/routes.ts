@@ -463,9 +463,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       console.log('🎨 [BACKEND] User ID:', userId);
+      console.log('🔴 [BACKEND] colorRowByStatus value received:', validation.data.colorRowByStatus);
       
       const preferences = await storage.saveUserPreferences(userId, validation.data);
       console.log('🎨 [BACKEND] Preferences saved to DB:', JSON.stringify(preferences, null, 2));
+      console.log('🔴 [BACKEND] colorRowByStatus value in saved preferences:', preferences.colorRowByStatus);
 
       console.log('🎨 [BACKEND] Sending response with status 200');
       res.json(preferences);
