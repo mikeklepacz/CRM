@@ -420,7 +420,7 @@ export function QuickReminder({
           </div>
 
           {/* Day view panel */}
-          <div className="flex-1 p-4 rounded-md bg-primary/10 border border-primary/20 min-h-[180px]" data-testid="day-view-panel">
+          <div className="p-4 rounded-md bg-primary/10 border border-primary/20 max-h-[240px] overflow-y-auto" data-testid="day-view-panel">
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-primary">
                 <Clock className="h-4 w-4" />
