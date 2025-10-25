@@ -4721,9 +4721,8 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                             
                             console.log('[REMINDER] Response:', response);
 
-                            // Update the form data using the actual saved scheduledDate from the response
-                            // This ensures the follow-up date matches exactly what's in the database and calendar
-                            const followUpDate = format(new Date(response.reminder.scheduledDate + 'T00:00:00'), 'M/d/yyyy');
+                            // Update the form data to reflect the changes
+                            const followUpDate = format(reminderData.date, 'M/d/yyyy');
                             handleInputChange('follow_up_date', followUpDate);
                             handleInputChange('next_action', reminderData.note);
 
