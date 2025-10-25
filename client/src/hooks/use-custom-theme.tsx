@@ -295,9 +295,12 @@ export function useCustomTheme() {
     mutationFn: async (colors: ThemeColors) => {
       console.log('🎨 [COLOR SAVE] Starting mutation with colors:', colors);
       console.log('🎨 [COLOR SAVE] Current theme:', actualTheme);
-      console.log('🎨 [COLOR SAVE] User preferences before merge:', userPreferences);
       
-      const preferences: any = userPreferences ? { ...userPreferences } : {};
+      // Get fresh user preferences from the query cache
+      const freshPreferences = queryClient.getQueryData(['/api/user/preferences']) as UserPreferences | null;
+      console.log('🎨 [COLOR SAVE] Fresh preferences from cache:', freshPreferences);
+      
+      const preferences: any = freshPreferences ? { ...freshPreferences } : {};
 
       if (actualTheme === 'dark') {
         preferences.darkModeColors = colors;

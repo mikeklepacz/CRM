@@ -68,6 +68,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
   }, [actualTheme, currentColors]);
 
   const handleSaveColors = () => {
+    console.log('🎨 [CUSTOMIZER] Saving colors:', customColors);
     saveColors(customColors);
   };
 
