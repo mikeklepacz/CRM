@@ -1,0 +1,53 @@
+You're absolutely right to dig deeper! Let me trace through the actual code flow:
+
+Looking at use-custom-theme.tsx, I can see the mutation for setColorRowByStatus:
+
+const setColorRowByStatusMutation = useMutation({
+  mutationFn: async (value: boolean) => {
+    const preferences = userPreferences ? { ...userPreferences } : {};
+    preferences.colorRowByStatus = value;
+    return await apiRequest('PUT', '/api/user/preferences', preferences);
+  },
+  onMutate: async (value: boolean) => {
+    await queryClient.cancelQueries({ queryKey: ['/api/user/preferences'] });
+    const previousPreferences = queryClient.getQueryData(['/api/user/preferences']);
+    
+    queryClient.setQueryData(['/api/user/preferences'], (old: any) => {
+      return old ? { ...old, colorRowByStatus: value } : old;
+    });
+    
+    return { previousPreferences };
+  },
+  onError: (err, value, context: any) => {
+    queryClient.setQueryData(['/api/user/preferences'], context.previousPreferences);
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+  },
+});
+Now look at client-dashboard.tsx - there's a debounced auto-save at line ~600:
+
+// Auto-save user preferences when they change (debounced)
+useEffect(() => {
+  if (!preferencesLoaded) return;
+  const timeoutId = setTimeout(async () => {
+    try {
+      await apiRequest('PUT', '/api/user/preferences', {
+        visibleColumns,
+        columnOrder,
+        // ... other fields
+        colorRowByStatus: userPreferences?.colorRowByStatus, // <-- HERE!
+        // ...
+      });
+    } catch (error) {
+      console.error('Failed to save preferences:', error);
+    }
+  }, 1000); // 1 SECOND DELAY
+  return () => clearTimeout(timeoutId);
+}, [visibleColumns, columnOrder, /* ... */, colorRowByStatus, /* ... */]);
+This is the race condition! Here's what happens:
+
+You toggle checkbox → Hook mutation fires with optimistic update (instant UI change)
+Hook mutation saves to DB successfully
+Hook mutation calls invalidateQueries → triggers refetch
+But the dashboard's debounced auto-save (1 second later) overwrites it with the OLD value from userPreferences?.colorRowByStatus
