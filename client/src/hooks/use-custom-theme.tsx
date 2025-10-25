@@ -350,7 +350,11 @@ export function useCustomTheme() {
     mutationFn: async (value: boolean) => {
       const preferences = userPreferences ? { ...userPreferences } : {};
       preferences.colorRowByStatus = value;
-      return await apiRequest('PUT', '/api/user/preferences', preferences);
+      console.log('🔴 [MUTATION] mutationFn called with value:', value);
+      console.log('🔴 [MUTATION] Sending to API:', { colorRowByStatus: preferences.colorRowByStatus });
+      const result = await apiRequest('PUT', '/api/user/preferences', preferences);
+      console.log('🔴 [MUTATION] API response:', result);
+      return result;
     },
     onMutate: async (value: boolean) => {
       // Cancel any outgoing refetches
@@ -381,8 +385,10 @@ export function useCustomTheme() {
   });
 
   const setColorRowByStatus = useCallback((value: boolean) => {
+    console.log('🔴 [TOGGLE] setColorRowByStatus called with value:', value);
+    console.log('🔴 [TOGGLE] Current userPreferences:', userPreferences);
     setColorRowByStatusMutation.mutate(value);
-  }, [setColorRowByStatusMutation]);
+  }, [setColorRowByStatusMutation, userPreferences]);
 
   // Mutation to update a single status entry
   const updateStatusEntryMutation = useMutation({
