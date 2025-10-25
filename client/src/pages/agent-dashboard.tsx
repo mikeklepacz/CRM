@@ -219,8 +219,8 @@ export default function AgentDashboard() {
         <div className="p-4 h-full">
           <RemindersWidget 
             onPhoneClick={(storeIdentifier) => {
-              // Navigate to store details page
-              setLocation(`/store/${encodeURIComponent(storeIdentifier)}`);
+              // Navigate to Clients page with store parameter to auto-open details
+              setLocation(`/clients?store=${encodeURIComponent(storeIdentifier)}`);
             }}
           />
         </div>

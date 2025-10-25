@@ -372,8 +372,8 @@ export default function SalesDashboard() {
             >
               <RemindersWidget 
                 onPhoneClick={(storeIdentifier) => {
-                  // Navigate to store details page
-                  setLocation(`/store/${encodeURIComponent(storeIdentifier)}`);
+                  // Navigate to Clients page with store parameter to auto-open details
+                  setLocation(`/clients?store=${encodeURIComponent(storeIdentifier)}`);
                 }}
               />
             </WidgetWithContextMenu>

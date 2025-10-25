@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLocation } from "wouter";
+import { normalizeLink } from "@shared/linkUtils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1130,6 +1131,50 @@ export default function ClientDashboard() {
     }
   }, [headers, userPreferences, preferencesQueryFetched, preferencesLoaded, currentUser?.role]);
 
+  // Auto-open store details dialog when navigated from Reminders phone click
+  useEffect(() => {
+    // Only run when data is loaded
+    if (!data || data.length === 0 || !preferencesLoaded) return;
+    
+    // Check for ?store= URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const storeIdentifier = urlParams.get('store');
+    
+    if (storeIdentifier) {
+      console.log('[Auto-open] Detected store parameter:', storeIdentifier);
+      
+      // Find the store in the data by matching the link (uniqueIdentifier)
+      const matchingStore = data.find((row: any) => {
+        const link = getLinkValue(row);
+        if (!link) return false;
+        
+        // Normalize and compare links
+        const normalizedRowLink = normalizeLink(link);
+        const normalizedSearchLink = normalizeLink(storeIdentifier);
+        
+        return normalizedRowLink === normalizedSearchLink;
+      });
+      
+      if (matchingStore) {
+        console.log('[Auto-open] Found matching store, opening details dialog');
+        
+        // Open the store details dialog
+        setStoreDetailsDialog({
+          open: true,
+          row: matchingStore,
+        });
+        
+        // Trigger default script loading in AI assistant
+        setLoadDefaultScriptTrigger(prev => prev + 1);
+        
+        // Clear the URL parameter so it doesn't auto-open again
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      } else {
+        console.log('[Auto-open] No matching store found for identifier:', storeIdentifier);
+      }
+    }
+  }, [data, preferencesLoaded]);
 
   const toggleColumn = (column: string) => {
     setVisibleColumns(prev => ({
