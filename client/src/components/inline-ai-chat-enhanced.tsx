@@ -112,8 +112,8 @@ function parseEmailFromMessage(content: string): { to: string; subject: string; 
   return null;
 }
 
-// Helper function to replace template variables with actual values
-function replaceTemplateVariables(
+// Helper function to replace simple template variables with actual values (used for email generation)
+function replaceSimpleTemplateVariables(
   content: string,
   storeContext?: {
     name?: string;
@@ -1488,6 +1488,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                 <div className="space-y-4">
                   {messages.map((msg) => {
                     const emailData = msg.role === "assistant" ? parseEmailFromMessage(msg.content) : null;
+                    const processedEmailData = emailData ? {
+                      to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
+                      subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
+                      body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
+                    } : null;
 
                     return (
                       <div
@@ -1535,11 +1540,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                               <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                             </div>
                           )}
-                          {emailData && (
+                          {processedEmailData && (
                             <EmailPreview
-                              to={emailData.to}
-                              subject={emailData.subject}
-                              body={emailData.body}
+                              to={processedEmailData.to}
+                              subject={processedEmailData.subject}
+                              body={processedEmailData.body}
                             />
                           )}
                         </div>
@@ -1576,6 +1581,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
             <div className="space-y-4">
               {messages.map((msg) => {
                 const emailData = msg.role === "assistant" ? parseEmailFromMessage(msg.content) : null;
+                const processedEmailData = emailData ? {
+                  to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
+                  subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
+                  body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
+                } : null;
 
                 return (
                   <div
@@ -1623,11 +1633,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                           <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                         </div>
                       )}
-                      {emailData && (
+                      {processedEmailData && (
                         <EmailPreview
-                          to={emailData.to}
-                          subject={emailData.subject}
-                          body={emailData.body}
+                          to={processedEmailData.to}
+                          subject={processedEmailData.subject}
+                          body={processedEmailData.body}
                         />
                       )}
                     </div>
@@ -2632,13 +2642,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
               <Copy className="mr-2 h-4 w-4" />
               Copy
             </Button>
-            {previewTemplate && parseEmailFromMessage(previewTemplate.content) && (
-              <EmailPreview
-                to={parseEmailFromMessage(previewTemplate.content)!.to}
-                subject={parseEmailFromMessage(previewTemplate.content)!.subject}
-                body={parseEmailFromMessage(previewTemplate.content)!.body}
-              />
-            )}
+            {previewTemplate && parseEmailFromMessage(previewTemplate.content) && (() => {
+              const emailData = parseEmailFromMessage(previewTemplate.content)!;
+              return (
+                <EmailPreview
+                  to={replaceSimpleTemplateVariables(emailData.to, storeContext, user)}
+                  subject={replaceSimpleTemplateVariables(emailData.subject, storeContext, user)}
+                  body={replaceSimpleTemplateVariables(emailData.body, storeContext, user)}
+                />
+              );
+            })()}
           </DialogFooter>
         </DialogContent>
       </Dialog>
