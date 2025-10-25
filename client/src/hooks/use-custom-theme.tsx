@@ -361,7 +361,8 @@ export function useCustomTheme() {
       
       // Optimistically update to the new value
       queryClient.setQueryData(['/api/user/preferences'], (old: any) => {
-        return old ? { ...old, colorRowByStatus: value } : old;
+        if (!old) return old;
+        return { ...old, colorRowByStatus: value };
       });
       
       console.log('🎨 [OPTIMISTIC UPDATE] colorRowByStatus set to:', value);
@@ -371,12 +372,16 @@ export function useCustomTheme() {
     },
     onError: (err, value, context: any) => {
       // If the mutation fails, use the context returned from onMutate to roll back
-      queryClient.setQueryData(['/api/user/preferences'], context.previousPreferences);
+      if (context?.previousPreferences) {
+        queryClient.setQueryData(['/api/user/preferences'], context.previousPreferences);
+      }
       console.error('🎨 [ROLLBACK] colorRowByStatus update failed, rolled back');
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
-      console.log('🎨 [SUCCESS] colorRowByStatus saved to database');
+    onSuccess: (data) => {
+      // Don't invalidate - keep the optimistic update
+      // The server response should match what we optimistically set
+      queryClient.setQueryData(['/api/user/preferences'], data);
+      console.log('🎨 [SUCCESS] colorRowByStatus saved to database:', data?.colorRowByStatus);
     },
   });
 
