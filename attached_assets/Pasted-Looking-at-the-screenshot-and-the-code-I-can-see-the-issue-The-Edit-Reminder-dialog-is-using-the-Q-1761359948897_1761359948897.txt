@@ -1,0 +1,24 @@
+Looking at the screenshot and the code, I can see the issue. The Edit Reminder dialog is using the QuickReminder component, but there's a critical problem with how the calendar reminders are being initialized and updated.
+
+Root Cause Analysis
+In quick-reminder.tsx, the calendar reminders state is initialized with defaultCalendarReminders:
+
+const [calendarReminders, setCalendarReminders] = useState(defaultCalendarReminders);
+However, when the dialog opens for editing, the defaultCalendarReminders prop is passed from the existing reminder data, but the component doesn't update its local state when this prop changes. This is a classic React state initialization issue.
+
+Additionally, looking at the checkbox logic in quick-reminder.tsx around lines 207-235, I can see the checkboxes are using data-testid="checkbox-quick-reminder-time-${value}" but the actual checkbox state management is complex and depends on both the calendarReminders array state.
+
+The issue is that when editing an existing reminder, the initial calendarReminders state doesn't sync with the new defaultCalendarReminders prop that gets passed in.
+
+The Fix
+We need to add a useEffect that updates the local state when defaultCalendarReminders changes:
+
+client/src/components/quick-reminder.tsx
+Add useEffect to sync calendarReminders state with defaultCalendarReminders prop when editing
+The key change is using JSON.stringify(defaultCalendarReminders) in the dependency array instead of just defaultCalendarReminders. This ensures the effect runs when the array contents change, not just when the array reference changes.
+
+However, there's another issue - when editing a reminder in reminders.tsx, the component doesn't pass the existing calendar reminders to the QuickReminder component. Let me check that:
+
+client/src/components/widgets/reminders.tsx
+Pass existing calendar reminders when editing a reminder
+This adds the missing defaultCalendarReminders prop when editing a reminder, which will now properly populate the checkboxes with the existing reminder's settings.

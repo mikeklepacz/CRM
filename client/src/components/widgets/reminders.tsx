@@ -433,6 +433,7 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
               pocPhone={editingReminder.storeMetadata?.pocPhone}
               defaultEmail={editingReminder.storeMetadata?.email}
               defaultPhone={editingReminder.storeMetadata?.phone}
+              defaultCalendarReminders={userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }]}
               isSaving={updateMutation.isPending}
               onSave={async (reminderData) => {
                 // Extract store name from title ("Follow up: StoreName" -> "StoreName")

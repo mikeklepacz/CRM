@@ -94,7 +94,7 @@ export function QuickReminder({
     if (defaultCalendarReminders) {
       setCalendarReminders(defaultCalendarReminders);
     }
-  }, [defaultCalendarReminders]);
+  }, [JSON.stringify(defaultCalendarReminders)]);
 
   const handleSave = () => {
     if (!note.trim() || !date) return;
