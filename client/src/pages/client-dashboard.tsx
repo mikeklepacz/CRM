@@ -2846,7 +2846,24 @@ export default function ClientDashboard() {
                       // Get row's status value for coloring
                       const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
                       const rowStatus = statusColumns.length > 0 ? row[statusColumns[0]] : null;
-                      const rowStatusColor = colorRowByStatus && rowStatus && (statusColors as any)?.[rowStatus];
+                      
+                      // Find matching status color (handles both "Status Name" and "1 – Status Name" formats)
+                      let rowStatusColor = null;
+                      if (colorRowByStatus && rowStatus && statusColors) {
+                        // Try exact match first
+                        rowStatusColor = (statusColors as any)[rowStatus];
+                        
+                        // If no exact match, try to find by matching the status name part (after "– ")
+                        if (!rowStatusColor) {
+                          const statusEntry = Object.entries(statusColors).find(([key]) => {
+                            const namePart = key.includes(' – ') ? key.split(' – ')[1] : key;
+                            return namePart === rowStatus || key === rowStatus;
+                          });
+                          if (statusEntry) {
+                            rowStatusColor = statusEntry[1];
+                          }
+                        }
+                      }
 
                       // Helper function to darken a hex color (for buttons - makes them stand out more than rows)
                       const darkenColor = (hex: string, percent: number = 30) => {
