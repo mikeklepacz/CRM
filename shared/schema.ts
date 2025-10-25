@@ -226,6 +226,7 @@ export const userPreferences = pgTable("user_preferences", {
   hasLightOverrides: boolean("has_light_overrides").default(false), // True when user has saved custom light colors
   hasDarkOverrides: boolean("has_dark_overrides").default(false), // True when user has saved custom dark colors
   colorPresets: jsonb("color_presets").$type<Array<{name: string, color: string}>>().default(sql`'[]'::jsonb`), // User's saved color presets
+  colorRowByStatus: boolean("color_row_by_status").default(false), // Color table rows based on status
   textAlign: varchar("text_align", { length: 20 }),
   freezeFirstColumn: boolean("freeze_first_column").default(false),
   loadingLogoUrl: text("loading_logo_url"), // Custom loading logo URL
