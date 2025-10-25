@@ -9369,9 +9369,11 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/admin/webhooks', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
+      // Filter to only active users
+      const activeUsers = users.filter(user => user.isActive !== false);
       const webhookStatuses = [];
 
-      for (const user of users) {
+      for (const user of activeUsers) {
         const integration = await storage.getUserIntegration(user.id);
         
         // Determine webhook URL based on environment
@@ -9415,6 +9417,8 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/admin/webhooks/bulk-register', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
+      // Filter to only active users
+      const activeUsers = users.filter(user => user.isActive !== false);
       const results = {
         total: 0,
         successful: 0,
@@ -9423,7 +9427,7 @@ Use this store information to provide context-aware responses. When helping draf
         details: [] as any[]
       };
 
-      for (const user of users) {
+      for (const user of activeUsers) {
         const integration = await storage.getUserIntegration(user.id);
         
         if (!integration?.googleCalendarAccessToken) {
