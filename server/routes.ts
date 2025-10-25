@@ -6242,6 +6242,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create a new reminder
+  // ✅ SET IN STONE - VERIFIED WORKING (Oct 25, 2025)
+  // This endpoint correctly saves reminders to BOTH:
+  //   1. Database (reminder card) 
+  //   2. Google Calendar (calendar event with proper timezone handling)
+  // Timezone handling: Uses scheduledDate + scheduledTime + timezone (no UTC conversion)
+  // Customer timezone mode: Supports both agent timezone and customer timezone
   app.post('/api/reminders', async (req, res) => {
     try {
       if (!req.user) {

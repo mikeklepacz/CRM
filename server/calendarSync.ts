@@ -4,6 +4,13 @@ import { storage } from './storage';
 /**
  * Syncs reminders to Google Calendar for a specific user
  * Creates calendar events for any reminders that don't have a calendarEventId
+ * 
+ * ✅ SET IN STONE - VERIFIED WORKING (Oct 25, 2025)
+ * This function correctly creates Google Calendar events with proper timezone handling:
+ *   - Uses scheduledDate + scheduledTime as local datetime in the reminder's timezone
+ *   - No UTC conversion (sends timezone-aware datetime directly to Google Calendar API)
+ *   - Calculates event end time using pure string arithmetic (+30 mins)
+ *   - Handles midnight rollover correctly
  */
 export async function syncRemindersToCalendar(userId: string): Promise<{ created: number; errors: number }> {
   try {
