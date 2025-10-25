@@ -8,6 +8,7 @@ import { UserManagement } from "@/components/user-management";
 import { SalesReports } from "@/components/sales-reports";
 import { OpenAIManagement } from "@/components/openai-management";
 import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
+import { WebhookManagement } from "@/components/webhook-management";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -40,6 +41,7 @@ export default function AdminDashboard() {
           <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
           <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
+          <TabsTrigger value="webhooks" data-testid="tab-webhooks">Webhooks</TabsTrigger>
           <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
           <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
@@ -55,6 +57,10 @@ export default function AdminDashboard() {
 
         <TabsContent value="reports">
           <SalesReports />
+        </TabsContent>
+
+        <TabsContent value="webhooks">
+          <WebhookManagement />
         </TabsContent>
 
         <TabsContent value="openai">

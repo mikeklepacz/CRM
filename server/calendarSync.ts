@@ -221,10 +221,18 @@ export async function setupCalendarWatch(userId: string): Promise<boolean> {
     // Generate unique channel ID
     const channelId = `calendar-watch-${userId}-${Date.now()}`;
     
-    // Get webhook URL - must match the actual endpoint path
-    const webhookUrl = process.env.REPLIT_DEV_DOMAIN
-      ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`
-      : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co/api/webhooks/google-calendar`;
+    // Get webhook URL - use REPLIT_DOMAINS for production, REPLIT_DEV_DOMAIN for dev
+    let webhookUrl: string;
+    if (process.env.REPLIT_DOMAINS) {
+      // Production: use first domain from REPLIT_DOMAINS
+      const domains = process.env.REPLIT_DOMAINS.split(',');
+      webhookUrl = `https://${domains[0]}/api/webhooks/google-calendar`;
+    } else if (process.env.REPLIT_DEV_DOMAIN) {
+      // Development: use REPLIT_DEV_DOMAIN
+      webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhooks/google-calendar`;
+    } else {
+      throw new Error('No REPLIT_DOMAINS or REPLIT_DEV_DOMAIN environment variable found');
+    }
 
     // Set up watch channel
     const response = await calendar.events.watch({
