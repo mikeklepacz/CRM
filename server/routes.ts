@@ -8386,6 +8386,13 @@ Use this store information to provide context-aware responses. When helping draf
           continue;
         }
 
+        // Skip inactive users - don't renew webhooks for deactivated accounts
+        const user = await storage.getUser(integration.userId);
+        if (!user || user.isActive === false) {
+          console.log(`[Webhook Renewal] Skipping renewal for inactive user ${integration.userId}`);
+          continue;
+        }
+
         // Check if webhook expires in less than 3 days
         if (integration.googleCalendarWebhookExpiry < threeDaysFromNow) {
           console.log(`[Webhook Renewal] Renewing webhook for user ${integration.userId}`);
