@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Users, Loader2 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 
 interface ReferralCommissionData {
   referringAgentId: string;
