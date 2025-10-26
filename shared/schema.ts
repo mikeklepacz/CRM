@@ -121,9 +121,26 @@ export const orders = pgTable("orders", {
   status: varchar("status", { length: 50 }).notNull(),
   orderDate: timestamp("order_date").notNull(),
   commissionType: varchar("commission_type", { length: 20 }).default('auto'), // 'auto', '25', '10', 'flat'
-  commissionAmount: decimal("commission_amount", { precision: 12, scale: 2 }),
+  commissionAmount: decimal("commission_amount", { precision: 12, scale: 2 }), // DEPRECATED - use commissions table instead
   syncedAt: timestamp("synced_at").defaultNow(),
 });
+
+// Commissions table - ledger for all commission records (primary agent and referral bonuses)
+export const commissions = pgTable("commissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  agentId: varchar("agent_id").notNull().references(() => users.id), // Agent receiving this commission
+  commissionKind: varchar("commission_kind", { length: 20 }).notNull(), // 'primary' or 'referral'
+  sourceAgentId: varchar("source_agent_id").references(() => users.id), // For referral commissions, which agent generated the sale
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }), // e.g., 25.00 for 25%, 10.00 for 10%
+  calculatedOn: timestamp("calculated_on").defaultNow(),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_commissions_agent_kind_calc").on(table.agentId, table.commissionKind, table.calculatedOn),
+  index("idx_commissions_order").on(table.orderId),
+  index("idx_commissions_source_agent").on(table.sourceAgentId),
+]);
 
 // System integrations - system-wide credentials (e.g., Google Sheets for CRM data)
 export const systemIntegrations = pgTable("system_integrations", {
@@ -646,6 +663,11 @@ export const insertOrderSchema = createInsertSchema(orders).omit({
   syncedAt: true,
 });
 
+export const insertCommissionSchema = createInsertSchema(commissions).omit({
+  id: true,
+  calculatedOn: true,
+});
+
 export const insertCsvUploadSchema = createInsertSchema(csvUploads).omit({
   id: true,
   uploadedAt: true,
@@ -809,6 +831,8 @@ export type Note = typeof notes.$inferSelect;
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type Commission = typeof commissions.$inferSelect;
+export type InsertCommission = z.infer<typeof insertCommissionSchema>;
 export type CsvUpload = typeof csvUploads.$inferSelect;
 export type InsertCsvUpload = z.infer<typeof insertCsvUploadSchema>;
 export type GoogleSheet = typeof googleSheets.$inferSelect;
@@ -849,6 +873,7 @@ export type SavedExclusion = typeof savedExclusions.$inferSelect;
 export type InsertSavedExclusion = z.infer<typeof insertSavedExclusionSchema>;
 export type Status = typeof statuses.$inferSelect;
 export type InsertStatus = z.infer<typeof insertStatusSchema>;
+export type SelectStatus = typeof statuses.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type TicketReply = typeof ticketReplies.$inferSelect;
