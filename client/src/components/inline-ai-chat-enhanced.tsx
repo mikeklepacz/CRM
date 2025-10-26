@@ -1148,24 +1148,35 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       return;
     }
 
-    // Fill template variables
-    const filledContent = replaceTemplateVariables(template.content, storeContext, user);
+    // Fill template variables using the simple replacement function
+    const filledContent = replaceSimpleTemplateVariables(template.content, storeContext, user);
 
     // Try to parse email format
     const emailData = parseEmailFromMessage(filledContent);
 
     if (emailData) {
-      // Validate that the parsed email is not empty
-      if (!emailData.to || emailData.to.trim() === '') {
+      // Apply variable replacement to each field
+      const processedEmailData = {
+        to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
+        subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
+        body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
+      };
+
+      // Validate that the processed email doesn't contain unreplaced variables
+      if (!processedEmailData.to || 
+          processedEmailData.to.trim() === '' || 
+          processedEmailData.to.includes('{{') || 
+          processedEmailData.to.includes('}}')) {
         toast({
-          title: "Invalid Email",
-          description: "The email address could not be determined. Please check the store details.",
+          title: "Invalid Email Address",
+          description: "Please replace the placeholder with an actual email address before creating a draft.",
           variant: "destructive",
         });
         return;
       }
+      
       // Create Gmail draft
-      createGmailDraftMutation.mutate(emailData);
+      createGmailDraftMutation.mutate(processedEmailData);
     } else {
       // Fallback: try to use store email
       const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(
