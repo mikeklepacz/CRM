@@ -415,13 +415,13 @@ export function UserManagement() {
 
                 <div className="space-y-2">
                   <Label htmlFor="referredBy">Referred By (Optional)</Label>
-                  <Select value={newUser.referredBy || undefined} onValueChange={(value) => setNewUser({ ...newUser, referredBy: value === "none" ? null : value })}>
+                  <Select value={newUser.referredBy || "none"} onValueChange={(value) => setNewUser({ ...newUser, referredBy: value === "none" ? null : value })}>
                     <SelectTrigger id="referredBy" data-testid="select-user-referredby">
                       <SelectValue placeholder="Select referring agent..." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {data?.users?.filter(u => u.role === 'agent').map((agent) => (
+                      {data?.users?.filter(u => u.role === 'agent' && u.isActive !== false).map((agent) => (
                         <SelectItem key={agent.id} value={agent.id}>
                           {agent.agentName || `${agent.firstName} ${agent.lastName}`.trim() || agent.email}
                         </SelectItem>
