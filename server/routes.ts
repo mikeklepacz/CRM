@@ -2772,9 +2772,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         date: order.date_created
       });
 
-      // Find matching client
+      // Find matching client in clients table (source of truth)
       let client = null;
-      if (email) {
+      
+      // Try to find by email/company in clients table
+      if (email || company) {
+        const clientRecord = await db.query.clients.findFirst({
+          where: email 
+            ? eq(clients.data, sql`jsonb_build_object('email', ${email})`)
+            : eq(clients.data, sql`jsonb_build_object('company', ${company})`)
+        });
+        client = clientRecord || null;
+      }
+      
+      // Legacy fallback: also check old client lookup method
+      if (!client && email) {
         client = await storage.findClientByUniqueKey('Email', email) ||
                  await storage.findClientByUniqueKey('email', email);
       }
@@ -2811,8 +2823,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Apply commissions (both primary and referral)
-      await commissionService.applyCommissions(order.id.toString());
+      // ONLY apply commissions automatically for REORDERS (existing clients)
+      // First orders must be manually matched via WooCommerce Sync UI to set commission type
+      if (client) {
+        console.log('[Webhook] Client found - auto-calculating commissions for reorder');
+        await commissionService.applyCommissions(order.id.toString());
+      } else {
+        console.log('[Webhook] New client - skipping auto commission calculation. Admin must match order manually.');
+      }
 
       // Update client if matched
       if (client) {
