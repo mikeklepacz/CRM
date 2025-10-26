@@ -95,7 +95,7 @@ const isCanadianProvince = (state: string): boolean => {
 // Helper function: Case-insensitive lookup for link value
 const getLinkValue = (row: any): string | undefined => {
   if (!row) return undefined;
-  
+
   // Iterate over all row keys and find the one that matches "link" (case-insensitive)
   for (const key in row) {
     if (key.toLowerCase().trim() === "link") {
@@ -106,7 +106,7 @@ const getLinkValue = (row: any): string | undefined => {
       }
     }
   }
-  
+
   return undefined;
 };
 
@@ -124,6 +124,7 @@ interface MergedDataRow {
   _storeSheetId?: string;
   _trackerSheetId?: string;
   _deletedFromStore?: boolean;
+  _hasTrackerData?: boolean; // Added to indicate if a tracker row exists for this store
 }
 
 // Status Editor Popover Component
@@ -154,7 +155,7 @@ function StatusEditorPopover({
   const [localColors, setLocalColors] = useState(statusColors);
   const [isSaving, setIsSaving] = useState(false);
   const [statusManagementOpen, setStatusManagementOpen] = useState(false);
-  
+
   const isAdmin = currentUser?.role === 'admin';
 
   // Update local state when props change
@@ -173,7 +174,7 @@ function StatusEditorPopover({
         const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
         await updateStatusEntry(i, statusName, colors.background, colors.text);
       }
-      
+
       toast({
         title: "Success",
         description: "Status colors saved successfully",
@@ -311,7 +312,7 @@ function StatusEditorPopover({
                       onDeletePreset={deleteColorPreset}
                       testId={`input-status-bg-${index}`}
                     />
-                    
+
                     {/* Text Color */}
                     <SharedColorPicker
                       label="Text"
@@ -379,7 +380,7 @@ function StatusEditorPopover({
           </div>
         </div>
       </PopoverContent>
-      
+
       <StatusManagementDialog
         open={statusManagementOpen}
         onOpenChange={setStatusManagementOpen}
@@ -422,7 +423,7 @@ export default function ClientDashboard() {
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
   const [freezeFirstColumn, setFreezeFirstColumn] = useState<boolean>(false);
-  
+
   // AI Assistant states
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
   const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
@@ -602,15 +603,15 @@ export default function ClientDashboard() {
       // Optimistically update the cache
       queryClient.setQueryData(["merged-data"], (old: any) => {
         if (!old || !old.rows) return old;
-        
+
         return {
           ...old,
           rows: old.rows.map((row: any) => {
             // Match the row being updated (by store row index or tracker row index)
-            const isMatchingRow = 
+            const isMatchingRow =
               (row._storeRowIndex === variables.rowIndex && row._storeSheetId === variables.sheetId) ||
               (row._trackerRowIndex === variables.rowIndex && row._trackerSheetId === variables.sheetId);
-            
+
             if (isMatchingRow) {
               return { ...row, [variables.column]: variables.value };
             }
@@ -723,7 +724,7 @@ export default function ClientDashboard() {
       // Optimistically update the cache
       queryClient.setQueryData(["merged-data"], (old: any) => {
         if (!old || !old.rows) return old;
-        
+
         return {
           ...old,
           rows: old.rows.map((row: any) => {
@@ -834,7 +835,7 @@ export default function ClientDashboard() {
         });
         return;
       }
-      
+
       // Use upsert mutation which creates tracker row and updates value
       upsertTrackerMutation.mutate({
         trackerSheetId,
@@ -848,11 +849,11 @@ export default function ClientDashboard() {
       sheetId = row._storeSheetId;
       rowIndex = row._storeRowIndex;
       const linkValue = getLinkValue(row);
-      
-      updateCellMutation.mutate({ 
-        sheetId, 
-        rowIndex, 
-        column, 
+
+      updateCellMutation.mutate({
+        sheetId,
+        rowIndex,
+        column,
         value,
         shouldAutoClaimRow: isUnclaimed && !!linkValue,
         linkValue: linkValue
@@ -981,9 +982,9 @@ export default function ClientDashboard() {
       const currentWidths = { ...columnWidths };
       const currentOrder = [...columnOrder];
       const hiddenColumns = ['title', 'error']; // Columns to hide by default
-      
+
       // Hide Agent column for non-admin users (since auto-claiming manages it)
-      const isAgentColumn = (col: string) => 
+      const isAgentColumn = (col: string) =>
         col.toLowerCase() === 'agent' || col.toLowerCase() === 'agent name';
       const shouldHideColumn = (col: string) => {
         if (isAgentColumn(col) && currentUser?.role !== 'admin') {
@@ -1011,12 +1012,12 @@ export default function ClientDashboard() {
           const savedOrder = userPreferences.columnOrder.filter((col: string) => headers.includes(col));
           const newColumns = headers.filter((h: string) => !savedOrder.includes(h));
           // Filter out Agent column for non-admin users
-          const finalOrder = [...savedOrder, ...newColumns].filter((col: string) => 
+          const finalOrder = [...savedOrder, ...newColumns].filter((col: string) =>
             currentUser?.role === 'admin' || !isAgentColumn(col)
           );
           setColumnOrder(finalOrder);
         } else {
-          const finalOrder = headers.filter((col: string) => 
+          const finalOrder = headers.filter((col: string) =>
             currentUser?.role === 'admin' || !isAgentColumn(col)
           );
           setColumnOrder(finalOrder);
@@ -1071,7 +1072,7 @@ export default function ClientDashboard() {
           currentWidths[header] = 200;
         });
         setVisibleColumns(currentVisible);
-        const finalOrder = headers.filter((col: string) => 
+        const finalOrder = headers.filter((col: string) =>
           currentUser?.role === 'admin' || !isAgentColumn(col)
         );
         setColumnOrder(finalOrder);
@@ -1089,7 +1090,7 @@ export default function ClientDashboard() {
         const newHeaders = headers.filter((h: string) => !currentOrder.includes(h));
         if (newHeaders.length > 0) {
           // Add new headers to column order (filtering out Agent for non-admins)
-          const headersToAdd = newHeaders.filter((col: string) => 
+          const headersToAdd = newHeaders.filter((col: string) =>
             currentUser?.role === 'admin' || !isAgentColumn(col)
           );
           setColumnOrder([...currentOrder, ...headersToAdd]);
@@ -1116,43 +1117,43 @@ export default function ClientDashboard() {
   useEffect(() => {
     // Only run when data is loaded
     if (!data || data.length === 0 || !preferencesLoaded) return;
-    
+
     // Check for ?store= URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     const storeIdentifier = urlParams.get('store');
     const phoneNumber = urlParams.get('phone');
-    
+
     if (storeIdentifier) {
-      
+
       // Find the store in the data by matching the link (uniqueIdentifier)
       const matchingStore = data.find((row: any) => {
         const link = getLinkValue(row);
         if (!link) return false;
-        
+
         // Normalize and compare links
         const normalizedRowLink = normalizeLink(link);
         const normalizedSearchLink = normalizeLink(storeIdentifier);
-        
+
         return normalizedRowLink === normalizedSearchLink;
       });
-      
+
       if (matchingStore) {
         // Open the store details dialog
         setStoreDetailsDialog({
           open: true,
           row: matchingStore,
         });
-        
+
         // Trigger default script loading in AI assistant
         setLoadDefaultScriptTrigger(prev => prev + 1);
-        
+
         // If phone number provided, trigger dial after a delay so user sees the dialog first
         if (phoneNumber) {
           setTimeout(() => {
             window.location.href = `tel:${phoneNumber}`;
           }, 800);
         }
-        
+
         // Clear the URL parameters so it doesn't auto-open again
         const newUrl = window.location.pathname;
         window.history.replaceState({}, '', newUrl);
@@ -2823,490 +2824,490 @@ export default function ClientDashboard() {
                           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                             const rowIdx = virtualRow.index;
                             const row = filteredData[rowIdx];
-                      const rowKey = row._storeRowIndex || row._trackerRowIndex || rowIdx;
-                      const isDeletedRow = row._deletedFromStore;
-                      // Calculate minimum required height based on font size
-                      const verticalPadding = Math.max(8, fontSize * 0.5) * 2;
-                      const lineHeight = fontSize * 1.4;
-                      const minRequiredHeight = lineHeight + verticalPadding;
-                      const effectiveHeight = Math.max(rowHeight, minRequiredHeight);
+                            const rowKey = row._storeRowIndex || row._trackerRowIndex || rowIdx;
+                            const isDeletedRow = row._deletedFromStore;
+                            // Calculate minimum required height based on font size
+                            const verticalPadding = Math.max(8, fontSize * 0.5) * 2;
+                            const lineHeight = fontSize * 1.4;
+                            const minRequiredHeight = lineHeight + verticalPadding;
+                            const effectiveHeight = Math.max(rowHeight, minRequiredHeight);
 
-                      // Get row's status value for coloring
-                      const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
-                      const rowStatus = statusColumns.length > 0 ? row[statusColumns[0]] : null;
-                      const rowStatusColor = colorRowByStatus && rowStatus && (statusColors as any)?.[rowStatus];
+                            // Get row's status value for coloring
+                            const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
+                            const rowStatus = statusColumns.length > 0 ? row[statusColumns[0]] : null;
+                            const rowStatusColor = colorRowByStatus && rowStatus && (statusColors as any)?.[rowStatus];
 
-                      // Helper function to darken a hex color (for buttons - makes them stand out more than rows)
-                      const darkenColor = (hex: string, percent: number = 30) => {
-                        // Handle cases where statusColor.background might be empty string
-                        if (!hex) return '';
-                        const r = parseInt(hex.slice(1, 3), 16);
-                        const g = parseInt(hex.slice(3, 5), 16);
-                        const b = parseInt(hex.slice(5, 7), 16);
+                            // Helper function to darken a hex color (for buttons - makes them stand out more than rows)
+                            const darkenColor = (hex: string, percent: number = 30) => {
+                              // Handle cases where statusColor.background might be empty string
+                              if (!hex) return '';
+                              const r = parseInt(hex.slice(1, 3), 16);
+                              const g = parseInt(hex.slice(3, 5), 16);
+                              const b = parseInt(hex.slice(5, 7), 16);
 
-                        const darkenValue = (val: number) => Math.max(0, Math.floor(val * (1 - percent / 100)));
+                              const darkenValue = (val: number) => Math.max(0, Math.floor(val * (1 - percent / 100)));
 
-                        const newR = darkenValue(r).toString(16).padStart(2, '0');
-                        const newG = darkenValue(g).toString(16).padStart(2, '0');
-                        const newB = darkenValue(b).toString(16).padStart(2, '0');
+                              const newR = darkenValue(r).toString(16).padStart(2, '0');
+                              const newG = darkenValue(g).toString(16).padStart(2, '0');
+                              const newB = darkenValue(b).toString(16).padStart(2, '0');
 
-                        return `#${newR}${newG}${newB}`;
-                      };
-
-                      return (
-                        <div
-                          key={virtualRow.key}
-                          data-testid={`row-data-${rowIdx}`}
-                          className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
-                          title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: `${virtualRow.size}px`,
-                            transform: `translateY(${virtualRow.start}px)`,
-                            fontSize: `${fontSize}px`,
-                            backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
-                            color: rowStatusColor ? rowStatusColor.text : customColors.tableTextColor,
-                            display: 'flex',
-                          }}
-                        >
-                          {visibleHeaders.map((header: string) => {
-                            const isEditable = editableColumns.some((col: string) => col.toLowerCase() === header.toLowerCase());
-                            const isTrackerColumn = trackerHeaders.some((h: string) => h.toLowerCase() === header.toLowerCase());
-                            const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
-                            const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
-                            const rowLink = row.link || row.Link || `row-${rowKey}`;
-                            const cellKey = `${rowLink}-${header}-${sheetId}`;
-                            const cellValue = editedCells[cellKey]?.value ?? row[header] ?? '';
-
-                            const isPhoneColumn = header.toLowerCase().includes('phone');
-                            const isEmailColumn = header.toLowerCase().includes('email') || header.toLowerCase().includes('e-mail');
-                            const isWebsiteColumn = header.toLowerCase().includes('website') || header.toLowerCase().includes('url') || header.toLowerCase().includes('site');
-                            const isLinkColumn = header.toLowerCase() === 'link';
-                            const isStateColumn = header.toLowerCase() === 'state';
-                            const isStatusColumn = header.toLowerCase().includes('status');
-                            const isHoursColumn = header.toLowerCase().includes('hour');
-                            const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
-                            const isSalesSummaryColumn = header.toLowerCase().includes('sales-ready') || header.toLowerCase().includes('sales ready') || header.toLowerCase().includes('sales_ready');
-                            const isAddressColumn = header.toLowerCase().includes('address') ||
-                                                   header.toLowerCase().includes('city') ||
-                                                   (header.toLowerCase().includes('state') && header.toLowerCase().includes('city')) ||
-                                                   header.toLowerCase().includes('point of contact');
-
-                            // Determine if this column should allow text wrapping
-                            const isNotesColumn = header.toLowerCase().includes('note') || header.toLowerCase().includes('comment');
-                            const shouldWrap = isAddressColumn || isNotesColumn || isHoursColumn;
-
-                            // Apply alignment styles
-                            const cellStyle: React.CSSProperties = {
-                              width: columnWidths[header] || 200,
-                              maxWidth: columnWidths[header] || 200,
-                              padding: `${Math.max(8, fontSize * 0.5)}px 16px`,
-                              lineHeight: `${fontSize * 1.4}px`,
-                              height: 'inherit',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              textAlign: textAlign, // Apply textAlign to ALL cells
-                              verticalAlign: verticalAlign,
-                              ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const, overflow: 'visible' } : {})
+                              return `#${newR}${newG}${newB}`;
                             };
-
-                            // Clean display based on column type
-                            let cleanedValue = cellValue;
-                            if (isHoursColumn) {
-                              cleanedValue = formatHours(cellValue);
-                            }
-
-                            const isLongText = cleanedValue.length > 100;
-                            const displayValue = isLongText ? cleanedValue.substring(0, 100) + '...' : cleanedValue;
-
-                            const isLeaflyLink = cellValue.toLowerCase().includes('leafly');
-                            const hasData = cellValue.length > 0;
-                            const comboboxKey = `${rowKey}-${header}`;
-                            const uniqueStates = isStateColumn ? getUniqueColumnValues(header) : [];
-
-                            const isFirstColumn = visibleHeaders.indexOf(header) === 0;
 
                             return (
                               <div
-                                key={header}
+                                key={virtualRow.key}
+                                data-testid={`row-data-${rowIdx}`}
+                                className={isDeletedRow ? "bg-destructive/10 hover:bg-destructive/20" : ""}
+                                title={isDeletedRow ? "This order was deleted from the store sheet" : ""}
                                 style={{
-                                  ...cellStyle,
-                                  ...(isFirstColumn && freezeFirstColumn ? {
-                                    position: 'sticky',
-                                    left: 0,
-                                    zIndex: 10,
-                                    backgroundColor: rowStatusColor ? rowStatusColor.background : customColors.background
-                                  } : {})
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  width: '100%',
+                                  height: `${virtualRow.size}px`,
+                                  transform: `translateY(${virtualRow.start}px)`,
+                                  fontSize: `${fontSize}px`,
+                                  backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
+                                  color: rowStatusColor ? rowStatusColor.text : customColors.tableTextColor,
+                                  display: 'flex',
                                 }}
                               >
-                                {isEditable ? (
-                                  hasData ? (
-                                    // Has data: Show value with edit controls - admins only
-                                    isDateColumn ? (
-                                      <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            className="w-full justify-start text-left font-normal"
-                                            data-testid={`button-date-${rowKey}-${header}`}
-                                            disabled={!isAdmin}
-                                          >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {cellValue || "Pick a date"}
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" align="start">
-                                          <Calendar
-                                            mode="single"
-                                            selected={cellValue ? (() => {
-                                              try {
-                                                const parsed = parse(cellValue, 'M/d/yyyy', new Date());
-                                                return isValid(parsed) ? parsed : undefined;
-                                              } catch {
-                                                return undefined;
-                                              }
-                                            })() : undefined}
-                                            onSelect={(date) => {
-                                              if (date) {
-                                                handleCellUpdate(row, header, format(date, 'M/d/yyyy'));
-                                              }
-                                              setOpenCombobox(null);
-                                            }}
-                                            initialFocus
-                                          />
-                                        </PopoverContent>
-                                      </Popover>
-                                    ) : isStatusColumn ? (
-                                      <Select
-                                        value={cellValue || ""}
-                                        onValueChange={(value) => handleCellUpdate(row, header, value)}
-                                        disabled={!isAdmin}
-                                      >
-                                        <SelectTrigger
-                                          className="w-full"
-                                          data-testid={`button-status-${rowKey}-${header}`}
-                                          disabled={!isAdmin}
-                                          style={cellValue && (customColors.statusColors as any)?.[cellValue] ? {
-                                            backgroundColor: (customColors.statusColors as any)[cellValue].background,
-                                            color: (customColors.statusColors as any)[cellValue].text,
-                                          } : undefined}
-                                        >
-                                          <SelectValue placeholder="Select status..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {statusOptions.map((status) => {
-                                            const statusColor = (customColors.statusColors as any)?.[status];
-                                            return (
-                                              <SelectItem
-                                                key={status}
-                                                value={status}
-                                                data-testid={`option-status-${status}`}
-                                                style={statusColor ? {
-                                                  backgroundColor: darkenColor(statusColor.background, 30),
-                                                  color: statusColor.text,
+                                {visibleHeaders.map((header: string) => {
+                                  const isEditable = editableColumns.some((col: string) => col.toLowerCase() === header.toLowerCase());
+                                  const isTrackerColumn = trackerHeaders.some((h: string) => h.toLowerCase() === header.toLowerCase());
+                                  const sheetId = isTrackerColumn ? trackerSheetId : storeSheetId;
+                                  const rowIndex = isTrackerColumn ? row._trackerRowIndex : row._storeRowIndex;
+                                  const rowLink = row.link || row.Link || `row-${rowKey}`;
+                                  const cellKey = `${rowLink}-${header}-${sheetId}`;
+                                  const cellValue = editedCells[cellKey]?.value ?? row[header] ?? '';
+
+                                  const isPhoneColumn = header.toLowerCase().includes('phone');
+                                  const isEmailColumn = header.toLowerCase().includes('email') || header.toLowerCase().includes('e-mail');
+                                  const isWebsiteColumn = header.toLowerCase().includes('website') || header.toLowerCase().includes('url') || header.toLowerCase().includes('site');
+                                  const isLinkColumn = header.toLowerCase() === 'link';
+                                  const isStateColumn = header.toLowerCase() === 'state';
+                                  const isStatusColumn = header.toLowerCase().includes('status');
+                                  const isHoursColumn = header.toLowerCase().includes('hour');
+                                  const isDateColumn = header.toLowerCase().includes('date') || header.toLowerCase().includes('follow');
+                                  const isSalesSummaryColumn = header.toLowerCase().includes('sales-ready') || header.toLowerCase().includes('sales ready') || header.toLowerCase().includes('sales_ready');
+                                  const isAddressColumn = header.toLowerCase().includes('address') ||
+                                                         header.toLowerCase().includes('city') ||
+                                                         (header.toLowerCase().includes('state') && header.toLowerCase().includes('city')) ||
+                                                         header.toLowerCase().includes('point of contact');
+
+                                  // Determine if this column should allow text wrapping
+                                  const isNotesColumn = header.toLowerCase().includes('note') || header.toLowerCase().includes('comment');
+                                  const shouldWrap = isAddressColumn || isNotesColumn || isHoursColumn;
+
+                                  // Apply alignment styles
+                                  const cellStyle: React.CSSProperties = {
+                                    width: columnWidths[header] || 200,
+                                    maxWidth: columnWidths[header] || 200,
+                                    padding: `${Math.max(8, fontSize * 0.5)}px 16px`,
+                                    lineHeight: `${fontSize * 1.4}px`,
+                                    height: 'inherit',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    textAlign: textAlign, // Apply textAlign to ALL cells
+                                    verticalAlign: verticalAlign,
+                                    ...(shouldWrap ? { wordBreak: 'break-word' as const, whiteSpace: 'normal' as const, overflow: 'visible' } : {})
+                                  };
+
+                                  // Clean display based on column type
+                                  let cleanedValue = cellValue;
+                                  if (isHoursColumn) {
+                                    cleanedValue = formatHours(cellValue);
+                                  }
+
+                                  const isLongText = cleanedValue.length > 100;
+                                  const displayValue = isLongText ? cleanedValue.substring(0, 100) + '...' : cleanedValue;
+
+                                  const isLeaflyLink = cellValue.toLowerCase().includes('leafly');
+                                  const hasData = cellValue.length > 0;
+                                  const comboboxKey = `${rowKey}-${header}`;
+                                  const uniqueStates = isStateColumn ? getUniqueColumnValues(header) : [];
+
+                                  const isFirstColumn = visibleHeaders.indexOf(header) === 0;
+
+                                  return (
+                                    <div
+                                      key={header}
+                                      style={{
+                                        ...cellStyle,
+                                        ...(isFirstColumn && freezeFirstColumn ? {
+                                          position: 'sticky',
+                                          left: 0,
+                                          zIndex: 10,
+                                          backgroundColor: rowStatusColor ? rowStatusColor.background : customColors.background
+                                        } : {})
+                                      }}
+                                    >
+                                      {isEditable ? (
+                                        hasData ? (
+                                          // Has data: Show value with edit controls - admins only
+                                          isDateColumn ? (
+                                            <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
+                                              <PopoverTrigger asChild>
+                                                <Button
+                                                  variant="outline"
+                                                  className="w-full justify-start text-left font-normal"
+                                                  data-testid={`button-date-${rowKey}-${header}`}
+                                                  disabled={!isAdmin}
+                                                >
+                                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                                  {cellValue || "Pick a date"}
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                  mode="single"
+                                                  selected={cellValue ? (() => {
+                                                    try {
+                                                      const parsed = parse(cellValue, 'M/d/yyyy', new Date());
+                                                      return isValid(parsed) ? parsed : undefined;
+                                                    } catch {
+                                                      return undefined;
+                                                    }
+                                                  })() : undefined}
+                                                  onSelect={(date) => {
+                                                    if (date) {
+                                                      handleCellUpdate(row, header, format(date, 'M/d/yyyy'));
+                                                    }
+                                                    setOpenCombobox(null);
+                                                  }}
+                                                  initialFocus
+                                                />
+                                              </PopoverContent>
+                                            </Popover>
+                                          ) : isStatusColumn ? (
+                                            <Select
+                                              value={cellValue || ""}
+                                              onValueChange={(value) => handleCellUpdate(row, header, value)}
+                                              disabled={!isAdmin}
+                                            >
+                                              <SelectTrigger
+                                                className="w-full"
+                                                data-testid={`button-status-${rowKey}-${header}`}
+                                                disabled={!isAdmin}
+                                                style={cellValue && (customColors.statusColors as any)?.[cellValue] ? {
+                                                  backgroundColor: (customColors.statusColors as any)[cellValue].background,
+                                                  color: (customColors.statusColors as any)[cellValue].text,
                                                 } : undefined}
                                               >
-                                                {status}
-                                              </SelectItem>
-                                            );
-                                          })}
-                                        </SelectContent>
-                                      </Select>
-                                    ) : isStateColumn ? (
-                                      <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={openCombobox === comboboxKey}
-                                            className="w-full justify-between"
-                                            data-testid={`button-state-${rowKey}-${header}`}
-                                            disabled={!isAdmin}
-                                          >
-                                            {cellValue || "Select state..."}
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[200px] p-0">
-                                          <Command>
-                                            <CommandInput placeholder="Search state..." />
-                                            <CommandList>
-                                              <CommandEmpty>No state found.</CommandEmpty>
-                                              <CommandGroup>
-                                                {uniqueStates.map((state) => (
-                                                  <CommandItem
-                                                    key={state}
-                                                    value={state}
-                                                    onSelect={(currentValue) => {
-                                                      handleCellUpdate(row, header, state);
-                                                      setOpenCombobox(null);
-                                                    }}
-                                                    data-testid={`option-state-${state}`}
-                                                  >
-                                                    <Check
-                                                      className={`mr-2 h-4 w-4 ${cellValue === state ? "opacity-100" : "opacity-0"}`}
-                                                    />
-                                                    {state}
-                                                  </CommandItem>
-                                                ))}
-                                              </CommandGroup>
-                                            </CommandList>
-                                          </Command>
-                                        </PopoverContent>
-                                      </Popover>
-                                    ) : (
-                                      <Input
-                                        value={cellValue}
-                                        onChange={(e) => handleCellEdit(row, header, e.target.value)}
-                                        className="w-full"
-                                        data-testid={`input-cell-${rowKey}-${header}`}
-                                        disabled={!isAdmin}
-                                        readOnly={!isAdmin}
-                                      />
-                                    )
-                                  ) : (
-                                    // Empty cell: Allow inline editing for new data - admins only
-                                    isDateColumn ? (
-                                      <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            className="w-full justify-start text-left font-normal"
-                                            data-testid={`button-date-${rowKey}-${header}`}
-                                            disabled={!isAdmin}
-                                          >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            Pick a date
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" align="start">
-                                          <Calendar
-                                            mode="single"
-                                            onSelect={(date) => {
-                                              if (date) {
-                                                handleCellUpdate(row, header, format(date, 'M/d/yyyy'));
-                                              }
-                                              setOpenCombobox(null);
-                                            }}
-                                            initialFocus
-                                          />
-                                        </PopoverContent>
-                                      </Popover>
-                                    ) : isStatusColumn ? (
-                                      <Select
-                                        value={cellValue || ""}
-                                        onValueChange={(value) => handleCellUpdate(row, header, value)}
-                                        disabled={!isAdmin}
-                                      >
-                                        <SelectTrigger
-                                          className="w-full"
-                                          data-testid={`button-status-${rowKey}-${header}`}
-                                          disabled={!isAdmin}
-                                        >
-                                          <SelectValue placeholder="Select status..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {statusOptions.map((status) => {
-                                            const statusColor = (customColors.statusColors as any)?.[status];
-                                            return (
-                                              <SelectItem
-                                                key={status}
-                                                value={status}
-                                                data-testid={`option-status-${status}`}
-                                                style={statusColor ? {
-                                                  backgroundColor: darkenColor(statusColor.background, 30),
-                                                  color: statusColor.text,
-                                                } : undefined}
+                                                <SelectValue placeholder="Select status..." />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {statusOptions.map((status) => {
+                                                  const statusColor = (customColors.statusColors as any)?.[status];
+                                                  return (
+                                                    <SelectItem
+                                                      key={status}
+                                                      value={status}
+                                                      data-testid={`option-status-${status}`}
+                                                      style={statusColor ? {
+                                                        backgroundColor: darkenColor(statusColor.background, 30),
+                                                        color: statusColor.text,
+                                                      } : undefined}
+                                                    >
+                                                      {status}
+                                                    </SelectItem>
+                                                  );
+                                                })}
+                                              </SelectContent>
+                                            </Select>
+                                          ) : isStateColumn ? (
+                                            <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
+                                              <PopoverTrigger asChild>
+                                                <Button
+                                                  variant="outline"
+                                                  role="combobox"
+                                                  aria-expanded={openCombobox === comboboxKey}
+                                                  className="w-full justify-between"
+                                                  data-testid={`button-state-${rowKey}-${header}`}
+                                                  disabled={!isAdmin}
+                                                >
+                                                  {cellValue || "Select state..."}
+                                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-[200px] p-0">
+                                                <Command>
+                                                  <CommandInput placeholder="Search state..." />
+                                                  <CommandList>
+                                                    <CommandEmpty>No state found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                      {uniqueStates.map((state) => (
+                                                        <CommandItem
+                                                          key={state}
+                                                          value={state}
+                                                          onSelect={(currentValue) => {
+                                                            handleCellUpdate(row, header, state);
+                                                            setOpenCombobox(null);
+                                                          }}
+                                                          data-testid={`option-state-${state}`}
+                                                        >
+                                                          <Check
+                                                            className={`mr-2 h-4 w-4 ${cellValue === state ? "opacity-100" : "opacity-0"}`}
+                                                          />
+                                                          {state}
+                                                        </CommandItem>
+                                                      ))}
+                                                    </CommandGroup>
+                                                  </CommandList>
+                                                </Command>
+                                              </PopoverContent>
+                                            </Popover>
+                                          ) : (
+                                            <Input
+                                              value={cellValue}
+                                              onChange={(e) => handleCellEdit(row, header, e.target.value)}
+                                              className="w-full"
+                                              data-testid={`input-cell-${rowKey}-${header}`}
+                                              disabled={!isAdmin}
+                                              readOnly={!isAdmin}
+                                            />
+                                          )
+                                        ) : (
+                                          // Empty cell: Allow inline editing for new data - admins only
+                                          isDateColumn ? (
+                                            <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
+                                              <PopoverTrigger asChild>
+                                                <Button
+                                                  variant="outline"
+                                                  className="w-full justify-start text-left font-normal"
+                                                  data-testid={`button-date-${rowKey}-${header}`}
+                                                  disabled={!isAdmin}
+                                                >
+                                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                                  Pick a date
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                  mode="single"
+                                                  onSelect={(date) => {
+                                                    if (date) {
+                                                      handleCellUpdate(row, header, format(date, 'M/d/yyyy'));
+                                                    }
+                                                    setOpenCombobox(null);
+                                                  }}
+                                                  initialFocus
+                                                />
+                                              </PopoverContent>
+                                            </Popover>
+                                          ) : isStatusColumn ? (
+                                            <Select
+                                              value={cellValue || ""}
+                                              onValueChange={(value) => handleCellUpdate(row, header, value)}
+                                              disabled={!isAdmin}
+                                            >
+                                              <SelectTrigger
+                                                className="w-full"
+                                                data-testid={`button-status-${rowKey}-${header}`}
+                                                disabled={!isAdmin}
                                               >
-                                                {status}
-                                              </SelectItem>
-                                            );
-                                          })}
-                                        </SelectContent>
-                                      </Select>
-                                    ) : isStateColumn ? (
-                                      <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={openCombobox === comboboxKey}
-                                            className="w-full justify-between"
-                                            data-testid={`button-state-${rowKey}-${header}`}
-                                            disabled={!isAdmin}
-                                          >
-                                            {cellValue || "Select state..."}
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[200px] p-0">
-                                          <Command>
-                                            <CommandInput placeholder="Search state..." />
-                                            <CommandList>
-                                              <CommandEmpty>No state found.</CommandEmpty>
-                                              <CommandGroup>
-                                                {uniqueStates.map((state) => (
-                                                  <CommandItem
-                                                    key={state}
-                                                    value={state}
-                                                    onSelect={(currentValue) => {
-                                                      handleCellUpdate(row, header, state);
-                                                      setOpenCombobox(null);
-                                                    }}
-                                                    data-testid={`option-state-${state}`}
-                                                  >
-                                                    <Check
-                                                      className={`mr-2 h-4 w-4 ${cellValue === state ? "opacity-100" : "opacity-0"}`}
-                                                    />
-                                                    {state}
-                                                  </CommandItem>
-                                                ))}
-                                              </CommandGroup>
-                                            </CommandList>
-                                          </Command>
-                                        </PopoverContent>
-                                      </Popover>
-                                    ) : (
-                                      <Input
-                                        value={cellValue}
-                                        onChange={(e) => handleCellEdit(row, header, e.target.value)}
-                                        placeholder="Enter value..."
-                                        className="w-full"
-                                        data-testid={`input-cell-${rowKey}-${header}`}
-                                        disabled={!isAdmin}
-                                        readOnly={!isAdmin}
-                                      />
-                                    )
-                                  )
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    {isPhoneColumn && cellValue ? (
-                                      <a
-                                        href={`tel:${cellValue}`}
-                                        onClick={(e) => {
-                                          // Don't prevent default - let tel: link work
-                                          // But also open the dialog
-                                          setStoreDetailsDialog({
-                                            open: true,
-                                            row: row,
-                                            franchiseContext: selectedFranchise ? {
-                                              brandName: selectedFranchise.brandName,
-                                              allLocations: selectedFranchise.locations
-                                            } : undefined
-                                          });
-                                          // Open AI Assistant with default script (only if autoLoadScript preference is enabled)
-                                          const autoLoadEnabled = userPreferences?.autoLoadScript ?? true;
-                                          if (autoLoadEnabled) {
-                                            const saved = localStorage.getItem(`storeDetailsShowAssistant`);
-                                            if (saved !== 'true') {
-                                              localStorage.setItem(`storeDetailsShowAssistant`, 'true');
-                                            }
-                                            setLoadDefaultScriptTrigger(prev => prev + 1);
-                                          }
-                                        }}
-                                        className="flex items-center gap-1 hover:underline"
-                                        style={{ color: customColors.primary }}
-                                        data-testid={`link-phone-${rowKey}-${header}`}
-                                      >
-                                        <Phone className="h-4 w-4" />
-                                        <span>{displayValue}</span>
-                                      </a>
-                                    ) : isEmailColumn && cellValue ? (
-                                      <button
-                                        onClick={() => setStoreDetailsDialog({
-                                          open: true,
-                                          row: row,
-                                          franchiseContext: selectedFranchise ? {
-                                            brandName: selectedFranchise.brandName,
-                                            allLocations: selectedFranchise.locations
-                                          } : undefined
-                                        })}
-                                        className="flex items-center gap-1 hover:underline"
-                                        style={{ color: customColors.primary }}
-                                        data-testid={`link-email-${rowKey}-${header}`}
-                                      >
-                                        <Mail className="h-4 w-4" />
-                                        <span>{displayValue}</span>
-                                      </button>
-                                    ) : isSalesSummaryColumn && cellValue ? (
-                                      <button
-                                        onClick={() => openExpandedView(row, header, cellValue, false)}
-                                        className="hover:underline text-left"
-                                        style={{ color: customColors.primary }}
-                                        data-testid={`link-sales-summary-${rowKey}-${header}`}
-                                      >
-                                        {cellValue.length > 50 ? cellValue.substring(0, 50) + '...' : cellValue || 'View Summary'}
-                                      </button>
-                                    ) : (header.toLowerCase() === 'name' || header.toLowerCase() === 'company') && cellValue ? (
-                                      <button
-                                        onClick={() => setStoreDetailsDialog({
-                                          open: true,
-                                          row: row,
-                                          franchiseContext: selectedFranchise ? {
-                                            brandName: selectedFranchise.brandName,
-                                            allLocations: selectedFranchise.locations
-                                          } : undefined
-                                        })}
-                                        className="hover:underline font-medium text-left"
-                                        style={{ color: customColors.primary }}
-                                        data-testid={`link-store-${rowKey}-${header}`}
-                                      >
-                                        {displayValue}
-                                      </button>
-                                    ) : isWebsiteColumn && cellValue ? (
-                                      <a
-                                        href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-1 hover:underline"
-                                        style={{ color: customColors.primary }}
-                                        data-testid={`link-website-${rowKey}-${header}`}
-                                      >
-                                        <ExternalLink className="h-4 w-4" />
-                                        <span>{extractDomain(cellValue)}</span>
-                                      </a>
-                                    ) : isLinkColumn && cellValue ? (
-                                      <a
-                                        href={cellValue}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-2xl hover:scale-110 transition-transform"
-                                        data-testid={`link-leafly-${rowKey}-${header}`}
-                                        title={cellValue}
-                                      >
-                                        {isLeaflyLink ? '🍁' : '🔗'}
-                                      </a>
-                                    ) : (
-                                      <span
-                                        data-testid={`text-cell-${rowKey}-${header}`}
-                                        className={isLongText ? "cursor-pointer hover:text-primary" : ""}
-                                        onClick={() => isLongText && openExpandedView(row, header, cellValue, false)}
-                                      >
-                                        {displayValue}
-                                      </span>
-                                    )}
-                                    {isLongText && !isPhoneColumn && !isWebsiteColumn && !isLinkColumn && !isSalesSummaryColumn && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 flex-shrink-0"
-                                        onClick={() => openExpandedView(row, header, cellValue, false)}
-                                        data-testid={`button-expand-${rowKey}-${header}`}
-                                      >
-                                        <Maximize2 className="h-4 w-4" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                )}
+                                                <SelectValue placeholder="Select status..." />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {statusOptions.map((status) => {
+                                                  const statusColor = (customColors.statusColors as any)?.[status];
+                                                  return (
+                                                    <SelectItem
+                                                      key={status}
+                                                      value={status}
+                                                      data-testid={`option-status-${status}`}
+                                                      style={statusColor ? {
+                                                        backgroundColor: darkenColor(statusColor.background, 30),
+                                                        color: statusColor.text,
+                                                      } : undefined}
+                                                    >
+                                                      {status}
+                                                    </SelectItem>
+                                                  );
+                                                })}
+                                              </SelectContent>
+                                            </Select>
+                                          ) : isStateColumn ? (
+                                            <Popover open={isAdmin && openCombobox === comboboxKey} onOpenChange={(open) => isAdmin && setOpenCombobox(open ? comboboxKey : null)}>
+                                              <PopoverTrigger asChild>
+                                                <Button
+                                                  variant="outline"
+                                                  role="combobox"
+                                                  aria-expanded={openCombobox === comboboxKey}
+                                                  className="w-full justify-between"
+                                                  data-testid={`button-state-${rowKey}-${header}`}
+                                                  disabled={!isAdmin}
+                                                >
+                                                  {cellValue || "Select state..."}
+                                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-[200px] p-0">
+                                                <Command>
+                                                  <CommandInput placeholder="Search state..." />
+                                                  <CommandList>
+                                                    <CommandEmpty>No state found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                      {uniqueStates.map((state) => (
+                                                        <CommandItem
+                                                          key={state}
+                                                          value={state}
+                                                          onSelect={(currentValue) => {
+                                                            handleCellUpdate(row, header, state);
+                                                            setOpenCombobox(null);
+                                                          }}
+                                                          data-testid={`option-state-${state}`}
+                                                        >
+                                                          <Check
+                                                            className={`mr-2 h-4 w-4 ${cellValue === state ? "opacity-100" : "opacity-0"}`}
+                                                          />
+                                                          {state}
+                                                        </CommandItem>
+                                                      ))}
+                                                    </CommandGroup>
+                                                  </CommandList>
+                                                </Command>
+                                              </PopoverContent>
+                                            </Popover>
+                                          ) : (
+                                            <Input
+                                              value={cellValue}
+                                              onChange={(e) => handleCellEdit(row, header, e.target.value)}
+                                              placeholder="Enter value..."
+                                              className="w-full"
+                                              data-testid={`input-cell-${rowKey}-${header}`}
+                                              disabled={!isAdmin}
+                                              readOnly={!isAdmin}
+                                            />
+                                          )
+                                        )
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          {isPhoneColumn && cellValue ? (
+                                            <a
+                                              href={`tel:${cellValue}`}
+                                              onClick={(e) => {
+                                                // Don't prevent default - let tel: link work
+                                                // But also open the dialog
+                                                setStoreDetailsDialog({
+                                                  open: true,
+                                                  row: row,
+                                                  franchiseContext: selectedFranchise ? {
+                                                    brandName: selectedFranchise.brandName,
+                                                    allLocations: selectedFranchise.locations
+                                                  } : undefined
+                                                });
+                                                // Open AI Assistant with default script (only if autoLoadScript preference is enabled)
+                                                const autoLoadEnabled = userPreferences?.autoLoadScript ?? true;
+                                                if (autoLoadEnabled) {
+                                                  const saved = localStorage.getItem(`storeDetailsShowAssistant`);
+                                                  if (saved !== 'true') {
+                                                    localStorage.setItem(`storeDetailsShowAssistant`, 'true');
+                                                  }
+                                                  setLoadDefaultScriptTrigger(prev => prev + 1);
+                                                }
+                                              }}
+                                              className="flex items-center gap-1 hover:underline"
+                                              style={{ color: customColors.primary }}
+                                              data-testid={`link-phone-${rowKey}-${header}`}
+                                            >
+                                              <Phone className="h-4 w-4" />
+                                              <span>{displayValue}</span>
+                                            </a>
+                                          ) : isEmailColumn && cellValue ? (
+                                            <button
+                                              onClick={() => setStoreDetailsDialog({
+                                                open: true,
+                                                row: row,
+                                                franchiseContext: selectedFranchise ? {
+                                                  brandName: selectedFranchise.brandName,
+                                                  allLocations: selectedFranchise.locations
+                                                } : undefined
+                                              })}
+                                              className="flex items-center gap-1 hover:underline"
+                                              style={{ color: customColors.primary }}
+                                              data-testid={`link-email-${rowKey}-${header}`}
+                                            >
+                                              <Mail className="h-4 w-4" />
+                                              <span>{displayValue}</span>
+                                            </button>
+                                          ) : isSalesSummaryColumn && cellValue ? (
+                                            <button
+                                              onClick={() => openExpandedView(row, header, cellValue, false)}
+                                              className="hover:underline text-left"
+                                              style={{ color: customColors.primary }}
+                                              data-testid={`link-sales-summary-${rowKey}-${header}`}
+                                            >
+                                              {cellValue.length > 50 ? cellValue.substring(0, 50) + '...' : cellValue || 'View Summary'}
+                                            </button>
+                                          ) : (header.toLowerCase() === 'name' || header.toLowerCase() === 'company') && cellValue ? (
+                                            <button
+                                              onClick={() => setStoreDetailsDialog({
+                                                open: true,
+                                                row: row,
+                                                franchiseContext: selectedFranchise ? {
+                                                  brandName: selectedFranchise.brandName,
+                                                  allLocations: selectedFranchise.locations
+                                                } : undefined
+                                              })}
+                                              className="hover:underline font-medium text-left"
+                                              style={{ color: customColors.primary }}
+                                              data-testid={`link-store-${rowKey}-${header}`}
+                                            >
+                                              {displayValue}
+                                            </button>
+                                          ) : isWebsiteColumn && cellValue ? (
+                                            <a
+                                              href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="flex items-center gap-1 hover:underline"
+                                              style={{ color: customColors.primary }}
+                                              data-testid={`link-website-${rowKey}-${header}`}
+                                            >
+                                              <ExternalLink className="h-4 w-4" />
+                                              <span>{extractDomain(cellValue)}</span>
+                                            </a>
+                                          ) : isLinkColumn && cellValue ? (
+                                            <a
+                                              href={cellValue}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-2xl hover:scale-110 transition-transform"
+                                              data-testid={`link-leafly-${rowKey}-${header}`}
+                                              title={cellValue}
+                                            >
+                                              {isLeaflyLink ? '🍁' : '🔗'}
+                                            </a>
+                                          ) : (
+                                            <span
+                                              data-testid={`text-cell-${rowKey}-${header}`}
+                                              className={isLongText ? "cursor-pointer hover:text-primary" : ""}
+                                              onClick={() => isLongText && openExpandedView(row, header, cellValue, false)}
+                                            >
+                                              {displayValue}
+                                            </span>
+                                          )}
+                                          {isLongText && !isPhoneColumn && !isWebsiteColumn && !isLinkColumn && !isSalesSummaryColumn && (
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-8 w-8 flex-shrink-0"
+                                              onClick={() => openExpandedView(row, header, cellValue, false)}
+                                              data-testid={`button-expand-${rowKey}-${header}`}
+                                            >
+                                              <Maximize2 className="h-4 w-4" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             );
                           })}
-                        </div>
-                      );
-                    })}
                         </div>
                       </td>
                     </tr>
@@ -3593,8 +3594,8 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: currentUser } = useQuery<{ email: string; role: string; agentName?: string }>({ queryKey: ['/api/auth/user'] });
-  
+  const { data: currentUser } = useQuery<{ id: string; email?: string; role?: string; agentName?: string }>({ queryKey: ['/api/auth/user'] });
+
   // Fetch user preferences for timezone and time format
   const { data: userPreferences } = useQuery<{ timezone?: string; defaultTimezoneMode?: string; timeFormat?: string; autoLoadScript?: boolean }>({
     queryKey: ['/api/user/preferences'],
@@ -3900,14 +3901,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     onMutate: async (variables) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: ["merged-data"] });
-      
+
       // Snapshot previous data
       const previousData = queryClient.getQueryData(["merged-data"]);
-      
+
       // Optimistically update cache
       queryClient.setQueryData(["merged-data"], (old: any) => {
         if (!old || !old.rows) return old;
-        
+
         return {
           ...old,
           rows: old.rows.map((r: any) => {
@@ -3919,7 +3920,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           })
         };
       });
-      
+
       return { previousData };
     },
     onError: (error: Error, variables, context: any) => {
@@ -4041,7 +4042,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       // Optimistically update the cache with the new formData values
       queryClient.setQueryData(["merged-data"], (old: any) => {
         if (!old || !old.rows) return old;
-        
+
         return {
           ...old,
           rows: old.rows.map((r: any) => {
@@ -4062,12 +4063,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     },
     onSuccess: async (data) => {
       setInitialData(formData); // Update initial data so changes are no longer "unsaved"
-      
+
       // Auto-claim unclaimed stores after successfully saving (if not already claimed via tracker upsert)
       const isUnclaimed = !row._trackerRowIndex;
       const linkValue = formData.link || getLinkValue(row);
       const joinColumn = "link";
-      
+
       if (isUnclaimed && linkValue && trackerSheetId) {
         try {
           await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
@@ -4081,12 +4082,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           console.error("Auto-claim failed:", error);
         }
       }
-      
+
       // If AI Assistant is open, trigger context update with latest field values
       if (showAssistant) {
         setContextUpdateTrigger(prev => prev + 1);
       }
-      
+
       // Only close if requested
       if (data?.closeDialog) {
         onOpenChange(false);
@@ -4166,7 +4167,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
 
   // AI Assistant toggle - global setting (applies to all stores)
   const GLOBAL_AI_ASSISTANT_KEY = 'show-ai-assistant';
-  
+
   const [showAssistant, setShowAssistant] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(GLOBAL_AI_ASSISTANT_KEY);
@@ -4591,7 +4592,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                         type="email"
                         value={formData.poc_email}
                         onChange={(e) => handleInputChange('poc_email', e.target.value)}
-                        placeholder="contact@email.com"
+                        placeholder="contact@store.com"
                       />
                     </div>
                     <div className="space-y-2">
@@ -4697,14 +4698,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                                     'Next Action': reminderData.note,
                                   }
                                 });
-                                
+
                                 // Update initialData to prevent "unsaved changes" indicator
                                 setInitialData(prev => ({
                                   ...prev,
                                   follow_up_date: followUpDate,
                                   next_action: reminderData.note,
                                 }));
-                                
+
                                 toast({
                                   title: "Reminder Created",
                                   description: response.warning 
@@ -4890,7 +4891,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
             </AccordionItem>
           </Accordion>
               </div>
-              
+
               {/* Sticky Save/Cancel Buttons - Only shown when AI Assistant is visible */}
               {showAssistant && (
                 <div className="sticky bottom-0 bg-background border-t pt-4 mt-4 flex justify-end gap-2">
