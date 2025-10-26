@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { commissions, users } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { getTimezoneOffset } from "date-fns-tz";
@@ -1674,8 +1677,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentUser = req.currentUser;
       const isUserAdmin = currentUser.role === 'admin';
       
-      const allCommissions = await storage.getAllCommissions();
-      const allUsers = await storage.getAllUsers();
+      // Query commissions table directly - filter for referral commissions only
+      const allCommissions = await db.query.commissions.findMany({
+        where: eq(commissions.commissionKind, 'referral')
+      });
+      const allUsers = await db.query.users.findMany();
       
       // Group referral commissions by referring agent (the person who earns the referral)
       const referralSummary: Record<string, {
