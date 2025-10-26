@@ -1507,6 +1507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalSales,
           grossIncome: grossIncome.toFixed(2),
           createdAt: user.createdAt,
+          referredBy: user.referredBy,
         };
       });
       
