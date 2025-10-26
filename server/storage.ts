@@ -4,6 +4,7 @@ import {
   clients,
   notes,
   orders,
+  commissions,
   csvUploads,
   googleSheets,
   systemIntegrations,
@@ -39,6 +40,8 @@ import {
   type InsertNote,
   type Order,
   type InsertOrder,
+  type Commission,
+  type InsertCommission,
   type CsvUpload,
   type InsertCsvUpload,
   type GoogleSheet,
@@ -136,6 +139,12 @@ export interface IStorage {
   updateOrder(id: string, updates: Partial<InsertOrder>): Promise<Order>;
   deleteOrder(id: string): Promise<void>;
   getAllOrders(): Promise<Order[]>;
+
+  // Commission operations
+  createCommission(commission: InsertCommission): Promise<Commission>;
+  getCommissionsByAgent(agentId: string): Promise<Commission[]>;
+  getCommissionsByOrder(orderId: string): Promise<Commission[]>;
+  deleteCommissionsByOrder(orderId: string): Promise<void>;
 
   // CSV Upload operations
   createCsvUpload(upload: InsertCsvUpload): Promise<CsvUpload>;
@@ -734,6 +743,31 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOrder(id: string): Promise<void> {
     await db.delete(orders).where(eq(orders.id, id));
+  }
+
+  // Commission operations
+  async createCommission(commission: InsertCommission): Promise<Commission> {
+    const [newCommission] = await db.insert(commissions).values(commission).returning();
+    return newCommission;
+  }
+
+  async getCommissionsByAgent(agentId: string): Promise<Commission[]> {
+    return await db
+      .select()
+      .from(commissions)
+      .where(eq(commissions.agentId, agentId))
+      .orderBy(desc(commissions.calculatedOn));
+  }
+
+  async getCommissionsByOrder(orderId: string): Promise<Commission[]> {
+    return await db
+      .select()
+      .from(commissions)
+      .where(eq(commissions.orderId, orderId));
+  }
+
+  async deleteCommissionsByOrder(orderId: string): Promise<void> {
+    await db.delete(commissions).where(eq(commissions.orderId, orderId));
   }
 
   // CSV Upload operations
