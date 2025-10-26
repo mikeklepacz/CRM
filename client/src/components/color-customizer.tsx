@@ -81,7 +81,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
   // Apply colors to CSS variables for live preview
   useEffect(() => {
     const root = document.documentElement;
-    
+
     // Helper function to convert hex to HSL
     const applyColorVar = (cssVar: string, hexColor: string) => {
       if (!hexColor) {
@@ -144,7 +144,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
       });
       return;
     }
-    
+
     const newPresets = [...colorPresets, { name: presetName.trim(), color }];
     setColorPresets(newPresets);
     setPresetName("");
@@ -169,6 +169,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
       const eyeDropper = new (window as any).EyeDropper();
       const result = await eyeDropper.open();
       setCustomColors({ ...customColors, [field]: result.sRGBHex });
+      saveColors(customColors) // Auto-save after eyedropper
     } catch (e) {
       // User cancelled
     }
@@ -255,6 +256,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                           onChange={(color) => {
                             const hexColor = hslToHex(color.h, color.s, color.l);
                             setCustomColors({ ...customColors, [field]: hexColor });
+                            saveColors(customColors); // Auto-save when color changes
                           }}
                         />
 
@@ -268,6 +270,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                 const value = e.target.value;
                                 if (/^#[0-9A-F]{6}$/i.test(value)) {
                                   setCustomColors({ ...customColors, [field]: value });
+                                  saveColors(customColors); // Auto-save after hex input
                                 }
                               }}
                               className="font-mono text-xs flex-1"
@@ -308,6 +311,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                   <button
                                     onClick={() => {
                                       setCustomColors({ ...customColors, [field]: preset.color });
+                                      saveColors(customColors); // Auto-save after applying preset
                                     }}
                                     className="w-8 h-8 rounded border border-border"
                                     style={{ backgroundColor: preset.color }}
@@ -367,6 +371,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                   const h = parseInt(e.target.value) || 0;
                                   const hexColor = hslToHex(h, hslColor.s, hslColor.l);
                                   setCustomColors({ ...customColors, [field]: hexColor });
+                                  saveColors(customColors); // Auto-save after HSL input
                                 }}
                                 className="font-mono text-xs"
                               />
@@ -382,6 +387,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                   const s = parseInt(e.target.value) || 0;
                                   const hexColor = hslToHex(hslColor.h, s, hslColor.l);
                                   setCustomColors({ ...customColors, [field]: hexColor });
+                                  saveColors(customColors); // Auto-save after HSL input
                                 }}
                                 className="font-mono text-xs"
                               />
@@ -397,6 +403,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                   const l = parseInt(e.target.value) || 0;
                                   const hexColor = hslToHex(hslColor.h, hslColor.s, l);
                                   setCustomColors({ ...customColors, [field]: hexColor });
+                                  saveColors(customColors); // Auto-save after HSL input
                                 }}
                                 className="font-mono text-xs"
                               />
@@ -411,26 +418,25 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
             })}
           </div>
 
+          {/* Reset Button */}
           <div className="flex gap-2 pt-4 border-t">
-            <Button
-              onClick={handleSaveColors}
-              disabled={isSaving}
-              className="flex-1"
-              data-testid="button-save-colors"
-            >
-              <Save className="mr-2 h-4 w-4" />
-              {isSaving ? 'Saving...' : 'Save Colors'}
-            </Button>
             <Button
               variant="outline"
               onClick={handleResetColors}
               disabled={isSaving}
+              className="w-full"
               data-testid="button-reset-colors"
             >
               <RotateCcw className="mr-2 h-4 w-4" />
-              Reset
+              Reset to Defaults
             </Button>
           </div>
+
+          {isSaving && (
+            <p className="text-xs text-muted-foreground text-center">
+              Saving changes...
+            </p>
+          )}
         </div>
       </PopoverContent>
     </Popover>
