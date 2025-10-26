@@ -666,17 +666,17 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       // Keep all scripts
       if (item.type === 'script') return true;
       
-      // Type guard: after checking for script, we know it's a message
-      if (item.type !== 'message') return true;
+      // Type assertion: at this point, item must be a message since we filtered out scripts
+      const messageItem = item as { type: 'message'; id: string; role: 'user' | 'assistant'; content: string; timestamp: number; status?: 'pending' | 'sent' | 'error'; error?: string };
       
       // Keep error messages
-      if (item.status === 'error') return true;
+      if (messageItem.status === 'error') return true;
       
       // Check if this optimistic message has a server equivalent
       const hasServerVersion = serverMessageItems.some(serverMsg => 
-        serverMsg.role === item.role &&
-        serverMsg.content === item.content &&
-        Math.abs(serverMsg.timestamp - item.timestamp) < 5000 // Within 5 seconds
+        serverMsg.role === messageItem.role &&
+        serverMsg.content === messageItem.content &&
+        Math.abs(serverMsg.timestamp - messageItem.timestamp) < 5000 // Within 5 seconds
       );
       
       return !hasServerVersion; // Keep it if there's no server version yet
@@ -1609,46 +1609,50 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                       </div>
                     </div>
                   );
-                } else {
-                  // Message display
-                  const emailData = item.role === "assistant" ? parseEmailFromMessage(item.content) : null;
-                  const processedEmailData = emailData ? {
-                    to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
-                    subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
-                    body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
-                  } : null;
+                }
+                
+                // Type assertion: at this point, item must be a message since we filtered out scripts
+                const messageItem = item as Extract<TimelineItem, { type: 'message' }>;
+                
+                // Message display
+                const emailData = messageItem.role === "assistant" ? parseEmailFromMessage(messageItem.content) : null;
+                const processedEmailData = emailData ? {
+                  to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
+                  subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
+                  body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
+                } : null;
 
-                  return (
-                    <div
-                      key={item.id}
-                      className={`flex gap-3 ${item.role === "user" ? "justify-end" : ""}`}
-                      data-testid={`message-${item.id}`}
-                    >
-                      {item.role === "assistant" && (
+                return (
+                  <div
+                    key={messageItem.id}
+                    className={`flex gap-3 ${messageItem.role === "user" ? "justify-end" : ""}`}
+                    data-testid={`message-${messageItem.id}`}
+                  >
+                    {messageItem.role === "assistant" && (
                         <div className="flex-shrink-0">
                           <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                             <Bot className="h-4 w-4 text-primary" />
                           </div>
                         </div>
                       )}
-                      <div className={`max-w-[80%] ${item.role === "user" ? "w-full" : ""}`}>
-                        {item.role === "assistant" ? (
+                      <div className={`max-w-[80%] ${messageItem.role === "user" ? "w-full" : ""}`}>
+                        {messageItem.role === "assistant" ? (
                           <ContextMenu>
                             <ContextMenuTrigger>
                               <div className="rounded-lg p-3 bg-muted">
-                                <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+                                <p className="text-sm whitespace-pre-wrap">{messageItem.content}</p>
                               </div>
                             </ContextMenuTrigger>
                             <ContextMenuContent>
                               <ContextMenuItem
-                                onClick={() => copyMessageToClipboard(item.content)}
+                                onClick={() => copyMessageToClipboard(messageItem.content)}
                                 data-testid="context-menu-copy"
                               >
                                 <Copy className="mr-2 h-4 w-4" />
                                 Copy
                               </ContextMenuItem>
                               <ContextMenuItem
-                                onClick={() => makeTemplateFromMessage(item.content)}
+                                onClick={() => makeTemplateFromMessage(messageItem.content)}
                                 data-testid="context-menu-make-template"
                               >
                                 <FileText className="mr-2 h-4 w-4" />
@@ -1658,21 +1662,21 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                           </ContextMenu>
                         ) : (
                           <div className={`rounded-lg p-3 ${
-                            item.status === 'error' 
+                            messageItem.status === 'error' 
                               ? 'bg-destructive/20 border border-destructive' 
-                              : item.status === 'pending'
+                              : messageItem.status === 'pending'
                               ? 'bg-primary/70 text-primary-foreground'
                               : 'bg-primary text-primary-foreground'
                           }`}>
-                            <p className="text-sm whitespace-pre-wrap">{item.content}</p>
-                            {item.status === 'error' && (
+                            <p className="text-sm whitespace-pre-wrap">{messageItem.content}</p>
+                            {messageItem.status === 'error' && (
                               <div className="mt-2 flex items-center gap-2">
-                                <p className="text-xs text-destructive">{item.error}</p>
+                                <p className="text-xs text-destructive">{messageItem.error}</p>
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleRetryMessage(item.id, item.content)}
-                                  data-testid={`button-retry-${item.id}`}
+                                  onClick={() => handleRetryMessage(messageItem.id, messageItem.content)}
+                                  data-testid={`button-retry-${messageItem.id}`}
                                 >
                                   Retry
                                 </Button>
@@ -1688,7 +1692,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                           />
                         )}
                       </div>
-                      {item.role === "user" && (
+                      {messageItem.role === "user" && (
                         <div className="flex-shrink-0">
                           <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
                             <UserIcon className="h-4 w-4" />
