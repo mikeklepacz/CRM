@@ -124,6 +124,19 @@ function stringSimilarity(str1: string, str2: string): number {
   return 1 - (distance / maxLen);
 }
 
+// Convert column index to Google Sheets column letter (0 -> A, 25 -> Z, 26 -> AA, etc.)
+function columnIndexToLetter(index: number): string {
+  let letter = '';
+  let num = index;
+  
+  while (num >= 0) {
+    letter = String.fromCharCode((num % 26) + 65) + letter;
+    num = Math.floor(num / 26) - 1;
+  }
+  
+  return letter;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -3294,6 +3307,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Starting commission sync...');
       let commissionsCalculated = 0;
       let agentTransfers = 0;
+      let sheetsUpdated = 0;
+      
+      // Get Commission Tracker sheet for updating agent names
+      let trackerSheet: any = null;
+      let trackerHeaders: string[] = [];
+      let trackerRows: any[][] = [];
+      
+      try {
+        const sheets = await storage.getAllActiveGoogleSheets();
+        trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+        
+        if (trackerSheet) {
+          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+          if (trackerRows.length > 0) {
+            trackerHeaders = trackerRows[0];
+          }
+        }
+      } catch (sheetError: any) {
+        console.error('Failed to load Commission Tracker sheet:', sheetError.message);
+      }
       
       try {
         const allLocalOrders = await storage.getAllOrders();
@@ -3344,6 +3378,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
               await commissionService.applyCommissions(localOrder.id);
               commissionsCalculated++;
               console.log(`✓ Synced commission for order ${localOrder.id} → ${localOrder.salesAgentName}`);
+              
+              // Update Google Sheets Commission Tracker with new agent name
+              if (trackerSheet && trackerHeaders.length > 0) {
+                const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
+                const agentNameIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+                
+                if (orderIdIndex !== -1 && agentNameIndex !== -1) {
+                  // Find the row with this order ID
+                  for (let i = 1; i < trackerRows.length; i++) {
+                    if (trackerRows[i][orderIdIndex] === localOrder.orderNumber) {
+                      // Update Agent Name column - convert index to column letter (A, B, ... Z, AA, AB, etc.)
+                      const columnLetter = columnIndexToLetter(agentNameIndex);
+                      const rowNumber = i + 1; // +1 for 1-indexed Google Sheets
+                      const cellRange = `${trackerSheet.sheetName}!${columnLetter}${rowNumber}`;
+                      
+                      try {
+                        await googleSheets.writeSheetData(
+                          trackerSheet.spreadsheetId,
+                          cellRange,
+                          [[localOrder.salesAgentName]]
+                        );
+                        
+                        sheetsUpdated++;
+                        console.log(`📝 Updated Google Sheets: Order ${localOrder.orderNumber} → ${localOrder.salesAgentName} (${cellRange})`);
+                      } catch (writeErr: any) {
+                        console.error(`✗ Failed to update Google Sheets for order ${localOrder.orderNumber}:`, writeErr.message);
+                      }
+                      break;
+                    }
+                  }
+                }
+              }
             } catch (commErr: any) {
               console.error(`✗ Failed to sync commission for order ${localOrder.id}:`, commErr.message);
             }
@@ -3354,7 +3420,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Don't fail the entire sync if commission calculation fails
       }
       
-      console.log('Commission sync completed:', { commissionsCalculated, agentTransfers });
+      console.log('Commission sync completed:', { commissionsCalculated, agentTransfers, sheetsUpdated });
 
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
