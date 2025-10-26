@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
-import { commissions, users } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
+import { commissions, users, clients } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { getTimezoneOffset } from "date-fns-tz";
@@ -177,9 +177,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
         });
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error);
-      res.status(500).json({ message: "Login failed" });
+      res.status(500).json({ message: error.message || "Login failed" });
     }
   });
 
@@ -206,9 +206,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json({ message: "Registration successful", user: { id: user.id, username: user.username } });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Registration error:", error);
-      res.status(500).json({ message: "Registration failed" });
+      res.status(500).json({ message: error.message || "Registration failed" });
     }
   });
 
@@ -253,6 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return next();
     } catch (error) {
+      console.error("Replit Auth refresh failed:", error);
       return res.status(401).json({ message: "Unauthorized" });
     }
   };
@@ -267,8 +268,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       req.currentUser = user;
       next();
-    } catch (error) {
-      res.status(500).json({ message: "Authorization check failed" });
+    } catch (error: any) {
+      console.error("Admin middleware error:", error);
+      res.status(500).json({ message: error.message || "Authorization check failed" });
     }
   };
 
@@ -282,8 +284,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       req.currentUser = user;
       next();
-    } catch (error) {
-      res.status(500).json({ message: "User fetch failed" });
+    } catch (error: any) {
+      console.error("getCurrentUser middleware error:", error);
+      res.status(500).json({ message: error.message || "User fetch failed" });
     }
   };
 
@@ -310,9 +313,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json(user);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+      res.status(500).json({ message: error.message || "Failed to fetch user" });
     }
   });
 
@@ -466,7 +469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     timezone: z.string().optional(),
     defaultTimezoneMode: z.enum(['agent', 'customer']).optional(),
     timeFormat: z.enum(['12hr', '24hr']).optional(),
-    defaultCalendarReminders: z.array(z.object({ method: z.enum(['popup', 'email']), minutes: z.number() })).optional(),
+    defaultCalendarReminders: z.array(z.object({ method: z.string(), minutes: z.number() })).optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
@@ -1390,8 +1393,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Export endpoint NEVER filters by agent or category
-      // It ONLY exports what is visually filtered in the CRMxactly what's visible in the filtered table
-      if (user.role !== 'admin' && user.showMyStoresOnly) {
+      // It ONLY exports what is visually filtered in the CRM exactly what's visible in the filtered table
+      // Check user.showMyStoresOnly here
+      const showMyStoresOnly = user?.preferences?.showMyStoresOnly ?? false;
+      if (user.role !== 'admin' && showMyStoresOnly) {
         filters.agentId = user.id;
       }
 
@@ -2027,7 +2032,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Prevent deleting yourself
-      const adminUser = await storage.getUser(adminUserId);
       if (userId === adminUserId) {
         return res.status(400).json({ message: "You cannot delete your own account" });
       }
@@ -2116,6 +2120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const orders = await storage.getAllOrders();
+      console.log('[GET /api/orders] All orders fetched:', orders.length);
 
       // Check Commission Tracker to see which orders have tracker rows
       const sheets = await storage.getAllActiveGoogleSheets();
@@ -2618,9 +2623,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Step 2: Write to Google Sheets Commission Tracker
+      let sheetsWritten = 0;
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       console.log('Tracker sheet found:', trackerSheet ? `${trackerSheet.spreadsheetName} / ${trackerSheet.sheetName}` : 'NONE');
-      let sheetsWritten = 0;
 
       if (trackerSheet) {
         const { spreadsheetId, sheetName } = trackerSheet;
@@ -2955,7 +2960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
               await googleSheets.writeSheetData(
                 sheetsConfig.spreadsheetId,
-                `${sheetsConfig.commissionTrackerSheetName}!A${nextRow}:N${nextRow}`,
+                `${sheetsConfig.commissionTrackerSheetName}!A${nextRow}:N${nextRow}`, // N is column 14
                 [rowData]
               );
 
@@ -3177,85 +3182,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Calculate commission if client is claimed
-          let commission = 0;
-          let commissionRate = 0;
-          let commissionType = '';
-
           if (client.assignedAgent && client.claimDate) {
             const monthsSinceClaim = differenceInMonths(orderDate, new Date(client.claimDate));
             const rate = monthsSinceClaim < 6 ? 0.25 : 0.10;
-            commission = orderTotal * rate;
-            commissionRate = rate;
-            commissionType = monthsSinceClaim < 6 ? '25%' : '10%';
+            const commission = orderTotal * rate;
             updates.commissionTotal = (parseFloat(client.commissionTotal || '0') + commission).toString();
           }
 
           await storage.updateClient(client.id, updates);
-
-          // Write to Commission Tracker Google Sheet - ONLY if client has an assigned agent
-          // This ensures we don't create incomplete commission records for unclaimed stores
-          if (client.assignedAgent && commission > 0) {
-            try {
-              const sheetsConfig = await storage.getSheetsConfig();
-              if (sheetsConfig?.spreadsheetId && sheetsConfig?.commissionTrackerSheetName) {
-                console.log('[Webhook] Writing order to Commission Tracker:', {
-                  orderId: order.id,
-                  client: client.name,
-                  agent: client.assignedAgent,
-                  commission
-                });
-
-                // Get existing data to find next empty row
-                const existingData = await googleSheets.readSheetData(
-                  sheetsConfig.spreadsheetId,
-                  `${sheetsConfig.commissionTrackerSheetName}!A:A`
-                );
-                const nextRow = (existingData?.length || 1) + 1;
-
-                // Map WooCommerce status to our status system
-                let orderStatus = 'Closed Won';
-                if (order.status === 'processing') {
-                  orderStatus = '4 – Follow-Up'; // Processing orders need follow-up
-                } else if (order.status === 'refunded' || order.status === 'cancelled') {
-                  orderStatus = '6 – Closed Lost';
-                }
-
-                // Prepare row data matching Commission Tracker columns
-                // Columns: Link, Transaction ID, Date, Agent Name, Order ID, Commission Type, Amount, Status, Follow-Up Date, Next Action, Notes, Point of Contact, POC EMAIL, POC Phone
-                const rowData = [
-                  client.link || '',                          // Link
-                  order.transaction_id || '',                 // Transaction ID
-                  format(orderDate, 'MM/dd/yyyy'),           // Date
-                  client.assignedAgent,                      // Agent Name
-                  order.id.toString(),                       // Order ID
-                  commissionType,                            // Commission Type (25% or 10%)
-                  commission.toFixed(2),                     // Amount
-                  orderStatus,                               // Status (based on WooCommerce order status)
-                  '',                                        // Follow-Up Date
-                  '',                                        // Next Action
-                  `WooCommerce order #${order.number || order.id} - $${orderTotal.toFixed(2)}`, // Notes
-                  client.pocName || '',                      // Point of Contact
-                  client.pocEmail || email || '',            // POC EMAIL
-                  client.pocPhone || ''                      // POC Phone
-                ];
-
-                await googleSheets.writeSheetData(
-                  sheetsConfig.spreadsheetId,
-                  `${sheetsConfig.commissionTrackerSheetName}!A${nextRow}:N${nextRow}`,
-                  [rowData]
-                );
-
-                console.log('[Webhook] ✅ Successfully wrote to Commission Tracker row', nextRow);
-              }
-            } catch (sheetsError: any) {
-              console.error('[Webhook] ❌ Failed to write to Commission Tracker:', sheetsError.message);
-              // Don't fail the webhook - order is still processed in database
-            }
-          } else if (client.assignedAgent) {
-            console.log('[Webhook] Skipping Commission Tracker write - no commission calculated (order may be outside commission period)');
-          } else {
-            console.log('[Webhook] Skipping Commission Tracker write - client has no assigned agent');
-          }
         }
       }
 
@@ -3583,73 +3517,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Get order from database
         const order = await storage.getOrderById(orderId);
-        if (!order || !order.clientId) {
+        if (!order) {
           console.log(`Skipping order ${orderId}: not matched to client`);
           continue;
         }
 
-        // Get client to extract Link
+        // Extract link from order's client data
         const client = await storage.getClient(order.clientId);
         if (!client) {
           console.log(`Skipping order ${orderId}: client not found`);
           continue;
         }
-
-        // Extract Link from client data (case-insensitive search)
         let linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
-
-        // If no link exists, generate unique 10-digit code and create Store Database entry
         if (!linkValue) {
-          console.log(`No Link found for order ${orderId}, generating unique code...`);
-
-          // Generate unique 10-digit code: WC + 8 random digits
-          const generateUniqueCode = () => {
-            const randomDigits = Math.floor(10000000 + Math.random() * 90000000); // 8 random digits
-            return `WC${randomDigits}`;
-          };
-
-          linkValue = generateUniqueCode();
-
-          // Get Store Database sheet
-          const storeSheet = await storage.getGoogleSheetByPurpose('store_database');
-          if (storeSheet) {
-            // Read Store Database headers
-            const storeHeaderRange = `${storeSheet.sheetName}!1:1`;
-            const storeHeaderData = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeHeaderRange);
-
-            if (storeHeaderData.length > 0) {
-              const storeHeaders = storeHeaderData[0];
-
-              // Build column map
-              const storeColumnMap: Record<string, number> = {};
-              storeHeaders.forEach((header: string, index: number) => {
-                storeColumnMap[header.toLowerCase().trim()] = index;
-              });
-
-              // Prepare new store row with minimal data
-              const newStoreRow = new Array(storeHeaders.length).fill('');
-              if ('link' in storeColumnMap) newStoreRow[storeColumnMap['link']] = linkValue;
-              if ('name' in storeColumnMap) newStoreRow[storeColumnMap['name']] = order.billingCompany || 'Unknown Company';
-              if ('email' in storeColumnMap) newStoreRow[storeColumnMap['email']] = order.billingEmail || '';
-              if ('dba' in storeColumnMap) newStoreRow[storeColumnMap['dba']] = order.billingCompany || '';
-
-              // Append to Store Database
-              await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:A`, [newStoreRow]);
-              console.log(`Created new store in Store Database with Link: ${linkValue}`);
-            }
-          }
-
-          // Update client record with the new Link
-          await storage.updateClient(client.id, {
-            ...client,
-            uniqueIdentifier: linkValue,
-            data: {
-              ...client.data,
-              Link: linkValue,
-              link: linkValue,
-            }
-          });
-          console.log(`Updated client ${client.id} with Link: ${linkValue}`);
+          console.log(`Skipping order ${orderId}: no link found for client ${client.id}`);
+          continue;
         }
 
         const salesAgentName = order.salesAgentName;
@@ -3669,8 +3551,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (commissionType === '10') {
           amount = orderTotal * 0.10;
         } else {
-          // Auto: default to 25% (proper 6-month rule requires client data)
-          amount = orderTotal * 0.25;
+          // Auto: determine based on 6-month rule
+          // Find first order date for this client
+          const firstOrderDate = client.firstOrderDate ? new Date(client.firstOrderDate) : new Date(order.orderDate);
+          const orderDate = new Date(order.orderDate);
+          const monthsSinceFirst = differenceInMonths(orderDate, firstOrderDate);
+          const rate = monthsSinceFirst < 6 ? 0.25 : 0.10;
+          amount = orderTotal * rate;
         }
 
         // Format date as M/d/yyyy to match existing pattern
@@ -3820,7 +3707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== GOOGLE SHEETS ROUTES ==========
 
   // List user's Google Sheets
-  app.get('/api/sheets/list', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.get('/api/sheets/list', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const sheets = await googleSheets.listSpreadsheets();
@@ -3832,7 +3719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get spreadsheet info (sheets/tabs)
-  app.get('/api/sheets/:spreadsheetId/info', isAuthenticatedCustom, isAdmin, async (req, res) => {
+  app.get('/api/sheets/:spreadsheetId/info', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { spreadsheetId } = req.params;
@@ -4087,7 +3974,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get user agent name for filtering
       const userAgentName = user?.agentName || 
-        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null)?.trim() || null;
+        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null)?.trim() || 
+        null;
 
       // Filter Store Database by Agent Name (for non-admin users)
       let filteredStoreData = storeData;
@@ -4103,42 +3991,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         console.log(`Filtered store data for agent "${userAgentName}": ${filteredStoreData.length} rows (includes unclaimed stores)`);
       } else if (user?.role !== 'admin' && !userAgentName) {
-        // No agent name available, filter both to empty (agent sees nothing)
+        // No agent name available for the user, filter all rows to empty
         filteredStoreData = [];
         console.log('No agent name found for user, filtering all store rows');
+      }
+
+      // Filter Tracker Data by Agent Name (for non-admin users)
+      let filteredTrackerData = trackerData;
+      const trackerAgentColumnName = trackerHeaders.find(h => 
+        h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
+      );
+
+      if (user?.role !== 'admin' && trackerAgentColumnName && userAgentName) {
+        filteredTrackerData = trackerData.filter(row => {
+          const rowAgentName = row[trackerAgentColumnName];
+          // Case-insensitive match
+          return rowAgentName && rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
+        });
+        console.log(`Filtered tracker data for agent "${userAgentName}": ${filteredTrackerData.length} rows`);
+      } else if (user?.role !== 'admin' && !userAgentName) {
+        // No agent name available, filter all tracker rows to empty
+        filteredTrackerData = [];
+        console.log('No agent name found for user, filtering all tracker rows');
       }
 
       // ============================================================================
       // CRITICAL: Filter by Selected Category
       // ============================================================================
       // Purpose:
-      // Implements row-level security so agents only see their own claimed stores
+      // Filter stores by the user's selected category preference
       //
-      // Security Model:
-      // - Admins: See ALL rows from both sheets (no filtering)
-      // - Agents: See ONLY their assigned stores from Store Database + matching tracker rows
-      //   - Unclaimed stores (no Agent Name in Store Database) = visible to all agents
-      //   - Assigned stores (Agent Name in Store Database) = visible only to that agent
-      //   - Tracker rows filtered to match agent's name
-      //
-      // Agent Name Source (WooCommerce Convention):
-      // 1. Prefer user.agentName field (stored from profile/WooCommerce integration)
-      // 2. Fallback to "firstName lastName" concatenation
-      // 3. Case-insensitive matching with trimmed whitespace
+      // This ensures users only see stores from their chosen category (e.g., "Pets" or "Cannabis")
+      // enabling complete data segregation between different sales teams
       //
       // Column Lookup:
-      // - Searches for "Agent Name" column (case-insensitive)
-      // - Normalizes spaces (handles "Agent  Name" with extra spaces)
+      // - Case-insensitive search for "Category" column in Store Database
       //
-      // Why This Matters:
-      // - Prevents agents from seeing each other's claimed stores
-      // - Maintains data privacy and sales territory boundaries
-      // - Ensures commission tracking is agent-specific
-      //
-      // Impact if broken:
-      // - Agents could see ALL stores (data leak)
-      // - Agents could see competitors' commission data
-      // - Row-level security completely bypassed
+      // Filter Logic:
+      // - If user has selectedCategory preference, show only matching stores
+      // - If no category selected, show all stores (no filtering)
       // ============================================================================
       // selectedCategory already fetched earlier for cache key
       const storeCategoryColumnName = storeHeaders.find(h => 
@@ -4370,9 +4261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const normalizedInputLink = normalizeLink(linkValue);
                 for (let i = 1; i < trackerRows.length; i++) {
                   const rowLink = trackerRows[i][trackerLinkIndex];
-                  const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
-
-                  if (rowLink && normalizedRowLink === normalizedInputLink) {
+                  if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
                     existingTrackerRow = i + 1; // 1-indexed
                     break;
                   }
@@ -4530,13 +4419,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/stores/auto-claim', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
       const { link } = req.body;
 
       if (!link) {
         return res.status(400).json({ message: "Link is required" });
       }
 
+      const user = await storage.getUser(userId);
       if (!user || !user.agentName) {
         return res.status(400).json({ message: "Agent name not set in profile" });
       }
@@ -4614,10 +4503,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { spreadsheetId, sheetName } = sheet;
 
-      // Read all data to find headers and next empty row
-      const dataRange = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(spreadsheetId, dataRange);
-      const headers = rows[0] || [];
+      // Read the current sheet to find the header row
+      const headerRange = `${sheetName}!1:1`;
+      const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
+      const headers = headerRows[0] || [];
 
       // Find the link column index
       const linkColumnIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
@@ -4629,31 +4518,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const normalizedInputLink = normalizeLink(linkValue.trim());
       let existingRowIndex = -1;
 
-      for (let i = 1; i < rows.length; i++) {
-        const rowLink = rows[i][linkColumnIndex];
-        const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+      for (let i = 1; i < headers.length; i++) { // Check headers first
+        if (headers[i].toLowerCase() === joinColumn.toLowerCase()) {
+          // Found the link column, now search rows
+          for (let r = 1; r < rows.length; r++) { // Start from row 2 (index 1)
+            const rowLink = rows[r][linkColumnIndex];
+            const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
 
-        if (rowLink && normalizedRowLink === normalizedInputLink) {
-          existingRowIndex = i + 1; // +1 because sheets are 1-indexed
-          break;
+            if (rowLink && normalizedRowLink === normalizedInputLink) {
+              existingRowIndex = r + 1; // +1 because sheets are 1-indexed
+              break;
+            }
+          }
+          if (existingRowIndex !== -1) break;
+        }
+      }
+      
+      // Corrected logic: loop through rows directly after getting linkColumnIndex
+      if (existingRowIndex === -1) { // If not found in the previous loop, search directly in rows
+        for (let r = 1; r < rows.length; r++) {
+          const rowLink = rows[r][linkColumnIndex];
+          const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+          if (rowLink && normalizedRowLink === normalizedInputLink) {
+            existingRowIndex = r + 1;
+            break;
+          }
         }
       }
 
-      if (existingRowIndex !== -1) {
-        // Row already exists - update the specific column instead of creating duplicate
-        const editColumnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
-        if (editColumnIndex !== -1 && value !== undefined) {
-          const columnLetter = String.fromCharCode(65 + editColumnIndex);
+      // Helper to update a cell (allows clearing values with empty string)
+      const updateCell = async (columnName: string, value: string) => {
+        const colIndex = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+        if (colIndex !== -1 && value !== undefined) {
+          const columnLetter = String.fromCharCode(65 + colIndex);
           const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
           await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value || '']]);
         }
+      };
+
+      if (existingRowIndex !== -1) {
+        // Row already exists - update the specific column instead of creating duplicate
+        await updateCell(column, value);
 
         // Also update agent if not set
         const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
         if (agentColumnIndex !== -1 && user?.email) {
           const agentColLetter = String.fromCharCode(65 + agentColumnIndex);
           const agentCellRange = `${sheetName}!${agentColLetter}${existingRowIndex}`;
-          await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.email]]);
+          // Check if agent column is empty before overwriting
+          const existingAgentValue = await googleSheets.readSheetData(spreadsheetId, agentCellRange);
+          if (!existingAgentValue || !existingAgentValue[0] || !existingAgentValue[0][0]) {
+            await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.email]]);
+          }
         }
 
         res.json({ message: "Store updated successfully", existingRow: true });
@@ -4662,7 +4578,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const newRow = headers.map(() => '');
 
         // Set the join column
-        newRow[linkColumnIndex] = linkValue;
+        const linkColIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
+        if (linkColIndex !== -1) {
+          newRow[linkColIndex] = linkValue;
+        }
 
         // Set the agent column to current user's email
         const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
@@ -4676,7 +4595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           newRow[editColumnIndex] = value;
         }
 
-        // Append the row to the sheet
+        // Append the row
         const appendRange = `${sheetName}!A:ZZ`;
         await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
 
@@ -4692,6 +4611,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/sheets/:id/claim-store-with-contact', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
       const { id } = req.params;
       const { linkValue, joinColumn, agent, status, followUpDate, nextAction, notes, pointOfContact } = req.body;
 
@@ -4756,44 +4676,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Row doesn't exist - create new row
         const newRow = headers.map(() => '');
 
-        // Set the join column
-        newRow[linkColumnIndex] = linkValue;
+        // Set values based on header names (case-insensitive)
+        const setCell = (columnName: string, value: string) => {
+          const index = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+          if (index !== -1) {
+            newRow[index] = value;
+          }
+        };
 
-        // Set the agent column
-        const agentColIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
-        if (agentColIndex !== -1) {
-          newRow[agentColIndex] = agent;
-        }
-
-        // Set the status column
-        const statusColIndex = headers.findIndex(h => h.toLowerCase() === 'status');
-        if (statusColIndex !== -1) {
-          newRow[statusColIndex] = status;
-        }
-
-        // Set follow-up date / followup column
-        const followUpDateColIndex = headers.findIndex(h => h.toLowerCase() === 'follow-up date' || h.toLowerCase() === 'followup');
-        if (followUpDateColIndex !== -1) {
-          newRow[followUpDateColIndex] = followUpDate;
-        }
-
-        // Set next action column
-        const nextActionColIndex = headers.findIndex(h => h.toLowerCase() === 'next action');
-        if (nextActionColIndex !== -1) {
-          newRow[nextActionColIndex] = nextAction;
-        }
-
-        // Set notes column
-        const notesColIndex = headers.findIndex(h => h.toLowerCase() === 'notes');
-        if (notesColIndex !== -1) {
-          newRow[notesColIndex] = notes;
-        }
-
-        // Set point of contact column
-        const pocColIndex = headers.findIndex(h => h.toLowerCase() === 'point of contact');
-        if (pocColIndex !== -1) {
-          newRow[pocColIndex] = pointOfContact;
-        }
+        setCell(joinColumn, linkValue);
+        setCell('agent', agent);
+        setCell('status', status);
+        setCell('follow-up date', followUpDate);
+        setCell('followup', followUpDate);
+        setCell('next action', nextAction);
+        setCell('notes', notes);
+        setCell('point of contact', pointOfContact);
 
         // Append the row
         const appendRange = `${sheetName}!A:ZZ`;
@@ -4833,7 +4731,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update each field
       const updateCell = async (columnName: string, value: string) => {
         const columnIndex = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
-        if (columnIndex !== -1 && value) {
+        if (columnIndex !== -1 && value !== undefined) {
           const columnLetter = String.fromCharCode(65 + columnIndex);
           const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
           await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
@@ -4924,7 +4822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updated,
         total: parsed.length,
       });
-    } catch(error: any) {
+    } catch (error: any) {
       console.error("Error importing from sheet:", error);
       res.status(500).json({ message: error.message || "Import failed" });
     }
@@ -4944,7 +4842,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { spreadsheetId, sheetName, uniqueIdentifierColumn } = sheet;
 
       // Get headers from sheet
-      const headerRange = `${sheetName}!A1:ZZ1`;
+      const headerRange = `${sheetName}!1:1`;
       const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
 
       if (!headerRows || headerRows.length === 0) {
@@ -5029,21 +4927,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.updateGoogleSheetLastSync(sheet.id);
 
-      // STEP 2: Export to sheet (overwrite existing rows)
-      const clients = await storage.getAllClients();
-      const exportRows: any[][] = [];
-
-      for (const client of clients) {
-        if (client.googleSheetRowId && client.uniqueIdentifier) {
-          const exportRow = googleSheets.convertObjectsToSheetRows(headers, [client.data])[0];
-          await googleSheets.writeSheetData(spreadsheetId, `${sheetName}!A${client.googleSheetRowId}`, [exportRow]);
-        }
-      }
-
       res.json({
         message: "Bidirectional sync completed",
         imported: { created, updated },
-        exported: { updated: clients.length },
         total: parsed.length,
       });
     } catch (error: any) {
@@ -5052,7 +4938,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // === Store Details Endpoints ===
+  // === STORE DETAILS ENDPOINTS ===
   app.get('/api/store/:storeId', isAuthenticatedCustom, async (req: any, res, next) => {
     try {
       if (!req.isAuthenticated()) {
@@ -5516,6 +5402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let updatedStoreCount = 0;
       let skippedCount = 0;
+      let createdTrackerCount = 0;
 
       // Update Store Database - update DBA and Agent Name for ALL stores
       for (const storeLink of storeLinks) {
@@ -5580,16 +5467,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ONLY if this is a NEW DBA claim (not updating an existing one)
       const firstStoreLink = storeLinks[0];
       const normalizedFirstLink = normalizeLink(firstStoreLink);
-      let createdTrackerCount = 0;
-
+      
       if (!isUpdatingExisting) {
         // Check if tracker row already exists for first store
         if (!existingTrackerLinks.has(normalizedFirstLink)) {
           console.log(`[CLAIM-MULTIPLE] Creating single tracker row for NEW DBA group using link: ${firstStoreLink}`);
           const newTrackerRow = new Array(trackerHeaders.length).fill('');
           if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = firstStoreLink;
-          if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = agentName;
+          if (trackerAgentIndex !== -1) {
+            newTrackerRow[trackerAgentIndex] = agentName;
+            console.log(`[CLAIM-MULTIPLE] Setting tracker Agent at index ${trackerAgentIndex}: "${agentName}"`);
+          }
+
           console.log(`[CLAIM-MULTIPLE] Tracker row prepared:`, newTrackerRow);
+
           const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
           console.log(`[CLAIM-MULTIPLE] Appending 1 tracker row to Commission Tracker`);
           console.log(`[CLAIM-MULTIPLE] Append range: ${appendRange}`);
@@ -5653,7 +5544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ stores: [] });
       }
 
-      // Find relevant column indices
+      // Parse store data
       const storeHeaders = storeRows[0];
       const nameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'name');
       const dbaIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'dba');
@@ -5737,7 +5628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Store sheet is empty' });
       }
 
-      // Find relevant column indices
+      // Find Agent Name column
       const storeHeaders = storeRows[0];
       const agentNameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'agent name');
       const linkIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'link');
@@ -6083,7 +5974,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (allowedAgentNames.length > 0) {
           // If Agent column doesn't exist, agents see ZERO data
           if (agentIndex === -1) {
-            continue;  // Skip this row - no Agent column means agents see nothing
+            continue;
           }
 
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
@@ -6091,7 +5982,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name.toLowerCase().trim() === rowAgentNormalized
           );
           if (!isAllowed) {
-            continue;  // Skip this row - doesn't match agent's name
+            continue;
           }
         }
 
@@ -6187,7 +6078,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
         if (storeRows.length > 1) {
           const storeHeaders = storeRows[0];
-          const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent');
+          const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent'); // Check for 'agent' column
+          if (storeAgentIndex === -1) { // Fallback to 'agent name' if 'agent' not found
+             storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
+          }
+          
           if (storeAgentIndex !== -1) {
             totalClients = storeRows.slice(1).filter(row => {
               const rowAgent = row[storeAgentIndex] || '';
@@ -6199,13 +6094,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       } else {
-        // Admin: count stores for specified agents, or all if no agents specified
+        // Admin: Filter by agentIds parameter
         if (allowedAgentNames.length > 0) {
           const storeRange = `${storeSheet.sheetName}!A:Z`;
           const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
           if (storeRows.length > 1) {
             const storeHeaders = storeRows[0];
-            const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent');
+            const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent'); // Check for 'agent' column
+            if (storeAgentIndex === -1) { // Fallback to 'agent name' if 'agent' not found
+              storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
+            }
+
             if (storeAgentIndex !== -1) {
               totalClients = storeRows.slice(1).filter(row => {
                 const rowAgent = row[storeAgentIndex] || '';
@@ -6275,15 +6174,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         if (!link || amount === 0) continue;
 
-        // Parse date
-        let transactionDate: Date | null = null;
-        if (dateStr) {
-          const parsed = new Date(dateStr);
-          if (!isNaN(parsed.getTime())) {
-            transactionDate = parsed;
-          }
-        }
-
         if (!storeTransactions[link]) {
           storeTransactions[link] = { count: 0, totalAmount: 0, lastTransactionDate: null };
         }
@@ -6292,6 +6182,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storeTransactions[link].totalAmount += amount;
 
         // Update last transaction date if this one is more recent
+        let transactionDate: Date | null = null;
+        if (dateStr) {
+          const parsed = new Date(dateStr);
+          if (!isNaN(parsed.getTime())) {
+            transactionDate = parsed;
+          }
+        }
         if (transactionDate && (!storeTransactions[link].lastTransactionDate || transactionDate > storeTransactions[link].lastTransactionDate)) {
           storeTransactions[link].lastTransactionDate = transactionDate;
         }
@@ -6322,305 +6219,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error fetching portfolio metrics:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch portfolio metrics' });
-    }
-  });
-
-  // Get revenue trends over time (from Google Sheets)
-  app.get('/api/analytics/revenue-trends', async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { range = 'last6months', agentIds } = req.query;
-
-      // Get current user details for agent filtering
-      const currentUser = await storage.getUserById(userId);
-      if (!currentUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      // SECURITY: Determine which agents' data to show
-      let allowedAgentNames: string[] = [];
-      const isAgent = currentUser.role === 'agent';
-
-      if (isAgent) {
-        // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
-        const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
-        allowedAgentNames = [currentAgentName];
-      } else {
-        // Admin: Use agentIds from query params or default to current user
-        const requestedAgentIds = agentIds 
-          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
-          : [userId];
-
-        // Fetch user details for requested agent IDs to get their names
-        const agentUsers = await Promise.all(
-          requestedAgentIds.map(id => storage.getUserById(id as string))
-        );
-
-        allowedAgentNames = agentUsers
-          .filter(Boolean)
-          .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
-      }
-
-      // Get Commission Tracker sheet
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
-      if (!trackerSheet) {
-        return res.json({ trends: [] });
-      }
-
-      // Read Commission Tracker data
-      const trackerRange = `${trackerSheet.sheetName}!A:G`;
-      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-
-      if (trackerRows.length <= 1) {
-        return res.json({ trends: [] });
-      }
-
-      // Parse headers
-      const headers = trackerRows[0];
-      const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
-      const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
-      const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
-      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
-
-      const monthlyData: { [key: string]: { commission: number; transactions: number } } = {};
-
-      // Process each tracker row
-      for (let i = 1; i < trackerRows.length; i++) {
-        const row = trackerRows[i];
-        const dateStr = row[dateIndex] || '';
-        const amountStr = row[amountIndex] || '0';
-        const commissionType = row[commissionTypeIndex] || '';
-        const rowAgent = row[agentIndex] || '';
-
-        // SECURITY: Filter by allowed agent names
-        if (allowedAgentNames.length > 0) {
-          // If Agent column doesn't exist, agents see ZERO data
-          if (agentIndex === -1) {
-            continue;
-          }
-
-          const rowAgentNormalized = rowAgent.toLowerCase().trim();
-          const isAllowed = allowedAgentNames.some(name => 
-            name.toLowerCase().trim() === rowAgentNormalized
-          );
-          if (!isAllowed) {
-            continue;
-          }
-        }
-
-        const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
-        if (amount === 0) continue;
-
-        // Parse date
-        let transactionDate: Date | null = null;
-        if (dateStr) {
-          const parsed = new Date(dateStr);
-          if (!isNaN(parsed.getTime())) {
-            transactionDate = parsed;
-          }
-        }
-
-        if (transactionDate) {
-          const monthKey = `${transactionDate.getFullYear()}-${String(transactionDate.getMonth() + 1).padStart(2, '0')}`;
-
-          if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = { commission: 0, transactions: 0 };
-          }
-
-          monthlyData[monthKey].commission += amount;
-          monthlyData[monthKey].transactions += 1;
-        }
-      }
-
-      // Filter by range
-      const sortedMonths = Object.keys(monthlyData).sort();
-      let filteredMonths = sortedMonths;
-
-      if (range === 'last3months') {
-        filteredMonths = sortedMonths.slice(-3);
-      } else if (range === 'last6months') {
-        filteredMonths = sortedMonths.slice(-6);
-      } else if (range === 'last12months') {
-        filteredMonths = sortedMonths.slice(-12);
-      }
-
-      const trends = filteredMonths.map(month => {
-        const commissionAmount = monthlyData[month].commission;
-        // Format month for display (e.g., "May 2025")
-        const [year, monthNum] = month.split('-');
-        const date = new Date(parseInt(year), parseInt(monthNum) - 1);
-        const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-
-        return {
-          period: monthName, // Readable label for X-axis
-          revenue: commissionAmount, // Use commission as revenue for chart
-          commissions: commissionAmount, // Also include as commissions
-          orders: monthlyData[month].transactions
-        };
-      });
-
-      res.json({ trends });
-    } catch (error: any) {
-      console.error('Error fetching revenue trends:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch revenue trends' });
-    }
-  });
-
-  // Get top clients by commission earnings (from Google Sheets)
-  app.get('/api/analytics/top-clients', async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { limit = '10', agentIds } = req.query;
-      const topN = parseInt(limit as string);
-
-      // Get current user details for agent filtering
-      const currentUser = await storage.getUserById(userId);
-      if (!currentUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      // SECURITY: Determine which agents' data to show
-      let allowedAgentNames: string[] = [];
-      const isAgent = currentUser.role === 'agent';
-
-      if (isAgent) {
-        // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
-        const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
-        allowedAgentNames = [currentAgentName];
-      } else {
-        // Admin: Use agentIds from query params or default to current user
-        const requestedAgentIds = agentIds 
-          ? (Array.isArray(agentIds) ? agentIds : [agentIds])
-          : [userId];
-
-        // Fetch user details for requested agent IDs to get their names
-        const agentUsers = await Promise.all(
-          requestedAgentIds.map(id => storage.getUserById(id as string))
-        );
-
-        allowedAgentNames = agentUsers
-          .filter(Boolean)
-          .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
-      }
-
-      // Get both Commission Tracker and Store Database sheets
-      const sheets = await storage.getAllActiveGoogleSheets();
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
-
-      if (!trackerSheet) {
-        return res.json({ topClients: [] });
-      }
-
-      // Read Commission Tracker data
-      const trackerRange = `${trackerSheet.sheetName}!A:G`;
-      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-
-      if (trackerRows.length <= 1) {
-        return res.json({ topClients: [] });
-      }
-
-      // Parse tracker headers
-      const trackerHeaders = trackerRows[0];
-      const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-      const amountIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'amount');
-      const agentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
-
-      // Aggregate commissions by store Link
-      const storeCommissions: { [link: string]: { totalCommission: number; transactionCount: number } } = {};
-
-      console.log('[TOP-CLIENTS] allowedAgentNames:', allowedAgentNames);
-      console.log('[TOP-CLIENTS] Processing', trackerRows.length - 1, 'tracker rows');
-
-      for (let i = 1; i < trackerRows.length; i++) {
-        const row = trackerRows[i];
-        const link = row[linkIndex] || '';
-        const amountStr = row[amountIndex] || '0';
-        const rowAgent = row[agentIndex] || '';
-
-        // SECURITY: Filter by allowed agent names
-        if (allowedAgentNames.length > 0) {
-          // If Agent column doesn't exist, agents see ZERO data
-          if (agentIndex === -1) {
-            continue;
-          }
-
-          const rowAgentNormalized = rowAgent.toLowerCase().trim();
-          const isAllowed = allowedAgentNames.some(name => 
-            name.toLowerCase().trim() === rowAgentNormalized
-          );
-          console.log(`[TOP-CLIENTS] Row ${i}: rowAgent="${rowAgent}", normalized="${rowAgentNormalized}", isAllowed=${isAllowed}`);
-          if (!isAllowed) {
-            console.log(`[TOP-CLIENTS] Row ${i}: SKIPPING - not allowed`);
-            continue;
-          }
-        }
-
-        const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
-        if (amount === 0 || !link) continue;
-
-        if (!storeCommissions[link]) {
-          storeCommissions[link] = { totalCommission: 0, transactionCount: 0 };
-        }
-
-        storeCommissions[link].totalCommission += amount;
-        storeCommissions[link].transactionCount += 1;
-      }
-
-      // Read Store Database to get store names
-      let storeNames: { [link: string]: string } = {};
-      if (storeSheet) {
-        try {
-          const storeRange = `${storeSheet.sheetName}!A:D`;
-          const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-
-          if (storeRows.length > 0) {
-            const storeHeaders = storeRows[0];
-            const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-            const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
-
-            for (let i = 1; i < storeRows.length; i++) {
-              const row = storeRows[i];
-              const link = row[storeLinkIndex] || '';
-              const name = row[storeNameIndex] || '';
-              if (link) {
-                storeNames[link] = name || 'Unknown Store';
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Error reading Store Database:', err);
-        }
-      }
-
-      // Build top clients list
-      const clientStats = Object.entries(storeCommissions).map(([link, stats]) => ({
-        id: link,
-        name: storeNames[link] || 'Unknown Store',
-        totalRevenue: "0.00", // We don't track order totals, only commissions
-        totalCommission: stats.totalCommission.toFixed(2),
-        orderCount: stats.transactionCount,
-        firstOrderDate: null,
-        lastOrderDate: null
-      }));
-
-      // Sort by commission and take top N
-      const topClients = clientStats
-        .sort((a, b) => parseFloat(b.totalCommission) - parseFloat(a.totalCommission))
-        .slice(0, topN);
-
-      res.json({ topClients });
-    } catch (error: any) {
-      console.error('Error fetching top clients:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch top clients' });
     }
   });
 
@@ -6666,7 +6264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fetch user info to add agentName to each reminder
         const reminderUser = await storage.getUserById(uid);
         if (!reminderUser) {
-          console.warn('[Reminders] User not found, skipping reminders');
+          console.warn(`[Reminders] User ${uid} not found, skipping reminders`);
           continue; // Skip if user not found
         }
 
@@ -7055,7 +6653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const calendarReminders = req.body.calendarReminders;
         if (calendarReminders && Array.isArray(calendarReminders)) {
           const userPreferences = await storage.getUserPreferences(userId);
-          const currentDefaults = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }];
+          const currentDefaults = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }]; // Default to popup 10 mins if not set
 
           // Compare calendar reminders with current defaults (handle empty arrays)
           const normalize = (arr: any[]) => JSON.stringify(
@@ -7289,10 +6887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Save calendar event ID to reminder metadata
           if (createdEvent.data.id) {
             await storage.updateReminder(reminder.id, {
-              storeMetadata: {
-                ...(reminder.storeMetadata || {}),
-                calendarEventId: createdEvent.data.id
-              }
+              googleCalendarEventId: createdEvent.data.id
             });
           }
 
@@ -8231,6 +7826,7 @@ Current Store Information:
 - State: ${contextInfo.state || 'N/A'}
 - Phone: ${contextInfo.phone || 'N/A'}
 - Website: ${contextInfo.website || 'N/A'}
+- Email: ${contextInfo.email || 'N/A'}
 - DBA: ${contextInfo.dba || 'N/A'}
 - Sales-Ready Summary: ${contextInfo.sales_ready_summary || 'N/A'}
 - Status: ${contextInfo.status || 'N/A'}
@@ -8268,7 +7864,23 @@ Use this store information to provide context-aware responses. When helping draf
         console.log('💬 [CHAT] Using Assistants API with vector store:', settings.vectorStoreId);
         // Use Assistants API with file search
         try {
-          // REUSE assistant instead of creating new one each time
+          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
+          // Create assistant with file search
+          console.log('💬 [CHAT] Creating assistant with file search...');
+          const assistant = await openai.beta.assistants.create({
+            model: 'gpt-4o',
+            instructions: systemInstructions,
+            tools: [{ type: 'file_search' }],
+            tool_resources: {
+              file_search: {
+                vector_store_ids: [settings.vectorStoreId]
+              }
+            }
+          });
+          console.log('💬 [CHAT] Assistant created:', assistant.id);
+          */
+
+          // OPTIMIZED: Reuse assistant instead of creating new one each time
           let assistantId = settings.assistantId;
 
           // Get or create assistant
@@ -8311,7 +7923,14 @@ Use this store information to provide context-aware responses. When helping draf
             console.log('💬 [CHAT] Assistant ID saved to database');
           }
 
-          // REUSE thread for this conversation
+          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
+          // Create thread
+          console.log('💬 [CHAT] Creating thread...');
+          const thread = await openai.beta.threads.create();
+          console.log('💬 [CHAT] Thread created:', thread.id);
+          */
+
+          // OPTIMIZED: Reuse thread for this conversation
           let threadId = conversation?.threadId;
 
           if (threadId) {
@@ -8368,6 +7987,16 @@ Use this store information to provide context-aware responses. When helping draf
             console.log('💬 [CHAT] ⚠️ Run did not complete, status:', runStatus.status);
             throw new Error('Assistant run did not complete successfully');
           }
+
+          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
+          // Clean up assistant
+          console.log('💬 [CHAT] Cleaning up assistant...');
+          await openai.beta.assistants.del(assistant.id);
+          console.log('💬 [CHAT] Assistant deleted');
+          */
+
+          // OPTIMIZED: Don't delete assistant - reuse it next time
+          console.log('💬 [CHAT] Assistant retained for future use (performance optimization)');
         } catch (error: any) {
           console.error('💬 [CHAT] ⚠️ Assistants API error:', error.message);
           console.log('💬 [CHAT] Falling back to regular chat completion...');
@@ -8925,7 +8554,7 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Get all unique tags across all templates (alphabetically)
-  app.get('/api/templates/tags', isAuthenticatedCustom, async (req, res) => {
+  app.get('/api/templates/tags', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const allTags = await storage.getAllTemplateTags();
       res.json(allTags);
@@ -9823,7 +9452,7 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req, res) => {
+  app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { placeId, category } = req.body;
@@ -9832,34 +9461,23 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: 'Place ID and category are required' });
       }
 
-      // Get place details
-      const place = await googleMaps.getPlaceDetails(placeId);
-      if (!place) {
+      // Get place details from Google Maps
+      const placeDetails = await googleMaps.getPlaceDetails(placeId);
+
+      if (!placeDetails) {
         return res.status(404).json({ message: 'Place not found' });
       }
 
-      // Parse city and state from the place's formatted address
-      const { city, state } = googleMaps.parseCityStateFromAddress(place.formatted_address);
+      // Parse address into street, city, state components for separate CRM columns
+      const { street, city, state } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
 
-      // Find the Store Database sheet
+      // Find Store Database sheet for this category
       const sheets = await storage.getAllActiveGoogleSheets();
       const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       if (!storeSheet) {
-        return res.status(404).json({ 
-          message: 'Store Database sheet not connected. Please connect a Google Sheet with purpose "Store Database" in Settings.' 
-        });
+        return res.status(404).json({ message: 'Store Database sheet not found. Please connect a Google Sheet first.' });
       }
-
-      // Clean up address - extract just street address without city/state/zip/country
-      const cleanAddress = (fullAddress: string): string => {
-        const parts = fullAddress.split(',').map(p => p.trim());
-        // Remove the last 2 parts (state+zip and country), keep street address
-        if (parts.length >= 3) {
-          return parts.slice(0, -2).join(', ');
-        }
-        return parts[0] || fullAddress;
-      };
 
       // Format hours more concisely - just show if open and basic hours
       const formatHours = (weekdayText?: string[]): string => {
@@ -9873,24 +9491,24 @@ Use this store information to provide context-aware responses. When helping draf
       //          H=Phone, I=Website, J=Email, K=Followers, L=Tags, M=Hours, N=DBA, 
       //          O=Vibe Score, P=Sales-ready Summary, Q=Agent Name, R=OPEN, S=Category
       const row = [
-        place.name || '',                                    // A: Name
-        place.types?.[0] || '',                             // B: Type
-        place.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`, // C: Link
-        '',                                                 // D: Member Since
-        cleanAddress(place.formatted_address || ''),        // E: Address (street only)
-        city,                                               // F: City
-        state,                                              // G: State
-        place.formatted_phone_number || place.international_phone_number || '', // H: Phone
-        place.website || '',                                // I: Website
-        '',                                                 // J: Email (blank)
-        '',                                                 // K: Followers (blank)
-        '',                                                 // L: Tags (blank)
-        formatHours(place.opening_hours?.weekday_text),     // M: Hours (sample)
-        '',                                                 // N: DBA (blank)
-        '',                                                 // O: Vibe Score (blank)
-        '',                                                 // P: Sales-ready Summary (blank)
-        '',                                                 // Q: Agent Name (blank - unclaimed)
-        place.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE', // R: OPEN (based on business status)
+        placeDetails.name || '',                                    // A: Name
+        placeDetails.types?.[0] || '',                             // B: Type
+        placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeDetails.place_id}`, // C: Link
+        '',                                                  // D: Member Since (blank)
+        street,                                                // E: Address (street only) (e.g., "23 N Harlem Ave")
+        city,                                                // F: City (e.g., "Oak Park")
+        state,                                               // G: State (e.g., "Illinois")
+        placeDetails.formatted_phone_number || placeDetails.international_phone_number || '', // H: Phone
+        placeDetails.website || '',                                // I: Website
+        '',                                                  // J: Email (blank)
+        '',                                                  // K: Followers (blank)
+        '',                                                  // L: Tags (blank)
+        formatHours(placeDetails.opening_hours?.weekday_text),     // M: Hours (sample)
+        '',                                                  // N: DBA (blank)
+        '',                                                  // O: Vibe Score (blank)
+        '',                                                  // P: Sales-ready Summary (blank)
+        '',                                                  // Q: Agent Name (blank - unclaimed)
+        placeDetails.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE', // R: OPEN (based on business status)
         category,                                            // S: Category
       ];
 
@@ -9904,8 +9522,8 @@ Use this store information to provide context-aware responses. When helping draf
       res.json({ 
         message: 'Place saved successfully to Store Database',
         place: {
-          name: place.name,
-          address: place.formatted_address,
+          name: placeDetails.name,
+          address: placeDetails.formatted_address,
           category
         }
       });

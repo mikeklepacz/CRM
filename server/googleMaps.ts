@@ -207,6 +207,35 @@ export function parseCityStateFromAddress(formattedAddress: string): { city: str
   return { city: '', state: '' };
 }
 
+// Parse full address into street, city, state components for CRM columns
+export function parseAddressComponents(formattedAddress: string): { 
+  street: string; 
+  city: string; 
+  state: string; 
+} {
+  const parts = formattedAddress.split(',').map(p => p.trim());
+  
+  if (parts.length >= 3) {
+    // Street address is the first part
+    const street = parts[0] || '';
+    
+    // City is second-to-last before state
+    const city = parts[parts.length - 3] || '';
+    
+    // State/ZIP is last part before country
+    const stateZip = parts[parts.length - 2] || '';
+    const stateParts = stateZip.split(' ');
+    const stateAbbr = stateParts[0] || '';
+    
+    // Convert state abbreviation to full name
+    const state = STATE_ABBREVIATIONS[stateAbbr.toUpperCase()] || stateAbbr;
+    
+    return { street, city, state };
+  }
+  
+  return { street: '', city: '', state: '' };
+}
+
 export interface ReverseGeocodeResult {
   city: string;
   state: string;
