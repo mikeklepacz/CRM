@@ -26,6 +26,7 @@ interface UserWithMetrics {
   totalSales: number;
   grossIncome: string;
   createdAt: string;
+  referredBy?: string | null;
 }
 
 export function UserManagement() {
@@ -478,6 +479,7 @@ export function UserManagement() {
                       <TableHead>Email</TableHead>
                       <TableHead>Agent Name</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Referred By</TableHead>
                       <TableHead className="text-right">Total Sales</TableHead>
                       <TableHead className="text-right">Gross Income</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -486,7 +488,7 @@ export function UserManagement() {
                   <TableBody>
                     {displayedUsers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                           No active users found
                         </TableCell>
                       </TableRow>
@@ -505,6 +507,13 @@ export function UserManagement() {
                               {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
                               {user.role}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {user.referredBy ? (
+                              users.find(u => u.id === user.referredBy)?.agentName || 
+                              users.find(u => u.id === user.referredBy)?.email || 
+                              '-'
+                            ) : '-'}
                           </TableCell>
                           <TableCell className="text-right" data-testid={`text-sales-${user.id}`}>
                             {user.totalSales}
@@ -549,6 +558,7 @@ export function UserManagement() {
                       <TableHead>Email</TableHead>
                       <TableHead>Agent Name</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Referred By</TableHead>
                       <TableHead className="text-right">Total Sales</TableHead>
                       <TableHead className="text-right">Gross Income</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -557,7 +567,7 @@ export function UserManagement() {
                   <TableBody>
                     {displayedUsers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                           No inactive users found
                         </TableCell>
                       </TableRow>
@@ -576,6 +586,13 @@ export function UserManagement() {
                               {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
                               {user.role}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {user.referredBy ? (
+                              users.find(u => u.id === user.referredBy)?.agentName || 
+                              users.find(u => u.id === user.referredBy)?.email || 
+                              '-'
+                            ) : '-'}
                           </TableCell>
                           <TableCell className="text-right" data-testid={`text-sales-${user.id}`}>
                             {user.totalSales}
@@ -639,7 +656,7 @@ export function UserManagement() {
               {deactivateDialog?.analysis && (
                 <div className="space-y-3">
                   <p>This action will deactivate the user and release their unclosed listings:</p>
-                  
+
                   <div className="bg-muted p-3 rounded-md space-y-2">
                     <div className="flex justify-between">
                       <span className="font-medium">Protected Listings (with Transaction IDs):</span>
@@ -691,11 +708,11 @@ export function UserManagement() {
                 <div className="bg-destructive/10 border border-destructive/50 p-4 rounded-md">
                   <p className="font-bold text-destructive">This action cannot be undone!</p>
                 </div>
-                
+
                 <p className="font-medium">
                   You are about to permanently delete user: <span className="font-bold">{deleteDialog?.userEmail}</span>
                 </p>
-                
+
                 <div className="space-y-2">
                   <p className="text-sm font-medium">This will permanently delete:</p>
                   <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
@@ -706,7 +723,7 @@ export function UserManagement() {
                     <li>All support tickets and messages</li>
                   </ul>
                 </div>
-                
+
                 <p className="text-sm font-medium text-destructive">
                   Are you absolutely sure you want to permanently delete this user?
                 </p>
