@@ -6349,9 +6349,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Helper function to normalize links for matching
+      const normalizeLink = (link: string): string => {
+        if (!link) return '';
+        return link
+          .toLowerCase()
+          .trim()
+          .replace(/^https?:\/\//, '') // Remove protocol
+          .replace(/^www\./, '') // Remove www
+          .replace(/\/$/, ''); // Remove trailing slash
+      };
+
       // Get Store Database sheet to look up company names by link
       const storeSheet = await storage.getGoogleSheetByPurpose('store_database');
-      const linkToNameMap: { [link: string]: string } = {};
+      const linkToNameMap: { [normalizedLink: string]: string } = {};
 
       if (storeSheet) {
         try {
@@ -6364,7 +6375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const nameIndex = 0; // Column A = Name
             const dbaIndex = 13; // Column N = DBA
 
-            // Build lookup map: link -> company name
+            // Build lookup map: normalized link -> company name
             for (let i = 1; i < storeRows.length; i++) {
               const row = storeRows[i];
               const storeLink = row[storeLinkIndex] || '';
@@ -6372,8 +6383,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const name = row[nameIndex] || '';
 
               if (storeLink) {
+                const normalized = normalizeLink(storeLink);
                 // Prefer DBA over Name
-                linkToNameMap[storeLink] = dba || name || storeLink;
+                linkToNameMap[normalized] = dba || name || storeLink;
               }
             }
           }
@@ -6385,15 +6397,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Convert to array and sort by total commission (descending)
       const topClients = Object.entries(clientMetrics)
-        .map(([link, metrics]) => ({
-          id: link,
-          name: linkToNameMap[link] || link, // Use company name from Store Database, fallback to link
-          totalRevenue: metrics.totalCommission.toFixed(2),
-          totalCommission: metrics.totalCommission.toFixed(2),
-          orderCount: metrics.orderCount,
-          firstOrderDate: metrics.firstOrderDate,
-          lastOrderDate: metrics.lastOrderDate
-        }))
+        .map(([link, metrics]) => {
+          const normalizedLink = normalizeLink(link);
+          const companyName = linkToNameMap[normalizedLink] || link;
+          
+          return {
+            id: link,
+            name: companyName, // Use company name from Store Database (DBA > Name), fallback to link
+            totalRevenue: metrics.totalCommission.toFixed(2),
+            totalCommission: metrics.totalCommission.toFixed(2),
+            orderCount: metrics.orderCount,
+            firstOrderDate: metrics.firstOrderDate,
+            lastOrderDate: metrics.lastOrderDate
+          };
+        })
         .sort((a, b) => parseFloat(b.totalCommission) - parseFloat(a.totalCommission))
         .slice(0, topLimit);
 
