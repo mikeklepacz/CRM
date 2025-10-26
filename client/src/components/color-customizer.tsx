@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,20 +62,6 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
   const [presetName, setPresetName] = useState("");
   const [hasLoadedInitialColors, setHasLoadedInitialColors] = useState(false);
   const { toast } = useToast();
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Debounced save function - only saves 500ms after last change
-  const debouncedSave = useCallback((colors: typeof customColors) => {
-    // Clear any pending save
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    // Schedule new save
-    saveTimeoutRef.current = setTimeout(() => {
-      saveColors(colors);
-    }, 500);
-  }, [saveColors]);
 
   // Sync customColors when preferences finish loading for the first time
   useEffect(() => {
@@ -182,9 +168,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
     try {
       const eyeDropper = new (window as any).EyeDropper();
       const result = await eyeDropper.open();
-      const newColors = { ...customColors, [field]: result.sRGBHex };
-      setCustomColors(newColors);
-      saveColors(newColors); // Immediate save for eyedropper (single action)
+      setCustomColors({ ...customColors, [field]: result.sRGBHex });
     } catch (e) {
       // User cancelled
     }
@@ -254,7 +238,13 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                   <Label className="text-sm font-medium">{fieldLabels[field]}</Label>
                   <p className="text-xs text-muted-foreground">{fieldDescriptions[field]}</p>
 
-                  <Popover open={activeColorField === field} onOpenChange={(open) => setActiveColorField(open ? field : null)}>
+                  <Popover open={activeColorField === field} onOpenChange={(open) => {
+                    if (!open && activeColorField === field) {
+                      // Save when closing the popover
+                      saveColors(customColors);
+                    }
+                    setActiveColorField(open ? field : null);
+                  }}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-start gap-2" data-testid={`button-color-${field}`}>
                         <div
@@ -270,9 +260,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                           color={hslColor}
                           onChange={(color) => {
                             const hexColor = hslToHex(color.h, color.s, color.l);
-                            const newColors = { ...customColors, [field]: hexColor };
-                            setCustomColors(newColors);
-                            debouncedSave(newColors); // Debounced auto-save
+                            setCustomColors({ ...customColors, [field]: hexColor });
                           }}
                         />
 
@@ -285,9 +273,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                               onChange={(e) => {
                                 const value = e.target.value;
                                 if (/^#[0-9A-F]{6}$/i.test(value)) {
-                                  const newColors = { ...customColors, [field]: value };
-                                  setCustomColors(newColors);
-                                  debouncedSave(newColors); // Debounced auto-save
+                                  setCustomColors({ ...customColors, [field]: value });
                                 }
                               }}
                               className="font-mono text-xs flex-1"
@@ -327,9 +313,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                 >
                                   <button
                                     onClick={() => {
-                                      const newColors = { ...customColors, [field]: preset.color };
-                                      setCustomColors(newColors);
-                                      debouncedSave(newColors); // Debounced auto-save
+                                      setCustomColors({ ...customColors, [field]: preset.color });
                                     }}
                                     className="w-8 h-8 rounded border border-border"
                                     style={{ backgroundColor: preset.color }}
@@ -388,9 +372,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                 onChange={(e) => {
                                   const h = parseInt(e.target.value) || 0;
                                   const hexColor = hslToHex(h, hslColor.s, hslColor.l);
-                                  const newColors = { ...customColors, [field]: hexColor };
-                                  setCustomColors(newColors);
-                                  debouncedSave(newColors); // Debounced auto-save
+                                  setCustomColors({ ...customColors, [field]: hexColor });
                                 }}
                                 className="font-mono text-xs"
                               />
@@ -405,9 +387,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                 onChange={(e) => {
                                   const s = parseInt(e.target.value) || 0;
                                   const hexColor = hslToHex(hslColor.h, s, hslColor.l);
-                                  const newColors = { ...customColors, [field]: hexColor };
-                                  setCustomColors(newColors);
-                                  debouncedSave(newColors); // Debounced auto-save
+                                  setCustomColors({ ...customColors, [field]: hexColor });
                                 }}
                                 className="font-mono text-xs"
                               />
@@ -422,9 +402,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                 onChange={(e) => {
                                   const l = parseInt(e.target.value) || 0;
                                   const hexColor = hslToHex(hslColor.h, hslColor.s, l);
-                                  const newColors = { ...customColors, [field]: hexColor };
-                                  setCustomColors(newColors);
-                                  debouncedSave(newColors); // Debounced auto-save
+                                  setCustomColors({ ...customColors, [field]: hexColor });
                                 }}
                                 className="font-mono text-xs"
                               />
