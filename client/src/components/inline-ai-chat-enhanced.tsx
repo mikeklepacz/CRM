@@ -140,23 +140,22 @@ function replaceSimpleTemplateVariables(
   // Replace store-related variables
   if (storeContext) {
     // Smart email replacement: try POC Email first, fall back to Email
-    // Handle both "POC EMAIL" and "poc_email" field names
-    const pocEmail = storeContext['POC EMAIL'] || storeContext.poc_email || storeContext.pocEmail || "";
-    const generalEmail = storeContext['Email'] || storeContext.email || "";
+    const pocEmail = storeContext.poc_email || "";
+    const generalEmail = storeContext.email || "";
     const smartEmail = pocEmail || generalEmail || "";
 
-    result = result.replace(/\{\{storeName\}\}/g, storeContext.name || storeContext.Name || "");
-    result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || storeContext.Address || "");
-    result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || storeContext.City || "");
-    result = result.replace(/\{\{storeState\}\}/g, storeContext.state || storeContext.State || "");
-    result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || storeContext.Phone || "");
-    result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || storeContext.Website || "");
-    result = result.replace(/\{\{pocName\}\}/g, storeContext['Point of Contact'] || storeContext.poc_name || storeContext.pocName || "");
+    result = result.replace(/\{\{storeName\}\}/g, storeContext.name || "");
+    result = result.replace(/\{\{storeAddress\}\}/g, storeContext.address || "");
+    result = result.replace(/\{\{storeCity\}\}/g, storeContext.city || "");
+    result = result.replace(/\{\{storeState\}\}/g, storeContext.state || "");
+    result = result.replace(/\{\{storePhone\}\}/g, storeContext.phone || "");
+    result = result.replace(/\{\{storeWebsite\}\}/g, storeContext.website || "");
+    result = result.replace(/\{\{pocName\}\}/g, storeContext.point_of_contact || "");
 
-    // Both {{email}} and {{pocEmail}} use smart fallback logic (POC EMAIL → Email)
+    // Both {{email}} and {{pocEmail}} use smart fallback logic (POC email → general email)
     result = result.replace(/\{\{pocEmail\}\}/g, smartEmail);
     result = result.replace(/\{\{email\}\}/g, smartEmail);
-    result = result.replace(/\{\{pocPhone\}\}/g, storeContext['POC Phone'] || storeContext.poc_phone || storeContext.pocPhone || "");
+    result = result.replace(/\{\{pocPhone\}\}/g, storeContext.poc_phone || "");
   }
 
   // Replace agent variables
