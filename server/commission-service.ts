@@ -92,6 +92,7 @@ export async function applyCommissions(orderId: string): Promise<void> {
       sourceAgentId: calc.sourceAgentId || null,
       amount: calc.amount.toFixed(2),
       commissionRate: calc.rate.toFixed(2),
+      commissionDate: new Date(order.orderDate),
       notes: calc.kind === 'referral' 
         ? `10% referral bonus from agent ${calc.sourceAgentId}` 
         : `${calc.rate}% commission on order ${order.orderNumber}`,
