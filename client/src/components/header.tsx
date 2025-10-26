@@ -89,7 +89,10 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
           </div>
           
           <div className="flex items-center gap-3">
-            <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
+            {/* BACK BURNER: Color Customizer - Admin only feature, hiding from regular users to focus on core functionality */}
+            {user.role === 'admin' && (
+              <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
+            )}
             
             {/* Support Ticket Icon */}
             <div className="relative">
