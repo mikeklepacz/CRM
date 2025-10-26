@@ -3289,36 +3289,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Auto-matching completed:', { autoMatched });
 
-      // COMMISSION BACKFILL: Calculate commissions for all orders missing commission records
-      console.log('Starting commission backfill...');
+      // COMMISSION SYNC: Recalculate commissions for orders with changes or missing commissions
+      // This ensures agent transfers from WooCommerce are automatically applied
+      console.log('Starting commission sync...');
       let commissionsCalculated = 0;
+      let agentTransfers = 0;
       
       try {
         const allLocalOrders = await storage.getAllOrders();
         
         for (const localOrder of allLocalOrders) {
+          if (!localOrder.salesAgentName) continue;
+          
           // Check if this order already has commission records
           const existingCommissions = await db.query.commissions.findMany({
             where: eq(commissions.orderId, localOrder.id),
           });
           
-          // If no commission records exist and order has a sales agent, calculate them
-          if (existingCommissions.length === 0 && localOrder.salesAgentName) {
+          // Recalculate if:
+          // 1. No commissions exist yet (new order)
+          // 2. Agent changed (detected by comparing agent name on commission vs order)
+          let needsRecalculation = existingCommissions.length === 0;
+          
+          if (!needsRecalculation && existingCommissions.length > 0) {
+            // Check if agent changed - find the primary commission's agent
+            const primaryCommission = existingCommissions.find(c => c.commissionKind === 'primary');
+            
+            // Recalculate if primary commission is missing (data corruption or manual deletion)
+            if (!primaryCommission) {
+              needsRecalculation = true;
+              console.log(`⚠️  Missing primary commission for order ${localOrder.id} - will recalculate`);
+            } else {
+              const commissionAgent = await db.query.users.findFirst({
+                where: eq(users.id, primaryCommission.agentId),
+              });
+              
+              // Agent changed if:
+              // 1. Old agent user was deleted (!commissionAgent)
+              // 2. Agent names don't match (case-insensitive)
+              if (!commissionAgent) {
+                needsRecalculation = true;
+                agentTransfers++;
+                console.log(`🔄 Agent transfer detected for order ${localOrder.id}: <deleted agent> → ${localOrder.salesAgentName}`);
+              } else if (commissionAgent.agentName?.toLowerCase().trim() !== localOrder.salesAgentName.toLowerCase().trim()) {
+                needsRecalculation = true;
+                agentTransfers++;
+                console.log(`🔄 Agent transfer detected for order ${localOrder.id}: ${commissionAgent.agentName} → ${localOrder.salesAgentName}`);
+              }
+            }
+          }
+          
+          if (needsRecalculation) {
             try {
               await commissionService.applyCommissions(localOrder.id);
               commissionsCalculated++;
-              console.log(`Calculated commission for order ${localOrder.id}`);
+              console.log(`✓ Synced commission for order ${localOrder.id} → ${localOrder.salesAgentName}`);
             } catch (commErr: any) {
-              console.error(`Failed to calculate commission for order ${localOrder.id}:`, commErr.message);
+              console.error(`✗ Failed to sync commission for order ${localOrder.id}:`, commErr.message);
             }
           }
         }
-      } catch (backfillError: any) {
-        console.error('Commission backfill error:', backfillError);
+      } catch (syncError: any) {
+        console.error('Commission sync error:', syncError);
         // Don't fail the entire sync if commission calculation fails
       }
       
-      console.log('Commission backfill completed:', { commissionsCalculated });
+      console.log('Commission sync completed:', { commissionsCalculated, agentTransfers });
 
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
