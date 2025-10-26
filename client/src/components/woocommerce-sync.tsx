@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -41,6 +41,11 @@ export function WooCommerceSync() {
   const [commissionTypes, setCommissionTypes] = useState<Record<string, string>>({});
   const [commissionAmounts, setCommissionAmounts] = useState<Record<string, string>>({});
   const [modifiedOrders, setModifiedOrders] = useState<Set<string>>(new Set());
+  const [savingOrders, setSavingOrders] = useState<Set<string>>(new Set());
+  
+  // Track active save promises for proper synchronization
+  const activeSavePromise = useRef<Promise<void> | null>(null);
+  const pendingSaveTimeout = useRef<NodeJS.Timeout | null>(null);
   
   // Sorting state - default to newest first (descending by order date)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -87,6 +92,91 @@ export function WooCommerceSync() {
     },
   });
 
+  // Function to execute saves for modified orders
+  const executeSave = () => {
+    const ordersToSave = Array.from(modifiedOrders);
+    if (ordersToSave.length === 0) return null;
+    
+    setSavingOrders(new Set(ordersToSave));
+    
+    // Capture current values at the time of save
+    const saveSnapshot: Record<string, { type: string; amount: string }> = {};
+    ordersToSave.forEach(orderId => {
+      saveSnapshot[orderId] = {
+        type: commissionTypes[orderId] || 'auto',
+        amount: commissionAmounts[orderId] || '',
+      };
+    });
+
+    // Create and chain the save promise to ensure all saves complete before sync
+    const savePromise = (activeSavePromise.current ?? Promise.resolve()).then(async () => {
+      const failedOrders: string[] = [];
+      
+      for (const orderId of ordersToSave) {
+        try {
+          await apiRequest("PATCH", `/api/orders/${orderId}`, {
+            commissionType: saveSnapshot[orderId].type,
+            commissionAmount: saveSnapshot[orderId].amount,
+          });
+        } catch (error: any) {
+          console.error(`Failed to save order ${orderId}:`, error);
+          failedOrders.push(orderId);
+          toast({
+            title: "Save failed",
+            description: `Failed to save commission changes for order ${orderId}`,
+            variant: "destructive",
+          });
+        }
+      }
+
+      // Only clear modified state for orders that saved successfully and haven't been changed again
+      setModifiedOrders(prev => {
+        const newSet = new Set(prev);
+        ordersToSave.forEach(orderId => {
+          // Keep if it failed to save OR if values changed during save
+          if (failedOrders.includes(orderId)) return;
+          if (commissionTypes[orderId] === saveSnapshot[orderId].type &&
+              commissionAmounts[orderId] === saveSnapshot[orderId].amount) {
+            newSet.delete(orderId);
+          }
+        });
+        return newSet;
+      });
+      
+      setSavingOrders(prev => {
+        const newSet = new Set(prev);
+        ordersToSave.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+    });
+
+    activeSavePromise.current = savePromise;
+    
+    // Clear the promise ref when this save chain completes
+    savePromise.then(() => {
+      if (activeSavePromise.current === savePromise) {
+        activeSavePromise.current = null;
+      }
+    });
+    
+    return savePromise;
+  };
+
+  // Auto-save commission changes with 1-second debounce
+  useEffect(() => {
+    if (modifiedOrders.size === 0) return;
+
+    const timer = setTimeout(executeSave, 1000);
+    pendingSaveTimeout.current = timer;
+
+    return () => {
+      clearTimeout(timer);
+      if (pendingSaveTimeout.current === timer) {
+        pendingSaveTimeout.current = null;
+      }
+    };
+  }, [commissionTypes, commissionAmounts, modifiedOrders, toast]);
+
   // Sort orders by order date (newest first by default)
   const sortedOrders = [...(orders || [])].sort((a: any, b: any) => {
     const dateA = new Date(a.orderDate).getTime();
@@ -122,6 +212,30 @@ export function WooCommerceSync() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
+      // Clear any pending debounce timer
+      if (pendingSaveTimeout.current) {
+        clearTimeout(pendingSaveTimeout.current);
+        pendingSaveTimeout.current = null;
+      }
+      
+      // Execute saves immediately for any modified orders
+      if (modifiedOrders.size > 0) {
+        toast({
+          title: "Saving changes...",
+          description: "Saving commission updates before sync",
+        });
+        
+        const savePromise = executeSave();
+        if (savePromise) {
+          await savePromise;
+        }
+      }
+      
+      // Wait for any other active saves to complete
+      if (activeSavePromise.current) {
+        await activeSavePromise.current;
+      }
+      
       return await apiRequest("POST", "/api/woocommerce/sync", {});
     },
     onSuccess: (data) => {
@@ -130,7 +244,7 @@ export function WooCommerceSync() {
       queryClient.invalidateQueries({ queryKey: ["/api/woocommerce/settings"] });
       toast({
         title: "Sync completed",
-        description: `Synced ${data.synced} orders, matched ${data.matched} clients`,
+        description: `Synced ${data.synced} orders, matched ${data.matched} clients. ${data.commissionsCalculated ? `Calculated ${data.commissionsCalculated} commissions.` : ''}`,
       });
     },
     onError: (error: Error) => {
@@ -348,19 +462,33 @@ export function WooCommerceSync() {
 
   // Pre-select matched stores when dialog opens and suggestions load
   useEffect(() => {
-    if (matchingOrderId && matchSuggestions?.matchedStoreLinks && matchSuggestions.matchedStoreLinks.length > 0) {
-      const matchedLinks = new Set(matchSuggestions.matchedStoreLinks.map(normalizeLink));
-      
-      // Find matching stores from suggestions
-      const matchedStores = matchSuggestions.suggestions
-        ?.filter((s: any) => matchedLinks.has(normalizeLink(s.link)))
-        .map((s: any) => ({ link: s.link, name: s.displayName })) || [];
-      
-      if (matchedStores.length > 0) {
-        setSelectedStores(matchedStores);
+    if (!matchingOrderId || !matchSuggestions) return;
+
+    const currentOrder = orders.find((o: any) => o.id === matchingOrderId);
+    const matchedLinks = new Set<string>();
+
+    // Add matched stores from tracker sheet (existing functionality)
+    if (matchSuggestions.matchedStoreLinks && matchSuggestions.matchedStoreLinks.length > 0) {
+      matchSuggestions.matchedStoreLinks.forEach((link: string) => matchedLinks.add(normalizeLink(link)));
+    }
+
+    // Add currently matched client from order.clientId (fixes the bug where matched client doesn't show as checked)
+    if (currentOrder?.clientId) {
+      const matchedClient = clients.find((c: any) => c.id === currentOrder.clientId);
+      if (matchedClient && matchedClient.data?.link) {
+        matchedLinks.add(normalizeLink(matchedClient.data.link));
       }
     }
-  }, [matchingOrderId, matchSuggestions]);
+
+    // Find matching stores from suggestions
+    const matchedStores = matchSuggestions.suggestions
+      ?.filter((s: any) => matchedLinks.has(normalizeLink(s.link)))
+      .map((s: any) => ({ link: s.link, name: s.displayName })) || [];
+
+    if (matchedStores.length > 0) {
+      setSelectedStores(matchedStores);
+    }
+  }, [matchingOrderId, matchSuggestions, orders, clients]);
 
   return (
     <Card>
