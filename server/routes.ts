@@ -1668,12 +1668,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get referral commission summary (agents see their own, admins see all)
-  app.get('/api/reports/referral-commissions', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
+  // Get referral commission summary (admin only)
+  app.get('/api/reports/referral-commissions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = req.currentUser;
-      
       const allCommissions = await storage.getAllCommissions();
       const allUsers = await storage.getAllUsers();
       
@@ -1684,21 +1681,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }> = {};
       
       for (const commission of allCommissions) {
-        if (commission.commissionKind === 'referral' && commission.agentId) {
-          // For non-admins, only show their own referral commissions
-          if (user.role !== 'admin' && commission.agentId !== userId) {
-            continue;
-          }
-          
-          if (!referralSummary[commission.agentId]) {
-            const agent = allUsers.find(u => u.id === commission.agentId);
-            referralSummary[commission.agentId] = {
-              referringAgentId: commission.agentId,
+        if (commission.type === 'referral' && commission.referringAgentId) {
+          if (!referralSummary[commission.referringAgentId]) {
+            const agent = allUsers.find(u => u.id === commission.referringAgentId);
+            referralSummary[commission.referringAgentId] = {
+              referringAgentId: commission.referringAgentId,
               referringAgentName: agent?.agentName || agent?.email || 'Unknown',
               totalReferralCommission: 0,
             };
           }
-          referralSummary[commission.agentId].totalReferralCommission += parseFloat(commission.amount);
+          referralSummary[commission.referringAgentId].totalReferralCommission += commission.amount;
         }
       }
       

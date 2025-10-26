@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Users, Loader2 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
 
 interface ReferralCommissionData {
   referringAgentId: string;
@@ -15,9 +14,6 @@ interface ReferralCommissionsResponse {
 }
 
 export function ReferralCommissionsWidget() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
-  
   const { data, isLoading, error } = useQuery<ReferralCommissionsResponse>({
     queryKey: ['/api/reports/referral-commissions'],
     queryFn: async () => {
@@ -35,9 +31,7 @@ export function ReferralCommissionsWidget() {
             <Users className="h-5 w-5" />
             <div className="flex-1 min-w-0">
               <CardTitle>Referral Commissions</CardTitle>
-              <CardDescription className="mt-1.5">
-                {isAdmin ? "Agents earning from referrals" : "Your referral earnings"}
-              </CardDescription>
+              <CardDescription className="mt-1.5">Agents earning from referrals</CardDescription>
             </div>
           </div>
         </CardHeader>
