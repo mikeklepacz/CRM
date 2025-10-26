@@ -6078,7 +6078,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
         if (storeRows.length > 1) {
           const storeHeaders = storeRows[0];
-          const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent'); // Check for 'agent' column
+          let storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent'); // Check for 'agent' column
           if (storeAgentIndex === -1) { // Fallback to 'agent name' if 'agent' not found
              storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
           }
@@ -6100,7 +6100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
           if (storeRows.length > 1) {
             const storeHeaders = storeRows[0];
-            const storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent'); // Check for 'agent' column
+            let storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent'); // Check for 'agent' column
             if (storeAgentIndex === -1) { // Fallback to 'agent name' if 'agent' not found
               storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
             }
