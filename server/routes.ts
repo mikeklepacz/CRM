@@ -2719,10 +2719,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Step 3: Recalculate commissions in SQL for all updated orders
+      // This ensures the commissions table is accurate with new commission types/amounts
+      let commissionsRecalculated = 0;
+      for (const update of orderUpdates) {
+        const { orderId } = update;
+        if (!orderId) continue;
+        
+        try {
+          await commissionService.applyCommissions(orderId);
+          commissionsRecalculated++;
+          console.log(`Recalculated commissions for order ${orderId}`);
+        } catch (error: any) {
+          console.error(`Failed to recalculate commissions for order ${orderId}:`, error);
+        }
+      }
+
       res.json({ 
-        message: `Saved ${dbUpdated} commission settings to database` + (sheetsWritten > 0 ? ` and wrote ${sheetsWritten} to Google Sheets` : ''),
+        message: `Saved ${dbUpdated} commission settings to database` + 
+                 (sheetsWritten > 0 ? `, wrote ${sheetsWritten} to Google Sheets` : '') +
+                 `, and recalculated ${commissionsRecalculated} commission records`,
         dbUpdated,
-        sheetsWritten
+        sheetsWritten,
+        commissionsRecalculated
       });
     } catch (error: any) {
       console.error("Error saving commission settings:", error);
