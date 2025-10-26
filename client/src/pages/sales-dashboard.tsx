@@ -28,6 +28,7 @@ import { TopClientsWidget } from "@/components/widgets/top-clients";
 import { ActionAlertsWidget } from "@/components/widgets/action-alerts";
 import { RevenueTrendsWidget } from "@/components/widgets/revenue-trends";
 import { RemindersWidget } from "@/components/widgets/reminders";
+import { ReferralCommissionsWidget } from "@/components/widgets/referral-commissions";
 import { apiRequest } from "@/lib/queryClient";
 import { AgentFilterProvider } from "@/contexts/agent-filter-context";
 import { AdminAgentToolbar } from "@/components/admin-agent-toolbar";
@@ -46,6 +47,7 @@ const AVAILABLE_WIDGETS = [
   { id: "action-alerts", name: "Action Alerts", description: "Important follow-ups and alerts" },
   { id: "reminders", name: "Reminders", description: "Upcoming reminders and tasks" },
   { id: "top-clients", name: "Top Clients", description: "Highest earning clients" },
+  { id: "referral-commissions", name: "Referral Commissions", description: "Agents earning from referrals" },
 ];
 
 // Default layout configuration for widgets
@@ -59,6 +61,7 @@ const defaultLayouts = {
     { i: "action-alerts", x: 0, y: 6, w: 6, h: 3, minW: 2, minH: 2 },
     { i: "reminders", x: 6, y: 6, w: 6, h: 3, minW: 2, minH: 2 },
     { i: "top-clients", x: 0, y: 9, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "referral-commissions", x: 0, y: 12, w: 12, h: 3, minW: 4, minH: 2 },
   ],
   md: [
     { i: "revenue-overview", x: 0, y: 0, w: 6, h: 2, minW: 2, minH: 1 },
@@ -69,6 +72,7 @@ const defaultLayouts = {
     { i: "action-alerts", x: 0, y: 9, w: 6, h: 3, minW: 2, minH: 2 },
     { i: "reminders", x: 6, y: 9, w: 6, h: 3, minW: 2, minH: 2 },
     { i: "top-clients", x: 0, y: 12, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "referral-commissions", x: 0, y: 15, w: 12, h: 3, minW: 4, minH: 2 },
   ],
   sm: [
     { i: "revenue-overview", x: 0, y: 0, w: 12, h: 2, minW: 4, minH: 1 },
@@ -79,6 +83,7 @@ const defaultLayouts = {
     { i: "action-alerts", x: 0, y: 14, w: 12, h: 3, minW: 4, minH: 2 },
     { i: "reminders", x: 0, y: 17, w: 12, h: 3, minW: 4, minH: 2 },
     { i: "top-clients", x: 0, y: 20, w: 12, h: 3, minW: 4, minH: 2 },
+    { i: "referral-commissions", x: 0, y: 23, w: 12, h: 3, minW: 4, minH: 2 },
   ],
 };
 
@@ -394,6 +399,18 @@ export default function SalesDashboard() {
               onHide={() => toggleWidgetVisibility("top-clients")}
             >
               <TopClientsWidget />
+            </WidgetWithContextMenu>
+          </div>
+        )}
+
+        {visibleWidgets.has("referral-commissions") && (
+          <div key="referral-commissions">
+            <WidgetWithContextMenu
+              widgetId="referral-commissions"
+              widgetName="Referral Commissions"
+              onHide={() => toggleWidgetVisibility("referral-commissions")}
+            >
+              <ReferralCommissionsWidget />
             </WidgetWithContextMenu>
           </div>
         )}
