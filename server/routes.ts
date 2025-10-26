@@ -6364,16 +6364,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeSheet = await storage.getGoogleSheetByPurpose('store_database');
       const linkToNameMap: { [normalizedLink: string]: string } = {};
 
+      console.log('[TOP-CLIENTS] Store sheet found:', !!storeSheet);
+
       if (storeSheet) {
         try {
           const storeRange = `${storeSheet.sheetName}!A:ZZ`;
           const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+
+          console.log('[TOP-CLIENTS] Store Database rows:', storeRows.length);
 
           if (storeRows.length > 1) {
             const storeHeaders = storeRows[0];
             const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
             const nameIndex = 0; // Column A = Name
             const dbaIndex = 13; // Column N = DBA
+
+            console.log('[TOP-CLIENTS] Store Headers:', storeHeaders);
+            console.log('[TOP-CLIENTS] Link column index:', storeLinkIndex, 'Name index:', nameIndex, 'DBA index:', dbaIndex);
 
             // Build lookup map: normalized link -> company name
             for (let i = 1; i < storeRows.length; i++) {
@@ -6386,20 +6393,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const normalized = normalizeLink(storeLink);
                 // Prefer DBA over Name
                 linkToNameMap[normalized] = dba || name || storeLink;
+                
+                if (i <= 3) {
+                  console.log(`[TOP-CLIENTS] Row ${i}: link="${storeLink}" -> normalized="${normalized}" -> name="${linkToNameMap[normalized]}"`);
+                }
               }
             }
+            console.log('[TOP-CLIENTS] Lookup map size:', Object.keys(linkToNameMap).length);
+            console.log('[TOP-CLIENTS] Sample lookup keys:', Object.keys(linkToNameMap).slice(0, 5));
           }
         } catch (error) {
-          console.error('Error reading Store Database for name lookup:', error);
+          console.error('[TOP-CLIENTS] Error reading Store Database for name lookup:', error);
           // Continue without names - will fall back to links
         }
       }
 
       // Convert to array and sort by total commission (descending)
       const topClients = Object.entries(clientMetrics)
-        .map(([link, metrics]) => {
+        .map(([link, metrics], index) => {
           const normalizedLink = normalizeLink(link);
           const companyName = linkToNameMap[normalizedLink] || link;
+          
+          if (index < 3) {
+            console.log(`[TOP-CLIENTS] Client ${index + 1}: original="${link}" -> normalized="${normalizedLink}" -> found="${companyName}"`);
+          }
           
           return {
             id: link,
@@ -6414,6 +6431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .sort((a, b) => parseFloat(b.totalCommission) - parseFloat(a.totalCommission))
         .slice(0, topLimit);
 
+      console.log('[TOP-CLIENTS] Returning', topClients.length, 'clients');
       res.json({ topClients });
     } catch (error: any) {
       console.error('Error fetching top clients:', error);
