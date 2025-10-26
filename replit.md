@@ -62,9 +62,11 @@ The application is built around a client dashboard that unifies data from two Go
     - A PostgreSQL database (Neon) is used for user management and preference storage.
     - The backend is powered by Express.js and Node.js.
     - Commission calculation logic is implemented based on claim dates: 25% for the first 6 months post-claim, then 10%.
+    - **Commission Date Tracking**: Commission records use `commissionDate` field set to the order date (not calculation date) for accurate historical reporting. This ensures monthly commission reports reflect when orders were placed. Migration 0008 added this column and backfilled all existing records.
     - **Unified Status Color System**: Status dropdown and table rows both read from `statusColors` in the useCustomTheme hook, eliminating previous hard-coded color divergence.
     - **Debug Logging**: Centralized debug utility (`lib/debug.ts`) provides structured logging for status colors, preferences, and data operations with emoji-prefixed categories.
     - **Sales Assistant Architecture**: User's own OpenAI API key stored securely in database. Knowledge base files uploaded to OpenAI's servers (metadata in PostgreSQL, actual files on OpenAI). Chat uses Assistants API with file search tool when knowledge base is available, falls back to standard chat completion otherwise.
+    - **Database Migrations**: The project uses manual SQL migrations (migrations/0001-0008) that must be applied via direct SQL execution. Drizzle metadata is intentionally absent to avoid conflicts with the existing migration history.
 
 ## External Dependencies
 - **Google Sheets API**: For connecting and interacting with the "Store Database" and "Commission Tracker" Google Sheets.
