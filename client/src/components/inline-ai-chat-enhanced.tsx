@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -593,9 +593,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const useTemplate = (template: { title: string; content: string; type?: string }) => {
     const filledContent = replaceTemplateVariables(template.content, storeContext, user);
     
-    // For Script templates, add to the display area
+    // For Script templates, add to timeline (chronological display)
     if ((template as any).type === 'Script') {
-      setLoadedScripts(prev => [...prev, { title: template.title, content: filledContent }]);
+      const scriptItem: TimelineItem = {
+        type: 'script',
+        id: `script-${Date.now()}`,
+        title: template.title,
+        content: filledContent,
+        timestamp: Date.now()
+      };
+      setTimeline(prev => [...prev, scriptItem]);
       setTemplateBuilderOpen(false); // Close template builder
       setTemplatesOpen(false); // Switch to chat view
       toast({ 
@@ -642,12 +649,54 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     },
   });
 
-  // Auto-scroll to bottom when messages change
+  // Merge server messages with timeline items and sort chronologically
+  const mergedTimeline = useMemo(() => {
+    const serverMessageItems: TimelineItem[] = messages.map(msg => ({
+      type: 'message' as const,
+      id: msg.id,
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+      timestamp: new Date(msg.createdAt || Date.now()).getTime(),
+      status: 'sent' as const,
+    }));
+    
+    // Filter out optimistic messages that have been replaced by server messages
+    // (same content from the same role around the same time)
+    const filteredTimeline = timeline.filter(item => {
+      if (item.type !== 'message' || item.status === 'error') return true; // Keep scripts and error messages
+      
+      // Check if this optimistic message has a server equivalent
+      const hasServerVersion = serverMessageItems.some(serverMsg => 
+        serverMsg.role === item.role &&
+        serverMsg.content === item.content &&
+        Math.abs(serverMsg.timestamp - item.timestamp) < 5000 // Within 5 seconds
+      );
+      
+      return !hasServerVersion; // Keep it if there's no server version yet
+    });
+    
+    // Combine and sort by timestamp
+    const combined = [...filteredTimeline, ...serverMessageItems];
+    return combined.sort((a, b) => a.timestamp - b.timestamp);
+  }, [messages, timeline]);
+
+  // Clear timeline when switching conversations
+  useEffect(() => {
+    setTimeline([]);
+  }, [selectedConversationId]);
+
+  // Auto-scroll to bottom when timeline changes
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const scrollArea = scrollRef.current;
+      setTimeout(() => {
+        scrollArea.scrollTo({
+          top: scrollArea.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 100);
     }
-  }, [messages]);
+  }, [mergedTimeline, isSending]);
 
   // Handle context update from parent (when Save is clicked and contextUpdateTrigger changes)
   useEffect(() => {
@@ -970,6 +1019,19 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     if (!messageInput.trim() || isSending) return;
 
     const content = messageInput.trim();
+    const tempId = `temp-${Date.now()}`;
+    
+    // Optimistic update: add user message to timeline immediately
+    const optimisticMessage: TimelineItem = {
+      type: 'message',
+      id: tempId,
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+      status: 'pending'
+    };
+    
+    setTimeline(prev => [...prev, optimisticMessage]);
     setMessageInput("");
     setIsSending(true);
 
@@ -983,8 +1045,25 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         setSelectedConversationId(data.conversationId);
       }
 
+      // Mark the optimistic message as "sent" but keep it visible
+      // It will be replaced by the server version when the query refetches
+      setTimeline(prev => prev.map(item => 
+        item.id === tempId && item.type === 'message'
+          ? { ...item, status: 'sent' as const }
+          : item
+      ));
+      
+      // Invalidate to fetch the real server messages
+      // The optimistic message will be naturally replaced by deduplication logic
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId || data.conversationId, "messages"] });
     } catch (error: any) {
+      // Update the optimistic message to show error state
+      setTimeline(prev => prev.map(item => 
+        item.id === tempId && item.type === 'message'
+          ? { ...item, status: 'error' as const, error: error.message || "Failed to send" }
+          : item
+      ));
+      
       toast({
         title: "Error",
         description: error.message || "Failed to send message",
@@ -993,6 +1072,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     } finally {
       setIsSending(false);
     }
+  };
+  
+  // Retry a failed message
+  const handleRetryMessage = async (messageId: string, content: string) => {
+    // Remove the failed message
+    setTimeline(prev => prev.filter(item => item.id !== messageId));
+    
+    // Send it again
+    setMessageInput(content);
+    setTimeout(() => handleSendMessage(), 0);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -1020,6 +1109,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     createTemplateMutation.mutate({
       title: newTemplateTitle,
       content: newTemplateContent,
+      type: "Script",
       tags,
     });
   };
@@ -1377,7 +1467,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                               className="flex-1"
                               onClick={() => {
                                 const filledContent = replaceTemplateVariables(template.content, storeContext, user);
-                                setLoadedScripts(prev => [...prev, { title: template.title, content: filledContent }]);
+                                const scriptItem: TimelineItem = {
+                                  type: 'script',
+                                  id: `script-${Date.now()}`,
+                                  title: template.title,
+                                  content: filledContent,
+                                  timestamp: Date.now()
+                                };
+                                setTimeline(prev => [...prev, scriptItem]);
                                 toast({ 
                                   title: "Script Injected", 
                                   description: `"${template.title}" added to display` 
@@ -1441,12 +1538,12 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
             <Bot className="h-5 w-5" />
             <h2 className="font-semibold">Sales Assistant</h2>
           </div>
-          {loadedScripts.length > 0 && (
+          {timeline.some(item => item.type === 'script') && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
-                setLoadedScripts([]);
+                setTimeline(prev => prev.filter(item => item.type !== 'script'));
                 toast({ title: "Scripts Cleared", description: "Script display reset" });
               }}
               data-testid="button-clear-scripts"
@@ -1470,109 +1567,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
           </div>
         )}
 
-        {/* Messages */}
+        {/* Messages - Unified Timeline */}
         <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
-          {/* Script Display Area */}
-          {loadedScripts.length > 0 ? (
-            <div className="space-y-4">
-              {loadedScripts.map((script, index) => (
-                <div key={index} className="border-2 border-primary/30 rounded-lg bg-card p-4">
-                  <div className="flex items-center gap-2 mb-3 pb-2 border-b">
-                    <FileText className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold text-lg">{script.title}</h3>
-                  </div>
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{script.content}</p>
-                  </div>
-                </div>
-              ))}
-              
-              {/* Divider between scripts and chat */}
-              {selectedConversationId && messages.length > 0 && (
-                <div className="border-t my-4 pt-4">
-                  <p className="text-xs text-muted-foreground text-center mb-4">Chat Messages</p>
-                </div>
-              )}
-              
-              {/* Chat messages below scripts */}
-              {selectedConversationId && messages.length > 0 && (
-                <div className="space-y-4">
-                  {messages.map((msg) => {
-                    const emailData = msg.role === "assistant" ? parseEmailFromMessage(msg.content) : null;
-                    const processedEmailData = emailData ? {
-                      to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
-                      subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
-                      body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
-                    } : null;
-
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
-                      >
-                        {msg.role === "assistant" && (
-                          <div className="flex-shrink-0">
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Bot className="h-4 w-4 text-primary" />
-                            </div>
-                          </div>
-                        )}
-                        <div
-                          className={`max-w-[80%] ${
-                            msg.role === "user" ? "w-full" : ""
-                          }`}
-                        >
-                          {msg.role === "assistant" ? (
-                            <ContextMenu>
-                              <ContextMenuTrigger>
-                                <div className="rounded-lg p-3 bg-muted">
-                                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                                </div>
-                              </ContextMenuTrigger>
-                              <ContextMenuContent>
-                                <ContextMenuItem
-                                  onClick={() => copyMessageToClipboard(msg.content)}
-                                  data-testid="context-menu-copy"
-                                >
-                                  <Copy className="mr-2 h-4 w-4" />
-                                  Copy
-                                </ContextMenuItem>
-                                <ContextMenuItem
-                                  onClick={() => makeTemplateFromMessage(msg.content)}
-                                  data-testid="context-menu-make-template"
-                                >
-                                  <FileText className="mr-2 h-4 w-4" />
-                                  Make Template
-                                </ContextMenuItem>
-                              </ContextMenuContent>
-                            </ContextMenu>
-                          ) : (
-                            <div className="rounded-lg p-3 bg-primary text-primary-foreground">
-                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                            </div>
-                          )}
-                          {processedEmailData && (
-                            <EmailPreview
-                              to={processedEmailData.to}
-                              subject={processedEmailData.subject}
-                              body={processedEmailData.body}
-                            />
-                          )}
-                        </div>
-                        {msg.role === "user" && (
-                          <div className="flex-shrink-0">
-                            <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
-                              <UserIcon className="h-4 w-4" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : !selectedConversationId ? (
+          {!selectedConversationId ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <Bot className="h-16 w-16 mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-lg font-semibold mb-2">Welcome to Sales Assistant</h3>
@@ -1588,82 +1585,132 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
-          ) : messages.length > 0 ? (
+          ) : (
             <div className="space-y-4">
-              {messages.map((msg) => {
-                const emailData = msg.role === "assistant" ? parseEmailFromMessage(msg.content) : null;
-                const processedEmailData = emailData ? {
-                  to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
-                  subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
-                  body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
-                } : null;
-
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
-                  >
-                    {msg.role === "assistant" && (
-                      <div className="flex-shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Bot className="h-4 w-4 text-primary" />
-                        </div>
+              {/* Render merged timeline chronologically */}
+              {mergedTimeline.map((item) => {
+                if (item.type === 'script') {
+                  // Script display
+                  return (
+                    <div key={item.id} className="border-2 border-primary/30 rounded-lg bg-card p-4" data-testid={`script-${item.id}`}>
+                      <div className="flex items-center gap-2 mb-3 pb-2 border-b">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <h3 className="font-semibold text-lg">{item.title}</h3>
                       </div>
-                    )}
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.content}</p>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // Message display
+                  const emailData = item.role === "assistant" ? parseEmailFromMessage(item.content) : null;
+                  const processedEmailData = emailData ? {
+                    to: replaceSimpleTemplateVariables(emailData.to, storeContext, user),
+                    subject: replaceSimpleTemplateVariables(emailData.subject, storeContext, user),
+                    body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
+                  } : null;
+
+                  return (
                     <div
-                      className={`max-w-[80%] ${
-                        msg.role === "user" ? "w-full" : ""
-                      }`}
+                      key={item.id}
+                      className={`flex gap-3 ${item.role === "user" ? "justify-end" : ""}`}
+                      data-testid={`message-${item.id}`}
                     >
-                      {msg.role === "assistant" ? (
-                        <ContextMenu>
-                          <ContextMenuTrigger>
-                            <div className="rounded-lg p-3 bg-muted">
-                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                            </div>
-                          </ContextMenuTrigger>
-                          <ContextMenuContent>
-                            <ContextMenuItem
-                              onClick={() => copyMessageToClipboard(msg.content)}
-                              data-testid="context-menu-copy"
-                            >
-                              <Copy className="mr-2 h-4 w-4" />
-                              Copy
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                              onClick={() => makeTemplateFromMessage(msg.content)}
-                              data-testid="context-menu-make-template"
-                            >
-                              <FileText className="mr-2 h-4 w-4" />
-                              Make Template
-                            </ContextMenuItem>
-                          </ContextMenuContent>
-                        </ContextMenu>
-                      ) : (
-                        <div className="rounded-lg p-3 bg-primary text-primary-foreground">
-                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      {item.role === "assistant" && (
+                        <div className="flex-shrink-0">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Bot className="h-4 w-4 text-primary" />
+                          </div>
                         </div>
                       )}
-                      {processedEmailData && (
-                        <EmailPreview
-                          to={processedEmailData.to}
-                          subject={processedEmailData.subject}
-                          body={processedEmailData.body}
-                        />
+                      <div className={`max-w-[80%] ${item.role === "user" ? "w-full" : ""}`}>
+                        {item.role === "assistant" ? (
+                          <ContextMenu>
+                            <ContextMenuTrigger>
+                              <div className="rounded-lg p-3 bg-muted">
+                                <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+                              </div>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              <ContextMenuItem
+                                onClick={() => copyMessageToClipboard(item.content)}
+                                data-testid="context-menu-copy"
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copy
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={() => makeTemplateFromMessage(item.content)}
+                                data-testid="context-menu-make-template"
+                              >
+                                <FileText className="mr-2 h-4 w-4" />
+                                Make Template
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        ) : (
+                          <div className={`rounded-lg p-3 ${
+                            item.status === 'error' 
+                              ? 'bg-destructive/20 border border-destructive' 
+                              : item.status === 'pending'
+                              ? 'bg-primary/70 text-primary-foreground'
+                              : 'bg-primary text-primary-foreground'
+                          }`}>
+                            <p className="text-sm whitespace-pre-wrap">{item.content}</p>
+                            {item.status === 'error' && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <p className="text-xs text-destructive">{item.error}</p>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleRetryMessage(item.id, item.content)}
+                                  data-testid={`button-retry-${item.id}`}
+                                >
+                                  Retry
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {processedEmailData && (
+                          <EmailPreview
+                            to={processedEmailData.to}
+                            subject={processedEmailData.subject}
+                            body={processedEmailData.body}
+                          />
+                        )}
+                      </div>
+                      {item.role === "user" && (
+                        <div className="flex-shrink-0">
+                          <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
+                            <UserIcon className="h-4 w-4" />
+                          </div>
+                        </div>
                       )}
                     </div>
-                    {msg.role === "user" && (
-                      <div className="flex-shrink-0">
-                        <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
-                          <UserIcon className="h-4 w-4" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
+                  );
+                }
               })}
+              
+              {/* Typing indicator when AI is responding */}
+              {isSending && (
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                  </div>
+                  <div className="rounded-lg p-3 bg-muted">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">AI is thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          ) : null}
+          )}
         </ScrollArea>
 
         {/* Input */}
@@ -2513,7 +2560,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => useTemplate(template)}
+                                onClick={() => useTemplate({ ...template, type: template.type || "Script" })}
                                 data-testid={`button-use-template-${template.id}`}
                               >
                                 Use
