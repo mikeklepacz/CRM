@@ -6349,11 +6349,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Get Store Database sheet to look up company names by link
+      const storeSheet = await storage.getGoogleSheetByPurpose('store_database');
+      const linkToNameMap: { [link: string]: string } = {};
+
+      if (storeSheet) {
+        try {
+          const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+          const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+
+          if (storeRows.length > 1) {
+            const storeHeaders = storeRows[0];
+            const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+            const nameIndex = 0; // Column A = Name
+            const dbaIndex = 13; // Column N = DBA
+
+            // Build lookup map: link -> company name
+            for (let i = 1; i < storeRows.length; i++) {
+              const row = storeRows[i];
+              const storeLink = row[storeLinkIndex] || '';
+              const dba = row[dbaIndex] || '';
+              const name = row[nameIndex] || '';
+
+              if (storeLink) {
+                // Prefer DBA over Name
+                linkToNameMap[storeLink] = dba || name || storeLink;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error reading Store Database for name lookup:', error);
+          // Continue without names - will fall back to links
+        }
+      }
+
       // Convert to array and sort by total commission (descending)
       const topClients = Object.entries(clientMetrics)
         .map(([link, metrics]) => ({
           id: link,
-          name: link,
+          name: linkToNameMap[link] || link, // Use company name from Store Database, fallback to link
           totalRevenue: metrics.totalCommission.toFixed(2),
           totalCommission: metrics.totalCommission.toFixed(2),
           orderCount: metrics.orderCount,
