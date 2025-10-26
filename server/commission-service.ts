@@ -104,12 +104,19 @@ export async function applyCommissions(orderId: string): Promise<void> {
 function calculateCommissionRate(
   commissionType: string | null,
   orderDate: Date,
-  client: { claimDate?: Date | null; assignedAgent?: string | null } | null
+  client: { claimDate?: Date | null; assignedAgent?: string | null; firstOrderDate?: Date | null } | null
 ): number {
   if (commissionType === '25') return 25.00;
   if (commissionType === '10') return 10.00;
   if (commissionType === 'flat') return 0;
   
+  // Use firstOrderDate for auto calculation (fairer timeline than claimDate)
+  if (commissionType === 'auto' && client?.firstOrderDate) {
+    const monthsSinceFirstOrder = differenceInMonths(new Date(orderDate), new Date(client.firstOrderDate));
+    return monthsSinceFirstOrder < 6 ? 25.00 : 10.00;
+  }
+  
+  // Fallback to claimDate if firstOrderDate not available (legacy support)
   if (commissionType === 'auto' && client?.claimDate) {
     const monthsSinceClaim = differenceInMonths(new Date(orderDate), new Date(client.claimDate));
     return monthsSinceClaim < 6 ? 25.00 : 10.00;
