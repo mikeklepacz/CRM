@@ -43,10 +43,6 @@ export function WooCommerceSync() {
   const [modifiedOrders, setModifiedOrders] = useState<Set<string>>(new Set());
   const [savingOrders, setSavingOrders] = useState<Set<string>>(new Set());
   
-  // Track active save promises for proper synchronization
-  const activeSavePromise = useRef<Promise<void> | null>(null);
-  const pendingSaveTimeout = useRef<NodeJS.Timeout | null>(null);
-  
   // Sorting state - default to newest first (descending by order date)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
@@ -129,30 +125,7 @@ export function WooCommerceSync() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      // Clear any pending debounce timer
-      if (pendingSaveTimeout.current) {
-        clearTimeout(pendingSaveTimeout.current);
-        pendingSaveTimeout.current = null;
-      }
-      
-      // Execute saves immediately for any modified orders
-      if (modifiedOrders.size > 0) {
-        toast({
-          title: "Saving changes...",
-          description: "Saving commission updates before sync",
-        });
-        
-        const savePromise = executeSave();
-        if (savePromise) {
-          await savePromise;
-        }
-      }
-      
-      // Wait for any other active saves to complete
-      if (activeSavePromise.current) {
-        await activeSavePromise.current;
-      }
-      
+      // No auto-save - users must explicitly click "Save Commissions" before syncing
       return await apiRequest("POST", "/api/woocommerce/sync", {});
     },
     onSuccess: (data) => {
@@ -628,7 +601,15 @@ export function WooCommerceSync() {
                             <Button 
                               variant={order.hasTrackerRows ? "default" : "outline"}
                               size="sm"
-                              onClick={() => setMatchingOrderId(order.id)}
+                              onClick={() => {
+                                setMatchingOrderId(order.id);
+                                // For new matches (no existing commission settings), default to $500 flat
+                                if (!order.commissionType && !commissionTypes[order.id]) {
+                                  setCommissionTypes(prev => ({ ...prev, [order.id]: 'flat' }));
+                                  setCommissionAmounts(prev => ({ ...prev, [order.id]: '500.00' }));
+                                  setModifiedOrders(prev => new Set(prev).add(order.id));
+                                }
+                              }}
                               className={order.hasTrackerRows ? "bg-green-600 hover:bg-green-700 border-green-700" : ""}
                               data-testid={`button-match-${order.id}`}
                             >
