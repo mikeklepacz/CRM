@@ -1701,7 +1701,6 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                     )}
                   </div>
                 );
-                }
               })}
               
               {/* Typing indicator when AI is responding */}
