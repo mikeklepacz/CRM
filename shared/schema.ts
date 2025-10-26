@@ -134,7 +134,8 @@ export const commissions = pgTable("commissions", {
   sourceAgentId: varchar("source_agent_id").references(() => users.id), // For referral commissions, which agent generated the sale
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
   commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }), // e.g., 25.00 for 25%, 10.00 for 10%
-  calculatedOn: timestamp("calculated_on").defaultNow(),
+  commissionDate: timestamp("commission_date").notNull(), // Date when the order was placed (source of truth for reports)
+  calculatedOn: timestamp("calculated_on").defaultNow(), // When the commission was calculated
   notes: text("notes"),
 }, (table) => [
   index("idx_commissions_agent_kind_calc").on(table.agentId, table.commissionKind, table.calculatedOn),
