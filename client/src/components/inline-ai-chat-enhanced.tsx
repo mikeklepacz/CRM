@@ -182,6 +182,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const [messageInput, setMessageInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollBottomRef = useRef<HTMLDivElement>(null);
   
   // Timeline state - chronological order of scripts and messages
   type TimelineItem = 
@@ -663,13 +664,20 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     // Filter out optimistic messages that have been replaced by server messages
     // (same content from the same role around the same time)
     const filteredTimeline = timeline.filter(item => {
-      if (item.type !== 'message' || item.status === 'error') return true; // Keep scripts and error messages
+      // Keep all scripts
+      if (item.type === 'script') return true;
+      
+      // Now we know item must be a message type
+      const msg = item; // TypeScript should infer this is a message now
+      
+      // Keep error messages
+      if (msg.status === 'error') return true;
       
       // Check if this optimistic message has a server equivalent
       const hasServerVersion = serverMessageItems.some(serverMsg => 
-        serverMsg.role === item.role &&
-        serverMsg.content === item.content &&
-        Math.abs(serverMsg.timestamp - item.timestamp) < 5000 // Within 5 seconds
+        serverMsg.role === msg.role &&
+        serverMsg.content === msg.content &&
+        Math.abs(serverMsg.timestamp - msg.timestamp) < 5000 // Within 5 seconds
       );
       
       return !hasServerVersion; // Keep it if there's no server version yet
@@ -687,14 +695,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
   // Auto-scroll to bottom when timeline changes
   useEffect(() => {
-    if (scrollRef.current) {
-      const scrollArea = scrollRef.current;
-      setTimeout(() => {
-        scrollArea.scrollTo({
-          top: scrollArea.scrollHeight,
-          behavior: 'smooth'
+    if (scrollBottomRef.current) {
+      // Use requestAnimationFrame for better timing with DOM updates
+      requestAnimationFrame(() => {
+        scrollBottomRef.current?.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'end'
         });
-      }, 100);
+      });
     }
   }, [mergedTimeline, isSending]);
 
@@ -1709,6 +1717,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                   </div>
                 </div>
               )}
+              
+              {/* Bottom anchor for auto-scroll */}
+              <div ref={scrollBottomRef} />
             </div>
           )}
         </ScrollArea>
