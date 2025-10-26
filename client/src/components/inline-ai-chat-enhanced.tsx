@@ -183,8 +183,12 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   
-  // Script display state - for showing scripts in the chat area
-  const [loadedScripts, setLoadedScripts] = useState<Array<{ title: string; content: string }>>([]);
+  // Timeline state - chronological order of scripts and messages
+  type TimelineItem = 
+    | { type: 'script'; id: string; title: string; content: string; timestamp: number }
+    | { type: 'message'; id: string; role: 'user' | 'assistant'; content: string; timestamp: number; status?: 'pending' | 'sent' | 'error'; error?: string };
+  
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [lastLoadTrigger, setLastLoadTrigger] = useState(0);
 
   // Template form state
@@ -685,8 +689,15 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       if (defaultScript && storeContext) {
         const filledContent = replaceTemplateVariables(defaultScript.content, storeContext, user);
         
-        // Add script to loaded scripts array (displays in chat area)
-        setLoadedScripts([{ title: defaultScript.title, content: filledContent }]);
+        // Add script to timeline (chronological display in chat area)
+        const scriptItem: TimelineItem = {
+          type: 'script',
+          id: `script-${Date.now()}`,
+          title: defaultScript.title,
+          content: filledContent,
+          timestamp: Date.now()
+        };
+        setTimeline(prev => [...prev, scriptItem]);
         
         // Switch to chat view
         setTemplatesOpen(false);
