@@ -1011,12 +1011,12 @@ export default function ClientDashboard() {
           const savedOrder = userPreferences.columnOrder.filter((col: string) => headers.includes(col));
           const newColumns = headers.filter((h: string) => !savedOrder.includes(h));
           // Filter out Agent column for non-admin users
-          const finalOrder = [...savedOrder, ...newColumns].filter(col => 
+          const finalOrder = [...savedOrder, ...newColumns].filter((col: string) => 
             currentUser?.role === 'admin' || !isAgentColumn(col)
           );
           setColumnOrder(finalOrder);
         } else {
-          const finalOrder = headers.filter(col => 
+          const finalOrder = headers.filter((col: string) => 
             currentUser?.role === 'admin' || !isAgentColumn(col)
           );
           setColumnOrder(finalOrder);
@@ -1054,10 +1054,7 @@ export default function ClientDashboard() {
           setVerticalAlign(userPreferences.verticalAlign);
         }
 
-        // Load status options
-        if (userPreferences.statusOptions) {
-          setStatusOptions(userPreferences.statusOptions);
-        }
+        // Status options are now managed by useCustomTheme hook
         // colorRowByStatus and colorPresets are now managed by useCustomTheme hook
         if (userPreferences.freezeFirstColumn !== undefined) {
           setFreezeFirstColumn(userPreferences.freezeFirstColumn);
@@ -1074,7 +1071,7 @@ export default function ClientDashboard() {
           currentWidths[header] = 200;
         });
         setVisibleColumns(currentVisible);
-        const finalOrder = headers.filter(col => 
+        const finalOrder = headers.filter((col: string) => 
           currentUser?.role === 'admin' || !isAgentColumn(col)
         );
         setColumnOrder(finalOrder);
@@ -1092,7 +1089,7 @@ export default function ClientDashboard() {
         const newHeaders = headers.filter((h: string) => !currentOrder.includes(h));
         if (newHeaders.length > 0) {
           // Add new headers to column order (filtering out Agent for non-admins)
-          const headersToAdd = newHeaders.filter(col => 
+          const headersToAdd = newHeaders.filter((col: string) => 
             currentUser?.role === 'admin' || !isAgentColumn(col)
           );
           setColumnOrder([...currentOrder, ...headersToAdd]);
@@ -1873,16 +1870,7 @@ export default function ClientDashboard() {
         } : {}}
       >
         <div className="flex flex-col items-center justify-center">
-          {userPreferences?.loadingLogoUrl ? (
-            <img 
-              src={userPreferences.loadingLogoUrl} 
-              alt="Loading..." 
-              className="w-32 h-32 mb-4 animate-pulse object-contain"
-              data-testid="img-loading-logo"
-            />
-          ) : (
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mb-4" data-testid="spinner-loading"></div>
-          )}
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mb-4" data-testid="spinner-loading"></div>
           <p className="text-muted-foreground">Loading your data...</p>
         </div>
       </div>
@@ -4100,7 +4088,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       }
       
       // Only close if requested
-      if (data.closeDialog) {
+      if (data?.closeDialog) {
         onOpenChange(false);
       }
     },
@@ -4760,7 +4748,6 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                         pocPhone={formData.poc_phone}
                         defaultEmail={formData.email}
                         defaultPhone={formData.phone}
-                        defaultCalendarReminders={userPreferences?.defaultCalendarReminders}
                       />
                     </CollapsibleContent>
                   </Collapsible>

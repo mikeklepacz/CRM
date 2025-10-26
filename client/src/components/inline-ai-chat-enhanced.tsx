@@ -666,6 +666,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       // Keep all scripts
       if (item.type === 'script') return true;
       
+      // Type guard: after checking for script, we know it's a message
+      if (item.type !== 'message') return true;
+      
       // Keep error messages
       if (item.status === 'error') return true;
       
