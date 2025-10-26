@@ -666,17 +666,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       // Keep all scripts
       if (item.type === 'script') return true;
       
-      // Now we know item must be a message type
-      const msg = item; // TypeScript should infer this is a message now
-      
       // Keep error messages
-      if (msg.status === 'error') return true;
+      if (item.status === 'error') return true;
       
       // Check if this optimistic message has a server equivalent
       const hasServerVersion = serverMessageItems.some(serverMsg => 
-        serverMsg.role === msg.role &&
-        serverMsg.content === msg.content &&
-        Math.abs(serverMsg.timestamp - msg.timestamp) < 5000 // Within 5 seconds
+        serverMsg.role === item.role &&
+        serverMsg.content === item.content &&
+        Math.abs(serverMsg.timestamp - item.timestamp) < 5000 // Within 5 seconds
       );
       
       return !hasServerVersion; // Keep it if there's no server version yet
