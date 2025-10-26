@@ -1667,6 +1667,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get referral commission summary (admin only)
+  app.get('/api/reports/referral-commissions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const allCommissions = await storage.getAllCommissions();
+      const allUsers = await storage.getAllUsers();
+      
+      const referralSummary: Record<string, {
+        referringAgentId: string;
+        referringAgentName: string;
+        totalReferralCommission: number;
+      }> = {};
+      
+      for (const commission of allCommissions) {
+        if (commission.type === 'referral' && commission.referringAgentId) {
+          if (!referralSummary[commission.referringAgentId]) {
+            const agent = allUsers.find(u => u.id === commission.referringAgentId);
+            referralSummary[commission.referringAgentId] = {
+              referringAgentId: commission.referringAgentId,
+              referringAgentName: agent?.agentName || agent?.email || 'Unknown',
+              totalReferralCommission: 0,
+            };
+          }
+          referralSummary[commission.referringAgentId].totalReferralCommission += commission.amount;
+        }
+      }
+      
+      const referralData = Object.values(referralSummary)
+        .sort((a, b) => b.totalReferralCommission - a.totalReferralCommission);
+      
+      res.json({ referralCommissions: referralData });
+    } catch (error: any) {
+      console.error("Error fetching referral commission data:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch referral commission data" });
+    }
+  });
+
   // Note: To make a user admin, run this SQL command in the database console:
   // UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 
