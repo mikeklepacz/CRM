@@ -29,6 +29,7 @@ import {
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
 import { notifyNewTicket, notifyTicketReply } from "./gmail";
+import { format } from "date-fns";
 
 // ============================================================================
 // In-Memory Cache for Google Sheets Data (30-second TTL)
@@ -50,14 +51,14 @@ function generateCacheKey(userId: string, storeSheetId: string, trackerSheetId: 
 function getCachedData(key: string): any | null {
   const entry = sheetsCache.get(key);
   if (!entry) return null;
-  
+
   const now = Date.now();
   if (now - entry.timestamp > CACHE_TTL_MS) {
     // Cache expired
     sheetsCache.delete(key);
     return null;
   }
-  
+
   return entry.data;
 }
 
@@ -128,12 +129,12 @@ function stringSimilarity(str1: string, str2: string): number {
 function columnIndexToLetter(index: number): string {
   let letter = '';
   let num = index;
-  
+
   while (num >= 0) {
     letter = String.fromCharCode((num % 26) + 65) + letter;
     num = Math.floor(num / 26) - 1;
   }
-  
+
   return letter;
 }
 
@@ -291,7 +292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      
+
       // Background sync: Create missing calendar events and renew watch channel if needed
       setImmediate(async () => {
         try {
@@ -300,14 +301,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (syncResult.created > 0) {
             console.log(`[LoginSync] Created ${syncResult.created} calendar events for user ${userId}`);
           }
-          
+
           // Renew watch channel if close to expiry
           await renewCalendarWatchIfNeeded(userId);
         } catch (error: any) {
           console.error('[LoginSync] Background sync failed:', error.message);
         }
       });
-      
+
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -465,12 +466,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     timezone: z.string().optional(),
     defaultTimezoneMode: z.enum(['agent', 'customer']).optional(),
     timeFormat: z.enum(['12hr', '24hr']).optional(),
+    defaultCalendarReminders: z.array(z.object({ method: z.enum(['popup', 'email']), minutes: z.number() })).optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
     try {
       console.log('🎨 [BACKEND] PUT /api/user/preferences - Request body:', JSON.stringify(req.body, null, 2));
-      
+
       const validation = userPreferencesSchema.safeParse(req.body);
       if (!validation.success) {
         console.error('🎨 [BACKEND] Validation failed:', validation.error.errors);
@@ -482,7 +484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       console.log('🎨 [BACKEND] User ID:', userId);
       console.log('🔴 [BACKEND] colorRowByStatus value received:', validation.data.colorRowByStatus);
-      
+
       const preferences = await storage.saveUserPreferences(userId, validation.data);
       console.log('🎨 [BACKEND] Preferences saved to DB:', JSON.stringify(preferences, null, 2));
       console.log('🔴 [BACKEND] colorRowByStatus value in saved preferences:', preferences.colorRowByStatus);
@@ -499,7 +501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/user/upload-loading-logo', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const { imageData } = req.body;
-      
+
       if (!imageData || !imageData.startsWith('data:image/')) {
         return res.status(400).json({ message: 'Invalid image data. Must be a base64-encoded image.' });
       }
@@ -508,13 +510,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const base64Length = imageData.length - (imageData.indexOf(',') + 1);
       const sizeInBytes = (base64Length * 3) / 4;
       const sizeInMB = sizeInBytes / (1024 * 1024);
-      
+
       if (sizeInMB > 5) {
         return res.status(400).json({ message: 'Image too large. Maximum size is 5MB.' });
       }
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       // Save the loading logo URL to user preferences
       const preferences = await storage.saveUserPreferences(userId, {
         loadingLogoUrl: imageData
@@ -718,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/gmail/oauth-url', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       // Use system-wide Google OAuth credentials for client ID/secret
       const systemIntegration = await storage.getSystemIntegration('google_sheets');
       if (!systemIntegration?.googleClientId) {
@@ -827,7 +829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to get or create Gmail labels
   async function getOrCreateGmailLabels(accessToken: string, labelNames: string[]): Promise<string[]> {
     console.log('📧 [GMAIL LABELS] Starting label resolution for:', labelNames);
-    
+
     if (!labelNames || labelNames.length === 0) {
       console.log('📧 [GMAIL LABELS] No labels requested, returning empty array');
       return [];
@@ -851,7 +853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { labels } = await listResponse.json();
       console.log(`📧 [GMAIL LABELS] ✅ Fetched ${labels.length} existing labels from Gmail`);
-      
+
       const existingLabels = new Map(labels.map((l: any) => [l.name, l.id]));
       const labelIds: string[] = [];
 
@@ -999,18 +1001,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Apply labels if user has configured them
       console.log('📧 [GMAIL] Fetching user settings to check for Gmail labels...');
       const user = await storage.getUser(userId);
-      
+
       let labelsApplied = false;
       let labelWarning = null;
-      
+
       if (user?.gmailLabels && user.gmailLabels.length > 0) {
         console.log('📧 [GMAIL] 🏷️  User has configured labels:', user.gmailLabels);
         console.log('📧 [GMAIL] Starting label application process...');
-        
+
         try {
           // Get or create label IDs
           const labelIds = await getOrCreateGmailLabels(accessToken, user.gmailLabels);
-          
+
           if (labelIds.length > 0) {
             console.log(`📧 [GMAIL] Attempting to apply ${labelIds.length} labels to draft message...`);
             // Modify the draft's message to add labels
@@ -1037,7 +1039,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const errorText = await modifyResponse.text();
               console.error('📧 [GMAIL] ❌ Failed to apply labels to draft. Status:', modifyResponse.status);
               console.error('📧 [GMAIL] Error details:', errorText);
-              
+
               // Check if it's a permission error
               if (modifyResponse.status === 403 || errorText.includes('insufficient') || errorText.includes('permission')) {
                 labelWarning = "Draft created but labels could not be applied. You may need to reconnect Gmail in Settings to grant label permissions.";
@@ -1089,14 +1091,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             integration.googleClientId,
             integration.googleClientSecret
           );
-          
+
           oauth2Client.setCredentials({
             access_token: integration.googleCalendarAccessToken,
             refresh_token: integration.googleCalendarRefreshToken || undefined
           });
 
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-          
+
           await calendar.channels.stop({
             requestBody: {
               id: integration.googleCalendarWebhookChannelId,
@@ -1131,9 +1133,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/calendar/webhook-status', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const integration = await storage.getUserIntegration(userId);
-      
+
       // Check if user has calendar connected
       if (!integration?.googleCalendarAccessToken) {
         return res.json({
@@ -1198,9 +1200,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/calendar/webhook-register', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const integration = await storage.getUserIntegration(userId);
-      
+
       // Check if user has calendar connected
       if (!integration?.googleCalendarAccessToken) {
         return res.status(400).json({ 
@@ -1216,14 +1218,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             integration.googleClientId,
             integration.googleClientSecret
           );
-          
+
           oauth2Client.setCredentials({
             access_token: integration.googleCalendarAccessToken,
             refresh_token: integration.googleCalendarRefreshToken || undefined
           });
 
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-          
+
           await calendar.channels.stop({
             requestBody: {
               id: integration.googleCalendarWebhookChannelId,
@@ -1238,7 +1240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Set up new webhook
       const success = await setupCalendarWatch(userId);
-      
+
       if (!success) {
         return res.status(500).json({ 
           message: "Failed to register webhook. Please try again." 
@@ -1247,7 +1249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get updated integration to return new status
       const updatedIntegration = await storage.getUserIntegration(userId);
-      
+
       res.json({
         message: "Webhook registered successfully",
         state: 'active',
@@ -1326,14 +1328,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const selectedCategory = await storage.getSelectedCategory(userId);
-      
+
       const clients = await storage.getAllClients();
-      
+
       // Filter by selected category if one is set
       const filteredClients = selectedCategory 
         ? clients.filter(client => client.category === selectedCategory)
         : clients;
-      
+
       res.json(filteredClients);
     } catch (error: any) {
       console.error("Error fetching clients:", error);
@@ -1346,14 +1348,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const selectedCategory = await storage.getSelectedCategory(userId);
-      
+
       const clients = await storage.getClientsByAgent(req.currentUser.id);
-      
+
       // Filter by selected category if one is set
       const filteredClients = selectedCategory 
         ? clients.filter(client => client.category === selectedCategory)
         : clients;
-      
+
       res.json(filteredClients);
     } catch (error: any) {
       console.error("Error fetching agent clients:", error);
@@ -1366,7 +1368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { search, nameFilter, cityFilter, states, cities, status } = req.body;
       const user = req.currentUser;
-      
+
       // DEBUG: Log received filters
       console.log('🔍 [EXPORT FILTERS RECEIVED]:', JSON.stringify({
         search,
@@ -1376,7 +1378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cities,
         status
       }, null, 2));
-      
+
       // Build filters - ONLY visual filters, no category or agent filtering
       const filters: any = {
         search,
@@ -1389,7 +1391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Export endpoint NEVER filters by agent or category
       // It ONLY exports what is visually filtered in the CRMxactly what's visible in the filtered table
-      if (user.role !== 'admin' && showMyStoresOnly) {
+      if (user.role !== 'admin' && user.showMyStoresOnly) {
         filters.agentId = user.id;
       }
 
@@ -1491,27 +1493,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/users', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const users = await storage.getAllUsers();
-      
+
       // Get all orders from database to calculate sales metrics
       const allOrders = await storage.getAllOrders();
-      
+
       const usersWithMetrics = users.map((user) => {
         let totalSales = 0;
         let grossIncome = 0;
-        
+
         // Match orders by salesAgentName
         if (user.agentName) {
           const userOrders = allOrders.filter(order => {
             if (!order.salesAgentName) return false;
             return order.salesAgentName.toLowerCase().trim() === user.agentName.toLowerCase().trim();
           });
-          
+
           totalSales = userOrders.length;
           grossIncome = userOrders.reduce((sum, order) => {
             return sum + parseFloat(order.total || '0');
           }, 0);
         }
-        
+
         return {
           id: user.id,
           email: user.email,
@@ -1526,7 +1528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           referredBy: user.referredBy,
         };
       });
-      
+
       res.json({ users: usersWithMetrics });
     } catch (error: any) {
       console.error("Error fetching users:", error);
@@ -1538,23 +1540,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/users', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const { email, firstName, lastName, agentName, password, role, selectedCategory, referredBy } = req.body;
-      
+
       if (!email || !agentName || !password) {
         return res.status(400).json({ message: "Email, agent name, and password are required" });
       }
-      
+
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res.status(400).json({ message: "User with this email already exists" });
       }
-      
+
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
-      
+
       // Use email as username
       const username = email;
-      
+
       const newUser = await storage.createUser({
         email,
         firstName: firstName || null,
@@ -1565,12 +1567,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: role || 'agent',
         referredBy: referredBy || null,
       });
-      
+
       // Set selectedCategory preference if provided
       if (selectedCategory) {
         await storage.setSelectedCategory(newUser.id, selectedCategory);
       }
-      
+
       res.json({ user: newUser });
     } catch (error: any) {
       console.error("Error creating user:", error);
@@ -1582,26 +1584,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/sales-data', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { startDate, endDate } = req.query;
-      
+
       if (!startDate || !endDate) {
         return res.status(400).json({ message: "Start date and end date are required" });
       }
-      
+
       // Parse dates
       const start = new Date(startDate as string);
       const end = new Date(endDate as string);
       end.setHours(23, 59, 59, 999); // Include the entire end date
-      
+
       // Fetch all orders within the date range
       const allOrders = await storage.getAllOrders();
       const ordersInRange = allOrders.filter(order => {
         const orderDate = new Date(order.orderDate);
         return orderDate >= start && orderDate <= end;
       });
-      
+
       // Fetch all users to get agent information
       const allUsers = await storage.getAllUsers();
-      
+
       // Group orders by agent and calculate metrics
       const agentSales: Record<string, {
         agentName: string;
@@ -1614,17 +1616,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalCommission: number;
         orders: any[];
       }> = {};
-      
+
       // Process each order
       for (const order of ordersInRange) {
         const agentName = order.salesAgentName || 'Unassigned';
-        
+
         if (!agentSales[agentName]) {
           // Find matching user
           const matchingUser = allUsers.find(u => 
             u.agentName && u.agentName.toLowerCase().trim() === agentName.toLowerCase().trim()
           );
-          
+
           agentSales[agentName] = {
             agentName,
             agentId: matchingUser?.id || null,
@@ -1637,10 +1639,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             orders: [],
           };
         }
-        
+
         const salesAmount = parseFloat(order.total || '0');
         const commissionAmount = parseFloat(order.commissionAmount || '0');
-        
+
         agentSales[agentName].totalOrders++;
         agentSales[agentName].totalSales += salesAmount;
         agentSales[agentName].totalCommission += commissionAmount;
@@ -1656,12 +1658,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: order.status,
         });
       }
-      
+
       // Convert to array and sort by total sales (descending)
       const agentSummaries = Object.values(agentSales)
         .filter(agent => agent.agentName !== 'Unassigned' && agent.totalOrders > 0)
         .sort((a, b) => b.totalSales - a.totalSales);
-      
+
       // Calculate totals
       const summary = {
         totalAgents: agentSummaries.length,
@@ -1673,7 +1675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           end: end.toISOString(),
         },
       };
-      
+
       res.json({
         summary,
         agents: agentSummaries,
@@ -1689,13 +1691,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const currentUser = req.currentUser;
       const isUserAdmin = currentUser.role === 'admin';
-      
+
       // Query commissions table directly - filter for referral commissions only
       const allCommissions = await db.query.commissions.findMany({
         where: eq(commissions.commissionKind, 'referral')
       });
       const allUsers = await db.query.users.findMany();
-      
+
       // Group referral commissions by referring agent (the person who earns the referral)
       const referralSummary: Record<string, {
         referringAgentId: string;
@@ -1707,7 +1709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }>;
         totalReferralCommission: number;
       }> = {};
-      
+
       for (const commission of allCommissions) {
         // Use correct field names: commissionKind and agentId
         if (commission.commissionKind === 'referral' && commission.agentId && commission.sourceAgentId) {
@@ -1715,12 +1717,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // commission.sourceAgentId = the agent who made the sale (who was referred)
           const referringAgentId = commission.agentId;
           const sourceAgentId = commission.sourceAgentId;
-          
+
           // Skip if agent is not admin and this isn't their referral commission
           if (!isUserAdmin && referringAgentId !== currentUser.id) {
             continue;
           }
-          
+
           // Initialize referring agent entry if doesn't exist
           if (!referralSummary[referringAgentId]) {
             const referringAgent = allUsers.find(u => u.id === referringAgentId);
@@ -1731,7 +1733,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               totalReferralCommission: 0,
             };
           }
-          
+
           // Initialize source agent entry if doesn't exist
           if (!referralSummary[referringAgentId].referredAgents[sourceAgentId]) {
             const sourceAgent = allUsers.find(u => u.id === sourceAgentId);
@@ -1741,14 +1743,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               totalEarnings: 0,
             };
           }
-          
+
           // Add to totals
           const amount = parseFloat(commission.amount);
           referralSummary[referringAgentId].referredAgents[sourceAgentId].totalEarnings += amount;
           referralSummary[referringAgentId].totalReferralCommission += amount;
         }
       }
-      
+
       // Convert to array format with referred agents as array
       const referralData = Object.values(referralSummary).map(entry => ({
         referringAgentId: entry.referringAgentId,
@@ -1757,10 +1759,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         referredAgents: Object.values(entry.referredAgents)
           .sort((a, b) => b.totalEarnings - a.totalEarnings),
       })).sort((a, b) => b.totalReferralCommission - a.totalReferralCommission);
-      
+
       console.log('[Referral Commissions API] User:', currentUser.agentName || currentUser.email);
       console.log('[Referral Commissions API] Returning data:', JSON.stringify(referralData, null, 2));
-      
+
       res.json({ referralCommissions: referralData });
     } catch (error: any) {
       console.error("Error fetching referral commission data:", error);
@@ -1875,33 +1877,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (integration?.googleCalendarWebhookChannelId && 
             integration?.googleCalendarWebhookResourceId &&
             integration?.googleCalendarAccessToken) {
-          
+
           const oauth2Client = new google.auth.OAuth2(
             integration.googleClientId,
             integration.googleClientSecret
           );
-          
+
           oauth2Client.setCredentials({
             access_token: integration.googleCalendarAccessToken,
             refresh_token: integration.googleCalendarRefreshToken || undefined
           });
 
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-          
+
           await calendar.channels.stop({
             requestBody: {
               id: integration.googleCalendarWebhookChannelId,
               resourceId: integration.googleCalendarWebhookResourceId,
             },
           });
-          
+
           // Clear webhook fields in database
           await storage.updateUserIntegration(userId, {
             googleCalendarWebhookChannelId: undefined,
             googleCalendarWebhookResourceId: undefined,
             googleCalendarWebhookExpiry: undefined,
           });
-          
+
           console.log(`[Deactivate] Unregistered Google Calendar webhook for user ${userId}`);
         }
       } catch (webhookError: any) {
@@ -2015,6 +2017,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Permanently delete user and all their data (admin only)
   app.delete('/api/admin/users/:userId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
+      const adminUserId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { userId } = req.params;
 
       // Get user info
@@ -2024,7 +2027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Prevent deleting yourself
-      const adminUserId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const adminUser = await storage.getUser(adminUserId);
       if (userId === adminUserId) {
         return res.status(400).json({ message: "You cannot delete your own account" });
       }
@@ -2037,26 +2040,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (integration?.googleCalendarWebhookChannelId && 
             integration?.googleCalendarWebhookResourceId &&
             integration?.googleCalendarAccessToken) {
-          
+
           const oauth2Client = new google.auth.OAuth2(
             integration.googleClientId,
             integration.googleClientSecret
           );
-          
+
           oauth2Client.setCredentials({
             access_token: integration.googleCalendarAccessToken,
             refresh_token: integration.googleCalendarRefreshToken || undefined
           });
 
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-          
+
           await calendar.channels.stop({
             requestBody: {
               id: integration.googleCalendarWebhookChannelId,
               resourceId: integration.googleCalendarWebhookResourceId,
             },
           });
-          
+
           console.log(`[Delete User] Unregistered Google Calendar webhook for user ${userId}`);
         }
       } catch (webhookError: any) {
@@ -2072,10 +2075,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Get ALL knowledge base files and filter for this user's uploads
           const allFiles = await storage.getAllKnowledgeBaseFiles();
           const userFiles = allFiles.filter(file => file.uploadedBy === userId);
-          
+
           if (userFiles.length > 0) {
             const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
-            
+
             for (const file of userFiles) {
               try {
                 if (file.openaiFileId) {
@@ -2113,25 +2116,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const orders = await storage.getAllOrders();
-      
+
       // Check Commission Tracker to see which orders have tracker rows
       const sheets = await storage.getAllActiveGoogleSheets();
       console.log('[GET /api/orders] All sheets:', sheets.map(s => ({ purpose: s.sheetPurpose, name: s.spreadsheetName })));
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
       console.log('[GET /api/orders] Tracker sheet found:', trackerSheet ? trackerSheet.spreadsheetName : 'NONE');
-      
+
       if (trackerSheet) {
         try {
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
           const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
           console.log('[GET /api/orders] Tracker rows read:', trackerRows.length);
-          
+
           if (trackerRows.length > 0) {
             const trackerHeaders = trackerRows[0];
             console.log('[GET /api/orders] Tracker headers:', trackerHeaders);
             const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
             console.log('[GET /api/orders] Transaction ID column index:', transactionIdIndex);
-            
+
             // Build set of order IDs that have tracker rows
             const ordersWithTrackerRows = new Set<string>();
             for (let i = 1; i < trackerRows.length; i++) {
@@ -2141,13 +2144,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
             console.log('[GET /api/orders] Orders with tracker rows:', Array.from(ordersWithTrackerRows));
-            
+
             // Add hasTrackerRows field to each order
             const ordersWithStatus = orders.map((order: any) => ({
               ...order,
               hasTrackerRows: ordersWithTrackerRows.has(order.id)
             }));
-            
+
             return res.json(ordersWithStatus);
           }
         } catch (trackerError) {
@@ -2155,7 +2158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Continue without tracker status if error
         }
       }
-      
+
       // If no tracker sheet or error, return orders without hasTrackerRows field
       res.json(orders);
     } catch (error: any) {
@@ -2175,7 +2178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (commissionAmount !== undefined) updates.commissionAmount = commissionAmount;
 
       const updatedOrder = await storage.updateOrder(orderId, updates);
-      
+
       if (!updatedOrder) {
         return res.status(404).json({ message: "Order not found" });
       }
@@ -2215,12 +2218,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
           const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-          
+
           if (trackerRows.length > 0) {
             const trackerHeaders = trackerRows[0];
             const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
             const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
-            
+
             // Find all stores matched to this order
             for (let i = 1; i < trackerRows.length; i++) {
               const trackerTransactionId = trackerRows[i][transactionIdIndex] || '';
@@ -2278,7 +2281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const nameMatch = storeName.toLowerCase().includes(searchLower);
           const dbaMatch = storeDba.toLowerCase().includes(searchLower);
           const emailMatch = storeEmail.toLowerCase().includes(searchLower);
-          
+
           if (nameMatch || dbaMatch || emailMatch) {
             score = 50; // Base score for manual matches
             if (nameMatch) reasons.push('Name match');
@@ -2293,7 +2296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const nameSimilarity = stringSimilarity(orderCompany, storeName);
             const dbaSimilarity = storeDba ? stringSimilarity(orderCompany, storeDba) : 0;
             const companySimilarity = Math.max(nameSimilarity, dbaSimilarity);
-            
+
             if (companySimilarity > 0.6) {
               score += companySimilarity * 50;
               reasons.push(`Company name ${Math.round(companySimilarity * 100)}% similar`);
@@ -2319,7 +2322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (orderCompany) {
             const exactNameMatch = storeName && orderCompany.toLowerCase() === storeName.toLowerCase();
             const exactDbaMatch = storeDba && orderCompany.toLowerCase() === storeDba.toLowerCase();
-            
+
             if (exactNameMatch || exactDbaMatch) {
               score += 100;
               reasons.push('Exact company name match');
@@ -2403,7 +2406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (linkIndex === -1) {
         return res.status(400).json({ message: 'Commission Tracker must have a "Link" column' });
       }
-      
+
       // Get agent name from order
       const agentName = order.salesAgentName || '';
 
@@ -2413,10 +2416,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process each selected store
       for (const store of storeLinks) {
         const { link: storeLink, name: storeName } = store;
-        
+
         // Note: Store Database (DBA, Agent Name, Email) is now synced automatically from Commission Tracker via Google Sheets
         // We only write to Commission Tracker and let the sync handle the Store Database updates
-        
+
         // Update or create row in Commission Tracker
         let existingTrackerRowIndex = -1;
         for (let i = 1; i < trackerRows.length; i++) {
@@ -2433,65 +2436,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const updateRange = `${trackerSheet.sheetName}!${orderIdColumn}${existingTrackerRowIndex}`;
             await googleSheets.writeSheetData(trackerSheet.spreadsheetId, updateRange, [[order.orderNumber]]);
           }
-          
+
           if (transactionIdIndex !== -1) {
             const txIdColumn = String.fromCharCode(65 + transactionIdIndex);
             const txRange = `${trackerSheet.sheetName}!${txIdColumn}${existingTrackerRowIndex}`;
             await googleSheets.writeSheetData(trackerSheet.spreadsheetId, txRange, [[order.id]]);
           }
-          
+
           if (agentNameIndex !== -1 && agentName) {
             const agentColumn = String.fromCharCode(65 + agentNameIndex);
             const agentRange = `${trackerSheet.sheetName}!${agentColumn}${existingTrackerRowIndex}`;
             await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentRange, [[agentName]]);
           }
-          
+
           if (trackerDateIndex !== -1 && order.orderDate) {
             const dateColumn = String.fromCharCode(65 + trackerDateIndex);
             const dateRange = `${trackerSheet.sheetName}!${dateColumn}${existingTrackerRowIndex}`;
             const formattedDate = new Date(order.orderDate).toLocaleDateString('en-US');
             await googleSheets.writeSheetData(trackerSheet.spreadsheetId, dateRange, [[formattedDate]]);
           }
-          
+
           if (trackerPocEmailIndex !== -1 && order.billingEmail) {
             const emailColumn = String.fromCharCode(65 + trackerPocEmailIndex);
             const emailRange = `${trackerSheet.sheetName}!${emailColumn}${existingTrackerRowIndex}`;
             await googleSheets.writeSheetData(trackerSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
           }
-          
+
           rowsProcessed++;
           results.push({ link: storeLink, name: storeName, action: 'updated' });
         } else {
           // Create new row in Commission Tracker
           const newRow: any[] = new Array(trackerHeaders.length).fill('');
-          
+
           // Set Link
           if (linkIndex !== -1) newRow[linkIndex] = storeLink;
-          
+
           // Set Order ID
           if (orderIdIndex !== -1) newRow[orderIdIndex] = order.orderNumber;
-          
+
           // Set Transaction ID
           if (transactionIdIndex !== -1) newRow[transactionIdIndex] = order.id;
-          
+
           // Set Agent Name
           if (agentNameIndex !== -1 && agentName) newRow[agentNameIndex] = agentName;
-          
+
           // Set Date
           if (trackerDateIndex !== -1 && order.orderDate) {
             const formattedDate = new Date(order.orderDate).toLocaleDateString('en-US');
             newRow[trackerDateIndex] = formattedDate;
           }
-          
+
           // Set POC Email
           if (trackerPocEmailIndex !== -1 && order.billingEmail) {
             newRow[trackerPocEmailIndex] = order.billingEmail;
           }
-          
+
           // Append new row to Commission Tracker
           const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
           await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
-          
+
           rowsProcessed++;
           results.push({ link: storeLink, name: storeName, action: 'created' });
         }
@@ -2502,26 +2505,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const store of storeLinks) {
         const { link: storeLink, name: storeName } = store;
         const normalizedLink = normalizeLink(storeLink);
-        
+
         // Check if client already exists by unique identifier (link)
         const existingClient = await db.query.clients.findFirst({
           where: eq(clients.uniqueIdentifier, normalizedLink),
         });
-        
+
         if (existingClient) {
           // Update existing client with order data
           const updates: any = {};
-          
+
           // Set firstOrderDate if not already set
           if (!existingClient.firstOrderDate && order.orderDate) {
             updates.firstOrderDate = order.orderDate;
           }
-          
+
           // Update lastOrderDate if this order is more recent
           if (!existingClient.lastOrderDate || new Date(order.orderDate) > new Date(existingClient.lastOrderDate)) {
             updates.lastOrderDate = order.orderDate;
           }
-          
+
           // Set assigned agent if not already set
           if (!existingClient.assignedAgent && order.salesAgentName) {
             const assignedUser = await db.query.users.findFirst({
@@ -2531,7 +2534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               updates.assignedAgent = assignedUser.id;
             }
           }
-          
+
           if (Object.keys(updates).length > 0) {
             await db.update(clients)
               .set({ ...updates, updatedAt: new Date() })
@@ -2542,7 +2545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const assignedUser = order.salesAgentName 
             ? await db.query.users.findFirst({ where: eq(users.agentName, order.salesAgentName) })
             : null;
-          
+
           await db.insert(clients).values({
             uniqueIdentifier: normalizedLink,
             data: {
@@ -2558,21 +2561,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      
+
       // Also link order to client in orders table
       if (storeLinks.length > 0) {
         const primaryStoreLink = normalizeLink(storeLinks[0].link);
         const primaryClient = await db.query.clients.findFirst({
           where: eq(clients.uniqueIdentifier, primaryStoreLink),
         });
-        
+
         if (primaryClient) {
           await db.update(orders)
             .set({ clientId: primaryClient.id })
             .where(eq(orders.id, orderId));
         }
       }
-      
+
       // Success! All data is now in Google Sheets Commission Tracker AND clients table
       res.json({ 
         message: `Order ${order.orderNumber} matched to ${storeLinks.length} store(s)`,
@@ -2600,7 +2603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let dbUpdated = 0;
       for (const update of orderUpdates) {
         const { orderId, commissionType, commissionAmount } = update;
-        
+
         if (!orderId) continue;
 
         const updates: any = {};
@@ -2618,14 +2621,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       console.log('Tracker sheet found:', trackerSheet ? `${trackerSheet.spreadsheetName} / ${trackerSheet.sheetName}` : 'NONE');
       let sheetsWritten = 0;
-      
+
       if (trackerSheet) {
         const { spreadsheetId, sheetName } = trackerSheet;
-        
+
         // Read tracker headers
         const headerRange = `${sheetName}!1:1`;
         const headerData = await googleSheets.readSheetData(spreadsheetId, headerRange);
-        
+
         if (headerData.length > 0) {
           const headers = headerData[0];
           const columnMap: Record<string, number> = {};
@@ -2645,7 +2648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (const orderReq of orderUpdates) {
             const { orderId, commissionType, commissionAmount } = orderReq;
             console.log(`\n--- Processing order ${orderId} ---`);
-            
+
             // Get order from database
             const order = await storage.getOrderById(orderId);
             if (!order) {
@@ -2701,10 +2704,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             // Update all matching rows
             console.log(`Calculated amount: $${amount.toFixed(2)}, type: ${commissionTypeLabel}`);
-            
+
             for (const rowIndex of matchingRowIndices) {
               const updates: Array<{range: string, values: any[][]}> = [];
-              
+
               if ('commission type' in columnMap) {
                 const col = String.fromCharCode(65 + columnMap['commission type']);
                 const range = `${sheetName}!${col}${rowIndex}`;
@@ -2716,7 +2719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               } else {
                 console.log('WARNING: "commission type" column not found');
               }
-              
+
               if ('amount' in columnMap) {
                 const col = String.fromCharCode(65 + columnMap['amount']);
                 const range = `${sheetName}!${col}${rowIndex}`;
@@ -2734,7 +2737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 await googleSheets.writeSheetData(spreadsheetId, update.range, update.values);
                 console.log(`Successfully wrote: ${update.range}`);
               }
-              
+
               sheetsWritten++;
             }
           }
@@ -2747,7 +2750,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const update of orderUpdates) {
         const { orderId } = update;
         if (!orderId) continue;
-        
+
         try {
           await commissionService.applyCommissions(orderId);
           commissionsRecalculated++;
@@ -2815,7 +2818,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Find matching client in clients table (source of truth)
       let client = null;
-      
+
       // Try to find by email/company in clients table
       if (email || company) {
         const clientRecord = await db.query.clients.findFirst({
@@ -2825,7 +2828,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         client = clientRecord || null;
       }
-      
+
       // Legacy fallback: also check old client lookup method
       if (!client && email) {
         client = await storage.findClientByUniqueKey('Email', email) ||
@@ -2891,7 +2894,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let commission = 0;
         let commissionRate = 0;
         let commissionType = '';
-        
+
         if (client.assignedAgent && client.claimDate) {
           const monthsSinceClaim = differenceInMonths(orderDate, new Date(client.claimDate));
           const rate = monthsSinceClaim < 6 ? 0.25 : 0.10;
@@ -3098,7 +3101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create or update order
         const existingOrder = await storage.getOrderById(order.id.toString());
-        
+
         // RE-ORDER DETECTION: Check if this is a repeat order from an existing client
         let isReOrder = false;
         if (!existingOrder && client) {
@@ -3133,7 +3136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: order.status,
             orderDate: new Date(order.date_created),
           });
-          
+
           // Create notification for re-order
           if (isReOrder && client.assignedAgent) {
             const clientName = (client.data as any)?.name || (client.data as any)?.company || 'Unknown Client';
@@ -3174,14 +3177,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Calculate commission if client is claimed
+          let commission = 0;
+          let commissionRate = 0;
+          let commissionType = '';
+
           if (client.assignedAgent && client.claimDate) {
             const monthsSinceClaim = differenceInMonths(orderDate, new Date(client.claimDate));
             const rate = monthsSinceClaim < 6 ? 0.25 : 0.10;
-            const commission = orderTotal * rate;
+            commission = orderTotal * rate;
+            commissionRate = rate;
+            commissionType = monthsSinceClaim < 6 ? '25%' : '10%';
             updates.commissionTotal = (parseFloat(client.commissionTotal || '0') + commission).toString();
           }
 
           await storage.updateClient(client.id, updates);
+
+          // Write to Commission Tracker Google Sheet - ONLY if client has an assigned agent
+          // This ensures we don't create incomplete commission records for unclaimed stores
+          if (client.assignedAgent && commission > 0) {
+            try {
+              const sheetsConfig = await storage.getSheetsConfig();
+              if (sheetsConfig?.spreadsheetId && sheetsConfig?.commissionTrackerSheetName) {
+                console.log('[Webhook] Writing order to Commission Tracker:', {
+                  orderId: order.id,
+                  client: client.name,
+                  agent: client.assignedAgent,
+                  commission
+                });
+
+                // Get existing data to find next empty row
+                const existingData = await googleSheets.readSheetData(
+                  sheetsConfig.spreadsheetId,
+                  `${sheetsConfig.commissionTrackerSheetName}!A:A`
+                );
+                const nextRow = (existingData?.length || 1) + 1;
+
+                // Map WooCommerce status to our status system
+                let orderStatus = 'Closed Won';
+                if (order.status === 'processing') {
+                  orderStatus = '4 – Follow-Up'; // Processing orders need follow-up
+                } else if (order.status === 'refunded' || order.status === 'cancelled') {
+                  orderStatus = '6 – Closed Lost';
+                }
+
+                // Prepare row data matching Commission Tracker columns
+                // Columns: Link, Transaction ID, Date, Agent Name, Order ID, Commission Type, Amount, Status, Follow-Up Date, Next Action, Notes, Point of Contact, POC EMAIL, POC Phone
+                const rowData = [
+                  client.link || '',                          // Link
+                  order.transaction_id || '',                 // Transaction ID
+                  format(orderDate, 'MM/dd/yyyy'),           // Date
+                  client.assignedAgent,                      // Agent Name
+                  order.id.toString(),                       // Order ID
+                  commissionType,                            // Commission Type (25% or 10%)
+                  commission.toFixed(2),                     // Amount
+                  orderStatus,                               // Status (based on WooCommerce order status)
+                  '',                                        // Follow-Up Date
+                  '',                                        // Next Action
+                  `WooCommerce order #${order.number || order.id} - $${orderTotal.toFixed(2)}`, // Notes
+                  client.pocName || '',                      // Point of Contact
+                  client.pocEmail || email || '',            // POC EMAIL
+                  client.pocPhone || ''                      // POC Phone
+                ];
+
+                await googleSheets.writeSheetData(
+                  sheetsConfig.spreadsheetId,
+                  `${sheetsConfig.commissionTrackerSheetName}!A${nextRow}:N${nextRow}`,
+                  [rowData]
+                );
+
+                console.log('[Webhook] ✅ Successfully wrote to Commission Tracker row', nextRow);
+              }
+            } catch (sheetsError: any) {
+              console.error('[Webhook] ❌ Failed to write to Commission Tracker:', sheetsError.message);
+              // Don't fail the webhook - order is still processed in database
+            }
+          } else if (client.assignedAgent) {
+            console.log('[Webhook] Skipping Commission Tracker write - no commission calculated (order may be outside commission period)');
+          } else {
+            console.log('[Webhook] Skipping Commission Tracker write - client has no assigned agent');
+          }
         }
       }
 
@@ -3205,7 +3279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // AUTO-MATCHING: Match orders to stores in Google Sheets based on billing email
       console.log('Starting auto-matching for claimed stores...');
       let autoMatched = 0;
-      
+
       try {
         const sheets = await storage.getAllActiveGoogleSheets();
         const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
@@ -3215,7 +3289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Read Store Database to find claimed stores
           const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
           const storeDbRows = await googleSheets.readSheetData(storeDbSheet.spreadsheetId, storeDbRange);
-          
+
           if (storeDbRows.length > 0) {
             const storeDbHeaders = storeDbRows[0];
             const storeDbLinkIndex = storeDbHeaders.findIndex(h => h.toLowerCase() === 'link');
@@ -3226,7 +3300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Read Commission Tracker
             const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
             const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-            
+
             if (trackerRows.length > 0) {
               const trackerHeaders = trackerRows[0];
               const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
@@ -3257,11 +3331,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     const normalizedStoreLink = normalizeLink(storeLink);
                     const currentOrderId = order.id.toString();
                     let alreadyTracked = false;
-                    
+
                     for (let j = 1; j < trackerRows.length; j++) {
                       const trackerLink = normalizeLink(trackerRows[j][linkIndex] || '');
                       const trackerTransactionId = trackerRows[j][transactionIdIndex] || '';
-                      
+
                       // Duplicate if BOTH Link and Transaction ID match
                       if (trackerLink === normalizedStoreLink && trackerTransactionId === currentOrderId) {
                         alreadyTracked = true;
@@ -3272,7 +3346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     if (!alreadyTracked) {
                       // Create new tracker row for this order
                       const newRow: any[] = new Array(trackerHeaders.length).fill('');
-                      
+
                       if (linkIndex !== -1) newRow[linkIndex] = storeLink;
                       if (orderIdIndex !== -1) newRow[orderIdIndex] = order.number || order.id.toString();
                       if (transactionIdIndex !== -1) newRow[transactionIdIndex] = order.id.toString();
@@ -3285,7 +3359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
                       const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
                       await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
-                      
+
                       autoMatched++;
                       console.log(`Auto-matched order ${order.id} to store ${storeLink}`);
                     }
@@ -3308,16 +3382,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let commissionsCalculated = 0;
       let agentTransfers = 0;
       let sheetsUpdated = 0;
-      
+
       // Get Commission Tracker sheet for updating agent names
       let trackerSheet: any = null;
       let trackerHeaders: string[] = [];
       let trackerRows: any[][] = [];
-      
+
       try {
         const sheets = await storage.getAllActiveGoogleSheets();
         trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-        
+
         if (trackerSheet) {
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
           trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
@@ -3328,27 +3402,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (sheetError: any) {
         console.error('Failed to load Commission Tracker sheet:', sheetError.message);
       }
-      
+
       try {
         const allLocalOrders = await storage.getAllOrders();
-        
+
         for (const localOrder of allLocalOrders) {
           if (!localOrder.salesAgentName) continue;
-          
+
           // Check if this order already has commission records
           const existingCommissions = await db.query.commissions.findMany({
             where: eq(commissions.orderId, localOrder.id),
           });
-          
+
           // Recalculate if:
           // 1. No commissions exist yet (new order)
           // 2. Agent changed (detected by comparing agent name on commission vs order)
           let needsRecalculation = existingCommissions.length === 0;
-          
+
           if (!needsRecalculation && existingCommissions.length > 0) {
             // Check if agent changed - find the primary commission's agent
             const primaryCommission = existingCommissions.find(c => c.commissionKind === 'primary');
-            
+
             // Recalculate if primary commission is missing (data corruption or manual deletion)
             if (!primaryCommission) {
               needsRecalculation = true;
@@ -3357,7 +3431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const commissionAgent = await db.query.users.findFirst({
                 where: eq(users.id, primaryCommission.agentId),
               });
-              
+
               // Agent changed if:
               // 1. Old agent user was deleted (!commissionAgent)
               // 2. Agent names don't match (case-insensitive)
@@ -3372,18 +3446,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
           }
-          
+
           if (needsRecalculation) {
             try {
               await commissionService.applyCommissions(localOrder.id);
               commissionsCalculated++;
               console.log(`✓ Synced commission for order ${localOrder.id} → ${localOrder.salesAgentName}`);
-              
+
               // Update Google Sheets Commission Tracker with new agent name
               if (trackerSheet && trackerHeaders.length > 0) {
                 const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
                 const agentNameIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
-                
+
                 if (orderIdIndex !== -1 && agentNameIndex !== -1) {
                   // Find the row with this order ID
                   for (let i = 1; i < trackerRows.length; i++) {
@@ -3392,14 +3466,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       const columnLetter = columnIndexToLetter(agentNameIndex);
                       const rowNumber = i + 1; // +1 for 1-indexed Google Sheets
                       const cellRange = `${trackerSheet.sheetName}!${columnLetter}${rowNumber}`;
-                      
+
                       try {
                         await googleSheets.writeSheetData(
                           trackerSheet.spreadsheetId,
                           cellRange,
                           [[localOrder.salesAgentName]]
                         );
-                        
+
                         sheetsUpdated++;
                         console.log(`📝 Updated Google Sheets: Order ${localOrder.orderNumber} → ${localOrder.salesAgentName} (${cellRange})`);
                       } catch (writeErr: any) {
@@ -3419,7 +3493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Commission sync error:', syncError);
         // Don't fail the entire sync if commission calculation fails
       }
-      
+
       console.log('Commission sync completed:', { commissionsCalculated, agentTransfers, sheetsUpdated });
 
       // Update last synced timestamp
@@ -3462,7 +3536,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get Commission Tracker sheet
-      const trackerSheet = await storage.getGoogleSheetByPurpose('commission_tracker');
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
         return res.status(400).json({ message: "Commission Tracker sheet not connected" });
       }
@@ -3523,48 +3597,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Extract Link from client data (case-insensitive search)
         let linkValue = client.data?.Link || client.data?.link || client.uniqueIdentifier;
-        
+
         // If no link exists, generate unique 10-digit code and create Store Database entry
         if (!linkValue) {
           console.log(`No Link found for order ${orderId}, generating unique code...`);
-          
+
           // Generate unique 10-digit code: WC + 8 random digits
           const generateUniqueCode = () => {
             const randomDigits = Math.floor(10000000 + Math.random() * 90000000); // 8 random digits
             return `WC${randomDigits}`;
           };
-          
+
           linkValue = generateUniqueCode();
-          
+
           // Get Store Database sheet
           const storeSheet = await storage.getGoogleSheetByPurpose('store_database');
           if (storeSheet) {
             // Read Store Database headers
             const storeHeaderRange = `${storeSheet.sheetName}!1:1`;
             const storeHeaderData = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeHeaderRange);
-            
+
             if (storeHeaderData.length > 0) {
               const storeHeaders = storeHeaderData[0];
-              
+
               // Build column map
               const storeColumnMap: Record<string, number> = {};
               storeHeaders.forEach((header: string, index: number) => {
                 storeColumnMap[header.toLowerCase().trim()] = index;
               });
-              
+
               // Prepare new store row with minimal data
               const newStoreRow = new Array(storeHeaders.length).fill('');
               if ('link' in storeColumnMap) newStoreRow[storeColumnMap['link']] = linkValue;
               if ('name' in storeColumnMap) newStoreRow[storeColumnMap['name']] = order.billingCompany || 'Unknown Company';
               if ('email' in storeColumnMap) newStoreRow[storeColumnMap['email']] = order.billingEmail || '';
               if ('dba' in storeColumnMap) newStoreRow[storeColumnMap['dba']] = order.billingCompany || '';
-              
+
               // Append to Store Database
               await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:A`, [newStoreRow]);
               console.log(`Created new store in Store Database with Link: ${linkValue}`);
             }
           }
-          
+
           // Update client record with the new Link
           await storage.updateClient(client.id, {
             ...client,
@@ -3595,13 +3669,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (commissionType === '10') {
           amount = orderTotal * 0.10;
         } else {
-          // Auto: determine based on 6-month rule
-          // Find first order date for this client
-          const firstOrderDate = client.firstOrderDate ? new Date(client.firstOrderDate) : new Date(order.orderDate);
-          const orderDate = new Date(order.orderDate);
-          const monthsSinceFirst = differenceInMonths(orderDate, firstOrderDate);
-          const rate = monthsSinceFirst < 6 ? 0.25 : 0.10;
-          amount = orderTotal * rate;
+          // Auto: default to 25% (proper 6-month rule requires client data)
+          amount = orderTotal * 0.25;
         }
 
         // Format date as M/d/yyyy to match existing pattern
@@ -3650,7 +3719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         rowData[columnMap['amount']] = amount.toFixed(2);
 
         // Append row to tracker sheet
-        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:A`, [rowData]);
+        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:ZZ`, [rowData]);
         written++;
         console.log(`Written order ${order.orderNumber} to tracker: ${salesAgentName} - $${amount.toFixed(2)}`);
       }
@@ -3676,13 +3745,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
       const agentId = req.query.agentId || userId;
-      
+
       if (user.role !== 'admin' && agentId !== userId) {
         return res.status(403).json({ message: "Cannot view other agents' commissions" });
       }
@@ -3705,13 +3774,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
       const agentId = req.query.agentId || userId;
-      
+
       if (user.role !== 'admin' && agentId !== userId) {
         return res.status(403).json({ message: "Cannot view other agents' commission summary" });
       }
@@ -3729,13 +3798,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
       const referrerId = req.query.referrerId || userId;
-      
+
       if (user.role !== 'admin' && referrerId !== userId) {
         return res.status(403).json({ message: "Cannot view other agents' team data" });
       }
@@ -3751,7 +3820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== GOOGLE SHEETS ROUTES ==========
 
   // List user's Google Sheets
-  app.get('/api/sheets/list', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.get('/api/sheets/list', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const sheets = await googleSheets.listSpreadsheets();
@@ -3763,7 +3832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get spreadsheet info (sheets/tabs)
-  app.get('/api/sheets/:spreadsheetId/info', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.get('/api/sheets/:spreadsheetId/info', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { spreadsheetId } = req.params;
@@ -3902,11 +3971,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get selected category for cache key (lightweight DB query)
       const selectedCategory = await storage.getSelectedCategory(userId);
-      
+
       // Check cache first (30-second TTL)
       const cacheKey = generateCacheKey(userId, storeSheetId, trackerSheetId, selectedCategory);
       const cachedData = getCachedData(cacheKey);
-      
+
       if (cachedData) {
         // Cache hit - return immediately
         return res.json(cachedData);
@@ -3976,7 +4045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const actualStoreJoinColumn = storeHeaders.find(h => 
         h.toLowerCase() === joinColumn.toLowerCase()
       ) || joinColumn;
-      
+
       const actualTrackerJoinColumn = trackerHeaders.find(h => 
         h.toLowerCase() === joinColumn.toLowerCase()
       ) || joinColumn;
@@ -4015,17 +4084,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // - Agents could see competitors' commission data
       // - Row-level security completely bypassed
       // ============================================================================
-      
+
       // Get user agent name for filtering
       const userAgentName = user?.agentName || 
-        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null);
-      
+        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : null)?.trim() || null;
+
       // Filter Store Database by Agent Name (for non-admin users)
       let filteredStoreData = storeData;
       const storeAgentColumnName = storeHeaders.find(h => 
         h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
       );
-      
+
       if (user?.role !== 'admin' && storeAgentColumnName && userAgentName) {
         filteredStoreData = storeData.filter(row => {
           const rowAgentName = row[storeAgentColumnName];
@@ -4033,49 +4102,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return !rowAgentName || rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
         });
         console.log(`Filtered store data for agent "${userAgentName}": ${filteredStoreData.length} rows (includes unclaimed stores)`);
-      }
-      
-      // Filter Tracker Data by Agent Name (for non-admin users)
-      let filteredTrackerData = trackerData;
-      const trackerAgentColumnName = trackerHeaders.find(h => 
-        h.toLowerCase().replace(/\s+/g, ' ').trim() === 'agent name'
-      );
-      
-      if (user?.role !== 'admin' && trackerAgentColumnName && userAgentName) {
-        filteredTrackerData = trackerData.filter(row => {
-          const rowAgentName = row[trackerAgentColumnName];
-          // Case-insensitive match
-          return rowAgentName && rowAgentName.toLowerCase().trim() === userAgentName.toLowerCase().trim();
-        });
-        console.log(`Filtered tracker data for agent "${userAgentName}": ${filteredTrackerData.length} rows`);
       } else if (user?.role !== 'admin' && !userAgentName) {
         // No agent name available, filter both to empty (agent sees nothing)
-        filteredTrackerData = [];
         filteredStoreData = [];
-        console.log('No agent name found for user, filtering all rows');
+        console.log('No agent name found for user, filtering all store rows');
       }
 
       // ============================================================================
       // CRITICAL: Filter by Selected Category
       // ============================================================================
       // Purpose:
-      // Filter stores by the user's selected category preference
+      // Implements row-level security so agents only see their own claimed stores
       //
-      // This ensures users only see stores from their chosen category (e.g., "Pets" or "Cannabis")
-      // enabling complete data segregation between different sales teams
+      // Security Model:
+      // - Admins: See ALL rows from both sheets (no filtering)
+      // - Agents: See ONLY their assigned stores from Store Database + matching tracker rows
+      //   - Unclaimed stores (no Agent Name in Store Database) = visible to all agents
+      //   - Assigned stores (Agent Name in Store Database) = visible only to that agent
+      //   - Tracker rows filtered to match agent's name
+      //
+      // Agent Name Source (WooCommerce Convention):
+      // 1. Prefer user.agentName field (stored from profile/WooCommerce integration)
+      // 2. Fallback to "firstName lastName" concatenation
+      // 3. Case-insensitive matching with trimmed whitespace
       //
       // Column Lookup:
-      // - Case-insensitive search for "Category" column in Store Database
+      // - Searches for "Agent Name" column (case-insensitive)
+      // - Normalizes spaces (handles "Agent  Name" with extra spaces)
       //
-      // Filter Logic:
-      // - If user has selectedCategory preference, show only matching stores
-      // - If no category selected, show all stores (no filtering)
+      // Why This Matters:
+      // - Prevents agents from seeing each other's claimed stores
+      // - Maintains data privacy and sales territory boundaries
+      // - Ensures commission tracking is agent-specific
+      //
+      // Impact if broken:
+      // - Agents could see ALL stores (data leak)
+      // - Agents could see competitors' commission data
+      // - Row-level security completely bypassed
       // ============================================================================
       // selectedCategory already fetched earlier for cache key
       const storeCategoryColumnName = storeHeaders.find(h => 
         h.toLowerCase().trim() === 'category'
       );
-      
+
       if (selectedCategory && storeCategoryColumnName) {
         const beforeFilterCount = filteredStoreData.length;
         filteredStoreData = filteredStoreData.filter(row => {
@@ -4105,7 +4174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeOpenColumnName = storeHeaders.find(h => 
         h.toLowerCase().trim() === 'open'
       );
-      
+
       if (storeOpenColumnName) {
         const beforeFilterCount = filteredStoreData.length;
         filteredStoreData = filteredStoreData.filter(row => {
@@ -4190,17 +4259,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Define editable columns (case-insensitive)
       const agentCol = trackerHeaders.find(h => h.toLowerCase() === 'agent');
       const excludedCols = [agentCol, joinColumn].filter(Boolean).map(c => c?.toLowerCase());
-      
+
       // Columns that agents cannot edit (read-only for agents, editable for admins)
       const agentReadOnlyColumns = ['order id', 'commission type', 'amount', 'transaction id'];
-      
+
       // Base editable columns for all users
       let editableColumns = [
         ...trackerHeaders.filter(h => !excludedCols.includes(h.toLowerCase())), // All tracker columns except agent and join column
         'additional phone', 'additional email', // Editable store columns (main phone/email are clickable links)
         'dba', 'agent name', // Corporate name and agent assignment for multi-location tracking
       ].filter(col => allHeaders.some(h => h.toLowerCase() === col.toLowerCase())); // Only include if they exist
-      
+
       // For agents (non-admins), remove the read-only columns
       if (user?.role !== 'admin') {
         editableColumns = editableColumns.filter(col => 
@@ -4232,10 +4301,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/sheets/refresh', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       // Clear cache for this user
       clearUserCache(userId);
-      
+
       res.json({ message: "Cache cleared successfully" });
     } catch (error: any) {
       console.error("Error clearing cache:", error);
@@ -4282,31 +4351,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
           if (linkIndex !== -1 && row[linkIndex]) {
             const linkValue = row[linkIndex];
-            
+
             // Find Commission Tracker and claim the store
             const sheets = await storage.getAllActiveGoogleSheets();
             const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-            
+
             if (trackerSheet) {
               const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
               const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-              
+
               if (trackerRows.length > 0) {
                 const trackerHeaders = trackerRows[0];
                 const trackerLinkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
                 const trackerAgentIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
-                
+
                 // Check if row exists in tracker (using normalized comparison)
                 let existingTrackerRow = -1;
                 const normalizedInputLink = normalizeLink(linkValue);
                 for (let i = 1; i < trackerRows.length; i++) {
                   const rowLink = trackerRows[i][trackerLinkIndex];
-                  if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
+                  const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+
+                  if (rowLink && normalizedRowLink === normalizedInputLink) {
                     existingTrackerRow = i + 1; // 1-indexed
                     break;
                   }
                 }
-                
+
                 if (existingTrackerRow > 0) {
                   // Update existing row with agent name
                   if (trackerAgentIndex !== -1) {
@@ -4379,7 +4450,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const headers = rows[0];
-      
+
       const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
       const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
 
@@ -4388,13 +4459,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if row exists with this link (using normalized comparison)
-      let existingRowIndex = -1;
       const normalizedInputLink = normalizeLink(link.trim());
-      
+      let existingRowIndex = -1;
+
       for (let i = 1; i < rows.length; i++) {
         const rowLink = rows[i][linkIndex];
         const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
-        
+
         if (rowLink && normalizedRowLink === normalizedInputLink) {
           existingRowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
@@ -4419,10 +4490,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // Row doesn't exist - create new row
         const newRow = new Array(headers.length).fill('');
-        
+
         // Set Link
         newRow[linkIndex] = link;
-        
+
         // Set Agent Name to claim the store
         if (agentNameIndex !== -1) {
           if (!currentUser.agentName) {
@@ -4432,7 +4503,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           newRow[agentNameIndex] = currentUser.agentName;
         }
-        
+
         // Set updated fields
         for (const [column, value] of Object.entries(updates)) {
           const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
@@ -4459,13 +4530,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/stores/auto-claim', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
       const { link } = req.body;
 
       if (!link) {
         return res.status(400).json({ message: "Link is required" });
       }
 
-      const user = await storage.getUser(userId);
       if (!user || !user.agentName) {
         return res.status(400).json({ message: "Agent name not set in profile" });
       }
@@ -4557,11 +4628,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if row already exists with this link (using normalized comparison)
       const normalizedInputLink = normalizeLink(linkValue.trim());
       let existingRowIndex = -1;
-      
+
       for (let i = 1; i < rows.length; i++) {
         const rowLink = rows[i][linkColumnIndex];
         const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
-        
+
         if (rowLink && normalizedRowLink === normalizedInputLink) {
           existingRowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
@@ -4649,11 +4720,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if row already exists with this link (using normalized comparison)
       const normalizedInputLink = normalizeLink(linkValue.trim());
       let existingRowIndex = -1;
-      
+
       for (let i = 1; i < rows.length; i++) {
         const rowLink = rows[i][linkColumnIndex];
         const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
-        
+
         if (rowLink && normalizedRowLink === normalizedInputLink) {
           existingRowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
@@ -4685,22 +4756,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Row doesn't exist - create new row
         const newRow = headers.map(() => '');
 
-        // Set values based on header names (case-insensitive)
-        const setCell = (columnName: string, value: string) => {
-          const index = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
-          if (index !== -1) {
-            newRow[index] = value;
-          }
-        };
+        // Set the join column
+        newRow[linkColumnIndex] = linkValue;
 
-        setCell(joinColumn, linkValue);
-        setCell('agent', agent);
-        setCell('status', status);
-        setCell('follow-up date', followUpDate);
-        setCell('followup', followUpDate);
-        setCell('next action', nextAction);
-        setCell('notes', notes);
-        setCell('point of contact', pointOfContact);
+        // Set the agent column
+        const agentColIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
+        if (agentColIndex !== -1) {
+          newRow[agentColIndex] = agent;
+        }
+
+        // Set the status column
+        const statusColIndex = headers.findIndex(h => h.toLowerCase() === 'status');
+        if (statusColIndex !== -1) {
+          newRow[statusColIndex] = status;
+        }
+
+        // Set follow-up date / followup column
+        const followUpDateColIndex = headers.findIndex(h => h.toLowerCase() === 'follow-up date' || h.toLowerCase() === 'followup');
+        if (followUpDateColIndex !== -1) {
+          newRow[followUpDateColIndex] = followUpDate;
+        }
+
+        // Set next action column
+        const nextActionColIndex = headers.findIndex(h => h.toLowerCase() === 'next action');
+        if (nextActionColIndex !== -1) {
+          newRow[nextActionColIndex] = nextAction;
+        }
+
+        // Set notes column
+        const notesColIndex = headers.findIndex(h => h.toLowerCase() === 'notes');
+        if (notesColIndex !== -1) {
+          newRow[notesColIndex] = notes;
+        }
+
+        // Set point of contact column
+        const pocColIndex = headers.findIndex(h => h.toLowerCase() === 'point of contact');
+        if (pocColIndex !== -1) {
+          newRow[pocColIndex] = pointOfContact;
+        }
 
         // Append the row
         const appendRange = `${sheetName}!A:ZZ`;
@@ -4831,110 +4924,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updated,
         total: parsed.length,
       });
-    } catch (error: any) {
+    } catch(error: any) {
       console.error("Error importing from sheet:", error);
       res.status(500).json({ message: error.message || "Import failed" });
-    }
-  });
-
-  // Update address information in tracker sheet
-  app.put('/api/sheets/:id/update-address', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { id } = req.params;
-      const { linkValue, joinColumn, rowIndex, address, city, state, phone, email, pointOfContact } = req.body;
-
-      const sheet = await storage.getGoogleSheetById(id);
-      if (!sheet) {
-        return res.status(400).json({ message: "Google Sheet not found" });
-      }
-
-      const { spreadsheetId, sheetName } = sheet;
-
-      // Read the current sheet to find the header row
-      const range = `${sheetName}!1:1`;
-      const headerData = await googleSheets.readSheetData(spreadsheetId, range);
-
-      if (headerData.length === 0) {
-        return res.status(400).json({ message: "Could not read sheet headers" });
-      }
-
-      const headers = headerData[0];
-      const updates: { range: string; values: any[][] }[] = [];
-
-      // Map field names to their column indices
-      const columnMap: Record<string, number> = {};
-      headers.forEach((header: string, index: number) => {
-        const lowerHeader = header.toLowerCase();
-        if (lowerHeader === 'address') columnMap.address = index;
-        if (lowerHeader === 'city') columnMap.city = index;
-        if (lowerHeader === 'state') columnMap.state = index;
-        if (lowerHeader === 'phone') columnMap.phone = index;
-        if (lowerHeader === 'email') columnMap.email = index;
-        if (lowerHeader === 'point of contact') columnMap.pointOfContact = index;
-      });
-
-      // Prepare batch updates
-      const actualRowNumber = rowIndex + 1; // Convert 0-based to 1-based
-
-      if (columnMap.address !== undefined && address !== undefined) {
-        const colLetter = String.fromCharCode(65 + columnMap.address);
-        updates.push({
-          range: `${sheetName}!${colLetter}${actualRowNumber}`,
-          values: [[address]]
-        });
-      }
-
-      if (columnMap.city !== undefined && city !== undefined) {
-        const colLetter = String.fromCharCode(65 + columnMap.city);
-        updates.push({
-          range: `${sheetName}!${colLetter}${actualRowNumber}`,
-          values: [[city]]
-        });
-      }
-
-      if (columnMap.state !== undefined && state !== undefined) {
-        const colLetter = String.fromCharCode(65 + columnMap.state);
-        updates.push({
-          range: `${sheetName}!${colLetter}${actualRowNumber}`,
-          values: [[state]]
-        });
-      }
-
-      if (columnMap.phone !== undefined && phone !== undefined) {
-        const colLetter = String.fromCharCode(65 + columnMap.phone);
-        updates.push({
-          range: `${sheetName}!${colLetter}${actualRowNumber}`,
-          values: [[phone]]
-        });
-      }
-
-      if (columnMap.email !== undefined && email !== undefined) {
-        const colLetter = String.fromCharCode(65 + columnMap.email);
-        updates.push({
-          range: `${sheetName}!${colLetter}${actualRowNumber}`,
-          values: [[email]]
-        });
-      }
-
-      if (columnMap.pointOfContact !== undefined && pointOfContact !== undefined) {
-        const colLetter = String.fromCharCode(65 + columnMap.pointOfContact);
-        updates.push({
-          range: `${sheetName}!${colLetter}${actualRowNumber}`,
-          values: [[pointOfContact]]
-        });
-      }
-
-      if (updates.length > 0) {
-        for (const update of updates) {
-          await googleSheets.writeSheetData(spreadsheetId, update.range, update.values);
-        }
-      }
-
-      res.json({ message: "Address updated successfully" });
-    } catch (error: any) {
-      console.error("Error updating address:", error);
-      res.status(500).json({ message: error.message || "Failed to update address" });
     }
   });
 
@@ -5037,9 +5029,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.updateGoogleSheetLastSync(sheet.id);
 
+      // STEP 2: Export to sheet (overwrite existing rows)
+      const clients = await storage.getAllClients();
+      const exportRows: any[][] = [];
+
+      for (const client of clients) {
+        if (client.googleSheetRowId && client.uniqueIdentifier) {
+          const exportRow = googleSheets.convertObjectsToSheetRows(headers, [client.data])[0];
+          await googleSheets.writeSheetData(spreadsheetId, `${sheetName}!A${client.googleSheetRowId}`, [exportRow]);
+        }
+      }
+
       res.json({
         message: "Bidirectional sync completed",
         imported: { created, updated },
+        exported: { updated: clients.length },
         total: parsed.length,
       });
     } catch (error: any) {
@@ -5128,7 +5132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (value) {
                 // Store with original header name
                 store[header] = value;
-                
+
                 // Also store with lowercase version for easier access
                 const lowerHeader = header.toLowerCase();
                 if (lowerHeader === 'notes') store.Notes = value;
@@ -5281,22 +5285,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
 
             let rowIndex = trackerRow?._trackerRowIndex;
-            
+
             // If no tracker row exists, create one
             if (!trackerRow) {
               // Append new row with link
               const newRowIndex = trackerRows.length + 1;
               const newRow = new Array(trackerHeaders.length).fill('');
-              
+
               // Set link value
               if (linkIndex !== -1) {
                 newRow[linkIndex] = decodedId;
               }
-              
+
               // Append the new row
               const appendRange = `${trackerSheet.sheetName}!A${newRowIndex}`;
               await googleSheets.writeSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
-              
+
               rowIndex = newRowIndex;
             }
 
@@ -5449,7 +5453,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       const agentName = user?.agentName || 
-        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email) || 
+        (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email)?.trim() || 
         'Unknown Agent';
       const { storeLinks, dbaName, storeSheetId, trackerSheetId, isUpdatingExisting } = req.body;
 
@@ -5537,7 +5541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[CLAIM-MULTIPLE] Found at Google Sheets row: ${storeRowIndex}`);
         console.log(`[CLAIM-MULTIPLE] Store headers:`, storeHeaders);
         console.log(`[CLAIM-MULTIPLE] DBA column index: ${storeDbaIndex}, Agent column index: ${storeAgentIndex}`);
-        
+
         if (storeDbaIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeDbaIndex);
           const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
@@ -5553,7 +5557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           console.log(`[CLAIM-MULTIPLE] ✗ DBA column not found - skipping DBA update`);
         }
-        
+
         if (storeAgentIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + storeAgentIndex);
           const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
@@ -5583,14 +5587,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!existingTrackerLinks.has(normalizedFirstLink)) {
           console.log(`[CLAIM-MULTIPLE] Creating single tracker row for NEW DBA group using link: ${firstStoreLink}`);
           const newTrackerRow = new Array(trackerHeaders.length).fill('');
-          newTrackerRow[trackerLinkIndex] = firstStoreLink;
-          if (trackerAgentIndex !== -1) {
-            newTrackerRow[trackerAgentIndex] = agentName;
-            console.log(`[CLAIM-MULTIPLE] Setting tracker Agent at index ${trackerAgentIndex}: "${agentName}"`);
-          }
-
+          if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = firstStoreLink;
+          if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = agentName;
           console.log(`[CLAIM-MULTIPLE] Tracker row prepared:`, newTrackerRow);
-          
           const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
           console.log(`[CLAIM-MULTIPLE] Appending 1 tracker row to Commission Tracker`);
           console.log(`[CLAIM-MULTIPLE] Append range: ${appendRange}`);
@@ -5654,7 +5653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ stores: [] });
       }
 
-      // Parse store data
+      // Find relevant column indices
       const storeHeaders = storeRows[0];
       const nameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'name');
       const dbaIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'dba');
@@ -5665,7 +5664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stateIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'state');
 
       const searchLower = searchTerm.toLowerCase().trim();
-      
+
       const matchingStores = storeRows.slice(1)
         .map((row, index) => {
           const name = nameIndex !== -1 ? (row[nameIndex] || '') : '';
@@ -5675,11 +5674,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const address = addressIndex !== -1 ? (row[addressIndex] || '') : '';
           const city = cityIndex !== -1 ? (row[cityIndex] || '') : '';
           const state = stateIndex !== -1 ? (row[stateIndex] || '') : '';
-          
+
           // Search in Name or DBA columns
           const nameMatch = name.toLowerCase().includes(searchLower);
           const dbaMatch = dba.toLowerCase().includes(searchLower);
-          
+
           if (nameMatch || dbaMatch) {
             // Normalize keys to lowercase for frontend consistency
             return {
@@ -5738,7 +5737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Store sheet is empty' });
       }
 
-      // Find Agent Name column
+      // Find relevant column indices
       const storeHeaders = storeRows[0];
       const agentNameIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'agent name');
       const linkIndex = storeHeaders.findIndex(h => h.toLowerCase() === 'link');
@@ -5759,7 +5758,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       storeRows.slice(1).forEach((row, index) => {
         const rowLink = row[linkIndex] || '';
         const rowIndex = index + 2; // +2 because row 1 is header, array is 0-indexed
-        
+
         if (storeLinks.includes(rowLink)) {
           batchUpdates.push({
             range: `${storeSheet.sheetName}!${agentColumnLetter}${rowIndex}`,
@@ -5788,17 +5787,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== SALES ANALYTICS ENDPOINTS =====
-  
+
   // Get dashboard summary with key sales metrics (from Google Sheets)
   app.get('/api/analytics/dashboard-summary', async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds } = req.query;
-      
+
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
@@ -5808,7 +5807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // SECURITY: Determine which agents' data to show
       let allowedAgentNames: string[] = [];
       const isAgent = currentUser.role === 'agent';
-      
+
       if (isAgent) {
         // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
         const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
@@ -5818,17 +5817,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const requestedAgentIds = agentIds 
           ? (Array.isArray(agentIds) ? agentIds : [agentIds])
           : [userId];
-        
+
         // Fetch user details for requested agent IDs to get their names
         const agentUsers = await Promise.all(
           requestedAgentIds.map(id => storage.getUserById(id as string))
         );
-        
+
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
       }
-      
+
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
@@ -5846,7 +5845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-      
+
       if (trackerRows.length <= 1) {
         return res.json({
           totalEarnings: "0.00",
@@ -5882,7 +5881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[DASHBOARD-SUMMARY] allowedAgentNames:', allowedAgentNames);
       console.log('[DASHBOARD-SUMMARY] agentIndex:', agentIndex);
       console.log('[DASHBOARD-SUMMARY] Processing', trackerRows.length - 1, 'tracker rows');
-      
+
       // Process each tracker row
       for (let i = 1; i < trackerRows.length; i++) {
         const row = trackerRows[i];
@@ -5898,7 +5897,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[DASHBOARD-SUMMARY] Row ${i}: SKIPPING - Agent column missing, security requires filtering`);
             continue;
           }
-          
+
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
@@ -6002,16 +6001,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds } = req.query;
-      
+
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
       }
-      
+
       // SECURITY: Determine which agents' data to show
       let allowedAgentNames: string[] = [];
       const isAgent = currentUser.role === 'agent';
@@ -6025,17 +6024,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const requestedAgentIds = agentIds 
           ? (Array.isArray(agentIds) ? agentIds : [agentIds])
           : [userId];
-        
+
         // Fetch user details for requested agent IDs to get their names
         const agentUsers = await Promise.all(
           requestedAgentIds.map(id => storage.getUserById(id as string))
         );
-        
+
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
       }
-      
+
       // Get Commission Tracker sheet
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
@@ -6050,7 +6049,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-      
+
       if (trackerRows.length <= 1) {
         return res.json({
           breakdown: {
@@ -6086,7 +6085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (agentIndex === -1) {
             continue;  // Skip this row - no Agent column means agents see nothing
           }
-          
+
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
@@ -6132,7 +6131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds } = req.query;
 
@@ -6155,12 +6154,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const requestedAgentIds = agentIds 
           ? (Array.isArray(agentIds) ? agentIds : [agentIds])
           : [userId];
-        
+
         // Fetch user details for requested agent IDs to get their names
         const agentUsers = await Promise.all(
           requestedAgentIds.map(id => storage.getUserById(id as string))
         );
-        
+
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
@@ -6200,7 +6199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       } else {
-        // For admins with agentIds filter, count only stores for those agents
+        // Admin: count stores for specified agents, or all if no agents specified
         if (allowedAgentNames.length > 0) {
           const storeRange = `${storeSheet.sheetName}!A:Z`;
           const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
@@ -6228,7 +6227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Read Commission Tracker to calculate active clients and repeat order rate
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-      
+
       if (trackerRows.length <= 1) {
         return res.json({
           totalClients,
@@ -6249,30 +6248,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeTransactions: { [link: string]: { count: number; totalAmount: number; lastTransactionDate: Date | null } } = {};
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      
+
       for (let i = 1; i < trackerRows.length; i++) {
         const row = trackerRows[i];
         const link = row[linkIndex] || '';
         const amountStr = row[amountIndex] || '0';
         const dateStr = row[dateIndex] || '';
         const rowAgent = row[agentIndex] || '';
-        
+
         // SECURITY: Filter by allowed agent names
         if (allowedAgentNames.length > 0) {
           // If Agent column doesn't exist, agents see ZERO data
           if (agentIndex === -1) {
-            continue;  // Skip this row - no Agent column means agents see nothing
+            continue;
           }
-          
+
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
           );
           if (!isAllowed) {
-            continue;  // Skip this row - doesn't match agent's name
+            continue;
           }
         }
-        
+
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         if (!link || amount === 0) continue;
 
@@ -6291,7 +6290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         storeTransactions[link].count += 1;
         storeTransactions[link].totalAmount += amount;
-        
+
         // Update last transaction date if this one is more recent
         if (transactionDate && (!storeTransactions[link].lastTransactionDate || transactionDate > storeTransactions[link].lastTransactionDate)) {
           storeTransactions[link].lastTransactionDate = transactionDate;
@@ -6304,12 +6303,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         store.lastTransactionDate && store.lastTransactionDate >= thirtyDaysAgo
       );
       const activeClients = activeStores.length;
-      
+
       // Calculate average revenue per client (based on all stores with transactions, not just active)
       const allStoresWithTransactions = Object.values(storeTransactions);
       const totalRevenue = allStoresWithTransactions.reduce((sum, store) => sum + store.totalAmount, 0);
       const avgRevenuePerClient = allStoresWithTransactions.length > 0 ? totalRevenue / allStoresWithTransactions.length : 0;
-      
+
       // Repeat order rate = percentage of stores (with transactions) that have multiple transactions
       const storesWithMultipleTransactions = allStoresWithTransactions.filter(store => store.count > 1).length;
       const repeatOrderRate = allStoresWithTransactions.length > 0 ? (storesWithMultipleTransactions / allStoresWithTransactions.length) * 100 : 0;
@@ -6332,7 +6331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { range = 'last6months', agentIds } = req.query;
 
@@ -6355,12 +6354,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const requestedAgentIds = agentIds 
           ? (Array.isArray(agentIds) ? agentIds : [agentIds])
           : [userId];
-        
+
         // Fetch user details for requested agent IDs to get their names
         const agentUsers = await Promise.all(
           requestedAgentIds.map(id => storage.getUserById(id as string))
         );
-        
+
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
@@ -6375,7 +6374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-      
+
       if (trackerRows.length <= 1) {
         return res.json({ trends: [] });
       }
@@ -6384,6 +6383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = trackerRows[0];
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+      const commissionTypeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'commission type');
       const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
 
       const monthlyData: { [key: string]: { commission: number; transactions: number } } = {};
@@ -6393,21 +6393,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const row = trackerRows[i];
         const dateStr = row[dateIndex] || '';
         const amountStr = row[amountIndex] || '0';
+        const commissionType = row[commissionTypeIndex] || '';
         const rowAgent = row[agentIndex] || '';
 
         // SECURITY: Filter by allowed agent names
         if (allowedAgentNames.length > 0) {
           // If Agent column doesn't exist, agents see ZERO data
           if (agentIndex === -1) {
-            continue;  // Skip this row - no Agent column means agents see nothing
+            continue;
           }
-          
+
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
           );
           if (!isAllowed) {
-            continue;  // Skip this row - doesn't match agent's name
+            continue;
           }
         }
 
@@ -6425,7 +6426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (transactionDate) {
           const monthKey = `${transactionDate.getFullYear()}-${String(transactionDate.getMonth() + 1).padStart(2, '0')}`;
-          
+
           if (!monthlyData[monthKey]) {
             monthlyData[monthKey] = { commission: 0, transactions: 0 };
           }
@@ -6438,7 +6439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter by range
       const sortedMonths = Object.keys(monthlyData).sort();
       let filteredMonths = sortedMonths;
-      
+
       if (range === 'last3months') {
         filteredMonths = sortedMonths.slice(-3);
       } else if (range === 'last6months') {
@@ -6453,7 +6454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const [year, monthNum] = month.split('-');
         const date = new Date(parseInt(year), parseInt(monthNum) - 1);
         const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        
+
         return {
           period: monthName, // Readable label for X-axis
           revenue: commissionAmount, // Use commission as revenue for chart
@@ -6475,7 +6476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { limit = '10', agentIds } = req.query;
       const topN = parseInt(limit as string);
@@ -6489,7 +6490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // SECURITY: Determine which agents' data to show
       let allowedAgentNames: string[] = [];
       const isAgent = currentUser.role === 'agent';
-      
+
       if (isAgent) {
         // SECURITY: Agents can ONLY see their own data - ignore any agentIds parameter
         const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
@@ -6499,12 +6500,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const requestedAgentIds = agentIds 
           ? (Array.isArray(agentIds) ? agentIds : [agentIds])
           : [userId];
-        
+
         // Fetch user details for requested agent IDs to get their names
         const agentUsers = await Promise.all(
           requestedAgentIds.map(id => storage.getUserById(id as string))
         );
-        
+
         allowedAgentNames = agentUsers
           .filter(Boolean)
           .map(user => user!.agentName || `${user!.firstName} ${user!.lastName}`.trim());
@@ -6522,7 +6523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Read Commission Tracker data
       const trackerRange = `${trackerSheet.sheetName}!A:G`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-      
+
       if (trackerRows.length <= 1) {
         return res.json({ topClients: [] });
       }
@@ -6531,14 +6532,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trackerHeaders = trackerRows[0];
       const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const amountIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'amount');
-      const agentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent');
+      const agentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
 
       // Aggregate commissions by store Link
       const storeCommissions: { [link: string]: { totalCommission: number; transactionCount: number } } = {};
-      
+
       console.log('[TOP-CLIENTS] allowedAgentNames:', allowedAgentNames);
       console.log('[TOP-CLIENTS] Processing', trackerRows.length - 1, 'tracker rows');
-      
+
       for (let i = 1; i < trackerRows.length; i++) {
         const row = trackerRows[i];
         const link = row[linkIndex] || '';
@@ -6549,9 +6550,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (allowedAgentNames.length > 0) {
           // If Agent column doesn't exist, agents see ZERO data
           if (agentIndex === -1) {
-            continue;  // Skip this row - no Agent column means agents see nothing
+            continue;
           }
-          
+
           const rowAgentNormalized = rowAgent.toLowerCase().trim();
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
@@ -6580,7 +6581,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const storeRange = `${storeSheet.sheetName}!A:D`;
           const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-          
+
           if (storeRows.length > 0) {
             const storeHeaders = storeRows[0];
             const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
@@ -6624,23 +6625,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== REMINDER MANAGEMENT ENDPOINTS =====
-  
+
   // Get all reminders for the current user (with optional agent filtering for admins)
   app.get('/api/reminders', async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { agentIds } = req.query;
-      
+
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
       }
-      
+
       // SECURITY: Determine which agents' data to show
       let allowedUserIds: string[] = [];
       const isAgent = currentUser.role === 'agent';
@@ -6653,51 +6654,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const requestedAgentIds = agentIds 
           ? (Array.isArray(agentIds) ? agentIds : [agentIds])
           : [userId];
-        
+
         allowedUserIds = requestedAgentIds;
       }
-      
+
       // Fetch reminders for allowed users
       let allReminders: any[] = [];
       for (const uid of allowedUserIds) {
         const userReminders = await storage.getRemindersByUser(uid);
-        
+
         // Fetch user info to add agentName to each reminder
         const reminderUser = await storage.getUserById(uid);
         if (!reminderUser) {
-          console.warn(`[Reminders] User ${uid} not found, skipping reminders`);
+          console.warn('[Reminders] User not found, skipping reminders');
           continue; // Skip if user not found
         }
-        
+
         const agentName = reminderUser.agentName || `${reminderUser.firstName || ''} ${reminderUser.lastName || ''}`.trim() || 'Unknown';
-        
+
         // Enrich reminders with agent info
         const enrichedReminders = userReminders.map(r => ({
           ...r,
           agentId: uid,
           agentName
         }));
-        
+
         allReminders = allReminders.concat(enrichedReminders);
       }
-      
+
       // Sort chronologically using proper datetime comparison
       allReminders.sort((a, b) => {
         // Construct ISO datetime strings (YYYY-MM-DDTHH:MM format)
         const aDateTime = `${a.scheduledDate || '9999-12-31'}T${a.scheduledTime || '23:59'}`;
         const bDateTime = `${b.scheduledDate || '9999-12-31'}T${b.scheduledTime || '23:59'}`;
-        
+
         // Compare as Date objects for proper chronological ordering
         const aDate = new Date(aDateTime);
         const bDate = new Date(bDateTime);
-        
+
         // Handle invalid dates by treating them as far future
         const aTime = isNaN(aDate.getTime()) ? Infinity : aDate.getTime();
         const bTime = isNaN(bDate.getTime()) ? Infinity : bDate.getTime();
-        
+
         return aTime - bTime;
       });
-      
+
       res.json({ reminders: allReminders });
     } catch (error: any) {
       console.error('Error fetching reminders:', error);
@@ -6711,11 +6712,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { clientId } = req.params;
       const reminders = await storage.getRemindersByClient(clientId);
-      
+
       // Filter by user (security check)
       const userReminders = reminders.filter(r => r.userId === userId);
       res.json({ reminders: userReminders });
@@ -6731,16 +6732,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { date } = req.params; // Expected format: YYYY-MM-DD
-      
+
       // Get all user's reminders
       const allReminders = await storage.getRemindersByUser(userId);
-      
+
       // Filter by date
       const dateReminders = allReminders.filter(r => r.scheduledDate === date && r.isActive);
-      
+
       // Sort by time
       const sortedReminders = dateReminders.sort((a, b) => {
         if (a.scheduledTime && b.scheduledTime) {
@@ -6748,7 +6749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         return 0;
       });
-      
+
       res.json({ reminders: sortedReminders });
     } catch (error: any) {
       console.error('Error fetching reminders by date:', error);
@@ -6768,7 +6769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { 
         title, 
@@ -6794,7 +6795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract date and time (simplified - no double conversion)
       const scheduledDate = reminderDate.split('T')[0]; // YYYY-MM-DD
       const scheduledTime = reminderTime; // HH:MM in 24hr format
-      
+
       // Note: Past date validation removed - timezone complexity causes false positives
       // Users can manage their own reminder dates, and Google Calendar will handle any actual past dates
 
@@ -6833,20 +6834,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user && user.role !== 'admin' && user.agentName && enhancedStoreMetadata?.link) {
         try {
           const linkValue = enhancedStoreMetadata.link;
-          
+
           // Find Commission Tracker and claim the store
           const sheets = await storage.getAllActiveGoogleSheets();
           const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-          
+
           if (trackerSheet) {
             const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
             const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-            
+
             if (trackerRows.length > 0) {
               const trackerHeaders = trackerRows[0];
               const trackerLinkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
               const trackerAgentIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
-              
+
               // Check if row exists in tracker
               let existingTrackerRow = -1;
               for (let i = 1; i < trackerRows.length; i++) {
@@ -6855,7 +6856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   break;
                 }
               }
-              
+
               if (existingTrackerRow > 0) {
                 // Update existing row with agent name
                 if (trackerAgentIndex !== -1) {
@@ -6883,14 +6884,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const integration = await storage.getUserIntegration(userId);
         if (integration?.googleCalendarAccessToken) {
           console.log('[Calendar] Starting calendar event creation for reminder:', reminder.id);
-          
+
           // Get system-wide OAuth credentials FIRST (needed for token refresh)
           const systemIntegration = await storage.getSystemIntegration('google_sheets');
           if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
             console.error('[Calendar] System-wide Google OAuth not configured');
             throw new Error('Google OAuth not configured');
           }
-          
+
           // Check if token needs refresh
           let accessToken = integration.googleCalendarAccessToken;
           if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
@@ -6907,7 +6908,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   grant_type: 'refresh_token'
                 })
               });
-              
+
               if (tokenResponse.ok) {
                 const tokens = await tokenResponse.json();
                 accessToken = tokens.access_token;
@@ -6965,7 +6966,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             systemIntegration.googleClientId,
             systemIntegration.googleClientSecret
           );
-          
+
           oauth2Client.setCredentials({
             access_token: accessToken,
             refresh_token: integration.googleCalendarRefreshToken || undefined
@@ -6973,17 +6974,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Create calendar event with timezone-aware datetime
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-          
+
           // Build timezone-aware datetime strings (YYYY-MM-DDTHH:MM:SS format)
           const startDateTime = `${scheduledDate}T${scheduledTime}:00`;
-          
+
           // Calculate end time by adding 30 minutes, handling midnight rollover
           const [hours, minutes] = scheduledTime.split(':').map(Number);
           const totalMinutes = hours * 60 + minutes + 30;
           const endHours = Math.floor(totalMinutes / 60) % 24;
           const endMinutes = totalMinutes % 60;
           const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
-          
+
           // Check if we crossed midnight (need to advance date)
           let endDate = scheduledDate;
           if (totalMinutes >= 1440) { // 24 * 60 = 1440 minutes in a day
@@ -7054,14 +7055,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const calendarReminders = req.body.calendarReminders;
         if (calendarReminders && Array.isArray(calendarReminders)) {
           const userPreferences = await storage.getUserPreferences(userId);
-          const currentDefaults = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 0 }];
-          
+          const currentDefaults = userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }];
+
           // Compare calendar reminders with current defaults (handle empty arrays)
           const normalize = (arr: any[]) => JSON.stringify(
             arr.sort((a: any, b: any) => a.method.localeCompare(b.method) || a.minutes - b.minutes)
           );
           const remindersChanged = normalize(calendarReminders) !== normalize(currentDefaults);
-          
+
           if (remindersChanged) {
             // Update user's default calendar reminders (including empty array for "no reminders")
             await storage.saveUserPreferences(userId, {
@@ -7089,10 +7090,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       // Verify ownership
       const existing = await storage.getReminderById(id);
       if (!existing || existing.userId !== userId) {
@@ -7113,10 +7114,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       // Verify ownership
       const existing = await storage.getReminderById(id);
       if (!existing || existing.userId !== userId) {
@@ -7137,10 +7138,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       // Verify ownership
       const existing = await storage.getReminderById(id);
       if (!existing || existing.userId !== userId) {
@@ -7161,9 +7162,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       // Get user's Google Calendar integration
       const integration = await storage.getUserIntegration(userId);
       if (!integration?.googleCalendarAccessToken) {
@@ -7197,7 +7198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               grant_type: 'refresh_token'
             })
           });
-          
+
           if (tokenResponse.ok) {
             const tokens = await tokenResponse.json();
             accessToken = tokens.access_token;
@@ -7214,7 +7215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         integration.googleClientId,
         integration.googleClientSecret
       );
-      
+
       oauth2Client.setCredentials({
         access_token: accessToken,
         refresh_token: integration.googleCalendarRefreshToken || undefined
@@ -7287,12 +7288,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Save calendar event ID to reminder metadata
           if (createdEvent.data.id) {
-            const updatedMetadata = {
-              ...(reminder.storeMetadata || {}),
-              calendarEventId: createdEvent.data.id
-            };
             await storage.updateReminder(reminder.id, {
-              storeMetadata: updatedMetadata
+              storeMetadata: {
+                ...(reminder.storeMetadata || {}),
+                calendarEventId: createdEvent.data.id
+              }
             });
           }
 
@@ -7323,10 +7323,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const reminders = await storage.getRemindersByUser(userId);
-      
+
       // Filter only active reminders with nextTrigger set
       const activeReminders = reminders.filter(r => r.isActive && r.nextTrigger);
 
@@ -7348,26 +7348,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add each reminder as an event
       for (const reminder of activeReminders) {
         if (!reminder.nextTrigger) continue;
-        
+
         const now = new Date();
         const triggerDate = new Date(reminder.nextTrigger);
-        
+
         icsLines.push('BEGIN:VEVENT');
         icsLines.push(`UID:${reminder.id}@hempwickcrm.app`);
         icsLines.push(`DTSTAMP:${formatICalDate(now)}`);
         icsLines.push(`DTSTART:${formatICalDate(triggerDate)}`);
         icsLines.push(`SUMMARY:${reminder.title.replace(/[,;\\]/g, '\\$&')}`);
-        
+
         if (reminder.description) {
           const cleanDesc = reminder.description.replace(/[,;\\]/g, '\\$&').replace(/\n/g, '\\n');
           icsLines.push(`DESCRIPTION:${cleanDesc}`);
         }
-        
+
         // Add priority if overdue
         if (triggerDate < now) {
           icsLines.push('PRIORITY:1');
         }
-        
+
         icsLines.push('STATUS:CONFIRMED');
         icsLines.push('END:VEVENT');
       }
@@ -7387,23 +7387,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== NOTIFICATION ENDPOINTS =====
-  
+
   // Get all notifications for the current user (with optional agent filtering for admins)
   app.get('/api/notifications', async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { unreadOnly = 'false', agentIds } = req.query;
-      
+
       // Get current user details for agent filtering
       const currentUser = await storage.getUserById(userId);
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
       }
-      
+
       // SECURITY: Determine which agents' data to show
       let allowedUserIds: string[] = [];
       const isAgent = currentUser.role === 'agent';
@@ -7416,17 +7416,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const requestedAgentIds = agentIds 
           ? (Array.isArray(agentIds) ? agentIds : [agentIds])
           : [userId];
-        
+
         allowedUserIds = requestedAgentIds;
       }
-      
+
       // Fetch notifications for allowed users
       let allNotifications: any[] = [];
       for (const uid of allowedUserIds) {
         const userNotifications = await storage.getNotificationsByUser(uid);
         allNotifications = allNotifications.concat(userNotifications);
       }
-      
+
       const filtered = unreadOnly === 'true'
         ? allNotifications.filter(n => !n.isRead)
         : allNotifications;
@@ -7447,10 +7447,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       // Verify ownership
       const existing = await storage.getNotificationById(id);
       if (!existing || existing.userId !== userId) {
@@ -7471,10 +7471,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       // Verify ownership
       const existing = await storage.getNotificationById(id);
       if (!existing || existing.userId !== userId) {
@@ -7495,10 +7495,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       // Verify ownership
       const existing = await storage.getNotificationById(id);
       if (!existing || existing.userId !== userId) {
@@ -7514,17 +7514,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== INTEGRATION ENDPOINTS =====
-  
+
   // Get integration status for the current user
   app.get('/api/integrations/status', isAuthenticatedCustom, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const integration = await storage.getUserIntegration(userId);
-      
+
       res.json({
         googleSheetsConnected: !!(integration?.googleAccessToken && integration?.googleRefreshToken),
         googleCalendarConnected: !!(integration?.googleCalendarAccessToken && integration?.googleCalendarRefreshToken),
@@ -7543,9 +7543,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       // For now, return a message that integration setup is coming soon
       // In Phase 2-3, we'll implement the full OAuth flow using Replit's Google Calendar connector
       res.json({
@@ -7564,9 +7564,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       // Clear Google Sheets tokens from user integration
       await storage.updateUserIntegration(userId, {
         googleAccessToken: null,
@@ -7575,7 +7575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleEmail: null,
         googleConnectedAt: null
       });
-      
+
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error disconnecting Google Sheets:', error);
@@ -7589,9 +7589,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       // Stop webhook before disconnecting
       const integration = await storage.getUserIntegration(userId);
       if (integration?.googleCalendarWebhookChannelId && 
@@ -7602,14 +7602,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             integration.googleClientId,
             integration.googleClientSecret
           );
-          
+
           oauth2Client.setCredentials({
             access_token: integration.googleCalendarAccessToken,
             refresh_token: integration.googleCalendarRefreshToken || undefined
           });
 
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-          
+
           await calendar.channels.stop({
             requestBody: {
               id: integration.googleCalendarWebhookChannelId,
@@ -7621,7 +7621,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('[Calendar Webhook] Failed to stop webhook on disconnect:', stopError.message);
         }
       }
-      
+
       // Clear Google Calendar tokens from user integration
       await storage.updateUserIntegration(userId, {
         googleCalendarAccessToken: null,
@@ -7633,7 +7633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleCalendarWebhookResourceId: null,
         googleCalendarWebhookExpiry: null,
       });
-      
+
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error disconnecting Google Calendar:', error);
@@ -7642,14 +7642,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== WIDGET LAYOUT ENDPOINTS =====
-  
+
   // Get widget layout for the current user
   app.get('/api/widget-layout', async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { dashboardType = 'sales' } = req.query;
       const layout = await storage.getWidgetLayout(userId, dashboardType as string);
@@ -7666,7 +7666,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const layoutData = { ...req.body, userId };
       const layout = await storage.saveWidgetLayout(layoutData);
@@ -7678,23 +7678,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== OPENAI ENDPOINTS =====
-  
+
   // Get OpenAI settings
   app.get('/api/openai/settings', isAuthenticated, async (req, res) => {
     try {
       console.log('⚙️ [SETTINGS] Starting GET request...');
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       console.log('⚙️ [SETTINGS] User ID:', userId);
-      
+
       const user = await storage.getUser(userId);
       console.log('⚙️ [SETTINGS] User role:', user?.role);
-      
+
       if (user?.role !== 'admin') {
         console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
-      
+
       console.log('⚙️ [SETTINGS] Fetching OpenAI settings from database...');
       const settings = await storage.getOpenaiSettings();
       console.log('⚙️ [SETTINGS] Settings retrieved:', {
@@ -7703,7 +7703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hasVectorStoreId: !!settings?.vectorStoreId,
         hasAiInstructions: !!settings?.aiInstructions
       });
-      
+
       // Don't send the full API key to frontend
       if (settings) {
         const maskedSettings = {
@@ -7729,18 +7729,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/openai/settings', isAuthenticated, async (req, res) => {
     try {
       console.log('⚙️ [SETTINGS] Starting POST request...');
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       console.log('⚙️ [SETTINGS] User ID:', userId);
-      
+
       const user = await storage.getUser(userId);
       console.log('⚙️ [SETTINGS] User role:', user?.role);
-      
+
       if (user?.role !== 'admin') {
         console.log('⚙️ [SETTINGS] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
       }
-      
+
       const { apiKey, aiInstructions, vectorStoreId } = req.body;
       console.log('⚙️ [SETTINGS] Request data:', {
         hasApiKey: !!apiKey,
@@ -7749,11 +7749,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         instructionsLength: aiInstructions?.length || 0,
         vectorStoreId: vectorStoreId || 'none'
       });
-      
+
       console.log('⚙️ [SETTINGS] Saving settings to database...');
       const settings = await storage.saveOpenaiSettings({ apiKey, aiInstructions, vectorStoreId });
       console.log('⚙️ [SETTINGS] Settings saved successfully');
-      
+
       const response = { 
         success: true,
         hasApiKey: !!settings.apiKey,
@@ -7773,17 +7773,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/openai/files', isAuthenticated, async (req, res) => {
     try {
       console.log('📁 [FILES] Starting GET request...');
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       console.log('📁 [FILES] User ID:', userId);
-      
+
       console.log('📁 [FILES] Fetching all knowledge base files from database...');
       const files = await storage.getAllKnowledgeBaseFiles();
       console.log('📁 [FILES] Files retrieved:', {
         count: files.length,
         fileIds: files.map(f => f.id)
       });
-      
+
       console.log('📁 [FILES] ✅ Sending files to client');
       res.json(files);
     } catch (error: any) {
@@ -7798,7 +7798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/openai/files/upload', isAuthenticated, async (req, res) => {
     try {
       console.log('📤 [FILE UPLOAD] Starting file upload...');
-      
+
       const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: 'Admin access required' });
@@ -7812,7 +7812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         productCategory,
         description
       });
-      
+
       if (!filename || !content) {
         return res.status(400).json({ message: 'Filename and content required' });
       }
@@ -7836,24 +7836,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const path = await import('path');
       const os = await import('os');
       const { randomUUID } = await import('crypto');
-      
+
       // Sanitize filename to prevent path traversal
       const safeFilename = path.basename(filename);
       const uniqueSuffix = randomUUID();
       const tmpFilename = `${uniqueSuffix}-${safeFilename}`;
       const tmpDir = os.tmpdir();
       const tmpFilePath = path.join(tmpDir, tmpFilename);
-      
+
       console.log('📤 [FILE UPLOAD] Temp file path:', tmpFilePath);
-      
+
       let file;
       try {
         console.log('📤 [FILE UPLOAD] Writing file to temp location...');
         await fs.writeFile(tmpFilePath, content, 'utf-8');
         console.log('📤 [FILE UPLOAD] File written successfully');
-        
+
         const fileStream = (await import('fs')).createReadStream(tmpFilePath);
-        
+
         console.log('📤 [FILE UPLOAD] Uploading to OpenAI...');
         file = await openai.files.create({
           file: fileStream,
@@ -7934,7 +7934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let processingComplete = false;
       let attempts = 0;
       const maxAttempts = 60; // 60 seconds max wait
-      
+
       while (!processingComplete && attempts < maxAttempts) {
         const statusResponse = await axios.get(
           `https://api.openai.com/v1/vector_stores/${vectorStoreId}/files/${file.id}`,
@@ -7945,10 +7945,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         );
-        
+
         const status = statusResponse.data.status;
         console.log('📤 [FILE UPLOAD] Processing status:', status, 'attempt:', attempts + 1);
-        
+
         if (status === 'completed') {
           processingComplete = true;
           console.log('📤 [FILE UPLOAD] File processing completed!');
@@ -7965,12 +7965,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           attempts++;
         }
       }
-      
+
       if (!processingComplete) {
         console.log('📤 [FILE UPLOAD] ⚠️ File processing timeout, but file may still complete');
         // Keep status as 'processing' if timeout - it might still complete on OpenAI's side
       }
-      
+
       console.log('📤 [FILE UPLOAD] File added to vector store successfully');
 
       console.log('📤 [FILE UPLOAD] ✅ Upload completed successfully!');
@@ -7987,7 +7987,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/openai/files/:id', isAuthenticated, async (req, res) => {
     try {
       console.log('📝 [EDIT FILE] Starting PUT request...');
-      
+
       const user = await storage.getUser(req.user.isPasswordAuth ? req.user.id : req.user.claims.sub);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: 'Admin access required' });
@@ -7995,7 +7995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { id } = req.params;
       const { category, productCategory, description } = req.body;
-      
+
       console.log('📝 [EDIT FILE] Updating file:', id);
       console.log('📝 [EDIT FILE] New values:', { category, productCategory, description });
 
@@ -8006,7 +8006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updatedFile = await storage.updateKnowledgeBaseFile(id, updates);
       console.log('📝 [EDIT FILE] File updated successfully');
-      
+
       res.json(updatedFile);
     } catch (error: any) {
       console.error('📝 [EDIT FILE] ❌ ERROR:', error.message);
@@ -8018,13 +8018,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/openai/files/:id', isAuthenticated, async (req, res) => {
     try {
       console.log('📁 [DELETE FILE] Starting DELETE request...');
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       console.log('📁 [DELETE FILE] User ID:', userId);
-      
+
       const user = await storage.getUser(userId);
       console.log('📁 [DELETE FILE] User role:', user?.role);
-      
+
       if (user?.role !== 'admin') {
         console.log('📁 [DELETE FILE] ❌ Access denied - user is not admin');
         return res.status(403).json({ message: 'Admin access required' });
@@ -8032,15 +8032,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const fileId = req.params.id;
       console.log('📁 [DELETE FILE] File ID to delete:', fileId);
-      
+
       console.log('📁 [DELETE FILE] Fetching file metadata from database...');
       const file = await storage.getKnowledgeBaseFile(fileId);
-      
+
       if (!file) {
         console.log('📁 [DELETE FILE] ❌ File not found in database');
         return res.status(404).json({ message: 'File not found' });
       }
-      
+
       console.log('📁 [DELETE FILE] File found:', {
         filename: file.filename,
         openaiFileId: file.openaiFileId,
@@ -8054,12 +8054,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hasApiKey: !!settings?.apiKey,
         hasOpenaiFileId: !!file.openaiFileId
       });
-      
+
       if (settings?.apiKey && file.openaiFileId) {
         console.log('📁 [DELETE FILE] Deleting file from OpenAI...');
         const OpenAI = (await import('openai')).default;
         const openai = new OpenAI({ apiKey: settings.apiKey });
-        
+
         try {
           await openai.files.del(file.openaiFileId);
           console.log('📁 [DELETE FILE] File deleted from OpenAI successfully');
@@ -8074,7 +8074,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('📁 [DELETE FILE] Deleting file from database...');
       await storage.deleteKnowledgeBaseFile(fileId);
       console.log('📁 [DELETE FILE] ✅ File deleted successfully');
-      
+
       res.json({ success: true });
     } catch (error: any) {
       console.error('📁 [DELETE FILE] ❌ ERROR:', error.message);
@@ -8088,7 +8088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/openai/chat', isAuthenticatedCustom, async (req: any, res) => {
     try {
       console.log('💬 [CHAT] Starting chat request...');
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { message, conversationId, contextData } = req.body;
       console.log('💬 [CHAT] Request details:', {
@@ -8128,7 +8128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hasVectorStoreId: !!settings?.vectorStoreId,
         hasAiInstructions: !!settings?.aiInstructions
       });
-      
+
       if (!settings?.apiKey) {
         console.log('💬 [CHAT] ❌ No API key configured');
         return res.status(400).json({ message: 'OpenAI API key not configured' });
@@ -8178,19 +8178,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get custom instructions or use default
       let systemInstructions = settings.aiInstructions || 'You are a helpful sales assistant for a hemp wick company. Use the knowledge base to answer questions about sales scripts, product information, objection handling, and closing techniques. Be specific and actionable in your responses.';
-      
+
       // Add category-specific context to system prompt
       if (selectedCategory) {
         systemInstructions += `\n\nIMPORTANT CATEGORY RESTRICTION: You are specifically assisting with ${selectedCategory} product sales. Focus EXCLUSIVELY on ${selectedCategory}-related sales strategies, product information, and objection handling. DO NOT provide information, scripts, or advice about other product categories. If asked about other categories, politely redirect: "I specialize in ${selectedCategory} sales. For other products, please consult the appropriate specialist."\n`;
         console.log('💬 [CHAT] Category-specific context added for:', selectedCategory);
       }
-      
+
       // Append user signature information
       if (currentUser) {
         console.log('💬 [CHAT] Appending user signature info to system instructions...');
-        
+
         let signatureText = '';
-        
+
         // Use custom signature if available, otherwise auto-generate
         if (currentUser.signature) {
           console.log('💬 [CHAT] Using custom signature from user profile');
@@ -8200,10 +8200,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const userFullName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Sales Representative';
           const userEmail = currentUser.email || '';
           const userRole = currentUser.role === 'admin' ? 'Sales Manager' : 'Sales Representative';
-          
+
           signatureText = `${userFullName}\n${userRole}\nNatural Materials Unlimited${userEmail ? `\n${userEmail}` : ''}`;
         }
-        
+
         const signatureInstructions = `
 
 YOUR IDENTITY & EMAIL SIGNATURE:
@@ -8212,11 +8212,11 @@ When drafting emails or communications, ALWAYS use this exact signature format:
 ${signatureText}
 
 IMPORTANT: Never use placeholders like [Your Name] or [Your Contact Information]. Always use the exact information provided above.`;
-        
+
         systemInstructions += signatureInstructions;
         console.log('💬 [CHAT] User signature appended');
       }
-      
+
       // Append store context if available
       if (contextInfo && Object.keys(contextInfo).length > 0) {
         console.log('💬 [CHAT] Appending store context to system instructions...');
@@ -8230,7 +8230,6 @@ Current Store Information:
 - City: ${contextInfo.city || 'N/A'}
 - State: ${contextInfo.state || 'N/A'}
 - Phone: ${contextInfo.phone || 'N/A'}
-- Email: ${contextInfo.email || 'N/A'}
 - Website: ${contextInfo.website || 'N/A'}
 - DBA: ${contextInfo.dba || 'N/A'}
 - Sales-Ready Summary: ${contextInfo.sales_ready_summary || 'N/A'}
@@ -8262,32 +8261,16 @@ Use this store information to provide context-aware responses. When helping draf
         systemInstructions += contextString;
         console.log('💬 [CHAT] Store context appended (length:', contextString.length, ')');
       }
-      
+
       console.log('💬 [CHAT] System instructions length:', systemInstructions.length);
 
       if (settings.vectorStoreId) {
         console.log('💬 [CHAT] Using Assistants API with vector store:', settings.vectorStoreId);
         // Use Assistants API with file search
         try {
-          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
-          // Create assistant with file search
-          console.log('💬 [CHAT] Creating assistant with file search...');
-          const assistant = await openai.beta.assistants.create({
-            model: 'gpt-4o',
-            instructions: systemInstructions,
-            tools: [{ type: 'file_search' }],
-            tool_resources: {
-              file_search: {
-                vector_store_ids: [settings.vectorStoreId]
-              }
-            }
-          });
-          console.log('💬 [CHAT] Assistant created:', assistant.id);
-          */
-
-          // OPTIMIZED: Reuse assistant instead of creating new one each time
+          // REUSE assistant instead of creating new one each time
           let assistantId = settings.assistantId;
-          
+
           // Get or create assistant
           if (assistantId) {
             console.log('💬 [CHAT] Reusing existing assistant:', assistantId);
@@ -8307,7 +8290,7 @@ Use this store information to provide context-aware responses. When helping draf
               assistantId = null; // Force recreation
             }
           }
-          
+
           if (!assistantId) {
             console.log('💬 [CHAT] Creating new reusable assistant...');
             const assistant = await openai.beta.assistants.create({
@@ -8322,22 +8305,15 @@ Use this store information to provide context-aware responses. When helping draf
             });
             assistantId = assistant.id;
             console.log('💬 [CHAT] New assistant created:', assistantId);
-            
+
             // Save assistant ID for future reuse
             await storage.saveOpenaiSettings({ assistantId });
             console.log('💬 [CHAT] Assistant ID saved to database');
           }
 
-          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
-          // Create thread
-          console.log('💬 [CHAT] Creating thread...');
-          const thread = await openai.beta.threads.create();
-          console.log('💬 [CHAT] Thread created:', thread.id);
-          */
-
-          // OPTIMIZED: Reuse thread for this conversation
+          // REUSE thread for this conversation
           let threadId = conversation?.threadId;
-          
+
           if (threadId) {
             console.log('💬 [CHAT] Reusing existing thread:', threadId);
           } else {
@@ -8345,7 +8321,7 @@ Use this store information to provide context-aware responses. When helping draf
             const thread = await openai.beta.threads.create();
             threadId = thread.id;
             console.log('💬 [CHAT] New thread created:', threadId);
-            
+
             // Save thread ID to conversation for future reuse
             await storage.updateConversation(activeConversationId, { threadId });
             console.log('💬 [CHAT] Thread ID saved to conversation');
@@ -8382,7 +8358,7 @@ Use this store information to provide context-aware responses. When helping draf
             // Get messages
             const messages = await openai.beta.threads.messages.list(threadId);
             const lastMessage = messages.data[0];
-            
+
             if (lastMessage.content[0].type === 'text') {
               assistantMessage = lastMessage.content[0].text.value;
               console.log('💬 [CHAT] Assistant response length:', assistantMessage.length);
@@ -8392,16 +8368,6 @@ Use this store information to provide context-aware responses. When helping draf
             console.log('💬 [CHAT] ⚠️ Run did not complete, status:', runStatus.status);
             throw new Error('Assistant run did not complete successfully');
           }
-
-          /* ORIGINAL CODE (BACKUP - REMOVE COMMENT TO REVERT):
-          // Clean up assistant
-          console.log('💬 [CHAT] Cleaning up assistant...');
-          await openai.beta.assistants.del(assistant.id);
-          console.log('💬 [CHAT] Assistant deleted');
-          */
-
-          // OPTIMIZED: Don't delete assistant - reuse it next time
-          console.log('💬 [CHAT] Assistant retained for future use (performance optimization)');
         } catch (error: any) {
           console.error('💬 [CHAT] ⚠️ Assistants API error:', error.message);
           console.log('💬 [CHAT] Falling back to regular chat completion...');
@@ -8493,21 +8459,21 @@ Use this store information to provide context-aware responses. When helping draf
   app.get('/api/openai/chat/history', isAuthenticatedCustom, async (req: any, res) => {
     try {
       console.log('💬 [HISTORY] Starting GET request...');
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const limit = parseInt(req.query.limit as string) || 50;
       console.log('💬 [HISTORY] Request details:', {
         userId,
         limit
       });
-      
+
       console.log('💬 [HISTORY] Fetching chat history from database...');
       const history = await storage.getChatHistory(userId, limit);
       console.log('💬 [HISTORY] Chat history retrieved:', {
         messageCount: history.length,
         hasMessages: history.length > 0
       });
-      
+
       // Return in chronological order (oldest first)
       const reversedHistory = history.reverse();
       console.log('💬 [HISTORY] ✅ Sending chat history to client');
@@ -8524,14 +8490,14 @@ Use this store information to provide context-aware responses. When helping draf
   app.delete('/api/openai/chat/history', isAuthenticatedCustom, async (req, res) => {
     try {
       console.log('💬 [CLEAR HISTORY] Starting DELETE request...');
-      
+
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       console.log('💬 [CLEAR HISTORY] User ID:', userId);
-      
+
       console.log('💬 [CLEAR HISTORY] Clearing chat history from database...');
       await storage.clearChatHistory(userId);
       console.log('💬 [CLEAR HISTORY] Chat history cleared successfully');
-      
+
       console.log('💬 [CLEAR HISTORY] ✅ Sending success response');
       res.json({ success: true });
     } catch (error: any) {
@@ -8558,16 +8524,16 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const conversation = await storage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       const messages = await storage.getConversationMessages(id);
       res.json({ ...conversation, messages });
     } catch (error: any) {
@@ -8580,11 +8546,11 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const validation = insertConversationSchema.safeParse({ ...req.body, userId });
-      
+
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
-      
+
       const conversation = await storage.createConversation(validation.data);
       res.json(conversation);
     } catch (error: any) {
@@ -8597,16 +8563,16 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const conversation = await storage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       const messages = await storage.getConversationMessages(id);
       res.json(messages);
     } catch (error: any) {
@@ -8619,21 +8585,21 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const conversation = await storage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       const { title } = req.body;
       if (!title || !title.trim()) {
         return res.status(400).json({ message: 'Title is required' });
       }
-      
+
       const updated = await storage.updateConversation(id, { title: title.trim() });
       res.json(updated);
     } catch (error: any) {
@@ -8646,26 +8612,26 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const conversation = await storage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
         contextData: z.record(z.any()).optional(),
       });
-      
+
       const validation = updateSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
-      
+
       const updated = await storage.updateConversation(id, validation.data);
       res.json(updated);
     } catch (error: any) {
@@ -8678,16 +8644,16 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const conversation = await storage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       await storage.deleteConversation(id);
       res.json({ success: true });
     } catch (error: any) {
@@ -8700,25 +8666,25 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const conversation = await storage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       const moveSchema = z.object({
         projectId: z.string().nullable(),
       });
-      
+
       const validation = moveSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
-      
+
       const updated = await storage.moveConversationToProject(id, validation.data.projectId);
       res.json(updated);
     } catch (error: any) {
@@ -8731,21 +8697,21 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const conversation = await storage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       if (conversation.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       const messages = await storage.getConversationMessages(id);
-      
+
       let exportText = `Conversation: ${conversation.title}\n`;
       exportText += `Created: ${conversation.createdAt}\n\n`;
-      
+
       if (conversation.contextData) {
         exportText += `Context:\n`;
         Object.entries(conversation.contextData).forEach(([key, value]) => {
@@ -8753,14 +8719,14 @@ Use this store information to provide context-aware responses. When helping draf
         });
         exportText += `\n`;
       }
-      
+
       exportText += `Messages:\n${'='.repeat(50)}\n\n`;
-      
+
       messages.forEach((msg: any) => {
         exportText += `[${msg.role.toUpperCase()}] ${new Date(msg.createdAt).toLocaleString()}\n`;
         exportText += `${msg.content}\n\n`;
       });
-      
+
       res.setHeader('Content-Type', 'text/plain');
       res.setHeader('Content-Disposition', `attachment; filename="conversation-${id}.txt"`);
       res.send(exportText);
@@ -8786,11 +8752,11 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const validation = insertProjectSchema.safeParse({ ...req.body, userId });
-      
+
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
-      
+
       const project = await storage.createProject(validation.data);
       res.json(project);
     } catch (error: any) {
@@ -8803,24 +8769,24 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const projects = await storage.getProjects(userId);
       const project = projects.find(p => p.id === id);
-      
+
       if (!project) {
         return res.status(404).json({ message: 'Project not found' });
       }
-      
+
       const updateSchema = z.object({
         name: z.string().min(1).optional(),
         description: z.string().optional(),
       });
-      
+
       const validation = updateSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
-      
+
       const updated = await storage.updateProject(id, validation.data);
       res.json(updated);
     } catch (error: any) {
@@ -8833,14 +8799,14 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const projects = await storage.getProjects(userId);
       const project = projects.find(p => p.id === id);
-      
+
       if (!project) {
         return res.status(404).json({ message: 'Project not found' });
       }
-      
+
       await storage.deleteProject(id);
       res.json({ success: true });
     } catch (error: any) {
@@ -8865,11 +8831,11 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const validation = insertTemplateSchema.safeParse({ ...req.body, userId });
-      
+
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
-      
+
       // If setting this as default Script, unset other defaults first
       if (validation.data.isDefault && validation.data.type === 'Script') {
         const existingTemplates = await storage.getUserTemplates(userId);
@@ -8879,7 +8845,7 @@ Use this store information to provide context-aware responses. When helping draf
           }
         }
       }
-      
+
       const template = await storage.createTemplate(validation.data);
       res.json(template);
     } catch (error: any) {
@@ -8892,16 +8858,16 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const template = await storage.getTemplate(id);
       if (!template) {
         return res.status(404).json({ message: 'Template not found' });
       }
-      
+
       if (template.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
         content: z.string().optional(),
@@ -8909,15 +8875,15 @@ Use this store information to provide context-aware responses. When helping draf
         tags: z.array(z.string()).optional(),
         isDefault: z.boolean().optional(),
       });
-      
+
       const validation = updateSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
-      
+
       // Determine the template type after update
       const updatedType = validation.data.type || template.type;
-      
+
       // If setting this as default Script, unset other defaults first
       if (validation.data.isDefault && updatedType === 'Script') {
         const existingTemplates = await storage.getUserTemplates(userId);
@@ -8927,7 +8893,7 @@ Use this store information to provide context-aware responses. When helping draf
           }
         }
       }
-      
+
       const updated = await storage.updateTemplate(id, validation.data);
       res.json(updated);
     } catch (error: any) {
@@ -8940,16 +8906,16 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      
+
       const template = await storage.getTemplate(id);
       if (!template) {
         return res.status(404).json({ message: 'Template not found' });
       }
-      
+
       if (template.userId !== userId) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
-      
+
       await storage.deleteTemplate(id);
       res.json({ success: true });
     } catch (error: any) {
@@ -8959,7 +8925,7 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Get all unique tags across all templates (alphabetically)
-  app.get('/api/templates/tags', isAuthenticatedCustom, async (req: any, res) => {
+  app.get('/api/templates/tags', isAuthenticatedCustom, async (req, res) => {
     try {
       const allTags = await storage.getAllTemplateTags();
       res.json(allTags);
@@ -8985,11 +8951,11 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { tag } = req.body;
-      
+
       if (!tag || typeof tag !== 'string' || !tag.trim()) {
         return res.status(400).json({ message: 'Tag is required' });
       }
-      
+
       const newTag = await storage.addUserTag(userId, tag);
       res.json(newTag);
     } catch (error: any) {
@@ -9002,7 +8968,7 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { tag } = req.params;
-      
+
       await storage.removeUserTag(userId, decodeURIComponent(tag));
       res.json({ success: true });
     } catch (error: any) {
@@ -9015,7 +8981,7 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { id } = req.params;
-      
+
       await storage.removeUserTagById(userId, id);
       res.json({ success: true });
     } catch (error: any) {
@@ -9083,7 +9049,7 @@ Use this store information to provide context-aware responses. When helping draf
               grant_type: 'refresh_token'
             })
           });
-          
+
           if (tokenResponse.ok) {
             const tokens = await tokenResponse.json();
             accessToken = tokens.access_token;
@@ -9100,17 +9066,17 @@ Use this store information to provide context-aware responses. When helping draf
         systemIntegration.googleClientId,
         systemIntegration.googleClientSecret
       );
-      
+
       oauth2Client.setCredentials({
         access_token: accessToken,
         refresh_token: userIntegration.googleCalendarRefreshToken || undefined
       });
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-      
+
       // Get all reminders for this user
       const reminders = await storage.getRemindersByUser(userId);
-      
+
       // Fetch each event to check for updates/deletions
       for (const reminder of reminders) {
         const calendarEventId = reminder.googleCalendarEventId;
@@ -9124,7 +9090,7 @@ Use this store information to provide context-aware responses. When helping draf
           });
 
           const event = eventResponse.data;
-          
+
           // Check if event was modified
           if (event.status === 'cancelled') {
             // Event was deleted, delete the reminder
@@ -9135,7 +9101,7 @@ Use this store information to provide context-aware responses. When helping draf
             // Google returns ISO datetime with timezone, parse it in the event's timezone
             const eventStartDateTime = event.start?.dateTime;
             const eventTimeZone = event.start?.timeZone || reminder.timezone;
-            
+
             if (eventStartDateTime && eventTimeZone) {
               // Parse Google's datetime to extract local date and time components
               // eventStartDateTime format: "2025-10-24T23:00:00+02:00" or "2025-10-24T23:00:00"
@@ -9143,7 +9109,7 @@ Use this store information to provide context-aware responses. When helping draf
               const newScheduledDate = dateTimeParts[0]; // YYYY-MM-DD
               const timePart = dateTimeParts[1].split('+')[0].split('-')[0].split('Z')[0]; // Remove timezone suffix
               const newScheduledTime = timePart.substring(0, 5); // HH:MM
-              
+
               // Check if date or time changed
               if (newScheduledDate !== reminder.scheduledDate || newScheduledTime !== reminder.scheduledTime) {
                 console.log(`[Webhook] Calendar event ${calendarEventId} time changed, updating reminder ${reminder.id}`);
@@ -9155,7 +9121,7 @@ Use this store information to provide context-aware responses. When helping draf
                 });
               }
             }
-            
+
             // Update title if changed
             if (event.summary && event.summary !== reminder.title) {
               console.log(`[Webhook] Calendar event ${calendarEventId} title changed, updating reminder ${reminder.id}`);
@@ -9186,10 +9152,10 @@ Use this store information to provide context-aware responses. When helping draf
   async function renewWebhooksIfNeeded() {
     try {
       console.log('[Webhook Renewal] Checking for webhooks that need renewal...');
-      
+
       const allIntegrations = await storage.getAllUserIntegrations();
       const threeDaysFromNow = Date.now() + (3 * 24 * 60 * 60 * 1000);
-      
+
       for (const integration of allIntegrations) {
         // Skip if no webhook registered or no calendar access
         if (!integration.googleCalendarWebhookChannelId || 
@@ -9227,7 +9193,7 @@ Use this store information to provide context-aware responses. When helping draf
                     grant_type: 'refresh_token'
                   })
                 });
-                
+
                 if (tokenResponse.ok) {
                   const tokens = await tokenResponse.json();
                   accessToken = tokens.access_token;
@@ -9247,14 +9213,14 @@ Use this store information to provide context-aware responses. When helping draf
                   integration.googleClientId,
                   integration.googleClientSecret
                 );
-                
+
                 oauth2Client.setCredentials({
                   access_token: accessToken,
                   refresh_token: integration.googleCalendarRefreshToken || undefined
                 });
 
                 const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-                
+
                 await calendar.channels.stop({
                   requestBody: {
                     id: integration.googleCalendarWebhookChannelId,
@@ -9278,7 +9244,7 @@ Use this store information to provide context-aware responses. When helping draf
               integration.googleClientId,
               integration.googleClientSecret
             );
-            
+
             oauth2Client.setCredentials({
               access_token: accessToken,
               refresh_token: integration.googleCalendarRefreshToken || undefined
@@ -9325,7 +9291,7 @@ Use this store information to provide context-aware responses. When helping draf
 
   // Run webhook renewal check every 24 hours
   setInterval(renewWebhooksIfNeeded, 24 * 60 * 60 * 1000);
-  
+
   // Run initial check 1 minute after startup
   setTimeout(renewWebhooksIfNeeded, 60 * 1000);
 
@@ -9687,11 +9653,11 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { category } = req.body;
-      
+
       if (!category) {
         return res.status(400).json({ message: 'Category is required' });
       }
-      
+
       await storage.setLastCategory(userId, category);
       res.json({ message: 'Last category saved successfully', category });
     } catch (error: any) {
@@ -9717,11 +9683,11 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { category } = req.body;
-      
+
       if (!category) {
         return res.status(400).json({ message: 'Category is required' });
       }
-      
+
       await storage.setSelectedCategory(userId, category);
       res.json({ message: 'Selected category saved successfully', category });
     } catch (error: any) {
@@ -9778,15 +9744,15 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Get search results from Google Maps with API-level type filtering and pagination
       const searchResponse = await googleMaps.searchPlaces(query, location, excludedTypesArray, pageToken);
-      
+
       // Check which place_ids are already imported
       const placeIds = searchResponse.results.map(r => r.place_id);
       const importedPlaceIds = await storage.checkImportedPlaces(placeIds);
-      
+
       // Filter out already imported places
       let filteredResults = searchResponse.results.filter(r => !importedPlaceIds.has(r.place_id));
       const duplicateCount = searchResponse.results.length - filteredResults.length;
-      
+
       // Filter out results containing excluded keywords (backend filtering)
       let excludedCount = 0;
       if (excludedKeywordsArray.length > 0) {
@@ -9798,7 +9764,7 @@ Use this store information to provide context-aware responses. When helping draf
         });
         excludedCount = beforeExclusionCount - filteredResults.length;
       }
-      
+
       res.json({ 
         results: filteredResults,
         totalResults: searchResponse.results.length,
@@ -9822,7 +9788,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       const details = await googleMaps.getPlaceDetails(placeId);
-      
+
       if (!details) {
         return res.status(404).json({ message: 'Place not found' });
       }
@@ -9845,7 +9811,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       const result = await googleMaps.reverseGeocode(lat, lng);
-      
+
       if (!result) {
         return res.status(404).json({ message: 'Location not found' });
       }
@@ -9872,7 +9838,7 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'Place not found' });
       }
 
-      // Parse city and state from address
+      // Parse city and state from the place's formatted address
       const { city, state } = googleMaps.parseCityStateFromAddress(place.formatted_address);
 
       // Find the Store Database sheet
@@ -9886,7 +9852,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Clean up address - extract just street address without city/state/zip/country
-      const cleanAddress = (fullAddress: string, cityName: string, stateName: string): string => {
+      const cleanAddress = (fullAddress: string): string => {
         const parts = fullAddress.split(',').map(p => p.trim());
         // Remove the last 2 parts (state+zip and country), keep street address
         if (parts.length >= 3) {
@@ -9910,20 +9876,20 @@ Use this store information to provide context-aware responses. When helping draf
         place.name || '',                                    // A: Name
         place.types?.[0] || '',                             // B: Type
         place.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`, // C: Link
-        '',                                                  // D: Member Since (blank)
-        cleanAddress(place.formatted_address || '', city, state), // E: Address (street only)
-        city,                                                // F: City
-        state,                                               // G: State
+        '',                                                 // D: Member Since
+        cleanAddress(place.formatted_address || ''),        // E: Address (street only)
+        city,                                               // F: City
+        state,                                              // G: State
         place.formatted_phone_number || place.international_phone_number || '', // H: Phone
         place.website || '',                                // I: Website
-        '',                                                  // J: Email (blank)
-        '',                                                  // K: Followers (blank)
-        '',                                                  // L: Tags (blank)
+        '',                                                 // J: Email (blank)
+        '',                                                 // K: Followers (blank)
+        '',                                                 // L: Tags (blank)
         formatHours(place.opening_hours?.weekday_text),     // M: Hours (sample)
-        '',                                                  // N: DBA (blank)
-        '',                                                  // O: Vibe Score (blank)
-        '',                                                  // P: Sales-ready Summary (blank)
-        '',                                                  // Q: Agent Name (blank - unclaimed)
+        '',                                                 // N: DBA (blank)
+        '',                                                 // O: Vibe Score (blank)
+        '',                                                 // P: Sales-ready Summary (blank)
+        '',                                                 // Q: Agent Name (blank - unclaimed)
         place.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE', // R: OPEN (based on business status)
         category,                                            // S: Category
       ];
@@ -9950,17 +9916,17 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Ticket Routes
-  
+
   // Get unread ticket count (admin only)
   app.get('/api/tickets/unread-count', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      
+
       if (user?.role !== 'admin') {
         return res.json({ count: 0 });
       }
-      
+
       const count = await storage.getUnreadAdminCount();
       res.json({ count });
     } catch (error: any) {
@@ -9968,17 +9934,17 @@ Use this store information to provide context-aware responses. When helping draf
       res.status(500).json({ message: error.message || 'Failed to get unread count' });
     }
   });
-  
+
   // Get all tickets with user info (admin only)
   app.get('/api/tickets/admin', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      
+
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: 'Admin access required' });
       }
-      
+
       const allTickets = await storage.getAllTickets();
       const ticketsWithUserInfo = await Promise.all(
         allTickets.map(async (ticket) => {
@@ -9992,53 +9958,53 @@ Use this store information to provide context-aware responses. When helping draf
           };
         })
       );
-      
+
       res.json({ tickets: ticketsWithUserInfo });
     } catch (error: any) {
       console.error('Error fetching admin tickets:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
     }
   });
-  
+
   // Get all tickets (admin) or user's tickets (regular users)
   app.get('/api/tickets', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      
+
       let tickets;
       if (user?.role === 'admin') {
         tickets = await storage.getAllTickets();
       } else {
         tickets = await storage.getUserTickets(userId);
       }
-      
+
       res.json({ tickets });
     } catch (error: any) {
       console.error('Error fetching tickets:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch tickets' });
     }
   });
-  
+
   // Get single ticket with replies
   app.get('/api/tickets/:id', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       const ticketId = req.params.id;
-      
+
       const ticket = await storage.getTicket(ticketId);
       if (!ticket) {
         return res.status(404).json({ message: 'Ticket not found' });
       }
-      
+
       // Check access: admin can see all, users can only see their own
       if (user?.role !== 'admin' && ticket.userId !== userId) {
         return res.status(403).json({ message: 'Access denied' });
       }
-      
+
       const replies = await storage.getTicketReplies(ticketId);
-      
+
       // Add user info to replies
       const repliesWithUserInfo = await Promise.all(
         replies.map(async (reply) => {
@@ -10052,21 +10018,21 @@ Use this store information to provide context-aware responses. When helping draf
           };
         })
       );
-      
+
       // Mark as read
       if (user?.role === 'admin') {
         await storage.markTicketReadByAdmin(ticketId);
       } else {
         await storage.markTicketReadByUser(ticketId);
       }
-      
+
       res.json({ ticket, replies: repliesWithUserInfo });
     } catch (error: any) {
       console.error('Error fetching ticket:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch ticket' });
     }
   });
-  
+
   // Create new ticket
   app.post('/api/tickets', isAuthenticatedCustom, async (req, res) => {
     try {
@@ -10075,9 +10041,9 @@ Use this store information to provide context-aware responses. When helping draf
         ...req.body,
         userId,
       });
-      
+
       const ticket = await storage.createTicket(validated);
-      
+
       // Send email notification to admin
       const user = await storage.getUser(userId);
       if (user) {
@@ -10089,7 +10055,7 @@ Use this store information to provide context-aware responses. When helping draf
           ticket.message
         ).catch(err => console.error('Failed to send new ticket email:', err));
       }
-      
+
       res.json({ ticket });
     } catch (error: any) {
       console.error('Error creating ticket:', error);
@@ -10099,32 +10065,32 @@ Use this store information to provide context-aware responses. When helping draf
       res.status(500).json({ message: error.message || 'Failed to create ticket' });
     }
   });
-  
+
   // Reply to ticket
   app.post('/api/tickets/:id/reply', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
       const ticketId = req.params.id;
-      
+
       const ticket = await storage.getTicket(ticketId);
       if (!ticket) {
         return res.status(404).json({ message: 'Ticket not found' });
       }
-      
+
       // Check access
       if (user?.role !== 'admin' && ticket.userId !== userId) {
         return res.status(403).json({ message: 'Access denied' });
       }
-      
+
       const validated = insertTicketReplySchema.parse({
         ticketId,
         userId,
         message: req.body.message,
       });
-      
+
       const reply = await storage.createTicketReply(validated);
-      
+
       // Mark ticket as having new reply
       if (user?.role === 'admin') {
         await storage.updateTicket(ticketId, { isUnreadByUser: true });
@@ -10148,7 +10114,7 @@ Use this store information to provide context-aware responses. When helping draf
           req.body.message
         ).catch(err => console.error('Failed to send follow-up email:', err));
       }
-      
+
       res.json({ reply });
     } catch (error: any) {
       console.error('Error creating reply:', error);
@@ -10158,24 +10124,24 @@ Use this store information to provide context-aware responses. When helping draf
       res.status(500).json({ message: error.message || 'Failed to create reply' });
     }
   });
-  
+
   // Update ticket status (admin only)
   app.patch('/api/tickets/:id/status', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
-      
+
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: 'Admin access required' });
       }
-      
+
       const ticketId = req.params.id;
       const { status } = req.body;
-      
+
       if (!['open', 'replied', 'closed'].includes(status)) {
         return res.status(400).json({ message: 'Invalid status' });
       }
-      
+
       const ticket = await storage.updateTicket(ticketId, { status });
       res.json({ ticket });
     } catch (error: any) {
@@ -10194,7 +10160,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       for (const user of activeUsers) {
         const integration = await storage.getUserIntegration(user.id);
-        
+
         // Determine webhook URL based on environment
         let registeredUrl = 'Not configured';
         if (process.env.REPLIT_DOMAINS) {
@@ -10248,7 +10214,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       for (const user of activeUsers) {
         const integration = await storage.getUserIntegration(user.id);
-        
+
         if (!integration?.googleCalendarAccessToken) {
           results.skipped++;
           results.details.push({
@@ -10261,7 +10227,7 @@ Use this store information to provide context-aware responses. When helping draf
         }
 
         results.total++;
-        
+
         try {
           const success = await setupCalendarWatch(user.id);
           if (success) {
@@ -10303,7 +10269,7 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { userId } = req.params;
       const user = await storage.getUser(userId);
-      
+
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
@@ -10314,7 +10280,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       const success = await setupCalendarWatch(userId);
-      
+
       if (success) {
         // Fetch updated integration data
         const updatedIntegration = await storage.getUserIntegration(userId);
