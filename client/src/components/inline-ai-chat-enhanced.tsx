@@ -806,6 +806,37 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         contextData,
       });
     },
+    onMutate: async ({ conversationId, content }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/conversations", conversationId, "messages"] });
+
+      // Snapshot the previous value
+      const previousMessages = queryClient.getQueryData(["/api/conversations", conversationId, "messages"]);
+
+      // Optimistically update to the new value
+      if (conversationId) {
+        queryClient.setQueryData(["/api/conversations", conversationId, "messages"], (old: any) => {
+          return [...(old || []), { 
+            id: `temp-${Date.now()}`, 
+            role: 'user', 
+            content,
+            conversationId,
+            createdAt: new Date()
+          }];
+        });
+      }
+
+      return { previousMessages, conversationId };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.conversationId) {
+        queryClient.setQueryData(
+          ["/api/conversations", context.conversationId, "messages"],
+          context.previousMessages
+        );
+      }
+    },
   });
 
   const createTemplateMutation = useMutation({
@@ -972,6 +1003,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         setSelectedConversationId(data.conversationId);
       }
 
+      // Wait a brief moment to ensure the backend has saved the message
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedConversationId || data.conversationId, "messages"] });
     } catch (error: any) {
       toast({
