@@ -44,6 +44,7 @@ export function UserManagement() {
     password: "",
     role: "agent",
     selectedCategory: "",
+    referredBy: "",
   });
 
   // Fetch all users with metrics
@@ -73,6 +74,7 @@ export function UserManagement() {
         password: "",
         role: "agent",
         selectedCategory: "",
+        referredBy: "",
       });
       toast({
         title: "Success",
@@ -408,6 +410,26 @@ export function UserManagement() {
                   </Select>
                   <p className="text-sm text-muted-foreground">
                     User will only see stores from this category in their CRM
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="referredBy">Referred By (Optional)</Label>
+                  <Select value={newUser.referredBy} onValueChange={(value) => setNewUser({ ...newUser, referredBy: value })}>
+                    <SelectTrigger id="referredBy" data-testid="select-user-referredby">
+                      <SelectValue placeholder="Select referring agent..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {data?.users?.filter(u => u.role === 'agent').map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.agentName || `${agent.firstName} ${agent.lastName}`.trim() || agent.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    If this agent was referred by another agent, select who referred them
                   </p>
                 </div>
               </div>

@@ -1520,7 +1520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new user (admin only)
   app.post('/api/users', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
-      const { email, firstName, lastName, agentName, password, role, selectedCategory } = req.body;
+      const { email, firstName, lastName, agentName, password, role, selectedCategory, referredBy } = req.body;
       
       if (!email || !agentName || !password) {
         return res.status(400).json({ message: "Email, agent name, and password are required" });
@@ -1546,6 +1546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         username,
         passwordHash,
         role: role || 'agent',
+        referredBy: referredBy || null,
       });
       
       // Set selectedCategory preference if provided
@@ -2631,6 +2632,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           orderDate: new Date(order.date_created),
         });
       }
+
+      // Apply commissions (both primary and referral)
+      await commissionService.applyCommissions(order.id.toString());
 
       // Update client if matched
       if (client) {
