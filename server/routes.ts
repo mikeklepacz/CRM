@@ -1668,34 +1668,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get referral commission summary (admin only)
-  app.get('/api/reports/referral-commissions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // Get referral commission summary (accessible to agents and admins)
+  app.get('/api/reports/referral-commissions', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
+      const currentUser = req.currentUser;
+      const isUserAdmin = currentUser.role === 'admin';
+      
       const allCommissions = await storage.getAllCommissions();
       const allUsers = await storage.getAllUsers();
       
+      // Group referral commissions by referring agent (the person who earns the referral)
       const referralSummary: Record<string, {
         referringAgentId: string;
         referringAgentName: string;
+        referredAgents: Record<string, {
+          agentId: string;
+          agentName: string;
+          totalEarnings: number;
+        }>;
         totalReferralCommission: number;
       }> = {};
       
       for (const commission of allCommissions) {
-        if (commission.type === 'referral' && commission.referringAgentId) {
-          if (!referralSummary[commission.referringAgentId]) {
-            const agent = allUsers.find(u => u.id === commission.referringAgentId);
-            referralSummary[commission.referringAgentId] = {
-              referringAgentId: commission.referringAgentId,
-              referringAgentName: agent?.agentName || agent?.email || 'Unknown',
+        // Use correct field names: commissionKind and agentId
+        if (commission.commissionKind === 'referral' && commission.agentId && commission.sourceAgentId) {
+          // commission.agentId = the referring agent (who earns the referral bonus)
+          // commission.sourceAgentId = the agent who made the sale (who was referred)
+          const referringAgentId = commission.agentId;
+          const sourceAgentId = commission.sourceAgentId;
+          
+          // Skip if agent is not admin and this isn't their referral commission
+          if (!isUserAdmin && referringAgentId !== currentUser.id) {
+            continue;
+          }
+          
+          // Initialize referring agent entry if doesn't exist
+          if (!referralSummary[referringAgentId]) {
+            const referringAgent = allUsers.find(u => u.id === referringAgentId);
+            referralSummary[referringAgentId] = {
+              referringAgentId,
+              referringAgentName: referringAgent?.agentName || referringAgent?.email || 'Unknown',
+              referredAgents: {},
               totalReferralCommission: 0,
             };
           }
-          referralSummary[commission.referringAgentId].totalReferralCommission += commission.amount;
+          
+          // Initialize source agent entry if doesn't exist
+          if (!referralSummary[referringAgentId].referredAgents[sourceAgentId]) {
+            const sourceAgent = allUsers.find(u => u.id === sourceAgentId);
+            referralSummary[referringAgentId].referredAgents[sourceAgentId] = {
+              agentId: sourceAgentId,
+              agentName: sourceAgent?.agentName || sourceAgent?.email || 'Unknown',
+              totalEarnings: 0,
+            };
+          }
+          
+          // Add to totals
+          const amount = parseFloat(commission.amount);
+          referralSummary[referringAgentId].referredAgents[sourceAgentId].totalEarnings += amount;
+          referralSummary[referringAgentId].totalReferralCommission += amount;
         }
       }
       
-      const referralData = Object.values(referralSummary)
-        .sort((a, b) => b.totalReferralCommission - a.totalReferralCommission);
+      // Convert to array format with referred agents as array
+      const referralData = Object.values(referralSummary).map(entry => ({
+        referringAgentId: entry.referringAgentId,
+        referringAgentName: entry.referringAgentName,
+        totalReferralCommission: entry.totalReferralCommission,
+        referredAgents: Object.values(entry.referredAgents)
+          .sort((a, b) => b.totalEarnings - a.totalEarnings),
+      })).sort((a, b) => b.totalReferralCommission - a.totalReferralCommission);
       
       res.json({ referralCommissions: referralData });
     } catch (error: any) {
@@ -3102,16 +3144,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Auto-matching completed:', { autoMatched });
 
+      // COMMISSION BACKFILL: Calculate commissions for all orders missing commission records
+      console.log('Starting commission backfill...');
+      let commissionsCalculated = 0;
+      
+      try {
+        const allLocalOrders = await storage.getAllOrders();
+        
+        for (const localOrder of allLocalOrders) {
+          // Check if this order already has commission records
+          const existingCommissions = await db.query.commissions.findMany({
+            where: eq(commissions.orderId, localOrder.id),
+          });
+          
+          // If no commission records exist and order has a sales agent, calculate them
+          if (existingCommissions.length === 0 && localOrder.salesAgentName) {
+            try {
+              await commissionService.applyCommissions(localOrder.id);
+              commissionsCalculated++;
+              console.log(`Calculated commission for order ${localOrder.id}`);
+            } catch (commErr: any) {
+              console.error(`Failed to calculate commission for order ${localOrder.id}:`, commErr.message);
+            }
+          }
+        }
+      } catch (backfillError: any) {
+        console.error('Commission backfill error:', backfillError);
+        // Don't fail the entire sync if commission calculation fails
+      }
+      
+      console.log('Commission backfill completed:', { commissionsCalculated });
+
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
         wooLastSyncedAt: new Date()
       });
 
       res.json({
-        message: `WooCommerce sync completed. ${deleted > 0 ? `Removed ${deleted} deleted/cancelled orders. ` : ''}${autoMatched > 0 ? `Auto-matched ${autoMatched} orders.` : ''}`,
+        message: `WooCommerce sync completed. ${deleted > 0 ? `Removed ${deleted} deleted/cancelled orders. ` : ''}${autoMatched > 0 ? `Auto-matched ${autoMatched} orders. ` : ''}${commissionsCalculated > 0 ? `Calculated ${commissionsCalculated} commissions.` : ''}`,
         synced,
         matched,
         autoMatched,
+        commissionsCalculated,
         total: orders.length,
       });
     } catch (error: any) {

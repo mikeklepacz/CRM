@@ -3,10 +3,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Users, Loader2 } from "lucide-react";
 
+interface ReferredAgent {
+  agentId: string;
+  agentName: string;
+  totalEarnings: number;
+}
+
 interface ReferralCommissionData {
   referringAgentId: string;
   referringAgentName: string;
   totalReferralCommission: number;
+  referredAgents: ReferredAgent[];
 }
 
 interface ReferralCommissionsResponse {
@@ -79,30 +86,44 @@ export function ReferralCommissionsWidget() {
       <CardContent>
         {!data.referralCommissions || data.referralCommissions.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4" data-testid="text-no-referrals">
-            No referral commissions yet. When agents refer other agents, their referral earnings will appear here.
+            No referral commissions yet. When agents you referred make sales, your referral earnings will appear here.
           </p>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Referring Agent</TableHead>
-                  <TableHead className="text-right">Total Referral Commission</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.referralCommissions.map((referral) => (
-                  <TableRow key={referral.referringAgentId} data-testid={`row-referral-${referral.referringAgentId}`}>
-                    <TableCell className="font-medium" data-testid={`text-agent-${referral.referringAgentId}`}>
-                      {referral.referringAgentName}
-                    </TableCell>
-                    <TableCell className="text-right font-medium" data-testid={`text-commission-${referral.referringAgentId}`}>
-                      ${referral.totalReferralCommission.toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="space-y-4">
+            {data.referralCommissions.map((referral) => (
+              <div key={referral.referringAgentId}>
+                {referral.referredAgents && referral.referredAgents.length > 0 && (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Referred Agent</TableHead>
+                          <TableHead className="text-right">Your Earnings from Referral</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {referral.referredAgents.map((agent) => (
+                          <TableRow key={agent.agentId} data-testid={`row-referred-agent-${agent.agentId}`}>
+                            <TableCell className="font-medium" data-testid={`text-referred-agent-${agent.agentId}`}>
+                              {agent.agentName}
+                            </TableCell>
+                            <TableCell className="text-right font-medium" data-testid={`text-earnings-${agent.agentId}`}>
+                              ${agent.totalEarnings.toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/50 font-semibold">
+                          <TableCell>Total</TableCell>
+                          <TableCell className="text-right" data-testid="text-total-earnings">
+                            ${referral.totalReferralCommission.toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </CardContent>
