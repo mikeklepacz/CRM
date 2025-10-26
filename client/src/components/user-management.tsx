@@ -44,7 +44,7 @@ export function UserManagement() {
     password: "",
     role: "agent",
     selectedCategory: "",
-    referredBy: "",
+    referredBy: null as string | null,
   });
 
   // Fetch all users with metrics
@@ -74,7 +74,7 @@ export function UserManagement() {
         password: "",
         role: "agent",
         selectedCategory: "",
-        referredBy: "",
+        referredBy: null,
       });
       toast({
         title: "Success",
@@ -415,12 +415,12 @@ export function UserManagement() {
 
                 <div className="space-y-2">
                   <Label htmlFor="referredBy">Referred By (Optional)</Label>
-                  <Select value={newUser.referredBy} onValueChange={(value) => setNewUser({ ...newUser, referredBy: value })}>
+                  <Select value={newUser.referredBy || undefined} onValueChange={(value) => setNewUser({ ...newUser, referredBy: value === "none" ? null : value })}>
                     <SelectTrigger id="referredBy" data-testid="select-user-referredby">
                       <SelectValue placeholder="Select referring agent..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {data?.users?.filter(u => u.role === 'agent').map((agent) => (
                         <SelectItem key={agent.id} value={agent.id}>
                           {agent.agentName || `${agent.firstName} ${agent.lastName}`.trim() || agent.email}
