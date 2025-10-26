@@ -1739,6 +1739,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .sort((a, b) => b.totalEarnings - a.totalEarnings),
       })).sort((a, b) => b.totalReferralCommission - a.totalReferralCommission);
       
+      console.log('[Referral Commissions API] User:', currentUser.agentName || currentUser.email);
+      console.log('[Referral Commissions API] Returning data:', JSON.stringify(referralData, null, 2));
+      
       res.json({ referralCommissions: referralData });
     } catch (error: any) {
       console.error("Error fetching referral commission data:", error);
