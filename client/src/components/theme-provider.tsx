@@ -28,12 +28,22 @@ export function ThemeProvider({
   storageKey = "crm-theme",
   ...props
 }: ThemeProviderProps) {
+  // Initialize theme from localStorage
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
   );
 
-  const [actualTheme, setActualTheme] = useState<"light" | "dark">("light");
+  // Initialize actualTheme immediately based on stored theme
+  const [actualTheme, setActualTheme] = useState<"light" | "dark">(() => {
+    const storedTheme = (localStorage.getItem(storageKey) as Theme) || defaultTheme;
+    
+    if (storedTheme === "auto") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return storedTheme;
+  });
 
+  // Apply theme class immediately during initialization
   useEffect(() => {
     const root = window.document.documentElement;
     
