@@ -510,8 +510,8 @@ export function UserManagement() {
                           </TableCell>
                           <TableCell>
                             {user.referredBy ? (
-                              users.find(u => u.id === user.referredBy)?.agentName || 
-                              users.find(u => u.id === user.referredBy)?.email || 
+                              data?.users.find(u => u.id === user.referredBy)?.agentName || 
+                              data?.users.find(u => u.id === user.referredBy)?.email || 
                               '-'
                             ) : '-'}
                           </TableCell>
@@ -589,8 +589,8 @@ export function UserManagement() {
                           </TableCell>
                           <TableCell>
                             {user.referredBy ? (
-                              users.find(u => u.id === user.referredBy)?.agentName || 
-                              users.find(u => u.id === user.referredBy)?.email || 
+                              data?.users.find(u => u.id === user.referredBy)?.agentName || 
+                              data?.users.find(u => u.id === user.referredBy)?.email || 
                               '-'
                             ) : '-'}
                           </TableCell>
