@@ -2950,7 +2950,7 @@ export default function ClientDashboard() {
                                     position: 'sticky',
                                     left: 0,
                                     zIndex: 10,
-                                    backgroundColor: rowStatusColor ? rowStatusColor.background : (colorRowByStatus ? '#ffffff' : customColors.background)
+                                    backgroundColor: rowStatusColor ? rowStatusColor.background : customColors.background
                                   } : {})
                                 }}
                               >
