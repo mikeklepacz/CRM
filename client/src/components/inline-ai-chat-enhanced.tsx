@@ -1629,13 +1629,13 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                     data-testid={`message-${messageItem.id}`}
                   >
                     {messageItem.role === "assistant" && (
-                        <div className="flex-shrink-0">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Bot className="h-4 w-4 text-primary" />
-                          </div>
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Bot className="h-4 w-4 text-primary" />
                         </div>
-                      )}
-                      <div className={`max-w-[80%] ${messageItem.role === "user" ? "w-full" : ""}`}>
+                      </div>
+                    )}
+                    <div className={`max-w-[80%] ${messageItem.role === "user" ? "w-full" : ""}`}>
                         {messageItem.role === "assistant" ? (
                           <ContextMenu>
                             <ContextMenuTrigger>
@@ -1691,16 +1691,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                             body={processedEmailData.body}
                           />
                         )}
-                      </div>
-                      {messageItem.role === "user" && (
-                        <div className="flex-shrink-0">
-                          <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
-                            <UserIcon className="h-4 w-4" />
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  );
+                    {messageItem.role === "user" && (
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
+                          <UserIcon className="h-4 w-4" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
                 }
               })}
               
