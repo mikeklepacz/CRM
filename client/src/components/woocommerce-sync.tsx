@@ -435,8 +435,31 @@ export function WooCommerceSync() {
     setBulkSelectedStores(new Set());
   };
 
-  const handleMatchOrder = () => {
+  const handleMatchOrder = async () => {
     if (matchingOrderId && selectedStores.length > 0) {
+      // First save commission settings if they've been modified
+      if (modifiedOrders.has(matchingOrderId)) {
+        try {
+          await apiRequest("PATCH", `/api/orders/${matchingOrderId}`, {
+            commissionType: commissionTypes[matchingOrderId] || 'flat',
+            commissionAmount: commissionAmounts[matchingOrderId] || '500.00',
+          });
+          setModifiedOrders(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(matchingOrderId);
+            return newSet;
+          });
+        } catch (error: any) {
+          console.error('Failed to save commission settings:', error);
+          toast({
+            title: "Save failed",
+            description: "Failed to save commission settings. The match will still proceed.",
+            variant: "destructive",
+          });
+        }
+      }
+      
+      // Then proceed with matching
       matchOrderMutation.mutate({ 
         orderId: matchingOrderId, 
         storeLinks: selectedStores,
@@ -708,6 +731,54 @@ export function WooCommerceSync() {
                                   <p className="text-sm"><strong>Email:</strong> {order.billingEmail || 'N/A'}</p>
                                   <p className="text-sm"><strong>Company:</strong> {order.billingCompany || 'N/A'}</p>
                                   <p className="text-sm"><strong>Total:</strong> ${parseFloat(order.total).toFixed(2)}</p>
+                                </div>
+
+                                {/* Commission Settings - At top for easy access */}
+                                <div className="space-y-3 p-4 bg-primary/5 border-2 border-primary/20 rounded-md">
+                                  <h4 className="font-semibold text-sm">Commission Settings</h4>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-2">
+                                      <Label htmlFor={`commission-type-${order.id}`}>Commission Type</Label>
+                                      <Select
+                                        value={commissionTypes[order.id] || 'flat'}
+                                        onValueChange={(value) => {
+                                          setCommissionTypes(prev => ({ ...prev, [order.id]: value }));
+                                          setModifiedOrders(prev => new Set(prev).add(order.id));
+                                        }}
+                                      >
+                                        <SelectTrigger id={`commission-type-${order.id}`} data-testid={`select-commission-type-${order.id}`}>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="flat">Flat Fee</SelectItem>
+                                          <SelectItem value="25">25%</SelectItem>
+                                          <SelectItem value="10">10%</SelectItem>
+                                          <SelectItem value="auto">Auto (6-month rule)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label htmlFor={`commission-amount-${order.id}`}>
+                                        Amount {commissionTypes[order.id] === 'flat' ? '($)' : '(auto)'}
+                                      </Label>
+                                      <Input
+                                        id={`commission-amount-${order.id}`}
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="500.00"
+                                        value={commissionAmounts[order.id] || '500.00'}
+                                        onChange={(e) => {
+                                          setCommissionAmounts(prev => ({ ...prev, [order.id]: e.target.value }));
+                                          setModifiedOrders(prev => new Set(prev).add(order.id));
+                                        }}
+                                        disabled={commissionTypes[order.id] !== 'flat'}
+                                        data-testid={`input-commission-amount-${order.id}`}
+                                      />
+                                    </div>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    💡 First orders typically use Flat Fee ($500). Reorders use Auto (6-month rule).
+                                  </p>
                                 </div>
 
                                 {/* Match Button - Positioned at top for easy access */}

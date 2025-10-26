@@ -2475,7 +2475,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Success! All data is now in Google Sheets Commission Tracker
+      // Populate/update clients table with matched store data
+      // This ensures clients table becomes the source of truth for reorders
+      for (const store of storeLinks) {
+        const { link: storeLink, name: storeName } = store;
+        const normalizedLink = normalizeLink(storeLink);
+        
+        // Check if client already exists by unique identifier (link)
+        const existingClient = await db.query.clients.findFirst({
+          where: eq(clients.uniqueIdentifier, normalizedLink),
+        });
+        
+        if (existingClient) {
+          // Update existing client with order data
+          const updates: any = {};
+          
+          // Set firstOrderDate if not already set
+          if (!existingClient.firstOrderDate && order.orderDate) {
+            updates.firstOrderDate = order.orderDate;
+          }
+          
+          // Update lastOrderDate if this order is more recent
+          if (!existingClient.lastOrderDate || new Date(order.orderDate) > new Date(existingClient.lastOrderDate)) {
+            updates.lastOrderDate = order.orderDate;
+          }
+          
+          // Set assigned agent if not already set
+          if (!existingClient.assignedAgent && order.salesAgentName) {
+            const assignedUser = await db.query.users.findFirst({
+              where: eq(users.agentName, order.salesAgentName),
+            });
+            if (assignedUser) {
+              updates.assignedAgent = assignedUser.id;
+            }
+          }
+          
+          if (Object.keys(updates).length > 0) {
+            await db.update(clients)
+              .set({ ...updates, updatedAt: new Date() })
+              .where(eq(clients.id, existingClient.id));
+          }
+        } else {
+          // Create new client record
+          const assignedUser = order.salesAgentName 
+            ? await db.query.users.findFirst({ where: eq(users.agentName, order.salesAgentName) })
+            : null;
+          
+          await db.insert(clients).values({
+            uniqueIdentifier: normalizedLink,
+            data: {
+              storeName: storeName,
+              link: storeLink,
+              email: order.billingEmail || '',
+              company: order.billingCompany || '',
+            },
+            assignedAgent: assignedUser?.id || null,
+            firstOrderDate: order.orderDate,
+            lastOrderDate: order.orderDate,
+            status: 'active',
+          });
+        }
+      }
+      
+      // Also link order to client in orders table
+      if (storeLinks.length > 0) {
+        const primaryStoreLink = normalizeLink(storeLinks[0].link);
+        const primaryClient = await db.query.clients.findFirst({
+          where: eq(clients.uniqueIdentifier, primaryStoreLink),
+        });
+        
+        if (primaryClient) {
+          await db.update(orders)
+            .set({ clientId: primaryClient.id })
+            .where(eq(orders.id, orderId));
+        }
+      }
+      
+      // Success! All data is now in Google Sheets Commission Tracker AND clients table
       res.json({ 
         message: `Order ${order.orderNumber} matched to ${storeLinks.length} store(s)`,
         rowsProcessed,
