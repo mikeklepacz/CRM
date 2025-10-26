@@ -9,6 +9,7 @@ import bcrypt from "bcrypt";
 import * as client from "openid-client";
 import * as googleSheets from "./googleSheets";
 import * as googleMaps from "./googleMaps";
+import * as commissionService from "./commission-service";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
@@ -3303,6 +3304,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to write to tracker",
         written: 0
       });
+    }
+  });
+
+  // ========== COMMISSION ROUTES ==========
+
+  // Get commissions for an agent
+  app.get('/api/commissions', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const agentId = req.query.agentId || userId;
+      
+      if (user.role !== 'admin' && agentId !== userId) {
+        return res.status(403).json({ message: "Cannot view other agents' commissions" });
+      }
+
+      const commissions = await commissionService.getAgentCommissions(agentId, {
+        commissionKind: req.query.kind,
+        startDate: req.query.startDate ? new Date(req.query.startDate) : undefined,
+        endDate: req.query.endDate ? new Date(req.query.endDate) : undefined,
+      });
+
+      res.json(commissions);
+    } catch (error: any) {
+      console.error("Error fetching commissions:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch commissions" });
+    }
+  });
+
+  // Get commission summary for an agent
+  app.get('/api/commissions/summary', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const agentId = req.query.agentId || userId;
+      
+      if (user.role !== 'admin' && agentId !== userId) {
+        return res.status(403).json({ message: "Cannot view other agents' commission summary" });
+      }
+
+      const summary = await commissionService.getCommissionSummary(agentId);
+      res.json(summary);
+    } catch (error: any) {
+      console.error("Error fetching commission summary:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch commission summary" });
+    }
+  });
+
+  // Get team commissions (for referring agents)
+  app.get('/api/commissions/team', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const referrerId = req.query.referrerId || userId;
+      
+      if (user.role !== 'admin' && referrerId !== userId) {
+        return res.status(403).json({ message: "Cannot view other agents' team data" });
+      }
+
+      const teamData = await commissionService.getTeamCommissions(referrerId);
+      res.json(teamData);
+    } catch (error: any) {
+      console.error("Error fetching team commissions:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch team commissions" });
     }
   });
 
