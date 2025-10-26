@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,7 +62,6 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
   const [presetName, setPresetName] = useState("");
   const [hasLoadedInitialColors, setHasLoadedInitialColors] = useState(false);
   const { toast } = useToast();
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync customColors when preferences finish loading for the first time
   useEffect(() => {
@@ -79,7 +78,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
     }
   }, [actualTheme, hasLoadedInitialColors]);
 
-  // Apply colors to CSS variables for live preview AND auto-save with debounce
+  // Apply colors to CSS variables for live preview
   useEffect(() => {
     const root = document.documentElement;
 
@@ -116,24 +115,7 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
       applyColorVar('--card-border', customColors.border);
       applyColorVar('--popover-border', customColors.border);
     }
-
-    // Auto-save colors after 1 second of no changes
-    if (hasLoadedInitialColors) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
-      saveTimeoutRef.current = setTimeout(() => {
-        saveColors(customColors);
-      }, 1000);
-    }
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [customColors, hasLoadedInitialColors, saveColors]);
+  }, [customColors]);
 
   const handleSaveColors = () => {
     saveColors(customColors);
@@ -257,6 +239,10 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                   <p className="text-xs text-muted-foreground">{fieldDescriptions[field]}</p>
 
                   <Popover open={activeColorField === field} onOpenChange={(open) => {
+                    if (!open && activeColorField === field) {
+                      // Save when closing the popover
+                      saveColors(customColors);
+                    }
                     setActiveColorField(open ? field : null);
                   }}>
                     <PopoverTrigger asChild>
