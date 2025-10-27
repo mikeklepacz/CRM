@@ -17,8 +17,14 @@ import {
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { ClientNotesDialog } from "./client-notes-dialog";
 
+// Extended client type with API-enriched fields
+interface EnrichedClient extends Client {
+  transactionId?: string;
+  orderId?: string;
+}
+
 interface ClientsTableProps {
-  clients: Client[];
+  clients: EnrichedClient[];
   currentUser: User;
   isLoading?: boolean;
 }
@@ -221,7 +227,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                 <TableHead>Company</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Order ID</TableHead>
+                <TableHead>Transaction ID</TableHead>
                 <TableHead>Last Order</TableHead>
                 <TableHead className="text-right">Commission</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -240,7 +246,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                 const daysSinceOrder = client.lastOrderDate 
                   ? Math.floor((Date.now() - new Date(client.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24))
                   : null;
-                const transactionId = (client as any).transactionId || '';
+                const transactionId = client.transactionId || '';
                 const status = client.status || '7 – Warm';
 
                 return (
