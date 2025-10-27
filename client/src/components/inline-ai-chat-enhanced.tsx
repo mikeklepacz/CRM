@@ -2588,7 +2588,11 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                       .map((template) => (
                         <div
                           key={template.id}
-                          className="p-4 border rounded-lg hover-elevate bg-card"
+                          className={`p-4 border rounded-lg hover-elevate bg-card ${
+                            (template as any).type === 'Script' && (template as any).isDefault 
+                              ? 'border-black dark:border-white border-2' 
+                              : ''
+                          }`}
                           data-testid={`template-card-${template.id}`}
                         >
                           <div className="flex items-start justify-between mb-2">
