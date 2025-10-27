@@ -73,7 +73,7 @@ export function ClientNotesDialog({ clientId, open, onOpenChange }: ClientNotesD
         throw new Error("Client link not found");
       }
 
-      return await apiRequest("PUT", `/api/sheets/${storeDbSheet.id}/contact-action`, {
+      return await apiRequest("PUT", `/api/sheets/${storeDbSheet.id}/update-contact-action`, {
         linkValue: link,
         joinColumn: storeDbSheet.uniqueIdentifierColumn || 'link',
         rowIndex,
