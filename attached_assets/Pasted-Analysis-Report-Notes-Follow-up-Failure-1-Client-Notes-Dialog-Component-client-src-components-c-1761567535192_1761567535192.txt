@@ -1,0 +1,75 @@
+Analysis Report: Notes & Follow-up Failure
+1. Client Notes Dialog Component (client/src/components/client-notes-dialog.tsx)
+Key Issues Found:
+
+Save Notes Mutation (lines 68-101):
+
+Uses /api/sheets/${storeDbSheet.id}/contact-action endpoint
+Requires storeDbSheet to exist
+Passes rowIndex from client.googleSheetRowId
+Problem: The mutation doesn't validate if storeDbSheet exists before attempting the API call
+Create Reminder Mutation (lines 103-141):
+
+Uses /api/reminders endpoint
+Requires link from client data
+Problem: After creating reminder, it attempts to auto-save Follow-Up Date and Next Action to tracker sheet, but this logic is in the onSave callback, not the mutation itself
+Reminder Save Handler (line 180-185):
+
+Calls createReminderMutation.mutate(data)
+Does NOT trigger the auto-save logic for Follow-Up Date/Next Action that's shown in client-dashboard.tsx
+2. Client Dashboard Save Logic (client/src/pages/client-dashboard.tsx)
+Critical Finding (lines in rag_source_5 and rag_source_6):
+
+The auto-save logic for Follow-Up Date and Next Action exists in the Client Dashboard's reminder handler:
+
+// Update the form data to reflect the changes
+const followUpDate = format(reminderData.date, 'M/d/yyyy');
+handleInputChange('follow_up_date', followUpDate);
+handleInputChange('next_action', reminderData.note);
+// Automatically save Follow-Up Date and Next Action to tracker sheet using mutation
+try {
+  const link = formData.link || getLinkValue(row);
+  if (link && trackerSheetId) {
+    await upsertTrackerFieldsMutation.mutateAsync({
+      link,
+      updates: {
+        'Follow-Up Date': followUpDate,
+        'Next Action': reminderData.note,
+      }
+    });
+But this logic is NOT present in client-notes-dialog.tsx
+
+3. Missing Integration
+The Problem:
+
+client-notes-dialog.tsx creates the reminder successfully
+But it does NOT call the upsertTrackerFieldsMutation to save Follow-Up Date and Next Action to Google Sheets
+The Notes tab saves directly to sheets via /api/sheets/${storeDbSheet.id}/contact-action
+The Reminder tab creates the reminder but doesn't sync back to sheets
+4. API Endpoint Analysis (server/routes.ts)
+Looking at the /api/sheets/:id/contact-action endpoint used by the Notes tab, it updates:
+
+agent
+status
+followUpDate
+nextAction
+notes
+pointOfContact
+But the Reminder tab uses /api/reminders which only creates the reminder record in the database - it doesn't update the Google Sheets tracker.
+
+5. Root Cause
+The "Notes & Follow-up" dialog has two separate workflows:
+
+Notes Tab: ✅ Works - saves notes directly to Google Sheets via contact-action endpoint
+Reminder Tab: ❌ Broken - creates reminder in database but fails to sync Follow-Up Date and Next Action back to Google Sheets
+The reminder creation succeeds, but the tracker sheet is never updated with the follow-up date and next action, causing the appearance of failure.
+
+6. Data Flow Comparison
+Client Dashboard (Working):
+
+User sets reminder → Create reminder in DB → Auto-save to tracker sheet via upsertTrackerFieldsMutation → Success
+Client Notes Dialog (Broken):
+
+User sets reminder → Create reminder in DB → ❌ Missing tracker sheet update → Partial success (reminder exists but sheets not updated)
+Summary
+The Notes/Follow-up dialog is missing the critical upsertTrackerFieldsMutation call that exists in the Client Dashboard. When users create a reminder through the dialog, it saves to the database but never syncs the Follow-Up Date and Next Action fields back to the Google Sheets Commission Tracker, making it appear as if the save failed.
