@@ -263,6 +263,7 @@ export interface IStorage {
   createStatus(status: InsertStatus): Promise<Status>;
   updateStatus(id: string, updates: Partial<InsertStatus>): Promise<Status>;
   deleteStatus(id: string): Promise<void>;
+  reorderStatuses(updates: { id: string; displayOrder: number }[]): Promise<void>;
   
   // Ticket operations
   getAllTickets(): Promise<Ticket[]>;
@@ -1586,6 +1587,19 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStatus(id: string): Promise<void> {
     await db.delete(statuses).where(eq(statuses.id, id));
+  }
+
+  async reorderStatuses(updates: { id: string; displayOrder: number }[]): Promise<void> {
+    // Update each status with its new display order
+    for (const update of updates) {
+      await db
+        .update(statuses)
+        .set({
+          displayOrder: update.displayOrder,
+          updatedAt: new Date(),
+        })
+        .where(eq(statuses.id, update.id));
+    }
   }
 
   // Ticket operations

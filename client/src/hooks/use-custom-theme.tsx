@@ -137,7 +137,6 @@ export function useCustomTheme() {
     
     const statuses = statusesData?.statuses || [];
     statuses
-      .filter(s => s.isActive)
       .sort((a, b) => a.displayOrder - b.displayOrder)
       .forEach(status => {
         const key = `${status.displayOrder} – ${status.name}`;

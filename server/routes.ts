@@ -9726,6 +9726,30 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Reorder statuses (admin only)
+  app.post('/api/statuses/reorder', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { updates } = req.body;
+      
+      if (!Array.isArray(updates)) {
+        return res.status(400).json({ message: 'Updates must be an array' });
+      }
+
+      // Validate each update has id and displayOrder
+      for (const update of updates) {
+        if (!update.id || typeof update.displayOrder !== 'number') {
+          return res.status(400).json({ message: 'Each update must have id and displayOrder' });
+        }
+      }
+
+      await storage.reorderStatuses(updates);
+      res.json({ message: 'Statuses reordered successfully' });
+    } catch (error: any) {
+      console.error('Error reordering statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to reorder statuses' });
+    }
+  });
+
   // Seed default statuses (admin only) - one-time setup
   app.post('/api/statuses/seed', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {

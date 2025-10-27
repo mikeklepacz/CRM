@@ -19,6 +19,8 @@ interface ClientFiltersProps {
   agents?: Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null }>;
   states?: string[];
   showAgentFilter?: boolean;
+  statusOptions?: string[];
+  statusColors?: { [key: string]: { background: string; text: string } };
 }
 
 export function ClientFilters({
@@ -36,6 +38,8 @@ export function ClientFilters({
   agents = [],
   states = [],
   showAgentFilter = true,
+  statusOptions = [],
+  statusColors = {},
 }: ClientFiltersProps) {
   const hasActiveFilters = search || state !== "all" || status !== "all" || assignedAgent !== "all" || inactivityDays !== "all";
 
@@ -78,10 +82,22 @@ export function ClientFilters({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-              <SelectItem value="claimed">Claimed</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              {statusOptions.map((statusOption) => {
+                const colors = statusColors[statusOption];
+                return (
+                  <SelectItem 
+                    key={statusOption}
+                    value={statusOption}
+                    data-testid={`status-filter-option-${statusOption.toLowerCase().replace(/[^a-z]+/g, '-')}`}
+                    style={{
+                      backgroundColor: colors?.background || 'transparent',
+                      color: colors?.text || 'inherit',
+                    }}
+                  >
+                    {statusOption}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>

@@ -31,9 +31,26 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Plus, Save, X, Sun, Moon, Edit, Check } from "lucide-react";
+import { Trash2, Plus, Save, X, Sun, Moon, Edit, Check, GripVertical } from "lucide-react";
 import { HslColorPicker } from "react-colorful";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // HSL <-> Hex conversion utilities
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
@@ -98,6 +115,82 @@ interface StatusManagementDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Sortable Row Component
+function SortableStatusRow({
+  status,
+  previewMode,
+  onEdit,
+  onDelete,
+}: {
+  status: Status;
+  previewMode: 'light' | 'dark';
+  onEdit: (status: Status) => void;
+  onDelete: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: status.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <TableRow ref={setNodeRef} style={style} data-testid={`row-status-${status.id}`}>
+      <TableCell className="w-12">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-1 hover-elevate rounded"
+          data-testid={`drag-handle-${status.id}`}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </TableCell>
+      <TableCell className="font-mono text-sm">{status.displayOrder}</TableCell>
+      <TableCell className="font-medium">{status.name}</TableCell>
+      <TableCell>
+        <div
+          className="inline-flex items-center justify-center px-3 py-1 rounded-md text-xs font-medium"
+          style={{
+            backgroundColor: previewMode === 'light' ? status.lightBgColor : status.darkBgColor,
+            color: previewMode === 'light' ? status.lightTextColor : status.darkTextColor,
+          }}
+        >
+          {status.name}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onEdit(status)}
+            data-testid={`button-edit-${status.id}`}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onDelete(status.id)}
+            data-testid={`button-delete-${status.id}`}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export function StatusManagementDialog({ open, onOpenChange }: StatusManagementDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -127,6 +220,72 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
   });
 
   const statuses = statusesData?.statuses || [];
+  
+  // Sorted statuses for display
+  const [sortedStatuses, setSortedStatuses] = useState<Status[]>([]);
+  
+  // Update sorted statuses when data changes
+  useEffect(() => {
+    const sorted = [...statuses].sort((a, b) => a.displayOrder - b.displayOrder);
+    setSortedStatuses(sorted);
+  }, [statuses]);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Reorder mutation
+  const reorderMutation = useMutation({
+    mutationFn: async (updates: { id: string; displayOrder: number }[]) => {
+      return await apiRequest('POST', '/api/statuses/reorder', { updates });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/statuses'] });
+      toast({
+        title: "Success",
+        description: "Statuses reordered successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reorder statuses",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    setSortedStatuses((items) => {
+      const oldIndex = items.findIndex((item) => item.id === active.id);
+      const newIndex = items.findIndex((item) => item.id === over.id);
+
+      const newOrder = arrayMove(items, oldIndex, newIndex);
+      
+      // Update display orders and send to backend
+      const updates = newOrder.map((item, index) => ({
+        id: item.id,
+        displayOrder: index + 1,
+      }));
+
+      reorderMutation.mutate(updates);
+
+      return newOrder.map((item, index) => ({
+        ...item,
+        displayOrder: index + 1,
+      }));
+    });
+  };
 
   // Create status mutation
   const createMutation = useMutation({
@@ -316,7 +475,7 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
               <div>
                 <DialogTitle>Manage Statuses</DialogTitle>
                 <DialogDescription>
-                  Create, edit, and delete status types with default colors for light and dark modes
+                  Create, edit, and reorder status types with custom colors for light and dark modes
                 </DialogDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -365,24 +524,13 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., 1 – Contacted"
+                    placeholder="e.g., Contacted"
                     data-testid="input-status-name"
                   />
                 </div>
 
-                {/* Display Order */}
-                <div className="space-y-2">
-                  <Label>Display Order</Label>
-                  <Input
-                    type="number"
-                    value={formData.displayOrder}
-                    onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) || 1 })}
-                    data-testid="input-display-order"
-                  />
-                </div>
-
                 {/* Preview */}
-                <div className="space-y-2">
+                <div className="md:col-span-2 space-y-2">
                   <Label>Preview</Label>
                   <div 
                     className="h-9 rounded-md flex items-center justify-center px-3 text-sm font-medium"
@@ -460,69 +608,53 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
 
             {/* Statuses Table */}
             <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">Order</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="w-40">Preview</TableHead>
-                    <TableHead className="w-20">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
-                        Loading statuses...
-                      </TableCell>
+                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-16">Order</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="w-40">Preview</TableHead>
+                      <TableHead className="w-20">Actions</TableHead>
                     </TableRow>
-                  ) : statuses.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
-                        No statuses found. Create your first status above.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    statuses.map((status) => (
-                      <TableRow key={status.id} data-testid={`row-status-${status.id}`}>
-                        <TableCell className="font-mono text-sm">{status.displayOrder}</TableCell>
-                        <TableCell className="font-medium">{status.name}</TableCell>
-                        <TableCell>
-                          <div
-                            className="inline-flex items-center justify-center px-3 py-1 rounded-md text-xs font-medium"
-                            style={{
-                              backgroundColor: previewMode === 'light' ? status.lightBgColor : status.darkBgColor,
-                              color: previewMode === 'light' ? status.lightTextColor : status.darkTextColor,
-                            }}
-                          >
-                            {status.name}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => startEdit(status)}
-                              data-testid={`button-edit-${status.id}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => handleDelete(status.id)}
-                              data-testid={`button-delete-${status.id}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          Loading statuses...
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    ) : sortedStatuses.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          No statuses found. Create your first status above.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <SortableContext
+                        items={sortedStatuses.map(s => s.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {sortedStatuses.map((status) => (
+                          <SortableStatusRow
+                            key={status.id}
+                            status={status}
+                            previewMode={previewMode}
+                            onEdit={startEdit}
+                            onDelete={handleDelete}
+                          />
+                        ))}
+                      </SortableContext>
+                    )}
+                  </TableBody>
+                </Table>
+              </DndContext>
             </div>
           </div>
         </DialogContent>
