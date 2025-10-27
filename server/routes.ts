@@ -1393,6 +1393,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const statusIndex = headers.findIndex((h: string) => h.toLowerCase() === 'status');
+      const transactionIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'transaction id');
+      const orderIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'order number' || h.toLowerCase() === 'order id');
 
       console.log('[MY-CLIENTS] allowedAgentNames:', allowedAgentNames);
       console.log('[MY-CLIENTS] Processing', trackerRows.length - 1, 'tracker rows');
@@ -1404,6 +1406,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalSales: number;
         lastOrderDate: Date | null;
         status: string;
+        transactionId: string;
+        orderId: string;
       }> = new Map();
 
       // Process each tracker row
@@ -1414,6 +1418,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amountStr = row[amountIndex]?.toString() || '0';
         const dateStr = row[dateIndex]?.toString() || '';
         const status = row[statusIndex]?.toString().trim() || '';
+        const transactionId = row[transactionIdIndex]?.toString().trim() || '';
+        const orderId = row[orderIdIndex]?.toString().trim() || '';
 
         if (!link) continue;
 
@@ -1451,6 +1457,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalSales: 0,
             lastOrderDate: orderDate,
             status: status || '7 – Warm',
+            transactionId: transactionId || '',
+            orderId: orderId || '',
           });
         }
 
@@ -1460,8 +1468,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (orderDate && (!client.lastOrderDate || orderDate > client.lastOrderDate)) {
           client.lastOrderDate = orderDate;
         }
+        // Always use the latest non-empty status
         if (status) {
-          client.status = status; // Use latest status
+          client.status = status;
+        }
+        // Always use the latest non-empty transaction ID
+        if (transactionId) {
+          client.transactionId = transactionId;
+        }
+        // Always use the latest non-empty order ID
+        if (orderId) {
+          client.orderId = orderId;
         }
       }
 
@@ -1470,16 +1487,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let enrichedClients = Array.from(clientMap.values()).map(client => ({
         id: client.link,
         uniqueIdentifier: client.link,
-        data: { Link: client.link, Name: '' },
+        data: { Link: client.link, Name: '', Contact: '' },
         assignedAgent: currentUser.id,
         claimDate: null,
         totalSales: client.totalSales.toFixed(2),
         commissionTotal: client.totalCommission.toFixed(2),
         category: null,
+        status: client.status,
+        lastOrderDate: client.lastOrderDate,
+        transactionId: client.transactionId,
+        orderId: client.orderId,
         lastSyncedAt: new Date(),
       }));
 
-      // Enrich with Store Database data if available
+      // Enrich with Store Database data if available (using same approach as Top Clients widget)
       if (storeSheet) {
         const storeRange = `${storeSheet.sheetName}!A:S`;
         const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
@@ -1487,29 +1508,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (storeRows.length > 1) {
           const storeHeaders = storeRows[0];
           const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-          const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
+          const nameIndex = 0; // Column A = Name
+          const dbaIndex = 13; // Column N = DBA
           const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
+          const pocNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'point of contact' || h.toLowerCase() === 'poc');
           
-          // Build lookup map for stores
-          const storeMap = new Map<string, { name: string; category: string }>();
+          // Build lookup map: normalized link -> store data (same as Top Clients)
+          const storeMap = new Map<string, { name: string; category: string; contact: string }>();
           for (let i = 1; i < storeRows.length; i++) {
             const row = storeRows[i];
             const storeLink = row[storeLinkIndex]?.toString().trim();
-            const storeName = row[storeNameIndex]?.toString().trim() || '';
+            const dba = row[dbaIndex]?.toString().trim() || '';
+            const name = row[nameIndex]?.toString().trim() || '';
             const storeCategory = row[storeCategoryIndex]?.toString().trim() || '';
+            const pocName = row[pocNameIndex]?.toString().trim() || '';
             
             if (storeLink) {
-              storeMap.set(storeLink, { name: storeName, category: storeCategory });
+              const normalized = normalizeLink(storeLink);
+              // Prefer DBA over Name (same as Top Clients)
+              storeMap.set(normalized, {
+                name: dba || name || storeLink,
+                category: storeCategory,
+                contact: pocName,
+              });
             }
           }
           
-          // Enrich clients with store data
+          // Enrich clients with store data using normalized link matching
           enrichedClients = enrichedClients.map(client => {
-            const storeData = storeMap.get(client.data.Link);
+            const normalizedLink = normalizeLink(client.data.Link);
+            const storeData = storeMap.get(normalizedLink);
             if (storeData) {
               return {
                 ...client,
-                data: { ...client.data, Name: storeData.name },
+                data: { 
+                  ...client.data, 
+                  Name: storeData.name,
+                  Contact: storeData.contact 
+                },
                 category: storeData.category,
               };
             }

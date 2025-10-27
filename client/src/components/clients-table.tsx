@@ -176,7 +176,11 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
   };
 
   const getCompanyName = (client: Client) => {
-    return client.data?.['Company'] || client.data?.['company'] || client.data?.['Business Name'] || 'Unknown';
+    return client.data?.['Name'] || client.data?.['name'] || client.data?.['Company'] || client.data?.['company'] || client.data?.['Business Name'] || 'Unknown';
+  };
+
+  const getContact = (client: Client) => {
+    return client.data?.['Contact'] || client.data?.['contact'] || client.data?.['Point of Contact'] || client.data?.['POC'] || '';
   };
 
   const getEmail = (client: Client) => {
@@ -217,8 +221,8 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                 <TableHead>Company</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Order ID</TableHead>
                 <TableHead>Last Order</TableHead>
-                <TableHead className="text-right">Total Sales</TableHead>
                 <TableHead className="text-right">Commission</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -229,12 +233,15 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                 const phone = getPhone(client);
                 const link = getLink(client);
                 const companyName = getCompanyName(client);
+                const contact = getContact(client);
                 const canClaim = !client.assignedAgent && currentUser.role === 'agent';
                 const canUnclaim = currentUser.role === 'admin';
                 const commissionRate = getCommissionRate(client);
                 const daysSinceOrder = client.lastOrderDate 
                   ? Math.floor((Date.now() - new Date(client.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24))
                   : null;
+                const transactionId = (client as any).transactionId || '';
+                const status = client.status || '7 – Warm';
 
                 return (
                   <TableRow key={client.id} className="hover-elevate">
@@ -251,6 +258,9 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                     </TableCell>
                     <TableCell className="align-middle">
                       <div className="space-y-1 text-sm">
+                        {contact && (
+                          <div className="font-medium text-foreground">{contact}</div>
+                        )}
                         {email && (
                           <a 
                             href={`mailto:${email}`} 
@@ -276,9 +286,12 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                       </div>
                     </TableCell>
                     <TableCell className="align-middle">
-                      <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
-                        {client.status || 'unassigned'}
+                      <Badge variant="outline">
+                        {status}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="align-middle text-sm text-muted-foreground">
+                      {transactionId || 'No orders'}
                     </TableCell>
                     <TableCell className="align-middle">
                       {client.lastOrderDate ? (
@@ -296,9 +309,6 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                       ) : (
                         <span className="text-muted-foreground text-sm">No orders</span>
                       )}
-                    </TableCell>
-                    <TableCell className="text-right font-medium align-middle" data-testid={`text-sales-${client.id}`}>
-                      ${parseFloat(client.totalSales || '0').toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right align-middle">
                       <div className="space-y-1">
