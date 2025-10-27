@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { formatInTimeZone, getTimezoneOffset } from "date-fns-tz";
+import { formatInTimeZone, getTimezoneOffset, fromZonedTime } from "date-fns-tz";
 import { Calendar as CalendarIcon, MapPin, User, Mail, Phone, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -106,27 +106,19 @@ export function QuickReminder({
     if (useCustomerTimezone && customerTimezone) {
       // User picked time in customer's timezone, convert to agent's timezone
       const dateStr = format(date, 'yyyy-MM-dd');
-      const [hours, minutes] = time.split(':').map(Number);
       
       // Create a date string in customer's timezone
       const customerDateTimeStr = `${dateStr}T${time}:00`;
       
-      // Parse this as a date in the customer's timezone and get UTC timestamp
-      const customerDate = new Date(customerDateTimeStr);
-      const customerOffset = getTimezoneOffset(customerTimezone, customerDate);
+      // Properly convert the customer's local time to UTC
+      const utcDate = fromZonedTime(customerDateTimeStr, customerTimezone);
       
-      // Get UTC timestamp: take the naive date and subtract customer's offset
-      const utcTimestamp = customerDate.getTime() - customerOffset;
-      const utcDate = new Date(utcTimestamp);
-      
-      // Now convert this UTC time to agent's timezone
-      const agentOffset = getTimezoneOffset(agentTimezone, utcDate);
-      const agentTimestamp = utcTimestamp + agentOffset;
-      const agentDate = new Date(agentTimestamp);
-      
-      // Extract the date and time in agent's timezone
-      finalDate = agentDate;
+      // Convert UTC to agent's timezone and extract time
       finalTime = formatInTimeZone(utcDate, agentTimezone, 'HH:mm');
+      
+      // Get the date in agent's timezone
+      const agentDateStr = formatInTimeZone(utcDate, agentTimezone, 'yyyy-MM-dd');
+      finalDate = new Date(agentDateStr);
     }
     
     onSave({ 
@@ -157,12 +149,10 @@ export function QuickReminder({
       const dateStr = format(date, 'yyyy-MM-dd');
       const customerDateTimeStr = `${dateStr}T${time}:00`;
       
-      const customerDate = new Date(customerDateTimeStr);
-      const customerOffset = getTimezoneOffset(customerTimezone, customerDate);
+      // Properly convert the customer's local time to UTC
+      const utcDate = fromZonedTime(customerDateTimeStr, customerTimezone);
       
-      const utcTimestamp = customerDate.getTime() - customerOffset;
-      const utcDate = new Date(utcTimestamp);
-      
+      // Convert UTC to agent's timezone
       const agentTime = formatInTimeZone(
         utcDate,
         agentTimezone,
