@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Calendar as CalendarIcon, StickyNote } from "lucide-react";
 import { QuickReminder } from "./quick-reminder";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { format } from "date-fns";
 import type { Client } from "@shared/schema";
 
 interface ClientNotesDialogProps {
@@ -52,6 +53,10 @@ export function ClientNotesDialog({ clientId, open, onOpenChange }: ClientNotesD
 
   const storeDbSheet = sheetsData?.sheets?.find((sheet: any) => 
     sheet.sheetPurpose === 'Store Database' || sheet.sheetPurpose === 'clients'
+  );
+
+  const trackerSheet = sheetsData?.sheets?.find((sheet: any) => 
+    sheet.sheetPurpose === 'Commission Tracker' || sheet.sheetPurpose === 'tracker'
   );
 
   // Save notes mutation
@@ -108,6 +113,40 @@ export function ClientNotesDialog({ clientId, open, onOpenChange }: ClientNotesD
     },
   });
 
+  // Mutation to upsert tracker fields (for reminder auto-save)
+  const upsertTrackerFieldsMutation = useMutation({
+    mutationFn: async ({
+      link,
+      updates,
+    }: {
+      link: string;
+      updates: Record<string, string>;
+    }) => {
+      return await apiRequest('POST', '/api/sheets/tracker/upsert', {
+        link,
+        updates,
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Failed to update tracker",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Create reminder mutation
   const createReminderMutation = useMutation({
     mutationFn: async (data: {
@@ -137,12 +176,32 @@ export function ClientNotesDialog({ clientId, open, onOpenChange }: ClientNotesD
         calendarReminders: data.calendarReminders,
       });
     },
-    onSuccess: () => {
+    onSuccess: async (_, variables) => {
+      // Automatically save Follow-Up Date and Next Action to tracker sheet
+      try {
+        const link = client?.data?.['Link'] || client?.data?.['link'] || '';
+        if (link && trackerSheet) {
+          const followUpDate = format(variables.date, 'M/d/yyyy');
+          await upsertTrackerFieldsMutation.mutateAsync({
+            link,
+            updates: {
+              'Follow-Up Date': followUpDate,
+              'Next Action': variables.note,
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to update tracker sheet:', error);
+        // Don't show error toast here - the upsertTrackerFieldsMutation handles it
+      }
+
       toast({
         title: "Reminder created",
-        description: "Your follow-up reminder has been saved and added to your calendar",
+        description: "Your follow-up reminder has been saved and synced to Google Sheets",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients/my"] });
       onOpenChange(false);
     },
     onError: (error: Error) => {
