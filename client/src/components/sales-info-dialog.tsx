@@ -149,11 +149,11 @@ export function SalesInfoDialog({
         });
       }
 
-      // Invalidate all reminder queries (including those with agent filters)
+      // Invalidate all reminder queries (including agent filters and date queries)
       await queryClient.invalidateQueries({ 
         predicate: (query) => {
           const key = query.queryKey[0];
-          return key === '/api/reminders';
+          return typeof key === 'string' && key.startsWith('/api/reminders');
         }
       });
       await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
