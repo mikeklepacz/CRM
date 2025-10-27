@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Trophy, ShoppingCart } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface TopClient {
@@ -80,53 +81,55 @@ export function TopClientsWidget() {
             No client data available
           </div>
         ) : (
-          <div className="space-y-3">
-            {topClients.map((client, index) => (
-              <div 
-                key={index}
-                className="flex items-center gap-3 p-3 bg-muted/30 hover-elevate rounded-md transition-colors"
-                data-testid={`top-client-${index}`}
-              >
-                {/* Rank Badge */}
-                <div className="flex-shrink-0">
-                  <Badge 
-                    variant={index === 0 ? "default" : "secondary"}
-                    className="w-8 h-8 flex items-center justify-center rounded-full"
-                  >
-                    {index + 1}
-                  </Badge>
-                </div>
+          <ScrollArea className="h-[500px] pr-4">
+            <div className="space-y-3">
+              {topClients.map((client, index) => (
+                <div 
+                  key={index}
+                  className="flex items-center gap-3 p-3 bg-muted/30 hover-elevate rounded-md transition-colors"
+                  data-testid={`top-client-${index}`}
+                >
+                  {/* Rank Badge */}
+                  <div className="flex-shrink-0">
+                    <Badge 
+                      variant={index === 0 ? "default" : "secondary"}
+                      className="w-8 h-8 flex items-center justify-center rounded-full"
+                    >
+                      {index + 1}
+                    </Badge>
+                  </div>
 
-                {/* Client Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate" data-testid={`client-name-${index}`}>
-                    {client.name}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <ShoppingCart className="h-3 w-3" />
-                      {client.orderCount} {client.orderCount === 1 ? 'order' : 'orders'}
-                    </span>
-                    {client.lastOrderDate && (
-                      <span className="text-xs text-muted-foreground">
-                        Last: {new Date(client.lastOrderDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {/* Client Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate" data-testid={`client-name-${index}`}>
+                      {client.name}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ShoppingCart className="h-3 w-3" />
+                        {client.orderCount} {client.orderCount === 1 ? 'order' : 'orders'}
                       </span>
-                    )}
+                      {client.lastOrderDate && (
+                        <span className="text-xs text-muted-foreground">
+                          Last: {new Date(client.lastOrderDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Commission */}
+                  <div className="text-right">
+                    <p className="text-lg font-semibold" data-testid={`client-commission-${index}`}>
+                      ${parseFloat(client.totalCommission).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Total commission
+                    </p>
                   </div>
                 </div>
-
-                {/* Commission */}
-                <div className="text-right">
-                  <p className="text-lg font-semibold" data-testid={`client-commission-${index}`}>
-                    ${parseFloat(client.totalCommission).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Total commission
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </ScrollArea>
         )}
       </CardContent>
     </Card>

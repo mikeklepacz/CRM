@@ -6365,7 +6365,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allSheets = await storage.getAllActiveGoogleSheets();
       console.log('[TOP-CLIENTS] All active sheets:', allSheets.map(s => ({ name: s.spreadsheetName, purpose: s.sheetPurpose })));
       
-      const storeSheet = await storage.getGoogleSheetByPurpose('clients');
+      const storeSheet = allSheets.find(s => s.sheetPurpose === 'Store Database');
       const linkToNameMap: { [normalizedLink: string]: string } = {};
 
       console.log('[TOP-CLIENTS] Store sheet found:', !!storeSheet);
