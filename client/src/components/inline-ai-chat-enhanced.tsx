@@ -687,9 +687,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     return combined.sort((a, b) => a.timestamp - b.timestamp);
   }, [messages, timeline]);
 
-  // Clear timeline when switching conversations
+  // Clear only messages when switching conversations (keep scripts as reference material)
   useEffect(() => {
-    setTimeline([]);
+    setTimeline(prev => prev.filter(item => item.type === 'script'));
   }, [selectedConversationId]);
 
   // Auto-scroll to bottom when timeline changes
