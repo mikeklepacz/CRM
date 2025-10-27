@@ -130,20 +130,22 @@ export function useCustomTheme() {
     retry: false,
   });
 
-  // Build status colors from API data - ALL statuses, no filtering
+  // Build status colors from API data
   const apiStatusColors = useMemo(() => {
     const lightColors: { [key: string]: { background: string; text: string } } = {};
     const darkColors: { [key: string]: { background: string; text: string } } = {};
     
     const statuses = statusesData?.statuses || [];
     statuses
+      .filter(s => s.isActive)
       .sort((a, b) => a.displayOrder - b.displayOrder)
       .forEach(status => {
-        lightColors[status.name] = {
+        const key = `${status.displayOrder} – ${status.name}`;
+        lightColors[key] = {
           background: status.lightBgColor,
           text: status.lightTextColor
         };
-        darkColors[status.name] = {
+        darkColors[key] = {
           background: status.darkBgColor,
           text: status.darkTextColor
         };
@@ -257,30 +259,21 @@ export function useCustomTheme() {
   );
 
   // Then use those stable strings as dependencies for the merged objects
-  // Note: statusColors are ALWAYS from API, never from saved preferences
   const lightColors = useMemo(
-    () => {
-      const userColors = { ...userPreferences?.lightModeColors };
-      delete userColors.statusColors; // Remove any stale statusColors from preferences
-      return {
-        ...defaultLightColors,
-        ...userColors,
-        statusColors: apiStatusColors.light,
-      };
-    },
+    () => ({
+      ...defaultLightColors,
+      statusColors: apiStatusColors.light,
+      ...userPreferences?.lightModeColors
+    }),
     [lightColorsStr, apiStatusColors]
   );
 
   const darkColors = useMemo(
-    () => {
-      const userColors = { ...userPreferences?.darkModeColors };
-      delete userColors.statusColors; // Remove any stale statusColors from preferences
-      return {
-        ...defaultDarkColors,
-        ...userColors,
-        statusColors: apiStatusColors.dark,
-      };
-    },
+    () => ({
+      ...defaultDarkColors,
+      statusColors: apiStatusColors.dark,
+      ...userPreferences?.darkModeColors
+    }),
     [darkColorsStr, apiStatusColors]
   );
 
@@ -356,12 +349,8 @@ export function useCustomTheme() {
       return;
     }
     
-    // Remove statusColors before saving - they come from API, not preferences
-    const colorsToSave = { ...colors };
-    delete colorsToSave.statusColors;
-    
-    console.log('🎨 [COLOR SAVE] Validating colors before save:', colorsToSave);
-    saveColorsMutation.mutate(colorsToSave);
+    console.log('🎨 [COLOR SAVE] Validating colors before save:', colors);
+    saveColorsMutation.mutate(colors);
   }, [saveColorsMutation, toast]);
 
   // Callback to reset colors to defaults
@@ -420,17 +409,36 @@ export function useCustomTheme() {
     setColorRowByStatusMutation.mutate(value);
   }, [setColorRowByStatusMutation, userPreferences]);
 
-  // DEPRECATED: Use Status Management dialog instead (manages via /api/statuses endpoints)
-  // This is kept for backward compatibility with old inline status editing
+  // Mutation to update a single status entry
   const updateStatusEntryMutation = useMutation({
     mutationFn: async ({ index, name, bgColor, textColor }: { index: number; name: string; bgColor: string; textColor: string }) => {
-      // This function is deprecated and should not be used
-      // Statuses are now managed via the Status Management dialog and API endpoints
-      console.warn('updateStatusEntry is deprecated - use Status Management dialog instead');
-      return { message: 'deprecated' };
+      const statusKey = `${index + 1} – ${name}`;
+      const newStatusColors = { ...currentColors.statusColors, [statusKey]: { background: bgColor, text: textColor } };
+      
+      // Remove old status if name changed
+      const oldStatusKey = Object.keys(currentColors.statusColors || {}).find(key => key.startsWith(`${index + 1} –`));
+      if (oldStatusKey && oldStatusKey !== statusKey) {
+        delete newStatusColors[oldStatusKey];
+      }
+      
+      const updatedColors = { ...currentColors, statusColors: newStatusColors };
+      
+      debug.statusSave('Updating status entry', { index, name, bgColor, textColor, statusKey });
+      
+      const preferences: any = userPreferences ? { ...userPreferences } : {};
+      if (actualTheme === 'dark') {
+        preferences.darkModeColors = updatedColors;
+        preferences.hasDarkOverrides = true;
+      } else {
+        preferences.lightModeColors = updatedColors;
+        preferences.hasLightOverrides = true;
+      }
+      
+      return await apiRequest('PUT', '/api/user/preferences', preferences);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      debug.statusSave('Status entry saved successfully');
     },
   });
 

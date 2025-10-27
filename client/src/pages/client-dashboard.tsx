@@ -127,69 +127,265 @@ interface MergedDataRow {
   _hasTrackerData?: boolean; // Added to indicate if a tracker row exists for this store
 }
 
-// Status Editor Popover Component - Simplified to use Status Management Dialog
+// Status Editor Popover Component
 function StatusEditorPopover({
+  statusOptions,
+  statusColors,
   colorRowByStatus,
   setColorRowByStatus,
+  updateStatusEntry,
+  colorPresets,
+  setColorPresets,
+  deleteColorPreset,
   currentUser,
 }: {
+  statusOptions: string[];
+  statusColors: { [status: string]: { background: string; text: string } };
   colorRowByStatus: boolean;
   setColorRowByStatus: (value: boolean) => void;
+  updateStatusEntry: (index: number, name: string, bgColor: string, textColor: string) => void;
+  colorPresets: Array<{name: string, color: string}>;
+  setColorPresets: (presets: Array<{name: string, color: string}>) => void;
+  deleteColorPreset: (index: number) => void;
   currentUser: any;
 }) {
+  const { toast } = useToast();
+  const { actualTheme } = useTheme();
+  const [localStatuses, setLocalStatuses] = useState(statusOptions);
+  const [localColors, setLocalColors] = useState(statusColors);
+  const [isSaving, setIsSaving] = useState(false);
   const [statusManagementOpen, setStatusManagementOpen] = useState(false);
+
   const isAdmin = currentUser?.role === 'admin';
 
-  return (
-    <>
-      {isAdmin ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setStatusManagementOpen(true)}
-          data-testid="button-status"
-        >
-          <Palette className="mr-2 h-4 w-4" />
-          Manage Statuses
-        </Button>
-      ) : (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" data-testid="button-status">
-              <Palette className="mr-2 h-4 w-4" />
-              Status
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[300px]" align="end">
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-medium">Status Settings</h4>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Configure how statuses appear in the table.
-                </p>
-              </div>
+  // Update local state when props change
+  useEffect(() => {
+    setLocalStatuses(statusOptions);
+    setLocalColors(statusColors);
+  }, [statusOptions, statusColors]);
 
-              <div className="flex items-center gap-2 p-3 rounded-md border">
-                <Checkbox
-                  id="status-color-rows"
-                  checked={colorRowByStatus}
-                  onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
-                  data-testid="checkbox-status-color-rows"
-                />
-                <Label htmlFor="status-color-rows" className="text-sm cursor-pointer">
-                  Color Rows by Status
-                </Label>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-      )}
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Save all status entries
+      for (let i = 0; i < localStatuses.length; i++) {
+        const statusEntry = Object.entries(localColors).find(([key]) => key.startsWith(`${i + 1} –`));
+        const statusName = statusEntry?.[0]?.replace(/^\d+ – /, '') || localStatuses[i].replace(/^\d+ – /, '');
+        const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
+        await updateStatusEntry(i, statusName, colors.background, colors.text);
+      }
+
+      toast({
+        title: "Success",
+        description: "Status colors saved successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save status colors",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+    setLocalColors(defaultColors.statusColors || {});
+    toast({
+      title: "Reset Complete",
+      description: "Status colors reset to defaults",
+    });
+  };
+
+  const handleSavePreset = (color: string, name: string) => {
+    const newPresets = [...colorPresets, { name, color }];
+    setColorPresets(newPresets);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" data-testid="button-status">
+          <Palette className="mr-2 h-4 w-4" />
+          Status
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[500px] max-h-[600px] overflow-y-auto" align="end">
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium">Status Customization</h4>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Customize status colors{isAdmin ? ' and names' : ''}. Changes apply everywhere.
+          </p>
+
+          {/* Edit Statuses Button (Admin only) */}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStatusManagementOpen(true)}
+              className="w-full"
+              data-testid="button-edit-statuses"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Edit Statuses
+            </Button>
+          )}
+
+          {/* Color Rows by Status Checkbox */}
+          <div className="flex items-center gap-2 p-3 rounded-md border">
+            <Checkbox
+              id="status-color-rows"
+              checked={colorRowByStatus}
+              onCheckedChange={(checked) => setColorRowByStatus(!!checked)}
+              data-testid="checkbox-status-color-rows"
+            />
+            <Label htmlFor="status-color-rows" className="text-sm cursor-pointer">
+              Color Rows by Status
+            </Label>
+          </div>
+
+          {/* Status Editors */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Edit Status Colors</Label>
+            {localStatuses.map((status, index) => {
+              const statusNumber = index + 1;
+              const statusEntry = Object.entries(localColors).find(([key]) => key.startsWith(`${statusNumber} –`));
+              const statusName = statusEntry?.[0]?.replace(/^\d+ – /, '') || status.replace(/^\d+ – /, '');
+              const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
+
+              return (
+                <div key={index} className="space-y-2 p-3 rounded-md border">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-muted-foreground w-4">{statusNumber}</span>
+                    {isAdmin ? (
+                      <Input
+                        value={statusName}
+                        onChange={(e) => {
+                          const newName = e.target.value;
+                          const newKey = `${statusNumber} – ${newName}`;
+                          const newColors = { ...localColors };
+                          // Remove old key
+                          const oldKey = Object.keys(newColors).find(k => k.startsWith(`${statusNumber} –`));
+                          if (oldKey) delete newColors[oldKey];
+                          // Add new key
+                          newColors[newKey] = colors;
+                          setLocalColors(newColors);
+                        }}
+                        className="flex-1"
+                        placeholder={`Status ${statusNumber} name`}
+                        data-testid={`input-status-name-${index}`}
+                      />
+                    ) : (
+                      <div className="flex-1 text-sm">{statusName}</div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Background Color */}
+                    <SharedColorPicker
+                      label="Background"
+                      value={colors.background}
+                      onChange={(color) => {
+                        const statusKey = `${statusNumber} – ${statusName}`;
+                        setLocalColors({
+                          ...localColors,
+                          [statusKey]: { ...colors, background: color }
+                        });
+                      }}
+                      onReset={() => {
+                        const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+                        const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
+                        if (defaultStatus) {
+                          const statusKey = `${statusNumber} – ${statusName}`;
+                          setLocalColors({
+                            ...localColors,
+                            [statusKey]: { ...colors, background: defaultStatus[1].background }
+                          });
+                        }
+                      }}
+                      colorPresets={colorPresets}
+                      onSavePreset={(color, name) => handleSavePreset(color, name)}
+                      onDeletePreset={deleteColorPreset}
+                      testId={`input-status-bg-${index}`}
+                    />
+
+                    {/* Text Color */}
+                    <SharedColorPicker
+                      label="Text"
+                      value={colors.text}
+                      onChange={(color) => {
+                        const statusKey = `${statusNumber} – ${statusName}`;
+                        setLocalColors({
+                          ...localColors,
+                          [statusKey]: { ...colors, text: color }
+                        });
+                      }}
+                      onReset={() => {
+                        const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
+                        const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
+                        if (defaultStatus) {
+                          const statusKey = `${statusNumber} – ${statusName}`;
+                          setLocalColors({
+                            ...localColors,
+                            [statusKey]: { ...colors, text: defaultStatus[1].text }
+                          });
+                        }
+                      }}
+                      colorPresets={colorPresets}
+                      onSavePreset={(color, name) => handleSavePreset(color, name)}
+                      onDeletePreset={deleteColorPreset}
+                      testId={`input-status-text-${index}`}
+                    />
+                  </div>
+                  {/* Live Preview */}
+                  <div
+                    className="px-3 py-2 rounded-sm text-sm text-center"
+                    style={{
+                      backgroundColor: colors.background,
+                      color: colors.text,
+                    }}
+                    data-testid={`preview-status-${index}`}
+                  >
+                    {statusNumber} – {statusName || `Status ${statusNumber}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Save Button */}
+          <div className="pt-4 border-t">
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="w-full"
+              data-testid="button-save-status-colors"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Colors
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
 
       <StatusManagementDialog
         open={statusManagementOpen}
         onOpenChange={setStatusManagementOpen}
       />
-    </>
+    </Popover>
   );
 }
 
@@ -235,9 +431,13 @@ export default function ClientDashboard() {
   // Use global theme hook for colors and statuses
   const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus, updateStatusEntry, colorPresets, setColorPresets, deleteColorPreset } = useCustomTheme();
 
-  // Derive statusOptions from API-fetched statusColors (already sorted by displayOrder)
+  // Derive statusOptions from API-fetched statusColors
   const statusOptions = useMemo(() => {
-    return Object.keys(statusColors);
+    return Object.keys(statusColors).sort((a, b) => {
+      const numA = parseInt(a.split(' – ')[0]);
+      const numB = parseInt(b.split(' – ')[0]);
+      return numA - numB;
+    });
   }, [statusColors]);
 
   // Address edit dialog state
@@ -2035,10 +2235,16 @@ export default function ClientDashboard() {
                         <Label htmlFor="freeze-first-column" className="text-sm cursor-pointer">Freeze Column</Label>
                       </div>
 
-                      {/* Status Button - Opens management dialog */}
+                      {/* Status Button - Opens editor dialog */}
                       <StatusEditorPopover
+                        statusOptions={statusOptions}
+                        statusColors={statusColors}
                         colorRowByStatus={colorRowByStatus}
                         setColorRowByStatus={setColorRowByStatus}
+                        updateStatusEntry={updateStatusEntry}
+                        colorPresets={colorPresets}
+                        setColorPresets={setColorPresets}
+                        deleteColorPreset={deleteColorPreset}
                         currentUser={currentUser}
                       />
                     </div>

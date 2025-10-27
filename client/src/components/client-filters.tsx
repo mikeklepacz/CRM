@@ -3,8 +3,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { X, Search } from "lucide-react";
-import { useCustomTheme } from "@/hooks/use-custom-theme";
-import { useMemo } from "react";
 
 interface ClientFiltersProps {
   search: string;
@@ -40,12 +38,6 @@ export function ClientFilters({
   showAgentFilter = true,
 }: ClientFiltersProps) {
   const hasActiveFilters = search || state !== "all" || status !== "all" || assignedAgent !== "all" || inactivityDays !== "all";
-  
-  const { statusColors } = useCustomTheme();
-  
-  const statusOptions = useMemo(() => {
-    return Object.keys(statusColors);
-  }, [statusColors]);
 
   return (
     <div className="space-y-4">
@@ -86,21 +78,10 @@ export function ClientFilters({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              {statusOptions.map((statusOption) => {
-                const colors = statusColors[statusOption];
-                return (
-                  <SelectItem 
-                    key={statusOption} 
-                    value={statusOption}
-                    style={{
-                      backgroundColor: colors?.background || 'transparent',
-                      color: colors?.text || 'inherit',
-                    }}
-                  >
-                    {statusOption}
-                  </SelectItem>
-                );
-              })}
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              <SelectItem value="claimed">Claimed</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
         </div>
