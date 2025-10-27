@@ -42,7 +42,7 @@ export function SalesInfoDialog({
   userPreferences,
 }: SalesInfoDialogProps) {
   const [notes, setNotes] = useState(storeData.notes || "");
-  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
