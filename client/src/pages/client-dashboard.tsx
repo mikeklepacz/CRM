@@ -4729,6 +4729,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                                 variant: "destructive",
                               });
                             }
+
+                            // Invalidate reminder queries to ensure UI updates immediately
+                            queryClient.invalidateQueries({
+                              predicate: (query) => {
+                                const key = query.queryKey[0];
+                                return typeof key === 'string' && key.startsWith('/api/reminders');
+                              }
+                            });
                           } catch (error: any) {
                             console.error('[REMINDER] Error:', error);
                             toast({
