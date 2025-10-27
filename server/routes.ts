@@ -8424,13 +8424,54 @@ When drafting emails or communications, ALWAYS prioritize POC (Point of Contact)
 
 EMAIL GENERATION PROTOCOL:
 When the user asks you to draft an email:
-1. FIRST: Check if POC Email exists → If yes, use it and mention: "I'll address this to [POC Email]"
-2. SECOND: If no POC Email, check if general Email exists → If yes, use it and mention: "I'll address this to [Email]"
+1. FIRST: Check if POC Email exists → If yes, use {{pocEmail}} or {{email}} placeholder and mention: "I'll address this to the POC email"
+2. SECOND: If no POC Email, check if general Email exists → If yes, use {{email}} placeholder and mention: "I'll address this to the store email"
 3. THIRD: If NEITHER email exists → Ask the user: "I don't have an email address for this contact. Would you like me to generate a template email that you can customize with the recipient later?"
    - Only proceed with email generation if the user confirms
-   - If they confirm, generate the email with placeholder recipient and make it clear they need to add the recipient
+   - If they confirm, generate the email with {{email}} placeholder and make it clear they need to add the recipient
 
-IMPORTANT: Never silently generate emails with missing recipient information. Always be transparent about which email you're using or ask for confirmation if none is available.
+TEMPLATE PLACEHOLDER SYSTEM:
+When generating emails, scripts, or templates, you MUST use ONLY the following placeholder format with double curly braces {{variable}}:
+
+Store-related variables:
+- {{storeName}}, {{storeAddress}}, {{storeCity}}, {{storeState}}
+- {{storePhone}}, {{storeWebsite}}
+- {{email}} or {{pocEmail}} - Smart fallback (uses POC email if available, otherwise store email)
+- {{pocName}}, {{pocPhone}}
+
+Agent/User variables:
+- {{agentName}}, {{agentEmail}}, {{agentPhone}}, {{agentMeetingLink}}
+
+Dynamic variables:
+- {{currentDate}}, {{currentTime}}
+
+CRITICAL PLACEHOLDER RULES:
+1. ALWAYS use the {{mustache}} syntax with double curly braces
+2. NEVER use bracket syntax like [recipient email], [Recipient's Name], [email], or [store name]
+3. NEVER use other placeholder formats like <email>, {email}, or $email
+4. These are the ONLY valid placeholders - do not invent new ones
+5. When drafting emails, use these exact placeholders - they will be automatically replaced with actual values
+
+Example CORRECT email format:
+To: {{email}}
+Subject: Follow up with {{storeName}}
+
+Body:
+Hello {{pocName}},
+
+I'm {{agentName}} from Natural Materials Unlimited...
+
+Best Regards,
+{{agentName}}
+{{agentEmail}}
+{{agentPhone}}
+
+Example INCORRECT formats to AVOID:
+- To: [recipient email] ❌
+- Hello [Recipient's Name] ❌
+- I'm [Your Name] ❌
+
+IMPORTANT: Never silently generate emails with missing recipient information. Always be transparent about which email placeholder you're using or ask for confirmation if none is available.
 
 Use this store information to provide context-aware responses. When helping draft emails or communications, reference specific details about this store.`;
         systemInstructions += contextString;
