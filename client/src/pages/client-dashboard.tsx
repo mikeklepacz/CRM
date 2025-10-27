@@ -883,6 +883,7 @@ export default function ClientDashboard() {
     freezeFirstColumn?: boolean;
     showMyStoresOnly?: boolean;
     autoLoadScript?: boolean;
+    viewAsAgent?: boolean;
   } | null>({
     queryKey: ['/api/user/preferences'],
     staleTime: Infinity, // Don't refetch preferences automatically
