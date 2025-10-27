@@ -9714,6 +9714,26 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Reorder statuses (admin only)
+  app.put('/api/statuses/reorder', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { updates } = req.body;
+      
+      if (!Array.isArray(updates)) {
+        return res.status(400).json({ message: 'Updates must be an array' });
+      }
+
+      for (const update of updates) {
+        await storage.updateStatus(update.id, { displayOrder: update.displayOrder });
+      }
+
+      res.json({ message: 'Statuses reordered successfully' });
+    } catch (error: any) {
+      console.error('Error reordering statuses:', error);
+      res.status(500).json({ message: error.message || 'Failed to reorder statuses' });
+    }
+  });
+
   // Delete status (admin only)
   app.delete('/api/statuses/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
