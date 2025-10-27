@@ -1378,8 +1378,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
 
-      // Read Commission Tracker data (all columns to get Link, Agent Name, Amount, etc.)
-      const trackerRange = `${trackerSheet.sheetName}!A:P`;
+      // Read Commission Tracker data (all columns to get Link, Agent Name, Amount, Total, etc.)
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       if (trackerRows.length <= 1) {
@@ -1391,6 +1391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
       const agentNameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
       const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+      const totalIndex = headers.findIndex((h: string) => h.toLowerCase() === 'total');
       const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
       const statusIndex = headers.findIndex((h: string) => h.toLowerCase() === 'status');
       const transactionIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'transaction id');
@@ -1416,6 +1417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const link = row[linkIndex]?.toString().trim();
         const rowAgent = row[agentNameIndex]?.toString().trim();
         const amountStr = row[amountIndex]?.toString() || '0';
+        const totalStr = row[totalIndex]?.toString() || '0';
         const dateStr = row[dateIndex]?.toString() || '';
         const status = row[statusIndex]?.toString().trim() || '';
         const transactionId = row[transactionIdIndex]?.toString().trim() || '';
@@ -1437,8 +1439,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // Parse amount
+        // Parse amount (commission) and total (gross order amount)
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
+        const total = parseFloat(String(totalStr).replace(/[^0-9.-]/g, '')) || 0;
 
         // Parse date
         let orderDate: Date | null = null;
@@ -1464,7 +1467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const client = clientMap.get(link)!;
         client.totalCommission += amount;
-        client.totalSales += amount; // For now, totalSales = commissions
+        client.totalSales += total; // Gross order amount from "Total" column
         if (orderDate && (!client.lastOrderDate || orderDate > client.lastOrderDate)) {
           client.lastOrderDate = orderDate;
         }
