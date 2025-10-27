@@ -335,8 +335,14 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                           size="sm"
                           onClick={() => setNotesClientId(client.id)}
                           data-testid={`button-notes-${client.id}`}
+                          className={`h-auto py-2 flex flex-col items-center gap-0 ${
+                            (client as any).needsFollowUp 
+                              ? 'bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200 border-red-300 dark:border-red-800' 
+                              : ''
+                          }`}
                         >
-                          Notes
+                          <span className="text-xs leading-tight">Notes</span>
+                          <span className="text-xs leading-tight">Follow up</span>
                         </Button>
                         {canClaim && (
                           <Button

@@ -45,12 +45,12 @@ export function ClientNotesDialog({ clientId, open, onOpenChange }: ClientNotesD
   }, [client]);
 
   // Get store database connection
-  const { data: googleSheets } = useQuery<any[]>({
+  const { data: sheetsData } = useQuery<{ sheets: any[] }>({
     queryKey: ["/api/sheets"],
     enabled: open,
   });
 
-  const storeDbSheet = googleSheets?.find((sheet: any) => 
+  const storeDbSheet = sheetsData?.sheets?.find((sheet: any) => 
     sheet.purpose === 'Store Database'
   );
 
