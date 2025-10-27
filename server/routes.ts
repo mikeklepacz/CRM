@@ -4747,6 +4747,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           newRow[agentNameIndex] = currentUser.agentName;
         }
 
+        // Set Status to 'Claimed' when creating new tracker row
+        const statusIndex = headers.findIndex(h => h.toLowerCase() === 'status');
+        if (statusIndex !== -1) {
+          newRow[statusIndex] = 'Claimed';
+        }
+
         // Set updated fields
         for (const [column, value] of Object.entries(updates)) {
           const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
@@ -4836,6 +4842,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const newTrackerRow = new Array(trackerHeaders.length).fill('');
         if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = link;
         if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = user.agentName;
+        
+        // Set Status to 'Claimed' when creating new tracker row
+        const trackerStatusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
+        if (trackerStatusIndex !== -1) newTrackerRow[trackerStatusIndex] = 'Claimed';
         
         const appendResult = await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
         
@@ -4960,6 +4970,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
         if (agentColumnIndex !== -1 && user?.email) {
           newRow[agentColumnIndex] = user.email;
+        }
+
+        // Set Status to 'Claimed' when creating new tracker row
+        const statusColumnIndex = headers.findIndex(h => h.toLowerCase() === 'status');
+        if (statusColumnIndex !== -1) {
+          newRow[statusColumnIndex] = 'Claimed';
         }
 
         // Set the column being edited

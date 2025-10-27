@@ -2837,6 +2837,11 @@ export default function ClientDashboard() {
                             const rowStatus = statusColumns.length > 0 ? row[statusColumns[0]] : null;
                             const rowStatusColor = colorRowByStatus && rowStatus && (statusColors as any)?.[rowStatus];
 
+                            // Check if this row is claimed by the current user (for bold text)
+                            const agentColumns = headers.filter((h: string) => h.toLowerCase() === 'agent' || h.toLowerCase() === 'agent name');
+                            const rowAgent = agentColumns.length > 0 ? row[agentColumns[0]] : null;
+                            const isClaimedByCurrentUser = rowAgent && currentUser?.agentName && rowAgent === currentUser.agentName;
+
                             // Helper function to darken a hex color (for buttons - makes them stand out more than rows)
                             const darkenColor = (hex: string, percent: number = 30) => {
                               // Handle cases where statusColor.background might be empty string
@@ -2871,6 +2876,7 @@ export default function ClientDashboard() {
                                   backgroundColor: rowStatusColor ? rowStatusColor.background : undefined,
                                   color: rowStatusColor ? rowStatusColor.text : customColors.tableTextColor,
                                   display: 'flex',
+                                  fontWeight: isClaimedByCurrentUser ? 'bold' : 'normal',
                                 }}
                               >
                                 {visibleHeaders.map((header: string) => {
