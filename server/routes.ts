@@ -3691,6 +3691,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Commission sync completed:', { commissionsCalculated, agentTransfers, sheetsUpdated });
 
+      // UPDATE TOTALS: Always update Column Q (Total) for all orders in tracker sheet
+      console.log('Starting total column sync...');
+      let totalsUpdated = 0;
+      
+      if (trackerSheet) {
+        // Reload tracker sheet to include any rows added during this sync
+        try {
+          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          const freshTrackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+          if (freshTrackerRows.length > 0) {
+            trackerRows = freshTrackerRows;
+            trackerHeaders = trackerRows[0];
+            console.log(`📋 Reloaded tracker sheet: ${trackerRows.length - 1} data rows, ${trackerHeaders.length} columns`);
+          } else {
+            console.log('⚠️  Tracker sheet is empty after reload');
+          }
+        } catch (reloadErr: any) {
+          console.error('✗ Failed to reload tracker sheet:', reloadErr.message);
+        }
+      }
+      
+      if (trackerSheet && trackerHeaders.length > 0) {
+        const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
+        const totalIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'total');
+        
+        if (orderIdIndex !== -1 && totalIndex !== -1) {
+          const allLocalOrders = await storage.getAllOrders();
+          
+          for (const localOrder of allLocalOrders) {
+            if (!localOrder.total) continue;
+            
+            // Find the row with this order ID (normalize to string for comparison)
+            const orderNumberStr = String(localOrder.orderNumber || '').trim();
+            for (let i = 1; i < trackerRows.length; i++) {
+              const sheetOrderId = String(trackerRows[i][orderIdIndex] || '').trim();
+              if (sheetOrderId === orderNumberStr) {
+                const rowNumber = i + 1; // +1 for 1-indexed Google Sheets
+                const totalColumnLetter = columnIndexToLetter(totalIndex);
+                const totalCellRange = `${trackerSheet.sheetName}!${totalColumnLetter}${rowNumber}`;
+                const orderTotal = parseFloat(localOrder.total);
+                
+                if (!isNaN(orderTotal)) {
+                  try {
+                    await googleSheets.writeSheetData(
+                      trackerSheet.spreadsheetId,
+                      totalCellRange,
+                      [[orderTotal.toFixed(2)]]
+                    );
+                    totalsUpdated++;
+                    console.log(`📝 Updated Total: Order ${localOrder.orderNumber} → $${orderTotal.toFixed(2)} (${totalCellRange})`);
+                  } catch (writeErr: any) {
+                    console.error(`✗ Failed to update total for order ${localOrder.orderNumber}:`, writeErr.message);
+                  }
+                }
+                break;
+              }
+            }
+          }
+        } else {
+          if (orderIdIndex === -1) console.log('⚠️  "Order ID" column not found in Commission Tracker');
+          if (totalIndex === -1) console.log('⚠️  "Total" column not found in Commission Tracker');
+        }
+      }
+      
+      console.log('Total column sync completed:', { totalsUpdated });
+
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
         wooLastSyncedAt: new Date()
