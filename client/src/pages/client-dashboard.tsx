@@ -4585,7 +4585,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                       value={formData.status}
                       onValueChange={(value) => handleInputChange('status', value)}
                     >
-                      <SelectTrigger id="status" data-testid="select-status">
+                      <SelectTrigger 
+                        id="status" 
+                        data-testid="select-status"
+                        style={formData.status && statusColors[formData.status] ? {
+                          backgroundColor: statusColors[formData.status].background,
+                          color: statusColors[formData.status].text,
+                        } : undefined}
+                      >
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
