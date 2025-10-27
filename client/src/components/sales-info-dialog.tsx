@@ -149,8 +149,14 @@ export function SalesInfoDialog({
         });
       }
 
-      queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
-      queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+      // Invalidate all reminder queries (including those with agent filters)
+      await queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === '/api/reminders';
+        }
+      });
+      await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
       onOpenChange(false);
     } catch (error: any) {
       toast({
