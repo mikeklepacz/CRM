@@ -130,14 +130,13 @@ export function useCustomTheme() {
     retry: false,
   });
 
-  // Build status colors from API data
+  // Build status colors from API data - ALL statuses, no filtering
   const apiStatusColors = useMemo(() => {
     const lightColors: { [key: string]: { background: string; text: string } } = {};
     const darkColors: { [key: string]: { background: string; text: string } } = {};
     
     const statuses = statusesData?.statuses || [];
     statuses
-      .filter(s => s.isActive)
       .sort((a, b) => a.displayOrder - b.displayOrder)
       .forEach(status => {
         const key = `${status.displayOrder} – ${status.name}`;
