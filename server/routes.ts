@@ -6361,6 +6361,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Get Store Database sheet to look up company names by link
+      // Debug: Check all active sheets
+      const allSheets = await storage.getAllActiveGoogleSheets();
+      console.log('[TOP-CLIENTS] All active sheets:', allSheets.map(s => ({ name: s.spreadsheetName, purpose: s.sheetPurpose })));
+      
       const storeSheet = await storage.getGoogleSheetByPurpose('clients');
       const linkToNameMap: { [normalizedLink: string]: string } = {};
 
