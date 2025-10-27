@@ -429,16 +429,7 @@ export default function ClientDashboard() {
   const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
 
   // Use global theme hook for colors and statuses
-  const { lightColors, darkColors, currentColors, statusColors, colorRowByStatus, setColorRowByStatus, updateStatusEntry, colorPresets, setColorPresets, deleteColorPreset } = useCustomTheme();
-
-  // Derive statusOptions from API-fetched statusColors
-  const statusOptions = useMemo(() => {
-    return Object.keys(statusColors).sort((a, b) => {
-      const numA = parseInt(a.split(' – ')[0]);
-      const numB = parseInt(b.split(' – ')[0]);
-      return numA - numB;
-    });
-  }, [statusColors]);
+  const { lightColors, darkColors, currentColors, statusColors, statusOptions, colorRowByStatus, setColorRowByStatus, updateStatusEntry, colorPresets, setColorPresets, deleteColorPreset } = useCustomTheme();
 
   // Address edit dialog state
   const [addressEditDialog, setAddressEditDialog] = useState<{

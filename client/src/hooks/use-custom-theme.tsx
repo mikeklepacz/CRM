@@ -130,7 +130,7 @@ export function useCustomTheme() {
     retry: false,
   });
 
-  // Build status colors from API data
+  // Build status colors and options from API data
   const apiStatusColors = useMemo(() => {
     const lightColors: { [key: string]: { background: string; text: string } } = {};
     const darkColors: { [key: string]: { background: string; text: string } } = {};
@@ -139,7 +139,8 @@ export function useCustomTheme() {
     statuses
       .sort((a, b) => a.displayOrder - b.displayOrder)
       .forEach(status => {
-        const key = `${status.displayOrder} – ${status.name}`;
+        // Use clean status name as the key
+        const key = status.name;
         lightColors[key] = {
           background: status.lightBgColor,
           text: status.lightTextColor
@@ -151,6 +152,14 @@ export function useCustomTheme() {
       });
     
     return { light: lightColors, dark: darkColors };
+  }, [statusesData]);
+
+  // Build ordered status options (just names, sorted by displayOrder)
+  const statusOptions = useMemo(() => {
+    const statuses = statusesData?.statuses || [];
+    return statuses
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map(status => status.name);
   }, [statusesData]);
 
   // Fetch user preferences (only when authenticated to avoid 401 errors)
@@ -475,6 +484,7 @@ export function useCustomTheme() {
       darkColors,
       currentColors,
       statusColors: currentColors.statusColors || {},
+      statusOptions,
       saveColors,
       resetColors,
       isLoading,
@@ -487,6 +497,6 @@ export function useCustomTheme() {
       setColorPresets,
       deleteColorPreset,
     }),
-    [lightColors, darkColors, currentColors, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending, colorPresets, setColorPresets, deleteColorPreset]
+    [lightColors, darkColors, currentColors, statusOptions, saveColors, resetColors, isLoading, saveColorsMutation.isPending, colorRowByStatus, setColorRowByStatus, updateStatusEntry, updateStatusEntryMutation.isPending, colorPresets, setColorPresets, deleteColorPreset]
   );
 }
