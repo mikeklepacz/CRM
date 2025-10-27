@@ -4342,20 +4342,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="notes">Notes</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleReDetect}
-                        data-testid="button-redetect"
-                        className="h-7"
-                      >
-                        <RefreshCw className="h-3 w-3 mr-1" />
-                        Detect Contact Info
-                      </Button>
-                    </div>
+                    <Label htmlFor="notes">Notes</Label>
                     <Textarea
                       id="notes"
                       data-testid="input-notes"
