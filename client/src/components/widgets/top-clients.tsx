@@ -22,7 +22,7 @@ export function TopClientsWidget() {
   const { data, isLoading, error } = useQuery<{ topClients: TopClient[] }>({
     queryKey: ['/api/analytics/top-clients', selectedAgentIds],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: '10' });
+      const params = new URLSearchParams({ limit: '50' });
       if (selectedAgentIds.length > 0) {
         selectedAgentIds.forEach(id => params.append('agentIds', id));
       }
@@ -64,24 +64,24 @@ export function TopClientsWidget() {
     );
   }
 
-  const topClients = data.topClients.slice(0, 10);
+  const topClients = data.topClients;
 
   return (
-    <Card className="h-full">
-      <CardHeader className="drag-handle cursor-move">
+    <Card className="h-full max-h-[600px] flex flex-col">
+      <CardHeader className="drag-handle cursor-move flex-shrink-0">
         <CardTitle className="flex items-center gap-2">
           <Trophy className="h-5 w-5 text-primary" />
           Top Clients
         </CardTitle>
         <CardDescription>Revenue leaders and order history</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-hidden">
         {topClients.length === 0 ? (
           <div className="text-center py-8 text-sm text-muted-foreground">
             No client data available
           </div>
         ) : (
-          <ScrollArea className="h-[500px] pr-4">
+          <ScrollArea className="h-full pr-4">
             <div className="space-y-3">
               {topClients.map((client, index) => (
                 <div 
