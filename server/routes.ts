@@ -3625,29 +3625,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
               commissionsCalculated++;
               console.log(`✓ Synced commission for order ${localOrder.id} → ${localOrder.salesAgentName}`);
 
-              // Update Google Sheets Commission Tracker with new agent name
+              // Update Google Sheets Commission Tracker with agent name and order total
               if (trackerSheet && trackerHeaders.length > 0) {
                 const orderIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'order id');
                 const agentNameIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+                const totalIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'total');
 
                 if (orderIdIndex !== -1 && agentNameIndex !== -1) {
                   // Find the row with this order ID
                   for (let i = 1; i < trackerRows.length; i++) {
                     if (trackerRows[i][orderIdIndex] === localOrder.orderNumber) {
-                      // Update Agent Name column - convert index to column letter (A, B, ... Z, AA, AB, etc.)
-                      const columnLetter = columnIndexToLetter(agentNameIndex);
                       const rowNumber = i + 1; // +1 for 1-indexed Google Sheets
-                      const cellRange = `${trackerSheet.sheetName}!${columnLetter}${rowNumber}`;
+                      const updates: Array<{ range: string, values: any[][] }> = [];
 
+                      // Update Agent Name column
+                      const agentColumnLetter = columnIndexToLetter(agentNameIndex);
+                      const agentCellRange = `${trackerSheet.sheetName}!${agentColumnLetter}${rowNumber}`;
+                      updates.push({
+                        range: agentCellRange,
+                        values: [[localOrder.salesAgentName]]
+                      });
+
+                      // Update Total column if it exists
+                      if (totalIndex !== -1 && localOrder.total) {
+                        const totalColumnLetter = columnIndexToLetter(totalIndex);
+                        const totalCellRange = `${trackerSheet.sheetName}!${totalColumnLetter}${rowNumber}`;
+                        const orderTotal = parseFloat(localOrder.total);
+                        if (!isNaN(orderTotal)) {
+                          updates.push({
+                            range: totalCellRange,
+                            values: [[orderTotal.toFixed(2)]]
+                          });
+                        }
+                      }
+
+                      // Write all updates
                       try {
-                        await googleSheets.writeSheetData(
-                          trackerSheet.spreadsheetId,
-                          cellRange,
-                          [[localOrder.salesAgentName]]
-                        );
+                        for (const update of updates) {
+                          await googleSheets.writeSheetData(
+                            trackerSheet.spreadsheetId,
+                            update.range,
+                            update.values
+                          );
+                        }
 
                         sheetsUpdated++;
-                        console.log(`📝 Updated Google Sheets: Order ${localOrder.orderNumber} → ${localOrder.salesAgentName} (${cellRange})`);
+                        console.log(`📝 Updated Google Sheets: Order ${localOrder.orderNumber} → ${localOrder.salesAgentName}, Total: $${localOrder.total}`);
                       } catch (writeErr: any) {
                         console.error(`✗ Failed to update Google Sheets for order ${localOrder.orderNumber}:`, writeErr.message);
                       }
