@@ -37,9 +37,11 @@ export default function AgentDashboard() {
     queryKey: ["/api/clients/my"],
   });
 
-  const { data: statuses = [] } = useQuery<Status[]>({
+  const { data: statusesResponse } = useQuery<{ statuses: Status[] }>({
     queryKey: ["/api/statuses"],
   });
+  
+  const statuses = statusesResponse?.statuses || [];
 
   useEffect(() => {
     if (!authLoading && !user) {
