@@ -45,7 +45,7 @@ export function ClientNotesDialog({ clientId, open, onOpenChange }: ClientNotesD
   }, [client]);
 
   // Get store database connection
-  const { data: googleSheets } = useQuery<any[]>({
+  const { data: googleSheets, isLoading: isSheetsLoading } = useQuery<any[]>({
     queryKey: ["/api/sheets"],
     enabled: open,
   });
@@ -53,6 +53,27 @@ export function ClientNotesDialog({ clientId, open, onOpenChange }: ClientNotesD
   const storeDbSheet = googleSheets?.find((sheet: any) => 
     sheet.purpose === 'Store Database' || sheet.sheetPurpose === 'clients'
   );
+
+  // Show error if Google Sheets not connected
+  if (open && !isSheetsLoading && !googleSheets) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Google Sheets Not Connected</DialogTitle>
+            <DialogDescription>
+              The administrator needs to connect Google Sheets in Admin Dashboard → Settings to enable notes functionality.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   // Save notes mutation
   const saveNotesMutation = useMutation({
