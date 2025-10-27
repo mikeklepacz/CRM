@@ -2960,23 +2960,23 @@ export default function ClientDashboard() {
                                                 className="w-full"
                                                 data-testid={`button-status-${rowKey}-${header}`}
                                                 disabled={!isAdmin}
-                                                style={cellValue && (customColors.statusColors as any)?.[cellValue] ? {
-                                                  backgroundColor: (customColors.statusColors as any)[cellValue].background,
-                                                  color: (customColors.statusColors as any)[cellValue].text,
+                                                style={cellValue && statusColors[cellValue] ? {
+                                                  backgroundColor: statusColors[cellValue].background,
+                                                  color: statusColors[cellValue].text,
                                                 } : undefined}
                                               >
                                                 <SelectValue placeholder="Select status..." />
                                               </SelectTrigger>
                                               <SelectContent>
                                                 {statusOptions.map((status) => {
-                                                  const statusColor = (customColors.statusColors as any)?.[status];
+                                                  const statusColor = statusColors[status];
                                                   return (
                                                     <SelectItem
                                                       key={status}
                                                       value={status}
                                                       data-testid={`option-status-${status}`}
                                                       style={statusColor ? {
-                                                        backgroundColor: darkenColor(statusColor.background, 30),
+                                                        backgroundColor: statusColor.background,
                                                         color: statusColor.text,
                                                       } : undefined}
                                                     >
@@ -3081,14 +3081,14 @@ export default function ClientDashboard() {
                                               </SelectTrigger>
                                               <SelectContent>
                                                 {statusOptions.map((status) => {
-                                                  const statusColor = (customColors.statusColors as any)?.[status];
+                                                  const statusColor = statusColors[status];
                                                   return (
                                                     <SelectItem
                                                       key={status}
                                                       value={status}
                                                       data-testid={`option-status-${status}`}
                                                       style={statusColor ? {
-                                                        backgroundColor: darkenColor(statusColor.background, 30),
+                                                        backgroundColor: statusColor.background,
                                                         color: statusColor.text,
                                                       } : undefined}
                                                     >
