@@ -15,7 +15,6 @@ import { QuickReminder } from "@/components/quick-reminder";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format, parse } from "date-fns";
 import { useAgentFilter } from '@/contexts/agent-filter-context';
-import { useAuth } from "@/hooks/useAuth";
 
 interface Reminder {
   id: string;
@@ -44,16 +43,14 @@ interface Reminder {
 
 interface RemindersWidgetProps {
   onPhoneClick?: (storeIdentifier: string, phoneNumber?: string) => void;
+  isAdmin?: boolean;
 }
 
-export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
+export function RemindersWidget({ onPhoneClick, isAdmin = false }: RemindersWidgetProps = {}) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const { selectedAgentIds } = useAgentFilter();
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
   const [deletingReminder, setDeletingReminder] = useState<Reminder | null>(null);
-  
-  const isAdmin = user?.role === 'admin';
 
   const { data, isLoading, error } = useQuery<{ reminders: Reminder[] }>({
     queryKey: ['/api/reminders', selectedAgentIds],
