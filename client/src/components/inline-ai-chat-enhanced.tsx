@@ -595,6 +595,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     
     // For Script templates, add to timeline (chronological display)
     if ((template as any).type === 'Script') {
+      // Set flag to prevent auto-scroll on script injection
+      isInjectingScriptRef.current = true;
+      
       const scriptItem: TimelineItem = {
         type: 'script',
         id: `script-${Date.now()}`,
@@ -748,6 +751,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     if (loadDefaultScriptTrigger && loadDefaultScriptTrigger > 0 && loadDefaultScriptTrigger !== lastLoadTrigger && templates.length > 0) {
       const defaultScript = templates.find(t => t.type === 'Script' && t.isDefault);
       if (defaultScript && storeContext) {
+        // Set flag to prevent auto-scroll on script injection
+        isInjectingScriptRef.current = true;
+        
         const filledContent = replaceTemplateVariables(defaultScript.content, storeContext, user);
         
         // Add script to timeline (chronological display in chat area)
@@ -1502,6 +1508,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                               size="sm"
                               className="flex-1"
                               onClick={() => {
+                                // Set flag to prevent auto-scroll on script injection
+                                isInjectingScriptRef.current = true;
+                                
                                 const filledContent = replaceTemplateVariables(template.content, storeContext, user);
                                 const scriptItem: TimelineItem = {
                                   type: 'script',
