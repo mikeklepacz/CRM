@@ -692,9 +692,12 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     setTimeline(prev => prev.filter(item => item.type === 'script'));
   }, [selectedConversationId]);
 
-  // Auto-scroll to bottom when timeline changes
+  // Track when scripts are being injected to prevent auto-scroll
+  const isInjectingScriptRef = useRef(false);
+
+  // Auto-scroll to bottom when timeline changes (but not for script injections)
   useEffect(() => {
-    if (scrollBottomRef.current) {
+    if (scrollBottomRef.current && !isInjectingScriptRef.current) {
       // Use requestAnimationFrame for better timing with DOM updates
       requestAnimationFrame(() => {
         scrollBottomRef.current?.scrollIntoView({ 
@@ -703,6 +706,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         });
       });
     }
+    // Reset flag after potential scroll
+    isInjectingScriptRef.current = false;
   }, [mergedTimeline, isSending]);
 
   // Handle context update from parent (when Save is clicked and contextUpdateTrigger changes)
