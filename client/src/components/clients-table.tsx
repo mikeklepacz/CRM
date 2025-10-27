@@ -15,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { ClientNotesDialog } from "./client-notes-dialog";
 
 // Extended client type with API-enriched fields
 interface EnrichedClient extends Client {
@@ -27,12 +26,12 @@ interface ClientsTableProps {
   clients: EnrichedClient[];
   currentUser: User;
   isLoading?: boolean;
+  onNotesClick: (clientId: string) => void;
 }
 
-export function ClientsTable({ clients, currentUser, isLoading }: ClientsTableProps) {
+export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: ClientsTableProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [notesClientId, setNotesClientId] = useState<string | null>(null);
 
   // Fetch Gmail connection status
   const { data: integrationStatus } = useQuery<{
@@ -333,7 +332,7 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setNotesClientId(client.id)}
+                          onClick={() => onNotesClick(client.id)}
                           data-testid={`button-notes-${client.id}`}
                           className={`h-auto py-2 flex flex-col items-center gap-0 ${
                             (client as any).needsFollowUp 
@@ -387,13 +386,6 @@ export function ClientsTable({ clients, currentUser, isLoading }: ClientsTablePr
         </div>
       </div>
 
-      {notesClientId && (
-        <ClientNotesDialog
-          clientId={notesClientId}
-          open={!!notesClientId}
-          onOpenChange={(open) => !open && setNotesClientId(null)}
-        />
-      )}
     </>
   );
 }

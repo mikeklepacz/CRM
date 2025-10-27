@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClientsTable } from "@/components/clients-table";
+import { ClientNotesDialog } from "@/components/client-notes-dialog";
 import { RemindersWidget } from "@/components/widgets/reminders";
 import { Users, DollarSign, TrendingUp, Calendar, Search, CalendarIcon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +33,7 @@ export default function AgentDashboard() {
   const [inactivityDays, setInactivityDays] = useState("all");
   const [timePeriod, setTimePeriod] = useState("all");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
+  const [notesClientId, setNotesClientId] = useState<string | null>(null);
 
   const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients/my"],
@@ -390,6 +392,7 @@ export default function AgentDashboard() {
               clients={filteredClients}
               currentUser={user}
               isLoading={clientsLoading}
+              onNotesClick={setNotesClientId}
             />
           )}
         </div>
@@ -410,6 +413,13 @@ export default function AgentDashboard() {
           />
         </div>
       </div>
+
+      {/* Notes Dialog - rendered outside table structure to avoid z-index issues */}
+      <ClientNotesDialog
+        clientId={notesClientId || ""}
+        open={!!notesClientId}
+        onOpenChange={(open) => !open && setNotesClientId(null)}
+      />
     </div>
   );
 }
