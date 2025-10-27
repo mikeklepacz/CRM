@@ -2963,6 +2963,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 `${sheetsConfig.commissionTrackerSheetName}!A${nextRow}:N${nextRow}`, // N is column 14
                 [rowData]
               );
+              
+              // Write Column P (updated) timestamp for new commission record
+              await googleSheets.writeCommissionTrackerTimestamp(
+                sheetsConfig.spreadsheetId,
+                sheetsConfig.commissionTrackerSheetName,
+                nextRow,
+                'P'
+              );
 
               console.log('[Webhook] ✅ Successfully wrote to Commission Tracker row', nextRow);
             }
@@ -4463,19 +4471,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (existingTrackerRow > 0) {
-        // Update existing row with agent name
+        // Update existing row with agent name and write Column O (time) timestamp
         if (trackerAgentIndex !== -1) {
           const agentColLetter = String.fromCharCode(65 + trackerAgentIndex);
           const agentCellRange = `${trackerSheet.sheetName}!${agentColLetter}${existingTrackerRow}`;
           await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentCellRange, [[user.agentName]]);
         }
+        // Write Column O (time) timestamp for claim
+        await googleSheets.writeCommissionTrackerTimestamp(
+          trackerSheet.spreadsheetId,
+          trackerSheet.sheetName,
+          existingTrackerRow,
+          'O'
+        );
         res.json({ message: "Store claimed successfully", claimed: true });
       } else {
         // Create new row in tracker
         const newTrackerRow = new Array(trackerHeaders.length).fill('');
         if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = link;
         if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = user.agentName;
-        await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+        
+        const appendResult = await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+        
+        // Write Column O (time) timestamp for new claim
+        // Calculate row number: existing rows + 1
+        const newRowNumber = trackerRows.length + 1;
+        await googleSheets.writeCommissionTrackerTimestamp(
+          trackerSheet.spreadsheetId,
+          trackerSheet.sheetName,
+          newRowNumber,
+          'O'
+        );
+        
         res.json({ message: "Store claimed successfully", claimed: true });
       }
     } catch (error: any) {

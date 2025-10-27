@@ -212,6 +212,19 @@ export async function batchUpdateSheetData(spreadsheetId: string, data: Array<{ 
   return response.data;
 }
 
+// Write timestamp to Column O (time) or Column P (updated) in Commission Tracker
+export async function writeCommissionTrackerTimestamp(
+  spreadsheetId: string, 
+  sheetName: string, 
+  rowIndex: number, 
+  column: 'O' | 'P'
+) {
+  const timestamp = new Date().toISOString();
+  const cellRange = `${sheetName}!${column}${rowIndex}`;
+  await writeSheetData(spreadsheetId, cellRange, [[timestamp]]);
+  console.log(`✅ Wrote timestamp to ${cellRange}: ${timestamp}`);
+}
+
 // --- Legacy per-user functions (for Gmail/Calendar that remain per-user) ---
 
 async function getUserAccessToken(userId: string) {
