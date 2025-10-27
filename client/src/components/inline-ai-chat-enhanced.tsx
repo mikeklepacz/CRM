@@ -1600,19 +1600,19 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
         {/* Messages - Unified Timeline */}
         <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
-          {!selectedConversationId ? (
+          {!selectedConversationId && mergedTimeline.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <Bot className="h-16 w-16 mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-lg font-semibold mb-2">Welcome to Sales Assistant</h3>
               <p className="text-muted-foreground mb-4">
-                Create a new chat to get started
+                Inject a script or create a new chat to get started
               </p>
               <Button onClick={() => createConversationMutation.mutate()} data-testid="button-start-chat">
                 <MessageSquarePlus className="h-4 w-4 mr-2" />
                 Start New Chat
               </Button>
             </div>
-          ) : messagesLoading ? (
+          ) : messagesLoading && selectedConversationId ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
