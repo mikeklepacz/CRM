@@ -15,6 +15,7 @@ import { QuickReminder } from "@/components/quick-reminder";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format, parse } from "date-fns";
 import { useAgentFilter } from '@/contexts/agent-filter-context';
+import { useAuth } from "@/hooks/useAuth";
 
 interface Reminder {
   id: string;
@@ -47,9 +48,12 @@ interface RemindersWidgetProps {
 
 export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { selectedAgentIds } = useAgentFilter();
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
   const [deletingReminder, setDeletingReminder] = useState<Reminder | null>(null);
+  
+  const isAdmin = user?.role === 'admin';
 
   const { data, isLoading, error } = useQuery<{ reminders: Reminder[] }>({
     queryKey: ['/api/reminders', selectedAgentIds],
@@ -317,29 +321,31 @@ export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
                           )}
                         </div>
                       </div>
-                      {/* Action Buttons */}
-                      <div className="flex gap-1 flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => setEditingReminder(reminder)}
-                          data-testid={`button-edit-reminder-${reminder.id}`}
-                          title="Edit reminder"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive hover:text-destructive"
-                          onClick={() => setDeletingReminder(reminder)}
-                          data-testid={`button-delete-reminder-${reminder.id}`}
-                          title="Delete reminder"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      {/* Action Buttons - Admin Only */}
+                      {isAdmin && (
+                        <div className="flex gap-1 flex-shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setEditingReminder(reminder)}
+                            data-testid={`button-edit-reminder-${reminder.id}`}
+                            title="Edit reminder"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-destructive hover:text-destructive"
+                            onClick={() => setDeletingReminder(reminder)}
+                            data-testid={`button-delete-reminder-${reminder.id}`}
+                            title="Delete reminder"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     {reminder.storeMetadata?.storeName && (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
