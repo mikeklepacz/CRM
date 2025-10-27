@@ -32,14 +32,46 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
 
   const handleCreateDraft = async () => {
     try {
-      // Validate that fields don't contain placeholders
-      if (!to || to.includes('{{') || to.includes('[recipient') || to.includes('[email') || !to.includes('@')) {
+      // Check for ANY bracket-style placeholders (broadened to catch all variants)
+      const anyBracketPattern = /\[[^\]]+\]/;
+      
+      // Validate "To" field
+      if (!to || !to.includes('@')) {
         toast({
           title: "Invalid Email Address",
-          description: "Please replace the placeholder with an actual email address before creating a draft.",
+          description: "Please provide a valid email address.",
           variant: "destructive",
         });
         return;
+      }
+      
+      // Check for ANY bracket-style placeholders in To field
+      if (anyBracketPattern.test(to)) {
+        toast({
+          title: "Invalid Placeholder Format",
+          description: "Email contains bracket-style placeholders like [recipient email]. The AI should use {{email}} format instead. Please try regenerating the email.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Check for unreplaced mustache placeholders in To field
+      if (to.includes('{{') || to.includes('}}')) {
+        toast({
+          title: "Unreplaced Placeholder",
+          description: "Email contains {{placeholder}} that wasn't replaced with an actual value. Please check the store has an email address.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Warn about bracket-style placeholders in subject or body (non-blocking)
+      if (anyBracketPattern.test(subject) || anyBracketPattern.test(body)) {
+        toast({
+          title: "Warning: Invalid Placeholders Detected",
+          description: "The email contains bracket-style placeholders. These won't be replaced. The AI should use {{storeName}} format instead.",
+          variant: "default",
+        });
       }
 
       setIsCreatingDraft(true);
