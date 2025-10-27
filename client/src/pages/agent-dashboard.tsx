@@ -5,11 +5,22 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClientFilters } from "@/components/client-filters";
+import { Input } from "@/components/ui/input";
 import { ClientsTable } from "@/components/clients-table";
 import { RemindersWidget } from "@/components/widgets/reminders";
-import { Users, DollarSign, TrendingUp, Calendar } from "lucide-react";
+import { Users, DollarSign, TrendingUp, Calendar, Search, CalendarIcon } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import type { Client } from "@shared/schema";
+import type { DateRange } from "react-day-picker";
+
+interface Status {
+  id: string;
+  name: string;
+  color: string;
+}
 
 export default function AgentDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -17,12 +28,17 @@ export default function AgentDashboard() {
   const [, setLocation] = useLocation();
   
   const [search, setSearch] = useState("");
-  const [state, setState] = useState("all");
   const [status, setStatus] = useState("all");
   const [inactivityDays, setInactivityDays] = useState("all");
+  const [timePeriod, setTimePeriod] = useState("all");
+  const [customDateRange, setCustomDateRange] = useState<{ from?: Date; to?: Date }>({});
 
   const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients/my"],
+  });
+
+  const { data: statuses = [] } = useQuery<Status[]>({
+    queryKey: ["/api/statuses"],
   });
 
   useEffect(() => {
@@ -40,31 +56,96 @@ export default function AgentDashboard() {
 
   if (authLoading || !user) return null;
 
-  const states = Array.from(new Set(
-    clients
-      .map(c => c.data?.['State'] || c.data?.['state'])
-      .filter(Boolean)
-  )).sort();
+  // Calculate time period filter dates
+  const getTimePeriodDates = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (timePeriod) {
+      case "today":
+        return { from: today, to: now };
+      case "week": {
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return { from: weekAgo, to: now };
+      }
+      case "month": {
+        const monthAgo = new Date(today);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        return { from: monthAgo, to: now };
+      }
+      case "quarter": {
+        const quarterAgo = new Date(today);
+        quarterAgo.setMonth(quarterAgo.getMonth() - 3);
+        return { from: quarterAgo, to: now };
+      }
+      case "year": {
+        const yearAgo = new Date(today);
+        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+        return { from: yearAgo, to: now };
+      }
+      case "custom":
+        return customDateRange;
+      default:
+        return { from: undefined, to: undefined };
+    }
+  };
+
+  const timeFilter = getTimePeriodDates();
 
   const filteredClients = clients.filter(client => {
+    // Search filter
     if (search) {
       const searchLower = search.toLowerCase();
       const dataStr = JSON.stringify(client.data).toLowerCase();
       if (!dataStr.includes(searchLower)) return false;
     }
-    if (state !== "all" && client.data?.['State'] !== state && client.data?.['state'] !== state) return false;
-    if (status !== "all" && client.status !== status) return false;
+    
+    // Status filter
+    if (status !== "all") {
+      const clientStatus = client.data?.['Status'] || client.data?.['status'];
+      if (clientStatus !== status) return false;
+    }
+    
+    // Inactivity filter
     if (inactivityDays !== "all") {
       if (!client.lastOrderDate) return true;
       const daysSinceOrder = Math.floor((Date.now() - new Date(client.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24));
       if (daysSinceOrder < parseInt(inactivityDays)) return false;
     }
+    
+    // Time period filter
+    if (timeFilter.from || timeFilter.to) {
+      const claimDate = client.claimDate ? new Date(client.claimDate) : null;
+      const lastOrderDate = client.lastOrderDate ? new Date(client.lastOrderDate) : null;
+      
+      // Filter by claim date or last order date
+      const relevantDate = lastOrderDate || claimDate;
+      if (!relevantDate) return false;
+      
+      if (timeFilter.from && relevantDate < timeFilter.from) return false;
+      if (timeFilter.to && relevantDate > timeFilter.to) return false;
+    }
+    
     return true;
   });
 
-  const totalSales = clients.reduce((sum, c) => sum + parseFloat(c.totalSales || '0'), 0);
-  const totalCommission = clients.reduce((sum, c) => sum + parseFloat(c.commissionTotal || '0'), 0);
-  const inactive90Days = clients.filter(c => {
+  // Calculate stats from filtered clients based on time period
+  const statsClients = clients.filter(client => {
+    if (timeFilter.from || timeFilter.to) {
+      const claimDate = client.claimDate ? new Date(client.claimDate) : null;
+      const lastOrderDate = client.lastOrderDate ? new Date(client.lastOrderDate) : null;
+      const relevantDate = lastOrderDate || claimDate;
+      if (!relevantDate) return false;
+      if (timeFilter.from && relevantDate < timeFilter.from) return false;
+      if (timeFilter.to && relevantDate > timeFilter.to) return false;
+    }
+    return true;
+  });
+
+  const totalSales = statsClients.reduce((sum, c) => sum + parseFloat(c.totalSales || '0'), 0);
+  const totalCommission = statsClients.reduce((sum, c) => sum + parseFloat(c.commissionTotal || '0'), 0);
+  const inactive90Days = statsClients.filter(c => {
     if (!c.lastOrderDate) return false;
     const days = Math.floor((Date.now() - new Date(c.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24));
     return days >= 90;
@@ -72,16 +153,10 @@ export default function AgentDashboard() {
 
   const clearFilters = () => {
     setSearch("");
-    setState("all");
     setStatus("all");
     setInactivityDays("all");
-  };
-
-  const quickFilter = (days: string) => {
-    setInactivityDays(days);
-    setSearch("");
-    setState("all");
-    setStatus("all");
+    setTimePeriod("all");
+    setCustomDateRange({});
   };
 
   return (
@@ -94,14 +169,15 @@ export default function AgentDashboard() {
             <p className="text-muted-foreground">Track your claimed clients and commissions</p>
           </div>
 
+          {/* Stat Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">My Clients</CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-semibold" data-testid="text-my-clients">{clients.length}</div>
+                <div className="text-2xl font-semibold" data-testid="text-my-clients">{statsClients.length}</div>
                 <p className="text-xs text-muted-foreground">
                   Claimed by you
                 </p>
@@ -109,7 +185,7 @@ export default function AgentDashboard() {
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -124,7 +200,7 @@ export default function AgentDashboard() {
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Commission Earned</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -139,7 +215,7 @@ export default function AgentDashboard() {
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Needs Follow-up</CardTitle>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -154,63 +230,149 @@ export default function AgentDashboard() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Filters</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={inactivityDays === "90" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => quickFilter("90")}
-                  data-testid="button-filter-90"
-                >
-                  90+ Days Inactive
-                </Button>
-                <Button
-                  variant={inactivityDays === "180" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => quickFilter("180")}
-                  data-testid="button-filter-180"
-                >
-                  180+ Days Inactive
-                </Button>
-                <Button
-                  variant={inactivityDays === "365" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => quickFilter("365")}
-                  data-testid="button-filter-365"
-                >
-                  365+ Days Inactive
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Compact Filter Bar */}
+          <div className="flex flex-wrap items-center gap-3 p-4 border rounded-lg bg-card">
+            {/* Time Period Buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Period:</span>
+              <Button
+                variant={timePeriod === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTimePeriod("all")}
+                data-testid="button-period-all"
+              >
+                All Time
+              </Button>
+              <Button
+                variant={timePeriod === "today" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTimePeriod("today")}
+                data-testid="button-period-today"
+              >
+                Today
+              </Button>
+              <Button
+                variant={timePeriod === "week" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTimePeriod("week")}
+                data-testid="button-period-week"
+              >
+                Week
+              </Button>
+              <Button
+                variant={timePeriod === "month" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTimePeriod("month")}
+                data-testid="button-period-month"
+              >
+                Month
+              </Button>
+              <Button
+                variant={timePeriod === "quarter" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTimePeriod("quarter")}
+                data-testid="button-period-quarter"
+              >
+                Quarter
+              </Button>
+              <Button
+                variant={timePeriod === "year" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTimePeriod("year")}
+                data-testid="button-period-year"
+              >
+                Year
+              </Button>
+              
+              {/* Custom Date Range Picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={timePeriod === "custom" ? "default" : "outline"}
+                    size="sm"
+                    data-testid="button-period-custom"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {timePeriod === "custom" && customDateRange.from
+                      ? `${format(customDateRange.from, "MMM d")}${customDateRange.to ? ` - ${format(customDateRange.to, "MMM d")}` : ""}`
+                      : "Custom"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="range"
+                    selected={customDateRange}
+                    onSelect={(range: DateRange | undefined) => {
+                      setCustomDateRange(range || {});
+                      if (range?.from) {
+                        setTimePeriod("custom");
+                      }
+                    }}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
 
-          <div className="space-y-6">
-            <ClientFilters
-              search={search}
-              onSearchChange={setSearch}
-              state={state}
-              onStateChange={setState}
-              status={status}
-              onStatusChange={setStatus}
-              assignedAgent="all"
-              onAssignedAgentChange={() => {}}
-              inactivityDays={inactivityDays}
-              onInactivityDaysChange={setInactivityDays}
-              onClearFilters={clearFilters}
-              states={states}
-              showAgentFilter={false}
-            />
+            <div className="h-6 w-px bg-border" />
 
-            <ClientsTable
-              clients={filteredClients}
-              currentUser={user}
-              isLoading={clientsLoading}
-            />
+            {/* Search */}
+            <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search clients..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-search"
+              />
+            </div>
+
+            {/* Status Dropdown */}
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="w-[180px]" data-testid="select-status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {statuses.map((s) => (
+                  <SelectItem key={s.id} value={s.name}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Inactivity Filter */}
+            <Select value={inactivityDays} onValueChange={setInactivityDays}>
+              <SelectTrigger className="w-[200px]" data-testid="select-inactivity">
+                <SelectValue placeholder="Inactivity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Clients</SelectItem>
+                <SelectItem value="90">Not ordered in 90 days</SelectItem>
+                <SelectItem value="180">Not ordered in 180 days</SelectItem>
+                <SelectItem value="365">Not ordered in 365 days</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Clear Filters */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              data-testid="button-clear-filters"
+            >
+              Clear All
+            </Button>
           </div>
+
+          {/* Client Table */}
+          <ClientsTable
+            clients={filteredClients}
+            currentUser={user}
+            isLoading={clientsLoading}
+          />
         </div>
       </div>
 
@@ -220,8 +382,6 @@ export default function AgentDashboard() {
           <RemindersWidget 
             onPhoneClick={(storeIdentifier, phoneNumber) => {
               console.log('[AgentDashboard] onPhoneClick called:', { storeIdentifier, phoneNumber });
-              // Navigate to Clients page with store parameter to auto-open details
-              // Phone number will trigger dial after delay
               const params = new URLSearchParams({ store: storeIdentifier });
               if (phoneNumber) {
                 params.append('phone', phoneNumber);
