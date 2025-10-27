@@ -2930,7 +2930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const updates: Array<{range: string, values: any[][]}> = [];
 
               if ('commission type' in columnMap) {
-                const col = String.fromCharCode(65 + columnMap['commission type']);
+                const col = columnIndexToLetter(columnMap['commission type']);
                 const range = `${sheetName}!${col}${rowIndex}`;
                 updates.push({
                   range,
@@ -2942,7 +2942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
 
               if ('amount' in columnMap) {
-                const col = String.fromCharCode(65 + columnMap['amount']);
+                const col = columnIndexToLetter(columnMap['amount']);
                 const range = `${sheetName}!${col}${rowIndex}`;
                 updates.push({
                   range,
@@ -2951,6 +2951,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 console.log(`Will update Amount: ${range} = $${amount.toFixed(2)}`);
               } else {
                 console.log('WARNING: "amount" column not found');
+              }
+
+              if ('total' in columnMap && !isNaN(orderTotal)) {
+                const col = columnIndexToLetter(columnMap['total']);
+                const range = `${sheetName}!${col}${rowIndex}`;
+                updates.push({
+                  range,
+                  values: [[orderTotal.toFixed(2)]]
+                });
+                console.log(`Will update Total: ${range} = $${orderTotal.toFixed(2)}`);
+              } else if (!('total' in columnMap)) {
+                console.log('WARNING: "total" column not found');
+              } else if (isNaN(orderTotal)) {
+                console.log(`WARNING: orderTotal is not a valid number: ${orderTotal}`);
               }
 
               for (const update of updates) {
