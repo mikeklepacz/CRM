@@ -164,8 +164,8 @@ export default function AgentDashboard() {
   return (
     <div className="h-[calc(100vh-4rem)] flex">
       {/* Left Column - Main Dashboard Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="container mx-auto px-4 py-6 space-y-6">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-shrink-0 px-4 py-6 space-y-6">
           <div>
             <h2 className="text-2xl font-semibold text-foreground">My Dashboard</h2>
             <p className="text-muted-foreground">Track your claimed clients and commissions</p>
@@ -368,13 +368,30 @@ export default function AgentDashboard() {
               Clear All
             </Button>
           </div>
+        </div>
 
-          {/* Client Table */}
-          <ClientsTable
-            clients={filteredClients}
-            currentUser={user}
-            isLoading={clientsLoading}
-          />
+        {/* Client Table - fills remaining space */}
+        <div className="flex-1 overflow-hidden px-4 pb-4">
+          {clients.length === 0 && !clientsLoading ? (
+            <Card className="h-full flex items-center justify-center">
+              <CardContent className="text-center py-12">
+                <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Clients Yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  You haven't claimed any clients yet. Import your store database from Google Sheets to get started.
+                </p>
+                <Button onClick={() => setLocation("/admin")} data-testid="button-goto-admin">
+                  Go to Admin Dashboard
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <ClientsTable
+              clients={filteredClients}
+              currentUser={user}
+              isLoading={clientsLoading}
+            />
+          )}
         </div>
       </div>
 
