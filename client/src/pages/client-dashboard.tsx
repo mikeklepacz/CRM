@@ -167,11 +167,10 @@ function StatusEditorPopover({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Save all status entries
+      // Save all status entries using clean status names
       for (let i = 0; i < localStatuses.length; i++) {
-        const statusEntry = Object.entries(localColors).find(([key]) => key.startsWith(`${i + 1} –`));
-        const statusName = statusEntry?.[0]?.replace(/^\d+ – /, '') || localStatuses[i].replace(/^\d+ – /, '');
-        const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
+        const statusName = localStatuses[i];
+        const colors = localColors[statusName] || { background: '#e5e7eb', text: '#000000' };
         await updateStatusEntry(i, statusName, colors.background, colors.text);
       }
 
@@ -252,37 +251,15 @@ function StatusEditorPopover({
           {/* Status Editors */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">Edit Status Colors</Label>
-            {localStatuses.map((status, index) => {
+            {localStatuses.map((statusName, index) => {
               const statusNumber = index + 1;
-              const statusEntry = Object.entries(localColors).find(([key]) => key.startsWith(`${statusNumber} –`));
-              const statusName = statusEntry?.[0]?.replace(/^\d+ – /, '') || status.replace(/^\d+ – /, '');
-              const colors = statusEntry?.[1] || { background: '#e5e7eb', text: '#000000' };
+              const colors = localColors[statusName] || { background: '#e5e7eb', text: '#000000' };
 
               return (
                 <div key={index} className="space-y-2 p-3 rounded-md border">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-muted-foreground w-4">{statusNumber}</span>
-                    {isAdmin ? (
-                      <Input
-                        value={statusName}
-                        onChange={(e) => {
-                          const newName = e.target.value;
-                          const newKey = `${statusNumber} – ${newName}`;
-                          const newColors = { ...localColors };
-                          // Remove old key
-                          const oldKey = Object.keys(newColors).find(k => k.startsWith(`${statusNumber} –`));
-                          if (oldKey) delete newColors[oldKey];
-                          // Add new key
-                          newColors[newKey] = colors;
-                          setLocalColors(newColors);
-                        }}
-                        className="flex-1"
-                        placeholder={`Status ${statusNumber} name`}
-                        data-testid={`input-status-name-${index}`}
-                      />
-                    ) : (
-                      <div className="flex-1 text-sm">{statusName}</div>
-                    )}
+                    <div className="flex-1 text-sm">{statusName}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {/* Background Color */}
@@ -290,20 +267,18 @@ function StatusEditorPopover({
                       label="Background"
                       value={colors.background}
                       onChange={(color) => {
-                        const statusKey = `${statusNumber} – ${statusName}`;
                         setLocalColors({
                           ...localColors,
-                          [statusKey]: { ...colors, background: color }
+                          [statusName]: { ...colors, background: color }
                         });
                       }}
                       onReset={() => {
                         const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
-                        const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
-                        if (defaultStatus) {
-                          const statusKey = `${statusNumber} – ${statusName}`;
+                        const defaultStatusColors = defaultColors.statusColors?.[statusName];
+                        if (defaultStatusColors) {
                           setLocalColors({
                             ...localColors,
-                            [statusKey]: { ...colors, background: defaultStatus[1].background }
+                            [statusName]: { ...colors, background: defaultStatusColors.background }
                           });
                         }
                       }}
@@ -318,20 +293,18 @@ function StatusEditorPopover({
                       label="Text"
                       value={colors.text}
                       onChange={(color) => {
-                        const statusKey = `${statusNumber} – ${statusName}`;
                         setLocalColors({
                           ...localColors,
-                          [statusKey]: { ...colors, text: color }
+                          [statusName]: { ...colors, text: color }
                         });
                       }}
                       onReset={() => {
                         const defaultColors = actualTheme === 'dark' ? defaultDarkColors : defaultLightColors;
-                        const defaultStatus = Object.entries(defaultColors.statusColors || {}).find(([key]) => key.startsWith(`${statusNumber} –`));
-                        if (defaultStatus) {
-                          const statusKey = `${statusNumber} – ${statusName}`;
+                        const defaultStatusColors = defaultColors.statusColors?.[statusName];
+                        if (defaultStatusColors) {
                           setLocalColors({
                             ...localColors,
-                            [statusKey]: { ...colors, text: defaultStatus[1].text }
+                            [statusName]: { ...colors, text: defaultStatusColors.text }
                           });
                         }
                       }}
@@ -350,7 +323,7 @@ function StatusEditorPopover({
                     }}
                     data-testid={`preview-status-${index}`}
                   >
-                    {statusNumber} – {statusName || `Status ${statusNumber}`}
+                    {statusName}
                   </div>
                 </div>
               );

@@ -50,13 +50,14 @@ export const defaultLightColors: ThemeColors = {
   columnsButton: '',
   actionButtons: '',
   statusColors: {
-    '1 – Contacted': { background: '#dbeafe', text: '#1e40af' },
-    '2 – Interested': { background: '#fef3c7', text: '#92400e' },
-    '3 – Sample Sent': { background: '#e0e7ff', text: '#3730a3' },
-    '4 – Follow-Up': { background: '#fed7aa', text: '#9a3412' },
-    '5 – Closed Won': { background: '#d1fae5', text: '#065f46' },
-    '6 – Closed Lost': { background: '#fee2e2', text: '#991b1b' },
-    '7 – Warm': { background: '#fef9c3', text: '#854d0e' },
+    'Contacted': { background: '#dbeafe', text: '#1e40af' },
+    'Interested': { background: '#fef3c7', text: '#92400e' },
+    'Sample Sent': { background: '#e0e7ff', text: '#3730a3' },
+    'Follow-Up': { background: '#fed7aa', text: '#9a3412' },
+    'Closed Won': { background: '#d1fae5', text: '#065f46' },
+    'Closed Lost': { background: '#fee2e2', text: '#991b1b' },
+    'Warm': { background: '#fef9c3', text: '#854d0e' },
+    'Claimed': { background: '#dbeafe', text: '#1e40af' },
   },
 };
 
@@ -76,13 +77,14 @@ export const defaultDarkColors: ThemeColors = {
   columnsButton: '',
   actionButtons: '',
   statusColors: {
-    '1 – Contacted': { background: '#1e3a8a', text: '#bfdbfe' },
-    '2 – Interested': { background: '#78350f', text: '#fef3c7' },
-    '3 – Sample Sent': { background: '#312e81', text: '#c7d2fe' },
-    '4 – Follow-Up': { background: '#7c2d12', text: '#fed7aa' },
-    '5 – Closed Won': { background: '#064e3b', text: '#a7f3d0' },
-    '6 – Closed Lost': { background: '#7f1d1d', text: '#fecaca' },
-    '7 – Warm': { background: '#78350f', text: '#fef9c3' },
+    'Contacted': { background: '#1e3a8a', text: '#bfdbfe' },
+    'Interested': { background: '#78350f', text: '#fef3c7' },
+    'Sample Sent': { background: '#312e81', text: '#c7d2fe' },
+    'Follow-Up': { background: '#7c2d12', text: '#fed7aa' },
+    'Closed Won': { background: '#064e3b', text: '#a7f3d0' },
+    'Closed Lost': { background: '#7f1d1d', text: '#fecaca' },
+    'Warm': { background: '#78350f', text: '#fef9c3' },
+    'Claimed': { background: '#1e3a8a', text: '#bfdbfe' },
   },
 };
 
@@ -111,6 +113,30 @@ const hexToHsl = (hex: string): { h: number; s: number; l: number } => {
   }
 
   return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+};
+
+/**
+ * Migrate legacy numbered status color keys (e.g., "1 – Claimed") to clean names (e.g., "Claimed")
+ * This ensures compatibility with the new clean status name system
+ */
+const migrateStatusColors = (statusColors: { [key: string]: { background: string; text: string } } | undefined): { [key: string]: { background: string; text: string } } => {
+  if (!statusColors) return {};
+  
+  const cleanColors: { [key: string]: { background: string; text: string } } = {};
+  
+  for (const [key, value] of Object.entries(statusColors)) {
+    // If the key matches the pattern "# – Name", extract just the name
+    const match = key.match(/^\d+\s*–\s*(.+)$/);
+    if (match) {
+      const cleanName = match[1];
+      cleanColors[cleanName] = value;
+    } else {
+      // Already a clean name
+      cleanColors[key] = value;
+    }
+  }
+  
+  return cleanColors;
 };
 
 /**
@@ -268,20 +294,38 @@ export function useCustomTheme() {
 
   // Then use those stable strings as dependencies for the merged objects
   const lightColors = useMemo(
-    () => ({
-      ...defaultLightColors,
-      statusColors: apiStatusColors.light,
-      ...userPreferences?.lightModeColors
-    }),
+    () => {
+      const userLightColors = userPreferences?.lightModeColors || {};
+      const migratedUserStatusColors = migrateStatusColors(userLightColors.statusColors);
+      
+      return {
+        ...defaultLightColors,
+        ...userLightColors,
+        // Merge clean API status colors with migrated user overrides
+        statusColors: {
+          ...apiStatusColors.light,
+          ...migratedUserStatusColors
+        }
+      };
+    },
     [lightColorsStr, apiStatusColors]
   );
 
   const darkColors = useMemo(
-    () => ({
-      ...defaultDarkColors,
-      statusColors: apiStatusColors.dark,
-      ...userPreferences?.darkModeColors
-    }),
+    () => {
+      const userDarkColors = userPreferences?.darkModeColors || {};
+      const migratedUserStatusColors = migrateStatusColors(userDarkColors.statusColors);
+      
+      return {
+        ...defaultDarkColors,
+        ...userDarkColors,
+        // Merge clean API status colors with migrated user overrides
+        statusColors: {
+          ...apiStatusColors.dark,
+          ...migratedUserStatusColors
+        }
+      };
+    },
     [darkColorsStr, apiStatusColors]
   );
 
@@ -417,21 +461,16 @@ export function useCustomTheme() {
     setColorRowByStatusMutation.mutate(value);
   }, [setColorRowByStatusMutation, userPreferences]);
 
-  // Mutation to update a single status entry
+  // Mutation to update a single status entry (using clean status names)
   const updateStatusEntryMutation = useMutation({
     mutationFn: async ({ index, name, bgColor, textColor }: { index: number; name: string; bgColor: string; textColor: string }) => {
-      const statusKey = `${index + 1} – ${name}`;
-      const newStatusColors = { ...currentColors.statusColors, [statusKey]: { background: bgColor, text: textColor } };
+      // Use clean status name as the key
+      const cleanStatusColors = migrateStatusColors(currentColors.statusColors);
+      cleanStatusColors[name] = { background: bgColor, text: textColor };
       
-      // Remove old status if name changed
-      const oldStatusKey = Object.keys(currentColors.statusColors || {}).find(key => key.startsWith(`${index + 1} –`));
-      if (oldStatusKey && oldStatusKey !== statusKey) {
-        delete newStatusColors[oldStatusKey];
-      }
+      const updatedColors = { ...currentColors, statusColors: cleanStatusColors };
       
-      const updatedColors = { ...currentColors, statusColors: newStatusColors };
-      
-      debug.statusSave('Updating status entry', { index, name, bgColor, textColor, statusKey });
+      debug.statusSave('Updating status entry', { index, name, bgColor, textColor });
       
       const preferences: any = userPreferences ? { ...userPreferences } : {};
       if (actualTheme === 'dark') {
