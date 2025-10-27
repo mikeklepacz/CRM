@@ -2683,14 +2683,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await googleSheets.writeSheetData(trackerSheet.spreadsheetId, emailRange, [[order.billingEmail]]);
           }
 
-          // Update Total column
-          const totalIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'total');
-          if (totalIndex !== -1) {
-            const totalColumn = String.fromCharCode(65 + totalIndex);
-            const totalRange = `${trackerSheet.sheetName}!${totalColumn}${existingTrackerRowIndex}`;
-            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, totalRange, [[parseFloat(order.total).toFixed(2)]]);
-          }
-
           rowsProcessed++;
           results.push({ link: storeLink, name: storeName, action: 'updated' });
         } else {
@@ -2718,12 +2710,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Set POC Email
           if (trackerPocEmailIndex !== -1 && order.billingEmail) {
             newRow[trackerPocEmailIndex] = order.billingEmail;
-          }
-
-          // Set Total
-          const totalIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'total');
-          if (totalIndex !== -1) {
-            newRow[totalIndex] = parseFloat(order.total).toFixed(2);
           }
 
           // Append new row to Commission Tracker
