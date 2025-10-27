@@ -65,13 +65,14 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
         return;
       }
       
-      // Warn about bracket-style placeholders in subject or body (non-blocking)
+      // Block bracket-style placeholders in subject or body (blocking, not warning)
       if (anyBracketPattern.test(subject) || anyBracketPattern.test(body)) {
         toast({
-          title: "Warning: Invalid Placeholders Detected",
-          description: "The email contains bracket-style placeholders. These won't be replaced. The AI should use {{storeName}} format instead.",
-          variant: "default",
+          title: "Invalid Placeholder Format",
+          description: "Email contains bracket-style placeholders. The AI should use {{storeName}} format instead. Please try regenerating the email.",
+          variant: "destructive",
         });
+        return;
       }
 
       setIsCreatingDraft(true);

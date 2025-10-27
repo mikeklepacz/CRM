@@ -912,6 +912,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields: to, subject, body" });
       }
 
+      // Server-side validation: reject bracket-style placeholders
+      const anyBracketPattern = /\[[^\]]+\]/;
+      if (anyBracketPattern.test(to) || anyBracketPattern.test(subject) || anyBracketPattern.test(body)) {
+        return res.status(400).json({ 
+          message: "Email contains invalid bracket-style placeholders like [recipient email]. Please use {{variable}} format instead." 
+        });
+      }
+
+      // Server-side validation: reject unreplaced mustache placeholders in To field
+      if (!to.includes('@') || to.includes('{{') || to.includes('}}')) {
+        return res.status(400).json({ 
+          message: "Invalid email address or unreplaced placeholder in To field." 
+        });
+      }
+
       // Get Gmail tokens
       const integration = await storage.getUserIntegration(userId);
       if (!integration?.googleCalendarAccessToken) {

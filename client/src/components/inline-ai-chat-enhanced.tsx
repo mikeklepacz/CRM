@@ -1162,8 +1162,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         body: replaceSimpleTemplateVariables(emailData.body, storeContext, user),
       };
 
-      // Check for bracket-style placeholders that AI might generate
-      const bracketPlaceholderPattern = /\[(?:recipient|email|name|store|contact|poc|your|agent)[^\]]*\]/i;
+      // Check for ANY bracket-style placeholders (broadened to catch all variants)
+      const anyBracketPattern = /\[[^\]]+\]/;
       
       // Validate that the processed email doesn't contain unreplaced variables
       if (!processedEmailData.to || 
@@ -1178,8 +1178,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         return;
       }
       
-      // Check for invalid bracket-style placeholders
-      if (bracketPlaceholderPattern.test(processedEmailData.to)) {
+      // Check for ANY bracket-style placeholders
+      if (anyBracketPattern.test(processedEmailData.to)) {
         toast({
           title: "Invalid Placeholder Format",
           description: "Email contains bracket-style placeholders like [recipient email]. The AI should use {{email}} format instead. Please try regenerating the email.",
