@@ -31,7 +31,7 @@ export default function AgentDashboard() {
   const [status, setStatus] = useState("all");
   const [inactivityDays, setInactivityDays] = useState("all");
   const [timePeriod, setTimePeriod] = useState("all");
-  const [customDateRange, setCustomDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
 
   const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients/my"],
@@ -57,6 +57,26 @@ export default function AgentDashboard() {
   }, [user, authLoading, toast]);
 
   if (authLoading || !user) return null;
+
+  // Helper function to check if a client is in the time range
+  const isClientInTimeRange = (client: Client, timeRange: { from?: Date; to?: Date } | undefined): boolean => {
+    if (!timeRange?.from && !timeRange?.to) return true;
+    
+    const claimDate = client.claimDate ? new Date(client.claimDate) : null;
+    const lastOrderDate = client.lastOrderDate ? new Date(client.lastOrderDate) : null;
+    
+    // Check if either date falls within the time period
+    const claimInRange = !!(claimDate && 
+      (!timeRange?.from || claimDate >= timeRange.from) &&
+      (!timeRange?.to || claimDate <= timeRange.to));
+      
+    const orderInRange = !!(lastOrderDate &&
+      (!timeRange?.from || lastOrderDate >= timeRange.from) &&
+      (!timeRange?.to || lastOrderDate <= timeRange.to));
+    
+    // Include client if either date is in range
+    return claimInRange || orderInRange;
+  };
 
   // Calculate time period filter dates
   const getTimePeriodDates = () => {
@@ -116,34 +136,14 @@ export default function AgentDashboard() {
       if (daysSinceOrder < parseInt(inactivityDays)) return false;
     }
     
-    // Time period filter
-    if (timeFilter.from || timeFilter.to) {
-      const claimDate = client.claimDate ? new Date(client.claimDate) : null;
-      const lastOrderDate = client.lastOrderDate ? new Date(client.lastOrderDate) : null;
-      
-      // Filter by claim date or last order date
-      const relevantDate = lastOrderDate || claimDate;
-      if (!relevantDate) return false;
-      
-      if (timeFilter.from && relevantDate < timeFilter.from) return false;
-      if (timeFilter.to && relevantDate > timeFilter.to) return false;
-    }
+    // Time period filter - include if EITHER claim date OR last order date falls within range
+    if (!isClientInTimeRange(client, timeFilter)) return false;
     
     return true;
   });
 
   // Calculate stats from filtered clients based on time period
-  const statsClients = clients.filter(client => {
-    if (timeFilter.from || timeFilter.to) {
-      const claimDate = client.claimDate ? new Date(client.claimDate) : null;
-      const lastOrderDate = client.lastOrderDate ? new Date(client.lastOrderDate) : null;
-      const relevantDate = lastOrderDate || claimDate;
-      if (!relevantDate) return false;
-      if (timeFilter.from && relevantDate < timeFilter.from) return false;
-      if (timeFilter.to && relevantDate > timeFilter.to) return false;
-    }
-    return true;
-  });
+  const statsClients = clients.filter(client => isClientInTimeRange(client, timeFilter));
 
   const totalSales = statsClients.reduce((sum, c) => sum + parseFloat(c.totalSales || '0'), 0);
   const totalCommission = statsClients.reduce((sum, c) => sum + parseFloat(c.commissionTotal || '0'), 0);
@@ -158,7 +158,7 @@ export default function AgentDashboard() {
     setStatus("all");
     setInactivityDays("all");
     setTimePeriod("all");
-    setCustomDateRange({});
+    setCustomDateRange(undefined);
   };
 
   return (
@@ -295,8 +295,8 @@ export default function AgentDashboard() {
                     data-testid="button-period-custom"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {timePeriod === "custom" && customDateRange.from
-                      ? `${format(customDateRange.from, "MMM d")}${customDateRange.to ? ` - ${format(customDateRange.to, "MMM d")}` : ""}`
+                    {timePeriod === "custom" && customDateRange?.from
+                      ? `${format(customDateRange.from, "MMM d")}${customDateRange?.to ? ` - ${format(customDateRange.to, "MMM d")}` : ""}`
                       : "Custom"}
                   </Button>
                 </PopoverTrigger>
@@ -305,7 +305,7 @@ export default function AgentDashboard() {
                     mode="range"
                     selected={customDateRange}
                     onSelect={(range: DateRange | undefined) => {
-                      setCustomDateRange(range || {});
+                      setCustomDateRange(range);
                       if (range?.from) {
                         setTimePeriod("custom");
                       }
