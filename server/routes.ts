@@ -1351,34 +1351,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/clients/my', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const selectedCategory = await storage.getSelectedCategory(userId);
-
-      // Auto-sync if needed (last sync > 5 minutes ago or never synced)
-      try {
-        const sheets = await storage.getAllActiveGoogleSheets();
-        const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-        
-        if (trackerSheet) {
-          const now = Date.now();
-          const lastSynced = trackerSheet.lastSyncedAt ? new Date(trackerSheet.lastSyncedAt).getTime() : 0;
-          const fiveMinutesAgo = now - (5 * 60 * 1000);
-          
-          if (lastSynced < fiveMinutesAgo) {
-            console.log('📊 Auto-syncing Commission Tracker (last sync:', trackerSheet.lastSyncedAt || 'never', ')');
-            await googleSheets.syncCommissionTrackerToPostgres(trackerSheet.id);
-          }
-        }
-      } catch (syncError: any) {
-        console.error('⚠️ Auto-sync failed (non-blocking):', syncError.message);
-        // Don't fail the request if sync fails
+      const currentUser = await storage.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
       }
 
-      const clients = await storage.getClientsByAgent(req.currentUser.id);
+      // Get selected category for filtering
+      const selectedCategory = await storage.getSelectedCategory(userId);
+
+      // SECURITY: Determine which agents' data to show (same as analytics)
+      let allowedAgentNames: string[] = [];
+      const isAgent = currentUser.role === 'agent';
+
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own claimed clients
+        const currentAgentName = currentUser.agentName || `${currentUser.firstName} ${currentUser.lastName}`.trim();
+        allowedAgentNames = [currentAgentName];
+      } else {
+        // Admins see all clients (no filtering)
+        allowedAgentNames = [];
+      }
+
+      // Get Commission Tracker sheet (source of truth)
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      if (!trackerSheet) {
+        return res.json([]);
+      }
+
+      // Read Commission Tracker data (all columns to get Link, Agent Name, Amount, etc.)
+      const trackerRange = `${trackerSheet.sheetName}!A:P`;
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      if (trackerRows.length <= 1) {
+        return res.json([]);
+      }
+
+      // Parse headers to find column indices
+      const headers = trackerRows[0];
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
+      const agentNameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
+      const amountIndex = headers.findIndex((h: string) => h.toLowerCase() === 'amount');
+      const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
+      const statusIndex = headers.findIndex((h: string) => h.toLowerCase() === 'status');
+
+      console.log('[MY-CLIENTS] allowedAgentNames:', allowedAgentNames);
+      console.log('[MY-CLIENTS] Processing', trackerRows.length - 1, 'tracker rows');
+
+      // Group commissions by client Link
+      const clientMap: Map<string, {
+        link: string;
+        totalCommission: number;
+        totalSales: number;
+        lastOrderDate: Date | null;
+        status: string;
+      }> = new Map();
+
+      // Process each tracker row
+      for (let i = 1; i < trackerRows.length; i++) {
+        const row = trackerRows[i];
+        const link = row[linkIndex]?.toString().trim();
+        const rowAgent = row[agentNameIndex]?.toString().trim();
+        const amountStr = row[amountIndex]?.toString() || '0';
+        const dateStr = row[dateIndex]?.toString() || '';
+        const status = row[statusIndex]?.toString().trim() || '';
+
+        if (!link) continue;
+
+        // SECURITY: Filter by allowed agent names (agents see only their clients)
+        if (allowedAgentNames.length > 0) {
+          if (agentNameIndex === -1) {
+            continue; // No agent column means agents see nothing
+          }
+          const rowAgentNormalized = rowAgent.toLowerCase().trim();
+          const isAllowed = allowedAgentNames.some(name => 
+            name.toLowerCase().trim() === rowAgentNormalized
+          );
+          if (!isAllowed) {
+            continue;
+          }
+        }
+
+        // Parse amount
+        const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
+
+        // Parse date
+        let orderDate: Date | null = null;
+        if (dateStr) {
+          const parsed = new Date(dateStr);
+          if (!isNaN(parsed.getTime())) {
+            orderDate = parsed;
+          }
+        }
+
+        // Add to client map
+        if (!clientMap.has(link)) {
+          clientMap.set(link, {
+            link,
+            totalCommission: 0,
+            totalSales: 0,
+            lastOrderDate: orderDate,
+            status: status || '7 – Warm',
+          });
+        }
+
+        const client = clientMap.get(link)!;
+        client.totalCommission += amount;
+        client.totalSales += amount; // For now, totalSales = commissions
+        if (orderDate && (!client.lastOrderDate || orderDate > client.lastOrderDate)) {
+          client.lastOrderDate = orderDate;
+        }
+        if (status) {
+          client.status = status; // Use latest status
+        }
+      }
+
+      // Get Store Database to enrich client data with names and categories
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      let enrichedClients = Array.from(clientMap.values()).map(client => ({
+        id: client.link,
+        uniqueIdentifier: client.link,
+        data: { Link: client.link, Name: '' },
+        assignedAgent: currentUser.id,
+        claimDate: null,
+        totalSales: client.totalSales.toFixed(2),
+        commissionTotal: client.totalCommission.toFixed(2),
+        category: null,
+        lastSyncedAt: new Date(),
+      }));
+
+      // Enrich with Store Database data if available
+      if (storeSheet) {
+        const storeRange = `${storeSheet.sheetName}!A:S`;
+        const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+        
+        if (storeRows.length > 1) {
+          const storeHeaders = storeRows[0];
+          const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+          const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
+          const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
+          
+          // Build lookup map for stores
+          const storeMap = new Map<string, { name: string; category: string }>();
+          for (let i = 1; i < storeRows.length; i++) {
+            const row = storeRows[i];
+            const storeLink = row[storeLinkIndex]?.toString().trim();
+            const storeName = row[storeNameIndex]?.toString().trim() || '';
+            const storeCategory = row[storeCategoryIndex]?.toString().trim() || '';
+            
+            if (storeLink) {
+              storeMap.set(storeLink, { name: storeName, category: storeCategory });
+            }
+          }
+          
+          // Enrich clients with store data
+          enrichedClients = enrichedClients.map(client => {
+            const storeData = storeMap.get(client.data.Link);
+            if (storeData) {
+              return {
+                ...client,
+                data: { ...client.data, Name: storeData.name },
+                category: storeData.category,
+              };
+            }
+            return client;
+          });
+        }
+      }
 
       // Filter by selected category if one is set
       const filteredClients = selectedCategory 
-        ? clients.filter(client => client.category === selectedCategory)
-        : clients;
+        ? enrichedClients.filter(client => client.category === selectedCategory)
+        : enrichedClients;
+
+      console.log(`[MY-CLIENTS] Returning ${filteredClients.length} clients for ${currentUser.agentName || currentUser.email}` + 
+                  (selectedCategory ? ` (filtered by category: ${selectedCategory})` : ''));
 
       res.json(filteredClients);
     } catch (error: any) {
