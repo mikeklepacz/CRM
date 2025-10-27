@@ -154,7 +154,6 @@ function SortableStatusRow({
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
       </TableCell>
-      <TableCell className="font-mono text-sm">{status.displayOrder}</TableCell>
       <TableCell className="font-medium">{status.name}</TableCell>
       <TableCell>
         <div
@@ -359,7 +358,7 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
     setEditingId(null);
     setFormData({
       name: '',
-      displayOrder: statuses.length + 1,
+      displayOrder: sortedStatuses.length + 1,
       lightBgColor: '#dbeafe',
       lightTextColor: '#1e40af',
       darkBgColor: '#1e3a8a',
@@ -403,7 +402,12 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: formData });
     } else {
-      createMutation.mutate(formData);
+      // When creating a new status, always set displayOrder to the next position
+      const newStatusData = {
+        ...formData,
+        displayOrder: sortedStatuses.length + 1,
+      };
+      createMutation.mutate(newStatusData);
     }
   };
 
@@ -617,7 +621,6 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12"></TableHead>
-                      <TableHead className="w-16">Order</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead className="w-40">Preview</TableHead>
                       <TableHead className="w-20">Actions</TableHead>
@@ -626,13 +629,13 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
                           Loading statuses...
                         </TableCell>
                       </TableRow>
                     ) : sortedStatuses.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
                           No statuses found. Create your first status above.
                         </TableCell>
                       </TableRow>
