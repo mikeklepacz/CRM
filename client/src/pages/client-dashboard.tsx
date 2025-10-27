@@ -1867,31 +1867,7 @@ export default function ClientDashboard() {
       >
       <Card style={{ backgroundColor: customColors.secondary, borderColor: customColors.border }}>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4">
-            <CardTitle>Client Dashboard</CardTitle>
-            {isRealAdmin && (
-              <div className="flex items-center gap-2">
-                <Label htmlFor="view-as-agent" className="text-sm font-medium cursor-pointer">
-                  View as Agent
-                </Label>
-                <Switch
-                  id="view-as-agent"
-                  checked={viewAsAgent}
-                  onCheckedChange={async (checked) => {
-                    setViewAsAgent(checked);
-                    try {
-                      await apiRequest('PATCH', '/api/user/preferences', {
-                        viewAsAgent: checked
-                      });
-                    } catch (error) {
-                      console.error('Failed to save view mode:', error);
-                    }
-                  }}
-                  data-testid="switch-view-as-agent"
-                />
-              </div>
-            )}
-          </div>
+          <CardTitle>Client Dashboard</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
 

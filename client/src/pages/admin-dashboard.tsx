@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,10 +9,31 @@ import { SalesReports } from "@/components/sales-reports";
 import { OpenAIManagement } from "@/components/openai-management";
 import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
 import { WebhookManagement } from "@/components/webhook-management";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+
+  // Fetch user preferences to get viewAsAgent state
+  const { data: userPreferences } = useQuery<{
+    viewAsAgent?: boolean;
+  } | null>({
+    queryKey: ['/api/user/preferences'],
+    staleTime: Infinity,
+  });
+
+  const [viewAsAgent, setViewAsAgent] = useState(userPreferences?.viewAsAgent || false);
+
+  // Sync state when preferences load
+  useEffect(() => {
+    if (userPreferences?.viewAsAgent !== undefined) {
+      setViewAsAgent(userPreferences.viewAsAgent);
+    }
+  }, [userPreferences]);
 
   useEffect(() => {
     if (!authLoading && user && user.role !== 'admin') {
@@ -31,9 +52,42 @@ export default function AdminDashboard() {
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">Admin Dashboard</h2>
-        <p className="text-muted-foreground">Manage integrations and system settings</p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-foreground">Admin Dashboard</h2>
+          <p className="text-muted-foreground">Manage integrations and system settings</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="admin-view-as-agent" className="text-sm font-medium cursor-pointer">
+            View as Agent
+          </Label>
+          <Switch
+            id="admin-view-as-agent"
+            checked={viewAsAgent}
+            onCheckedChange={async (checked) => {
+              setViewAsAgent(checked);
+              try {
+                await apiRequest('PATCH', '/api/user/preferences', {
+                  viewAsAgent: checked
+                });
+                toast({
+                  title: checked ? "Switched to Agent View" : "Switched to Admin View",
+                  description: checked 
+                    ? "You're now viewing the Client Dashboard as an agent would see it." 
+                    : "You're back to the full admin view.",
+                });
+              } catch (error) {
+                console.error('Failed to save view mode:', error);
+                toast({
+                  title: "Error",
+                  description: "Failed to save view preference",
+                  variant: "destructive",
+                });
+              }
+            }}
+            data-testid="switch-view-as-agent"
+          />
+        </div>
       </div>
 
       <Tabs defaultValue="users" className="space-y-6">
