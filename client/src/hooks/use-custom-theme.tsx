@@ -139,12 +139,11 @@ export function useCustomTheme() {
     statuses
       .sort((a, b) => a.displayOrder - b.displayOrder)
       .forEach(status => {
-        const key = `${status.displayOrder} – ${status.name}`;
-        lightColors[key] = {
+        lightColors[status.name] = {
           background: status.lightBgColor,
           text: status.lightTextColor
         };
-        darkColors[key] = {
+        darkColors[status.name] = {
           background: status.darkBgColor,
           text: status.darkTextColor
         };
@@ -261,8 +260,8 @@ export function useCustomTheme() {
   const lightColors = useMemo(
     () => ({
       ...defaultLightColors,
+      ...userPreferences?.lightModeColors,
       statusColors: apiStatusColors.light,
-      ...userPreferences?.lightModeColors
     }),
     [lightColorsStr, apiStatusColors]
   );
@@ -270,8 +269,8 @@ export function useCustomTheme() {
   const darkColors = useMemo(
     () => ({
       ...defaultDarkColors,
+      ...userPreferences?.darkModeColors,
       statusColors: apiStatusColors.dark,
-      ...userPreferences?.darkModeColors
     }),
     [darkColorsStr, apiStatusColors]
   );

@@ -44,11 +44,7 @@ export function ClientFilters({
   const { statusColors } = useCustomTheme();
   
   const statusOptions = useMemo(() => {
-    return Object.keys(statusColors).sort((a, b) => {
-      const numA = parseInt(a.split(' – ')[0]);
-      const numB = parseInt(b.split(' – ')[0]);
-      return numA - numB;
-    });
+    return Object.keys(statusColors);
   }, [statusColors]);
 
   return (
