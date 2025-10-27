@@ -20,6 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store, Bot, Download, ChevronDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -912,7 +913,11 @@ export default function ClientDashboard() {
   });
 
   // Check if user is admin - only admins can edit CRM table directly
-  const isAdmin = currentUser?.role === 'admin';
+  const isRealAdmin = currentUser?.role === 'admin';
+  
+  // View mode: admins can toggle to view as agent
+  const [viewAsAgent, setViewAsAgent] = useState(userPreferences?.viewAsAgent || false);
+  const isAdmin = isRealAdmin && !viewAsAgent;
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -1026,6 +1031,9 @@ export default function ClientDashboard() {
         }
         if (userPreferences.showMyStoresOnly !== undefined) {
           setShowMyStoresOnly(userPreferences.showMyStoresOnly);
+        }
+        if (userPreferences.viewAsAgent !== undefined) {
+          setViewAsAgent(userPreferences.viewAsAgent);
         }
 
         setPreferencesLoaded(true);
@@ -1858,7 +1866,31 @@ export default function ClientDashboard() {
       >
       <Card style={{ backgroundColor: customColors.secondary, borderColor: customColors.border }}>
         <CardHeader className="pb-3">
-          <CardTitle>Client Dashboard</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle>Client Dashboard</CardTitle>
+            {isRealAdmin && (
+              <div className="flex items-center gap-2">
+                <Label htmlFor="view-as-agent" className="text-sm font-medium cursor-pointer">
+                  View as Agent
+                </Label>
+                <Switch
+                  id="view-as-agent"
+                  checked={viewAsAgent}
+                  onCheckedChange={async (checked) => {
+                    setViewAsAgent(checked);
+                    try {
+                      await apiRequest('PATCH', '/api/user/preferences', {
+                        viewAsAgent: checked
+                      });
+                    } catch (error) {
+                      console.error('Failed to save view mode:', error);
+                    }
+                  }}
+                  data-testid="switch-view-as-agent"
+                />
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
 
