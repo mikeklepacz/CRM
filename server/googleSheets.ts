@@ -225,6 +225,138 @@ export async function writeCommissionTrackerTimestamp(
   console.log(`✅ Wrote timestamp to ${cellRange}: ${timestamp}`);
 }
 
+// Sync Commission Tracker data to PostgreSQL clients table
+// Uses Column P (updated) for incremental sync, falls back to full sync if no lastSyncedAt
+export async function syncCommissionTrackerToPostgres(trackerSheetId: string) {
+  const sheet = await storage.getGoogleSheetById(trackerSheetId);
+  if (!sheet || sheet.sheetPurpose !== 'commissions') {
+    throw new Error('Invalid Commission Tracker sheet');
+  }
+
+  console.log(`📊 Starting Commission Tracker sync for sheet: ${sheet.sheetName}`);
+  
+  // Read all Commission Tracker data
+  const range = `${sheet.sheetName}!A:P`; // Include columns up to P (updated timestamp)
+  const rows = await readSheetData(sheet.spreadsheetId, range);
+  
+  if (rows.length === 0) {
+    console.log('⚠️ Commission Tracker is empty');
+    return { synced: 0, skipped: 0 };
+  }
+
+  const headers = rows[0].map((h: string) => h.toLowerCase());
+  const linkIndex = headers.findIndex((h: string) => h === 'link');
+  const agentNameIndex = headers.findIndex((h: string) => h === 'agent name');
+  const amountIndex = headers.findIndex((h: string) => h === 'amount');
+  const updatedIndex = 14; // Column P (0-indexed = 14)
+
+  if (linkIndex === -1 || agentNameIndex === -1) {
+    throw new Error('Required columns (Link, Agent Name) not found in Commission Tracker');
+  }
+
+  const lastSyncedAt = sheet.lastSyncedAt ? new Date(sheet.lastSyncedAt) : null;
+  console.log(`📅 Last synced at: ${lastSyncedAt?.toISOString() || 'never'}`);
+
+  let synced = 0;
+  let skipped = 0;
+
+  // Track which clients have changes
+  const changedLinks = new Set<string>();
+
+  // First pass: identify which links have changed rows
+  if (lastSyncedAt) {
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const link = row[linkIndex]?.toString().trim();
+      const updatedStr = row[updatedIndex]?.toString().trim();
+      
+      if (!link) continue;
+      
+      const updatedAt = updatedStr ? new Date(updatedStr) : null;
+      
+      // If any row for this link was updated since last sync, recalculate this client's totals
+      if (updatedAt && updatedAt > lastSyncedAt) {
+        changedLinks.add(link);
+      }
+    }
+    
+    if (changedLinks.size === 0) {
+      console.log('✅ No changes detected since last sync');
+      return { synced: 0, skipped: rows.length - 1 };
+    }
+    
+    console.log(`📊 Detected ${changedLinks.size} clients with changes`);
+  }
+
+  // Second pass: calculate COMPLETE totals for changed clients (from ALL their rows)
+  const clientData: Map<string, { agentName: string; totalCommission: number; lastUpdated: Date | null }> = new Map();
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const link = row[linkIndex]?.toString().trim();
+    const agentName = row[agentNameIndex]?.toString().trim();
+    const amountStr = row[amountIndex]?.toString().trim();
+    const updatedStr = row[updatedIndex]?.toString().trim();
+
+    if (!link || !agentName) continue;
+
+    // For incremental sync: only process links that have changes (or all links if full sync)
+    if (lastSyncedAt && !changedLinks.has(link)) {
+      skipped++;
+      continue;
+    }
+
+    // Parse commission amount and timestamp
+    const amount = amountStr ? parseFloat(amountStr.replace(/[^0-9.-]+/g, '')) : 0;
+    const updatedAt = updatedStr ? new Date(updatedStr) : null;
+
+    if (!clientData.has(link)) {
+      clientData.set(link, { agentName, totalCommission: 0, lastUpdated: updatedAt });
+    }
+
+    const data = clientData.get(link)!;
+    data.totalCommission += amount;
+    if (updatedAt && (!data.lastUpdated || updatedAt > data.lastUpdated)) {
+      data.lastUpdated = updatedAt;
+    }
+  }
+
+  // Upsert clients in PostgreSQL
+  for (const [link, data] of Array.from(clientData.entries())) {
+    try {
+      // Find or create client by link
+      let client = await storage.findClientByUniqueKey('Link', link);
+
+      if (client) {
+        // Update existing client
+        await storage.updateClient(client.id, {
+          commissionTotal: data.totalCommission.toString(),
+          lastSyncedAt: new Date(),
+        });
+      } else {
+        // Create new client (this shouldn't happen often, but handle it)
+        await storage.createClient({
+          data: { Link: link },
+          uniqueIdentifier: link,
+          googleSheetId: trackerSheetId,
+          commissionTotal: data.totalCommission.toString(),
+          totalSales: '0',
+          lastSyncedAt: new Date(),
+        });
+      }
+      synced++;
+    } catch (error: any) {
+      console.error(`❌ Error syncing client ${link}:`, error.message);
+    }
+  }
+
+  // Update last synced timestamp on the sheet record
+  await storage.updateGoogleSheetLastSync(trackerSheetId);
+
+  console.log(`✅ Sync complete: ${synced} clients synced, ${skipped} rows skipped`);
+  return { synced, skipped };
+}
+
 // --- Legacy per-user functions (for Gmail/Calendar that remain per-user) ---
 
 async function getUserAccessToken(userId: string) {

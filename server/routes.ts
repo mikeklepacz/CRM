@@ -1347,10 +1347,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get agent's clients - filtered by user's selected category
+  // Auto-syncs if last sync was > 5 minutes ago
   app.get('/api/clients/my', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const selectedCategory = await storage.getSelectedCategory(userId);
+
+      // Auto-sync if needed (last sync > 5 minutes ago or never synced)
+      try {
+        const sheets = await storage.getAllActiveGoogleSheets();
+        const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+        
+        if (trackerSheet) {
+          const now = Date.now();
+          const lastSynced = trackerSheet.lastSyncedAt ? new Date(trackerSheet.lastSyncedAt).getTime() : 0;
+          const fiveMinutesAgo = now - (5 * 60 * 1000);
+          
+          if (lastSynced < fiveMinutesAgo) {
+            console.log('📊 Auto-syncing Commission Tracker (last sync:', trackerSheet.lastSyncedAt || 'never', ')');
+            await googleSheets.syncCommissionTrackerToPostgres(trackerSheet.id);
+          }
+        }
+      } catch (syncError: any) {
+        console.error('⚠️ Auto-sync failed (non-blocking):', syncError.message);
+        // Don't fail the request if sync fails
+      }
 
       const clients = await storage.getClientsByAgent(req.currentUser.id);
 
@@ -4196,18 +4217,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Manual refresh endpoint - clears cache for current user
+  // Manual refresh endpoint - syncs Commission Tracker to PostgreSQL and clears cache
   app.post('/api/sheets/refresh', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
 
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (trackerSheet) {
+        // Sync Commission Tracker data to PostgreSQL
+        const syncResult = await googleSheets.syncCommissionTrackerToPostgres(trackerSheet.id);
+        console.log(`📊 Sync result:`, syncResult);
+      } else {
+        console.log('⚠️ No Commission Tracker sheet found, skipping sync');
+      }
+
       // Clear cache for this user
       clearUserCache(userId);
 
-      res.json({ message: "Cache cleared successfully" });
+      res.json({ message: "Sync completed and cache cleared successfully" });
     } catch (error: any) {
-      console.error("Error clearing cache:", error);
-      res.status(500).json({ message: error.message || "Failed to clear cache" });
+      console.error("Error during refresh:", error);
+      res.status(500).json({ message: error.message || "Failed to refresh data" });
     }
   });
 
