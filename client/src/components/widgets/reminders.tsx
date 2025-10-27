@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bell, Clock, Download, Store, Globe, User, Mail, Phone, Trash2, Pencil } from "lucide-react";
+import { Bell, Clock, Download, Store, Globe, User, Mail, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,11 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { formatTimezoneDisplay } from "@shared/timezoneUtils";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { QuickReminder } from "@/components/quick-reminder";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { format, parse } from "date-fns";
 import { useAgentFilter } from '@/contexts/agent-filter-context';
 
 interface Reminder {
@@ -43,14 +37,11 @@ interface Reminder {
 
 interface RemindersWidgetProps {
   onPhoneClick?: (storeIdentifier: string, phoneNumber?: string) => void;
-  isAdmin?: boolean;
 }
 
-export function RemindersWidget({ onPhoneClick, isAdmin = false }: RemindersWidgetProps = {}) {
+export function RemindersWidget({ onPhoneClick }: RemindersWidgetProps = {}) {
   const { toast } = useToast();
   const { selectedAgentIds } = useAgentFilter();
-  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
-  const [deletingReminder, setDeletingReminder] = useState<Reminder | null>(null);
 
   const { data, isLoading, error } = useQuery<{ reminders: Reminder[] }>({
     queryKey: ['/api/reminders', selectedAgentIds],
@@ -71,51 +62,6 @@ export function RemindersWidget({ onPhoneClick, isAdmin = false }: RemindersWidg
   });
 
   const userTimezone = userPreferences?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest('DELETE', `/api/reminders/${id}`, {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/reminders'] });
-      toast({
-        title: "Reminder deleted",
-        description: "The reminder has been removed successfully.",
-      });
-      setDeletingReminder(null);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete reminder",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
-      const response = await apiRequest('PATCH', `/api/reminders/${id}`, updates);
-      return response;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/reminders'] });
-      toast({
-        title: "Reminder updated",
-        description: "Your changes have been saved successfully.",
-      });
-      setEditingReminder(null);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update reminder",
-        variant: "destructive",
-      });
-    },
-  });
 
   const handleExportCalendar = async () => {
     try {
@@ -318,31 +264,6 @@ export function RemindersWidget({ onPhoneClick, isAdmin = false }: RemindersWidg
                           )}
                         </div>
                       </div>
-                      {/* Action Buttons - Admin Only */}
-                      {isAdmin && (
-                        <div className="flex gap-1 flex-shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => setEditingReminder(reminder)}
-                            data-testid={`button-edit-reminder-${reminder.id}`}
-                            title="Edit reminder"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive hover:text-destructive"
-                            onClick={() => setDeletingReminder(reminder)}
-                            data-testid={`button-delete-reminder-${reminder.id}`}
-                            title="Delete reminder"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
                     </div>
                     {reminder.storeMetadata?.storeName && (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -434,88 +355,6 @@ export function RemindersWidget({ onPhoneClick, isAdmin = false }: RemindersWidg
           </div>
         )}
       </CardContent>
-
-      {/* Edit Dialog */}
-      <Dialog open={!!editingReminder} onOpenChange={(open) => !open && setEditingReminder(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Reminder</DialogTitle>
-            <DialogDescription>
-              Update the reminder details below
-            </DialogDescription>
-          </DialogHeader>
-          {editingReminder && (
-            <QuickReminder
-              defaultNote={editingReminder.description || ''}
-              defaultDate={editingReminder.scheduledDate ? parse(editingReminder.scheduledDate, 'yyyy-MM-dd', new Date()) : new Date()}
-              storeAddress={editingReminder.storeMetadata?.address}
-              storeCity={editingReminder.storeMetadata?.city}
-              storeState={editingReminder.storeMetadata?.state}
-              userTimezone={userTimezone}
-              defaultTimezoneMode={editingReminder.storeMetadata?.customerTimeZone ? "customer" : "agent"}
-              timeFormat={userPreferences?.timeFormat || "12hr"}
-              pointOfContact={editingReminder.storeMetadata?.pointOfContact}
-              pocEmail={editingReminder.storeMetadata?.pocEmail}
-              pocPhone={editingReminder.storeMetadata?.pocPhone}
-              defaultEmail={editingReminder.storeMetadata?.email}
-              defaultPhone={editingReminder.storeMetadata?.phone}
-              defaultCalendarReminders={userPreferences?.defaultCalendarReminders || [{ method: 'popup', minutes: 10 }]}
-              isSaving={updateMutation.isPending}
-              onSave={async (reminderData) => {
-                // Extract store name from title ("Follow up: StoreName" -> "StoreName")
-                const storeName = editingReminder.title.replace(/^Follow up:\s*/, '');
-                
-                await updateMutation.mutateAsync({
-                  id: editingReminder.id,
-                  updates: {
-                    title: `Follow up: ${storeName}`,
-                    description: reminderData.note,
-                    scheduledDate: format(reminderData.date, 'yyyy-MM-dd'),
-                    scheduledTime: reminderData.time,
-                    timezone: reminderData.useCustomerTimezone && reminderData.customerTimezone 
-                      ? reminderData.customerTimezone 
-                      : reminderData.agentTimezone,
-                    storeMetadata: {
-                      ...editingReminder.storeMetadata,
-                      customerTimeZone: reminderData.customerTimezone,
-                    },
-                  },
-                });
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deletingReminder} onOpenChange={(open) => !open && setDeletingReminder(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Reminder</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this reminder? This action cannot be undone.
-              {deletingReminder && (
-                <div className="mt-2 p-2 rounded-md bg-muted text-sm">
-                  <strong>{deletingReminder.title}</strong>
-                  {deletingReminder.description && (
-                    <p className="mt-1 text-muted-foreground">{deletingReminder.description}</p>
-                  )}
-                </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deletingReminder && deleteMutation.mutate(deletingReminder.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-delete"
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Card>
   );
 }
