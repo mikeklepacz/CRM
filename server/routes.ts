@@ -77,7 +77,7 @@ function clearAllCache(): void {
 
 // Clear cache entries for specific user
 function clearUserCache(userId: string): void {
-  for (const key of sheetsCache.keys()) {
+  for (const key of Array.from(sheetsCache.keys())) {
     if (key.startsWith(`${userId}:`)) {
       sheetsCache.delete(key);
     }
@@ -696,8 +696,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleRefreshToken: tokens.refresh_token,
         googleTokenExpiry: expiryTimestamp,
         googleEmail: userinfo.email,
-        connectedByUserId: userId,
-        connectedByEmail: email
+        connectedBy: userId,
+        connectedAt: new Date()
       });
 
       console.log('✅ Google Sheets connected successfully (system-wide)');
