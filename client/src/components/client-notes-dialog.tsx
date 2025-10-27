@@ -51,7 +51,7 @@ export function ClientNotesDialog({ clientId, open, onOpenChange }: ClientNotesD
   });
 
   const storeDbSheet = googleSheets?.find((sheet: any) => 
-    sheet.purpose === 'Store Database' || sheet.sheetPurpose === 'clients'
+    sheet.purpose === 'Store Database'
   );
 
   // Save notes mutation
