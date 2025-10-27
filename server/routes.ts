@@ -1399,6 +1399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('[MY-CLIENTS] allowedAgentNames:', allowedAgentNames);
       console.log('[MY-CLIENTS] Processing', trackerRows.length - 1, 'tracker rows');
+      console.log('[MY-CLIENTS] Column indices:', { linkIndex, agentNameIndex, amountIndex, totalIndex, dateIndex, statusIndex });
 
       // Group commissions by client Link
       const clientMap: Map<string, {
@@ -1442,6 +1443,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Parse amount (commission) and total (gross order amount)
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         const total = parseFloat(String(totalStr).replace(/[^0-9.-]/g, '')) || 0;
+        
+        if (total > 0) {
+          console.log(`[MY-CLIENTS] Row ${i}: link=${link}, total=${total}, amount=${amount}`);
+        }
 
         // Parse date
         let orderDate: Date | null = null;
@@ -1564,6 +1569,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[MY-CLIENTS] Returning ${filteredClients.length} clients for ${currentUser.agentName || currentUser.email}` + 
                   (selectedCategory ? ` (filtered by category: ${selectedCategory})` : ''));
+      
+      // Debug: Log total sales for each client
+      filteredClients.forEach((c, i) => {
+        console.log(`[MY-CLIENTS] Client ${i + 1}: ${c.data.Name || 'Unknown'} - totalSales=${c.totalSales}, commission=${c.commissionTotal}`);
+      });
 
       res.json(filteredClients);
     } catch (error: any) {
