@@ -6232,6 +6232,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const storeHeaders = storeRows[0];
+      console.log('[DBA-PARENT] Store Database headers:', storeHeaders);
+      
       const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const categoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
 
@@ -6256,6 +6258,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storePhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'phone');
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
 
+      console.log('[DBA-PARENT] Column indices - Name:', storeNameIndex, 'Link:', storeLinkIndex, 'Category:', categoryIndex);
+      console.log('[DBA-PARENT] Values to write - dbaName:', dbaName, 'corporateUuid:', corporateUuid, 'category:', category);
+
       const storeRow = new Array(storeHeaders.length).fill('');
       if (storeNameIndex !== -1) storeRow[storeNameIndex] = dbaName;
       if (storeLinkIndex !== -1) storeRow[storeLinkIndex] = corporateUuid;
@@ -6265,6 +6270,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (storePhoneIndex !== -1) storeRow[storePhoneIndex] = phone || '';
       if (storeEmailIndex !== -1) storeRow[storeEmailIndex] = email || '';
       if (categoryIndex !== -1) storeRow[categoryIndex] = category;
+
+      console.log('[DBA-PARENT] Complete storeRow before append:', storeRow);
+      console.log('[DBA-PARENT] storeRow[0] (should be Name):', storeRow[0]);
+      console.log('[DBA-PARENT] storeRow[storeNameIndex]:', storeRow[storeNameIndex]);
 
       await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [storeRow]);
 
