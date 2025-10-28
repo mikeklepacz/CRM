@@ -165,14 +165,31 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       }
 
       // Helper function to get value from various possible field names (case-insensitive)
+      // Checks both top-level row properties and nested row.data (for Agent Dashboard compatibility)
+      // Handles Google Sheets headers with trailing spaces and inconsistent casing
       const getValue = (fieldNames: string[]) => {
         for (const fieldName of fieldNames) {
-          // Try exact match first
-          if (row[fieldName]) return row[fieldName];
+          const normalizedFieldName = fieldName.trim().toLowerCase();
+          
+          // Try exact match on top-level row first
+          if (row[fieldName] !== undefined && row[fieldName] !== null) return row[fieldName];
 
-          // Try case-insensitive match
-          const key = Object.keys(row).find(k => k.toLowerCase() === fieldName.toLowerCase());
-          if (key && row[key]) return row[key];
+          // Try case-insensitive + trimmed match on top-level row
+          const key = Object.keys(row).find(k => k.trim().toLowerCase() === normalizedFieldName);
+          if (key && row[key] !== undefined && row[key] !== null) return row[key];
+
+          // Try exact match in row.data (for Agent Dashboard which may pass nested data)
+          if (row.data && row.data[fieldName] !== undefined && row.data[fieldName] !== null) {
+            return row.data[fieldName];
+          }
+
+          // Try case-insensitive + trimmed match in row.data
+          if (row.data) {
+            const dataKey = Object.keys(row.data).find(k => k.trim().toLowerCase() === normalizedFieldName);
+            if (dataKey && row.data[dataKey] !== undefined && row.data[dataKey] !== null) {
+              return row.data[dataKey];
+            }
+          }
         }
         return "";
       };
