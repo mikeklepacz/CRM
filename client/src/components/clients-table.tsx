@@ -145,12 +145,32 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
     },
   });
 
-  const handlePhoneClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string) => {
+  const logCallMutation = useMutation({
+    mutationFn: async ({ storeName, phoneNumber, storeLink }: { storeName: string; phoneNumber: string; storeLink: string | null }) => {
+      return await apiRequest("POST", "/api/call-history", {
+        storeName,
+        phoneNumber,
+        storeLink,
+      });
+    },
+    onError: (error: Error) => {
+      console.error('Failed to log call:', error);
+    },
+  });
+
+  const handlePhoneClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string, storeName: string, phoneNumber: string) => {
     // Don't prevent default - let the phone link open
     // Just trigger auto-claim silently in the background
     if (link && currentUser.role !== 'admin') {
       autoClaimMutation.mutate(link);
     }
+    
+    // Log the call to database
+    logCallMutation.mutate({
+      storeName,
+      phoneNumber,
+      storeLink: link || null,
+    });
   };
 
   const handleEmailClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string, email: string, companyName: string) => {
@@ -282,7 +302,7 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                             href={`tel:${phone}`} 
                             className="flex items-center gap-1 text-primary hover:underline"
                             data-testid={`link-phone-${client.id}`}
-                            onClick={(e) => handlePhoneClick(e, link)}
+                            onClick={(e) => handlePhoneClick(e, link, companyName, phone)}
                           >
                             <Phone className="h-3 w-3" />
                             {phone}
