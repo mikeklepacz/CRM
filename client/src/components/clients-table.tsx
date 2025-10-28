@@ -265,7 +265,7 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                 const canClaim = !client.assignedAgent && currentUser.role === 'agent';
                 const canUnclaim = currentUser.role === 'admin';
                 const commissionRate = getCommissionRate(client);
-                const daysSinceOrder = client.lastOrderDate 
+                const daysSinceOrder = client.lastOrderDate
                   ? Math.floor((Date.now() - new Date(client.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24))
                   : null;
                 const transactionId = client.transactionId || '';
@@ -290,8 +290,8 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                           <div className="font-medium text-foreground">{contact}</div>
                         )}
                         {email && (
-                          <a 
-                            href={`mailto:${email}`} 
+                          <a
+                            href={`mailto:${email}`}
                             className="flex items-center gap-1 text-primary hover:underline"
                             data-testid={`link-email-${client.id}`}
                             onClick={(e) => handleEmailClick(e, link, email, companyName)}
@@ -301,8 +301,8 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                           </a>
                         )}
                         {phone && (
-                          <a 
-                            href={`tel:${phone}`} 
+                          <a
+                            href={`tel:${phone}`}
                             className="flex items-center gap-1 text-primary hover:underline"
                             data-testid={`link-phone-${client.id}`}
                             onClick={(e) => handlePhoneClick(e, link, companyName, phone)}
@@ -369,8 +369,8 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                           }}
                           data-testid={`button-notes-${client.id}`}
                           className={`h-auto py-2 flex flex-col items-center gap-0 ${
-                            (client as any).needsFollowUp 
-                              ? 'bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200 border-red-300 dark:border-red-800' 
+                            (client as any).needsFollowUp
+                              ? 'bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200 border-red-300 dark:border-red-800'
                               : ''
                           }`}
                         >

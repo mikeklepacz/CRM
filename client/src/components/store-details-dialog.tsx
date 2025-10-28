@@ -1143,11 +1143,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                 <SelectContent>
                                   {statusOptions.map((status: string) => {
                                     const colors = statusColors[status];
-                                    debug.statusColors(`Applying status colors to Store Info popup dropdown`, {
-                                      status,
-                                      backgroundColor: colors?.background,
-                                      textColor: colors?.text,
-                                    });
                                     return (
                                       <SelectItem
                                         key={status}
