@@ -344,6 +344,18 @@ export const notifications = pgTable("notifications", {
   index("idx_notifications_user_created").on(table.userId, table.createdAt),
 ]);
 
+// Call History table - tracks phone calls made by agents
+export const callHistory = pgTable("call_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentId: varchar("agent_id").notNull().references(() => users.id),
+  storeName: varchar("store_name", { length: 255 }).notNull(),
+  phoneNumber: varchar("phone_number", { length: 50 }).notNull(),
+  storeLink: varchar("store_link", { length: 500 }),
+  calledAt: timestamp("called_at").defaultNow(),
+}, (table) => [
+  index("idx_call_history_agent_date").on(table.agentId, table.calledAt),
+]);
+
 // Dashboard widget layouts - save drag-and-drop positions
 export const widgetLayouts = pgTable("widget_layouts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -649,6 +661,13 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
+export const callHistoryRelations = relations(callHistory, ({ one }) => ({
+  agent: one(users, {
+    fields: [callHistory.agentId],
+    references: [users.id],
+  }),
+}));
+
 // Zod Schemas
 export const insertClientSchema = createInsertSchema(clients).omit({
   id: true,
@@ -713,6 +732,11 @@ export const insertReminderSchema = createInsertSchema(reminders).omit({
 export const insertNotificationSchema = createInsertSchema(notifications).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertCallHistorySchema = createInsertSchema(callHistory).omit({
+  id: true,
+  calledAt: true,
 });
 
 export const insertWidgetLayoutSchema = createInsertSchema(widgetLayouts).omit({
@@ -851,6 +875,8 @@ export type Reminder = typeof reminders.$inferSelect;
 export type InsertReminder = z.infer<typeof insertReminderSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type CallHistory = typeof callHistory.$inferSelect;
+export type InsertCallHistory = z.infer<typeof insertCallHistorySchema>;
 export type WidgetLayout = typeof widgetLayouts.$inferSelect;
 export type InsertWidgetLayout = z.infer<typeof insertWidgetLayoutSchema>;
 export type OpenaiSettings = typeof openaiSettings.$inferSelect;
