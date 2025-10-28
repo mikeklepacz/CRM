@@ -491,10 +491,21 @@ export default function AgentDashboard() {
                   const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
                   const phoneNumber = pocPhone || regularPhone;
                   
+                  // Construct row object in the same format as client-dashboard merged data
+                  // The StoreDetailsDialog expects direct field access (row.Name, row.Link, etc.)
+                  // plus metadata fields like _storeRowIndex and _trackerRowIndex
+                  const row = {
+                    ...client.data, // Spread all the JSONB data fields
+                    _storeRowIndex: client.googleSheetRowId || undefined, // Row index in Store Database
+                    _trackerRowIndex: undefined, // We don't have tracker row index from /api/clients/my
+                    link: storeLink, // Ensure link is accessible
+                    Link: storeLink, // Add both casings for compatibility
+                  };
+                  
                   // Open Store Details dialog locally with auto-call functionality
                   setStoreDetailsDialog({
                     open: true,
-                    row: client.data,
+                    row: row,
                     autoCallPhone: phoneNumber, // This will trigger auto-call via useEffect
                   });
                 }
