@@ -2659,7 +2659,11 @@ export default function ClientDashboard() {
               <p className="mt-2 text-muted-foreground">Loading data...</p>
             </div>
           ) : storeSheetId && trackerSheetId && data.length > 0 ? (
-            <div className="border rounded-md overflow-hidden" style={{ borderColor: customColors.border }}>
+            <>
+              <h2 className="text-2xl font-semibold mb-4" style={{ color: customColors.text }}>
+                My Client Dashboard
+              </h2>
+              <div className="border rounded-md overflow-hidden" style={{ borderColor: customColors.border }}>
               <div 
                 ref={tableContainerRef}
                 className="h-[600px] w-full overflow-auto" 
@@ -3324,6 +3328,7 @@ export default function ClientDashboard() {
                 </Table>
               </div>
             </div>
+            </>
           ) : storeSheetId && trackerSheetId ? (
             <div className="text-center py-8 text-muted-foreground">
               No data found. Check your sheet selection and try refreshing.
