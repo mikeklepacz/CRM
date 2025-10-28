@@ -35,18 +35,6 @@ export function FranchiseFinderDialog({
   const [maxLocations, setMaxLocations] = useState(100);
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
 
-  const allStates = useMemo(() => {
-    const states = new Set<string>();
-    franchises.forEach(franchise => {
-      franchise.locations.forEach(location => {
-        if (location.State) {
-          states.add(location.State);
-        }
-      });
-    });
-    return Array.from(states).sort();
-  }, [franchises]);
-
   const franchises = useMemo(() => {
     let filteredFranchises = detectFranchises(stores, minLocations, maxLocations);
 
@@ -57,6 +45,16 @@ export function FranchiseFinderDialog({
     }
     return filteredFranchises;
   }, [stores, minLocations, maxLocations, selectedStates]);
+
+  const allStates = useMemo(() => {
+    const states = new Set<string>();
+    stores.forEach(store => {
+      if (store.State) {
+        states.add(store.State);
+      }
+    });
+    return Array.from(states).sort();
+  }, [stores]);
 
   const handleSelectFranchise = (franchise: FranchiseGroup) => {
     onSelectFranchise(franchise);
@@ -123,24 +121,65 @@ export function FranchiseFinderDialog({
                   <Button variant="outline" className="w-full justify-start" data-testid="button-state-filter">
                     {selectedStates.length > 0
                       ? `${selectedStates.length} state(s) selected`
-                      : "Select States"}
+                      : "All States"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-[300px] p-0">
-                  <ScrollArea className="h-[300px] px-4 py-2">
-                    {allStates.map((state) => (
-                      <div key={state} className="flex items-center space-x-2 py-1">
-                        <Checkbox
-                          id={`state-${state}`}
-                          checked={selectedStates.includes(state)}
-                          onCheckedChange={(checked) => handleStateChange(state, checked as boolean)}
-                        />
-                        <Label htmlFor={`state-${state}`} className="font-normal text-sm cursor-pointer capitalize">
-                          {state}
-                        </Label>
+                <PopoverContent align="start" className="w-80">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">Filter by State</h4>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedStates(allStates)}
+                          data-testid="button-select-all-states"
+                        >
+                          All
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedStates([])}
+                          data-testid="button-clear-all-states"
+                        >
+                          None
+                        </Button>
                       </div>
-                    ))}
-                  </ScrollArea>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Select states to filter franchises
+                    </p>
+                    <ScrollArea className="h-64">
+                      <div className="space-y-2">
+                        {allStates.map((state) => {
+                          const stateCount = franchises.reduce((count, franchise) => {
+                            return count + franchise.locations.filter(loc => loc.State === state).length;
+                          }, 0);
+                          
+                          return (
+                            <div key={state} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`state-${state}`}
+                                checked={selectedStates.includes(state)}
+                                onCheckedChange={(checked) => handleStateChange(state, checked as boolean)}
+                                data-testid={`checkbox-state-${state}`}
+                              />
+                              <Label
+                                htmlFor={`state-${state}`}
+                                className="text-sm cursor-pointer flex-1"
+                              >
+                                {state}
+                              </Label>
+                              <span className="text-xs text-muted-foreground">
+                                ({stateCount})
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
