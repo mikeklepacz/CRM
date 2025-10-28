@@ -6249,7 +6249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // STEP 1: Write to Store Database sheet
       // Columns: A=Name, C=Link, E=Address, F=City, G=State, S=Category
-      const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'store name');
+      const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
       const storeAddressIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'address');
       const storeCityIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'city');
       const storeStateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
