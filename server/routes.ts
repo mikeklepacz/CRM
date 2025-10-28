@@ -6218,7 +6218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const corporateUuid = uuidv4();
       
       // Find Store Database sheet
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
       if (!storeSheet) {
         return res.status(404).json({ message: 'Store Database sheet not found' });
       }
