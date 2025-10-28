@@ -515,7 +515,10 @@ export default function AgentDashboard() {
                   });
                   if (!response.ok) throw new Error('Failed to fetch store data');
 
-                  const mergedData = await response.json();
+                  const responseData = await response.json();
+
+                  // Extract rows from the response (API returns { headers, rows })
+                  const mergedData = responseData?.rows || responseData;
 
                   // Add null check for mergedData
                   if (!mergedData || !Array.isArray(mergedData)) {
