@@ -17,7 +17,7 @@ interface CallHistoryDialogProps {
 
 interface CallRecord {
   id: string;
-  timestamp: string;
+  calledAt: string;
   agentId: string;
   storeName: string;
   phoneNumber: string;
@@ -83,8 +83,8 @@ export function CallHistoryDialog({ open, onOpenChange }: CallHistoryDialogProps
     if (existing) {
       existing.calls.push(call);
       existing.count++;
-      if (new Date(call.timestamp) > new Date(existing.lastCallTime)) {
-        existing.lastCallTime = call.timestamp;
+      if (new Date(call.calledAt) > new Date(existing.lastCallTime)) {
+        existing.lastCallTime = call.calledAt;
       }
     } else {
       acc.push({
@@ -93,7 +93,7 @@ export function CallHistoryDialog({ open, onOpenChange }: CallHistoryDialogProps
         storeLink: call.storeLink,
         calls: [call],
         count: 1,
-        lastCallTime: call.timestamp,
+        lastCallTime: call.calledAt,
       });
     }
     
