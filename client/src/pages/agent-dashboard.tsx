@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { ClientsTable } from "@/components/clients-table";
 import { RemindersWidget } from "@/components/widgets/reminders";
 import { CallHistoryDialog } from "@/components/call-history-dialog";
+import { StoreDetailsDialog } from "@/components/store-details-dialog";
+import { useCustomTheme } from "@/hooks/use-custom-theme";
+import { apiRequest } from "@/lib/queryClient";
 import { Users, DollarSign, TrendingUp, Calendar, Search, CalendarIcon, Phone as PhoneIcon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -34,8 +37,22 @@ export default function AgentDashboard() {
   const [timePeriod, setTimePeriod] = useState("all");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
+  
+  // Store details dialog state
+  const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
+    open: boolean;
+    row: any;
+    autoCallPhone?: string;
+  } | null>(null);
+  
+  // AI Assistant context update trigger
+  const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
+  const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
+  
+  // Custom theme for status colors
+  const { currentColors, statusColors, statusOptions } = useCustomTheme();
 
-  const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
+  const { data: clients = [], isLoading: clientsLoading, refetch: refetchClients } = useQuery<Client[]>({
     queryKey: ["/api/clients/my"],
   });
 
@@ -61,6 +78,37 @@ export default function AgentDashboard() {
   const storeDbSheet = sheetsData?.sheets?.find((sheet: any) => 
     sheet.sheetPurpose === 'Store Database' || sheet.sheetPurpose === 'clients'
   );
+
+  // Auto-call logic when dialog opens with phone number
+  useEffect(() => {
+    if (storeDetailsDialog?.open && storeDetailsDialog?.autoCallPhone) {
+      const phoneNumber = storeDetailsDialog.autoCallPhone;
+      const row = storeDetailsDialog.row;
+      const storeLink = row.link || row.Link;
+      const storeName = row.name || row.Name || row.Company || 'Unknown Store';
+      
+      // Log the call to database
+      apiRequest('POST', '/api/call-history', {
+        storeLink: storeLink,
+        phoneNumber: phoneNumber,
+        storeName: storeName,
+      }).catch(error => {
+        console.error('Failed to log call:', error);
+        // Don't block the call if logging fails
+      });
+      
+      // Trigger default script loading in AI assistant
+      setLoadDefaultScriptTrigger(prev => prev + 1);
+      
+      // Trigger phone dialer after a delay so user sees the dialog first
+      setTimeout(() => {
+        window.location.href = `tel:${phoneNumber}`;
+      }, 800);
+      
+      // Clear the autoCallPhone flag so it doesn't trigger again
+      setStoreDetailsDialog(prev => prev ? { ...prev, autoCallPhone: undefined } : null);
+    }
+  }, [storeDetailsDialog?.open, storeDetailsDialog?.autoCallPhone]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -443,13 +491,12 @@ export default function AgentDashboard() {
                   const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
                   const phoneNumber = pocPhone || regularPhone;
                   
-                  // Navigate to clients page with store parameter to auto-open dialog
-                  const params = new URLSearchParams({ store: storeLink });
-                  if (phoneNumber) {
-                    params.append('phone', phoneNumber);
-                    params.append('autoCall', 'true');
-                  }
-                  setLocation(`/clients?${params.toString()}`);
+                  // Open Store Details dialog locally with auto-call functionality
+                  setStoreDetailsDialog({
+                    open: true,
+                    row: client.data,
+                    autoCallPhone: phoneNumber, // This will trigger auto-call via useEffect
+                  });
                 }
               }}
             />
@@ -483,6 +530,30 @@ export default function AgentDashboard() {
           setLocation(`/store/${encodeURIComponent(storeLink)}?phone=${encodeURIComponent(phoneNumber)}`);
         }}
       />
+      
+      {/* Store Details Dialog */}
+      {storeDetailsDialog && (
+        <StoreDetailsDialog
+          open={storeDetailsDialog.open}
+          onOpenChange={(open) => {
+            if (!open) {
+              setStoreDetailsDialog(null);
+              // Reset script trigger so it doesn't auto-load when reopening
+              setLoadDefaultScriptTrigger(0);
+            }
+          }}
+          row={storeDetailsDialog.row}
+          trackerSheetId={trackerSheet?.id}
+          storeSheetId={storeDbSheet?.id}
+          refetch={refetchClients}
+          currentColors={currentColors}
+          statusOptions={statusOptions}
+          statusColors={statusColors}
+          contextUpdateTrigger={contextUpdateTrigger}
+          setContextUpdateTrigger={setContextUpdateTrigger}
+          loadDefaultScriptTrigger={loadDefaultScriptTrigger}
+        />
+      )}
     </div>
   );
 }
