@@ -492,12 +492,26 @@ export default function AgentDashboard() {
                 const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
                 const phoneNumber = pocPhone || regularPhone;
                 
+                // Get sheet IDs from sheets data (same pattern as Client Dashboard)
+                const storeSheetId = storeDbSheet?.id;
+                const trackerSheetId = trackerSheet?.id;
+                const joinColumn = "link";
+                
+                if (!storeSheetId || !trackerSheetId) {
+                  toast({
+                    title: "Error",
+                    description: "Sheet configuration not found. Please configure sheets in Admin Dashboard.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                
                 try {
                   // Fetch fresh data from Google Sheets (same as Client Dashboard)
                   const response = await fetch('/api/sheets/merged-data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
+                    body: JSON.stringify({ storeSheetId, trackerSheetId, joinColumn }),
                   });
                   if (!response.ok) throw new Error('Failed to fetch store data');
                   
