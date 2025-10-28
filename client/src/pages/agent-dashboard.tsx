@@ -491,11 +491,36 @@ export default function AgentDashboard() {
                   const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
                   const phoneNumber = pocPhone || regularPhone;
                   
+                  // Normalize JSONB keys: Google Sheets headers may have trailing spaces or inconsistent casing
+                  // StoreDetailsDialog expects exact matches like "Name", "Address", etc.
+                  // We need to: 1) trim whitespace, 2) standardize to Title Case
+                  const toTitleCase = (str: string): string => {
+                    return str
+                      .trim()
+                      .split(/[\s-]+/) // Split on spaces and hyphens
+                      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                      .join(' ');
+                  };
+                  
+                  const normalizedData: Record<string, any> = {};
+                  if (client.data) {
+                    Object.entries(client.data).forEach(([key, value]) => {
+                      // Trim whitespace and convert to Title Case
+                      const normalizedKey = toTitleCase(key);
+                      normalizedData[normalizedKey] = value;
+                      
+                      // Also keep original key for backward compatibility
+                      if (key !== normalizedKey) {
+                        normalizedData[key.trim()] = value;
+                      }
+                    });
+                  }
+                  
                   // Construct row object in the same format as client-dashboard merged data
                   // The StoreDetailsDialog expects direct field access (row.Name, row.Link, etc.)
                   // plus metadata fields like _storeRowIndex and _trackerRowIndex
                   const row = {
-                    ...client.data, // Spread all the JSONB data fields
+                    ...normalizedData, // Spread normalized JSONB data fields
                     _storeRowIndex: client.googleSheetRowId || undefined, // Row index in Store Database
                     _trackerRowIndex: undefined, // We don't have tracker row index from /api/clients/my
                     link: storeLink, // Ensure link is accessible
