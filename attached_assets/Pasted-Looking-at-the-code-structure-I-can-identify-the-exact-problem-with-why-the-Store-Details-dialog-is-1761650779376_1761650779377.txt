@@ -1,0 +1,104 @@
+Looking at the code structure, I can identify the exact problem with why the Store Details dialog isn't loading data when opened from the Agent Dashboard.
+
+Root Cause Analysis
+The Issue: The StoreDetailsDialog component expects data in a very specific format with specific field names, but the Agent Dashboard is passing client data in a different structure than what the dialog expects.
+
+Here's the breakdown of what's wrong:
+1. Data Structure Mismatch
+In Agent Dashboard (agent-dashboard.tsx line ~240-270):
+
+const row = {
+  ...normalizedData, // Spread normalized JSONB data fields
+  _storeRowIndex: client.googleSheetRowId || undefined,
+  _trackerRowIndex: undefined,
+  link: storeLink,
+  Link: storeLink,
+};
+The Agent Dashboard constructs a row object by:
+
+Taking the client's JSONB data field and normalizing keys to Title Case
+Adding metadata fields like _storeRowIndex
+Adding the link field
+In Store Details Dialog (store-details-dialog.tsx line ~120-170):
+
+const getValue = (fieldNames: string[]) => {
+  for (const fieldName of fieldNames) {
+    // Try exact match on top-level row first
+    if (row[fieldName] !== undefined && row[fieldName] !== null) return row[fieldName];
+    
+    // Try case-insensitive match on top-level row
+    const key = Object.keys(row).find(k => k.trim().toLowerCase() === normalizedFieldName);
+    if (key && row[key] !== undefined && row[key] !== null) return row[key];
+    
+    // Try exact match in row.data
+    if (row.data && row.data[fieldName] !== undefined && row.data[fieldName] !== null) {
+      return row.data[fieldName];
+    }
+    
+    // Try case-insensitive match in row.data
+    if (row.data) {
+      const dataKey = Object.keys(row.data).find(k => k.trim().toLowerCase() === normalizedFieldName);
+      if (dataKey && row.data[dataKey] !== undefined && row.data[dataKey] !== null) {
+        return row.data[dataKey];
+      }
+    }
+  }
+  return "";
+};
+The dialog's getValue helper function looks for fields in two places:
+
+Directly on row object
+Inside row.data object
+2. The Critical Problem
+When the Agent Dashboard creates the row object, it does this:
+
+const normalizedData: Record<string, any> = {};
+if (client.data) {
+  Object.entries(client.data).forEach(([key, value]) => {
+    const normalizedKey = toTitleCase(key);
+    normalizedData[normalizedKey] = value;
+    
+    // Also keep original key for backward compatibility
+    if (key !== normalizedKey) {
+      normalizedData[key.trim()] = value;
+    }
+  });
+}
+const row = {
+  ...normalizedData, // Fields are spread directly onto row
+  _storeRowIndex: client.googleSheetRowId || undefined,
+  _trackerRowIndex: undefined,
+  link: storeLink,
+  Link: storeLink,
+};
+The fields are spread directly onto the row object, NOT nested inside row.data.
+
+But the getValue function checks row.data as a fallback, which doesn't exist in the Agent Dashboard's row structure.
+
+3. Why It Works in Client Dashboard But Not Agent Dashboard
+Client Dashboard (client-dashboard.tsx):
+When clicking a name in the CRM table, the row object comes directly from the filteredData, which has the merged data structure from the backend. This data has fields directly on the row object, which works with the dialog's getValue function.
+
+Agent Dashboard:
+The row is manually constructed from client.data, but the structure doesn't match what the dialog expects when it falls back to checking row.data.
+
+4. Additional Issues
+Missing _trackerRowIndex
+_trackerRowIndex: undefined, // We don't have tracker row index from /api/clients/my
+The Agent Dashboard explicitly sets _trackerRowIndex to undefined, which means the dialog won't be able to save tracker field edits properly because it uses this to determine which sheet and row to update.
+
+Inconsistent Field Access Pattern
+The dialog tries multiple lookup strategies:
+
+Direct field access: row[fieldName]
+Case-insensitive: row.data[fieldName] (doesn't exist in Agent Dashboard data)
+Nested access: row.data[fieldName] (doesn't exist in Agent Dashboard data)
+Summary
+The primary issue: The row object structure from Agent Dashboard doesn't match what StoreDetailsDialog expects. The dialog's getValue function has fallback logic to check row.data, but Agent Dashboard spreads the data directly onto the row object instead of nesting it under row.data. While this should theoretically work for the top-level checks, there's likely a timing or reactivity issue where the dialog isn't properly reading the spread fields.
+
+Secondary issues:
+
+Missing _trackerRowIndex prevents tracker field updates
+The normalization logic in Agent Dashboard may create fields that don't exactly match what the dialog's getValue function is looking for
+No validation that required fields exist before opening the dialog
+The fix needs to ensure the Agent Dashboard constructs the row object in the exact same format as the Client Dashboard's merged data structure.
