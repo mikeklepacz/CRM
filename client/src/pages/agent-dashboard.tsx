@@ -470,68 +470,59 @@ export default function AgentDashboard() {
               clients={filteredClients}
               currentUser={user}
               isLoading={clientsLoading}
-              onNotesClick={(clientId) => {
+              onNotesClick={async (clientId) => {
                 const client = clients.find(c => c.id === clientId);
-                if (client) {
-                  // Get store link from client data
-                  const storeLink = client.link || client.data?.['Link'] || client.data?.['link'];
+                if (!client) return;
+                
+                // Get store link from client data
+                const storeLink = client.link || client.data?.['Link'] || client.data?.['link'];
+                
+                // Guard against missing store link
+                if (!storeLink) {
+                  toast({
+                    title: "Error",
+                    description: "Unable to identify store",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                
+                // Get phone number for auto-call - prioritize POC phone, fallback to regular phone
+                const pocPhone = client.data?.['POC Phone'] || client.data?.['poc_phone'];
+                const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
+                const phoneNumber = pocPhone || regularPhone;
+                
+                try {
+                  // Fetch fresh data from Google Sheets (same as Client Dashboard)
+                  const response = await fetch('/api/merged-data');
+                  if (!response.ok) throw new Error('Failed to fetch store data');
                   
-                  // Guard against missing store link
-                  if (!storeLink) {
+                  const mergedData = await response.json();
+                  
+                  // Find the matching store by link
+                  const row = mergedData.find((r: any) => r.Link === storeLink || r.link === storeLink);
+                  
+                  if (!row) {
                     toast({
                       title: "Error",
-                      description: "Unable to identify store",
+                      description: "Store not found in database",
                       variant: "destructive",
                     });
                     return;
                   }
                   
-                  // Get phone number - prioritize POC phone, fallback to regular phone
-                  const pocPhone = client.data?.['POC Phone'] || client.data?.['poc_phone'];
-                  const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
-                  const phoneNumber = pocPhone || regularPhone;
-                  
-                  // Normalize JSONB keys: Google Sheets headers may have trailing spaces or inconsistent casing
-                  // StoreDetailsDialog expects exact matches like "Name", "Address", etc.
-                  // We need to: 1) trim whitespace, 2) standardize to Title Case
-                  const toTitleCase = (str: string): string => {
-                    return str
-                      .trim()
-                      .split(/[\s-]+/) // Split on spaces and hyphens
-                      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                      .join(' ');
-                  };
-                  
-                  const normalizedData: Record<string, any> = {};
-                  if (client.data) {
-                    Object.entries(client.data).forEach(([key, value]) => {
-                      // Trim whitespace and convert to Title Case
-                      const normalizedKey = toTitleCase(key);
-                      normalizedData[normalizedKey] = value;
-                      
-                      // Also keep original key for backward compatibility
-                      if (key !== normalizedKey) {
-                        normalizedData[key.trim()] = value;
-                      }
-                    });
-                  }
-                  
-                  // Construct row object in the same format as client-dashboard merged data
-                  // The StoreDetailsDialog expects direct field access (row.Name, row.Link, etc.)
-                  // plus metadata fields like _storeRowIndex and _trackerRowIndex
-                  const row = {
-                    ...normalizedData, // Spread normalized JSONB data fields
-                    _storeRowIndex: client.googleSheetRowId || undefined, // Row index in Store Database
-                    _trackerRowIndex: undefined, // We don't have tracker row index from /api/clients/my
-                    link: storeLink, // Ensure link is accessible
-                    Link: storeLink, // Add both casings for compatibility
-                  };
-                  
-                  // Open Store Details dialog locally with auto-call functionality
+                  // Open Store Details dialog with fresh Google Sheets data
                   setStoreDetailsDialog({
                     open: true,
-                    row: row,
+                    row: row, // Pass the exact same structure as Client Dashboard
                     autoCallPhone: phoneNumber, // This will trigger auto-call via useEffect
+                  });
+                } catch (error) {
+                  console.error('Error fetching store data:', error);
+                  toast({
+                    title: "Error",
+                    description: "Failed to load store details",
+                    variant: "destructive",
                   });
                 }
               }}
