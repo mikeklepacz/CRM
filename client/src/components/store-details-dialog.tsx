@@ -41,9 +41,9 @@ const getLinkValue = (row: any): string | undefined => {
 };
 
 // Store Details Dialog Component
-export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger }: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void; 
+export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   row: any;
   trackerSheetId: string | undefined;
   storeSheetId: string | undefined;
@@ -139,7 +139,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       ...selectedStores.map(s => s.link)
     ]);
 
-    return allStores.filter((store: any) => 
+    return allStores.filter((store: any) =>
       !excludedLinks.has(store.link) &&
       (store.name?.toLowerCase().includes(searchLower) ||
       store.city?.toLowerCase().includes(searchLower) ||
@@ -170,7 +170,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       const getValue = (fieldNames: string[]) => {
         for (const fieldName of fieldNames) {
           const normalizedFieldName = fieldName.trim().toLowerCase();
-          
+
           // Try exact match on top-level row first
           if (row[fieldName] !== undefined && row[fieldName] !== null) return row[fieldName];
 
@@ -256,7 +256,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         setCurrentDbaStores([]);
         setSelectedStores([]);
         // Let the dbaStores query populate currentDbaStores when it completes
-      } 
+      }
       // Priority 3: No DBA or franchise
       else {
         setMultiLocationMode(false);
@@ -319,7 +319,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         // If it's a 10-digit number, format it
         if (rawPhone.length === 10) {
           formatted = `+1 (${rawPhone.slice(0, 3)}) ${rawPhone.slice(3, 6)}-${rawPhone.slice(6)}`;
-        } 
+        }
         // If it's 11 digits starting with 1, format it
         else if (rawPhone.length === 11 && rawPhone.startsWith('1')) {
           formatted = `+1 (${rawPhone.slice(1, 4)}) ${rawPhone.slice(4, 7)}-${rawPhone.slice(7)}`;
@@ -653,7 +653,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const handleCallFromDetails = async () => {
     // Use POC phone if available, fallback to regular phone
     const phoneNumber = formData.poc_phone || formData.phone;
-    
+
     if (!phoneNumber) {
       toast({
         title: "No Phone Number",
@@ -664,7 +664,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
     }
 
     const storeLink = formData.link;
-    
+
     if (!storeLink) {
       toast({
         title: "Error",
@@ -785,873 +785,876 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       </AlertDialog>
 
       <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden flex flex-col" : "max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"}>
-        <DialogHeader>
-          <DialogTitle className="text-center">Store Details</DialogTitle>
-          <div className="flex items-center justify-between gap-4 pt-2">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="show-assistant"
-                  checked={showAssistant}
-                  onCheckedChange={(checked) => handleShowAssistantChange(!!checked)}
-                  data-testid="checkbox-show-assistant"
-                />
-                <Label 
-                  htmlFor="show-assistant" 
-                  className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  Show AI Assistant
-                </Label>
+        <DialogContent className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden flex flex-col" : "max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"}>
+          <DialogHeader>
+            <DialogTitle className="text-center">Store Details</DialogTitle>
+            <DialogDescription>
+              View and edit store information, contact details, and notes
+            </DialogDescription>
+            <div className="flex items-center justify-between gap-4 pt-2">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="show-assistant"
+                    checked={showAssistant}
+                    onCheckedChange={(checked) => handleShowAssistantChange(!!checked)}
+                    data-testid="checkbox-show-assistant"
+                  />
+                  <Label
+                    htmlFor="show-assistant"
+                    className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Show AI Assistant
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="auto-load-script"
+                    checked={autoLoadScript}
+                    onCheckedChange={(checked) => handleAutoLoadScriptChange(!!checked)}
+                    data-testid="checkbox-auto-load-script"
+                  />
+                  <Label
+                    htmlFor="auto-load-script"
+                    className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
+                  >
+                    Auto Load Script
+                  </Label>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
-                  id="auto-load-script"
-                  checked={autoLoadScript}
-                  onCheckedChange={(checked) => handleAutoLoadScriptChange(!!checked)}
-                  data-testid="checkbox-auto-load-script"
+                  id="listing-active"
+                  checked={formData.open === "TRUE" || formData.open === "true"}
+                  onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
+                  data-testid="checkbox-listing-active"
                 />
-                <Label 
-                  htmlFor="auto-load-script" 
-                  className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
+                <Label
+                  htmlFor="listing-active"
+                  className="text-sm font-medium cursor-pointer whitespace-nowrap"
                 >
-                  Auto Load Script
+                  Listing Active
                 </Label>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="listing-active"
-                checked={formData.open === "TRUE" || formData.open === "true"}
-                onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
-                data-testid="checkbox-listing-active"
-              />
-              <Label 
-                htmlFor="listing-active" 
-                className="text-sm font-medium cursor-pointer whitespace-nowrap"
-              >
-                Listing Active
-              </Label>
-            </div>
-          </div>
-        </DialogHeader>
+          </DialogHeader>
 
-        <div className="flex gap-4 overflow-hidden flex-1">
-          {/* AI Assistant Panel - NOW ON LEFT */}
-          {showAssistant && (
-            <div className="w-1/2 border-r pr-4 flex flex-col overflow-hidden">
-              <InlineAIChatEnhanced 
-                storeContext={{
-                  sales_ready_summary: formData.sales_ready_summary,
-                  notes: formData.notes,
-                  point_of_contact: formData.point_of_contact,
-                  poc_email: formData.poc_email,
-                  poc_phone: formData.poc_phone,
-                  status: formData.status,
-                  follow_up_date: formData.follow_up_date,
-                  next_action: formData.next_action,
-                  dba: dbaName,
-                  name: formData.name,
-                  type: formData.type,
-                  link: formData.link,
-                  address: formData.address,
-                  city: formData.city,
-                  state: formData.state,
-                  phone: formData.phone,
-                  email: formData.email,
-                  website: formData.website,
-                }}
-                contextUpdateTrigger={contextUpdateTrigger}
-                loadDefaultScriptTrigger={loadDefaultScriptTrigger}
-              />
-            </div>
-          )}
-
-          {/* Store Details Content - NOW ON RIGHT */}
-          <div className={showAssistant ? "w-1/2 flex flex-col overflow-hidden pl-2" : "w-full flex flex-col overflow-hidden"}>
-            {!row ? (
-              <div className="flex items-center justify-center h-64">
-                <p>No store data available</p>
+          <div className="flex gap-4 overflow-hidden flex-1">
+            {/* AI Assistant Panel - NOW ON LEFT */}
+            {showAssistant && (
+              <div className="w-1/2 border-r pr-4 flex flex-col overflow-hidden">
+                <InlineAIChatEnhanced
+                  storeContext={{
+                    sales_ready_summary: formData.sales_ready_summary,
+                    notes: formData.notes,
+                    point_of_contact: formData.point_of_contact,
+                    poc_email: formData.poc_email,
+                    poc_phone: formData.poc_phone,
+                    status: formData.status,
+                    follow_up_date: formData.follow_up_date,
+                    next_action: formData.next_action,
+                    dba: dbaName,
+                    name: formData.name,
+                    type: formData.type,
+                    link: formData.link,
+                    address: formData.address,
+                    city: formData.city,
+                    state: formData.state,
+                    phone: formData.phone,
+                    email: formData.email,
+                    website: formData.website,
+                  }}
+                  contextUpdateTrigger={contextUpdateTrigger}
+                  loadDefaultScriptTrigger={loadDefaultScriptTrigger}
+                />
               </div>
-            ) : (
-              <>
-              <div className="flex-1 overflow-y-auto">
-              <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
-            {/* Sales Info - AT THE TOP - EXPANDED BY DEFAULT */}
-            <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
-              <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-sales-info">
-                Sales Info
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="sales_ready_summary">Sales-ready Summary</Label>
-                    <Textarea
-                      id="sales_ready_summary"
-                      data-testid="input-sales-ready-summary"
-                      value={formData.sales_ready_summary}
-                      onChange={(e) => handleInputChange('sales_ready_summary', e.target.value)}
-                      placeholder="Summary for sales team..."
-                      rows={4}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="notes">Notes</Label>
-                    <Textarea
-                      id="notes"
-                      data-testid="input-notes"
-                      value={formData.notes}
-                      onChange={(e) => handleInputChange('notes', e.target.value)}
-                      placeholder="Call notes, contact info from store worker..."
-                      rows={4}
-                    />
-                  </div>
+            )}
 
-                  {/* Multiple Locations Feature */}
-                  <div className="space-y-4 pt-4 border-t">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="multiple_locations"
-                        checked={multiLocationMode}
-                        onCheckedChange={(checked) => {
-                          setMultiLocationMode(checked as boolean);
-                          if (!checked) {
-                            setSelectedStores([]);
-                            setCurrentDbaStores([]);
-                            setDbaName("");
-                            setStoreSearch("");
-                          }
-                        }}
-                        data-testid="checkbox-multiple-locations"
-                      />
-                      <Label htmlFor="multiple_locations" className="cursor-pointer font-medium">
-                        Multiple Locations (claim DBA with multiple stores)
-                      </Label>
-                    </div>
-
-                    {multiLocationMode && (
-                      <div className="space-y-4 pl-6 border-l-2 border-primary/20">
-                        <div className="space-y-2">
-                          <Label htmlFor="dba_name">DBA / Company Name</Label>
-                          <Input
-                            id="dba_name"
-                            data-testid="input-dba-name"
-                            value={dbaName}
-                            onChange={(e) => setDbaName(e.target.value)}
-                            placeholder="e.g., Lift Cannabis, Green Thumb Industries"
-                          />
-                        </div>
-
-                        {/* Current stores in DBA (read-only) */}
-                        {currentDbaStores.length > 0 && (
-                          <div className="space-y-2">
-                            <Label>Current Stores in this DBA ({currentDbaStores.length})</Label>
-                            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2 bg-muted/30">
-                              {currentDbaStores.map((store) => (
-                                <div
-                                  key={store.link}
-                                  className="flex items-center justify-between p-2 bg-background rounded-md"
-                                  data-testid={`current-store-${store.link}`}
-                                >
-                                  <span className="text-sm">{store.name}</span>
-                                  <Badge variant="secondary" className="text-xs">Current</Badge>
-                                </div>
-                              ))}
+            {/* Store Details Content - NOW ON RIGHT */}
+            <div className={showAssistant ? "w-1/2 flex flex-col overflow-hidden pl-2" : "w-full flex flex-col overflow-hidden"}>
+              {!row ? (
+                <div className="flex items-center justify-center h-64">
+                  <p>No store data available</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex-1 overflow-y-auto">
+                    <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
+                      {/* Sales Info - AT THE TOP - EXPANDED BY DEFAULT */}
+                      <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
+                        <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-sales-info">
+                          Sales Info
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4 pt-2">
+                            <div className="space-y-2">
+                              <Label htmlFor="sales_ready_summary">Sales-ready Summary</Label>
+                              <Textarea
+                                id="sales_ready_summary"
+                                data-testid="input-sales-ready-summary"
+                                value={formData.sales_ready_summary}
+                                onChange={(e) => handleInputChange('sales_ready_summary', e.target.value)}
+                                placeholder="Summary for sales team..."
+                                rows={4}
+                              />
                             </div>
-                          </div>
-                        )}
+                            <div className="space-y-2">
+                              <Label htmlFor="notes">Notes</Label>
+                              <Textarea
+                                id="notes"
+                                data-testid="input-notes"
+                                value={formData.notes}
+                                onChange={(e) => handleInputChange('notes', e.target.value)}
+                                placeholder="Call notes, contact info from store worker..."
+                                rows={4}
+                              />
+                            </div>
 
-                        {/* New stores being added to DBA */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Label>Selected Locations ({selectedStores.length})</Label>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setStoreSearchDialog(true)}
-                              data-testid="button-add-locations"
-                            >
-                              <Search className="h-4 w-4 mr-2" />
-                              Add Locations
-                            </Button>
-                          </div>
+                            {/* Multiple Locations Feature */}
+                            <div className="space-y-4 pt-4 border-t">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="multiple_locations"
+                                  checked={multiLocationMode}
+                                  onCheckedChange={(checked) => {
+                                    setMultiLocationMode(checked as boolean);
+                                    if (!checked) {
+                                      setSelectedStores([]);
+                                      setCurrentDbaStores([]);
+                                      setDbaName("");
+                                      setStoreSearch("");
+                                    }
+                                  }}
+                                  data-testid="checkbox-multiple-locations"
+                                />
+                                <Label htmlFor="multiple_locations" className="cursor-pointer font-medium">
+                                  Multiple Locations (claim DBA with multiple stores)
+                                </Label>
+                              </div>
 
-                          {selectedStores.length > 0 ? (
-                            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
-                              {selectedStores.map((store) => (
-                                <div
-                                  key={store.link}
-                                  className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
-                                  data-testid={`selected-store-${store.link}`}
-                                >
-                                  <span className="text-sm">{store.name}</span>
+                              {multiLocationMode && (
+                                <div className="space-y-4 pl-6 border-l-2 border-primary/20">
+                                  <div className="space-y-2">
+                                    <Label htmlFor="dba_name">DBA / Company Name</Label>
+                                    <Input
+                                      id="dba_name"
+                                      data-testid="input-dba-name"
+                                      value={dbaName}
+                                      onChange={(e) => setDbaName(e.target.value)}
+                                      placeholder="e.g., Lift Cannabis, Green Thumb Industries"
+                                    />
+                                  </div>
+
+                                  {/* Current stores in DBA (read-only) */}
+                                  {currentDbaStores.length > 0 && (
+                                    <div className="space-y-2">
+                                      <Label>Current Stores in this DBA ({currentDbaStores.length})</Label>
+                                      <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2 bg-muted/30">
+                                        {currentDbaStores.map((store) => (
+                                          <div
+                                            key={store.link}
+                                            className="flex items-center justify-between p-2 bg-background rounded-md"
+                                            data-testid={`current-store-${store.link}`}
+                                          >
+                                            <span className="text-sm">{store.name}</span>
+                                            <Badge variant="secondary" className="text-xs">Current</Badge>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* New stores being added to DBA */}
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <Label>Selected Locations ({selectedStores.length})</Label>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setStoreSearchDialog(true)}
+                                        data-testid="button-add-locations"
+                                      >
+                                        <Search className="h-4 w-4 mr-2" />
+                                        Add Locations
+                                      </Button>
+                                    </div>
+
+                                    {selectedStores.length > 0 ? (
+                                      <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
+                                        {selectedStores.map((store) => (
+                                          <div
+                                            key={store.link}
+                                            className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
+                                            data-testid={`selected-store-${store.link}`}
+                                          >
+                                            <span className="text-sm">{store.name}</span>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => setSelectedStores(prev => prev.filter(s => s.link !== store.link))}
+                                              data-testid={`button-remove-store-${store.link}`}
+                                            >
+                                              ×
+                                            </Button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/30">
+                                        No new locations selected. Click "Add Locations" to add stores to this DBA.
+                                      </p>
+                                    )}
+                                  </div>
+
                                   <Button
                                     type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setSelectedStores(prev => prev.filter(s => s.link !== store.link))}
-                                    data-testid={`button-remove-store-${store.link}`}
+                                    variant="default"
+                                    onClick={async () => {
+                                      if (selectedStores.length === 0) {
+                                        toast({
+                                          title: "No stores selected",
+                                          description: "Please select at least one store to add to this DBA",
+                                          variant: "destructive",
+                                        });
+                                        return;
+                                      }
+
+                                      try {
+                                        const storeLinks = selectedStores.map(s => s.link);
+                                        const isUpdatingExisting = currentDbaStores.length > 0;
+
+                                        const response = await apiRequest('POST', '/api/stores/claim-multiple', {
+                                          storeLinks,
+                                          dbaName: dbaName.trim(),
+                                          storeSheetId,
+                                          trackerSheetId,
+                                          isUpdatingExisting
+                                        });
+
+                                        const successMessage = isUpdatingExisting
+                                          ? `Added ${response.updatedStoreCount} new store${response.updatedStoreCount !== 1 ? 's' : ''} to DBA "${dbaName}"`
+                                          : `Claimed ${response.createdTrackerCount} location${response.createdTrackerCount !== 1 ? 's' : ''} with DBA "${dbaName}"`;
+                                        const warningMessage = response.skippedCount > 0 ? ` (${response.skippedCount} skipped - already in DBA)` : '';
+
+                                        toast({
+                                          title: "Success",
+                                          description: successMessage + warningMessage,
+                                        });
+
+                                        // Show warnings if any
+                                        if (response.warnings && response.warnings.length > 0) {
+                                          response.warnings.forEach((warning: string) => {
+                                            toast({
+                                              title: "Warning",
+                                              description: warning,
+                                              variant: "destructive",
+                                            });
+                                          });
+                                        }
+
+                                        // Reset state
+                                        setMultiLocationMode(false);
+                                        setSelectedStores([]);
+                                        setCurrentDbaStores([]);
+                                        setDbaName("");
+
+                                        // Refresh the dashboard
+                                        await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+                                        await refetch();
+
+                                        // Close the dialog
+                                        onOpenChange(false);
+                                      } catch (error: any) {
+                                        toast({
+                                          title: "Error",
+                                          description: error.message || "Failed to claim locations",
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }}
+                                    disabled={!dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
+                                    data-testid="button-claim-multiple"
                                   >
-                                    ×
+                                    <Sparkles className="h-4 w-4 mr-2" />
+                                    {currentDbaStores.length > 0
+                                      ? `Add ${selectedStores.length} Location${selectedStores.length !== 1 ? 's' : ''} to DBA`
+                                      : `Claim ${selectedStores.length} Location${selectedStores.length !== 1 ? 's' : ''} with DBA`
+                                    }
                                   </Button>
                                 </div>
-                              ))}
+                              )}
                             </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/30">
-                              No new locations selected. Click "Add Locations" to add stores to this DBA.
-                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="point_of_contact">Point of Contact</Label>
+                                <Input
+                                  id="point_of_contact"
+                                  data-testid="input-point-of-contact"
+                                  value={formData.point_of_contact}
+                                  onChange={(e) => handleInputChange('point_of_contact', e.target.value)}
+                                  placeholder="Primary contact person"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="poc_email">POC Email</Label>
+                                <Input
+                                  id="poc_email"
+                                  data-testid="input-poc-email"
+                                  type="email"
+                                  value={formData.poc_email}
+                                  onChange={(e) => handleInputChange('poc_email', e.target.value)}
+                                  placeholder="contact@store.com"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="poc_phone">POC Phone</Label>
+                                <Input
+                                  id="poc_phone"
+                                  data-testid="input-poc-phone"
+                                  type="tel"
+                                  value={formData.poc_phone}
+                                  onChange={(e) => handleInputChange('poc_phone', e.target.value)}
+                                  placeholder="(555) 123-4567"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Status */}
+                            <div className="space-y-2 pt-4 border-t">
+                              <Label htmlFor="status">Status</Label>
+                              <Select
+                                value={formData.status}
+                                onValueChange={(value) => handleInputChange('status', value)}
+                              >
+                                <SelectTrigger
+                                  id="status"
+                                  data-testid="select-status"
+                                  style={formData.status && statusColors[formData.status] ? {
+                                    backgroundColor: statusColors[formData.status].background,
+                                    color: statusColors[formData.status].text,
+                                  } : undefined}
+                                >
+                                  <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {statusOptions.map((status: string) => {
+                                    const colors = statusColors[status];
+                                    debug.statusColors(`Applying status colors to Store Info popup dropdown`, {
+                                      status,
+                                      backgroundColor: colors?.background,
+                                      textColor: colors?.text,
+                                    });
+                                    return (
+                                      <SelectItem
+                                        key={status}
+                                        value={status}
+                                        data-testid={`status-option-${status.toLowerCase().replace(/[^a-z]+/g, '-')}`}
+                                        style={{
+                                          backgroundColor: colors?.background || 'transparent',
+                                          color: colors?.text || 'inherit',
+                                        }}
+                                      >
+                                        {status}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Smart Reminder Box - Collapsible */}
+                            <Collapsible open={reminderSectionOpen} onOpenChange={setReminderSectionOpen} className="pt-4 border-t">
+                              <CollapsibleTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  className="w-full justify-between p-3 h-auto"
+                                  data-testid="button-toggle-reminder"
+                                >
+                                  <span className="font-medium">Set Reminder</span>
+                                  <ChevronDown className={`h-4 w-4 transition-transform ${reminderSectionOpen ? "rotate-180" : ""}`} />
+                                </Button>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="pt-2">
+                                <QuickReminder
+                                  onSave={async (reminderData) => {
+                                    try {
+                                      const response = await apiRequest('POST', '/api/reminders', {
+                                        title: `Follow up: ${formData.name}`,
+                                        description: reminderData.note,
+                                        reminderDate: reminderData.date.toISOString(),
+                                        reminderTime: reminderData.time,
+                                        storeMetadata: {
+                                          sheetId: trackerSheetId,
+                                          uniqueIdentifier: getLinkValue(row),
+                                          storeName: formData.name,
+                                          address: formData.address,
+                                          city: formData.city,
+                                          state: formData.state,
+                                          pointOfContact: formData.point_of_contact,
+                                          pocEmail: formData.poc_email || formData.email,
+                                          pocPhone: formData.poc_phone || formData.phone,
+                                        },
+                                        useCustomerTimezone: reminderData.useCustomerTimezone,
+                                        customerTimezone: reminderData.customerTimezone,
+                                        agentTimezone: reminderData.agentTimezone,
+                                        calendarReminders: reminderData.calendarReminders,
+                                      });
+
+                                      // Update the form data to reflect the changes
+                                      const followUpDate = format(reminderData.date, 'M/d/yyyy');
+                                      handleInputChange('follow_up_date', followUpDate);
+                                      handleInputChange('next_action', reminderData.note);
+
+                                      // Automatically save Follow-Up Date and Next Action to tracker sheet using mutation
+                                      try {
+                                        const link = formData.link || getLinkValue(row);
+                                        if (link && trackerSheetId) {
+                                          await upsertTrackerFieldsMutation.mutateAsync({
+                                            link,
+                                            updates: {
+                                              'Follow-Up Date': followUpDate,
+                                              'Next Action': reminderData.note,
+                                            }
+                                          });
+
+                                          // Update initialData to prevent "unsaved changes" indicator
+                                          setInitialData(prev => ({
+                                            ...prev,
+                                            follow_up_date: followUpDate,
+                                            next_action: reminderData.note,
+                                          }));
+
+                                          toast({
+                                            title: "Reminder Created",
+                                            description: response.warning
+                                              ? response.warning.message
+                                              : "Your reminder has been saved and Follow-Up Date updated.",
+                                            variant: response.warning ? "default" : "default",
+                                          });
+                                        } else {
+                                          toast({
+                                            title: "Reminder Created",
+                                            description: response.warning
+                                              ? response.warning.message
+                                              : "Your reminder has been saved but Follow-Up Date could not be updated (missing link or tracker sheet).",
+                                            variant: response.warning ? "default" : "default",
+                                          });
+                                        }
+                                      } catch (saveError: any) {
+                                        toast({
+                                          title: "Partial Success",
+                                          description: "Reminder created but Follow-Up Date could not be saved: " + (saveError.message || "Unknown error"),
+                                          variant: "destructive",
+                                        });
+                                      }
+
+                                      // Invalidate reminder queries to ensure UI updates immediately
+                                      queryClient.invalidateQueries({
+                                        predicate: (query) => {
+                                          const key = query.queryKey[0];
+                                          return typeof key === 'string' && key.startsWith('/api/reminders');
+                                        }
+                                      });
+                                    } catch (error: any) {
+                                      console.error('[REMINDER] Error:', error);
+                                      toast({
+                                        title: "Error",
+                                        description: error.message || "Failed to create reminder",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                  storeAddress={formData.address}
+                                  storeCity={formData.city}
+                                  storeState={formData.state}
+                                  userTimezone={userPreferences?.timezone}
+                                  defaultTimezoneMode={userPreferences?.defaultTimezoneMode}
+                                  timeFormat={userPreferences?.timeFormat}
+                                  pointOfContact={formData.point_of_contact}
+                                  pocEmail={formData.poc_email}
+                                  pocPhone={formData.poc_phone}
+                                  defaultEmail={formData.email}
+                                  defaultPhone={formData.phone}
+                                />
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+
+                      {/* Basic Information */}
+                      <AccordionItem value="basic-info" data-testid="accordion-item-basic-info">
+                        <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-basic-info">
+                          Basic Information
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4 pt-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="name">Store Name</Label>
+                                <Input
+                                  id="name"
+                                  data-testid="input-store-name"
+                                  value={formData.name}
+                                  onChange={(e) => handleInputChange('name', e.target.value)}
+                                  placeholder="Enter store name"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="type">Type</Label>
+                                <Input
+                                  id="type"
+                                  data-testid="input-type"
+                                  value={formData.type}
+                                  onChange={(e) => handleInputChange('type', e.target.value)}
+                                  placeholder="e.g., Dispensary, Headshop"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Profile Link - HIDDEN */}
+                            <input
+                              type="hidden"
+                              id="link"
+                              value={formData.link}
+                              onChange={(e) => handleInputChange('link', e.target.value)}
+                            />
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+
+                      {/* Contact Information - includes Street Address, City, State */}
+                      <AccordionItem value="contact-info" data-testid="accordion-item-contact-info">
+                        <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-contact-info">
+                          Contact Information
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4 pt-2">
+                            {/* Street Address, City, State */}
+                            <div className="space-y-2">
+                              <Label htmlFor="address">Street Address</Label>
+                              <Input
+                                id="address"
+                                data-testid="input-address"
+                                value={formData.address}
+                                onChange={(e) => handleInputChange('address', e.target.value)}
+                                placeholder="123 Main St"
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="city">City</Label>
+                                <Input
+                                  id="city"
+                                  data-testid="input-city"
+                                  value={formData.city}
+                                  onChange={(e) => handleInputChange('city', e.target.value)}
+                                  placeholder="City"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="state">State</Label>
+                                <Input
+                                  id="state"
+                                  data-testid="input-state"
+                                  value={formData.state}
+                                  onChange={(e) => handleInputChange('state', e.target.value)}
+                                  placeholder="State"
+                                />
+                              </div>
+                            </div>
+
+                            <Separator className="my-4" />
+
+                            {/* Phone, Email, Website */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="phone">Phone</Label>
+                                <Input
+                                  id="phone"
+                                  data-testid="input-phone"
+                                  type="tel"
+                                  value={formData.phone}
+                                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                                  placeholder="(555) 123-4567"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="email">Email</Label>
+                                <Input
+                                  id="email"
+                                  data-testid="input-email"
+                                  type="email"
+                                  value={formData.email}
+                                  onChange={(e) => handleInputChange('email', e.target.value)}
+                                  placeholder="contact@store.com"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="website">Website</Label>
+                              <div className="flex gap-2">
+                                <Input
+                                  id="website"
+                                  data-testid="input-website"
+                                  value={formData.website}
+                                  onChange={(e) => handleInputChange('website', e.target.value)}
+                                  placeholder="https://www.store.com"
+                                  className="flex-1"
+                                />
+                                {formData.website && (
+                                  <Button variant="outline" size="icon" asChild data-testid="button-open-website">
+                                    <a href={formData.website.startsWith('http') ? formData.website : `https://${formData.website}`} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink className="h-4 w-4" />
+                                    </a>
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  </div>
+
+                  {/* Sticky Save/Cancel Buttons - Only shown when AI Assistant is visible */}
+                  {showAssistant && (
+                    <div className="sticky bottom-0 bg-background border-t pt-4 mt-4 flex justify-end gap-2">
+                      <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleCallFromDetails}
+                        data-testid="button-call"
+                        variant="outline"
+                      >
+                        <Phone className="h-4 w-4 mr-2" />
+                        Call
+                      </Button>
+                      <Button
+                        onClick={handleSave}
+                        disabled={saveMutation.isPending}
+                        data-testid="button-save"
+                        variant="outline"
+                      >
+                        {saveMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            Save
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        onClick={handleSaveAndExit}
+                        disabled={saveMutation.isPending}
+                        data-testid="button-save-and-exit"
+                        style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
+                      >
+                        {saveMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            Save & Exit
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* DialogFooter - Only shown when AI Assistant is NOT visible */}
+          {!showAssistant && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCallFromDetails}
+                data-testid="button-call"
+                variant="outline"
+              >
+                <Phone className="h-4 w-4 mr-2" />
+                Call
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={saveMutation.isPending}
+                data-testid="button-save"
+                variant="outline"
+              >
+                {saveMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleSaveAndExit}
+                disabled={saveMutation.isPending}
+                data-testid="button-save-and-exit"
+                style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
+              >
+                {saveMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save & Exit
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Store Search Dialog for Multi-Location Selection */}
+      <Dialog open={storeSearchDialog} onOpenChange={setStoreSearchDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Select Multiple Locations</DialogTitle>
+            <DialogDescription>
+              Search and select multiple stores to claim with the DBA name
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="store_search">Search Stores (type 2+ letters to search)</Label>
+              <Input
+                id="store_search"
+                data-testid="input-store-search"
+                value={storeSearch}
+                onChange={(e) => setStoreSearch(e.target.value)}
+                placeholder="Search by name, city, state, or address..."
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                {selectedStores.length} location{selectedStores.length !== 1 ? 's' : ''} selected
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (filteredStores.length > 0) {
+                      setSelectedStores(filteredStores.map((store: any) => ({ link: store.link, name: store.name })));
+                    }
+                  }}
+                  disabled={filteredStores.length === 0}
+                  data-testid="button-select-all"
+                >
+                  Select All ({filteredStores.length})
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedStores([])}
+                  disabled={selectedStores.length === 0}
+                  data-testid="button-select-none"
+                >
+                  Clear All
+                </Button>
+              </div>
+            </div>
+
+            <ScrollArea className="h-96 border rounded-md">
+              <div className="p-4 space-y-2">
+                {storeSearch.length < 2 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Type 2 or more letters to search for stores...
+                  </p>
+                ) : isLoadingStores ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
+                    Loading stores...
+                  </p>
+                ) : filteredStores.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    No stores found matching "{storeSearch}"
+                  </p>
+                ) : (
+                  filteredStores.map((store: any) => {
+                    const isSelected = selectedStores.some(s => s.link === store.link);
+
+                    const toggleStore = () => {
+                      setSelectedStores(prev => {
+                        const alreadySelected = prev.some(s => s.link === store.link);
+                        if (alreadySelected) {
+                          return prev.filter(s => s.link !== store.link);
+                        } else {
+                          return [...prev, { link: store.link, name: store.name }];
+                        }
+                      });
+                    };
+
+                    return (
+                      <div
+                        key={store.link}
+                        className={`flex items-start space-x-3 p-3 rounded-md border cursor-pointer hover-elevate ${
+                          isSelected ? 'bg-primary/10 border-primary' : ''
+                        }`}
+                        onClick={toggleStore}
+                        data-testid={`store-option-${store.link}`}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          data-testid={`checkbox-store-${store.link}`}
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium">{store.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {store.city && store.state ? `${store.city}, ${store.state}` : store.city || store.state || ''}
+                          </div>
+                          {store.address && (
+                            <div className="text-xs text-muted-foreground">{store.address}</div>
                           )}
                         </div>
-
-                        <Button
-                          type="button"
-                          variant="default"
-                          onClick={async () => {
-                            if (selectedStores.length === 0) {
-                              toast({
-                                title: "No stores selected",
-                                description: "Please select at least one store to add to this DBA",
-                                variant: "destructive",
-                              });
-                              return;
-                            }
-
-                            try {
-                              const storeLinks = selectedStores.map(s => s.link);
-                              const isUpdatingExisting = currentDbaStores.length > 0;
-
-                              const response = await apiRequest('POST', '/api/stores/claim-multiple', {
-                                storeLinks,
-                                dbaName: dbaName.trim(),
-                                storeSheetId,
-                                trackerSheetId,
-                                isUpdatingExisting
-                              });
-
-                              const successMessage = isUpdatingExisting 
-                                ? `Added ${response.updatedStoreCount} new store${response.updatedStoreCount !== 1 ? 's' : ''} to DBA "${dbaName}"`
-                                : `Claimed ${response.createdTrackerCount} location${response.createdTrackerCount !== 1 ? 's' : ''} with DBA "${dbaName}"`;
-                              const warningMessage = response.skippedCount > 0 ? ` (${response.skippedCount} skipped - already in DBA)` : '';
-
-                              toast({
-                                title: "Success",
-                                description: successMessage + warningMessage,
-                              });
-
-                              // Show warnings if any
-                              if (response.warnings && response.warnings.length > 0) {
-                                response.warnings.forEach((warning: string) => {
-                                  toast({
-                                    title: "Warning",
-                                    description: warning,
-                                    variant: "destructive",
-                                  });
-                                });
-                              }
-
-                              // Reset state
-                              setMultiLocationMode(false);
-                              setSelectedStores([]);
-                              setCurrentDbaStores([]);
-                              setDbaName("");
-
-                              // Refresh the dashboard
-                              await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
-                              await refetch();
-
-                              // Close the dialog
-                              onOpenChange(false);
-                            } catch (error: any) {
-                              toast({
-                                title: "Error",
-                                description: error.message || "Failed to claim locations",
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                          disabled={!dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
-                          data-testid="button-claim-multiple"
-                        >
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          {currentDbaStores.length > 0 
-                            ? `Add ${selectedStores.length} Location${selectedStores.length !== 1 ? 's' : ''} to DBA`
-                            : `Claim ${selectedStores.length} Location${selectedStores.length !== 1 ? 's' : ''} with DBA`
-                          }
-                        </Button>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="point_of_contact">Point of Contact</Label>
-                      <Input
-                        id="point_of_contact"
-                        data-testid="input-point-of-contact"
-                        value={formData.point_of_contact}
-                        onChange={(e) => handleInputChange('point_of_contact', e.target.value)}
-                        placeholder="Primary contact person"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="poc_email">POC Email</Label>
-                      <Input
-                        id="poc_email"
-                        data-testid="input-poc-email"
-                        type="email"
-                        value={formData.poc_email}
-                        onChange={(e) => handleInputChange('poc_email', e.target.value)}
-                        placeholder="contact@store.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="poc_phone">POC Phone</Label>
-                      <Input
-                        id="poc_phone"
-                        data-testid="input-poc-phone"
-                        type="tel"
-                        value={formData.poc_phone}
-                        onChange={(e) => handleInputChange('poc_phone', e.target.value)}
-                        placeholder="(555) 123-4567"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Status */}
-                  <div className="space-y-2 pt-4 border-t">
-                    <Label htmlFor="status">Status</Label>
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) => handleInputChange('status', value)}
-                    >
-                      <SelectTrigger 
-                        id="status" 
-                        data-testid="select-status"
-                        style={formData.status && statusColors[formData.status] ? {
-                          backgroundColor: statusColors[formData.status].background,
-                          color: statusColors[formData.status].text,
-                        } : undefined}
-                      >
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {statusOptions.map((status: string) => {
-                          const colors = statusColors[status];
-                          debug.statusColors(`Applying status colors to Store Info popup dropdown`, {
-                            status,
-                            backgroundColor: colors?.background,
-                            textColor: colors?.text,
-                          });
-                          return (
-                            <SelectItem 
-                              key={status}
-                              value={status} 
-                              data-testid={`status-option-${status.toLowerCase().replace(/[^a-z]+/g, '-')}`}
-                              style={{
-                                backgroundColor: colors?.background || 'transparent',
-                                color: colors?.text || 'inherit',
-                              }}
-                            >
-                              {status}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Smart Reminder Box - Collapsible */}
-                  <Collapsible open={reminderSectionOpen} onOpenChange={setReminderSectionOpen} className="pt-4 border-t">
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-between p-3 h-auto"
-                        data-testid="button-toggle-reminder"
-                      >
-                        <span className="font-medium">Set Reminder</span>
-                        <ChevronDown className={`h-4 w-4 transition-transform ${reminderSectionOpen ? "rotate-180" : ""}`} />
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-2">
-                      <QuickReminder
-                        onSave={async (reminderData) => {
-                          try {
-                            const response = await apiRequest('POST', '/api/reminders', {
-                              title: `Follow up: ${formData.name}`,
-                              description: reminderData.note,
-                              reminderDate: reminderData.date.toISOString(),
-                              reminderTime: reminderData.time,
-                              storeMetadata: {
-                                sheetId: trackerSheetId,
-                                uniqueIdentifier: getLinkValue(row),
-                                storeName: formData.name,
-                                address: formData.address,
-                                city: formData.city,
-                                state: formData.state,
-                                pointOfContact: formData.point_of_contact,
-                                pocEmail: formData.poc_email || formData.email,
-                                pocPhone: formData.poc_phone || formData.phone,
-                              },
-                              useCustomerTimezone: reminderData.useCustomerTimezone,
-                              customerTimezone: reminderData.customerTimezone,
-                              agentTimezone: reminderData.agentTimezone,
-                              calendarReminders: reminderData.calendarReminders,
-                            });
-
-                            // Update the form data to reflect the changes
-                            const followUpDate = format(reminderData.date, 'M/d/yyyy');
-                            handleInputChange('follow_up_date', followUpDate);
-                            handleInputChange('next_action', reminderData.note);
-
-                            // Automatically save Follow-Up Date and Next Action to tracker sheet using mutation
-                            try {
-                              const link = formData.link || getLinkValue(row);
-                              if (link && trackerSheetId) {
-                                await upsertTrackerFieldsMutation.mutateAsync({
-                                  link,
-                                  updates: {
-                                    'Follow-Up Date': followUpDate,
-                                    'Next Action': reminderData.note,
-                                  }
-                                });
-
-                                // Update initialData to prevent "unsaved changes" indicator
-                                setInitialData(prev => ({
-                                  ...prev,
-                                  follow_up_date: followUpDate,
-                                  next_action: reminderData.note,
-                                }));
-
-                                toast({
-                                  title: "Reminder Created",
-                                  description: response.warning 
-                                    ? response.warning.message 
-                                    : "Your reminder has been saved and Follow-Up Date updated.",
-                                  variant: response.warning ? "default" : "default",
-                                });
-                              } else {
-                                toast({
-                                  title: "Reminder Created",
-                                  description: response.warning 
-                                    ? response.warning.message 
-                                    : "Your reminder has been saved but Follow-Up Date could not be updated (missing link or tracker sheet).",
-                                  variant: response.warning ? "default" : "default",
-                                });
-                              }
-                            } catch (saveError: any) {
-                              toast({
-                                title: "Partial Success",
-                                description: "Reminder created but Follow-Up Date could not be saved: " + (saveError.message || "Unknown error"),
-                                variant: "destructive",
-                              });
-                            }
-
-                            // Invalidate reminder queries to ensure UI updates immediately
-                            queryClient.invalidateQueries({
-                              predicate: (query) => {
-                                const key = query.queryKey[0];
-                                return typeof key === 'string' && key.startsWith('/api/reminders');
-                              }
-                            });
-                          } catch (error: any) {
-                            console.error('[REMINDER] Error:', error);
-                            toast({
-                              title: "Error",
-                              description: error.message || "Failed to create reminder",
-                              variant: "destructive",
-                            });
-                          }
-                        }}
-                        storeAddress={formData.address}
-                        storeCity={formData.city}
-                        storeState={formData.state}
-                        userTimezone={userPreferences?.timezone}
-                        defaultTimezoneMode={userPreferences?.defaultTimezoneMode}
-                        timeFormat={userPreferences?.timeFormat}
-                        pointOfContact={formData.point_of_contact}
-                        pocEmail={formData.poc_email}
-                        pocPhone={formData.poc_phone}
-                        defaultEmail={formData.email}
-                        defaultPhone={formData.phone}
-                      />
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* Basic Information */}
-            <AccordionItem value="basic-info" data-testid="accordion-item-basic-info">
-              <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-basic-info">
-                Basic Information
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-4 pt-2">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Store Name</Label>
-                      <Input
-                        id="name"
-                        data-testid="input-store-name"
-                        value={formData.name}
-                        onChange={(e) => handleInputChange('name', e.target.value)}
-                        placeholder="Enter store name"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="type">Type</Label>
-                      <Input
-                        id="type"
-                        data-testid="input-type"
-                        value={formData.type}
-                        onChange={(e) => handleInputChange('type', e.target.value)}
-                        placeholder="e.g., Dispensary, Headshop"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Profile Link - HIDDEN */}
-                  <input
-                    type="hidden"
-                    id="link"
-                    value={formData.link}
-                    onChange={(e) => handleInputChange('link', e.target.value)}
-                  />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* Contact Information - includes Street Address, City, State */}
-            <AccordionItem value="contact-info" data-testid="accordion-item-contact-info">
-              <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-contact-info">
-                Contact Information
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-4 pt-2">
-                  {/* Street Address, City, State */}
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Street Address</Label>
-                    <Input
-                      id="address"
-                      data-testid="input-address"
-                      value={formData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      placeholder="123 Main St"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="city">City</Label>
-                      <Input
-                        id="city"
-                        data-testid="input-city"
-                        value={formData.city}
-                        onChange={(e) => handleInputChange('city', e.target.value)}
-                        placeholder="City"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="state">State</Label>
-                      <Input
-                        id="state"
-                        data-testid="input-state"
-                        value={formData.state}
-                        onChange={(e) => handleInputChange('state', e.target.value)}
-                        placeholder="State"
-                      />
-                    </div>
-                  </div>
-
-                  <Separator className="my-4" />
-
-                  {/* Phone, Email, Website */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input
-                        id="phone"
-                        data-testid="input-phone"
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => handleInputChange('phone', e.target.value)}
-                        placeholder="(555) 123-4567"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        data-testid="input-email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        placeholder="contact@store.com"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="website">Website</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="website"
-                        data-testid="input-website"
-                        value={formData.website}
-                        onChange={(e) => handleInputChange('website', e.target.value)}
-                        placeholder="https://www.store.com"
-                        className="flex-1"
-                      />
-                      {formData.website && (
-                        <Button variant="outline" size="icon" asChild data-testid="button-open-website">
-                          <a href={formData.website.startsWith('http') ? formData.website : `https://${formData.website}`} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+                    );
+                  })
+                )}
               </div>
-
-              {/* Sticky Save/Cancel Buttons - Only shown when AI Assistant is visible */}
-              {showAssistant && (
-                <div className="sticky bottom-0 bg-background border-t pt-4 mt-4 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handleCallFromDetails} 
-                    data-testid="button-call"
-                    variant="outline"
-                  >
-                    <Phone className="h-4 w-4 mr-2" />
-                    Call
-                  </Button>
-                  <Button 
-                    onClick={handleSave} 
-                    disabled={saveMutation.isPending} 
-                    data-testid="button-save"
-                    variant="outline"
-                  >
-                    {saveMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save
-                      </>
-                    )}
-                  </Button>
-                  <Button 
-                    onClick={handleSaveAndExit} 
-                    disabled={saveMutation.isPending} 
-                    data-testid="button-save-and-exit"
-                    style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
-                  >
-                    {saveMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save & Exit
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* DialogFooter - Only shown when AI Assistant is NOT visible */}
-        {!showAssistant && (
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleCallFromDetails} 
-            data-testid="button-call"
-            variant="outline"
-          >
-            <Phone className="h-4 w-4 mr-2" />
-            Call
-          </Button>
-          <Button 
-            onClick={handleSave} 
-            disabled={saveMutation.isPending} 
-            data-testid="button-save"
-            variant="outline"
-          >
-            {saveMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save
-              </>
-            )}
-          </Button>
-          <Button 
-            onClick={handleSaveAndExit} 
-            disabled={saveMutation.isPending} 
-            data-testid="button-save-and-exit"
-            style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
-          >
-            {saveMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save & Exit
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-        )}
-      </DialogContent>
-    </Dialog>
-
-    {/* Store Search Dialog for Multi-Location Selection */}
-    <Dialog open={storeSearchDialog} onOpenChange={setStoreSearchDialog}>
-      <DialogContent className="max-w-3xl max-h-[80vh]">
-        <DialogHeader>
-          <DialogTitle>Select Multiple Locations</DialogTitle>
-          <DialogDescription>
-            Search and select multiple stores to claim with the DBA name
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="store_search">Search Stores (type 2+ letters to search)</Label>
-            <Input
-              id="store_search"
-              data-testid="input-store-search"
-              value={storeSearch}
-              onChange={(e) => setStoreSearch(e.target.value)}
-              placeholder="Search by name, city, state, or address..."
-            />
+            </ScrollArea>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {selectedStores.length} location{selectedStores.length !== 1 ? 's' : ''} selected
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (filteredStores.length > 0) {
-                    setSelectedStores(filteredStores.map((store: any) => ({ link: store.link, name: store.name })));
-                  }
-                }}
-                disabled={filteredStores.length === 0}
-                data-testid="button-select-all"
-              >
-                Select All ({filteredStores.length})
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedStores([])}
-                disabled={selectedStores.length === 0}
-                data-testid="button-select-none"
-              >
-                Clear All
-              </Button>
-            </div>
-          </div>
-
-          <ScrollArea className="h-96 border rounded-md">
-            <div className="p-4 space-y-2">
-              {storeSearch.length < 2 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  Type 2 or more letters to search for stores...
-                </p>
-              ) : isLoadingStores ? (
-                <p className="text-center text-muted-foreground py-8">
-                  <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
-                  Loading stores...
-                </p>
-              ) : filteredStores.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  No stores found matching "{storeSearch}"
-                </p>
-              ) : (
-                filteredStores.map((store: any) => {
-                  const isSelected = selectedStores.some(s => s.link === store.link);
-
-                  const toggleStore = () => {
-                    setSelectedStores(prev => {
-                      const alreadySelected = prev.some(s => s.link === store.link);
-                      if (alreadySelected) {
-                        return prev.filter(s => s.link !== store.link);
-                      } else {
-                        return [...prev, { link: store.link, name: store.name }];
-                      }
-                    });
-                  };
-
-                  return (
-                    <div
-                      key={store.link}
-                      className={`flex items-start space-x-3 p-3 rounded-md border cursor-pointer hover-elevate ${
-                        isSelected ? 'bg-primary/10 border-primary' : ''
-                      }`}
-                      onClick={toggleStore}
-                      data-testid={`store-option-${store.link}`}
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        data-testid={`checkbox-store-${store.link}`}
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">{store.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {store.city && store.state ? `${store.city}, ${store.state}` : store.city || store.state || ''}
-                        </div>
-                        {store.address && (
-                          <div className="text-xs text-muted-foreground">{store.address}</div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </ScrollArea>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setStoreSearchDialog(false)} data-testid="button-cancel-search">
-            Done
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStoreSearchDialog(false)} data-testid="button-cancel-search">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
