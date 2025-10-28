@@ -34,6 +34,7 @@ export function FranchiseFinderDialog({
   const [minLocations, setMinLocations] = useState(2);
   const [maxLocations, setMaxLocations] = useState(100);
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
+  const [showCanadaOnly, setShowCanadaOnly] = useState(false);
 
   const franchises = useMemo(() => {
     let filteredFranchises = detectFranchises(stores, minLocations, maxLocations);
@@ -68,14 +69,6 @@ export function FranchiseFinderDialog({
 
   const canadianStates = allStates.filter(isCanadianProvince);
   const usStates = allStates.filter(state => !isCanadianProvince(state));
-
-  const showCanadaOnly = selectedStates.length > 0 && 
-    selectedStates.every(isCanadianProvince) && 
-    canadianStates.every(state => selectedStates.includes(state));
-
-  const showUSAOnly = selectedStates.length > 0 && 
-    selectedStates.every(state => !isCanadianProvince(state)) && 
-    usStates.every(state => selectedStates.includes(state));
 
   const stateCounts = useMemo(() => {
     const counts: Record<string, number> = {};
