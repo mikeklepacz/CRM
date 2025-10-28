@@ -73,10 +73,10 @@ export default function AgentDashboard() {
   });
 
   const trackerSheet = sheetsData?.sheets?.find((sheet: any) => 
-    sheet.sheetPurpose === 'Commission Tracker' || sheet.sheetPurpose === 'tracker'
+    sheet.sheetPurpose === 'commissions'
   );
   const storeDbSheet = sheetsData?.sheets?.find((sheet: any) => 
-    sheet.sheetPurpose === 'Store Database' || sheet.sheetPurpose === 'clients'
+    sheet.sheetPurpose === 'Store Database'
   );
 
   // Auto-call logic when dialog opens with phone number
