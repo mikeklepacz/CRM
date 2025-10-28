@@ -4289,7 +4289,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
       </AlertDialog>
 
       <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden" : "max-w-4xl max-h-[90vh] overflow-y-auto"}>
+      <DialogContent className={showAssistant ? "max-w-[95vw] h-[95vh] overflow-hidden flex flex-col" : "max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"}>
         <DialogHeader>
           <DialogTitle className="text-center">Store Details</DialogTitle>
           <div className="flex items-center justify-between gap-4 pt-2">
@@ -4341,7 +4341,7 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           </div>
         </DialogHeader>
 
-        <div className={showAssistant ? "flex gap-4 overflow-hidden flex-1" : ""}>
+        <div className="flex gap-4 overflow-hidden flex-1">
           {/* AI Assistant Panel - NOW ON LEFT */}
           {showAssistant && (
             <div className="w-1/2 border-r pr-4 flex flex-col overflow-hidden">
@@ -4373,14 +4373,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
           )}
 
           {/* Store Details Content - NOW ON RIGHT */}
-          <div className={showAssistant ? "w-1/2 flex flex-col overflow-hidden pl-2" : "w-full"}>
+          <div className={showAssistant ? "w-1/2 flex flex-col overflow-hidden pl-2" : "w-full flex flex-col overflow-hidden"}>
             {!row ? (
               <div className="flex items-center justify-center h-64">
                 <p>No store data available</p>
               </div>
             ) : (
               <>
-              <div className={showAssistant ? "flex-1 overflow-y-auto" : ""}>
+              <div className="flex-1 overflow-y-auto">
               <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
             {/* Sales Info - AT THE TOP - EXPANDED BY DEFAULT */}
             <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
