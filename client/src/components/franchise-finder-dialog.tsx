@@ -28,11 +28,11 @@ export function FranchiseFinderDialog({
   stores,
   onSelectFranchise,
 }: FranchiseFinderDialogProps) {
-  const [locationRange, setLocationRange] = useState([2, 100]);
-
+  const [maxLocations, setMaxLocations] = useState(100);
+  
   const franchises = useMemo(() => {
-    return detectFranchises(stores, locationRange[0], locationRange[1]);
-  }, [stores, locationRange]);
+    return detectFranchises(stores, 2, maxLocations);
+  }, [stores, maxLocations]);
 
   const handleSelectFranchise = (franchise: FranchiseGroup) => {
     onSelectFranchise(franchise);
@@ -53,34 +53,27 @@ export function FranchiseFinderDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Location Range Slider */}
+          {/* Max Locations Slider */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">
-                Locations per Franchise
+                Maximum Locations per Franchise
               </label>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" data-testid="badge-min-locations">
-                  {locationRange[0]}
-                </Badge>
-                <span className="text-sm text-muted-foreground">to</span>
-                <Badge variant="secondary" data-testid="badge-max-locations">
-                  {locationRange[1] === 100 ? "100+" : locationRange[1]}
-                </Badge>
-              </div>
+              <Badge variant="secondary" data-testid="badge-max-locations">
+                {maxLocations === 100 ? "100+" : maxLocations}
+              </Badge>
             </div>
             <Slider
-              value={locationRange}
-              onValueChange={(values) => setLocationRange(values)}
+              value={[maxLocations]}
+              onValueChange={(values) => setMaxLocations(values[0])}
               min={2}
               max={100}
               step={1}
               className="w-full"
-              data-testid="slider-location-range"
-              minStepsBetweenThumbs={1}
+              data-testid="slider-max-locations"
             />
             <p className="text-xs text-muted-foreground">
-              Adjust to find franchises within your target range. For example, set 10-20 to find mid-sized franchises.
+              Adjust to find franchises that match your target account size. Smaller teams may prefer fewer locations.
             </p>
           </div>
 
@@ -107,7 +100,7 @@ export function FranchiseFinderDialog({
                     No franchises found with your current filters
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Try adjusting the location range slider
+                    Try increasing the maximum locations slider
                   </p>
                 </div>
               ) : (
