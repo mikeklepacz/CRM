@@ -30,25 +30,25 @@ export default function AgentDashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  
+
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [inactivityDays, setInactivityDays] = useState("all");
   const [timePeriod, setTimePeriod] = useState("all");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
-  
+
   // Store details dialog state
   const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
     open: boolean;
     row: any;
     autoCallPhone?: string;
   } | null>(null);
-  
+
   // AI Assistant context update trigger
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
   const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
-  
+
   // Custom theme for status colors
   const { currentColors, statusColors, statusOptions } = useCustomTheme();
 
@@ -59,7 +59,7 @@ export default function AgentDashboard() {
   const { data: statusesResponse } = useQuery<{ statuses: Status[] }>({
     queryKey: ["/api/statuses"],
   });
-  
+
   const statuses = statusesResponse?.statuses || [];
 
   // Fetch user preferences for reminder settings
@@ -86,7 +86,7 @@ export default function AgentDashboard() {
       const row = storeDetailsDialog.row;
       const storeLink = row.link || row.Link;
       const storeName = row.name || row.Name || row.Company || 'Unknown Store';
-      
+
       // Log the call to database
       apiRequest('POST', '/api/call-history', {
         storeLink: storeLink,
@@ -96,15 +96,15 @@ export default function AgentDashboard() {
         console.error('Failed to log call:', error);
         // Don't block the call if logging fails
       });
-      
+
       // Trigger default script loading in AI assistant
       setLoadDefaultScriptTrigger(prev => prev + 1);
-      
+
       // Trigger phone dialer after a delay so user sees the dialog first
       setTimeout(() => {
         window.location.href = `tel:${phoneNumber}`;
       }, 800);
-      
+
       // Clear the autoCallPhone flag so it doesn't trigger again
       setStoreDetailsDialog(prev => prev ? { ...prev, autoCallPhone: undefined } : null);
     }
@@ -128,19 +128,19 @@ export default function AgentDashboard() {
   // Helper function to check if a client is in the time range
   const isClientInTimeRange = (client: Client, timeRange: { from?: Date; to?: Date } | undefined): boolean => {
     if (!timeRange?.from && !timeRange?.to) return true;
-    
+
     const claimDate = client.claimDate ? new Date(client.claimDate) : null;
     const lastOrderDate = client.lastOrderDate ? new Date(client.lastOrderDate) : null;
-    
+
     // Check if either date falls within the time period
     const claimInRange = !!(claimDate && 
       (!timeRange?.from || claimDate >= timeRange.from) &&
       (!timeRange?.to || claimDate <= timeRange.to));
-      
+
     const orderInRange = !!(lastOrderDate &&
       (!timeRange?.from || lastOrderDate >= timeRange.from) &&
       (!timeRange?.to || lastOrderDate <= timeRange.to));
-    
+
     // Include client if either date is in range
     return claimInRange || orderInRange;
   };
@@ -149,7 +149,7 @@ export default function AgentDashboard() {
   const getTimePeriodDates = () => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     switch (timePeriod) {
       case "today":
         return { from: today, to: now };
@@ -189,23 +189,23 @@ export default function AgentDashboard() {
       const dataStr = JSON.stringify(client.data).toLowerCase();
       if (!dataStr.includes(searchLower)) return false;
     }
-    
+
     // Status filter
     if (status !== "all") {
       const clientStatus = client.data?.['Status'] || client.data?.['status'];
       if (clientStatus !== status) return false;
     }
-    
+
     // Inactivity filter
     if (inactivityDays !== "all") {
       if (!client.lastOrderDate) return true;
       const daysSinceOrder = Math.floor((Date.now() - new Date(client.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24));
       if (daysSinceOrder < parseInt(inactivityDays)) return false;
     }
-    
+
     // Time period filter - include if EITHER claim date OR last order date falls within range
     if (!isClientInTimeRange(client, timeFilter)) return false;
-    
+
     return true;
   });
 
@@ -352,7 +352,7 @@ export default function AgentDashboard() {
               >
                 Year
               </Button>
-              
+
               {/* Custom Date Range Picker */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -473,10 +473,10 @@ export default function AgentDashboard() {
               onNotesClick={async (clientId) => {
                 const client = clients.find(c => c.id === clientId);
                 if (!client) return;
-                
+
                 // Get store link from client data
                 const storeLink = client.link || client.data?.['Link'] || client.data?.['link'];
-                
+
                 // Guard against missing store link
                 if (!storeLink) {
                   toast({
@@ -486,17 +486,17 @@ export default function AgentDashboard() {
                   });
                   return;
                 }
-                
+
                 // Get phone number for auto-call - prioritize POC phone, fallback to regular phone
                 const pocPhone = client.data?.['POC Phone'] || client.data?.['poc_phone'];
                 const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
                 const phoneNumber = pocPhone || regularPhone;
-                
+
                 // Get sheet IDs from sheets data (same pattern as Client Dashboard)
                 const storeSheetId = storeDbSheet?.id;
                 const trackerSheetId = trackerSheet?.id;
                 const joinColumn = "link";
-                
+
                 if (!storeSheetId || !trackerSheetId) {
                   toast({
                     title: "Error",
@@ -505,7 +505,7 @@ export default function AgentDashboard() {
                   });
                   return;
                 }
-                
+
                 try {
                   // Fetch fresh data from Google Sheets (same as Client Dashboard)
                   const response = await fetch('/api/sheets/merged-data', {
@@ -514,12 +514,22 @@ export default function AgentDashboard() {
                     body: JSON.stringify({ storeSheetId, trackerSheetId, joinColumn }),
                   });
                   if (!response.ok) throw new Error('Failed to fetch store data');
-                  
+
                   const mergedData = await response.json();
-                  
+
+                  // Add null check for mergedData
+                  if (!mergedData || !Array.isArray(mergedData)) {
+                    toast({
+                      title: "Error",
+                      description: "Store data not loaded. Please refresh the page.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
                   // Find the matching store by link
                   const row = mergedData.find((r: any) => r.Link === storeLink || r.link === storeLink);
-                  
+
                   if (!row) {
                     toast({
                       title: "Error",
@@ -528,7 +538,7 @@ export default function AgentDashboard() {
                     });
                     return;
                   }
-                  
+
                   // Open Store Details dialog with fresh Google Sheets data
                   setStoreDetailsDialog({
                     open: true,
@@ -575,7 +585,7 @@ export default function AgentDashboard() {
           setLocation(`/store/${encodeURIComponent(storeLink)}?phone=${encodeURIComponent(phoneNumber)}`);
         }}
       />
-      
+
       {/* Store Details Dialog */}
       {storeDetailsDialog && (
         <StoreDetailsDialog
