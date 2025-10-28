@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus } from "lucide-react";
+import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, Check, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -21,6 +21,20 @@ import { format } from "date-fns";
 import { QuickReminder } from "@/components/quick-reminder";
 import { normalizeLink } from "@shared/linkUtils";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+
+// US States and Canadian Provinces
+const US_STATES_AND_PROVINCES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia',
+  'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland',
+  'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey',
+  'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
+  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
+  'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador', 'Northwest Territories',
+  'Nova Scotia', 'Nunavut', 'Ontario', 'Prince Edward Island', 'Quebec', 'Saskatchewan', 'Yukon'
+];
 
 // Helper function: Case-insensitive lookup for link value
 const getLinkValue = (row: any): string | undefined => {
@@ -99,11 +113,15 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   // Multiple Locations feature state
   const [multiLocationMode, setMultiLocationMode] = useState(false);
   const [dbaName, setDbaName] = useState("");
+  const [dbaCity, setDbaCity] = useState("");
+  const [dbaState, setDbaState] = useState("");
+  const [dbaType, setDbaType] = useState("");
+  const [stateComboboxOpen, setStateComboboxOpen] = useState(false);
   const [currentDbaStores, setCurrentDbaStores] = useState<Array<{ link: string; name: string }>>([]);
   const [selectedStores, setSelectedStores] = useState<Array<{ link: string; name: string }>>([]);
   const [storeSearchDialog, setStoreSearchDialog] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
-  
+
   // Parent DBA management state
   const [parentCreationType, setParentCreationType] = useState<'new' | 'existing'>('new');
   const [selectedParentLink, setSelectedParentLink] = useState<string>('');
@@ -244,6 +262,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       };
       setFormData(populatedData);
       setInitialData(populatedData);
+
+      // Set dbaState from populated data
+      setDbaState(populatedData.state);
 
       // Track the active row to prevent race conditions
       const currentLink = getValue(['Link', 'link']);
@@ -1216,7 +1237,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
                                       try {
                                         const storeLinks = selectedStores.map(s => s.link);
-                                        
+
                                         // Step 1: Claim all locations with DBA name (existing behavior)
                                         const claimResponse = await apiRequest('POST', '/api/stores/claim-multiple', {
                                           storeLinks,
@@ -1228,7 +1249,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
                                         // Step 2: Create parent DBA record
                                         let parentLink: string;
-                                        
+
                                         if (parentCreationType === 'new') {
                                           // Create new parent (corporate office)
                                           const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
@@ -1295,6 +1316,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         // Refresh the dashboard
                                         await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
                                         await refetch();
+                                        await refetchChildren();
 
                                         // Close the dialog
                                         onOpenChange(false);
@@ -1534,12 +1556,12 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           parentLink: formData.parent_link,
                                           childLinks: [currentStoreLink]
                                         });
-                                        
+
                                         toast({
                                           title: "Success",
                                           description: "Removed from parent DBA",
                                         });
-                                        
+
                                         await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
                                         await refetch();
                                         await refetchChildren();
@@ -1569,7 +1591,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       </Badge>
                                     )}
                                   </div>
-                                  
+
                                   <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
                                     {childLocations.children.map((child: any) => (
                                       <div
@@ -1593,18 +1615,18 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             size="sm"
                                             onClick={async () => {
                                               if (!confirm(`Remove "${child.name}" from this DBA?`)) return;
-                                              
+
                                               try {
                                                 await apiRequest('POST', '/api/dba/unlink-children', {
                                                   parentLink: currentStoreLink,
                                                   childLinks: [child.link]
                                                 });
-                                                
+
                                                 toast({
                                                   title: "Success",
                                                   description: `Removed ${child.name} from DBA`,
                                                 });
-                                                
+
                                                 await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
                                                 await refetch();
                                                 await refetchChildren();
@@ -1718,13 +1740,45 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                               </div>
                               <div className="space-y-2">
                                 <Label htmlFor="state">State</Label>
-                                <Input
-                                  id="state"
-                                  data-testid="input-state"
-                                  value={formData.state}
-                                  onChange={(e) => handleInputChange('state', e.target.value)}
-                                  placeholder="State"
-                                />
+                                <Popover open={stateComboboxOpen} onOpenChange={setStateComboboxOpen}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={stateComboboxOpen}
+                                      className="w-full justify-between"
+                                      id="state"
+                                    >
+                                      {formData.state || "Select state..."}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-full p-0">
+                                    <Command>
+                                      <CommandInput placeholder="Search state..." />
+                                      <CommandList>
+                                        <CommandEmpty>No state found.</CommandEmpty>
+                                        <CommandGroup>
+                                          {US_STATES_AND_PROVINCES.map((state) => (
+                                            <CommandItem
+                                              key={state}
+                                              value={state}
+                                              onSelect={() => {
+                                                handleInputChange('state', state);
+                                                setStateComboboxOpen(false);
+                                              }}
+                                            >
+                                              <Check
+                                                className={`mr-2 h-4 w-4 ${formData.state === state ? "opacity-100" : "opacity-0"}`}
+                                              />
+                                              {state}
+                                            </CommandItem>
+                                          ))}
+                                        </CommandGroup>
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
                               </div>
                             </div>
 
