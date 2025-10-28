@@ -352,17 +352,33 @@ export default function StoreDetails() {
         </Card>
 
         {/* Save Button at Bottom */}
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={saveMutation.isPending} size="lg">
+        <div className="sticky bottom-0 bg-background border-t pt-4 mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setLocation('/clients')}>
+            Cancel
+          </Button>
+          <Button variant="outline" onClick={handleSave} disabled={saveMutation.isPending}>
             {saveMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving Changes...
+                Saving...
               </>
             ) : (
               <>
                 <Save className="h-4 w-4 mr-2" />
-                Save All Changes
+                Save
+              </>
+            )}
+          </Button>
+          <Button onClick={handleSave} disabled={saveMutation.isPending}>
+            {saveMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save & Exit
               </>
             )}
           </Button>
