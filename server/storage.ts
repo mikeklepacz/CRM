@@ -28,6 +28,7 @@ import {
   statuses,
   tickets,
   ticketReplies,
+  callHistory,
   type User,
   type UpsertUser,
   type Ticket,
@@ -81,6 +82,8 @@ import {
   type InsertSavedExclusion,
   type Status,
   type InsertStatus,
+  type CallHistory,
+  type InsertCallHistory,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -278,6 +281,11 @@ export interface IStorage {
   // Ticket Reply operations
   getTicketReplies(ticketId: string): Promise<TicketReply[]>;
   createTicketReply(reply: InsertTicketReply): Promise<TicketReply>;
+  
+  // Call History operations
+  createCallHistory(callData: InsertCallHistory): Promise<CallHistory>;
+  getUserCallHistory(userId: string): Promise<CallHistory[]>;
+  getAllCallHistory(agentId?: string): Promise<CallHistory[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1698,6 +1706,37 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tickets.id, reply.ticketId));
     
     return newReply;
+  }
+
+  // Call History operations
+  async createCallHistory(callData: InsertCallHistory): Promise<CallHistory> {
+    const [newCall] = await db
+      .insert(callHistory)
+      .values(callData)
+      .returning();
+    return newCall;
+  }
+
+  async getUserCallHistory(userId: string): Promise<CallHistory[]> {
+    return await db
+      .select()
+      .from(callHistory)
+      .where(eq(callHistory.agentId, userId))
+      .orderBy(desc(callHistory.calledAt));
+  }
+
+  async getAllCallHistory(agentId?: string): Promise<CallHistory[]> {
+    if (agentId) {
+      return await db
+        .select()
+        .from(callHistory)
+        .where(eq(callHistory.agentId, agentId))
+        .orderBy(desc(callHistory.calledAt));
+    }
+    return await db
+      .select()
+      .from(callHistory)
+      .orderBy(desc(callHistory.calledAt));
   }
 }
 
