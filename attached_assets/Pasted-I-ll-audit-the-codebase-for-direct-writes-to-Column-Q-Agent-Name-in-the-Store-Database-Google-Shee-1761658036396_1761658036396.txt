@@ -1,0 +1,61 @@
+I'll audit the codebase for direct writes to Column Q (Agent Name) in the Store Database Google Sheet.
+
+After analyzing the code, here are all the locations where we directly write to the "Agent Name" column in the Store Database:
+
+1. Bulk Assign Agent (server/routes.ts ~line 3235)
+const agentColumnLetter = String.fromCharCode(65 + agentNameIndex);
+// ...
+await googleSheets.writeSheetData(storeSheet.spreadsheetId, update.range, update.values);
+This writes the agent name when bulk assigning multiple stores.
+
+2. Claim Multiple Stores (server/routes.ts ~line 3346)
+if (storeAgentIndex !== -1) {
+  const columnLetter = String.fromCharCode(65 + storeAgentIndex);
+  const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
+  await googleSheets.writeSheetData(storeSheet.spreadsheetId, cellRange, [[agentName]]);
+}
+This writes when claiming multiple stores at once.
+
+3. Inline Cell Update (server/routes.ts ~line 4679)
+// Helper to update a cell
+const updateCell = async (columnName: string, value: string) => {
+  const colIndex = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+  if (colIndex !== -1 && value !== undefined) {
+    const columnLetter = String.fromCharCode(65 + colIndex);
+    const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
+    await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value || '']]);
+  }
+};
+This is used for inline editing and could write to any column, including "Agent Name".
+
+4. Set Agent in Inline Edit (server/routes.ts ~line 4703)
+const agentColumnIndex = headers.findIndex(h => h.toLowerCase() === 'agent');
+if (agentColumnIndex !== -1 && user?.email) {
+  const agentColLetter = String.fromCharCode(65 + agentColumnIndex);
+  const agentCellRange = `${sheetName}!${agentColLetter}${existingRowIndex}`;
+  // Check if agent column is empty before overwriting
+  const existingAgentValue = await googleSheets.readSheetData(/* ... */);
+}
+Note: This looks for "agent" (not "agent name"), so it may be targeting a different column.
+
+5. Claim Store in Commission Tracker (server/routes.ts ~line 5205)
+let storeAgentIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
+// ...
+if (storeAgentIndex !== -1) {
+  const columnLetter = String.fromCharCode(65 + storeAgentIndex);
+  const cellRange = `${storeSheet.sheetName}!${columnLetter}${storeRowIndex}`;
+  await googleSheets.writeSheetData(storeSheet.spreadsheetId, cellRange, [[agentName]]);
+}
+This writes when claiming a store from the Commission Tracker.
+
+Summary
+The code writes to "Agent Name" column in these scenarios:
+
+Bulk assign agent - assigns agent to multiple stores
+Claim multiple stores - when claiming multiple stores via checkbox selection
+Inline cell update - when editing cells directly in the table
+Claim from Commission Tracker - when claiming a store from the tracker
+Important Note: The code searches for the column using case-insensitive matching:
+
+headers.findIndex(h => h.toLowerCase() === 'agent name')
+So if your column is named "Agent Name", "agent name", "AGENT NAME", etc., it will find it. The actual column letter (Q) is calculated dynamically based on the column's position in the sheet headers.
