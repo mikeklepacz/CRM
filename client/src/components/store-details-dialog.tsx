@@ -54,7 +54,7 @@ const getLinkValue = (row: any): string | undefined => {
   return undefined;
 };
 
-// Helper function: Format phone number as (XXX) XXX-XXXX
+// Helper function: Format phone number as +1 (XXX) XXX-XXXX
 const formatPhoneNumber = (value: string): string => {
   // Remove all non-digit characters
   const digits = value.replace(/\D/g, '');
@@ -62,13 +62,13 @@ const formatPhoneNumber = (value: string): string => {
   // Don't format if empty
   if (digits.length === 0) return '';
   
-  // Format based on length
+  // Format based on length with +1 prefix
   if (digits.length <= 3) {
-    return digits;
+    return `+1 (${digits}`;
   } else if (digits.length <= 6) {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `+1 (${digits.slice(0, 3)}) ${digits.slice(3)}`;
   } else {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+    return `+1 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
   }
 };
 
