@@ -6063,6 +6063,471 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== DBA PARENT-CHILD MANAGEMENT ENDPOINTS =====
+
+  // Create a parent DBA record (can be corporate office or existing location)
+  app.post('/api/dba/create-parent', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName } = req.body;
+
+      if (!dbaName || !dbaName.trim()) {
+        return res.status(400).json({ message: "DBA name is required" });
+      }
+
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
+      }
+
+      // Read tracker data
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      if (trackerRows.length === 0) {
+        return res.status(404).json({ message: 'Commission Tracker is empty' });
+      }
+
+      const trackerHeaders = trackerRows[0];
+      const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const dbaIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'dba');
+      const isParentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'is parent');
+      const pocNameIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'point of contact');
+      const pocEmailIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'poc email');
+      const pocPhoneIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'poc phone');
+      const notesIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'notes');
+      const agentIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'agent name');
+
+      // If updating an existing location to be parent
+      if (parentLink) {
+        const normalizedParentLink = normalizeLink(parentLink);
+        let foundRowIndex = -1;
+
+        for (let i = 1; i < trackerRows.length; i++) {
+          if (normalizeLink(trackerRows[i][linkIndex] || '') === normalizedParentLink) {
+            foundRowIndex = i + 1; // 1-indexed
+            break;
+          }
+        }
+
+        if (foundRowIndex !== -1) {
+          // Update existing row to be parent
+          const updates: { range: string; values: any[][] }[] = [];
+
+          if (isParentIndex !== -1) {
+            const colLetter = String.fromCharCode(65 + isParentIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+              values: [['TRUE']]
+            });
+          }
+
+          if (dbaIndex !== -1) {
+            const colLetter = String.fromCharCode(65 + dbaIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+              values: [[dbaName]]
+            });
+          }
+
+          // Update POC info if provided
+          if (pocName && pocNameIndex !== -1) {
+            const colLetter = String.fromCharCode(65 + pocNameIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+              values: [[pocName]]
+            });
+          }
+
+          if (pocEmail && pocEmailIndex !== -1) {
+            const colLetter = String.fromCharCode(65 + pocEmailIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+              values: [[pocEmail]]
+            });
+          }
+
+          if (pocPhone && pocPhoneIndex !== -1) {
+            const colLetter = String.fromCharCode(65 + pocPhoneIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+              values: [[pocPhone]]
+            });
+          }
+
+          if (notes && notesIndex !== -1) {
+            const colLetter = String.fromCharCode(65 + notesIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${foundRowIndex}`,
+              values: [[notes]]
+            });
+          }
+
+          // Execute all updates
+          for (const update of updates) {
+            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
+          }
+
+          clearUserCache(userId);
+          return res.json({ 
+            success: true, 
+            message: 'Parent DBA record updated successfully',
+            parentLink 
+          });
+        }
+      }
+
+      // Create new parent record (corporate office without existing store link)
+      const newRow = new Array(trackerHeaders.length).fill('');
+      
+      // Generate a unique link for corporate office (using DBA name)
+      const corporateLink = `dba-parent-${dbaName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+      
+      if (linkIndex !== -1) newRow[linkIndex] = corporateLink;
+      if (dbaIndex !== -1) newRow[dbaIndex] = dbaName;
+      if (isParentIndex !== -1) newRow[isParentIndex] = 'TRUE';
+      if (pocNameIndex !== -1 && pocName) newRow[pocNameIndex] = pocName;
+      if (pocEmailIndex !== -1 && pocEmail) newRow[pocEmailIndex] = pocEmail;
+      if (pocPhoneIndex !== -1 && pocPhone) newRow[pocPhoneIndex] = pocPhone;
+      if (notesIndex !== -1 && notes) newRow[notesIndex] = notes;
+      if (agentIndex !== -1 && agentName) newRow[agentIndex] = agentName;
+
+      // Set status to 'Parent DBA'
+      const statusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
+      if (statusIndex !== -1) newRow[statusIndex] = 'Parent DBA';
+
+      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newRow]);
+
+      clearUserCache(userId);
+      res.json({ 
+        success: true, 
+        message: 'Parent DBA record created successfully',
+        parentLink: corporateLink
+      });
+    } catch (error: any) {
+      console.error("Error creating parent DBA:", error);
+      res.status(500).json({ message: error.message || "Failed to create parent DBA" });
+    }
+  });
+
+  // Link child locations to a parent DBA
+  app.post('/api/dba/link-children', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { parentLink, childLinks } = req.body;
+
+      if (!parentLink || !childLinks || !Array.isArray(childLinks) || childLinks.length === 0) {
+        return res.status(400).json({ message: "Parent link and child links array are required" });
+      }
+
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
+      }
+
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      if (trackerRows.length === 0) {
+        return res.status(404).json({ message: 'Commission Tracker is empty' });
+      }
+
+      const trackerHeaders = trackerRows[0];
+      const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const parentLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'parent link');
+
+      if (linkIndex === -1) {
+        return res.status(404).json({ message: 'Link column not found' });
+      }
+
+      if (parentLinkIndex === -1) {
+        return res.status(404).json({ message: 'Parent Link column not found in Commission Tracker. Please add a "Parent Link" column.' });
+      }
+
+      const normalizedParentLink = normalizeLink(parentLink);
+      const updates: { range: string; values: any[][] }[] = [];
+      let linkedCount = 0;
+
+      // Link each child to the parent
+      for (const childLink of childLinks) {
+        const normalizedChildLink = normalizeLink(childLink);
+        
+        for (let i = 1; i < trackerRows.length; i++) {
+          if (normalizeLink(trackerRows[i][linkIndex] || '') === normalizedChildLink) {
+            const rowIndex = i + 1; // 1-indexed
+            const colLetter = String.fromCharCode(65 + parentLinkIndex);
+            
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${rowIndex}`,
+              values: [[parentLink]]
+            });
+            linkedCount++;
+            break;
+          }
+        }
+      }
+
+      // Execute all updates
+      for (const update of updates) {
+        await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
+      }
+
+      clearUserCache(userId);
+      res.json({ 
+        success: true, 
+        message: `Successfully linked ${linkedCount} location(s) to parent DBA`,
+        linkedCount
+      });
+    } catch (error: any) {
+      console.error("Error linking child locations:", error);
+      res.status(500).json({ message: error.message || "Failed to link child locations" });
+    }
+  });
+
+  // Unlink child locations from a parent DBA
+  app.post('/api/dba/unlink-children', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { childLinks } = req.body;
+
+      if (!childLinks || !Array.isArray(childLinks) || childLinks.length === 0) {
+        return res.status(400).json({ message: "Child links array is required" });
+      }
+
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
+      }
+
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      const trackerHeaders = trackerRows[0];
+      const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const parentLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'parent link');
+
+      if (parentLinkIndex === -1) {
+        return res.status(404).json({ message: 'Parent Link column not found' });
+      }
+
+      const updates: { range: string; values: any[][] }[] = [];
+      let unlinkedCount = 0;
+
+      // Clear parent link for each child
+      for (const childLink of childLinks) {
+        const normalizedChildLink = normalizeLink(childLink);
+        
+        for (let i = 1; i < trackerRows.length; i++) {
+          if (normalizeLink(trackerRows[i][linkIndex] || '') === normalizedChildLink) {
+            const rowIndex = i + 1;
+            const colLetter = String.fromCharCode(65 + parentLinkIndex);
+            
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${rowIndex}`,
+              values: [['']]
+            });
+            unlinkedCount++;
+            break;
+          }
+        }
+      }
+
+      // Execute all updates
+      for (const update of updates) {
+        await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
+      }
+
+      clearUserCache(userId);
+      res.json({ 
+        success: true, 
+        message: `Successfully unlinked ${unlinkedCount} location(s) from parent DBA`,
+        unlinkedCount
+      });
+    } catch (error: any) {
+      console.error("Error unlinking child locations:", error);
+      res.status(500).json({ message: error.message || "Failed to unlink child locations" });
+    }
+  });
+
+  // Set head office for a DBA group
+  app.post('/api/dba/set-head-office', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { headOfficeLink, parentLink, mergePocInfo } = req.body;
+
+      if (!headOfficeLink) {
+        return res.status(400).json({ message: "Head office link is required" });
+      }
+
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
+      }
+
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      const trackerHeaders = trackerRows[0];
+      const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const headOfficeLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'head office link');
+      const parentLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'parent link');
+
+      if (headOfficeLinkIndex === -1) {
+        return res.status(404).json({ message: 'Head Office Link column not found in Commission Tracker. Please add a "Head Office Link" column.' });
+      }
+
+      const normalizedHeadOfficeLink = normalizeLink(headOfficeLink);
+      const normalizedParentLink = parentLink ? normalizeLink(parentLink) : null;
+
+      // Find parent row and head office row
+      let parentRowIndex = -1;
+      let headOfficeRowIndex = -1;
+      let headOfficeData: any = {};
+
+      for (let i = 1; i < trackerRows.length; i++) {
+        const rowLink = normalizeLink(trackerRows[i][linkIndex] || '');
+        
+        if (rowLink === normalizedHeadOfficeLink) {
+          headOfficeRowIndex = i + 1;
+          // Store head office data
+          trackerHeaders.forEach((header, idx) => {
+            headOfficeData[header] = trackerRows[i][idx] || '';
+          });
+        }
+        
+        if (normalizedParentLink && rowLink === normalizedParentLink) {
+          parentRowIndex = i + 1;
+        }
+      }
+
+      const updates: { range: string; values: any[][] }[] = [];
+
+      // Set head office link on parent (if parent exists)
+      if (parentRowIndex !== -1 && headOfficeLinkIndex !== -1) {
+        const colLetter = String.fromCharCode(65 + headOfficeLinkIndex);
+        updates.push({
+          range: `${trackerSheet.sheetName}!${colLetter}${parentRowIndex}`,
+          values: [[headOfficeLink]]
+        });
+
+        // Merge POC info from head office to parent if requested
+        if (mergePocInfo && headOfficeRowIndex !== -1) {
+          const pocNameIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'point of contact');
+          const pocEmailIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'poc email');
+          const pocPhoneIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'poc phone');
+          const notesIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'notes');
+
+          if (pocNameIndex !== -1 && headOfficeData['Point of Contact']) {
+            const colLetter = String.fromCharCode(65 + pocNameIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${parentRowIndex}`,
+              values: [[headOfficeData['Point of Contact']]]
+            });
+          }
+
+          if (pocEmailIndex !== -1 && headOfficeData['POC Email']) {
+            const colLetter = String.fromCharCode(65 + pocEmailIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${parentRowIndex}`,
+              values: [[headOfficeData['POC Email']]]
+            });
+          }
+
+          if (pocPhoneIndex !== -1 && headOfficeData['POC Phone']) {
+            const colLetter = String.fromCharCode(65 + pocPhoneIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${parentRowIndex}`,
+              values: [[headOfficeData['POC Phone']]]
+            });
+          }
+
+          // Append notes instead of overwriting
+          if (notesIndex !== -1 && headOfficeData['Notes']) {
+            const existingNotes = trackerRows[parentRowIndex - 1][notesIndex] || '';
+            const mergedNotes = existingNotes 
+              ? `${existingNotes}\n\n[From ${headOfficeData['Name'] || 'Head Office'}]: ${headOfficeData['Notes']}`
+              : headOfficeData['Notes'];
+            
+            const colLetter = String.fromCharCode(65 + notesIndex);
+            updates.push({
+              range: `${trackerSheet.sheetName}!${colLetter}${parentRowIndex}`,
+              values: [[mergedNotes]]
+            });
+          }
+        }
+      }
+
+      // Execute all updates
+      for (const update of updates) {
+        await googleSheets.writeSheetData(trackerSheet.spreadsheetId, update.range, update.values);
+      }
+
+      clearUserCache(userId);
+      res.json({ 
+        success: true, 
+        message: 'Head office set successfully',
+        pocInfoMerged: mergePocInfo && parentRowIndex !== -1
+      });
+    } catch (error: any) {
+      console.error("Error setting head office:", error);
+      res.status(500).json({ message: error.message || "Failed to set head office" });
+    }
+  });
+
+  // Get all child locations for a parent DBA
+  app.get('/api/dba/children/:parentLink', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { parentLink } = req.params;
+
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
+      }
+
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      const trackerHeaders = trackerRows[0];
+      const linkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const parentLinkIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'parent link');
+
+      if (parentLinkIndex === -1) {
+        return res.json({ children: [] });
+      }
+
+      const normalizedParentLink = normalizeLink(parentLink);
+      const children: any[] = [];
+
+      for (let i = 1; i < trackerRows.length; i++) {
+        const rowParentLink = trackerRows[i][parentLinkIndex] || '';
+        
+        if (normalizeLink(rowParentLink) === normalizedParentLink) {
+          const childData: any = {};
+          trackerHeaders.forEach((header, idx) => {
+            childData[header] = trackerRows[i][idx] || '';
+          });
+          children.push(childData);
+        }
+      }
+
+      res.json({ children });
+    } catch (error: any) {
+      console.error("Error getting child locations:", error);
+      res.status(500).json({ message: error.message || "Failed to get child locations" });
+    }
+  });
+
   // ===== SALES ANALYTICS ENDPOINTS =====
 
   // Get dashboard summary with key sales metrics (from Google Sheets)
