@@ -173,62 +173,31 @@ export function FranchiseFinderDialog({
                     </div>
 
                     {/* Canada Checkbox */}
-                    {canadianStates.length > 0 && (
-                      <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
-                        <Checkbox
-                          id="canada-toggle"
-                          checked={showCanadaOnly}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedStates(canadianStates);
-                            } else {
-                              setSelectedStates([]);
-                            }
-                          }}
-                          data-testid="checkbox-canada-toggle"
-                        />
-                        <Label
-                          htmlFor="canada-toggle"
-                          className="text-sm cursor-pointer flex-1 font-medium"
-                        >
-                          Canada
-                        </Label>
-                        <span className="text-xs text-muted-foreground">
-                          ({canadianStates.reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
-                        </span>
-                      </div>
-                    )}
-
-                    {/* USA Checkbox */}
-                    {usStates.length > 0 && (
-                      <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
-                        <Checkbox
-                          id="usa-toggle"
-                          checked={showUSAOnly}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedStates(usStates);
-                            } else {
-                              setSelectedStates([]);
-                            }
-                          }}
-                          data-testid="checkbox-usa-toggle"
-                        />
-                        <Label
-                          htmlFor="usa-toggle"
-                          className="text-sm cursor-pointer flex-1 font-medium"
-                        >
-                          USA
-                        </Label>
-                        <span className="text-xs text-muted-foreground">
-                          ({usStates.reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                      <Checkbox
+                        id="canada-toggle"
+                        checked={showCanadaOnly}
+                        onCheckedChange={(checked) => {
+                          setShowCanadaOnly(!!checked);
+                        }}
+                        data-testid="checkbox-canada-toggle"
+                      />
+                      <Label
+                        htmlFor="canada-toggle"
+                        className="text-sm cursor-pointer flex-1 font-medium"
+                      >
+                        Canada
+                      </Label>
+                      <span className="text-xs text-muted-foreground">
+                        ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
+                      </span>
+                    </div>
 
                     <ScrollArea className="h-64">
                       <div className="space-y-2">
-                        {allStates.map((state) => (
+                        {allStates
+                          .filter(state => showCanadaOnly ? isCanadianProvince(state) : !isCanadianProvince(state))
+                          .map((state) => (
                           <div key={state} className="flex items-center gap-2">
                             <Checkbox
                               id={`state-${state}`}
