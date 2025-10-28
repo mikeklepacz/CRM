@@ -4479,7 +4479,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      const mergedData = Array.from(mergedDataMap.values());
+      let mergedData = Array.from(mergedDataMap.values());
+
+      // ============================================================================
+      // DBA Parent-Child Filtering
+      // ============================================================================
+      // Filter out child locations that have a Parent Link
+      // This ensures only parent records (or standalone records) show in dashboard
+      // Child locations can be viewed by expanding the parent in Store Details dialog
+      // ============================================================================
+      const parentLinkColumn = trackerHeaders.find(h => h.toLowerCase() === 'parent link');
+      if (parentLinkColumn) {
+        mergedData = mergedData.filter(row => {
+          const parentLinkValue = row[parentLinkColumn];
+          // Keep rows without a parent link (parents or standalone stores)
+          // Filter out rows with a parent link (children)
+          return !parentLinkValue || parentLinkValue.toString().trim() === '';
+        });
+      }
 
       // Combine headers (store headers + tracker headers, avoiding duplicates)
       const allHeaders = [...storeHeaders];
