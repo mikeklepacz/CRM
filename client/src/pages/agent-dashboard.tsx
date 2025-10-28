@@ -72,10 +72,10 @@ export default function AgentDashboard() {
     queryKey: ["/api/sheets"],
   });
 
-  const trackerSheet = sheetsData?.sheets?.find((sheet: any) => 
+  const trackerSheet = sheetsData?.sheets?.find((sheet: any) =>
     sheet.sheetPurpose === 'commissions'
   );
-  const storeDbSheet = sheetsData?.sheets?.find((sheet: any) => 
+  const storeDbSheet = sheetsData?.sheets?.find((sheet: any) =>
     sheet.sheetPurpose === 'Store Database'
   );
 
@@ -133,7 +133,7 @@ export default function AgentDashboard() {
     const lastOrderDate = client.lastOrderDate ? new Date(client.lastOrderDate) : null;
 
     // Check if either date falls within the time period
-    const claimInRange = !!(claimDate && 
+    const claimInRange = !!(claimDate &&
       (!timeRange?.from || claimDate >= timeRange.from) &&
       (!timeRange?.to || claimDate <= timeRange.to));
 
@@ -471,14 +471,23 @@ export default function AgentDashboard() {
               currentUser={user}
               isLoading={clientsLoading}
               onNotesClick={async (clientId) => {
+                console.log('🔵 [NOTES CLICK] Button clicked for clientId:', clientId);
+
                 const client = clients.find(c => c.id === clientId);
-                if (!client) return;
+                console.log('🔵 [NOTES CLICK] Client lookup result:', client ? 'FOUND' : 'NOT FOUND');
+
+                if (!client) {
+                  console.error('🔴 [NOTES CLICK] Client not found in clients array');
+                  return;
+                }
 
                 // Get store link from client data
                 const storeLink = client.link || client.data?.['Link'] || client.data?.['link'];
+                console.log('🔵 [NOTES CLICK] Store link extracted:', storeLink);
 
                 // Guard against missing store link
                 if (!storeLink) {
+                  console.error('🔴 [NOTES CLICK] No store link found');
                   toast({
                     title: "Error",
                     description: "Unable to identify store",
@@ -491,13 +500,16 @@ export default function AgentDashboard() {
                 const pocPhone = client.data?.['POC Phone'] || client.data?.['poc_phone'];
                 const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
                 const phoneNumber = pocPhone || regularPhone;
+                console.log('🔵 [NOTES CLICK] Phone number extracted:', phoneNumber);
 
                 // Get sheet IDs from sheets data (same pattern as Client Dashboard)
                 const storeSheetId = storeDbSheet?.id;
                 const trackerSheetId = trackerSheet?.id;
                 const joinColumn = "link";
+                console.log('🔵 [NOTES CLICK] Sheet IDs - Store:', storeSheetId, 'Tracker:', trackerSheetId);
 
                 if (!storeSheetId || !trackerSheetId) {
+                  console.error('🔴 [NOTES CLICK] Missing sheet configuration');
                   toast({
                     title: "Error",
                     description: "Sheet configuration not found. Please configure sheets in Admin Dashboard.",
@@ -507,21 +519,46 @@ export default function AgentDashboard() {
                 }
 
                 try {
+                  console.log('🔵 [NOTES CLICK] Fetching merged data from API...');
+
                   // Fetch fresh data from Google Sheets (same as Client Dashboard)
                   const response = await fetch('/api/sheets/merged-data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ storeSheetId, trackerSheetId, joinColumn }),
                   });
-                  if (!response.ok) throw new Error('Failed to fetch store data');
+
+                  console.log('🔵 [NOTES CLICK] API response status:', response.status, response.statusText);
+
+                  if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('🔴 [NOTES CLICK] API error response:', errorText);
+                    throw new Error('Failed to fetch store data');
+                  }
 
                   const responseData = await response.json();
+                  console.log('🔵 [NOTES CLICK] API response structure:', {
+                    hasData: !!responseData?.data,
+                    dataLength: responseData?.data?.length,
+                    hasHeaders: !!responseData?.headers,
+                    fullResponse: responseData
+                  });
 
-                  // Extract rows from the response (API returns { headers, rows })
-                  const mergedData = responseData?.rows || responseData;
+                  // Extract data from the response (API returns { headers, data, editableColumns, ... })
+                  const mergedData = responseData?.data || [];
+                  console.log('🔵 [NOTES CLICK] Extracted mergedData:', {
+                    isArray: Array.isArray(mergedData),
+                    length: mergedData.length,
+                    firstItem: mergedData[0]
+                  });
 
                   // Add null check for mergedData
-                  if (!mergedData || !Array.isArray(mergedData)) {
+                  if (!mergedData || !Array.isArray(mergedData) || mergedData.length === 0) {
+                    console.error('🔴 [NOTES CLICK] Invalid merged data:', {
+                      mergedData,
+                      isArray: Array.isArray(mergedData),
+                      length: mergedData?.length
+                    });
                     toast({
                       title: "Error",
                       description: "Store data not loaded. Please refresh the page.",
@@ -531,9 +568,18 @@ export default function AgentDashboard() {
                   }
 
                   // Find the matching store by link
+                  console.log('🔵 [NOTES CLICK] Searching for store with link:', storeLink);
+                  console.log('🔵 [NOTES CLICK] Available links in data:', mergedData.map((r: any) => r.Link || r.link));
+
                   const row = mergedData.find((r: any) => r.Link === storeLink || r.link === storeLink);
+                  console.log('🔵 [NOTES CLICK] Store search result:', row ? 'FOUND' : 'NOT FOUND');
+
+                  if (row) {
+                    console.log('🔵 [NOTES CLICK] Found store data:', row);
+                  }
 
                   if (!row) {
+                    console.error('🔴 [NOTES CLICK] Store not found in merged data');
                     toast({
                       title: "Error",
                       description: "Store not found in database",
@@ -542,14 +588,22 @@ export default function AgentDashboard() {
                     return;
                   }
 
+                  console.log('🟢 [NOTES CLICK] Opening Store Details dialog...');
+
                   // Open Store Details dialog with fresh Google Sheets data
                   setStoreDetailsDialog({
                     open: true,
                     row: row, // Pass the exact same structure as Client Dashboard
                     autoCallPhone: phoneNumber, // This will trigger auto-call via useEffect
                   });
+
+                  console.log('🟢 [NOTES CLICK] Store Details dialog state set successfully');
                 } catch (error) {
-                  console.error('Error fetching store data:', error);
+                  console.error('🔴 [NOTES CLICK] Exception caught:', error);
+                  console.error('🔴 [NOTES CLICK] Error details:', {
+                    message: error instanceof Error ? error.message : 'Unknown error',
+                    stack: error instanceof Error ? error.stack : undefined
+                  });
                   toast({
                     title: "Error",
                     description: "Failed to load store details",
@@ -565,7 +619,7 @@ export default function AgentDashboard() {
       {/* Right Column - Reminders Widget (hidden on mobile/tablet, visible on large screens) */}
       <div className="hidden lg:block lg:w-96 border-l overflow-y-auto">
         <div className="p-4 h-full">
-          <RemindersWidget 
+          <RemindersWidget
             onPhoneClick={(storeIdentifier, phoneNumber) => {
               console.log('[AgentDashboard] onPhoneClick called:', { storeIdentifier, phoneNumber });
               const params = new URLSearchParams({ store: storeIdentifier });
@@ -579,8 +633,8 @@ export default function AgentDashboard() {
       </div>
 
       {/* Call History Dialog */}
-      <CallHistoryDialog 
-        open={callHistoryOpen} 
+      <CallHistoryDialog
+        open={callHistoryOpen}
         onOpenChange={setCallHistoryOpen}
         onCallStore={(storeLink, phoneNumber) => {
           // Navigate to the store details page with phone parameter

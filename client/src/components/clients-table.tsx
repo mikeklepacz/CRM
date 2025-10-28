@@ -167,7 +167,7 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
     if (link && currentUser.role !== 'admin') {
       autoClaimMutation.mutate(link);
     }
-    
+
     // Log the call to database
     logCallMutation.mutate({
       storeName,
@@ -355,7 +355,18 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => onNotesClick(client.id)}
+                          onClick={(e) => {
+                            console.log('🟡 [NOTES BUTTON] Click event triggered');
+                            console.log('🟡 [NOTES BUTTON] Client ID:', client.id);
+                            console.log('🟡 [NOTES BUTTON] onNotesClick handler exists:', !!onNotesClick);
+                            e.stopPropagation();
+                            if (onNotesClick) {
+                              console.log('🟡 [NOTES BUTTON] Calling onNotesClick...');
+                              onNotesClick(client.id);
+                            } else {
+                              console.error('🔴 [NOTES BUTTON] onNotesClick handler is undefined!');
+                            }
+                          }}
                           data-testid={`button-notes-${client.id}`}
                           className={`h-auto py-2 flex flex-col items-center gap-0 ${
                             (client as any).needsFollowUp 
