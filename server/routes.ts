@@ -6086,25 +6086,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/dba/create-parent', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName, address, city, state, phone, email, storeSheetId, trackerSheetId } = req.body;
-
-      console.log('[CREATE-PARENT] ========== ENDPOINT CALLED ==========');
-      console.log('[CREATE-PARENT] Request body:', { dbaName, parentLink, address, city, state, phone, email, storeSheetId, trackerSheetId });
+      const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName } = req.body;
 
       if (!dbaName || !dbaName.trim()) {
         return res.status(400).json({ message: "DBA name is required" });
       }
 
-      if (!storeSheetId || !trackerSheetId) {
-        return res.status(400).json({ message: "Store and Tracker sheet IDs are required" });
-      }
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
-      // Get sheets by ID
-      const storeSheet = await storage.getGoogleSheetById(storeSheetId);
-      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
-
-      if (!storeSheet || !trackerSheet) {
-        return res.status(404).json({ message: 'One or both sheets not found' });
+      if (!trackerSheet) {
+        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
       }
 
       // Read tracker data
@@ -6204,103 +6197,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Create new parent record (corporate office with full address)
-      console.log('[CREATE-PARENT] 🆕 Creating NEW parent DBA record');
-      console.log('[CREATE-PARENT] DBA Name:', dbaName);
-      console.log('[CREATE-PARENT] Address:', address, city, state);
-      console.log('[CREATE-PARENT] Phone:', phone, 'Email:', email);
+      // Create new parent record (corporate office without existing store link)
+      const newRow = new Array(trackerHeaders.length).fill('');
       
-      // Generate a unique UUID for the corporate office link
-      const corporateLink = crypto.randomUUID();
-      console.log('[CREATE-PARENT] Generated corporate link UUID:', corporateLink);
-
-      // Step 1: Create store in Store Database sheet
-      console.log('[CREATE-PARENT] 📋 STEP 1: Writing to Store Database');
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-
-      if (storeRows.length === 0) {
-        return res.status(404).json({ message: 'Store Database is empty' });
-      }
-
-      const storeHeaders = storeRows[0];
-      console.log('[CREATE-PARENT] Store Database headers:', storeHeaders);
+      // Generate a unique link for corporate office (using DBA name)
+      const corporateLink = `dba-parent-${dbaName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
       
-      // Store Database columns: Name, Type, Link, Member Since, Address, City, State, Phone, Website, Email, Followers, Tags, Hours, DBA, Vibe Score, Sales-ready Summary, Agent Name, OPEN, Category
-      const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
-      const storeTypeIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'type');
-      const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-      const storeMemberSinceIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'member since');
-      const storeAddressIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'address');
-      const storeCityIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'city');
-      const storeStateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
-      const storePhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'phone');
-      const storeWebsiteIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'website');
-      const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
-      const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
-
-      console.log('[CREATE-PARENT] Column indices - Name:', storeNameIndex, 'Link:', storeLinkIndex, 'Address:', storeAddressIndex);
-
-      // Initialize array with proper length - empty strings allow formulas (DBA, Agent Name) to work
-      const newStoreRow: any[] = new Array(storeHeaders.length).fill('');
-      
-      // Set only the columns we're explicitly populating - DO NOT touch DBA or Agent Name (formulas handle those)
-      if (storeNameIndex !== -1) newStoreRow[storeNameIndex] = dbaName; // Use DBA name as store name
-      if (storeLinkIndex !== -1) newStoreRow[storeLinkIndex] = corporateLink;
-      if (storeMemberSinceIndex !== -1) newStoreRow[storeMemberSinceIndex] = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      if (storeAddressIndex !== -1) newStoreRow[storeAddressIndex] = address || '';
-      if (storeCityIndex !== -1) newStoreRow[storeCityIndex] = city || '';
-      if (storeStateIndex !== -1) newStoreRow[storeStateIndex] = state || '';
-      if (storePhoneIndex !== -1) newStoreRow[storePhoneIndex] = phone || '';
-      if (storeWebsiteIndex !== -1) newStoreRow[storeWebsiteIndex] = '';
-      if (storeEmailIndex !== -1) newStoreRow[storeEmailIndex] = email || '';
-      // Category will be populated later - leave as empty string for now
-      if (storeCategoryIndex !== -1) newStoreRow[storeCategoryIndex] = '';
-
-      console.log('[CREATE-PARENT] Store Database row to append:', newStoreRow);
-      console.log('[CREATE-PARENT] Appending to Store Database:', storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
-      
-      try {
-        await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [newStoreRow]);
-        console.log('[CREATE-PARENT] ✅ Store Database append successful');
-      } catch (error: any) {
-        console.error('[CREATE-PARENT] ❌ Store Database append FAILED:', error.message);
-        throw error;
-      }
-
-      // Step 2: Create corresponding row in Commission Tracker
-      console.log('[CREATE-PARENT] 📋 STEP 2: Writing to Commission Tracker');
-      const newTrackerRow = new Array(trackerHeaders.length).fill('');
-      
-      if (linkIndex !== -1) newTrackerRow[linkIndex] = corporateLink;
-      if (dbaIndex !== -1) newTrackerRow[dbaIndex] = dbaName;
-      if (isParentIndex !== -1) newTrackerRow[isParentIndex] = 'TRUE';
-      if (pocNameIndex !== -1 && pocName) newTrackerRow[pocNameIndex] = pocName;
-      if (pocEmailIndex !== -1 && pocEmail) newTrackerRow[pocEmailIndex] = pocEmail;
-      if (pocPhoneIndex !== -1 && pocPhone) newTrackerRow[pocPhoneIndex] = pocPhone;
-      if (notesIndex !== -1 && notes) newTrackerRow[notesIndex] = notes;
-      if (agentIndex !== -1 && agentName) newTrackerRow[agentIndex] = agentName;
+      if (linkIndex !== -1) newRow[linkIndex] = corporateLink;
+      if (dbaIndex !== -1) newRow[dbaIndex] = dbaName;
+      if (isParentIndex !== -1) newRow[isParentIndex] = 'TRUE';
+      if (pocNameIndex !== -1 && pocName) newRow[pocNameIndex] = pocName;
+      if (pocEmailIndex !== -1 && pocEmail) newRow[pocEmailIndex] = pocEmail;
+      if (pocPhoneIndex !== -1 && pocPhone) newRow[pocPhoneIndex] = pocPhone;
+      if (notesIndex !== -1 && notes) newRow[notesIndex] = notes;
+      if (agentIndex !== -1 && agentName) newRow[agentIndex] = agentName;
 
       // Set status to 'Parent DBA'
       const statusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
-      if (statusIndex !== -1) newTrackerRow[statusIndex] = 'Parent DBA';
+      if (statusIndex !== -1) newRow[statusIndex] = 'Parent DBA';
 
-      console.log('[CREATE-PARENT] Commission Tracker row to append:', newTrackerRow);
-      console.log('[CREATE-PARENT] Appending to Commission Tracker:', trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`);
-      
-      try {
-        await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
-        console.log('[CREATE-PARENT] ✅ Commission Tracker append successful');
-      } catch (error: any) {
-        console.error('[CREATE-PARENT] ❌ Commission Tracker append FAILED:', error.message);
-        throw error;
-      }
+      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newRow]);
 
       clearUserCache(userId);
-      console.log('[CREATE-PARENT] ========== SUCCESS - Parent created with link:', corporateLink, '==========');
       res.json({ 
         success: true, 
-        message: 'Parent DBA record created successfully in both Store Database and Commission Tracker',
+        message: 'Parent DBA record created successfully',
         parentLink: corporateLink
       });
     } catch (error: any) {
@@ -6621,72 +6542,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error getting child locations:", error);
       res.status(500).json({ message: error.message || "Failed to get child locations" });
-    }
-  });
-
-  // ===== TEST ENDPOINT - WRITE TO STORE DATABASE NAME COLUMN =====
-  app.post('/api/test/write-name', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      console.log('[TEST-WRITE] 🧪 Test endpoint called - Writing to Store Database Name column');
-      
-      const sheets = await storage.getAllActiveGoogleSheets();
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
-
-      if (!storeSheet) {
-        return res.status(404).json({ message: 'Store Database sheet not found' });
-      }
-
-      // Read current rows to determine next row number
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-      
-      if (storeRows.length === 0) {
-        return res.status(404).json({ message: 'Store Database is empty' });
-      }
-
-      const nextRowNumber = storeRows.length + 1;
-      const testUUID = crypto.randomUUID();
-      const testName = `TEST WRITE - ${new Date().toISOString()}`;
-      
-      console.log('[TEST-WRITE] Next row number:', nextRowNumber);
-      console.log('[TEST-WRITE] Test UUID:', testUUID);
-      console.log('[TEST-WRITE] Test Name:', testName);
-
-      // Step 1: Append minimal row (just Link column at position 2/C)
-      const storeHeaders = storeRows[0];
-      const linkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-      
-      if (linkIndex === -1) {
-        return res.status(404).json({ message: 'Link column not found in Store Database' });
-      }
-
-      // Create minimal row with only Link populated
-      const minimalRow = new Array(storeHeaders.length).fill('');
-      minimalRow[linkIndex] = testUUID;
-
-      console.log('[TEST-WRITE] Appending minimal row with Link UUID');
-      await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [minimalRow]);
-      console.log('[TEST-WRITE] ✅ Minimal row appended');
-
-      // Step 2: Write specifically to Name column (Column A) of the new row
-      const nameCellRange = `${storeSheet.sheetName}!A${nextRowNumber}`;
-      console.log('[TEST-WRITE] Writing to Name cell:', nameCellRange);
-      
-      await googleSheets.writeSheetData(storeSheet.spreadsheetId, nameCellRange, [[testName]]);
-      console.log('[TEST-WRITE] ✅ Name written to cell A' + nextRowNumber);
-
-      res.json({
-        success: true,
-        message: `Successfully wrote to Store Database Name column (Row ${nextRowNumber})`,
-        rowNumber: nextRowNumber,
-        testName,
-        testUUID,
-        sheetName: storeSheet.sheetName,
-        spreadsheetId: storeSheet.spreadsheetId
-      });
-    } catch (error: any) {
-      console.error('[TEST-WRITE] ❌ Error:', error);
-      res.status(500).json({ message: error.message || 'Failed to write test data' });
     }
   });
 

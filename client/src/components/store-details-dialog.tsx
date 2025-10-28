@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, Check, ChevronsUpDown } from "lucide-react";
+import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -21,20 +21,6 @@ import { format } from "date-fns";
 import { QuickReminder } from "@/components/quick-reminder";
 import { normalizeLink } from "@shared/linkUtils";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-
-// US States and Canadian Provinces
-const US_STATES_AND_PROVINCES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia',
-  'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland',
-  'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey',
-  'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
-  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
-  'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador', 'Northwest Territories',
-  'Nova Scotia', 'Nunavut', 'Ontario', 'Prince Edward Island', 'Quebec', 'Saskatchewan', 'Yukon'
-];
 
 // Helper function: Case-insensitive lookup for link value
 const getLinkValue = (row: any): string | undefined => {
@@ -52,24 +38,6 @@ const getLinkValue = (row: any): string | undefined => {
   }
 
   return undefined;
-};
-
-// Helper function: Format phone number as +1 XXX-XXX-XXXX
-const formatPhoneNumber = (value: string): string => {
-  // Remove all non-digit characters
-  const digits = value.replace(/\D/g, '');
-  
-  // Don't format if empty
-  if (digits.length === 0) return '';
-  
-  // Format based on length with +1 prefix
-  if (digits.length <= 3) {
-    return `+1 ${digits}`;
-  } else if (digits.length <= 6) {
-    return `+1 ${digits.slice(0, 3)}-${digits.slice(3)}`;
-  } else {
-    return `+1 ${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-  }
 };
 
 // Store Details Dialog Component
@@ -131,15 +99,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   // Multiple Locations feature state
   const [multiLocationMode, setMultiLocationMode] = useState(false);
   const [dbaName, setDbaName] = useState("");
-  const [dbaCity, setDbaCity] = useState("");
-  const [dbaState, setDbaState] = useState("");
-  const [dbaType, setDbaType] = useState("");
-  const [stateComboboxOpen, setStateComboboxOpen] = useState(false);
   const [currentDbaStores, setCurrentDbaStores] = useState<Array<{ link: string; name: string }>>([]);
   const [selectedStores, setSelectedStores] = useState<Array<{ link: string; name: string }>>([]);
   const [storeSearchDialog, setStoreSearchDialog] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
-
+  
   // Parent DBA management state
   const [parentCreationType, setParentCreationType] = useState<'new' | 'existing'>('new');
   const [selectedParentLink, setSelectedParentLink] = useState<string>('');
@@ -147,13 +111,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [parentPocName, setParentPocName] = useState('');
   const [parentPocEmail, setParentPocEmail] = useState('');
   const [parentPocPhone, setParentPocPhone] = useState('');
-  const [parentAddress, setParentAddress] = useState('');
-  const [parentCity, setParentCity] = useState('');
-  const [parentState, setParentState] = useState('');
-  const [parentPhone, setParentPhone] = useState('');
-  const [parentEmail, setParentEmail] = useState('');
-  const [isClaimingMultiple, setIsClaimingMultiple] = useState(false);
-  const [phoneFormatTimer, setPhoneFormatTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Child locations management
   const currentStoreLink = getLinkValue(row);
@@ -282,9 +239,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       };
       setFormData(populatedData);
       setInitialData(populatedData);
-
-      // Set dbaState from populated data
-      setDbaState(populatedData.state);
 
       // Track the active row to prevent race conditions
       const currentLink = getValue(['Link', 'link']);
@@ -521,8 +475,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         }
       });
 
-      // MULTIPLE LOCATIONS MODE: Validate Agent Name is set
+      // MULTIPLE LOCATIONS MODE: Write DBA and Agent Name to Store Database
       if (multiLocationMode && dbaName && dbaName.trim()) {
+        // Validate Agent Name is set
         if (!currentUser?.agentName) {
           toast({
             title: "Agent Name Required",
@@ -531,8 +486,27 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
           });
           return;
         }
-        // Note: DBA and Agent Name are written to Commission Tracker only
-        // Store Database gets these values via Google Sheets formulas
+
+        const sheetId = storeSheetId;
+        const rowIndex = row._storeRowIndex;
+
+        if (sheetId && rowIndex) {
+          // Add DBA change
+          storeChanges.push({
+            sheetId,
+            rowIndex,
+            column: 'DBA',
+            value: dbaName.trim()
+          });
+
+          // Add Agent Name change
+          storeChanges.push({
+            sheetId,
+            rowIndex,
+            column: 'Agent Name',
+            value: currentUser.agentName
+          });
+        }
       }
 
       if (storeChanges.length === 0 && Object.keys(trackerChanges).length === 0) {
@@ -1035,91 +1009,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       </div>
                                     </div>
 
-                                    {/* Parent address fields (for new parent only) */}
+                                    {/* Parent POC fields (for new parent only) */}
                                     {parentCreationType === 'new' && (
-                                      <div className="space-y-3 pt-2 border-t">
-                                        <Label className="text-xs text-muted-foreground">Corporate Office Location</Label>
-                                        <div className="grid grid-cols-1 gap-2">
-                                          <Input
-                                            placeholder="Address"
-                                            value={parentAddress}
-                                            onChange={(e) => setParentAddress(e.target.value)}
-                                            data-testid="input-parent-address"
-                                          />
-                                          <div className="grid grid-cols-2 gap-2">
-                                            <Input
-                                              placeholder="City"
-                                              value={parentCity}
-                                              onChange={(e) => setParentCity(e.target.value)}
-                                              data-testid="input-parent-city"
-                                            />
-                                            <Popover>
-                                              <PopoverTrigger asChild>
-                                                <Button
-                                                  variant="outline"
-                                                  role="combobox"
-                                                  className="w-full justify-between font-normal"
-                                                  data-testid="select-parent-state"
-                                                >
-                                                  {parentState || "State/Province"}
-                                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                              </PopoverTrigger>
-                                              <PopoverContent className="w-[200px] p-0" align="start">
-                                                <Command>
-                                                  <CommandInput placeholder="Search state..." />
-                                                  <CommandList>
-                                                    <CommandEmpty>No state found.</CommandEmpty>
-                                                    <CommandGroup>
-                                                      <ScrollArea className="h-[200px]">
-                                                        {US_STATES_AND_PROVINCES.map((state) => (
-                                                          <CommandItem
-                                                            key={state}
-                                                            value={state}
-                                                            onSelect={() => setParentState(state)}
-                                                          >
-                                                            <Check className={`mr-2 h-4 w-4 ${parentState === state ? "opacity-100" : "opacity-0"}`} />
-                                                            {state}
-                                                          </CommandItem>
-                                                        ))}
-                                                      </ScrollArea>
-                                                    </CommandGroup>
-                                                  </CommandList>
-                                                </Command>
-                                              </PopoverContent>
-                                            </Popover>
-                                          </div>
-                                          <Input
-                                            placeholder="+1 XXX-XXX-XXXX"
-                                            type="tel"
-                                            value={parentPhone}
-                                            onChange={(e) => {
-                                              const value = e.target.value;
-                                              setParentPhone(value);
-                                              
-                                              // Clear existing timer
-                                              if (phoneFormatTimer) {
-                                                clearTimeout(phoneFormatTimer);
-                                              }
-                                              
-                                              // Set new timer to format after 2 seconds of no typing
-                                              const timer = setTimeout(() => {
-                                                const formatted = formatPhoneNumber(value);
-                                                if (formatted) setParentPhone(formatted);
-                                              }, 2000);
-                                              
-                                              setPhoneFormatTimer(timer);
-                                            }}
-                                            data-testid="input-parent-phone"
-                                          />
-                                          <Input
-                                            placeholder="Email"
-                                            type="email"
-                                            value={parentEmail}
-                                            onChange={(e) => setParentEmail(e.target.value)}
-                                            data-testid="input-parent-email"
-                                          />
-                                        </div>
+                                      <div className="space-y-2 pt-2 border-t">
                                         <Label className="text-xs text-muted-foreground">Corporate Contact Info (optional)</Label>
                                         <div className="grid grid-cols-1 gap-2">
                                           <Input
@@ -1280,10 +1172,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         return;
                                       }
 
-                                      setIsClaimingMultiple(true);
                                       try {
                                         const storeLinks = selectedStores.map(s => s.link);
-
+                                        
                                         // Step 1: Claim all locations with DBA name (existing behavior)
                                         const claimResponse = await apiRequest('POST', '/api/stores/claim-multiple', {
                                           storeLinks,
@@ -1295,32 +1186,23 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
                                         // Step 2: Create parent DBA record
                                         let parentLink: string;
-
+                                        
                                         if (parentCreationType === 'new') {
                                           // Create new parent (corporate office)
                                           const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
                                             dbaName: dbaName.trim(),
-                                            address: parentAddress || '',
-                                            city: parentCity || '',
-                                            state: parentState || '',
-                                            phone: parentPhone || '',
-                                            email: parentEmail || '',
                                             pocName: parentPocName || '',
                                             pocEmail: parentPocEmail || '',
                                             pocPhone: parentPocPhone || '',
                                             notes: `Corporate parent for ${dbaName.trim()}`,
-                                            agentName: currentUser?.agentName || '',
-                                            storeSheetId,
-                                            trackerSheetId
+                                            agentName: currentUser?.agentName || ''
                                           });
                                           parentLink = parentResponse.parentLink;
                                         } else {
                                           // Use existing location as parent
                                           const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
                                             dbaName: dbaName.trim(),
-                                            parentLink: selectedParentLink,
-                                            storeSheetId,
-                                            trackerSheetId
+                                            parentLink: selectedParentLink
                                           });
                                           parentLink = selectedParentLink;
                                         }
@@ -1362,7 +1244,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         // Refresh the dashboard
                                         await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
                                         await refetch();
-                                        await refetchChildren();
 
                                         // Close the dialog
                                         onOpenChange(false);
@@ -1372,24 +1253,13 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           description: error.message || "Failed to claim locations",
                                           variant: "destructive",
                                         });
-                                      } finally {
-                                        setIsClaimingMultiple(false);
                                       }
                                     }}
-                                    disabled={isClaimingMultiple || !dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
+                                    disabled={!dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
                                     data-testid="button-claim-multiple"
                                   >
-                                    {isClaimingMultiple ? (
-                                      <>
-                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        Claiming...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Sparkles className="h-4 w-4 mr-2" />
-                                        Claim DBA with Parent-Child Structure
-                                      </>
-                                    )}
+                                    <Sparkles className="h-4 w-4 mr-2" />
+                                    Claim DBA with Parent-Child Structure
                                   </Button>
                                 </div>
                               )}
@@ -1613,12 +1483,12 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           parentLink: formData.parent_link,
                                           childLinks: [currentStoreLink]
                                         });
-
+                                        
                                         toast({
                                           title: "Success",
                                           description: "Removed from parent DBA",
                                         });
-
+                                        
                                         await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
                                         await refetch();
                                         await refetchChildren();
@@ -1648,7 +1518,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       </Badge>
                                     )}
                                   </div>
-
+                                  
                                   <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
                                     {childLocations.children.map((child: any) => (
                                       <div
@@ -1672,18 +1542,18 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             size="sm"
                                             onClick={async () => {
                                               if (!confirm(`Remove "${child.name}" from this DBA?`)) return;
-
+                                              
                                               try {
                                                 await apiRequest('POST', '/api/dba/unlink-children', {
                                                   parentLink: currentStoreLink,
                                                   childLinks: [child.link]
                                                 });
-
+                                                
                                                 toast({
                                                   title: "Success",
                                                   description: `Removed ${child.name} from DBA`,
                                                 });
-
+                                                
                                                 await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
                                                 await refetch();
                                                 await refetchChildren();
@@ -1797,45 +1667,13 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                               </div>
                               <div className="space-y-2">
                                 <Label htmlFor="state">State</Label>
-                                <Popover open={stateComboboxOpen} onOpenChange={setStateComboboxOpen}>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      aria-expanded={stateComboboxOpen}
-                                      className="w-full justify-between"
-                                      id="state"
-                                    >
-                                      {formData.state || "Select state..."}
-                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-full p-0">
-                                    <Command>
-                                      <CommandInput placeholder="Search state..." />
-                                      <CommandList>
-                                        <CommandEmpty>No state found.</CommandEmpty>
-                                        <CommandGroup>
-                                          {US_STATES_AND_PROVINCES.map((state) => (
-                                            <CommandItem
-                                              key={state}
-                                              value={state}
-                                              onSelect={() => {
-                                                handleInputChange('state', state);
-                                                setStateComboboxOpen(false);
-                                              }}
-                                            >
-                                              <Check
-                                                className={`mr-2 h-4 w-4 ${formData.state === state ? "opacity-100" : "opacity-0"}`}
-                                              />
-                                              {state}
-                                            </CommandItem>
-                                          ))}
-                                        </CommandGroup>
-                                      </CommandList>
-                                    </Command>
-                                  </PopoverContent>
-                                </Popover>
+                                <Input
+                                  id="state"
+                                  data-testid="input-state"
+                                  value={formData.state}
+                                  onChange={(e) => handleInputChange('state', e.target.value)}
+                                  placeholder="State"
+                                />
                               </div>
                             </div>
 
