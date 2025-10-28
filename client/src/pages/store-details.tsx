@@ -51,13 +51,13 @@ export default function StoreDetails() {
   });
 
   // Fetch notes for this client
-  const { data: notesData = [] } = useQuery({
+  const { data: notesData = [] } = useQuery<any[]>({
     queryKey: ['/api/clients', storeId, 'notes'],
     enabled: !!storeId,
   });
 
   // Fetch user preferences
-  const { data: userPreferences } = useQuery({
+  const { data: userPreferences } = useQuery<any>({
     queryKey: ["/api/user/preferences"],
   });
 

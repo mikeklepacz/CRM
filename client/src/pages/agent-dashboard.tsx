@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClientsTable } from "@/components/clients-table";
 import { RemindersWidget } from "@/components/widgets/reminders";
-import { Users, DollarSign, TrendingUp, Calendar, Search, CalendarIcon } from "lucide-react";
+import { CallHistoryDialog } from "@/components/call-history-dialog";
+import { Users, DollarSign, TrendingUp, Calendar, Search, CalendarIcon, Phone as PhoneIcon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -32,6 +33,7 @@ export default function AgentDashboard() {
   const [inactivityDays, setInactivityDays] = useState("all");
   const [timePeriod, setTimePeriod] = useState("all");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
+  const [callHistoryOpen, setCallHistoryOpen] = useState(false);
 
   const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients/my"],
@@ -384,6 +386,19 @@ export default function AgentDashboard() {
             >
               Clear All
             </Button>
+
+            <div className="h-6 w-px bg-border" />
+
+            {/* Call History Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCallHistoryOpen(true)}
+              data-testid="button-call-history"
+            >
+              <PhoneIcon className="h-4 w-4 mr-2" />
+              Call History
+            </Button>
           </div>
         </div>
 
@@ -434,6 +449,11 @@ export default function AgentDashboard() {
         </div>
       </div>
 
+      {/* Call History Dialog */}
+      <CallHistoryDialog 
+        open={callHistoryOpen} 
+        onOpenChange={setCallHistoryOpen}
+      />
     </div>
   );
 }
