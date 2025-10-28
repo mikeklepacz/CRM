@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClientsTable } from "@/components/clients-table";
-import { SalesInfoDialog } from "@/components/sales-info-dialog";
 import { RemindersWidget } from "@/components/widgets/reminders";
 import { Users, DollarSign, TrendingUp, Calendar, Search, CalendarIcon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,7 +32,6 @@ export default function AgentDashboard() {
   const [inactivityDays, setInactivityDays] = useState("all");
   const [timePeriod, setTimePeriod] = useState("all");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
-  const [notesClientId, setNotesClientId] = useState<string | null>(null);
 
   const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients/my"],
@@ -409,7 +407,12 @@ export default function AgentDashboard() {
               clients={filteredClients}
               currentUser={user}
               isLoading={clientsLoading}
-              onNotesClick={setNotesClientId}
+              onNotesClick={(clientId) => {
+                const client = clients.find(c => c.id === clientId);
+                if (client) {
+                  setLocation(`/store/${clientId}`);
+                }
+              }}
             />
           )}
         </div>
@@ -431,34 +434,6 @@ export default function AgentDashboard() {
         </div>
       </div>
 
-      {/* Notes Dialog - rendered outside table structure to avoid z-index issues */}
-      {notesClientId && (() => {
-        const selectedClient = clients.find(c => c.id === notesClientId);
-        if (!selectedClient) return null;
-        
-        return (
-          <SalesInfoDialog
-            open={true}
-            onOpenChange={(open) => !open && setNotesClientId(null)}
-            storeName={selectedClient.data?.['Name'] || selectedClient.data?.['name'] || 'Unknown Store'}
-            storeData={{
-              link: selectedClient.data?.['Link'] || selectedClient.data?.['link'] || '',
-              notes: selectedClient.data?.['Notes'] || selectedClient.data?.['notes'] || '',
-              address: selectedClient.data?.['Address'] || selectedClient.data?.['address'] || '',
-              city: selectedClient.data?.['City'] || selectedClient.data?.['city'] || '',
-              state: selectedClient.data?.['State'] || selectedClient.data?.['state'] || '',
-              point_of_contact: selectedClient.data?.['Point of Contact'] || selectedClient.data?.['POC'] || '',
-              poc_email: selectedClient.data?.['POC Email'] || selectedClient.data?.['poc email'] || '',
-              poc_phone: selectedClient.data?.['POC Phone'] || selectedClient.data?.['poc phone'] || '',
-              email: selectedClient.data?.['Email'] || selectedClient.data?.['email'] || '',
-              phone: selectedClient.data?.['Phone'] || selectedClient.data?.['phone'] || '',
-            }}
-            trackerSheetId={trackerSheet?.id || null}
-            storeSheetId={storeDbSheet?.id || null}
-            userPreferences={userPreferences}
-          />
-        );
-      })()}
     </div>
   );
 }
