@@ -111,6 +111,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [parentPocName, setParentPocName] = useState('');
   const [parentPocEmail, setParentPocEmail] = useState('');
   const [parentPocPhone, setParentPocPhone] = useState('');
+  const [parentAddress, setParentAddress] = useState('');
+  const [parentCity, setParentCity] = useState('');
+  const [parentState, setParentState] = useState('');
+  const [parentPhone, setParentPhone] = useState('');
+  const [parentEmail, setParentEmail] = useState('');
 
   // Child locations management
   const currentStoreLink = getLinkValue(row);
@@ -1009,9 +1014,46 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       </div>
                                     </div>
 
-                                    {/* Parent POC fields (for new parent only) */}
+                                    {/* Parent address fields (for new parent only) */}
                                     {parentCreationType === 'new' && (
-                                      <div className="space-y-2 pt-2 border-t">
+                                      <div className="space-y-3 pt-2 border-t">
+                                        <Label className="text-xs text-muted-foreground">Corporate Office Location</Label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                          <Input
+                                            placeholder="Address"
+                                            value={parentAddress}
+                                            onChange={(e) => setParentAddress(e.target.value)}
+                                            data-testid="input-parent-address"
+                                          />
+                                          <div className="grid grid-cols-2 gap-2">
+                                            <Input
+                                              placeholder="City"
+                                              value={parentCity}
+                                              onChange={(e) => setParentCity(e.target.value)}
+                                              data-testid="input-parent-city"
+                                            />
+                                            <Input
+                                              placeholder="State"
+                                              value={parentState}
+                                              onChange={(e) => setParentState(e.target.value)}
+                                              data-testid="input-parent-state"
+                                            />
+                                          </div>
+                                          <Input
+                                            placeholder="Phone"
+                                            type="tel"
+                                            value={parentPhone}
+                                            onChange={(e) => setParentPhone(e.target.value)}
+                                            data-testid="input-parent-phone"
+                                          />
+                                          <Input
+                                            placeholder="Email"
+                                            type="email"
+                                            value={parentEmail}
+                                            onChange={(e) => setParentEmail(e.target.value)}
+                                            data-testid="input-parent-email"
+                                          />
+                                        </div>
                                         <Label className="text-xs text-muted-foreground">Corporate Contact Info (optional)</Label>
                                         <div className="grid grid-cols-1 gap-2">
                                           <Input
@@ -1191,6 +1233,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           // Create new parent (corporate office)
                                           const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
                                             dbaName: dbaName.trim(),
+                                            address: parentAddress || '',
+                                            city: parentCity || '',
+                                            state: parentState || '',
+                                            phone: parentPhone || '',
+                                            email: parentEmail || '',
                                             pocName: parentPocName || '',
                                             pocEmail: parentPocEmail || '',
                                             pocPhone: parentPocPhone || '',

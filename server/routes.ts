@@ -6086,7 +6086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/dba/create-parent', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName } = req.body;
+      const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName, address, city, state, phone, email } = req.body;
 
       if (!dbaName || !dbaName.trim()) {
         return res.status(400).json({ message: "DBA name is required" });
@@ -6197,31 +6197,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Create new parent record (corporate office without existing store link)
-      const newRow = new Array(trackerHeaders.length).fill('');
+      // Create new parent record (corporate office with full address)
+      // Generate a unique UUID for the corporate office link
+      const corporateLink = crypto.randomUUID();
+
+      // Step 1: Create store in Store Database sheet (if address provided)
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store Database sheet not found' });
+      }
+
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+
+      if (storeRows.length === 0) {
+        return res.status(404).json({ message: 'Store Database is empty' });
+      }
+
+      const storeHeaders = storeRows[0];
+      const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'store name');
+      const storeAddressIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'address');
+      const storeCityIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'city');
+      const storeStateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
+      const storePhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'phone');
+      const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
+      const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const storeStatusIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
+
+      // Create new store row in Store Database
+      const newStoreRow = new Array(storeHeaders.length).fill('');
+      if (storeNameIndex !== -1) newStoreRow[storeNameIndex] = dbaName; // Use DBA name as store name
+      if (storeAddressIndex !== -1 && address) newStoreRow[storeAddressIndex] = address;
+      if (storeCityIndex !== -1 && city) newStoreRow[storeCityIndex] = city;
+      if (storeStateIndex !== -1 && state) newStoreRow[storeStateIndex] = state;
+      if (storePhoneIndex !== -1 && phone) newStoreRow[storePhoneIndex] = phone;
+      if (storeEmailIndex !== -1 && email) newStoreRow[storeEmailIndex] = email;
+      if (storeLinkIndex !== -1) newStoreRow[storeLinkIndex] = corporateLink;
+      if (storeStatusIndex !== -1) newStoreRow[storeStatusIndex] = 'Parent DBA';
+
+      // POC fields in Store Database
+      const storePocNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc name' || h.toLowerCase() === 'point of contact');
+      const storePocEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc email');
+      const storePocPhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc phone');
+      if (storePocNameIndex !== -1 && pocName) newStoreRow[storePocNameIndex] = pocName;
+      if (storePocEmailIndex !== -1 && pocEmail) newStoreRow[storePocEmailIndex] = pocEmail;
+      if (storePocPhoneIndex !== -1 && pocPhone) newStoreRow[storePocPhoneIndex] = pocPhone;
+
+      await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [newStoreRow]);
+
+      // Step 2: Create corresponding row in Commission Tracker
+      const newTrackerRow = new Array(trackerHeaders.length).fill('');
       
-      // Generate a unique link for corporate office (using DBA name)
-      const corporateLink = `dba-parent-${dbaName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
-      
-      if (linkIndex !== -1) newRow[linkIndex] = corporateLink;
-      if (dbaIndex !== -1) newRow[dbaIndex] = dbaName;
-      if (isParentIndex !== -1) newRow[isParentIndex] = 'TRUE';
-      if (pocNameIndex !== -1 && pocName) newRow[pocNameIndex] = pocName;
-      if (pocEmailIndex !== -1 && pocEmail) newRow[pocEmailIndex] = pocEmail;
-      if (pocPhoneIndex !== -1 && pocPhone) newRow[pocPhoneIndex] = pocPhone;
-      if (notesIndex !== -1 && notes) newRow[notesIndex] = notes;
-      if (agentIndex !== -1 && agentName) newRow[agentIndex] = agentName;
+      if (linkIndex !== -1) newTrackerRow[linkIndex] = corporateLink;
+      if (dbaIndex !== -1) newTrackerRow[dbaIndex] = dbaName;
+      if (isParentIndex !== -1) newTrackerRow[isParentIndex] = 'TRUE';
+      if (pocNameIndex !== -1 && pocName) newTrackerRow[pocNameIndex] = pocName;
+      if (pocEmailIndex !== -1 && pocEmail) newTrackerRow[pocEmailIndex] = pocEmail;
+      if (pocPhoneIndex !== -1 && pocPhone) newTrackerRow[pocPhoneIndex] = pocPhone;
+      if (notesIndex !== -1 && notes) newTrackerRow[notesIndex] = notes;
+      if (agentIndex !== -1 && agentName) newTrackerRow[agentIndex] = agentName;
 
       // Set status to 'Parent DBA'
       const statusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
-      if (statusIndex !== -1) newRow[statusIndex] = 'Parent DBA';
+      if (statusIndex !== -1) newTrackerRow[statusIndex] = 'Parent DBA';
 
-      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newRow]);
+      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
 
       clearUserCache(userId);
       res.json({ 
         success: true, 
-        message: 'Parent DBA record created successfully',
+        message: 'Parent DBA record created successfully in both Store Database and Commission Tracker',
         parentLink: corporateLink
       });
     } catch (error: any) {
