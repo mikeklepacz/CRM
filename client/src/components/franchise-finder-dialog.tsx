@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,10 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Store, Globe, MapPin } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Store, Globe, MapPin, Settings2 } from "lucide-react";
 import { detectFranchises, type FranchiseGroup, type StoreData } from "@shared/franchiseUtils";
 
 interface FranchiseFinderDialogProps {
@@ -30,14 +33,38 @@ export function FranchiseFinderDialog({
 }: FranchiseFinderDialogProps) {
   const [minLocations, setMinLocations] = useState(2);
   const [maxLocations, setMaxLocations] = useState(100);
-  
+  const [selectedStates, setSelectedStates] = useState<string[]>([]);
+
+  const allStates = useMemo(() => {
+    const states = new Set<string>();
+    stores.forEach(store => {
+      if (store.State) {
+        states.add(store.State);
+      }
+    });
+    return Array.from(states).sort();
+  }, [stores]);
+
   const franchises = useMemo(() => {
-    return detectFranchises(stores, minLocations, maxLocations);
-  }, [stores, minLocations, maxLocations]);
+    let filteredFranchises = detectFranchises(stores, minLocations, maxLocations);
+
+    if (selectedStates.length > 0) {
+      filteredFranchises = filteredFranchises.filter(franchise =>
+        franchise.locations.some(location => location.State && selectedStates.includes(location.State))
+      );
+    }
+    return filteredFranchises;
+  }, [stores, minLocations, maxLocations, selectedStates]);
 
   const handleSelectFranchise = (franchise: FranchiseGroup) => {
     onSelectFranchise(franchise);
     onOpenChange(false);
+  };
+
+  const handleStateChange = (state: string, isChecked: boolean) => {
+    setSelectedStates(prev =>
+      isChecked ? [...prev, state] : prev.filter(s => s !== state)
+    );
   };
 
   return (
@@ -54,31 +81,67 @@ export function FranchiseFinderDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Location Range Slider */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">
-                Locations per Franchise
-              </label>
-              <Badge variant="secondary" data-testid="badge-location-range">
-                {minLocations} - {maxLocations === 100 ? "100+" : maxLocations}
-              </Badge>
+          {/* Controls Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Location Range Slider */}
+            <div className="space-y-3 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  Locations per Franchise
+                </label>
+                <Badge variant="secondary" data-testid="badge-location-range">
+                  {minLocations} - {maxLocations === 100 ? "100+" : maxLocations}
+                </Badge>
+              </div>
+              <Slider
+                value={[minLocations, maxLocations]}
+                onValueChange={(values) => {
+                  setMinLocations(values[0]);
+                  setMaxLocations(values[1]);
+                }}
+                min={2}
+                max={100}
+                step={1}
+                className="w-full"
+                data-testid="slider-location-range"
+              />
+              <p className="text-xs text-muted-foreground">
+                Adjust to find franchises that match your target account size. Smaller teams may prefer fewer locations.
+              </p>
             </div>
-            <Slider
-              value={[minLocations, maxLocations]}
-              onValueChange={(values) => {
-                setMinLocations(values[0]);
-                setMaxLocations(values[1]);
-              }}
-              min={2}
-              max={100}
-              step={1}
-              className="w-full"
-              data-testid="slider-location-range"
-            />
-            <p className="text-xs text-muted-foreground">
-              Adjust to find franchises that match your target account size. Smaller teams may prefer fewer locations.
-            </p>
+
+            {/* State Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <Settings2 className="h-4 w-4 text-muted-foreground" />
+                Filter by State
+              </label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start" data-testid="button-state-filter">
+                    {selectedStates.length > 0
+                      ? `${selectedStates.length} state(s) selected`
+                      : "Select States"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[300px] p-0">
+                  <ScrollArea className="h-[300px] px-4 py-2">
+                    {allStates.map((state) => (
+                      <div key={state} className="flex items-center space-x-2 py-1">
+                        <Checkbox
+                          id={`state-${state}`}
+                          checked={selectedStates.includes(state)}
+                          onCheckedChange={(checked) => handleStateChange(state, checked as boolean)}
+                        />
+                        <Label htmlFor={`state-${state}`} className="font-normal text-sm cursor-pointer capitalize">
+                          {state}
+                        </Label>
+                      </div>
+                    ))}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
           <Separator />
@@ -104,7 +167,7 @@ export function FranchiseFinderDialog({
                     No franchises found with your current filters
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Try increasing the maximum locations slider
+                    Try adjusting the location range or state filter
                   </p>
                 </div>
               ) : (
