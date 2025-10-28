@@ -1089,10 +1089,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             </Popover>
                                           </div>
                                           <Input
-                                            placeholder="Phone"
+                                            placeholder="+1 XXX-XXX-XXXX"
                                             type="tel"
                                             value={parentPhone}
-                                            onChange={(e) => setParentPhone(formatPhoneNumber(e.target.value))}
+                                            onChange={(e) => setParentPhone(e.target.value)}
                                             data-testid="input-parent-phone"
                                           />
                                           <Input
