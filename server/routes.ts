@@ -6624,6 +6624,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== TEST ENDPOINT - WRITE TO STORE DATABASE NAME COLUMN =====
+  app.post('/api/test/write-name', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      console.log('[TEST-WRITE] 🧪 Test endpoint called - Writing to Store Database Name column');
+      
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
+
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store Database sheet not found' });
+      }
+
+      // Read current rows to determine next row number
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      
+      if (storeRows.length === 0) {
+        return res.status(404).json({ message: 'Store Database is empty' });
+      }
+
+      const nextRowNumber = storeRows.length + 1;
+      const testUUID = crypto.randomUUID();
+      const testName = `TEST WRITE - ${new Date().toISOString()}`;
+      
+      console.log('[TEST-WRITE] Next row number:', nextRowNumber);
+      console.log('[TEST-WRITE] Test UUID:', testUUID);
+      console.log('[TEST-WRITE] Test Name:', testName);
+
+      // Step 1: Append minimal row (just Link column at position 2/C)
+      const storeHeaders = storeRows[0];
+      const linkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      
+      if (linkIndex === -1) {
+        return res.status(404).json({ message: 'Link column not found in Store Database' });
+      }
+
+      // Create minimal row with only Link populated
+      const minimalRow = new Array(storeHeaders.length).fill('');
+      minimalRow[linkIndex] = testUUID;
+
+      console.log('[TEST-WRITE] Appending minimal row with Link UUID');
+      await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [minimalRow]);
+      console.log('[TEST-WRITE] ✅ Minimal row appended');
+
+      // Step 2: Write specifically to Name column (Column A) of the new row
+      const nameCellRange = `${storeSheet.sheetName}!A${nextRowNumber}`;
+      console.log('[TEST-WRITE] Writing to Name cell:', nameCellRange);
+      
+      await googleSheets.writeSheetData(storeSheet.spreadsheetId, nameCellRange, [[testName]]);
+      console.log('[TEST-WRITE] ✅ Name written to cell A' + nextRowNumber);
+
+      res.json({
+        success: true,
+        message: `Successfully wrote to Store Database Name column (Row ${nextRowNumber})`,
+        rowNumber: nextRowNumber,
+        testName,
+        testUUID,
+        sheetName: storeSheet.sheetName,
+        spreadsheetId: storeSheet.spreadsheetId
+      });
+    } catch (error: any) {
+      console.error('[TEST-WRITE] ❌ Error:', error);
+      res.status(500).json({ message: error.message || 'Failed to write test data' });
+    }
+  });
+
   // ===== SALES ANALYTICS ENDPOINTS =====
 
   // Get dashboard summary with key sales metrics (from Google Sheets)
