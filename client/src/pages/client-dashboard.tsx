@@ -4194,6 +4194,47 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     saveMutation.mutate({ closeDialog: true });
   };
 
+  // Handle calling the store from the details dialog
+  const handleCallFromDetails = async () => {
+    // Use POC phone if available, fallback to regular phone
+    const phoneNumber = formData.poc_phone || formData.phone;
+    
+    if (!phoneNumber) {
+      toast({
+        title: "No Phone Number",
+        description: "This store doesn't have a phone number on file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const storeLink = formData.link;
+    
+    if (!storeLink) {
+      toast({
+        title: "Error",
+        description: "Unable to identify store for call logging",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Log the call to history
+    try {
+      await apiRequest('POST', '/api/call-history', {
+        storeLink,
+        phoneNumber,
+        storeName: formData.name || 'Unknown Store',
+      });
+    } catch (error) {
+      console.error('Failed to log call:', error);
+      // Don't block the call if logging fails
+    }
+
+    // Dial the phone
+    window.location.href = `tel:${phoneNumber}`;
+  };
+
   // AI Assistant toggle - global setting (applies to all stores)
   const GLOBAL_AI_ASSISTANT_KEY = 'show-ai-assistant';
 
@@ -4930,6 +4971,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
                     Cancel
                   </Button>
                   <Button 
+                    onClick={handleCallFromDetails} 
+                    data-testid="button-call"
+                    variant="outline"
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    Call
+                  </Button>
+                  <Button 
                     onClick={handleSave} 
                     disabled={saveMutation.isPending} 
                     data-testid="button-save"
@@ -4977,6 +5026,14 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
             Cancel
+          </Button>
+          <Button 
+            onClick={handleCallFromDetails} 
+            data-testid="button-call"
+            variant="outline"
+          >
+            <Phone className="h-4 w-4 mr-2" />
+            Call
           </Button>
           <Button 
             onClick={handleSave} 
