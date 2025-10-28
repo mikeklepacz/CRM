@@ -427,6 +427,17 @@ export default function AgentDashboard() {
                 if (client) {
                   // Get store link from client data
                   const storeLink = client.link || client.data?.['Link'] || client.data?.['link'];
+                  
+                  // Guard against missing store link
+                  if (!storeLink) {
+                    toast({
+                      title: "Error",
+                      description: "Unable to identify store",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  
                   // Get phone number - prioritize POC phone, fallback to regular phone
                   const pocPhone = client.data?.['POC Phone'] || client.data?.['poc_phone'];
                   const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
