@@ -98,6 +98,9 @@ function normalizePhone(phone: string): string {
 /**
  * Detect potential franchise groups from store data
  * Groups by website first (strongest signal), then by name similarity
+ * @param stores - Array of store data
+ * @param minLocations - Minimum number of locations for a franchise (default: 2)
+ * @param maxLocations - Maximum number of locations for a franchise (default: 100)
  */
 export function detectFranchises(
   stores: StoreData[],
