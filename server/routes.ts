@@ -6214,34 +6214,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const storeHeaders = storeRows[0];
-      const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'store name');
+      // Store Database columns: Name, Type, Link, Member Since, Address, City, State, Phone, Website, Email, Followers, Tags, Hours, DBA, Vibe Score, Sales-ready Summary, Agent Name, OPEN, Category
+      const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
+      const storeTypeIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'type');
+      const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const storeMemberSinceIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'member since');
       const storeAddressIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'address');
       const storeCityIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'city');
       const storeStateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
       const storePhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'phone');
+      const storeWebsiteIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'website');
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
-      const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-      const storeStatusIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
-      const storePocNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc name' || h.toLowerCase() === 'point of contact');
-      const storePocEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc email');
-      const storePocPhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc phone');
+      const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
 
-      // IMPORTANT: Initialize array with proper length so Google Sheets API handles it correctly
-      // When appending, empty strings allow formulas in those cells to work
+      // Initialize array with proper length - empty strings allow formulas (DBA, Agent Name) to work
       const newStoreRow: any[] = new Array(storeHeaders.length).fill('');
       
-      // Set only the columns we're explicitly populating
+      // Set only the columns we're explicitly populating - DO NOT touch DBA or Agent Name (formulas handle those)
       if (storeNameIndex !== -1) newStoreRow[storeNameIndex] = dbaName; // Use DBA name as store name
+      if (storeLinkIndex !== -1) newStoreRow[storeLinkIndex] = corporateLink;
+      if (storeMemberSinceIndex !== -1) newStoreRow[storeMemberSinceIndex] = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       if (storeAddressIndex !== -1) newStoreRow[storeAddressIndex] = address || '';
       if (storeCityIndex !== -1) newStoreRow[storeCityIndex] = city || '';
       if (storeStateIndex !== -1) newStoreRow[storeStateIndex] = state || '';
       if (storePhoneIndex !== -1) newStoreRow[storePhoneIndex] = phone || '';
+      if (storeWebsiteIndex !== -1) newStoreRow[storeWebsiteIndex] = '';
       if (storeEmailIndex !== -1) newStoreRow[storeEmailIndex] = email || '';
-      if (storeLinkIndex !== -1) newStoreRow[storeLinkIndex] = corporateLink;
-      if (storeStatusIndex !== -1) newStoreRow[storeStatusIndex] = 'Parent DBA';
-      if (storePocNameIndex !== -1) newStoreRow[storePocNameIndex] = pocName || '';
-      if (storePocEmailIndex !== -1) newStoreRow[storePocEmailIndex] = pocEmail || '';
-      if (storePocPhoneIndex !== -1) newStoreRow[storePocPhoneIndex] = pocPhone || '';
+      // Category will be populated later - leave as empty string for now
+      if (storeCategoryIndex !== -1) newStoreRow[storeCategoryIndex] = '';
 
       await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [newStoreRow]);
 
