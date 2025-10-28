@@ -5145,6 +5145,40 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
     <CallHistoryDialog 
       open={callHistoryOpen} 
       onOpenChange={setCallHistoryOpen}
+      onCallStore={(storeLink, phoneNumber) => {
+        // Find the store in the CRM data by matching the link
+        const matchingStore = data.find((row: any) => {
+          const rowLink = getLinkValue(row);
+          return rowLink && normalizeLink(rowLink) === normalizeLink(storeLink);
+        });
+
+        if (matchingStore) {
+          // Close the call history dialog
+          setCallHistoryOpen(false);
+
+          // Open the store details dialog
+          setStoreDetailsDialog({
+            open: true,
+            row: matchingStore,
+          });
+
+          // Trigger default script loading in AI assistant
+          setLoadDefaultScriptTrigger(prev => prev + 1);
+
+          // If phone number provided, trigger dial after a delay so user sees the dialog first
+          if (phoneNumber) {
+            setTimeout(() => {
+              window.location.href = `tel:${phoneNumber}`;
+            }, 800);
+          }
+        } else {
+          toast({
+            title: "Store Not Found",
+            description: "Unable to locate this store in the CRM data",
+            variant: "destructive",
+          });
+        }
+      }}
     />
     </>
   );
