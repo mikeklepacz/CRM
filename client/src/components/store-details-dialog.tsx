@@ -501,9 +501,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         }
       });
 
-      // MULTIPLE LOCATIONS MODE: Write DBA and Agent Name to Store Database
+      // MULTIPLE LOCATIONS MODE: Validate Agent Name is set
       if (multiLocationMode && dbaName && dbaName.trim()) {
-        // Validate Agent Name is set
         if (!currentUser?.agentName) {
           toast({
             title: "Agent Name Required",
@@ -512,27 +511,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
           });
           return;
         }
-
-        const sheetId = storeSheetId;
-        const rowIndex = row._storeRowIndex;
-
-        if (sheetId && rowIndex) {
-          // Add DBA change
-          storeChanges.push({
-            sheetId,
-            rowIndex,
-            column: 'DBA',
-            value: dbaName.trim()
-          });
-
-          // Add Agent Name change
-          storeChanges.push({
-            sheetId,
-            rowIndex,
-            column: 'Agent Name',
-            value: currentUser.agentName
-          });
-        }
+        // Note: DBA and Agent Name are written to Commission Tracker only
+        // Store Database gets these values via Google Sheets formulas
       }
 
       if (storeChanges.length === 0 && Object.keys(trackerChanges).length === 0) {
