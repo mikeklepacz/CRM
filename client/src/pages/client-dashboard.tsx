@@ -770,6 +770,28 @@ export default function ClientDashboard() {
     },
   });
 
+  // TEST MUTATION - Write to Store Database Name column
+  const testWriteMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', '/api/test/write-name', {});
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "✅ Store Database Write Success!",
+        description: `Wrote to row ${data.rowNumber}: "${data.testName}"`,
+      });
+      console.log('[TEST-WRITE] Success:', data);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "❌ Store Database Write Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      console.error('[TEST-WRITE] Error:', error);
+    },
+  });
+
   const handleCellUpdate = (row: MergedDataRow, column: string, value: any) => {
     // Only admins can edit CRM table cells - sales agents must use Store Details dialog
     if (currentUser?.role !== 'admin') {
@@ -1923,6 +1945,15 @@ export default function ClientDashboard() {
                     >
                       <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                       {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                    <Button
+                      variant="default"
+                      onClick={() => testWriteMutation.mutate()}
+                      disabled={testWriteMutation.isPending}
+                      data-testid="button-test-write"
+                    >
+                      {testWriteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      🧪 Test Write to Name Column
                     </Button>
                   </div>
                   {/* My Stores Only toggle */}
