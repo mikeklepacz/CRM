@@ -10597,6 +10597,61 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Call History routes
+  app.post('/api/call-history', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { storeName, phoneNumber, storeLink } = req.body;
+
+      if (!storeName || !phoneNumber) {
+        return res.status(400).json({ message: 'Store name and phone number are required' });
+      }
+
+      const callData = {
+        agentId: userId,
+        storeName,
+        phoneNumber,
+        storeLink: storeLink || null,
+      };
+
+      const newCall = await storage.createCallHistory(callData);
+      res.json(newCall);
+    } catch (error: any) {
+      console.error('Error creating call history:', error);
+      res.status(500).json({ message: error.message || 'Failed to log call' });
+    }
+  });
+
+  app.get('/api/call-history', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Admin can filter by agent
+      const { agentId } = req.query;
+      
+      if (agentId && user.role === 'admin') {
+        const callHistory = await storage.getAllCallHistory(agentId as string);
+        res.json(callHistory);
+      } else if (user.role === 'admin' && !agentId) {
+        // Admin without filter gets all call history
+        const callHistory = await storage.getAllCallHistory();
+        res.json(callHistory);
+      } else {
+        // Regular users get only their own call history
+        const callHistory = await storage.getUserCallHistory(userId);
+        res.json(callHistory);
+      }
+    } catch (error: any) {
+      console.error('Error fetching call history:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch call history' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
