@@ -42,6 +42,7 @@ import { useChatPanel } from "@/hooks/useChatPanel";
 import { QuickReminder } from "@/components/quick-reminder";
 import { normalizeLink } from "@shared/linkUtils";
 import { StatusManagementDialog } from "@/components/status-management-dialog";
+import { CallHistoryDialog } from "@/components/call-history-dialog";
 
 // US States and Canadian Provinces abbreviations to full names mapping
 const REGIONS: Record<string, string> = {
@@ -437,6 +438,9 @@ export default function ClientDashboard() {
   });
   const [vCardListName, setVCardListName] = useState("");
   const [vCardPlatform, setVCardPlatform] = useState<"ios" | "android">("ios");
+
+  // Call History dialog state
+  const [callHistoryOpen, setCallHistoryOpen] = useState(false);
 
   // Local state for editing colors before saving
   // Initialize once from hook values, then allow independent editing
@@ -2602,6 +2606,17 @@ export default function ClientDashboard() {
                     </div>
                   </PopoverContent>
                 </Popover>
+
+                {/* Call History Button */}
+                <Button
+                  variant="outline"
+                  onClick={() => setCallHistoryOpen(true)}
+                  data-testid="button-call-history"
+                  style={currentColors.actionButtons ? { backgroundColor: currentColors.actionButtons, borderColor: currentColors.actionButtons } : undefined}
+                >
+                  <Phone className="mr-2 h-4 w-4" />
+                  Call History
+                </Button>
 
                 {/* Export vCard Button */}
                 <Button
@@ -5090,6 +5105,12 @@ function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeShee
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Call History Dialog */}
+    <CallHistoryDialog 
+      open={callHistoryOpen} 
+      onOpenChange={setCallHistoryOpen}
+    />
     </>
   );
 }
