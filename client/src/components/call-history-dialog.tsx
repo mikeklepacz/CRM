@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,6 +36,7 @@ interface GroupedCall {
 
 export function CallHistoryDialog({ open, onOpenChange }: CallHistoryDialogProps) {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
   // Fetch all users (for admin agent filter)
@@ -111,8 +113,21 @@ export function CallHistoryDialog({ open, onOpenChange }: CallHistoryDialogProps
       storeLink: group.storeLink,
     });
 
-    // Open phone dialer
-    window.location.href = `tel:${group.phoneNumber}`;
+    // Close the dialog
+    onOpenChange(false);
+
+    // Navigate to client dashboard with store and phone params
+    // This will open store details dialog, load default script, and dial phone
+    if (group.storeLink) {
+      const params = new URLSearchParams({ 
+        store: group.storeLink,
+        phone: group.phoneNumber 
+      });
+      setLocation(`/clients?${params.toString()}`);
+    } else {
+      // If no store link, just dial the phone
+      window.location.href = `tel:${group.phoneNumber}`;
+    }
   };
 
   return (
