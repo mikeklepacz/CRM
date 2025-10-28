@@ -153,6 +153,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [parentPhone, setParentPhone] = useState('');
   const [parentEmail, setParentEmail] = useState('');
   const [isClaimingMultiple, setIsClaimingMultiple] = useState(false);
+  const [phoneFormatTimer, setPhoneFormatTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Child locations management
   const currentStoreLink = getLinkValue(row);
@@ -1092,7 +1093,23 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             placeholder="+1 XXX-XXX-XXXX"
                                             type="tel"
                                             value={parentPhone}
-                                            onChange={(e) => setParentPhone(e.target.value)}
+                                            onChange={(e) => {
+                                              const value = e.target.value;
+                                              setParentPhone(value);
+                                              
+                                              // Clear existing timer
+                                              if (phoneFormatTimer) {
+                                                clearTimeout(phoneFormatTimer);
+                                              }
+                                              
+                                              // Set new timer to format after 2 seconds of no typing
+                                              const timer = setTimeout(() => {
+                                                const formatted = formatPhoneNumber(value);
+                                                if (formatted) setParentPhone(formatted);
+                                              }, 2000);
+                                              
+                                              setPhoneFormatTimer(timer);
+                                            }}
                                             data-testid="input-parent-phone"
                                           />
                                           <Input
