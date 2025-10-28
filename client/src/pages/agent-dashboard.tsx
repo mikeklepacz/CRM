@@ -494,7 +494,11 @@ export default function AgentDashboard() {
                 
                 try {
                   // Fetch fresh data from Google Sheets (same as Client Dashboard)
-                  const response = await fetch('/api/merged-data');
+                  const response = await fetch('/api/sheets/merged-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                  });
                   if (!response.ok) throw new Error('Failed to fetch store data');
                   
                   const mergedData = await response.json();
