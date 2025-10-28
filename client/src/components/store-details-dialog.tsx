@@ -99,6 +99,14 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [selectedStores, setSelectedStores] = useState<Array<{ link: string; name: string }>>([]);
   const [storeSearchDialog, setStoreSearchDialog] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
+  
+  // Parent DBA management state
+  const [parentCreationType, setParentCreationType] = useState<'new' | 'existing'>('new');
+  const [selectedParentLink, setSelectedParentLink] = useState<string>('');
+  const [headOfficeLink, setHeadOfficeLink] = useState<string>('');
+  const [parentPocName, setParentPocName] = useState('');
+  const [parentPocEmail, setParentPocEmail] = useState('');
+  const [parentPocPhone, setParentPocPhone] = useState('');
 
   // Track the current row's link to prevent race conditions
   const [activeRowLink, setActiveRowLink] = useState<string | null>(null);
@@ -942,9 +950,127 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       data-testid="input-dba-name"
                                       value={dbaName}
                                       onChange={(e) => setDbaName(e.target.value)}
-                                      placeholder="e.g., Lift Cannabis, Green Thumb Industries"
+                                      placeholder="e.g., House of Dank, Green Thumb Industries"
                                     />
                                   </div>
+
+                                  {/* Parent creation type */}
+                                  <div className="space-y-3 p-3 bg-muted/30 rounded-md">
+                                    <Label>Parent Record</Label>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id="parent-new"
+                                          checked={parentCreationType === 'new'}
+                                          onCheckedChange={(checked) => {
+                                            if (checked) {
+                                              setParentCreationType('new');
+                                              setSelectedParentLink('');
+                                            }
+                                          }}
+                                          data-testid="checkbox-parent-new"
+                                        />
+                                        <Label htmlFor="parent-new" className="cursor-pointer font-normal">
+                                          Create new parent (Corporate Office)
+                                        </Label>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id="parent-existing"
+                                          checked={parentCreationType === 'existing'}
+                                          onCheckedChange={(checked) => {
+                                            if (checked) {
+                                              setParentCreationType('existing');
+                                              if (selectedStores.length > 0) {
+                                                setSelectedParentLink(selectedStores[0].link);
+                                              }
+                                            }
+                                          }}
+                                          data-testid="checkbox-parent-existing"
+                                        />
+                                        <Label htmlFor="parent-existing" className="cursor-pointer font-normal">
+                                          Use existing location as parent
+                                        </Label>
+                                      </div>
+                                    </div>
+
+                                    {/* Parent POC fields (for new parent only) */}
+                                    {parentCreationType === 'new' && (
+                                      <div className="space-y-2 pt-2 border-t">
+                                        <Label className="text-xs text-muted-foreground">Corporate Contact Info (optional)</Label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                          <Input
+                                            placeholder="POC Name"
+                                            value={parentPocName}
+                                            onChange={(e) => setParentPocName(e.target.value)}
+                                            data-testid="input-parent-poc-name"
+                                          />
+                                          <Input
+                                            placeholder="POC Email"
+                                            type="email"
+                                            value={parentPocEmail}
+                                            onChange={(e) => setParentPocEmail(e.target.value)}
+                                            data-testid="input-parent-poc-email"
+                                          />
+                                          <Input
+                                            placeholder="POC Phone"
+                                            type="tel"
+                                            value={parentPocPhone}
+                                            onChange={(e) => setParentPocPhone(e.target.value)}
+                                            data-testid="input-parent-poc-phone"
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Select parent from existing stores */}
+                                    {parentCreationType === 'existing' && selectedStores.length > 0 && (
+                                      <div className="space-y-2 pt-2 border-t">
+                                        <Label htmlFor="select-parent">Select Parent Location</Label>
+                                        <Select
+                                          value={selectedParentLink}
+                                          onValueChange={setSelectedParentLink}
+                                        >
+                                          <SelectTrigger id="select-parent" data-testid="select-parent-location">
+                                            <SelectValue placeholder="Choose which location is the parent" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {selectedStores.map((store) => (
+                                              <SelectItem key={store.link} value={store.link}>
+                                                {store.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Head Office selection */}
+                                  {selectedStores.length > 0 && (
+                                    <div className="space-y-2 p-3 bg-muted/30 rounded-md">
+                                      <Label htmlFor="select-head-office">Head Office Location (optional)</Label>
+                                      <p className="text-xs text-muted-foreground">
+                                        Select which location is the corporate headquarters
+                                      </p>
+                                      <Select
+                                        value={headOfficeLink}
+                                        onValueChange={setHeadOfficeLink}
+                                      >
+                                        <SelectTrigger id="select-head-office" data-testid="select-head-office">
+                                          <SelectValue placeholder="Choose head office (or skip)" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="">None</SelectItem>
+                                          {selectedStores.map((store) => (
+                                            <SelectItem key={store.link} value={store.link}>
+                                              {store.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
 
                                   {/* Current stores in DBA (read-only) */}
                                   {currentDbaStores.length > 0 && (
@@ -1022,44 +1148,83 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         return;
                                       }
 
+                                      if (parentCreationType === 'existing' && !selectedParentLink) {
+                                        toast({
+                                          title: "Parent not selected",
+                                          description: "Please select which location should be the parent",
+                                          variant: "destructive",
+                                        });
+                                        return;
+                                      }
+
                                       try {
                                         const storeLinks = selectedStores.map(s => s.link);
-                                        const isUpdatingExisting = currentDbaStores.length > 0;
-
-                                        const response = await apiRequest('POST', '/api/stores/claim-multiple', {
+                                        
+                                        // Step 1: Claim all locations with DBA name (existing behavior)
+                                        const claimResponse = await apiRequest('POST', '/api/stores/claim-multiple', {
                                           storeLinks,
                                           dbaName: dbaName.trim(),
                                           storeSheetId,
                                           trackerSheetId,
-                                          isUpdatingExisting
+                                          isUpdatingExisting: currentDbaStores.length > 0
                                         });
 
-                                        const successMessage = isUpdatingExisting
-                                          ? `Added ${response.updatedStoreCount} new store${response.updatedStoreCount !== 1 ? 's' : ''} to DBA "${dbaName}"`
-                                          : `Claimed ${response.createdTrackerCount} location${response.createdTrackerCount !== 1 ? 's' : ''} with DBA "${dbaName}"`;
-                                        const warningMessage = response.skippedCount > 0 ? ` (${response.skippedCount} skipped - already in DBA)` : '';
+                                        // Step 2: Create parent DBA record
+                                        let parentLink: string;
+                                        
+                                        if (parentCreationType === 'new') {
+                                          // Create new parent (corporate office)
+                                          const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
+                                            dbaName: dbaName.trim(),
+                                            pocName: parentPocName || '',
+                                            pocEmail: parentPocEmail || '',
+                                            pocPhone: parentPocPhone || '',
+                                            notes: `Corporate parent for ${dbaName.trim()}`,
+                                            agentName: currentUser?.agentName || ''
+                                          });
+                                          parentLink = parentResponse.parentLink;
+                                        } else {
+                                          // Use existing location as parent
+                                          const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
+                                            dbaName: dbaName.trim(),
+                                            parentLink: selectedParentLink
+                                          });
+                                          parentLink = selectedParentLink;
+                                        }
+
+                                        // Step 3: Link all child locations to parent
+                                        const childLinks = storeLinks.filter(link => link !== parentLink);
+                                        if (childLinks.length > 0) {
+                                          await apiRequest('POST', '/api/dba/link-children', {
+                                            parentLink,
+                                            childLinks
+                                          });
+                                        }
+
+                                        // Step 4: Set head office if selected
+                                        if (headOfficeLink && headOfficeLink !== '') {
+                                          await apiRequest('POST', '/api/dba/set-head-office', {
+                                            headOfficeLink,
+                                            parentLink,
+                                            mergePocInfo: true
+                                          });
+                                        }
 
                                         toast({
                                           title: "Success",
-                                          description: successMessage + warningMessage,
+                                          description: `Claimed ${selectedStores.length} location(s) with DBA "${dbaName.trim()}" and created parent record`,
                                         });
-
-                                        // Show warnings if any
-                                        if (response.warnings && response.warnings.length > 0) {
-                                          response.warnings.forEach((warning: string) => {
-                                            toast({
-                                              title: "Warning",
-                                              description: warning,
-                                              variant: "destructive",
-                                            });
-                                          });
-                                        }
 
                                         // Reset state
                                         setMultiLocationMode(false);
                                         setSelectedStores([]);
                                         setCurrentDbaStores([]);
                                         setDbaName("");
+                                        setSelectedParentLink('');
+                                        setHeadOfficeLink('');
+                                        setParentPocName('');
+                                        setParentPocEmail('');
+                                        setParentPocPhone('');
 
                                         // Refresh the dashboard
                                         await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
@@ -1079,10 +1244,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                     data-testid="button-claim-multiple"
                                   >
                                     <Sparkles className="h-4 w-4 mr-2" />
-                                    {currentDbaStores.length > 0
-                                      ? `Add ${selectedStores.length} Location${selectedStores.length !== 1 ? 's' : ''} to DBA`
-                                      : `Claim ${selectedStores.length} Location${selectedStores.length !== 1 ? 's' : ''} with DBA`
-                                    }
+                                    Claim DBA with Parent-Child Structure
                                   </Button>
                                 </div>
                               )}
