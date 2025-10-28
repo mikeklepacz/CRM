@@ -153,6 +153,9 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
         storeLink,
       });
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
+    },
     onError: (error: Error) => {
       console.error('Failed to log call:', error);
     },

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Phone, Loader2, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 
 interface CallHistoryDialogProps {
@@ -65,6 +65,10 @@ export function CallHistoryDialog({ open, onOpenChange }: CallHistoryDialogProps
         phoneNumber,
         storeLink,
       });
+    },
+    onSuccess: () => {
+      // Invalidate call history to show the new call
+      queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
     },
     onError: (error: Error) => {
       console.error('Failed to log call:', error);
