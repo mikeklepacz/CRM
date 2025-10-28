@@ -3566,6 +3566,35 @@ export default function ClientDashboard() {
       <CallHistoryDialog 
         open={callHistoryOpen} 
         onOpenChange={setCallHistoryOpen}
+        onCallStore={(storeLink, phoneNumber) => {
+          // Find the store in the data by matching the link
+          const matchingStore = data.find((row: any) => {
+            const link = getLinkValue(row);
+            if (!link) return false;
+
+            // Normalize and compare links
+            const normalizedRowLink = normalizeLink(link);
+            const normalizedSearchLink = normalizeLink(storeLink);
+
+            return normalizedRowLink === normalizedSearchLink;
+          });
+
+          if (matchingStore) {
+            // Open the store details dialog
+            setStoreDetailsDialog({
+              open: true,
+              row: matchingStore,
+            });
+
+            // Trigger default script loading in AI assistant
+            setLoadDefaultScriptTrigger(prev => prev + 1);
+
+            // Trigger dial after a delay so user sees the dialog first
+            setTimeout(() => {
+              window.location.href = `tel:${phoneNumber}`;
+            }, 800);
+          }
+        }}
       />
       </div>
 

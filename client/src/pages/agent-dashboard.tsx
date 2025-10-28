@@ -453,6 +453,11 @@ export default function AgentDashboard() {
       <CallHistoryDialog 
         open={callHistoryOpen} 
         onOpenChange={setCallHistoryOpen}
+        onCallStore={(storeLink, phoneNumber) => {
+          // Navigate to the store details page with phone parameter
+          // This will trigger the phone call after opening the page
+          setLocation(`/store/${encodeURIComponent(storeLink)}?phone=${encodeURIComponent(phoneNumber)}`);
+        }}
       />
     </div>
   );

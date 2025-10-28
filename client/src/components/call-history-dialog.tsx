@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 interface CallHistoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCallStore?: (storeLink: string, phoneNumber: string) => void;
 }
 
 interface CallRecord {
@@ -34,9 +35,8 @@ interface GroupedCall {
   lastCallTime: string;
 }
 
-export function CallHistoryDialog({ open, onOpenChange }: CallHistoryDialogProps) {
+export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHistoryDialogProps) {
   const { user } = useAuth();
-  const [, setLocation] = useLocation();
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
   // Fetch all users (for admin agent filter)
@@ -116,16 +116,11 @@ export function CallHistoryDialog({ open, onOpenChange }: CallHistoryDialogProps
     // Close the dialog
     onOpenChange(false);
 
-    // Navigate to client dashboard with store and phone params
-    // This will open store details dialog, load default script, and dial phone
-    if (group.storeLink) {
-      const params = new URLSearchParams({ 
-        store: group.storeLink,
-        phone: group.phoneNumber 
-      });
-      setLocation(`/clients?${params.toString()}`);
+    // Use callback if provided (for in-context store details opening)
+    if (onCallStore && group.storeLink) {
+      onCallStore(group.storeLink, group.phoneNumber);
     } else {
-      // If no store link, just dial the phone
+      // Fallback: just dial the phone
       window.location.href = `tel:${group.phoneNumber}`;
     }
   };
