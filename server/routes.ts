@@ -6088,6 +6088,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName, address, city, state, phone, email, storeSheetId, trackerSheetId } = req.body;
 
+      console.log('[CREATE-PARENT] ========== ENDPOINT CALLED ==========');
+      console.log('[CREATE-PARENT] Request body:', { dbaName, parentLink, address, city, state, phone, email, storeSheetId, trackerSheetId });
+
       if (!dbaName || !dbaName.trim()) {
         return res.status(400).json({ message: "DBA name is required" });
       }
@@ -6202,10 +6205,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create new parent record (corporate office with full address)
+      console.log('[CREATE-PARENT] 🆕 Creating NEW parent DBA record');
+      console.log('[CREATE-PARENT] DBA Name:', dbaName);
+      console.log('[CREATE-PARENT] Address:', address, city, state);
+      console.log('[CREATE-PARENT] Phone:', phone, 'Email:', email);
+      
       // Generate a unique UUID for the corporate office link
       const corporateLink = crypto.randomUUID();
+      console.log('[CREATE-PARENT] Generated corporate link UUID:', corporateLink);
 
       // Step 1: Create store in Store Database sheet
+      console.log('[CREATE-PARENT] 📋 STEP 1: Writing to Store Database');
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
       const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
@@ -6214,6 +6224,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const storeHeaders = storeRows[0];
+      console.log('[CREATE-PARENT] Store Database headers:', storeHeaders);
+      
       // Store Database columns: Name, Type, Link, Member Since, Address, City, State, Phone, Website, Email, Followers, Tags, Hours, DBA, Vibe Score, Sales-ready Summary, Agent Name, OPEN, Category
       const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
       const storeTypeIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'type');
@@ -6226,6 +6238,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeWebsiteIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'website');
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
       const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
+
+      console.log('[CREATE-PARENT] Column indices - Name:', storeNameIndex, 'Link:', storeLinkIndex, 'Address:', storeAddressIndex);
 
       // Initialize array with proper length - empty strings allow formulas (DBA, Agent Name) to work
       const newStoreRow: any[] = new Array(storeHeaders.length).fill('');
@@ -6243,9 +6257,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Category will be populated later - leave as empty string for now
       if (storeCategoryIndex !== -1) newStoreRow[storeCategoryIndex] = '';
 
-      await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [newStoreRow]);
+      console.log('[CREATE-PARENT] Store Database row to append:', newStoreRow);
+      console.log('[CREATE-PARENT] Appending to Store Database:', storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`);
+      
+      try {
+        await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [newStoreRow]);
+        console.log('[CREATE-PARENT] ✅ Store Database append successful');
+      } catch (error: any) {
+        console.error('[CREATE-PARENT] ❌ Store Database append FAILED:', error.message);
+        throw error;
+      }
 
       // Step 2: Create corresponding row in Commission Tracker
+      console.log('[CREATE-PARENT] 📋 STEP 2: Writing to Commission Tracker');
       const newTrackerRow = new Array(trackerHeaders.length).fill('');
       
       if (linkIndex !== -1) newTrackerRow[linkIndex] = corporateLink;
@@ -6261,9 +6285,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const statusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
       if (statusIndex !== -1) newTrackerRow[statusIndex] = 'Parent DBA';
 
-      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+      console.log('[CREATE-PARENT] Commission Tracker row to append:', newTrackerRow);
+      console.log('[CREATE-PARENT] Appending to Commission Tracker:', trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`);
+      
+      try {
+        await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+        console.log('[CREATE-PARENT] ✅ Commission Tracker append successful');
+      } catch (error: any) {
+        console.error('[CREATE-PARENT] ❌ Commission Tracker append FAILED:', error.message);
+        throw error;
+      }
 
       clearUserCache(userId);
+      console.log('[CREATE-PARENT] ========== SUCCESS - Parent created with link:', corporateLink, '==========');
       res.json({ 
         success: true, 
         message: 'Parent DBA record created successfully in both Store Database and Commission Tracker',
