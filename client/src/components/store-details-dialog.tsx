@@ -1033,12 +1033,41 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                               onChange={(e) => setParentCity(e.target.value)}
                                               data-testid="input-parent-city"
                                             />
-                                            <Input
-                                              placeholder="State"
-                                              value={parentState}
-                                              onChange={(e) => setParentState(e.target.value)}
-                                              data-testid="input-parent-state"
-                                            />
+                                            <Popover>
+                                              <PopoverTrigger asChild>
+                                                <Button
+                                                  variant="outline"
+                                                  role="combobox"
+                                                  className="w-full justify-between font-normal"
+                                                  data-testid="select-parent-state"
+                                                >
+                                                  {parentState || "State/Province"}
+                                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-[200px] p-0" align="start">
+                                                <Command>
+                                                  <CommandInput placeholder="Search state..." />
+                                                  <CommandList>
+                                                    <CommandEmpty>No state found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                      <ScrollArea className="h-[200px]">
+                                                        {US_STATES_AND_PROVINCES.map((state) => (
+                                                          <CommandItem
+                                                            key={state}
+                                                            value={state}
+                                                            onSelect={() => setParentState(state)}
+                                                          >
+                                                            <Check className={`mr-2 h-4 w-4 ${parentState === state ? "opacity-100" : "opacity-0"}`} />
+                                                            {state}
+                                                          </CommandItem>
+                                                        ))}
+                                                      </ScrollArea>
+                                                    </CommandGroup>
+                                                  </CommandList>
+                                                </Command>
+                                              </PopoverContent>
+                                            </Popover>
                                           </div>
                                           <Input
                                             placeholder="Phone"

@@ -6222,25 +6222,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
       const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const storeStatusIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
-
-      // Create new store row in Store Database
-      const newStoreRow = new Array(storeHeaders.length).fill('');
-      if (storeNameIndex !== -1) newStoreRow[storeNameIndex] = dbaName; // Use DBA name as store name
-      if (storeAddressIndex !== -1 && address) newStoreRow[storeAddressIndex] = address;
-      if (storeCityIndex !== -1 && city) newStoreRow[storeCityIndex] = city;
-      if (storeStateIndex !== -1 && state) newStoreRow[storeStateIndex] = state;
-      if (storePhoneIndex !== -1 && phone) newStoreRow[storePhoneIndex] = phone;
-      if (storeEmailIndex !== -1 && email) newStoreRow[storeEmailIndex] = email;
-      if (storeLinkIndex !== -1) newStoreRow[storeLinkIndex] = corporateLink;
-      if (storeStatusIndex !== -1) newStoreRow[storeStatusIndex] = 'Parent DBA';
-
-      // POC fields in Store Database
       const storePocNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc name' || h.toLowerCase() === 'point of contact');
       const storePocEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc email');
       const storePocPhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc phone');
-      if (storePocNameIndex !== -1 && pocName) newStoreRow[storePocNameIndex] = pocName;
-      if (storePocEmailIndex !== -1 && pocEmail) newStoreRow[storePocEmailIndex] = pocEmail;
-      if (storePocPhoneIndex !== -1 && pocPhone) newStoreRow[storePocPhoneIndex] = pocPhone;
+
+      // IMPORTANT: DO NOT use .fill('') as it overwrites formulas in ALL columns
+      // Only write to specific columns we need. Leave DBA and Agent Name columns empty
+      // so Google Sheets formulas can populate them from Commission Tracker
+      const newStoreRow: any[] = [];
+      
+      // Set only the columns we're explicitly populating
+      if (storeNameIndex !== -1) newStoreRow[storeNameIndex] = dbaName; // Use DBA name as store name
+      if (storeAddressIndex !== -1) newStoreRow[storeAddressIndex] = address || '';
+      if (storeCityIndex !== -1) newStoreRow[storeCityIndex] = city || '';
+      if (storeStateIndex !== -1) newStoreRow[storeStateIndex] = state || '';
+      if (storePhoneIndex !== -1) newStoreRow[storePhoneIndex] = phone || '';
+      if (storeEmailIndex !== -1) newStoreRow[storeEmailIndex] = email || '';
+      if (storeLinkIndex !== -1) newStoreRow[storeLinkIndex] = corporateLink;
+      if (storeStatusIndex !== -1) newStoreRow[storeStatusIndex] = 'Parent DBA';
+      if (storePocNameIndex !== -1) newStoreRow[storePocNameIndex] = pocName || '';
+      if (storePocEmailIndex !== -1) newStoreRow[storePocEmailIndex] = pocEmail || '';
+      if (storePocPhoneIndex !== -1) newStoreRow[storePocPhoneIndex] = pocPhone || '';
 
       await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [newStoreRow]);
 
