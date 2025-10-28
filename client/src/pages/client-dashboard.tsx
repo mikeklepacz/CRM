@@ -1099,6 +1099,7 @@ export default function ClientDashboard() {
     const urlParams = new URLSearchParams(window.location.search);
     const storeIdentifier = urlParams.get('store');
     const phoneNumber = urlParams.get('phone');
+    const autoCall = urlParams.get('autoCall');
 
     if (storeIdentifier) {
 
@@ -1126,6 +1127,19 @@ export default function ClientDashboard() {
 
         // If phone number provided, trigger dial after a delay so user sees the dialog first
         if (phoneNumber) {
+          // If autoCall is true, log the call to database first
+          if (autoCall === 'true') {
+            const storeName = matchingStore['Name'] || matchingStore['name'] || matchingStore['Company'] || 'Unknown Store';
+            apiRequest('POST', '/api/call-history', {
+              storeLink: storeIdentifier,
+              phoneNumber: phoneNumber,
+              storeName: storeName,
+            }).catch(error => {
+              console.error('Failed to log call:', error);
+              // Don't block the call if logging fails
+            });
+          }
+          
           setTimeout(() => {
             window.location.href = `tel:${phoneNumber}`;
           }, 800);

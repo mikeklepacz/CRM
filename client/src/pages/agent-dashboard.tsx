@@ -425,7 +425,20 @@ export default function AgentDashboard() {
               onNotesClick={(clientId) => {
                 const client = clients.find(c => c.id === clientId);
                 if (client) {
-                  setLocation(`/store/${clientId}`);
+                  // Get store link from client data
+                  const storeLink = client.link || client.data?.['Link'] || client.data?.['link'];
+                  // Get phone number - prioritize POC phone, fallback to regular phone
+                  const pocPhone = client.data?.['POC Phone'] || client.data?.['poc_phone'];
+                  const regularPhone = client.data?.['Phone'] || client.data?.['phone'];
+                  const phoneNumber = pocPhone || regularPhone;
+                  
+                  // Navigate to clients page with store parameter to auto-open dialog
+                  const params = new URLSearchParams({ store: storeLink });
+                  if (phoneNumber) {
+                    params.append('phone', phoneNumber);
+                    params.append('autoCall', 'true');
+                  }
+                  setLocation(`/clients?${params.toString()}`);
                 }
               }}
             />
