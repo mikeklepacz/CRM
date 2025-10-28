@@ -107,7 +107,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   // Parent DBA management state
   const [parentCreationType, setParentCreationType] = useState<'new' | 'existing'>('new');
   const [selectedParentLink, setSelectedParentLink] = useState<string>('');
-  const [headOfficeLink, setHeadOfficeLink] = useState<string>('');
+  const [headOfficeLink, setHeadOfficeLink] = useState<string>('none');
   const [parentPocName, setParentPocName] = useState('');
   const [parentPocEmail, setParentPocEmail] = useState('');
   const [parentPocPhone, setParentPocPhone] = useState('');
@@ -1076,7 +1076,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           <SelectValue placeholder="Choose head office (or skip)" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          <SelectItem value="">None</SelectItem>
+                                          <SelectItem value="none">None</SelectItem>
                                           {selectedStores.map((store) => (
                                             <SelectItem key={store.link} value={store.link}>
                                               {store.name}
@@ -1217,7 +1217,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         }
 
                                         // Step 4: Set head office if selected
-                                        if (headOfficeLink && headOfficeLink !== '') {
+                                        if (headOfficeLink && headOfficeLink !== 'none') {
                                           await apiRequest('POST', '/api/dba/set-head-office', {
                                             headOfficeLink,
                                             parentLink,
