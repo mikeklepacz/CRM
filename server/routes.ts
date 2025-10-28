@@ -6086,18 +6086,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/dba/create-parent', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName, address, city, state, phone, email } = req.body;
+      const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName, address, city, state, phone, email, storeSheetId, trackerSheetId } = req.body;
 
       if (!dbaName || !dbaName.trim()) {
         return res.status(400).json({ message: "DBA name is required" });
       }
 
-      // Find Commission Tracker sheet
-      const sheets = await storage.getAllActiveGoogleSheets();
-      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      if (!storeSheetId || !trackerSheetId) {
+        return res.status(400).json({ message: "Store and Tracker sheet IDs are required" });
+      }
 
-      if (!trackerSheet) {
-        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
+      // Get sheets by ID
+      const storeSheet = await storage.getGoogleSheetById(storeSheetId);
+      const trackerSheet = await storage.getGoogleSheetById(trackerSheetId);
+
+      if (!storeSheet || !trackerSheet) {
+        return res.status(404).json({ message: 'One or both sheets not found' });
       }
 
       // Read tracker data
@@ -6201,12 +6205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate a unique UUID for the corporate office link
       const corporateLink = crypto.randomUUID();
 
-      // Step 1: Create store in Store Database sheet (if address provided)
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
-      if (!storeSheet) {
-        return res.status(404).json({ message: 'Store Database sheet not found' });
-      }
-
+      // Step 1: Create store in Store Database sheet
       const storeRange = `${storeSheet.sheetName}!A:ZZ`;
       const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 

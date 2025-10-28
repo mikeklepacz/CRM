@@ -1242,14 +1242,18 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             pocEmail: parentPocEmail || '',
                                             pocPhone: parentPocPhone || '',
                                             notes: `Corporate parent for ${dbaName.trim()}`,
-                                            agentName: currentUser?.agentName || ''
+                                            agentName: currentUser?.agentName || '',
+                                            storeSheetId,
+                                            trackerSheetId
                                           });
                                           parentLink = parentResponse.parentLink;
                                         } else {
                                           // Use existing location as parent
                                           const parentResponse = await apiRequest('POST', '/api/dba/create-parent', {
                                             dbaName: dbaName.trim(),
-                                            parentLink: selectedParentLink
+                                            parentLink: selectedParentLink,
+                                            storeSheetId,
+                                            trackerSheetId
                                           });
                                           parentLink = selectedParentLink;
                                         }
