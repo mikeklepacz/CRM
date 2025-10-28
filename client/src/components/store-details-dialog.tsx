@@ -54,6 +54,24 @@ const getLinkValue = (row: any): string | undefined => {
   return undefined;
 };
 
+// Helper function: Format phone number as (XXX) XXX-XXXX
+const formatPhoneNumber = (value: string): string => {
+  // Remove all non-digit characters
+  const digits = value.replace(/\D/g, '');
+  
+  // Don't format if empty
+  if (digits.length === 0) return '';
+  
+  // Format based on length
+  if (digits.length <= 3) {
+    return digits;
+  } else if (digits.length <= 6) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  } else {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  }
+};
+
 // Store Details Dialog Component
 export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger }: {
   open: boolean;
@@ -134,6 +152,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [parentState, setParentState] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [parentEmail, setParentEmail] = useState('');
+  const [isClaimingMultiple, setIsClaimingMultiple] = useState(false);
 
   // Child locations management
   const currentStoreLink = getLinkValue(row);
@@ -1073,7 +1092,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             placeholder="Phone"
                                             type="tel"
                                             value={parentPhone}
-                                            onChange={(e) => setParentPhone(e.target.value)}
+                                            onChange={(e) => setParentPhone(formatPhoneNumber(e.target.value))}
                                             data-testid="input-parent-phone"
                                           />
                                           <Input
@@ -1244,6 +1263,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         return;
                                       }
 
+                                      setIsClaimingMultiple(true);
                                       try {
                                         const storeLinks = selectedStores.map(s => s.link);
 
@@ -1335,13 +1355,24 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           description: error.message || "Failed to claim locations",
                                           variant: "destructive",
                                         });
+                                      } finally {
+                                        setIsClaimingMultiple(false);
                                       }
                                     }}
-                                    disabled={!dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
+                                    disabled={isClaimingMultiple || !dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
                                     data-testid="button-claim-multiple"
                                   >
-                                    <Sparkles className="h-4 w-4 mr-2" />
-                                    Claim DBA with Parent-Child Structure
+                                    {isClaimingMultiple ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Claiming...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles className="h-4 w-4 mr-2" />
+                                        Claim DBA with Parent-Child Structure
+                                      </>
+                                    )}
                                   </Button>
                                 </div>
                               )}

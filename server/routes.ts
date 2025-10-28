@@ -6226,10 +6226,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storePocEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc email');
       const storePocPhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'poc phone');
 
-      // IMPORTANT: DO NOT use .fill('') as it overwrites formulas in ALL columns
-      // Only write to specific columns we need. Leave DBA and Agent Name columns empty
-      // so Google Sheets formulas can populate them from Commission Tracker
-      const newStoreRow: any[] = [];
+      // IMPORTANT: Initialize array with proper length so Google Sheets API handles it correctly
+      // When appending, empty strings allow formulas in those cells to work
+      const newStoreRow: any[] = new Array(storeHeaders.length).fill('');
       
       // Set only the columns we're explicitly populating
       if (storeNameIndex !== -1) newStoreRow[storeNameIndex] = dbaName; // Use DBA name as store name
