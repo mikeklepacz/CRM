@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown } from "lucide-react";
+import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -87,6 +87,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
     follow_up_date: "",
     next_action: "",
     open: "TRUE",
+    dba: "",
+    parent_link: "",
+    is_parent: "",
+    head_office_link: "",
   });
 
   // Track initial data to determine what changed
@@ -107,6 +111,13 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [parentPocName, setParentPocName] = useState('');
   const [parentPocEmail, setParentPocEmail] = useState('');
   const [parentPocPhone, setParentPocPhone] = useState('');
+
+  // Child locations management
+  const currentStoreLink = getLinkValue(row);
+  const { data: childLocations, refetch: refetchChildren } = useQuery({
+    queryKey: ['/api/dba/children', currentStoreLink],
+    enabled: !!currentStoreLink && open,
+  });
 
   // Track the current row's link to prevent race conditions
   const [activeRowLink, setActiveRowLink] = useState<string | null>(null);
@@ -221,6 +232,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         follow_up_date: getValue(['Follow-Up Date', 'follow_up_date']),
         next_action: getValue(['Next Action', 'next_action']),
         open: getValue(['Open', 'open']) || "TRUE",
+        dba: getValue(['DBA', 'dba']),
+        parent_link: getValue(['Parent Link', 'parent_link']),
+        is_parent: getValue(['Is Parent', 'is_parent']),
+        head_office_link: getValue(['Head Office Link', 'head_office_link']),
       };
       setFormData(populatedData);
       setInitialData(populatedData);
@@ -1442,6 +1457,143 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                           </div>
                         </AccordionContent>
                       </AccordionItem>
+
+                      {/* DBA Management - only show if this location has children or is a child */}
+                      {(childLocations && childLocations.children && childLocations.children.length > 0) || formData.parent_link ? (
+                        <AccordionItem value="dba-management" data-testid="accordion-item-dba-management">
+                          <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-dba-management">
+                            DBA Management
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="space-y-4 pt-2">
+                              {/* Show parent info if this is a child location */}
+                              {formData.parent_link && (
+                                <div className="p-3 bg-muted/30 rounded-md space-y-2">
+                                  <Label className="text-sm font-medium">This is a child location</Label>
+                                  <p className="text-xs text-muted-foreground">
+                                    Parent: <span className="font-medium">{formData.dba || 'Unknown'}</span>
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        await apiRequest('POST', '/api/dba/unlink-children', {
+                                          parentLink: formData.parent_link,
+                                          childLinks: [currentStoreLink]
+                                        });
+                                        
+                                        toast({
+                                          title: "Success",
+                                          description: "Removed from parent DBA",
+                                        });
+                                        
+                                        await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+                                        await refetch();
+                                        await refetchChildren();
+                                      } catch (error: any) {
+                                        toast({
+                                          title: "Error",
+                                          description: error.message || "Failed to unlink from parent",
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }}
+                                    data-testid="button-unlink-from-parent"
+                                  >
+                                    Remove from Parent DBA
+                                  </Button>
+                                </div>
+                              )}
+
+                              {/* Show child locations if this is a parent */}
+                              {childLocations && childLocations.children && childLocations.children.length > 0 && (
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <Label>Child Locations ({childLocations.children.length})</Label>
+                                    {childLocations.headOffice && (
+                                      <Badge variant="secondary" className="text-xs">
+                                        Head Office: {childLocations.headOffice.name}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
+                                    {childLocations.children.map((child: any) => (
+                                      <div
+                                        key={child.link}
+                                        className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
+                                        data-testid={`child-location-${child.link}`}
+                                      >
+                                        <div className="flex-1">
+                                          <p className="text-sm font-medium">{child.name}</p>
+                                          {child.address && (
+                                            <p className="text-xs text-muted-foreground">{child.address}, {child.city}, {child.state}</p>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          {childLocations.headOfficeLink === child.link && (
+                                            <Badge variant="default" className="text-xs">HQ</Badge>
+                                          )}
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={async () => {
+                                              if (!confirm(`Remove "${child.name}" from this DBA?`)) return;
+                                              
+                                              try {
+                                                await apiRequest('POST', '/api/dba/unlink-children', {
+                                                  parentLink: currentStoreLink,
+                                                  childLinks: [child.link]
+                                                });
+                                                
+                                                toast({
+                                                  title: "Success",
+                                                  description: `Removed ${child.name} from DBA`,
+                                                });
+                                                
+                                                await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+                                                await refetch();
+                                                await refetchChildren();
+                                              } catch (error: any) {
+                                                toast({
+                                                  title: "Error",
+                                                  description: error.message || "Failed to remove child location",
+                                                  variant: "destructive",
+                                                });
+                                              }
+                                            }}
+                                            data-testid={`button-remove-child-${child.link}`}
+                                          >
+                                            Remove
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Add more child locations */}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setMultiLocationMode(true);
+                                      setDbaName(formData.dba || '');
+                                    }}
+                                    data-testid="button-add-more-children"
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add More Locations to DBA
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ) : null}
 
                       {/* Basic Information */}
                       <AccordionItem value="basic-info" data-testid="accordion-item-basic-info">
