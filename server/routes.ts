@@ -10,6 +10,7 @@ import { getTimezoneOffset } from "date-fns-tz";
 import axios from "axios";
 import bcrypt from "bcrypt";
 import * as client from "openid-client";
+import { v4 as uuidv4 } from "uuid";
 import * as googleSheets from "./googleSheets";
 import * as googleMaps from "./googleMaps";
 import * as commissionService from "./commission-service";
@@ -6086,7 +6087,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/dba/create-parent', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { dbaName, parentLink, pocName, pocEmail, pocPhone, notes, agentName } = req.body;
+      const { 
+        dbaName, 
+        parentLink, 
+        pocName, 
+        pocEmail, 
+        pocPhone, 
+        notes, 
+        agentName,
+        // Corporate office location data
+        address,
+        city,
+        state,
+        phone,
+        email,
+        childLinks // Array of child store links to get category from
+      } = req.body;
 
       if (!dbaName || !dbaName.trim()) {
         return res.status(400).json({ message: "DBA name is required" });
@@ -6197,32 +6213,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Create new parent record (corporate office without existing store link)
-      const newRow = new Array(trackerHeaders.length).fill('');
+      // Create new parent record (corporate office with full location data)
+      // Generate a proper UUID for the corporate office
+      const corporateUuid = uuidv4();
       
-      // Generate a unique link for corporate office (using DBA name)
-      const corporateLink = `dba-parent-${dbaName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+      // Find Store Database sheet
+      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
+      if (!storeSheet) {
+        return res.status(404).json({ message: 'Store Database sheet not found' });
+      }
+
+      // Read Store Database to get category from first child location
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
       
-      if (linkIndex !== -1) newRow[linkIndex] = corporateLink;
-      if (dbaIndex !== -1) newRow[dbaIndex] = dbaName;
-      if (isParentIndex !== -1) newRow[isParentIndex] = 'TRUE';
-      if (pocNameIndex !== -1 && pocName) newRow[pocNameIndex] = pocName;
-      if (pocEmailIndex !== -1 && pocEmail) newRow[pocEmailIndex] = pocEmail;
-      if (pocPhoneIndex !== -1 && pocPhone) newRow[pocPhoneIndex] = pocPhone;
-      if (notesIndex !== -1 && notes) newRow[notesIndex] = notes;
-      if (agentIndex !== -1 && agentName) newRow[agentIndex] = agentName;
+      if (storeRows.length === 0) {
+        return res.status(404).json({ message: 'Store Database is empty' });
+      }
+
+      const storeHeaders = storeRows[0];
+      const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+      const categoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
+
+      // Get category from first child location (all children should have same category)
+      let category = '';
+      if (childLinks && childLinks.length > 0 && categoryIndex !== -1) {
+        const normalizedFirstChild = normalizeLink(childLinks[0]);
+        for (let i = 1; i < storeRows.length; i++) {
+          if (normalizeLink(storeRows[i][storeLinkIndex] || '') === normalizedFirstChild) {
+            category = storeRows[i][categoryIndex] || '';
+            break;
+          }
+        }
+      }
+
+      // STEP 1: Write to Store Database sheet
+      // Columns: A=Name, C=Link, E=Address, F=City, G=State, S=Category
+      const storeNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'store name');
+      const storeAddressIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'address');
+      const storeCityIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'city');
+      const storeStateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
+      const storePhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'phone');
+      const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
+
+      const storeRow = new Array(storeHeaders.length).fill('');
+      if (storeNameIndex !== -1) storeRow[storeNameIndex] = dbaName;
+      if (storeLinkIndex !== -1) storeRow[storeLinkIndex] = corporateUuid;
+      if (storeAddressIndex !== -1) storeRow[storeAddressIndex] = address || '';
+      if (storeCityIndex !== -1) storeRow[storeCityIndex] = city || '';
+      if (storeStateIndex !== -1) storeRow[storeStateIndex] = state || '';
+      if (storePhoneIndex !== -1) storeRow[storePhoneIndex] = phone || '';
+      if (storeEmailIndex !== -1) storeRow[storeEmailIndex] = email || '';
+      if (categoryIndex !== -1) storeRow[categoryIndex] = category;
+
+      await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [storeRow]);
+
+      // STEP 2: Write to Commission Tracker sheet
+      // Columns: A=Link, D=Agent Name, H=Status, R=DBA
+      const trackerRow = new Array(trackerHeaders.length).fill('');
+      
+      if (linkIndex !== -1) trackerRow[linkIndex] = corporateUuid;
+      if (dbaIndex !== -1) trackerRow[dbaIndex] = dbaName;
+      if (isParentIndex !== -1) trackerRow[isParentIndex] = 'TRUE';
+      if (pocNameIndex !== -1 && pocName) trackerRow[pocNameIndex] = pocName;
+      if (pocEmailIndex !== -1 && pocEmail) trackerRow[pocEmailIndex] = pocEmail;
+      if (pocPhoneIndex !== -1 && pocPhone) trackerRow[pocPhoneIndex] = pocPhone;
+      if (notesIndex !== -1 && notes) trackerRow[notesIndex] = notes;
+      if (agentIndex !== -1 && agentName) trackerRow[agentIndex] = agentName;
 
       // Set status to 'Parent DBA'
       const statusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
-      if (statusIndex !== -1) newRow[statusIndex] = 'Parent DBA';
+      if (statusIndex !== -1) trackerRow[statusIndex] = 'Parent DBA';
 
-      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newRow]);
+      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [trackerRow]);
 
       clearUserCache(userId);
       res.json({ 
         success: true, 
-        message: 'Parent DBA record created successfully',
-        parentLink: corporateLink
+        message: 'Parent DBA record created successfully in both Store Database and Commission Tracker',
+        parentLink: corporateUuid
       });
     } catch (error: any) {
       console.error("Error creating parent DBA:", error);

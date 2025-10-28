@@ -40,6 +40,31 @@ const getLinkValue = (row: any): string | undefined => {
   return undefined;
 };
 
+// US States and Canadian Provinces for state dropdowns
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
+];
+
+const CANADIAN_PROVINCES = [
+  'Alberta',
+  'British Columbia',
+  'Manitoba',
+  'New Brunswick',
+  'Newfoundland and Labrador',
+  'Northwest Territories',
+  'Nova Scotia',
+  'Nunavut',
+  'Ontario',
+  'Prince Edward Island',
+  'Quebec',
+  'Saskatchewan',
+  'Yukon'
+];
+
 // Store Details Dialog Component
 export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger }: {
   open: boolean;
@@ -111,6 +136,13 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [parentPocName, setParentPocName] = useState('');
   const [parentPocEmail, setParentPocEmail] = useState('');
   const [parentPocPhone, setParentPocPhone] = useState('');
+  
+  // Corporate office location data
+  const [corporateAddress, setCorporateAddress] = useState('');
+  const [corporateCity, setCorporateCity] = useState('');
+  const [corporateState, setCorporateState] = useState('');
+  const [corporatePhone, setCorporatePhone] = useState('');
+  const [corporateEmail, setCorporateEmail] = useState('');
 
   // Child locations management
   const currentStoreLink = getLinkValue(row);
@@ -1009,31 +1041,89 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       </div>
                                     </div>
 
-                                    {/* Parent POC fields (for new parent only) */}
+                                    {/* Corporate office location fields (for new parent only) */}
                                     {parentCreationType === 'new' && (
-                                      <div className="space-y-2 pt-2 border-t">
-                                        <Label className="text-xs text-muted-foreground">Corporate Contact Info (optional)</Label>
-                                        <div className="grid grid-cols-1 gap-2">
-                                          <Input
-                                            placeholder="POC Name"
-                                            value={parentPocName}
-                                            onChange={(e) => setParentPocName(e.target.value)}
-                                            data-testid="input-parent-poc-name"
-                                          />
-                                          <Input
-                                            placeholder="POC Email"
-                                            type="email"
-                                            value={parentPocEmail}
-                                            onChange={(e) => setParentPocEmail(e.target.value)}
-                                            data-testid="input-parent-poc-email"
-                                          />
-                                          <Input
-                                            placeholder="POC Phone"
-                                            type="tel"
-                                            value={parentPocPhone}
-                                            onChange={(e) => setParentPocPhone(e.target.value)}
-                                            data-testid="input-parent-poc-phone"
-                                          />
+                                      <div className="space-y-3 pt-2 border-t">
+                                        {/* Location Info */}
+                                        <div className="space-y-2">
+                                          <Label className="text-xs text-muted-foreground">Corporate Office Location</Label>
+                                          <div className="grid grid-cols-1 gap-2">
+                                            <Input
+                                              placeholder="Address"
+                                              value={corporateAddress}
+                                              onChange={(e) => setCorporateAddress(e.target.value)}
+                                              data-testid="input-corporate-address"
+                                            />
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <Input
+                                                placeholder="City"
+                                                value={corporateCity}
+                                                onChange={(e) => setCorporateCity(e.target.value)}
+                                                data-testid="input-corporate-city"
+                                              />
+                                              <Select
+                                                value={corporateState}
+                                                onValueChange={setCorporateState}
+                                              >
+                                                <SelectTrigger data-testid="select-corporate-state">
+                                                  <SelectValue placeholder="State" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {US_STATES.map((state) => (
+                                                    <SelectItem key={state} value={state}>
+                                                      {state}
+                                                    </SelectItem>
+                                                  ))}
+                                                  {CANADIAN_PROVINCES.map((province) => (
+                                                    <SelectItem key={province} value={province}>
+                                                      {province}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                            <Input
+                                              placeholder="Phone"
+                                              type="tel"
+                                              value={corporatePhone}
+                                              onChange={(e) => setCorporatePhone(e.target.value)}
+                                              data-testid="input-corporate-phone"
+                                            />
+                                            <Input
+                                              placeholder="Email"
+                                              type="email"
+                                              value={corporateEmail}
+                                              onChange={(e) => setCorporateEmail(e.target.value)}
+                                              data-testid="input-corporate-email"
+                                            />
+                                          </div>
+                                        </div>
+
+                                        {/* POC Info */}
+                                        <div className="space-y-2">
+                                          <Label className="text-xs text-muted-foreground">Corporate Contact Info (optional)</Label>
+                                          <div className="grid grid-cols-1 gap-2">
+                                            <Input
+                                              placeholder="POC Name"
+                                              value={parentPocName}
+                                              onChange={(e) => setParentPocName(e.target.value)}
+                                              data-testid="input-parent-poc-name"
+                                            />
+                                            <Input
+                                              placeholder="POC Email"
+                                              type="email"
+                                              value={parentPocEmail}
+                                              onChange={(e) => setParentPocEmail(e.target.value)}
+                                              data-testid="input-parent-poc-email"
+                                            />
+                                            <Input
+                                              placeholder="POC Phone"
+                                              type="tel"
+                                              value={parentPocPhone}
+                                              onChange={(e) => setParentPocPhone(e.target.value)}
+                                              data-testid="input-parent-poc-phone"
+                                            />
+                                          </div>
                                         </div>
                                       </div>
                                     )}
@@ -1195,7 +1285,15 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             pocEmail: parentPocEmail || '',
                                             pocPhone: parentPocPhone || '',
                                             notes: `Corporate parent for ${dbaName.trim()}`,
-                                            agentName: currentUser?.agentName || ''
+                                            agentName: currentUser?.agentName || '',
+                                            // Corporate office location data
+                                            address: corporateAddress || '',
+                                            city: corporateCity || '',
+                                            state: corporateState || '',
+                                            phone: corporatePhone || '',
+                                            email: corporateEmail || '',
+                                            // Category will be copied from first child location
+                                            childLinks: storeLinks
                                           });
                                           parentLink = parentResponse.parentLink;
                                         } else {
