@@ -26,7 +26,7 @@ interface ClientsTableProps {
   clients: EnrichedClient[];
   currentUser: User;
   isLoading?: boolean;
-  onNotesClick: (clientId: string) => void;
+  onNotesClick: (clientId: string, clientData: EnrichedClient) => void;
 }
 
 export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: ClientsTableProps) {
@@ -355,7 +355,7 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => onNotesClick(client.id)}
+                          onClick={() => onNotesClick(client.id, client)}
                           data-testid={`button-notes-${client.id}`}
                           className={`h-auto py-2 flex flex-col items-center gap-0 ${
                             (client as any).needsFollowUp 
