@@ -37,13 +37,15 @@ export function FranchiseFinderDialog({
 
   const allStates = useMemo(() => {
     const states = new Set<string>();
-    stores.forEach(store => {
-      if (store.State) {
-        states.add(store.State);
-      }
+    franchises.forEach(franchise => {
+      franchise.locations.forEach(location => {
+        if (location.State) {
+          states.add(location.State);
+        }
+      });
     });
     return Array.from(states).sort();
-  }, [stores]);
+  }, [franchises]);
 
   const franchises = useMemo(() => {
     let filteredFranchises = detectFranchises(stores, minLocations, maxLocations);
