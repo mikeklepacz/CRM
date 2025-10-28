@@ -3561,6 +3561,12 @@ export default function ClientDashboard() {
           setShowMyStoresOnly(false);
         }}
       />
+
+      {/* Call History Dialog */}
+      <CallHistoryDialog 
+        open={callHistoryOpen} 
+        onOpenChange={setCallHistoryOpen}
+      />
       </div>
 
     </div>
