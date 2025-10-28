@@ -56,6 +56,37 @@ export function FranchiseFinderDialog({
     return Array.from(states).sort();
   }, [stores]);
 
+  const isCanadianProvince = (state: string) => {
+    const canadianProvinces = [
+      'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
+      'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador',
+      'Nova Scotia', 'Northwest Territories', 'Nunavut', 'Ontario', 'Prince Edward Island',
+      'Quebec', 'Saskatchewan', 'Yukon'
+    ];
+    return canadianProvinces.includes(state);
+  };
+
+  const canadianStates = allStates.filter(isCanadianProvince);
+  const usStates = allStates.filter(state => !isCanadianProvince(state));
+
+  const showCanadaOnly = selectedStates.length > 0 && 
+    selectedStates.every(isCanadianProvince) && 
+    canadianStates.every(state => selectedStates.includes(state));
+
+  const showUSAOnly = selectedStates.length > 0 && 
+    selectedStates.every(state => !isCanadianProvince(state)) && 
+    usStates.every(state => selectedStates.includes(state));
+
+  const stateCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    stores.forEach(store => {
+      if (store.State) {
+        counts[store.State] = (counts[store.State] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [stores]);
+
   const handleSelectFranchise = (franchise: FranchiseGroup) => {
     onSelectFranchise(franchise);
     onOpenChange(false);
@@ -147,36 +178,82 @@ export function FranchiseFinderDialog({
                         </Button>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Select states to filter franchises
-                    </p>
+
+                    {/* Canada Checkbox */}
+                    {canadianStates.length > 0 && (
+                      <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                        <Checkbox
+                          id="canada-toggle"
+                          checked={showCanadaOnly}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedStates(canadianStates);
+                            } else {
+                              setSelectedStates([]);
+                            }
+                          }}
+                          data-testid="checkbox-canada-toggle"
+                        />
+                        <Label
+                          htmlFor="canada-toggle"
+                          className="text-sm cursor-pointer flex-1 font-medium"
+                        >
+                          Canada
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          ({canadianStates.reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
+                        </span>
+                      </div>
+                    )}
+
+                    {/* USA Checkbox */}
+                    {usStates.length > 0 && (
+                      <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                        <Checkbox
+                          id="usa-toggle"
+                          checked={showUSAOnly}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedStates(usStates);
+                            } else {
+                              setSelectedStates([]);
+                            }
+                          }}
+                          data-testid="checkbox-usa-toggle"
+                        />
+                        <Label
+                          htmlFor="usa-toggle"
+                          className="text-sm cursor-pointer flex-1 font-medium"
+                        >
+                          USA
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          ({usStates.reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} shops)
+                        </span>
+                      </div>
+                    )}
+
                     <ScrollArea className="h-64">
                       <div className="space-y-2">
-                        {allStates.map((state) => {
-                          const stateCount = franchises.reduce((count, franchise) => {
-                            return count + franchise.locations.filter(loc => loc.State === state).length;
-                          }, 0);
-                          
-                          return (
-                            <div key={state} className="flex items-center gap-2">
-                              <Checkbox
-                                id={`state-${state}`}
-                                checked={selectedStates.includes(state)}
-                                onCheckedChange={(checked) => handleStateChange(state, checked as boolean)}
-                                data-testid={`checkbox-state-${state}`}
-                              />
-                              <Label
-                                htmlFor={`state-${state}`}
-                                className="text-sm cursor-pointer flex-1"
-                              >
-                                {state}
-                              </Label>
-                              <span className="text-xs text-muted-foreground">
-                                ({stateCount})
-                              </span>
-                            </div>
-                          );
-                        })}
+                        {allStates.map((state) => (
+                          <div key={state} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`state-${state}`}
+                              checked={selectedStates.includes(state)}
+                              onCheckedChange={(checked) => handleStateChange(state, checked as boolean)}
+                              data-testid={`checkbox-state-${state}`}
+                            />
+                            <Label
+                              htmlFor={`state-${state}`}
+                              className="text-sm cursor-pointer flex-1"
+                            >
+                              {state}
+                            </Label>
+                            <span className="text-xs text-muted-foreground">
+                              ({stateCounts[state] || 0})
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </ScrollArea>
                   </div>
