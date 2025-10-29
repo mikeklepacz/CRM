@@ -388,6 +388,7 @@ export default function ClientDashboard() {
   const [citySearchTerm, setCitySearchTerm] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [showMyStoresOnly, setShowMyStoresOnly] = useState<boolean>(false);
+  const [showUnclaimedOnly, setShowUnclaimedOnly] = useState<boolean>(false);
   const [showCanadaOnly, setShowCanadaOnly] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<number>(14); // Font size in pixels
   const [rowHeight, setRowHeight] = useState<number>(48); // Row height in pixels
@@ -1038,6 +1039,9 @@ export default function ClientDashboard() {
         if (userPreferences.showMyStoresOnly !== undefined) {
           setShowMyStoresOnly(userPreferences.showMyStoresOnly);
         }
+        if (userPreferences.showUnclaimedOnly !== undefined) {
+          setShowUnclaimedOnly(userPreferences.showUnclaimedOnly);
+        }
         if (userPreferences.viewAsAgent !== undefined) {
           setViewAsAgent(userPreferences.viewAsAgent);
         }
@@ -1482,6 +1486,7 @@ export default function ClientDashboard() {
           // colorPresets now managed by useCustomTheme hook
           freezeFirstColumn, // Save freeze column preference
           showMyStoresOnly, // Save My Stores Only preference
+          showUnclaimedOnly, // Save Show Unclaimed Only preference
           colorRowByStatus: userPreferences?.colorRowByStatus, // Preserve colorRowByStatus state
           // Note: Colors are saved separately via useCustomTheme
         });
@@ -1491,7 +1496,7 @@ export default function ClientDashboard() {
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(timeoutId);
-  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, freezeFirstColumn, showMyStoresOnly]);
+  }, [visibleColumns, columnOrder, columnWidths, selectedStates, selectedCities, fontSize, rowHeight, preferencesLoaded, textAlign, verticalAlign, statusOptions, freezeFirstColumn, showMyStoresOnly, showUnclaimedOnly]);
 
   // Handle column resizing with global mouse events
   useEffect(() => {
@@ -1644,6 +1649,68 @@ export default function ClientDashboard() {
     if (showMyStoresOnly) {
       // Filter to only claimed stores (_hasTrackerData === true)
       let filtered = data.filter((row: any) => row._hasTrackerData === true);
+
+      // Apply search filter (if any)
+      if (searchTerm.trim()) {
+        const searchLower = searchTerm.toLowerCase();
+        filtered = filtered.filter((row: any) => {
+          return headers.some((header: string) => {
+            const value = row[header]?.toString().toLowerCase() || '';
+            return value.includes(searchLower);
+          });
+        });
+      }
+
+      // Apply status filter (if any)
+      if (selectedStatuses.size > 0) {
+        const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
+        filtered = filtered.filter((row: any) => {
+          return statusColumns.some((col: string) => {
+            const value = row[col];
+            if (value && String(value).trim()) {
+              return selectedStatuses.has(String(value).trim());
+            }
+            return false;
+          });
+        });
+      }
+
+      // Apply sorting
+      if (sortColumn) {
+        filtered = [...filtered].sort((a: any, b: any) => {
+          const aVal = String(a[sortColumn] || '');
+          const bVal = String(b[sortColumn] || '');
+
+          // Try numeric comparison first
+          const aNum = parseFloat(aVal);
+          const bNum = parseFloat(bVal);
+
+          if (!isNaN(aNum) && !isNaN(bNum)) {
+            return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+          }
+
+          // Fall back to string comparison
+          const comparison = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
+          return sortDirection === 'asc' ? comparison : -comparison;
+        });
+      }
+
+      return filtered;
+    }
+
+    // Show Unclaimed Shops filter - bypass state/city filters when active
+    if (showUnclaimedOnly) {
+      // Filter to only unclaimed stores:
+      // 1. No tracker data at all (_hasTrackerData === false), OR
+      // 2. Has tracker data but no agent assigned (Agent/Agent Name field is empty)
+      let filtered = data.filter((row: any) => {
+        if (row._hasTrackerData === false) {
+          return true; // No tracker row at all = unclaimed
+        }
+        // Has tracker data - check if Agent Name is empty
+        const agentName = row['Agent Name'] || row['agent name'] || row['Agent'] || row['agent'] || '';
+        return !agentName || agentName.toString().trim() === '';
+      });
 
       // Apply search filter (if any)
       if (searchTerm.trim()) {
@@ -1925,21 +1992,48 @@ export default function ClientDashboard() {
                       {isRefreshing ? 'Refreshing...' : 'Refresh'}
                     </Button>
                   </div>
-                  {/* My Stores Only toggle */}
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="my-stores-only"
-                      checked={showMyStoresOnly}
-                      onCheckedChange={(checked) => setShowMyStoresOnly(checked === true)}
-                      data-testid="checkbox-my-stores-only"
-                    />
-                    <Label
-                      htmlFor="my-stores-only"
-                      className="text-sm font-medium cursor-pointer"
-                      style={{ color: customColors.text }}
-                    >
-                      My Stores Only
-                    </Label>
+                  {/* Filter toggles */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="my-stores-only"
+                        checked={showMyStoresOnly}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setShowUnclaimedOnly(false);
+                          }
+                          setShowMyStoresOnly(checked === true);
+                        }}
+                        data-testid="checkbox-my-stores-only"
+                      />
+                      <Label
+                        htmlFor="my-stores-only"
+                        className="text-sm font-medium cursor-pointer"
+                        style={{ color: customColors.text }}
+                      >
+                        My Stores Only
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="unclaimed-only"
+                        checked={showUnclaimedOnly}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setShowMyStoresOnly(false);
+                          }
+                          setShowUnclaimedOnly(checked === true);
+                        }}
+                        data-testid="checkbox-unclaimed-only"
+                      />
+                      <Label
+                        htmlFor="unclaimed-only"
+                        className="text-sm font-medium cursor-pointer"
+                        style={{ color: customColors.text }}
+                      >
+                        Show Unclaimed Shops
+                      </Label>
+                    </div>
                   </div>
                 </div>
 
