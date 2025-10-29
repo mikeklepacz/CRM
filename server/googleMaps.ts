@@ -207,11 +207,12 @@ export function parseCityStateFromAddress(formattedAddress: string): { city: str
   return { city: '', state: '' };
 }
 
-// Parse full address into street, city, state components for CRM columns
+// Parse full address into street, city, state, zip components for CRM columns
 export function parseAddressComponents(formattedAddress: string): { 
   street: string; 
   city: string; 
-  state: string; 
+  state: string;
+  zip: string;
 } {
   const parts = formattedAddress.split(',').map(p => p.trim());
   
@@ -226,14 +227,15 @@ export function parseAddressComponents(formattedAddress: string): {
     const stateZip = parts[parts.length - 2] || '';
     const stateParts = stateZip.split(' ');
     const stateAbbr = stateParts[0] || '';
+    const zip = stateParts[1] || '';
     
     // Convert state abbreviation to full name
     const state = STATE_ABBREVIATIONS[stateAbbr.toUpperCase()] || stateAbbr;
     
-    return { street, city, state };
+    return { street, city, state, zip };
   }
   
-  return { street: '', city: '', state: '' };
+  return { street: '', city: '', state: '', zip: '' };
 }
 
 export interface ReverseGeocodeResult {

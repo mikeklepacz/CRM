@@ -11272,8 +11272,8 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'Place not found' });
       }
 
-      // Parse address into street, city, state components for separate CRM columns
-      const { street, city, state } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
+      // Parse address into street, city, state, zip components for separate CRM columns
+      const { street, city, state, zip } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
 
       // Find Store Database sheet for this category
       const sheets = await storage.getAllActiveGoogleSheets();
@@ -11334,6 +11334,7 @@ Use this store information to provide context-aware responses. When helping draf
       if (addressIndex !== -1) row[addressIndex] = street;
       if (cityIndex !== -1) row[cityIndex] = city;
       if (stateIndex !== -1) row[stateIndex] = state;
+      if (zipIndex !== -1) row[zipIndex] = zip;
       if (phoneIndex !== -1) row[phoneIndex] = placeDetails.formatted_phone_number || placeDetails.international_phone_number || '';
       if (websiteIndex !== -1) row[websiteIndex] = placeDetails.website || '';
       if (hoursIndex !== -1) row[hoursIndex] = formatHours(placeDetails.opening_hours?.weekday_text);
