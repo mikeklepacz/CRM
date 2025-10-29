@@ -101,6 +101,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
     address: "",
     city: "",
     state: "",
+    zip: "",
     phone: "",
     website: "",
     email: "",
@@ -143,6 +144,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [corporateAddress, setCorporateAddress] = useState('');
   const [corporateCity, setCorporateCity] = useState('');
   const [corporateState, setCorporateState] = useState('');
+  const [corporateZip, setCorporateZip] = useState('');
   const [corporatePhone, setCorporatePhone] = useState('');
   const [corporateEmail, setCorporateEmail] = useState('');
 
@@ -254,6 +256,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         address: getValue(['Address', 'address']),
         city: getValue(['City', 'city']),
         state: getValue(['State', 'state']),
+        zip: getValue(['ZIP', 'Zip', 'zip']),
         phone: getValue(['Phone', 'phone']),
         website: getValue(['Website', 'website']),
         email: getValue(['Email', 'email']),
@@ -1085,6 +1088,12 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                               </Select>
                                             </div>
                                             <Input
+                                              placeholder="ZIP Code"
+                                              value={corporateZip}
+                                              onChange={(e) => setCorporateZip(e.target.value)}
+                                              data-testid="input-corporate-zip"
+                                            />
+                                            <Input
                                               placeholder="Phone"
                                               type="tel"
                                               value={corporatePhone}
@@ -1304,6 +1313,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             address: corporateAddress || '',
                                             city: corporateCity || '',
                                             state: corporateState || '',
+                                            zip: corporateZip || '',
                                             phone: corporatePhone || '',
                                             email: corporateEmail || '',
                                             // Category will be copied from first child location
@@ -1789,6 +1799,18 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                   placeholder="State"
                                 />
                               </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="zip">ZIP Code</Label>
+                              <Input
+                                id="zip"
+                                data-testid="input-zip"
+                                value={formData.zip}
+                                onChange={(e) => handleInputChange('zip', e.target.value)}
+                                placeholder="12345"
+                                className="md:w-1/2"
+                              />
                             </div>
 
                             <Separator className="my-4" />

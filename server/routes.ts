@@ -6653,6 +6653,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Verify unmatched entries with Google Maps API
+  app.post('/api/stores/google-verify', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { unmatchedEntries } = req.body;
+
+      if (!unmatchedEntries || !Array.isArray(unmatchedEntries) || unmatchedEntries.length === 0) {
+        return res.status(400).json({ message: 'Unmatched entries array is required' });
+      }
+
+      const verified: any[] = [];
+      const notFound: any[] = [];
+
+      // Process each unmatched entry
+      for (const entry of unmatchedEntries) {
+        try {
+          // Build search query from available data
+          const searchParts: string[] = [];
+          
+          if (entry.name) searchParts.push(entry.name);
+          if (entry.address) searchParts.push(entry.address);
+          if (entry.city) searchParts.push(entry.city);
+          if (entry.state) searchParts.push(entry.state);
+
+          const searchQuery = searchParts.join(' ');
+
+          if (!searchQuery.trim()) {
+            notFound.push(entry);
+            continue;
+          }
+
+          // Query Google Maps API
+          const searchResults = await googleMaps.searchPlaces(searchQuery);
+
+          if (searchResults.results && searchResults.results.length > 0) {
+            // Take the first (best) result
+            const topResult = searchResults.results[0];
+
+            // Get detailed information for this place
+            const placeDetails = await googleMaps.getPlaceDetails(topResult.place_id);
+
+            if (placeDetails) {
+              // Parse the address components
+              const parsedAddress = googleMaps.parseFullAddress(placeDetails.formatted_address);
+
+              verified.push({
+                original: entry,
+                google: {
+                  name: placeDetails.name,
+                  address: parsedAddress.address,
+                  city: parsedAddress.city,
+                  state: parsedAddress.state,
+                  zip: parsedAddress.zip,
+                  phone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || '',
+                  website: placeDetails.website || '',
+                  link: placeDetails.url || '',
+                  rating: topResult.rating,
+                  reviews: topResult.user_ratings_total,
+                  placeId: placeDetails.place_id,
+                }
+              });
+            } else {
+              notFound.push(entry);
+            }
+          } else {
+            notFound.push(entry);
+          }
+        } catch (error: any) {
+          console.error(`Error verifying entry ${entry.name}:`, error);
+          notFound.push(entry);
+        }
+      }
+
+      res.json({
+        verified,
+        notFound,
+        summary: {
+          total: unmatchedEntries.length,
+          verified: verified.length,
+          notFound: notFound.length,
+        }
+      });
+    } catch (error: any) {
+      console.error("Error verifying with Google Maps:", error);
+      res.status(500).json({ message: error.message || "Failed to verify with Google Maps" });
+    }
+  });
+
   // ===== DBA PARENT-CHILD MANAGEMENT ENDPOINTS =====
 
   // Create a parent DBA record (can be corporate office or existing location)
@@ -6671,6 +6758,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         address,
         city,
         state,
+        zip,
         phone,
         email,
         childLinks // Array of child store links to get category from
@@ -6827,6 +6915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeAddressIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'address');
       const storeCityIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'city');
       const storeStateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
+      const storeZipIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'zip code');
       const storePhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'phone');
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
 
@@ -6839,6 +6928,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (storeAddressIndex !== -1) storeRow[storeAddressIndex] = address || '';
       if (storeCityIndex !== -1) storeRow[storeCityIndex] = city || '';
       if (storeStateIndex !== -1) storeRow[storeStateIndex] = state || '';
+      if (storeZipIndex !== -1 && zip) storeRow[storeZipIndex] = zip;
       if (storePhoneIndex !== -1) storeRow[storePhoneIndex] = phone || '';
       if (storeEmailIndex !== -1) storeRow[storeEmailIndex] = email || '';
       if (categoryIndex !== -1) storeRow[categoryIndex] = category;

@@ -189,6 +189,55 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
   }
 }
 
+export interface ParsedAddress {
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+}
+
+export function parseFullAddress(formattedAddress: string): ParsedAddress {
+  // Example: "3630 Gull Rd, Kalamazoo, MI 49048, USA"
+  // Example: "1958 South Industrial Highway, Ann Arbor, MI 48104, USA"
+  
+  const parts = formattedAddress.split(',').map(p => p.trim());
+  
+  let address = '';
+  let city = '';
+  let state = '';
+  let zip = '';
+  
+  if (parts.length >= 3) {
+    // Street address is the first part
+    address = parts[0] || '';
+    
+    // City is usually second-to-last or third-to-last
+    city = parts[parts.length - 3] || '';
+    
+    // State and ZIP are in the second-to-last part
+    const stateZipPart = parts[parts.length - 2] || '';
+    const stateZipMatch = stateZipPart.match(/^([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+    
+    if (stateZipMatch) {
+      state = stateZipMatch[1]; // 2-letter state code
+      zip = stateZipMatch[2]; // ZIP code
+    } else {
+      // Fallback: try to extract state code
+      const stateMatch = stateZipPart.match(/([A-Z]{2})/);
+      if (stateMatch) {
+        state = stateMatch[1];
+      }
+      // Try to extract ZIP
+      const zipMatch = stateZipPart.match(/(\d{5}(?:-\d{4})?)/);
+      if (zipMatch) {
+        zip = zipMatch[1];
+      }
+    }
+  }
+  
+  return { address, city, state, zip };
+}
+
 export function parseCityStateFromAddress(formattedAddress: string): { city: string; state: string } {
   const parts = formattedAddress.split(',').map(p => p.trim());
   
