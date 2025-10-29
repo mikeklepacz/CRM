@@ -451,7 +451,7 @@ export default function AgentDashboard() {
         </div>
 
         {/* Client Table - fills remaining space */}
-        <div className="flex-1 overflow-hidden px-4 pb-4">
+        <div className="flex-1 overflow-auto px-4 pb-4">
           {clients.length === 0 && !clientsLoading ? (
             <Card className="h-full flex items-center justify-center">
               <CardContent className="text-center py-12">

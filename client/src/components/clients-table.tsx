@@ -242,17 +242,17 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
   return (
     <>
       <div className="border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-full">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
-                <TableHead>Company</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Transaction ID</TableHead>
-                <TableHead>Last Order</TableHead>
-                <TableHead className="text-right">Commission</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="bg-background">Company</TableHead>
+                <TableHead className="bg-background">Contact</TableHead>
+                <TableHead className="bg-background">Status</TableHead>
+                <TableHead className="bg-background">Transaction ID</TableHead>
+                <TableHead className="bg-background">Last Order</TableHead>
+                <TableHead className="text-right bg-background">Commission</TableHead>
+                <TableHead className="text-right bg-background">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
