@@ -286,6 +286,13 @@ export interface IStorage {
   createCallHistory(callData: InsertCallHistory): Promise<CallHistory>;
   getUserCallHistory(userId: string): Promise<CallHistory[]>;
   getAllCallHistory(agentId?: string): Promise<CallHistory[]>;
+  
+  // Follow-up Center operations
+  getFollowUpClients(userId: string, userRole: string): Promise<{
+    claimedUntouched: Array<Client & { daysSinceContact: number }>;
+    interestedGoingCold: Array<Client & { daysSinceContact: number }>;
+    closedWonReorder: Array<Client & { daysSinceOrder: number }>;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1737,6 +1744,56 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(callHistory)
       .orderBy(desc(callHistory.calledAt));
+  }
+  
+  async getFollowUpClients(userId: string, userRole: string): Promise<{
+    claimedUntouched: Array<Client & { daysSinceContact: number }>;
+    interestedGoingCold: Array<Client & { daysSinceContact: number }>;
+    closedWonReorder: Array<Client & { daysSinceOrder: number }>;
+  }> {
+    const now = new Date();
+    
+    // Base query - get clients for this agent (or all if admin)
+    const baseQuery = userRole === 'admin' 
+      ? db.select().from(clients)
+      : db.select().from(clients).where(eq(clients.assignedAgent, userId));
+    
+    const allClients = await baseQuery;
+    
+    // Filter 1: Claimed but no contact
+    const claimedUntouched = allClients
+      .filter(c => c.claimDate && !c.lastContactDate)
+      .map(c => ({
+        ...c,
+        daysSinceContact: Math.floor((now.getTime() - new Date(c.claimDate!).getTime()) / (1000 * 60 * 60 * 24))
+      }));
+    
+    // Filter 2: Interested/contacted but going cold
+    const interestedGoingCold = allClients
+      .filter(c => {
+        const status = (c.data?.Status || c.data?.status || '').toLowerCase();
+        return c.lastContactDate && 
+               !c.firstOrderDate && 
+               (status === 'interested' || status === 'contacted');
+      })
+      .map(c => ({
+        ...c,
+        daysSinceContact: Math.floor((now.getTime() - new Date(c.lastContactDate!).getTime()) / (1000 * 60 * 60 * 24))
+      }));
+    
+    // Filter 3: Closed-won but hasn't reordered
+    const closedWonReorder = allClients
+      .filter(c => c.firstOrderDate && c.firstOrderDate === c.lastOrderDate)
+      .map(c => ({
+        ...c,
+        daysSinceOrder: Math.floor((now.getTime() - new Date(c.firstOrderDate!).getTime()) / (1000 * 60 * 60 * 24))
+      }));
+    
+    return {
+      claimedUntouched,
+      interestedGoingCold,
+      closedWonReorder
+    };
   }
 }
 

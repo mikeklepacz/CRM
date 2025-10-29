@@ -85,6 +85,7 @@ export const clients = pgTable("clients", {
   // Tracking fields
   assignedAgent: varchar("assigned_agent").references(() => users.id),
   claimDate: timestamp("claim_date"),
+  lastContactDate: timestamp("last_contact_date"), // Last time agent made contact (call, email, etc.)
   status: varchar("status", { length: 50 }).default('unassigned'), // unassigned, claimed, active, inactive
   category: varchar("category", { length: 100 }), // Category filter (e.g., "Pets", "Cannabis") for team segregation
   tags: text("tags").array().default(sql`ARRAY[]::text[]`),

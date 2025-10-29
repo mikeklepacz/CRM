@@ -11895,6 +11895,19 @@ Use this store information to provide context-aware responses. When helping draf
       };
 
       const newCall = await storage.createCallHistory(callData);
+      
+      // Update lastContactDate for the client if we can find them by storeLink
+      if (storeLink) {
+        try {
+          const client = await storage.getClientByUniqueIdentifier(storeLink);
+          if (client) {
+            await storage.updateClient(client.id, { lastContactDate: new Date() });
+          }
+        } catch (error) {
+          console.log('Could not update lastContactDate for client:', error);
+        }
+      }
+      
       res.json(newCall);
     } catch (error: any) {
       console.error('Error creating call history:', error);
@@ -11929,6 +11942,24 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error fetching call history:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch call history' });
+    }
+  });
+
+  // Follow-up Center endpoint
+  app.get('/api/follow-up-center', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const followUpData = await storage.getFollowUpClients(userId, user.role || 'agent');
+      res.json(followUpData);
+    } catch (error: any) {
+      console.error('Error fetching follow-up center data:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch follow-up data' });
     }
   });
 
