@@ -7246,14 +7246,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const sheets = await storage.getAllActiveGoogleSheets();
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-      const storeSheet = sheets.find(s => s.sheetPurpose === 'stores');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
-      }
-
-      if (!storeSheet) {
-        return res.status(404).json({ message: 'Store Database sheet not found' });
       }
 
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
@@ -7267,16 +7262,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ children: [] });
       }
 
-      // Also read Store Database to get names and addresses
-      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
-      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
-      const storeHeaders = storeRows[0];
-      const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-      const nameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'name');
-      const addressIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'address');
-      const cityIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'city');
-      const stateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
-
       const normalizedParentLink = normalizeLink(parentLink);
       const children: any[] = [];
 
@@ -7284,22 +7269,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const rowParentLink = trackerRows[i][parentLinkIndex] || '';
         
         if (normalizeLink(rowParentLink) === normalizedParentLink) {
-          const childLink = trackerRows[i][linkIndex] || '';
-          const normalizedChildLink = normalizeLink(childLink);
-          
-          // Find matching store data
-          const storeRow = storeRows.find((row, idx) => 
-            idx > 0 && normalizeLink(row[storeLinkIndex] || '') === normalizedChildLink
-          );
-
-          const childData: any = {
-            link: childLink,
-            name: storeRow && nameIndex !== -1 ? storeRow[nameIndex] : '',
-            address: storeRow && addressIndex !== -1 ? storeRow[addressIndex] : '',
-            city: storeRow && cityIndex !== -1 ? storeRow[cityIndex] : '',
-            state: storeRow && stateIndex !== -1 ? storeRow[stateIndex] : '',
-          };
-
+          const childData: any = {};
+          trackerHeaders.forEach((header, idx) => {
+            childData[header] = trackerRows[i][idx] || '';
+          });
           children.push(childData);
         }
       }
