@@ -451,7 +451,7 @@ export default function AgentDashboard() {
         </div>
 
         {/* Client Table - fills remaining space */}
-        <div className="flex-1 overflow-auto px-4 pb-4">
+        <div className="flex-1 flex flex-col px-4 pb-4 overflow-hidden">
           {clients.length === 0 && !clientsLoading ? (
             <Card className="h-full flex items-center justify-center">
               <CardContent className="text-center py-12">
@@ -466,7 +466,14 @@ export default function AgentDashboard() {
               </CardContent>
             </Card>
           ) : (
-            <ClientsTable
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">My Clients</h3>
+                <p className="text-sm text-muted-foreground">
+                  {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <ClientsTable
               clients={filteredClients}
               currentUser={user}
               isLoading={clientsLoading}
@@ -563,6 +570,7 @@ export default function AgentDashboard() {
                 }
               }}
             />
+            </>
           )}
         </div>
       </div>
