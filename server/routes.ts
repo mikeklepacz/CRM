@@ -6095,6 +6095,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Sheet ID is required" });
       }
 
+      // ===== ADDRESS NORMALIZATION UTILITIES =====
+      
+      // State abbreviation to full name mapping (and reverse)
+      const stateMap: Record<string, string> = {
+        'al': 'alabama', 'alabama': 'al',
+        'ak': 'alaska', 'alaska': 'ak',
+        'az': 'arizona', 'arizona': 'az',
+        'ar': 'arkansas', 'arkansas': 'ar',
+        'ca': 'california', 'california': 'ca',
+        'co': 'colorado', 'colorado': 'co',
+        'ct': 'connecticut', 'connecticut': 'ct',
+        'de': 'delaware', 'delaware': 'de',
+        'fl': 'florida', 'florida': 'fl',
+        'ga': 'georgia', 'georgia': 'ga',
+        'hi': 'hawaii', 'hawaii': 'hi',
+        'id': 'idaho', 'idaho': 'id',
+        'il': 'illinois', 'illinois': 'il',
+        'in': 'indiana', 'indiana': 'in',
+        'ia': 'iowa', 'iowa': 'ia',
+        'ks': 'kansas', 'kansas': 'ks',
+        'ky': 'kentucky', 'kentucky': 'ky',
+        'la': 'louisiana', 'louisiana': 'la',
+        'me': 'maine', 'maine': 'me',
+        'md': 'maryland', 'maryland': 'md',
+        'ma': 'massachusetts', 'massachusetts': 'ma',
+        'mi': 'michigan', 'michigan': 'mi',
+        'mn': 'minnesota', 'minnesota': 'mn',
+        'ms': 'mississippi', 'mississippi': 'ms',
+        'mo': 'missouri', 'missouri': 'mo',
+        'mt': 'montana', 'montana': 'mt',
+        'ne': 'nebraska', 'nebraska': 'ne',
+        'nv': 'nevada', 'nevada': 'nv',
+        'nh': 'new hampshire', 'new hampshire': 'nh',
+        'nj': 'new jersey', 'new jersey': 'nj',
+        'nm': 'new mexico', 'new mexico': 'nm',
+        'ny': 'new york', 'new york': 'ny',
+        'nc': 'north carolina', 'north carolina': 'nc',
+        'nd': 'north dakota', 'north dakota': 'nd',
+        'oh': 'ohio', 'ohio': 'oh',
+        'ok': 'oklahoma', 'oklahoma': 'ok',
+        'or': 'oregon', 'oregon': 'or',
+        'pa': 'pennsylvania', 'pennsylvania': 'pa',
+        'ri': 'rhode island', 'rhode island': 'ri',
+        'sc': 'south carolina', 'south carolina': 'sc',
+        'sd': 'south dakota', 'south dakota': 'sd',
+        'tn': 'tennessee', 'tennessee': 'tn',
+        'tx': 'texas', 'texas': 'tx',
+        'ut': 'utah', 'utah': 'ut',
+        'vt': 'vermont', 'vermont': 'vt',
+        'va': 'virginia', 'virginia': 'va',
+        'wa': 'washington', 'washington': 'wa',
+        'wv': 'west virginia', 'west virginia': 'wv',
+        'wi': 'wisconsin', 'wisconsin': 'wi',
+        'wy': 'wyoming', 'wyoming': 'wy',
+      };
+
+      // Street suffix abbreviations and variations
+      const streetSuffixMap: Record<string, string[]> = {
+        'avenue': ['ave', 'av', 'avenue'],
+        'boulevard': ['blvd', 'boul', 'boulevard'],
+        'circle': ['cir', 'circ', 'circle'],
+        'court': ['ct', 'court'],
+        'drive': ['dr', 'drv', 'drive'],
+        'highway': ['hwy', 'highway'],
+        'lane': ['ln', 'lane'],
+        'parkway': ['pkwy', 'parkway', 'pky'],
+        'place': ['pl', 'place'],
+        'road': ['rd', 'road'],
+        'square': ['sq', 'square'],
+        'street': ['st', 'str', 'street'],
+        'terrace': ['ter', 'terr', 'terrace'],
+        'trail': ['trl', 'trail'],
+        'way': ['way'],
+      };
+
+      // Directional abbreviations
+      const directionalMap: Record<string, string[]> = {
+        'north': ['n', 'north', 'no'],
+        'south': ['s', 'south', 'so'],
+        'east': ['e', 'east'],
+        'west': ['w', 'west'],
+        'northeast': ['ne', 'northeast'],
+        'northwest': ['nw', 'northwest'],
+        'southeast': ['se', 'southeast'],
+        'southwest': ['sw', 'southwest'],
+      };
+
+      // Normalize state (handles both abbreviations and full names)
+      const normalizeState = (state: string): string => {
+        const normalized = state.toLowerCase().trim();
+        return stateMap[normalized] || normalized;
+      };
+
+      // Check if two states match (handles MI ↔ Michigan, etc.)
+      const statesMatch = (state1: string, state2: string): boolean => {
+        const norm1 = normalizeState(state1);
+        const norm2 = normalizeState(state2);
+        return norm1 === norm2 || stateMap[norm1] === norm2 || stateMap[norm2] === norm1;
+      };
+
+      // Extract street number from address
+      const extractStreetNumber = (address: string): string | null => {
+        const match = address.match(/^\s*(\d{1,6})\s+/);
+        return match ? match[1] : null;
+      };
+
+      // Normalize address components (expand abbreviations)
+      const normalizeAddressComponent = (component: string): string => {
+        let normalized = component.toLowerCase().trim();
+        
+        // Normalize directionals
+        for (const [full, variations] of Object.entries(directionalMap)) {
+          for (const variation of variations) {
+            const regex = new RegExp(`\\b${variation}\\.?\\b`, 'gi');
+            normalized = normalized.replace(regex, full);
+          }
+        }
+
+        // Normalize street suffixes
+        for (const [full, variations] of Object.entries(streetSuffixMap)) {
+          for (const variation of variations) {
+            const regex = new RegExp(`\\b${variation}\\.?\\b`, 'gi');
+            normalized = normalized.replace(regex, full);
+          }
+        }
+
+        return normalized;
+      };
+
       // Get Store Database
       const sheet = await storage.getGoogleSheetById(sheetId);
       if (!sheet) {
@@ -6122,17 +6251,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const addressIndex = headers.findIndex((h: string) => h.toLowerCase() === 'address');
       const phoneIndex = headers.findIndex((h: string) => h.toLowerCase() === 'phone');
 
-      // Build database of stores
+      // Build database of stores with normalized fields
       const dbStores = rows.slice(1)
         .filter((row: any[]) => row[linkIndex]) // Only stores with links
-        .map((row: any[]) => ({
-          name: nameIndex !== -1 ? (row[nameIndex] || '') : '',
-          link: linkIndex !== -1 ? (row[linkIndex] || '') : '',
-          city: cityIndex !== -1 ? (row[cityIndex] || '').trim().toLowerCase() : '',
-          state: stateIndex !== -1 ? (row[stateIndex] || '').trim().toLowerCase() : '',
-          address: addressIndex !== -1 ? (row[addressIndex] || '').trim().toLowerCase() : '',
-          phone: phoneIndex !== -1 ? (row[phoneIndex] || '').replace(/\D/g, '') : '', // Normalize to digits only
-        }));
+        .map((row: any[]) => {
+          const address = addressIndex !== -1 ? (row[addressIndex] || '').trim() : '';
+          const state = stateIndex !== -1 ? (row[stateIndex] || '').trim() : '';
+          
+          return {
+            name: nameIndex !== -1 ? (row[nameIndex] || '') : '',
+            link: linkIndex !== -1 ? (row[linkIndex] || '') : '',
+            city: cityIndex !== -1 ? (row[cityIndex] || '').trim().toLowerCase() : '',
+            state: state.toLowerCase(),
+            stateNormalized: normalizeState(state),
+            address: address.toLowerCase(),
+            addressNormalized: normalizeAddressComponent(address),
+            streetNumber: extractStreetNumber(address),
+            phone: phoneIndex !== -1 ? (row[phoneIndex] || '').replace(/\D/g, '') : '',
+            // Store original row for returning results
+            originalRow: row,
+          };
+        });
 
       // Helper to normalize phone numbers
       const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
@@ -6201,12 +6340,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           if (parsedCity || parsedState || parsedPhone) {
+            const streetNumber = extractStreetNumber(parsedAddress);
+            const addressNormalized = normalizeAddressComponent(parsedAddress);
+            
             parsedStores.push({
               rawText: currentBlock.join('\n'),
               name: parsedName,
               city: parsedCity,
               state: parsedState,
+              stateNormalized: normalizeState(parsedState),
               address: parsedAddress,
+              addressNormalized,
+              streetNumber,
               phone: parsedPhone,
             });
           }
@@ -6215,7 +6360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Match parsed stores against database
+      // Match parsed stores against database with enhanced scoring
       const matched: any[] = [];
       const unmatched: any[] = [];
 
@@ -6225,22 +6370,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (const dbStore of dbStores) {
           let confidence = 0;
+          const scoreBreakdown: string[] = [];
 
-          // City + State match (most reliable) - 60 points
-          if (parsed.city && parsed.state && 
-              dbStore.city === parsed.city && dbStore.state === parsed.state) {
-            confidence += 60;
+          // Street Number + City + State match (highest priority) - 70 points
+          if (parsed.streetNumber && dbStore.streetNumber && 
+              parsed.streetNumber === dbStore.streetNumber &&
+              parsed.city && dbStore.city === parsed.city && 
+              parsed.state && statesMatch(parsed.state, dbStore.state)) {
+            confidence += 70;
+            scoreBreakdown.push('Street#/City/State: 70');
+          }
+          // City + State match only - 50 points
+          else if (parsed.city && parsed.state && 
+                   dbStore.city === parsed.city && statesMatch(parsed.state, dbStore.state)) {
+            confidence += 50;
+            scoreBreakdown.push('City/State: 50');
           }
 
           // Phone match (very reliable) - 30 points
           if (parsed.phone && dbStore.phone && parsed.phone === dbStore.phone) {
             confidence += 30;
+            scoreBreakdown.push('Phone: 30');
           }
 
-          // Address keyword matching - 10 points
-          if (parsed.address && dbStore.address && 
-              dbStore.address.includes(parsed.address.split(',')[0].toLowerCase())) {
-            confidence += 10;
+          // Normalized address matching - 20 points
+          if (parsed.addressNormalized && dbStore.addressNormalized) {
+            // Extract first part of address (before comma) and compare normalized versions
+            const parsedStreet = parsed.addressNormalized.split(',')[0].trim();
+            const dbStreet = dbStore.addressNormalized.split(',')[0].trim();
+            
+            if (parsedStreet && dbStreet && dbStreet.includes(parsedStreet)) {
+              confidence += 20;
+              scoreBreakdown.push('Address: 20');
+            }
           }
 
           if (confidence > bestConfidence) {
@@ -6248,10 +6410,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             bestMatch = {
               ...dbStore,
               // Return original cased values for display
-              name: rows.slice(1).find((row: any[]) => row[linkIndex] === dbStore.link)?.[nameIndex] || dbStore.name,
-              city: rows.slice(1).find((row: any[]) => row[linkIndex] === dbStore.link)?.[cityIndex] || dbStore.city,
-              state: rows.slice(1).find((row: any[]) => row[linkIndex] === dbStore.link)?.[stateIndex] || dbStore.state,
-              address: rows.slice(1).find((row: any[]) => row[linkIndex] === dbStore.link)?.[addressIndex] || dbStore.address,
+              name: dbStore.originalRow[nameIndex] || dbStore.name,
+              city: dbStore.originalRow[cityIndex] || dbStore.city,
+              state: dbStore.originalRow[stateIndex] || dbStore.state,
+              address: dbStore.originalRow[addressIndex] || dbStore.address,
+              scoreBreakdown: scoreBreakdown.join(', '),
             };
           }
         }
