@@ -1228,13 +1228,20 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
                                     {selectedStores.length > 0 ? (
                                       <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
-                                        {selectedStores.map((store) => (
+                                        {selectedStores.map((store: any) => (
                                           <div
                                             key={store.link}
                                             className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
                                             data-testid={`selected-store-${store.link}`}
                                           >
-                                            <span className="text-sm">{store.name}</span>
+                                            <div className="flex items-center gap-2 flex-1">
+                                              <span className="text-sm">{store.name}</span>
+                                              {store.source === 'google' && (
+                                                <Badge variant="default" className="bg-blue-600 text-xs">
+                                                  From Google
+                                                </Badge>
+                                              )}
+                                            </div>
                                             <Button
                                               type="button"
                                               variant="ghost"
@@ -1277,7 +1284,35 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       }
 
                                       try {
-                                        const storeLinks = selectedStores.map(s => s.link);
+                                        // Step 0: Import Google-sourced stores first
+                                        const storesWithLinks = await Promise.all(
+                                          selectedStores.map(async (store: any) => {
+                                            if (store.source === 'google') {
+                                              // Import this Google store to the database
+                                              const importResult = await apiRequest('POST', '/api/stores/import-new', {
+                                                store: {
+                                                  name: store.name,
+                                                  address: store.address,
+                                                  city: store.city,
+                                                  state: store.state,
+                                                  phone: store.phone,
+                                                  zip: store.zip,
+                                                },
+                                                sheetId: storeSheetId,
+                                              });
+                                              
+                                              // Return store with real database link
+                                              return {
+                                                ...store,
+                                                link: importResult.link,
+                                              };
+                                            }
+                                            // Return database-matched stores as-is
+                                            return store;
+                                          })
+                                        );
+
+                                        const storeLinks = storesWithLinks.map(s => s.link);
                                         
                                         // Step 1: Claim all locations with DBA name (existing behavior)
                                         const claimResponse = await apiRequest('POST', '/api/stores/claim-multiple', {

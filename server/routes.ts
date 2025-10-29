@@ -6653,6 +6653,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Search Google Places API for a specific store location
+  app.post('/api/stores/search-google', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { name, city, state } = req.body;
+
+      if (!name) {
+        return res.status(400).json({ message: 'Store name is required' });
+      }
+
+      // Build search query
+      let query = name;
+      let location = '';
+      
+      if (city && state) {
+        location = `${city}, ${state}`;
+      } else if (city) {
+        location = city;
+      } else if (state) {
+        location = state;
+      }
+
+      // Search Google Places API
+      const searchResults = await googleMaps.searchPlaces(query, location);
+
+      if (!searchResults.results || searchResults.results.length === 0) {
+        return res.json({ results: [] });
+      }
+
+      // Get detailed information for top 3 results
+      const detailedResults = await Promise.all(
+        searchResults.results.slice(0, 3).map(async (place) => {
+          try {
+            const details = await googleMaps.getPlaceDetails(place.place_id);
+            if (!details) return null;
+
+            // Parse address components to get full state name (not abbreviation)
+            const addressComponents = googleMaps.parseAddressComponents(details.formatted_address);
+
+            return {
+              place_id: details.place_id,
+              name: details.name,
+              fullAddress: details.formatted_address,
+              address: addressComponents.street,
+              city: addressComponents.city,
+              state: addressComponents.state, // Full state name, not abbreviation
+              zip: addressComponents.zip,
+              phone: details.formatted_phone_number || '',
+              website: details.website || '',
+              rating: place.rating,
+              user_ratings_total: place.user_ratings_total,
+            };
+          } catch (error) {
+            console.error(`Error fetching details for place ${place.place_id}:`, error);
+            return null;
+          }
+        })
+      );
+
+      // Filter out null results
+      const validResults = detailedResults.filter(r => r !== null);
+
+      res.json({ results: validResults });
+    } catch (error: any) {
+      console.error("Error searching Google Places:", error);
+      res.status(500).json({ message: error.message || "Failed to search Google Places" });
+    }
+  });
+
   // ===== DBA PARENT-CHILD MANAGEMENT ENDPOINTS =====
 
   // Create a parent DBA record (can be corporate office or existing location)

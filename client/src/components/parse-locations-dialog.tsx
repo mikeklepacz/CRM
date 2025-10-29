@@ -33,6 +33,23 @@ interface MatchedStore {
   confidence: number;
 }
 
+interface GoogleVerifiedStore {
+  parsed: ParsedStore;
+  googleResult: {
+    place_id: string;
+    name: string;
+    fullAddress: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+    phone: string;
+    website: string;
+    rating?: number;
+    user_ratings_total?: number;
+  };
+}
+
 interface ParseLocationsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -48,12 +65,15 @@ export function ParseLocationsDialog({
 }: ParseLocationsDialogProps) {
   const [rawText, setRawText] = useState("");
   const [matchedStores, setMatchedStores] = useState<MatchedStore[]>([]);
+  const [googleVerifiedStores, setGoogleVerifiedStores] = useState<GoogleVerifiedStore[]>([]);
   const [unmatchedStores, setUnmatchedStores] = useState<ParsedStore[]>([]);
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
-  const [summary, setSummary] = useState<{ total: number; matched: number; unmatched: number } | null>(null);
+  const [selectedGoogleStores, setSelectedGoogleStores] = useState<Set<string>>(new Set());
+  const [summary, setSummary] = useState<{ total: number; matched: number; unmatched: number; googleVerified: number } | null>(null);
   const [searchingIndex, setSearchingIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchingGoogle, setIsSearchingGoogle] = useState(false);
   const { toast } = useToast();
 
   const parseAndMatchMutation = useMutation({
@@ -66,22 +86,93 @@ export function ParseLocationsDialog({
         sheetId: storeSheetId,
       });
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setMatchedStores(data.matched || []);
       setUnmatchedStores(data.unmatched || []);
-      setSummary(data.summary || null);
       
-      // Auto-select all matches
+      // Auto-select all database matches
       const autoSelected = new Set<string>();
       data.matched?.forEach((m: MatchedStore) => {
         autoSelected.add(m.match.link);
       });
       setSelectedMatches(autoSelected);
 
-      toast({
-        title: "Parsing Complete",
-        description: `Found ${data.summary.matched} matches out of ${data.summary.total} entries`,
-      });
+      // Auto-search Google for unmatched entries
+      if (data.unmatched && data.unmatched.length > 0) {
+        setIsSearchingGoogle(true);
+        
+        try {
+          const googleResults: GoogleVerifiedStore[] = [];
+          const stillUnmatched: ParsedStore[] = [];
+
+          for (const unmatchedStore of data.unmatched) {
+            try {
+              const googleSearchResult = await apiRequest('POST', '/api/stores/search-google', {
+                name: unmatchedStore.name,
+                city: unmatchedStore.city,
+                state: unmatchedStore.state,
+              });
+
+              if (googleSearchResult.results && googleSearchResult.results.length > 0) {
+                // Take the first result as the best match
+                googleResults.push({
+                  parsed: unmatchedStore,
+                  googleResult: googleSearchResult.results[0],
+                });
+              } else {
+                stillUnmatched.push(unmatchedStore);
+              }
+            } catch (error) {
+              console.error('Error searching Google for:', unmatchedStore.name, error);
+              stillUnmatched.push(unmatchedStore);
+            }
+          }
+
+          setGoogleVerifiedStores(googleResults);
+          setUnmatchedStores(stillUnmatched);
+          
+          // Auto-select all Google-verified stores
+          const autoSelectedGoogle = new Set<string>();
+          googleResults.forEach((g) => {
+            autoSelectedGoogle.add(g.googleResult.place_id);
+          });
+          setSelectedGoogleStores(autoSelectedGoogle);
+
+          setSummary({
+            total: data.summary.total,
+            matched: data.summary.matched,
+            googleVerified: googleResults.length,
+            unmatched: stillUnmatched.length,
+          });
+
+          toast({
+            title: "Parsing Complete",
+            description: `Found ${data.summary.matched} database matches and ${googleResults.length} Google-verified locations`,
+          });
+        } catch (error) {
+          console.error('Error during Google search:', error);
+          setSummary(data.summary || null);
+          
+          toast({
+            title: "Parsing Complete",
+            description: `Found ${data.summary.matched} matches. Google search failed.`,
+          });
+        } finally {
+          setIsSearchingGoogle(false);
+        }
+      } else {
+        setSummary({
+          total: data.summary.total,
+          matched: data.summary.matched,
+          googleVerified: 0,
+          unmatched: 0,
+        });
+        
+        toast({
+          title: "Parsing Complete",
+          description: `Found ${data.summary.matched} matches out of ${data.summary.total} entries`,
+        });
+      }
     },
     onError: (error: any) => {
       toast({
@@ -196,17 +287,35 @@ export function ParseLocationsDialog({
   };
 
   const handleAddSelected = () => {
-    const selectedStores = matchedStores
+    // Get selected database matches
+    const selectedDbStores = matchedStores
       .filter(m => selectedMatches.has(m.match.link))
-      .map(m => m.match);
+      .map(m => ({ ...m.match, source: 'database' }));
     
-    onStoresSelected(selectedStores);
+    // Get selected Google-verified stores (need to create pseudo-links)
+    const selectedGoogleStores = googleVerifiedStores
+      .filter(g => selectedGoogleStores.has(g.googleResult.place_id))
+      .map(g => ({
+        name: g.googleResult.name,
+        link: g.googleResult.place_id, // Use place_id as temporary identifier
+        city: g.googleResult.city,
+        state: g.googleResult.state,
+        address: g.googleResult.address,
+        phone: g.googleResult.phone,
+        zip: g.googleResult.zip,
+        source: 'google',
+      }));
+    
+    const allSelected = [...selectedDbStores, ...selectedGoogleStores];
+    onStoresSelected(allSelected);
     
     // Reset and close
     setRawText("");
     setMatchedStores([]);
+    setGoogleVerifiedStores([]);
     setUnmatchedStores([]);
     setSelectedMatches(new Set());
+    setSelectedGoogleStores(new Set());
     setSummary(null);
     onOpenChange(false);
   };
@@ -215,8 +324,10 @@ export function ParseLocationsDialog({
     // Reset state
     setRawText("");
     setMatchedStores([]);
+    setGoogleVerifiedStores([]);
     setUnmatchedStores([]);
     setSelectedMatches(new Set());
+    setSelectedGoogleStores(new Set());
     setSummary(null);
     onOpenChange(false);
   };
@@ -291,7 +402,11 @@ export function ParseLocationsDialog({
             <div className="flex items-center gap-4 p-3 bg-muted rounded-md">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <span className="font-medium">{summary.matched} Matched</span>
+                <span className="font-medium">{summary.matched} Database Match</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-blue-600" />
+                <span className="font-medium">{summary.googleVerified} From Google</span>
               </div>
               <div className="flex items-center gap-2">
                 <XCircle className="h-5 w-5 text-red-600" />
@@ -300,6 +415,12 @@ export function ParseLocationsDialog({
               <div className="ml-auto text-sm text-muted-foreground">
                 Total: {summary.total}
               </div>
+              {isSearchingGoogle && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Searching Google...
+                </div>
+              )}
             </div>
 
             {/* Matched Stores */}
@@ -330,6 +451,59 @@ export function ParseLocationsDialog({
                             {item.match.address && <div>{item.match.address}</div>}
                             <div>{item.match.city}, {item.match.state}</div>
                             {item.match.phone && <div>{item.match.phone}</div>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* Google-Verified Stores */}
+            {googleVerifiedStores.length > 0 && (
+              <div className="flex flex-col gap-2 flex-1 overflow-hidden">
+                <h3 className="text-sm font-semibold text-blue-600">Google-Verified Stores ({googleVerifiedStores.length})</h3>
+                <ScrollArea className="flex-1 border rounded-md">
+                  <div className="p-4 space-y-3">
+                    {googleVerifiedStores.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-3 p-3 border rounded-md hover-elevate bg-blue-50 dark:bg-blue-950/20"
+                        data-testid={`google-store-${idx}`}
+                      >
+                        <Checkbox
+                          checked={selectedGoogleStores.has(item.googleResult.place_id)}
+                          onCheckedChange={() => {
+                            const newSelected = new Set(selectedGoogleStores);
+                            if (newSelected.has(item.googleResult.place_id)) {
+                              newSelected.delete(item.googleResult.place_id);
+                            } else {
+                              newSelected.add(item.googleResult.place_id);
+                            }
+                            setSelectedGoogleStores(newSelected);
+                          }}
+                          data-testid={`checkbox-google-${idx}`}
+                        />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{item.googleResult.name}</span>
+                            <Badge variant="default" className="bg-blue-600">
+                              From Google
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <div>{item.googleResult.address}</div>
+                            <div>{item.googleResult.city}, {item.googleResult.state} {item.googleResult.zip}</div>
+                            {item.googleResult.phone && <div>{item.googleResult.phone}</div>}
+                            {item.googleResult.rating && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <span>⭐ {item.googleResult.rating}</span>
+                                {item.googleResult.user_ratings_total && (
+                                  <span className="text-xs">({item.googleResult.user_ratings_total} reviews)</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -468,8 +642,10 @@ export function ParseLocationsDialog({
                   variant="outline"
                   onClick={() => {
                     setMatchedStores([]);
+                    setGoogleVerifiedStores([]);
                     setUnmatchedStores([]);
                     setSelectedMatches(new Set());
+                    setSelectedGoogleStores(new Set());
                     setSummary(null);
                   }}
                   data-testid="button-start-over"
@@ -478,10 +654,10 @@ export function ParseLocationsDialog({
                 </Button>
                 <Button
                   onClick={handleAddSelected}
-                  disabled={selectedMatches.size === 0}
+                  disabled={selectedMatches.size === 0 && selectedGoogleStores.size === 0}
                   data-testid="button-add-selected"
                 >
-                  Add Selected ({selectedMatches.size})
+                  Add Selected ({selectedMatches.size + selectedGoogleStores.size})
                 </Button>
               </div>
             </div>
