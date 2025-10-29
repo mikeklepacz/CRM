@@ -11290,34 +11290,58 @@ Use this store information to provide context-aware responses. When helping draf
         return weekdayText[0] || '';
       };
 
-      // Prepare row data for Google Sheet
-      // Columns: A=Name, B=Type, C=Link, D=Member Since, E=Address, F=City, G=State, 
-      //          H=Phone, I=Website, J=Email, K=Followers, L=Tags, M=Hours, N=DBA, 
-      //          O=Vibe Score, P=Sales-ready Summary, Q=Agent Name, R=OPEN, S=Category
-      const row = [
-        placeDetails.name || '',                                    // A: Name
-        placeDetails.types?.[0] || '',                             // B: Type
-        placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeDetails.place_id}`, // C: Link
-        '',                                                  // D: Member Since (blank)
-        street,                                                // E: Address (street only) (e.g., "23 N Harlem Ave")
-        city,                                                // F: City (e.g., "Oak Park")
-        state,                                               // G: State (e.g., "Illinois")
-        placeDetails.formatted_phone_number || placeDetails.international_phone_number || '', // H: Phone
-        placeDetails.website || '',                                // I: Website
-        '',                                                  // J: Email (blank)
-        '',                                                  // K: Followers (blank)
-        '',                                                  // L: Tags (blank)
-        formatHours(placeDetails.opening_hours?.weekday_text),     // M: Hours (sample)
-        '',                                                  // N: DBA (blank)
-        '',                                                  // O: Vibe Score (blank)
-        '',                                                  // P: Sales-ready Summary (blank)
-        '',                                                  // Q: Agent Name (blank - unclaimed)
-        placeDetails.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE', // R: OPEN (based on business status)
-        category,                                            // S: Category
-      ];
+      // Read Store Database headers to get column positions (header-based writing)
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      
+      if (!storeRows || storeRows.length === 0) {
+        return res.status(500).json({ message: 'Store Database sheet is empty or has no headers' });
+      }
 
-      // Append to Google Sheet (A through S = 19 columns)
-      const range = `${storeSheet.sheetName}!A:S`;
+      const headers = storeRows[0];
+      
+      // Find column indices by header name (case-insensitive)
+      const findColumnIndex = (columnName: string) => 
+        headers.findIndex((h: string) => h.toLowerCase() === columnName.toLowerCase());
+
+      const nameIndex = findColumnIndex('name');
+      const typeIndex = findColumnIndex('type');
+      const linkIndex = findColumnIndex('link');
+      const memberSinceIndex = findColumnIndex('member since');
+      const addressIndex = findColumnIndex('address');
+      const cityIndex = findColumnIndex('city');
+      const stateIndex = findColumnIndex('state');
+      const zipIndex = findColumnIndex('zip');
+      const phoneIndex = findColumnIndex('phone');
+      const websiteIndex = findColumnIndex('website');
+      const emailIndex = findColumnIndex('email');
+      const followersIndex = findColumnIndex('followers');
+      const tagsIndex = findColumnIndex('tags');
+      const hoursIndex = findColumnIndex('hours');
+      const dbaIndex = findColumnIndex('dba');
+      const vibeScoreIndex = findColumnIndex('vibe score');
+      const salesReadyIndex = findColumnIndex('sales-ready summary');
+      const agentNameIndex = findColumnIndex('agent name');
+      const openIndex = findColumnIndex('open');
+      const categoryIndex = findColumnIndex('category');
+
+      // Build row dynamically based on actual header positions
+      const row = new Array(headers.length).fill('');
+      
+      if (nameIndex !== -1) row[nameIndex] = placeDetails.name || '';
+      if (typeIndex !== -1) row[typeIndex] = placeDetails.types?.[0] || '';
+      if (linkIndex !== -1) row[linkIndex] = placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeDetails.place_id}`;
+      if (addressIndex !== -1) row[addressIndex] = street;
+      if (cityIndex !== -1) row[cityIndex] = city;
+      if (stateIndex !== -1) row[stateIndex] = state;
+      if (phoneIndex !== -1) row[phoneIndex] = placeDetails.formatted_phone_number || placeDetails.international_phone_number || '';
+      if (websiteIndex !== -1) row[websiteIndex] = placeDetails.website || '';
+      if (hoursIndex !== -1) row[hoursIndex] = formatHours(placeDetails.opening_hours?.weekday_text);
+      if (openIndex !== -1) row[openIndex] = placeDetails.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE';
+      if (categoryIndex !== -1) row[categoryIndex] = category;
+
+      // Append to Google Sheet (header-based, works regardless of column order/additions)
+      const range = `${storeSheet.sheetName}!A:ZZ`;
       await googleSheets.appendSheetData(storeSheet.spreadsheetId, range, [row]);
 
       // Record this place_id to prevent duplicates in future searches
