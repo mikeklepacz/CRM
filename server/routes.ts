@@ -6276,68 +6276,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Helper to normalize phone numbers
       const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
 
-      // Helper to extract city, state from address line
-      const parseCityState = (line: string) => {
-        // Common street suffixes (full and abbreviated)
+      // Helper to parse full address line into components
+      const parseAddressLine = (line: string) => {
+        // Pattern: "1958 South Industrial Highway Ann Arbor, MI 48104" or similar
+        
+        // Extract building number (leading digits)
+        const buildingMatch = line.match(/^\s*(\d{1,6})\s+/);
+        const buildingNumber = buildingMatch ? buildingMatch[1] : null;
+        
+        // Extract state and optional ZIP from end
+        const stateMatch = line.match(/,?\s*([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/i);
+        if (!stateMatch) return null;
+        
+        const state = stateMatch[1].toUpperCase();
+        
+        // Get everything between building number and state
+        let middle = line;
+        if (buildingMatch) {
+          middle = line.substring(buildingMatch[0].length);
+        }
+        // Find state match in the middle string (not original line) to avoid offset bug
+        const stateIndexInMiddle = middle.lastIndexOf(stateMatch[0]);
+        if (stateIndexInMiddle === -1) return null;
+        middle = middle.substring(0, stateIndexInMiddle).trim();
+        
+        // Common street suffixes to identify street vs city boundary
         const streetSuffixes = [
-          'street', 'st', 'st.',
-          'avenue', 'ave', 'ave.',
-          'road', 'rd', 'rd.',
-          'boulevard', 'blvd', 'blvd.',
-          'drive', 'dr', 'dr.',
-          'lane', 'ln', 'ln.',
-          'court', 'ct', 'ct.',
-          'circle', 'cir', 'cir.',
-          'highway', 'hwy', 'hwy.',
-          'parkway', 'pkwy', 'pkwy.',
-          'place', 'pl', 'pl.',
-          'terrace', 'ter', 'ter.',
-          'way'
+          'street', 'st', 'st.', 'avenue', 'ave', 'ave.', 
+          'road', 'rd', 'rd.', 'boulevard', 'blvd', 'blvd.',
+          'drive', 'dr', 'dr.', 'lane', 'ln', 'ln.',
+          'court', 'ct', 'ct.', 'circle', 'cir', 'cir.',
+          'highway', 'hwy', 'hwy.', 'parkway', 'pkwy', 'pkwy.',
+          'place', 'pl', 'pl.', 'terrace', 'ter', 'ter.',
+          'way', 'trail', 'trl', 'trl.'
         ];
-
-        // First, try to find state + ZIP at the end
-        const stateZipMatch = line.match(/\b([A-Z]{2})\s+\d{5}(?:-\d{4})?$/i);
-        if (!stateZipMatch) return null;
-
-        const state = stateZipMatch[1];
         
-        // Get everything before the state+ZIP
-        const beforeState = line.substring(0, stateZipMatch.index).trim();
-        
-        // Look for the last street suffix in the line
-        let cityStartIndex = -1;
+        // Find last occurrence of any street suffix
         let lastSuffixEnd = -1;
-        
         for (const suffix of streetSuffixes) {
           const regex = new RegExp(`\\b${suffix}\\b`, 'gi');
           let match;
-          while ((match = regex.exec(beforeState)) !== null) {
+          while ((match = regex.exec(middle)) !== null) {
             lastSuffixEnd = match.index + match[0].length;
           }
         }
         
-        // If we found a suffix, city starts after it
+        let streetName = '';
+        let city = '';
+        
         if (lastSuffixEnd > -1) {
-          cityStartIndex = lastSuffixEnd;
+          // Street is everything up to and including the suffix
+          streetName = middle.substring(0, lastSuffixEnd).trim();
+          // City is everything after the suffix
+          let cityPart = middle.substring(lastSuffixEnd).trim();
+          // Remove leading comma if present
+          cityPart = cityPart.replace(/^[,\s]+/, '');
+          // Take first 1-3 words as city
+          const cityWords = cityPart.split(/\s+/).filter(w => w.length > 0);
+          city = cityWords.slice(0, 3).join(' ');
+        } else {
+          // No suffix found - try to split on comma
+          const parts = middle.split(',');
+          if (parts.length >= 2) {
+            streetName = parts[0].trim();
+            city = parts[1].trim();
+          } else {
+            // Last resort: take last 1-2 words as city
+            const words = middle.split(/\s+/).filter(w => w.length > 0);
+            if (words.length >= 3) {
+              city = words.slice(-2).join(' ');
+              streetName = words.slice(0, -2).join(' ');
+            } else {
+              streetName = middle;
+              city = '';
+            }
+          }
         }
         
-        // Extract city: everything from after the suffix to before the state
-        let cityPart = cityStartIndex > -1 
-          ? beforeState.substring(cityStartIndex).trim()
-          : beforeState.trim();
-        
-        // Remove any leading commas or whitespace
-        cityPart = cityPart.replace(/^[,\s]+/, '').trim();
-        
-        // City is typically 1-3 words, extract just those
-        const cityWords = cityPart.split(/\s+/).filter(w => w.length > 0);
-        const city = cityWords.slice(0, 3).join(' ');
-        
-        if (city.length > 0) {
-          return { city: city.toLowerCase(), state: state.toLowerCase() };
-        }
-        
-        return null;
+        return {
+          buildingNumber,
+          streetName: streetName.toLowerCase(),
+          city: city.toLowerCase(),
+          state: state.toLowerCase(),
+        };
       };
 
       // Helper to extract phone number
@@ -6352,7 +6373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Filter out noise words
       const noiseWords = ['SHOP NOW', 'MORE INFO', 'DELIVERY', 'CLICK HERE', 'VIEW DETAILS'];
-      const cleanedLines = lines.filter(line => 
+      const cleanedLines = lines.filter((line: string) => 
         !noiseWords.some(noise => line.toUpperCase().includes(noise))
       );
 
@@ -6365,6 +6386,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (extractPhone(line)) {
           // Process this block
           let parsedName = '';
+          let parsedBuildingNumber = null;
+          let parsedStreetName = '';
           let parsedCity = '';
           let parsedState = '';
           let parsedAddress = '';
@@ -6373,11 +6396,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (let i = 0; i < currentBlock.length; i++) {
             const blockLine = currentBlock[i];
             
-            // Try to extract city/state
-            const cityState = parseCityState(blockLine);
-            if (cityState) {
-              parsedCity = cityState.city;
-              parsedState = cityState.state;
+            // Try to parse as full address line
+            const addressParts = parseAddressLine(blockLine);
+            if (addressParts) {
+              parsedBuildingNumber = addressParts.buildingNumber;
+              parsedStreetName = addressParts.streetName;
+              parsedCity = addressParts.city;
+              parsedState = addressParts.state;
               parsedAddress = blockLine.trim();
             }
 
@@ -6388,24 +6413,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
 
             // First non-address line is likely the name
-            if (i === 0 || (i === 1 && !cityState)) {
+            if (i === 0 || (i === 1 && !addressParts)) {
               parsedName = blockLine;
             }
           }
 
           if (parsedCity || parsedState || parsedPhone) {
-            const streetNumber = extractStreetNumber(parsedAddress);
             const addressNormalized = normalizeAddressComponent(parsedAddress);
             
             parsedStores.push({
               rawText: currentBlock.join('\n'),
               name: parsedName,
+              buildingNumber: parsedBuildingNumber,
+              streetName: parsedStreetName,
               city: parsedCity,
               state: parsedState,
               stateNormalized: normalizeState(parsedState),
               address: parsedAddress,
               addressNormalized,
-              streetNumber,
               phone: parsedPhone,
             });
           }
@@ -6414,7 +6439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Match parsed stores against database with enhanced scoring
+      // Match parsed stores against database with NEW scoring focused on building # + state
       const matched: any[] = [];
       const unmatched: any[] = [];
 
@@ -6426,37 +6451,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let confidence = 0;
           const scoreBreakdown: string[] = [];
 
-          // Street Number + City + State match (highest priority) - 70 points
-          if (parsed.streetNumber && dbStore.streetNumber && 
-              parsed.streetNumber === dbStore.streetNumber &&
-              parsed.city && dbStore.city === parsed.city && 
+          // CRITICAL MATCH: Building Number + State (essentially unique in dispensary vertical) - 70 points
+          if (parsed.buildingNumber && dbStore.streetNumber && 
+              parsed.buildingNumber === dbStore.streetNumber &&
               parsed.state && statesMatch(parsed.state, dbStore.state)) {
             confidence += 70;
-            scoreBreakdown.push('Street#/City/State: 70');
-          }
-          // City + State match only - 50 points
-          else if (parsed.city && parsed.state && 
-                   dbStore.city === parsed.city && statesMatch(parsed.state, dbStore.state)) {
-            confidence += 50;
-            scoreBreakdown.push('City/State: 50');
+            scoreBreakdown.push(`Building#(${parsed.buildingNumber})+State: 70`);
           }
 
-          // Phone match (very reliable) - 30 points
-          if (parsed.phone && dbStore.phone && parsed.phone === dbStore.phone) {
-            confidence += 30;
-            scoreBreakdown.push('Phone: 30');
-          }
-
-          // Normalized address matching - 20 points
-          if (parsed.addressNormalized && dbStore.addressNormalized) {
-            // Extract first part of address (before comma) and compare normalized versions
-            const parsedStreet = parsed.addressNormalized.split(',')[0].trim();
-            const dbStreet = dbStore.addressNormalized.split(',')[0].trim();
+          // Street name similarity - 20 points
+          if (parsed.streetName && dbStore.addressNormalized && confidence >= 70) {
+            // Already matched on building+state, now check if street name also matches
+            const normalizedParsedStreet = normalizeAddressComponent(parsed.streetName);
+            const dbStreetPart = dbStore.addressNormalized.split(',')[0].trim();
             
-            if (parsedStreet && dbStreet && dbStreet.includes(parsedStreet)) {
+            // Check if key words from street name appear in db address
+            const parsedWords = normalizedParsedStreet.split(/\s+/).filter(w => w.length > 3);
+            const matchedWords = parsedWords.filter(word => dbStreetPart.includes(word));
+            
+            if (matchedWords.length > 0) {
               confidence += 20;
-              scoreBreakdown.push('Address: 20');
+              scoreBreakdown.push(`Street(${matchedWords.join(' ')}): 20`);
             }
+          }
+
+          // Phone match - 10 points
+          if (parsed.phone && dbStore.phone && parsed.phone === dbStore.phone) {
+            confidence += 10;
+            scoreBreakdown.push('Phone: 10');
           }
 
           if (confidence > bestConfidence) {
@@ -6473,7 +6495,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        if (bestConfidence >= 50) { // Threshold for confident match
+        // Threshold: 70 points = building# + state (the minimum for a valid match in dispensary vertical)
+        if (bestConfidence >= 70) {
           matched.push({
             parsed,
             match: bestMatch,
