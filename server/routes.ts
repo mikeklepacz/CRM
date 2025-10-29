@@ -6756,6 +6756,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pocPhone, 
         notes, 
         agentName,
+        status, // Default status for new parent (e.g., 'claimed')
         // Corporate office location data
         address,
         city,
@@ -6918,9 +6919,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeStateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
       const storePhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'phone');
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
+      const storeStatusIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
 
-      console.log('[DBA-PARENT] Column indices - Name:', storeNameIndex, 'Link:', storeLinkIndex, 'Category:', categoryIndex);
-      console.log('[DBA-PARENT] Values to write - dbaName:', dbaName, 'corporateUuid:', corporateUuid, 'category:', category);
+      console.log('[DBA-PARENT] Column indices - Name:', storeNameIndex, 'Link:', storeLinkIndex, 'Category:', categoryIndex, 'Status:', storeStatusIndex);
+      console.log('[DBA-PARENT] Values to write - dbaName:', dbaName, 'corporateUuid:', corporateUuid, 'category:', category, 'status:', status);
 
       const storeRow = new Array(storeHeaders.length).fill('');
       if (storeNameIndex !== -1) storeRow[storeNameIndex] = dbaName;
@@ -6931,6 +6933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (storePhoneIndex !== -1) storeRow[storePhoneIndex] = phone || '';
       if (storeEmailIndex !== -1) storeRow[storeEmailIndex] = email || '';
       if (categoryIndex !== -1) storeRow[categoryIndex] = category;
+      if (storeStatusIndex !== -1 && status) storeRow[storeStatusIndex] = status;
 
       console.log('[DBA-PARENT] Complete storeRow before append:', storeRow);
       console.log('[DBA-PARENT] storeRow[0] (should be Name):', storeRow[0]);
@@ -6951,9 +6954,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (notesIndex !== -1 && notes) trackerRow[notesIndex] = notes;
       if (agentIndex !== -1 && agentName) trackerRow[agentIndex] = agentName;
 
-      // Set status to 'Parent DBA'
+      // Set status (default to 'claimed' for new DBA parents)
       const statusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
-      if (statusIndex !== -1) trackerRow[statusIndex] = 'Parent DBA';
+      if (statusIndex !== -1) trackerRow[statusIndex] = status || 'claimed';
 
       await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [trackerRow]);
 

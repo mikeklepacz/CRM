@@ -1396,6 +1396,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             pocPhone: parentPocPhone || '',
                                             notes: `Corporate parent for ${dbaName.trim()}`,
                                             agentName: currentUser?.agentName || '',
+                                            status: 'claimed', // Default status for new DBA parent
                                             // Corporate office location data
                                             address: corporateAddress || '',
                                             city: corporateCity || '',

@@ -1698,69 +1698,7 @@ export default function ClientDashboard() {
       return filtered;
     }
 
-    // Show Unclaimed Shops filter - bypass state/city filters when active
-    if (showUnclaimedOnly) {
-      // Filter to only unclaimed stores:
-      // 1. No tracker data at all (_hasTrackerData === false), OR
-      // 2. Has tracker data but no agent assigned (Agent/Agent Name field is empty)
-      let filtered = data.filter((row: any) => {
-        if (row._hasTrackerData === false) {
-          return true; // No tracker row at all = unclaimed
-        }
-        // Has tracker data - check if Agent Name is empty
-        const agentName = row['Agent Name'] || row['agent name'] || row['Agent'] || row['agent'] || '';
-        return !agentName || agentName.toString().trim() === '';
-      });
-
-      // Apply search filter (if any)
-      if (searchTerm.trim()) {
-        const searchLower = searchTerm.toLowerCase();
-        filtered = filtered.filter((row: any) => {
-          return headers.some((header: string) => {
-            const value = row[header]?.toString().toLowerCase() || '';
-            return value.includes(searchLower);
-          });
-        });
-      }
-
-      // Apply status filter (if any)
-      if (selectedStatuses.size > 0) {
-        const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
-        filtered = filtered.filter((row: any) => {
-          return statusColumns.some((col: string) => {
-            const value = row[col];
-            if (value && String(value).trim()) {
-              return selectedStatuses.has(String(value).trim());
-            }
-            return false;
-          });
-        });
-      }
-
-      // Apply sorting
-      if (sortColumn) {
-        filtered = [...filtered].sort((a: any, b: any) => {
-          const aVal = String(a[sortColumn] || '');
-          const bVal = String(b[sortColumn] || '');
-
-          // Try numeric comparison first
-          const aNum = parseFloat(aVal);
-          const bNum = parseFloat(bVal);
-
-          if (!isNaN(aNum) && !isNaN(bNum)) {
-            return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
-          }
-
-          // Fall back to string comparison
-          const comparison = aVal.toLowerCase().localeCompare(bVal.toLowerCase());
-          return sortDirection === 'asc' ? comparison : -comparison;
-        });
-      }
-
-      return filtered;
-    }
-
-    // Regular filtering (all stores mode)
+    // Regular filtering (all stores mode and Show Unclaimed Shops mode)
     // CRITICAL: If any filter has 0 selections, show NOTHING (not everything)
     if (allStates.length > 0 && selectedStates.size === 0) {
       return []; // Show 0 rows when nothing is selected
@@ -1774,6 +1712,16 @@ export default function ClientDashboard() {
         return value.includes(searchLower);
       });
     });
+
+    // Show Unclaimed Shops: exclude stores claimed by current user
+    if (showUnclaimedOnly && currentUser?.agentName) {
+      filtered = filtered.filter((row: any) => {
+        const agentName = row['Agent Name'] || row['agent name'] || row['Agent'] || row['agent'] || '';
+        const agentNameStr = agentName.toString().trim();
+        // Exclude if agent name matches current user's agent name
+        return agentNameStr !== currentUser.agentName;
+      });
+    }
 
     // Filter by name if nameFilter is set
     if (nameFilter.trim()) {
