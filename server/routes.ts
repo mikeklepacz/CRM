@@ -6081,6 +6081,207 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Parse and match pasted store list against Store Database
+  app.post('/api/stores/parse-and-match', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { rawText, sheetId } = req.body;
+
+      if (!rawText || !rawText.trim()) {
+        return res.status(400).json({ message: "Text to parse is required" });
+      }
+
+      if (!sheetId) {
+        return res.status(400).json({ message: "Sheet ID is required" });
+      }
+
+      // Get Store Database
+      const sheet = await storage.getGoogleSheetById(sheetId);
+      if (!sheet) {
+        return res.status(404).json({ message: 'Sheet not found' });
+      }
+
+      // Read all store data
+      const range = `${sheet.sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return res.json({ 
+          matched: [], 
+          unmatched: [],
+          summary: { total: 0, matched: 0, unmatched: 0 }
+        });
+      }
+
+      // Parse headers
+      const headers = rows[0];
+      const nameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'name');
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
+      const cityIndex = headers.findIndex((h: string) => h.toLowerCase() === 'city');
+      const stateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'state');
+      const addressIndex = headers.findIndex((h: string) => h.toLowerCase() === 'address');
+      const phoneIndex = headers.findIndex((h: string) => h.toLowerCase() === 'phone');
+
+      // Build database of stores
+      const dbStores = rows.slice(1)
+        .filter((row: any[]) => row[linkIndex]) // Only stores with links
+        .map((row: any[]) => ({
+          name: nameIndex !== -1 ? (row[nameIndex] || '') : '',
+          link: linkIndex !== -1 ? (row[linkIndex] || '') : '',
+          city: cityIndex !== -1 ? (row[cityIndex] || '').trim().toLowerCase() : '',
+          state: stateIndex !== -1 ? (row[stateIndex] || '').trim().toLowerCase() : '',
+          address: addressIndex !== -1 ? (row[addressIndex] || '').trim().toLowerCase() : '',
+          phone: phoneIndex !== -1 ? (row[phoneIndex] || '').replace(/\D/g, '') : '', // Normalize to digits only
+        }));
+
+      // Helper to normalize phone numbers
+      const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+
+      // Helper to extract city, state from address line
+      const parseCityState = (line: string) => {
+        // Pattern: "City, ST ZIP" or "City ST ZIP"
+        const match = line.match(/([A-Za-z\s]+),?\s+([A-Z]{2})\s+\d{5}/);
+        if (match) {
+          return { city: match[1].trim().toLowerCase(), state: match[2].toLowerCase() };
+        }
+        return null;
+      };
+
+      // Helper to extract phone number
+      const extractPhone = (line: string) => {
+        const match = line.match(/\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
+        return match ? normalizePhone(match[0]) : null;
+      };
+
+      // Parse the raw text into store entries
+      const lines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
+      const parsedStores: any[] = [];
+      
+      // Filter out noise words
+      const noiseWords = ['SHOP NOW', 'MORE INFO', 'DELIVERY', 'CLICK HERE', 'VIEW DETAILS'];
+      const cleanedLines = lines.filter(line => 
+        !noiseWords.some(noise => line.toUpperCase().includes(noise))
+      );
+
+      // Group lines into store blocks (heuristic: phone number marks end of block)
+      let currentBlock: string[] = [];
+      for (const line of cleanedLines) {
+        currentBlock.push(line);
+        
+        // If line contains phone, it's likely the end of a store entry
+        if (extractPhone(line)) {
+          // Process this block
+          let parsedName = '';
+          let parsedCity = '';
+          let parsedState = '';
+          let parsedAddress = '';
+          let parsedPhone = '';
+
+          for (let i = 0; i < currentBlock.length; i++) {
+            const blockLine = currentBlock[i];
+            
+            // Try to extract city/state
+            const cityState = parseCityState(blockLine);
+            if (cityState) {
+              parsedCity = cityState.city;
+              parsedState = cityState.state;
+              parsedAddress = blockLine.trim();
+            }
+
+            // Try to extract phone
+            const phone = extractPhone(blockLine);
+            if (phone) {
+              parsedPhone = phone;
+            }
+
+            // First non-address line is likely the name
+            if (i === 0 || (i === 1 && !cityState)) {
+              parsedName = blockLine;
+            }
+          }
+
+          if (parsedCity || parsedState || parsedPhone) {
+            parsedStores.push({
+              rawText: currentBlock.join('\n'),
+              name: parsedName,
+              city: parsedCity,
+              state: parsedState,
+              address: parsedAddress,
+              phone: parsedPhone,
+            });
+          }
+
+          currentBlock = [];
+        }
+      }
+
+      // Match parsed stores against database
+      const matched: any[] = [];
+      const unmatched: any[] = [];
+
+      for (const parsed of parsedStores) {
+        let bestMatch: any = null;
+        let bestConfidence = 0;
+
+        for (const dbStore of dbStores) {
+          let confidence = 0;
+
+          // City + State match (most reliable) - 60 points
+          if (parsed.city && parsed.state && 
+              dbStore.city === parsed.city && dbStore.state === parsed.state) {
+            confidence += 60;
+          }
+
+          // Phone match (very reliable) - 30 points
+          if (parsed.phone && dbStore.phone && parsed.phone === dbStore.phone) {
+            confidence += 30;
+          }
+
+          // Address keyword matching - 10 points
+          if (parsed.address && dbStore.address && 
+              dbStore.address.includes(parsed.address.split(',')[0].toLowerCase())) {
+            confidence += 10;
+          }
+
+          if (confidence > bestConfidence) {
+            bestConfidence = confidence;
+            bestMatch = {
+              ...dbStore,
+              // Return original cased values for display
+              name: rows.slice(1).find((row: any[]) => row[linkIndex] === dbStore.link)?.[nameIndex] || dbStore.name,
+              city: rows.slice(1).find((row: any[]) => row[linkIndex] === dbStore.link)?.[cityIndex] || dbStore.city,
+              state: rows.slice(1).find((row: any[]) => row[linkIndex] === dbStore.link)?.[stateIndex] || dbStore.state,
+              address: rows.slice(1).find((row: any[]) => row[linkIndex] === dbStore.link)?.[addressIndex] || dbStore.address,
+            };
+          }
+        }
+
+        if (bestConfidence >= 50) { // Threshold for confident match
+          matched.push({
+            parsed,
+            match: bestMatch,
+            confidence: bestConfidence,
+          });
+        } else {
+          unmatched.push(parsed);
+        }
+      }
+
+      res.json({ 
+        matched, 
+        unmatched,
+        summary: {
+          total: parsedStores.length,
+          matched: matched.length,
+          unmatched: unmatched.length,
+        }
+      });
+    } catch (error: any) {
+      console.error("Error parsing and matching stores:", error);
+      res.status(500).json({ message: error.message || "Failed to parse and match stores" });
+    }
+  });
+
   // ===== DBA PARENT-CHILD MANAGEMENT ENDPOINTS =====
 
   // Create a parent DBA record (can be corporate office or existing location)

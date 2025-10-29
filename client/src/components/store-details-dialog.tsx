@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus } from "lucide-react";
+import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { QuickReminder } from "@/components/quick-reminder";
 import { normalizeLink } from "@shared/linkUtils";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
+import { ParseLocationsDialog } from "@/components/parse-locations-dialog";
 
 // Helper function: Case-insensitive lookup for link value
 const getLinkValue = (row: any): string | undefined => {
@@ -128,6 +129,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [selectedStores, setSelectedStores] = useState<Array<{ link: string; name: string }>>([]);
   const [storeSearchDialog, setStoreSearchDialog] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
+  const [parseLocationsDialog, setParseLocationsDialog] = useState(false);
   
   // Parent DBA management state
   const [parentCreationType, setParentCreationType] = useState<'new' | 'existing'>('new');
@@ -1200,16 +1202,28 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                   <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                       <Label>Selected Locations ({selectedStores.length})</Label>
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setStoreSearchDialog(true)}
-                                        data-testid="button-add-locations"
-                                      >
-                                        <Search className="h-4 w-4 mr-2" />
-                                        Add Locations
-                                      </Button>
+                                      <div className="flex gap-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setParseLocationsDialog(true)}
+                                          data-testid="button-parse-locations"
+                                        >
+                                          <FileText className="h-4 w-4 mr-2" />
+                                          Parse Locations
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setStoreSearchDialog(true)}
+                                          data-testid="button-add-locations"
+                                        >
+                                          <Search className="h-4 w-4 mr-2" />
+                                          Add Locations
+                                        </Button>
+                                      </div>
                                     </div>
 
                                     {selectedStores.length > 0 ? (
@@ -1339,8 +1353,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         setParentPocEmail('');
                                         setParentPocPhone('');
 
-                                        // Refresh the dashboard
+                                        // Refresh the dashboard and stores list
                                         await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+                                        await queryClient.invalidateQueries({ queryKey: [`/api/stores/all/${storeSheetId}`] });
+                                        await queryClient.invalidateQueries({ queryKey: [`/api/stores/by-dba`] });
                                         await refetch();
 
                                         // Close the dialog
@@ -2062,6 +2078,22 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Parse Locations Dialog */}
+      <ParseLocationsDialog
+        open={parseLocationsDialog}
+        onOpenChange={setParseLocationsDialog}
+        storeSheetId={storeSheetId}
+        onStoresSelected={(stores) => {
+          // Add parsed stores to selectedStores
+          setSelectedStores(prev => {
+            const newStores = stores.filter(
+              s => !prev.some(existing => existing.link === s.link)
+            );
+            return [...prev, ...newStores];
+          });
+        }}
+      />
     </>
   );
 }
