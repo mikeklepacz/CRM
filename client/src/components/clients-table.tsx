@@ -273,15 +273,7 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                 return (
                   <TableRow key={client.id} className="hover-elevate">
                     <TableCell className="font-medium align-middle">
-                      <div className="space-y-1">
-                        <div data-testid={`text-company-${client.id}`}>{companyName}</div>
-                        {client.assignedAgent && (
-                          <Badge variant="secondary" className="text-xs" data-testid={`badge-agent-${client.id}`}>
-                            <UserCheck className="h-3 w-3 mr-1" />
-                            Claimed
-                          </Badge>
-                        )}
-                      </div>
+                      <div data-testid={`text-company-${client.id}`}>{companyName}</div>
                     </TableCell>
                     <TableCell className="align-middle">
                       <div className="space-y-1 text-sm">
