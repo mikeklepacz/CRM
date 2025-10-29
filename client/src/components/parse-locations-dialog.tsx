@@ -6,7 +6,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, FileText, CheckCircle2, XCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, FileText, CheckCircle2, XCircle, Search, Link as LinkIcon, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -50,6 +51,9 @@ export function ParseLocationsDialog({
   const [unmatchedStores, setUnmatchedStores] = useState<ParsedStore[]>([]);
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
   const [summary, setSummary] = useState<{ total: number; matched: number; unmatched: number } | null>(null);
+  const [searchingIndex, setSearchingIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const { toast } = useToast();
 
   const parseAndMatchMutation = useMutation({
@@ -87,6 +91,99 @@ export function ParseLocationsDialog({
       });
     },
   });
+
+  const searchStoresMutation = useMutation({
+    mutationFn: async (query: string) => {
+      if (!storeSheetId) throw new Error("Store sheet ID is required");
+      return await apiRequest('POST', '/api/stores/search', {
+        query,
+        sheetId: storeSheetId,
+      });
+    },
+    onSuccess: (data) => {
+      setSearchResults(data.stores || []);
+    },
+  });
+
+  const manualLinkMutation = useMutation({
+    mutationFn: async ({ unmatchedIndex, storeLink }: { unmatchedIndex: number; storeLink: string }) => {
+      const unmatched = unmatchedStores[unmatchedIndex];
+      const linkedStore = searchResults.find(s => s.link === storeLink);
+      if (!linkedStore) throw new Error("Store not found");
+      
+      // Move from unmatched to matched
+      const newMatch: MatchedStore = {
+        parsed: unmatched,
+        match: linkedStore,
+        confidence: 100, // Manual link = 100% confidence
+      };
+      
+      return newMatch;
+    },
+    onSuccess: (newMatch, { unmatchedIndex }) => {
+      // Add to matched stores
+      setMatchedStores(prev => [...prev, newMatch]);
+      
+      // Remove from unmatched stores
+      setUnmatchedStores(prev => prev.filter((_, idx) => idx !== unmatchedIndex));
+      
+      // Auto-select the newly matched store
+      setSelectedMatches(prev => new Set(prev).add(newMatch.match.link));
+      
+      // Update summary
+      setSummary(prev => prev ? {
+        ...prev,
+        matched: prev.matched + 1,
+        unmatched: prev.unmatched - 1,
+      } : null);
+      
+      // Close search
+      setSearchingIndex(null);
+      setSearchQuery("");
+      setSearchResults([]);
+      
+      toast({
+        title: "Store Linked",
+        description: "Successfully linked store manually",
+      });
+    },
+  });
+
+  const importAsNewMutation = useMutation({
+    mutationFn: async (unmatchedIndex: number) => {
+      if (!storeSheetId) throw new Error("Store sheet ID is required");
+      const unmatched = unmatchedStores[unmatchedIndex];
+      
+      return await apiRequest('POST', '/api/stores/import-new', {
+        store: unmatched,
+        sheetId: storeSheetId,
+      });
+    },
+    onSuccess: (data, unmatchedIndex) => {
+      // Remove from unmatched stores
+      setUnmatchedStores(prev => prev.filter((_, idx) => idx !== unmatchedIndex));
+      
+      // Update summary
+      setSummary(prev => prev ? {
+        ...prev,
+        unmatched: prev.unmatched - 1,
+      } : null);
+      
+      toast({
+        title: "Store Imported",
+        description: "Successfully added new store to database",
+      });
+    },
+  });
+
+  const handleSearch = (index: number, query: string) => {
+    setSearchQuery(query);
+    if (query.trim().length >= 2) {
+      searchStoresMutation.mutate(query);
+    } else {
+      setSearchResults([]);
+    }
+  };
 
   const handleToggleMatch = (link: string) => {
     const newSelected = new Set(selectedMatches);
@@ -255,13 +352,101 @@ export function ParseLocationsDialog({
                         data-testid={`unmatched-store-${idx}`}
                       >
                         {item.name && <div className="font-medium mb-1">{item.name}</div>}
-                        <div className="text-sm text-muted-foreground space-y-0.5">
+                        <div className="text-sm text-muted-foreground space-y-0.5 mb-2">
                           {item.address && <div>{item.address}</div>}
                           {item.city && item.state && (
                             <div>{item.city}, {item.state}</div>
                           )}
                           {item.phone && <div>{item.phone}</div>}
                         </div>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 pt-2 border-t">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (searchingIndex === idx) {
+                                setSearchingIndex(null);
+                                setSearchQuery("");
+                                setSearchResults([]);
+                              } else {
+                                setSearchingIndex(idx);
+                                setSearchQuery("");
+                                setSearchResults([]);
+                              }
+                            }}
+                            data-testid={`button-search-${idx}`}
+                          >
+                            <Search className="h-3 w-3 mr-1" />
+                            {searchingIndex === idx ? "Cancel Search" : "Search Database"}
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => importAsNewMutation.mutate(idx)}
+                            disabled={importAsNewMutation.isPending}
+                            data-testid={`button-import-${idx}`}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Import as New
+                          </Button>
+                        </div>
+                        
+                        {/* Search Section */}
+                        {searchingIndex === idx && (
+                          <div className="mt-3 pt-3 border-t space-y-2">
+                            <Input
+                              placeholder="Search by name, address, city..."
+                              value={searchQuery}
+                              onChange={(e) => handleSearch(idx, e.target.value)}
+                              autoFocus
+                              data-testid={`input-search-${idx}`}
+                            />
+                            
+                            {searchStoresMutation.isPending && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Searching...
+                              </div>
+                            )}
+                            
+                            {searchResults.length > 0 && (
+                              <div className="space-y-1 max-h-40 overflow-y-auto">
+                                {searchResults.map((result) => (
+                                  <div
+                                    key={result.link}
+                                    className="flex items-start justify-between gap-2 p-2 border rounded hover-elevate text-sm"
+                                    data-testid={`search-result-${result.link}`}
+                                  >
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium truncate">{result.name}</div>
+                                      <div className="text-xs text-muted-foreground truncate">
+                                        {result.city}, {result.state}
+                                      </div>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => manualLinkMutation.mutate({ unmatchedIndex: idx, storeLink: result.link })}
+                                      disabled={manualLinkMutation.isPending}
+                                      data-testid={`button-link-${result.link}`}
+                                    >
+                                      <LinkIcon className="h-3 w-3 mr-1" />
+                                      Link
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {searchQuery.length >= 2 && !searchStoresMutation.isPending && searchResults.length === 0 && (
+                              <div className="text-sm text-muted-foreground py-2">
+                                No matching stores found
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

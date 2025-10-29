@@ -6499,6 +6499,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Search stores in database for manual matching
+  app.post('/api/stores/search', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { query, sheetId } = req.body;
+
+      if (!query || query.trim().length < 2) {
+        return res.json({ stores: [] });
+      }
+
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheet = sheets.find(s => s.id === sheetId);
+      
+      if (!sheet) {
+        return res.status(404).json({ message: 'Sheet not found' });
+      }
+
+      // Read store database
+      const range = `${sheet.sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return res.json({ stores: [] });
+      }
+
+      const headers = rows[0];
+      const nameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'store name');
+      const addressIndex = headers.findIndex((h: string) => h.toLowerCase() === 'address');
+      const cityIndex = headers.findIndex((h: string) => h.toLowerCase() === 'city');
+      const stateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'state');
+      const phoneIndex = headers.findIndex((h: string) => h.toLowerCase() === 'phone');
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
+
+      const searchLower = query.toLowerCase();
+      const matchingStores = [];
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const name = row[nameIndex] || '';
+        const address = row[addressIndex] || '';
+        const city = row[cityIndex] || '';
+        const state = row[stateIndex] || '';
+        const phone = row[phoneIndex] || '';
+        const link = row[linkIndex] || '';
+
+        // Search across name, address, city
+        if (name.toLowerCase().includes(searchLower) ||
+            address.toLowerCase().includes(searchLower) ||
+            city.toLowerCase().includes(searchLower)) {
+          matchingStores.push({
+            name,
+            address,
+            city,
+            state,
+            phone,
+            link,
+          });
+        }
+
+        // Limit results to prevent overwhelming UI
+        if (matchingStores.length >= 20) break;
+      }
+
+      res.json({ stores: matchingStores });
+    } catch (error: any) {
+      console.error("Error searching stores:", error);
+      res.status(500).json({ message: error.message || "Failed to search stores" });
+    }
+  });
+
+  // Import new store to database
+  app.post('/api/stores/import-new', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { store, sheetId } = req.body;
+
+      if (!store) {
+        return res.status(400).json({ message: 'Store data is required' });
+      }
+
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const sheet = sheets.find(s => s.id === sheetId);
+      
+      if (!sheet) {
+        return res.status(404).json({ message: 'Sheet not found' });
+      }
+
+      // Read current data to get headers
+      const range = `${sheet.sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ message: 'Sheet is empty - cannot determine columns' });
+      }
+
+      const headers = rows[0];
+      const nameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'store name');
+      const addressIndex = headers.findIndex((h: string) => h.toLowerCase() === 'address');
+      const cityIndex = headers.findIndex((h: string) => h.toLowerCase() === 'city');
+      const stateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'state');
+      const phoneIndex = headers.findIndex((h: string) => h.toLowerCase() === 'phone');
+      const zipIndex = headers.findIndex((h: string) => h.toLowerCase() === 'zip code');
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
+
+      // Generate UUID for new store
+      const { v4: uuidv4 } = await import('uuid');
+      const newLink = uuidv4();
+
+      // Build new row with data in correct column positions
+      const newRow = new Array(headers.length).fill('');
+      if (nameIndex >= 0) newRow[nameIndex] = store.name || '';
+      if (addressIndex >= 0) newRow[addressIndex] = store.address || '';
+      if (cityIndex >= 0) newRow[cityIndex] = store.city || '';
+      if (stateIndex >= 0) newRow[stateIndex] = store.state || '';
+      if (phoneIndex >= 0) newRow[phoneIndex] = store.phone || '';
+      if (zipIndex >= 0 && store.zip) newRow[zipIndex] = store.zip;
+      if (linkIndex >= 0) newRow[linkIndex] = newLink;
+
+      // Append to sheet
+      const appendRange = `${sheet.sheetName}!A:ZZ`;
+      await googleSheets.appendSheetData(sheet.spreadsheetId, appendRange, [newRow]);
+
+      res.json({ 
+        success: true, 
+        link: newLink,
+        message: 'Store imported successfully'
+      });
+    } catch (error: any) {
+      console.error("Error importing new store:", error);
+      res.status(500).json({ message: error.message || "Failed to import store" });
+    }
+  });
+
   // ===== DBA PARENT-CHILD MANAGEMENT ENDPOINTS =====
 
   // Create a parent DBA record (can be corporate office or existing location)
