@@ -247,17 +247,21 @@ export function ParseLocationsDialog({
               <div className="flex flex-col gap-2 flex-1 overflow-hidden min-h-0">
                 <h3 className="text-sm font-semibold text-red-600">Unmatched Entries ({unmatchedStores.length})</h3>
                 <ScrollArea className="flex-1 border rounded-md">
-                  <div className="p-4 space-y-2">
+                  <div className="p-4 space-y-3">
                     {unmatchedStores.map((item, idx) => (
                       <div
                         key={idx}
-                        className="p-2 text-sm bg-muted/50 rounded"
+                        className="p-3 border rounded-md bg-muted/50"
                         data-testid={`unmatched-store-${idx}`}
                       >
-                        {item.name && <div className="font-medium">{item.name}</div>}
-                        {item.city && item.state && (
-                          <div className="text-muted-foreground">{item.city}, {item.state}</div>
-                        )}
+                        {item.name && <div className="font-medium mb-1">{item.name}</div>}
+                        <div className="text-sm text-muted-foreground space-y-0.5">
+                          {item.address && <div>{item.address}</div>}
+                          {item.city && item.state && (
+                            <div>{item.city}, {item.state}</div>
+                          )}
+                          {item.phone && <div>{item.phone}</div>}
+                        </div>
                       </div>
                     ))}
                   </div>
