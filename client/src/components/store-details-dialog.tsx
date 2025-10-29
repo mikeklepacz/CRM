@@ -359,13 +359,15 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   }, [row, open, storeSheetId, franchiseContext]);
 
   // Auto-populate currentDbaStores when dbaStores query completes
+  // NOTE: dbaName is intentionally NOT in the dependency array to prevent clearing
+  // selectedStores when the user types in the DBA name field
   useEffect(() => {
     if (dbaStores && Array.isArray(dbaStores) && multiLocationMode && activeRowLink && dbaName) {
       setCurrentDbaStores(dbaStores.map((s: any) => ({ link: s.link, name: s.name })));
       // Clear selectedStores since we're showing existing DBA stores
       setSelectedStores([]);
     }
-  }, [dbaStores, multiLocationMode, activeRowLink, dbaName]);
+  }, [dbaStores, multiLocationMode, activeRowLink]);
 
   // Auto-detect emails and phone numbers from Notes field
   // Only auto-populate if the POC field hasn't been manually edited
