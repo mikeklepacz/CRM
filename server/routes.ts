@@ -11349,7 +11349,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { placeId, category } = req.body;
+      const { placeId, category, name: providedName } = req.body;
 
       if (!placeId || !category) {
         return res.status(400).json({ message: 'Place ID and category are required' });
@@ -11361,6 +11361,9 @@ Use this store information to provide context-aware responses. When helping draf
       if (!placeDetails) {
         return res.status(404).json({ message: 'Place not found' });
       }
+
+      // Use provided name from search results if available, otherwise fall back to placeDetails
+      const businessName = providedName || placeDetails.name;
 
       // Parse address into street, city, state, ZIP components for separate CRM columns
       const { address: street, city, state, zip } = googleMaps.parseFullAddress(placeDetails.formatted_address);
@@ -11409,7 +11412,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Build row with data in correct column positions
       const row = new Array(headers.length).fill('');
-      if (nameIndex >= 0) row[nameIndex] = placeDetails.name || '';
+      if (nameIndex >= 0) row[nameIndex] = businessName || '';
       if (typeIndex >= 0) row[typeIndex] = placeDetails.types?.[0] || '';
       if (linkIndex >= 0) row[linkIndex] = placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeDetails.place_id}`;
       if (addressIndex >= 0) row[addressIndex] = street;
@@ -11432,7 +11435,7 @@ Use this store information to provide context-aware responses. When helping draf
       res.json({ 
         message: 'Place saved successfully to Store Database',
         place: {
-          name: placeDetails.name,
+          name: businessName,
           address: placeDetails.formatted_address,
           category
         }
