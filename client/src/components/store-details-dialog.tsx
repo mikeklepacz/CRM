@@ -2119,6 +2119,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         open={parseLocationsDialog}
         onOpenChange={setParseLocationsDialog}
         storeSheetId={storeSheetId}
+        category={row?.category || row?.Category || ''}
         onStoresSelected={(stores) => {
           // Add parsed stores to selectedStores
           setSelectedStores(prev => {

@@ -55,13 +55,15 @@ interface ParseLocationsDialogProps {
   onOpenChange: (open: boolean) => void;
   storeSheetId: string | undefined;
   onStoresSelected: (stores: any[]) => void;
+  category?: string;
 }
 
 export function ParseLocationsDialog({ 
   open, 
   onOpenChange, 
   storeSheetId,
-  onStoresSelected 
+  onStoresSelected,
+  category
 }: ParseLocationsDialogProps) {
   const [rawText, setRawText] = useState("");
   const [matchedStores, setMatchedStores] = useState<MatchedStore[]>([]);
@@ -112,6 +114,7 @@ export function ParseLocationsDialog({
                 address: unmatchedStore.address,
                 city: unmatchedStore.city,
                 state: unmatchedStore.state,
+                category: category || '',
               });
 
               if (googleSearchResult.results && googleSearchResult.results.length > 0) {
