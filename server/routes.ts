@@ -6656,17 +6656,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search Google Places API for a specific store location
   app.post('/api/stores/search-google', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const { name, city, state } = req.body;
+      const { name, address, city, state } = req.body;
 
       if (!name) {
         return res.status(400).json({ message: 'Store name is required' });
       }
 
-      // Build search query
+      // Build search query - prioritize using the full address for better results
       let query = name;
       let location = '';
       
-      if (city && state) {
+      if (address && city && state) {
+        // Best case: full address helps Google pinpoint the exact business
+        location = `${address}, ${city}, ${state}`;
+      } else if (address && city) {
+        location = `${address}, ${city}`;
+      } else if (city && state) {
         location = `${city}, ${state}`;
       } else if (city) {
         location = city;

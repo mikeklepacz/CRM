@@ -109,6 +109,7 @@ export function ParseLocationsDialog({
             try {
               const googleSearchResult = await apiRequest('POST', '/api/stores/search-google', {
                 name: unmatchedStore.name,
+                address: unmatchedStore.address,
                 city: unmatchedStore.city,
                 state: unmatchedStore.state,
               });
