@@ -144,13 +144,14 @@ export async function writeSheetData(spreadsheetId: string, range: string, value
 }
 
 // Append data to Google Sheet (system-wide)
+// Uses OVERWRITE to avoid creating "occupied" empty cells that block ARRAYFORMULA expansion
 export async function appendSheetData(spreadsheetId: string, range: string, values: any[][]) {
   const sheets = await getSystemGoogleSheetClient();
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId,
     range,
     valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
+    insertDataOption: 'OVERWRITE',
     requestBody: {
       values,
     },
