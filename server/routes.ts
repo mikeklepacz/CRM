@@ -6278,13 +6278,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Helper to extract city, state from address line
       const parseCityState = (line: string) => {
-        // Pattern: Match city (1-4 words) followed by state and ZIP at END of line
-        // Format: "...City Name, ST ZIP" or "...City Name ST ZIP"
-        // City is the last 1-4 words before the state abbreviation
-        const match = line.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*,?\s+([A-Z]{2})\s+\d{5}(?:-\d{4})?$/);
-        if (match) {
-          return { city: match[1].trim().toLowerCase(), state: match[2].toLowerCase() };
+        // Common street suffixes (full and abbreviated)
+        const streetSuffixes = [
+          'street', 'st', 'st.',
+          'avenue', 'ave', 'ave.',
+          'road', 'rd', 'rd.',
+          'boulevard', 'blvd', 'blvd.',
+          'drive', 'dr', 'dr.',
+          'lane', 'ln', 'ln.',
+          'court', 'ct', 'ct.',
+          'circle', 'cir', 'cir.',
+          'highway', 'hwy', 'hwy.',
+          'parkway', 'pkwy', 'pkwy.',
+          'place', 'pl', 'pl.',
+          'terrace', 'ter', 'ter.',
+          'way'
+        ];
+
+        // First, try to find state + ZIP at the end
+        const stateZipMatch = line.match(/\b([A-Z]{2})\s+\d{5}(?:-\d{4})?$/i);
+        if (!stateZipMatch) return null;
+
+        const state = stateZipMatch[1];
+        
+        // Get everything before the state+ZIP
+        const beforeState = line.substring(0, stateZipMatch.index).trim();
+        
+        // Look for the last street suffix in the line
+        let cityStartIndex = -1;
+        let lastSuffixEnd = -1;
+        
+        for (const suffix of streetSuffixes) {
+          const regex = new RegExp(`\\b${suffix}\\b`, 'gi');
+          let match;
+          while ((match = regex.exec(beforeState)) !== null) {
+            lastSuffixEnd = match.index + match[0].length;
+          }
         }
+        
+        // If we found a suffix, city starts after it
+        if (lastSuffixEnd > -1) {
+          cityStartIndex = lastSuffixEnd;
+        }
+        
+        // Extract city: everything from after the suffix to before the state
+        let cityPart = cityStartIndex > -1 
+          ? beforeState.substring(cityStartIndex).trim()
+          : beforeState.trim();
+        
+        // Remove any leading commas or whitespace
+        cityPart = cityPart.replace(/^[,\s]+/, '').trim();
+        
+        // City is typically 1-3 words, extract just those
+        const cityWords = cityPart.split(/\s+/).filter(w => w.length > 0);
+        const city = cityWords.slice(0, 3).join(' ');
+        
+        if (city.length > 0) {
+          return { city: city.toLowerCase(), state: state.toLowerCase() };
+        }
+        
         return null;
       };
 
