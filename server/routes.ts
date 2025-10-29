@@ -1391,6 +1391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get Commission Tracker sheet (source of truth)
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
+        console.log('[MY-CLIENTS] ❌ No Commission Tracker sheet found');
         return res.json([]);
       }
 
@@ -1399,6 +1400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
       if (trackerRows.length <= 1) {
+        console.log('[MY-CLIENTS] ❌ Commission Tracker is empty or has no data rows');
         return res.json([]);
       }
 
@@ -1413,9 +1415,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transactionIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'transaction id');
       const orderIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'order number' || h.toLowerCase() === 'order id');
 
-      console.log('[MY-CLIENTS] allowedAgentNames:', allowedAgentNames);
-      console.log('[MY-CLIENTS] Processing', trackerRows.length - 1, 'tracker rows');
-      console.log('[MY-CLIENTS] Column indices:', { linkIndex, agentNameIndex, amountIndex, totalIndex, dateIndex, statusIndex });
+      console.log('[MY-CLIENTS] 👤 User:', currentUser.email, 'Role:', currentUser.role);
+      console.log('[MY-CLIENTS] 🏷️  User agentName field:', currentUser.agentName);
+      console.log('[MY-CLIENTS] 🔐 allowedAgentNames:', allowedAgentNames);
+      console.log('[MY-CLIENTS] 📊 Processing', trackerRows.length - 1, 'tracker rows');
+      console.log('[MY-CLIENTS] 📋 Column indices:', { linkIndex, agentNameIndex, amountIndex, totalIndex, dateIndex, statusIndex });
 
       // Group commissions by client Link
       const clientMap: Map<string, {
@@ -1427,6 +1431,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         transactionId: string;
         orderId: string;
       }> = new Map();
+
+      let rowsProcessed = 0;
+      let rowsFiltered = 0;
 
       // Process each tracker row
       for (let i = 1; i < trackerRows.length; i++) {
@@ -1440,21 +1447,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const transactionId = row[transactionIdIndex]?.toString().trim() || '';
         const orderId = row[orderIdIndex]?.toString().trim() || '';
 
-        if (!link) continue;
+        if (!link) {
+          console.log(`[MY-CLIENTS] Row ${i + 1}: Skipping - no link`);
+          continue;
+        }
 
         // SECURITY: Filter by allowed agent names (agents see only their clients)
         if (allowedAgentNames.length > 0) {
           if (agentNameIndex === -1) {
+            console.log(`[MY-CLIENTS] ❌ Agent Name column not found - filtering all rows`);
             continue; // No agent column means agents see nothing
           }
-          const rowAgentNormalized = rowAgent.toLowerCase().trim();
+          const rowAgentNormalized = rowAgent ? rowAgent.toLowerCase().trim() : '';
           const isAllowed = allowedAgentNames.some(name => 
             name.toLowerCase().trim() === rowAgentNormalized
           );
           if (!isAllowed) {
+            if (i <= 5) { // Only log first 5 filtered rows to avoid spam
+              console.log(`[MY-CLIENTS] Row ${i + 1}: Filtered out - rowAgent="${rowAgent}" not in allowedAgentNames`);
+            }
+            rowsFiltered++;
             continue;
           }
         }
+
+        rowsProcessed++;
 
         // Parse amount (commission) and total (gross order amount)
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
@@ -1583,13 +1600,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? enrichedClients.filter(client => client.category === selectedCategory)
         : enrichedClients;
 
+      console.log(`[MY-CLIENTS] ✅ Processing complete:`);
+      console.log(`[MY-CLIENTS]    - Rows processed: ${rowsProcessed}`);
+      console.log(`[MY-CLIENTS]    - Rows filtered out: ${rowsFiltered}`);
+      console.log(`[MY-CLIENTS]    - Unique stores found: ${clientMap.size}`);
+      console.log(`[MY-CLIENTS]    - After enrichment: ${enrichedClients.length}`);
+      console.log(`[MY-CLIENTS]    - After category filter: ${filteredClients.length}`);
       console.log(`[MY-CLIENTS] Returning ${filteredClients.length} clients for ${currentUser.agentName || currentUser.email}` + 
                   (selectedCategory ? ` (filtered by category: ${selectedCategory})` : ''));
       
-      // Debug: Log total sales for each client
-      filteredClients.forEach((c, i) => {
-        console.log(`[MY-CLIENTS] Client ${i + 1}: ${c.data.Name || 'Unknown'} - totalSales=${c.totalSales}, commission=${c.commissionTotal}`);
-      });
+      // Debug: Log total sales for first few clients
+      if (filteredClients.length > 0) {
+        filteredClients.slice(0, 3).forEach((c, i) => {
+          console.log(`[MY-CLIENTS] Client ${i + 1}: ${c.data.Name || 'Unknown'} - totalSales=${c.totalSales}, commission=${c.commissionTotal}`);
+        });
+      }
 
       res.json(filteredClients);
     } catch (error: any) {
