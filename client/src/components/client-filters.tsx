@@ -3,6 +3,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { X, Search } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ClientFiltersProps {
   search: string;
@@ -43,6 +47,30 @@ export function ClientFilters({
 }: ClientFiltersProps) {
   const hasActiveFilters = search || state !== "all" || status !== "all" || assignedAgent !== "all" || inactivityDays !== "all";
 
+  // State abbreviation to full name mapping
+  const STATE_NAMES: Record<string, string> = {
+    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+    'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+    'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+    'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+    'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+    'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+    'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia',
+    // Canadian provinces
+    'AB': 'Alberta', 'BC': 'British Columbia', 'MB': 'Manitoba', 'NB': 'New Brunswick',
+    'NL': 'Newfoundland and Labrador', 'NS': 'Nova Scotia', 'ON': 'Ontario',
+    'PE': 'Prince Edward Island', 'QC': 'Quebec', 'SK': 'Saskatchewan',
+    'NT': 'Northwest Territories', 'NU': 'Nunavut', 'YT': 'Yukon'
+  };
+
+  const getStateName = (abbr: string) => STATE_NAMES[abbr] || abbr;
+
   return (
     <div className="space-y-4">
       <div className="relative">
@@ -60,17 +88,58 @@ export function ClientFilters({
         {states.length > 0 && (
           <div className="space-y-2">
             <Label htmlFor="filter-state">State</Label>
-            <Select value={state} onValueChange={onStateChange}>
-              <SelectTrigger id="filter-state" data-testid="select-filter-state">
-                <SelectValue placeholder="All states" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All States</SelectItem>
-                {states.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between font-normal"
+                  data-testid="select-filter-state"
+                >
+                  {state === "all" ? "All States" : getStateName(state)}
+                  <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search states..." />
+                  <CommandList>
+                    <CommandEmpty>No state found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => onStateChange("all")}
+                        data-testid="state-option-all"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            state === "all" ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        All States
+                      </CommandItem>
+                      {states.map((s) => (
+                        <CommandItem
+                          key={s}
+                          value={getStateName(s)}
+                          onSelect={() => onStateChange(s)}
+                          data-testid={`state-option-${s.toLowerCase()}`}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              state === s ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {getStateName(s)}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
 

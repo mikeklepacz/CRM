@@ -6404,7 +6404,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedStores: any[] = [];
       
       // Filter out noise words
-      const noiseWords = ['SHOP NOW', 'MORE INFO', 'DELIVERY', 'CLICK HERE', 'VIEW DETAILS'];
+      const noiseWords = [
+        'SHOP NOW', 'MORE INFO', 'DELIVERY', 'CLICK HERE', 'VIEW DETAILS',
+        'CHOOSE DISPENSARY', 'CLOSED TILL', 'OPEN NOW', 'CLOSED NOW',
+        'OPENS AT', 'CLOSES AT', 'VIEW MENU', 'ORDER ONLINE', 'PICKUP',
+        'CURBSIDE', 'IN-STORE', 'DISPENSARY INFO'
+      ];
       const cleanedLines = lines.filter((line: string) => 
         !noiseWords.some(noise => line.toUpperCase().includes(noise))
       );
