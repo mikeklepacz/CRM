@@ -6656,27 +6656,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search Google Places API for a specific store location
   app.post('/api/stores/search-google', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const { name, address, city, state } = req.body;
+      const { name, address, city, state, category } = req.body;
 
       if (!name) {
         return res.status(400).json({ message: 'Store name is required' });
       }
 
       // Build search query - prioritize using the full address for better results
+      // Append category at the end to help Google identify the business type
       let query = name;
       let location = '';
       
       if (address && city && state) {
-        // Best case: full address helps Google pinpoint the exact business
+        // Best case: full address + category helps Google pinpoint the exact business
         location = `${address}, ${city}, ${state}`;
+        if (category) {
+          location = `${location} ${category}`;
+        }
       } else if (address && city) {
         location = `${address}, ${city}`;
+        if (category) {
+          location = `${location} ${category}`;
+        }
       } else if (city && state) {
         location = `${city}, ${state}`;
+        if (category) {
+          location = `${location} ${category}`;
+        }
       } else if (city) {
         location = city;
+        if (category) {
+          location = `${location} ${category}`;
+        }
       } else if (state) {
         location = state;
+        if (category) {
+          location = `${location} ${category}`;
+        }
       }
 
       // Search Google Places API
