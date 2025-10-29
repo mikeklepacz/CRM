@@ -3971,8 +3971,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         rowData[columnMap['total']] = orderTotal.toFixed(2);
         rowData[columnMap['amount']] = amount.toFixed(2);
 
-        // Append row to tracker sheet
-        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:ZZ`, [rowData]);
+        // Append row to tracker sheet (range matches array length to avoid touching non-existent columns)
+        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}`, [rowData]);
         written++;
         console.log(`Written order ${order.orderNumber} to tracker: ${salesAgentName} - $${amount.toFixed(2)}`);
       }
@@ -4674,7 +4674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   const newTrackerRow = new Array(trackerHeaders.length).fill('');
                   if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = linkValue;
                   if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = user.agentName;
-                  await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+                  await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}`, [newTrackerRow]);
                 }
               }
             }
@@ -4802,8 +4802,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // Append new row
-        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:ZZ`, [newRow]);
+        // Append new row (range matches array length to avoid touching non-existent columns)
+        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}`, [newRow]);
 
         // Invalidate cache after successful creation
         clearUserCache(userId);
@@ -4896,7 +4896,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const trackerStatusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
         if (trackerStatusIndex !== -1) newTrackerRow[trackerStatusIndex] = 'Claimed';
         
-        await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+        await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}`, [newTrackerRow]);
         
         // Write Column O (time) timestamp for new claim
         const newRowNumber = trackerRows.length + 1;
@@ -6976,7 +6976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[DBA-PARENT] storeRow[0] (should be Name):', storeRow[0]);
       console.log('[DBA-PARENT] storeRow[storeNameIndex]:', storeRow[storeNameIndex]);
 
-      await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}!A:ZZ`, [storeRow]);
+      await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}`, [storeRow]);
 
       // STEP 2: Write to Commission Tracker sheet
       // Columns: A=Link, D=Agent Name, H=Status, R=DBA
@@ -6995,7 +6995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const statusIndex = trackerHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
       if (statusIndex !== -1) trackerRow[statusIndex] = status || 'claimed';
 
-      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [trackerRow]);
+      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}`, [trackerRow]);
 
       clearUserCache(userId);
       res.json({ 
@@ -8335,7 +8335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const newTrackerRow = new Array(trackerHeaders.length).fill('');
                 if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = linkValue;
                 if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = user.agentName;
-                await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}!A:ZZ`, [newTrackerRow]);
+                await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}`, [newTrackerRow]);
               }
             }
           }
