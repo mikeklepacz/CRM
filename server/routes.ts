@@ -1362,8 +1362,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get agent's clients - filtered by user's selected category
-  // Auto-syncs if last sync was > 5 minutes ago
+  // Get agent's clients (sales/commissions data - NOT filtered by category)
+  // Category filtering only applies to CRM view, not sales data
   app.get('/api/clients/my', isAuthenticatedCustom, getCurrentUser, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
@@ -1371,9 +1371,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!currentUser) {
         return res.status(404).json({ message: 'User not found' });
       }
-
-      // Get selected category for filtering
-      const selectedCategory = await storage.getSelectedCategory(userId);
 
       // SECURITY: Determine which agents' data to show (same as analytics)
       let allowedAgentNames: string[] = [];
@@ -1595,28 +1592,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Filter by selected category if one is set
-      const filteredClients = selectedCategory 
-        ? enrichedClients.filter(client => client.category === selectedCategory)
-        : enrichedClients;
-
       console.log(`[MY-CLIENTS] ✅ Processing complete:`);
       console.log(`[MY-CLIENTS]    - Rows processed: ${rowsProcessed}`);
       console.log(`[MY-CLIENTS]    - Rows filtered out: ${rowsFiltered}`);
       console.log(`[MY-CLIENTS]    - Unique stores found: ${clientMap.size}`);
       console.log(`[MY-CLIENTS]    - After enrichment: ${enrichedClients.length}`);
-      console.log(`[MY-CLIENTS]    - After category filter: ${filteredClients.length}`);
-      console.log(`[MY-CLIENTS] Returning ${filteredClients.length} clients for ${currentUser.agentName || currentUser.email}` + 
-                  (selectedCategory ? ` (filtered by category: ${selectedCategory})` : ''));
+      console.log(`[MY-CLIENTS] Returning ${enrichedClients.length} clients for ${currentUser.agentName || currentUser.email}`);
       
       // Debug: Log total sales for first few clients
-      if (filteredClients.length > 0) {
-        filteredClients.slice(0, 3).forEach((c, i) => {
+      if (enrichedClients.length > 0) {
+        enrichedClients.slice(0, 3).forEach((c, i) => {
           console.log(`[MY-CLIENTS] Client ${i + 1}: ${c.data.Name || 'Unknown'} - totalSales=${c.totalSales}, commission=${c.commissionTotal}`);
         });
       }
 
-      res.json(filteredClients);
+      res.json(enrichedClients);
     } catch (error: any) {
       console.error("Error fetching agent clients:", error);
       res.status(500).json({ message: error.message || "Failed to fetch clients" });
