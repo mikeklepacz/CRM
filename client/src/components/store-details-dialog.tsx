@@ -135,6 +135,36 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   const [parentCreationType, setParentCreationType] = useState<'new' | 'existing'>('new');
   const [selectedParentLink, setSelectedParentLink] = useState<string>('');
   const [headOfficeLink, setHeadOfficeLink] = useState<string>('none');
+
+  // Helper function to get value from row (handles nested data and case-insensitivity)
+  const getRowValue = (fieldNames: string[]): string => {
+    if (!row) return "";
+    
+    for (const fieldName of fieldNames) {
+      const normalizedFieldName = fieldName.trim().toLowerCase();
+
+      // Try exact match on top-level row first
+      if (row[fieldName] !== undefined && row[fieldName] !== null) return String(row[fieldName]);
+
+      // Try case-insensitive + trimmed match on top-level row
+      const key = Object.keys(row).find(k => k.trim().toLowerCase() === normalizedFieldName);
+      if (key && row[key] !== undefined && row[key] !== null) return String(row[key]);
+
+      // Try exact match in row.data (for Agent Dashboard which may pass nested data)
+      if (row.data && row.data[fieldName] !== undefined && row.data[fieldName] !== null) {
+        return String(row.data[fieldName]);
+      }
+
+      // Try case-insensitive + trimmed match in row.data
+      if (row.data) {
+        const dataKey = Object.keys(row.data).find(k => k.trim().toLowerCase() === normalizedFieldName);
+        if (dataKey && row.data[dataKey] !== undefined && row.data[dataKey] !== null) {
+          return String(row.data[dataKey]);
+        }
+      }
+    }
+    return "";
+  };
   const [parentPocName, setParentPocName] = useState('');
   const [parentPocEmail, setParentPocEmail] = useState('');
   const [parentPocPhone, setParentPocPhone] = useState('');
@@ -2119,7 +2149,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         open={parseLocationsDialog}
         onOpenChange={setParseLocationsDialog}
         storeSheetId={storeSheetId}
-        category={row?.category || row?.Category || ''}
+        category={getRowValue(['Category', 'category'])}
         onStoresSelected={(stores) => {
           // Add parsed stores to selectedStores
           setSelectedStores(prev => {
