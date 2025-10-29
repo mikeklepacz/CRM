@@ -11382,7 +11382,7 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Read headers to find column positions
       const headerRange = `${storeSheet.sheetName}!1:1`;
-      const headerResponse = await googleSheets.getSheetData(storeSheet.spreadsheetId, headerRange);
+      const headerResponse = await googleSheets.readSheetData(storeSheet.spreadsheetId, headerRange);
       const headers = headerResponse.values?.[0] || [];
       
       // Find column indexes dynamically
