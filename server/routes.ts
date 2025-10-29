@@ -6700,7 +6700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               verified.push({
                 original: entry,
                 google: {
-                  name: placeDetails.name,
+                  name: topResult.name || placeDetails.name,
                   address: parsedAddress.address,
                   city: parsedAddress.city,
                   state: parsedAddress.state,
