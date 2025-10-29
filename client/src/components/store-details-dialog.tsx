@@ -1651,8 +1651,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                         </AccordionContent>
                       </AccordionItem>
 
-                      {/* DBA Management - only show if this location has children or is a child */}
-                      {(childLocations && childLocations.children && childLocations.children.length > 0) || formData.parent_link ? (
+                      {/* DBA Management - show if location has DBA value, has children, or is a child */}
+                      {formData.dba || (childLocations && childLocations.children && childLocations.children.length > 0) || formData.parent_link ? (
                         <AccordionItem value="dba-management" data-testid="accordion-item-dba-management">
                           <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-dba-management">
                             DBA Management
