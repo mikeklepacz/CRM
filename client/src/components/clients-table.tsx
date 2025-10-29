@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Phone, Calendar, DollarSign, Loader2, MoreVertical, UserCheck } from "lucide-react";
+import { Calendar, Loader2, MoreVertical } from "lucide-react";
 import { formatDistanceToNow, differenceInMonths } from "date-fns";
 import type { Client, User } from "@shared/schema";
 import {
@@ -33,13 +32,6 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch Gmail connection status
-  const { data: integrationStatus } = useQuery<{
-    googleCalendarConnected: boolean;
-    googleSheetsConnected: boolean;
-  }>({
-    queryKey: ["/api/integrations/status"],
-  });
 
   const claimMutation = useMutation({
     mutationFn: async (clientId: string) => {
@@ -105,97 +97,6 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
     },
   });
 
-  const autoClaimMutation = useMutation({
-    mutationFn: async (link: string) => {
-      return await apiRequest("POST", `/api/stores/auto-claim`, { link });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients/my"] });
-    },
-    onError: (error: Error) => {
-      // Silent fail for auto-claim - don't show errors to user
-      console.error('Auto-claim failed:', error.message);
-    },
-  });
-
-  const createGmailDraftMutation = useMutation({
-    mutationFn: async ({ to, subject }: { to: string; subject: string }) => {
-      return await apiRequest("POST", "/api/gmail/create-draft", {
-        to,
-        subject,
-        body: "",
-      });
-    },
-    onSuccess: (data: any) => {
-      if (data?.draftUrl) {
-        window.open(data.draftUrl, '_blank');
-      }
-      toast({
-        title: "Draft Created",
-        description: "Gmail draft has been created and opened in a new tab",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to Create Draft",
-        description: error.message || "Could not create Gmail draft. Using default email client instead.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const logCallMutation = useMutation({
-    mutationFn: async ({ storeName, phoneNumber, storeLink }: { storeName: string; phoneNumber: string; storeLink: string | null }) => {
-      return await apiRequest("POST", "/api/call-history", {
-        storeName,
-        phoneNumber,
-        storeLink,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
-    },
-    onError: (error: Error) => {
-      console.error('Failed to log call:', error);
-    },
-  });
-
-  const handlePhoneClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string, storeName: string, phoneNumber: string) => {
-    // Don't prevent default - let the phone link open
-    // Just trigger auto-claim silently in the background
-    if (link && currentUser.role !== 'admin') {
-      autoClaimMutation.mutate(link);
-    }
-
-    // Log the call to database
-    logCallMutation.mutate({
-      storeName,
-      phoneNumber,
-      storeLink: link || null,
-    });
-  };
-
-  const handleEmailClick = (e: React.MouseEvent<HTMLAnchorElement>, link: string, email: string, companyName: string) => {
-    // Trigger auto-claim
-    if (link && currentUser.role !== 'admin') {
-      autoClaimMutation.mutate(link);
-    }
-
-    // Check if user prefers Gmail drafts and Gmail is connected
-    const emailPreference = (currentUser as any).emailPreference || 'mailto';
-    const gmailConnected = integrationStatus?.googleCalendarConnected || false;
-
-    if (emailPreference === 'gmail_draft' && gmailConnected) {
-      // Prevent default mailto and create Gmail draft instead
-      e.preventDefault();
-      createGmailDraftMutation.mutate({
-        to: email,
-        subject: `Re: ${companyName}`,
-      });
-    }
-    // Otherwise, let the default mailto: link work
-  };
 
   const getCommissionRate = (client: Client) => {
     if (!client.claimDate) return 0;
@@ -207,21 +108,6 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
     return client.data?.['Name'] || client.data?.['name'] || client.data?.['Company'] || client.data?.['company'] || client.data?.['Business Name'] || 'Unknown';
   };
 
-  const getContact = (client: Client) => {
-    return client.data?.['Contact'] || client.data?.['contact'] || client.data?.['Point of Contact'] || client.data?.['POC'] || '';
-  };
-
-  const getEmail = (client: Client) => {
-    return client.data?.['Email'] || client.data?.['email'] || client.data?.['Contact Email'] || '';
-  };
-
-  const getPhone = (client: Client) => {
-    return client.data?.['Phone'] || client.data?.['phone'] || client.data?.['Contact Phone'] || '';
-  };
-
-  const getLink = (client: Client) => {
-    return client.data?.['Link'] || client.data?.['link'] || '';
-  };
 
   if (isLoading) {
     return (
@@ -246,7 +132,6 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
           <TableHeader className="sticky top-0 z-10 bg-background border-b">
             <TableRow>
               <TableHead className="bg-background">Company</TableHead>
-              <TableHead className="bg-background">Contact</TableHead>
               <TableHead className="bg-background">Status</TableHead>
               <TableHead className="bg-background">Transaction ID</TableHead>
               <TableHead className="bg-background">Last Order</TableHead>
@@ -256,11 +141,7 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
           </TableHeader>
             <TableBody>
               {clients.map((client) => {
-                const email = getEmail(client);
-                const phone = getPhone(client);
-                const link = getLink(client);
                 const companyName = getCompanyName(client);
-                const contact = getContact(client);
                 const canClaim = !client.assignedAgent && currentUser.role === 'agent';
                 const canUnclaim = currentUser.role === 'admin';
                 const commissionRate = getCommissionRate(client);
@@ -274,35 +155,6 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                   <TableRow key={client.id} className="hover-elevate">
                     <TableCell className="font-medium align-middle">
                       <div data-testid={`text-company-${client.id}`}>{companyName}</div>
-                    </TableCell>
-                    <TableCell className="align-middle">
-                      <div className="space-y-1 text-sm">
-                        {contact && (
-                          <div className="font-medium text-foreground">{contact}</div>
-                        )}
-                        {email && (
-                          <a
-                            href={`mailto:${email}`}
-                            className="flex items-center gap-1 text-primary hover:underline"
-                            data-testid={`link-email-${client.id}`}
-                            onClick={(e) => handleEmailClick(e, link, email, companyName)}
-                          >
-                            <Mail className="h-3 w-3" />
-                            {email}
-                          </a>
-                        )}
-                        {phone && (
-                          <a
-                            href={`tel:${phone}`}
-                            className="flex items-center gap-1 text-primary hover:underline"
-                            data-testid={`link-phone-${client.id}`}
-                            onClick={(e) => handlePhoneClick(e, link, companyName, phone)}
-                          >
-                            <Phone className="h-3 w-3" />
-                            {phone}
-                          </a>
-                        )}
-                      </div>
                     </TableCell>
                     <TableCell className="align-middle">
                       <Badge variant="outline">
