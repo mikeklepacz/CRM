@@ -1042,7 +1042,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                     )}
                                   </div>
 
-                                  {/* Parent creation type */}
+                                  {/* Parent creation type - only show when creating new DBA, not when editing existing */}
+                                  {!formData.dba && (
                                   <div className="space-y-3 p-3 bg-muted/30 rounded-md" style={{ opacity: !dbaName.trim() ? 0.5 : 1, pointerEvents: !dbaName.trim() ? 'none' : 'auto' }}>
                                     <Label>Parent Record</Label>
                                     <div className="space-y-2">
@@ -1191,6 +1192,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       </div>
                                     )}
                                   </div>
+                                  )}
 
                                   {/* Head Office selection */}
                                   {selectedStores.length > 0 && (
@@ -1764,21 +1766,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       </div>
                                     ))}
                                   </div>
-
-                                  {/* Add more child locations */}
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      setMultiLocationMode(true);
-                                      setDbaName(formData.dba || '');
-                                    }}
-                                    data-testid="button-add-more-children"
-                                  >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add More Locations to DBA
-                                  </Button>
                                 </div>
                               )}
                             </div>
