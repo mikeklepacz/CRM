@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, FileText } from "lucide-react";
+import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, FileText, Check, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -22,6 +22,9 @@ import { QuickReminder } from "@/components/quick-reminder";
 import { normalizeLink } from "@shared/linkUtils";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 import { ParseLocationsDialog } from "@/components/parse-locations-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 // Helper function: Case-insensitive lookup for link value
 const getLinkValue = (row: any): string | undefined => {
@@ -1113,27 +1116,62 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                                 data-testid="input-corporate-city"
                                                 required
                                               />
-                                              <Select
-                                                value={corporateState}
-                                                onValueChange={setCorporateState}
-                                                required
-                                              >
-                                                <SelectTrigger data-testid="select-corporate-state">
-                                                  <SelectValue placeholder="State *" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                  {US_STATES.map((state) => (
-                                                    <SelectItem key={state} value={state}>
-                                                      {state}
-                                                    </SelectItem>
-                                                  ))}
-                                                  {CANADIAN_PROVINCES.map((province) => (
-                                                    <SelectItem key={province} value={province}>
-                                                      {province}
-                                                    </SelectItem>
-                                                  ))}
-                                                </SelectContent>
-                                              </Select>
+                                              <Popover>
+                                                <PopoverTrigger asChild>
+                                                  <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    className={cn(
+                                                      "w-full justify-between font-normal",
+                                                      !corporateState && "text-muted-foreground"
+                                                    )}
+                                                    data-testid="select-corporate-state"
+                                                  >
+                                                    {corporateState || "State *"}
+                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                  </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[200px] p-0" align="start">
+                                                  <Command>
+                                                    <CommandInput placeholder="Search states..." />
+                                                    <CommandList>
+                                                      <CommandEmpty>No state found.</CommandEmpty>
+                                                      <CommandGroup>
+                                                        {US_STATES.map((state) => (
+                                                          <CommandItem
+                                                            key={state}
+                                                            value={state}
+                                                            onSelect={() => setCorporateState(state)}
+                                                          >
+                                                            <Check
+                                                              className={cn(
+                                                                "mr-2 h-4 w-4",
+                                                                corporateState === state ? "opacity-100" : "opacity-0"
+                                                              )}
+                                                            />
+                                                            {state}
+                                                          </CommandItem>
+                                                        ))}
+                                                        {CANADIAN_PROVINCES.map((province) => (
+                                                          <CommandItem
+                                                            key={province}
+                                                            value={province}
+                                                            onSelect={() => setCorporateState(province)}
+                                                          >
+                                                            <Check
+                                                              className={cn(
+                                                                "mr-2 h-4 w-4",
+                                                                corporateState === province ? "opacity-100" : "opacity-0"
+                                                              )}
+                                                            />
+                                                            {province}
+                                                          </CommandItem>
+                                                        ))}
+                                                      </CommandGroup>
+                                                    </CommandList>
+                                                  </Command>
+                                                </PopoverContent>
+                                              </Popover>
                                             </div>
                                             <Input
                                               placeholder="Phone"
@@ -1876,13 +1914,63 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                               </div>
                               <div className="space-y-2">
                                 <Label htmlFor="state">State</Label>
-                                <Input
-                                  id="state"
-                                  data-testid="input-state"
-                                  value={formData.state}
-                                  onChange={(e) => handleInputChange('state', e.target.value)}
-                                  placeholder="State"
-                                />
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      id="state"
+                                      variant="outline"
+                                      role="combobox"
+                                      className={cn(
+                                        "w-full justify-between font-normal",
+                                        !formData.state && "text-muted-foreground"
+                                      )}
+                                      data-testid="input-state"
+                                    >
+                                      {formData.state || "State"}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[300px] p-0" align="start">
+                                    <Command>
+                                      <CommandInput placeholder="Search states..." />
+                                      <CommandList>
+                                        <CommandEmpty>No state found.</CommandEmpty>
+                                        <CommandGroup>
+                                          {US_STATES.map((state) => (
+                                            <CommandItem
+                                              key={state}
+                                              value={state}
+                                              onSelect={() => handleInputChange('state', state)}
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  "mr-2 h-4 w-4",
+                                                  formData.state === state ? "opacity-100" : "opacity-0"
+                                                )}
+                                              />
+                                              {state}
+                                            </CommandItem>
+                                          ))}
+                                          {CANADIAN_PROVINCES.map((province) => (
+                                            <CommandItem
+                                              key={province}
+                                              value={province}
+                                              onSelect={() => handleInputChange('state', province)}
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  "mr-2 h-4 w-4",
+                                                  formData.state === province ? "opacity-100" : "opacity-0"
+                                                )}
+                                              />
+                                              {province}
+                                            </CommandItem>
+                                          ))}
+                                        </CommandGroup>
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
                               </div>
                             </div>
 
