@@ -1411,12 +1411,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const statusIndex = headers.findIndex((h: string) => h.toLowerCase() === 'status');
       const transactionIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'transaction id');
       const orderIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'order number' || h.toLowerCase() === 'order id');
+      const parentLinkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'parent link');
 
       console.log('[MY-CLIENTS] 👤 User:', currentUser.email, 'Role:', currentUser.role);
       console.log('[MY-CLIENTS] 🏷️  User agentName field:', currentUser.agentName);
       console.log('[MY-CLIENTS] 🔐 allowedAgentNames:', allowedAgentNames);
       console.log('[MY-CLIENTS] 📊 Processing', trackerRows.length - 1, 'tracker rows');
-      console.log('[MY-CLIENTS] 📋 Column indices:', { linkIndex, agentNameIndex, amountIndex, totalIndex, dateIndex, statusIndex });
+      console.log('[MY-CLIENTS] 📋 Column indices:', { linkIndex, agentNameIndex, amountIndex, totalIndex, dateIndex, statusIndex, parentLinkIndex });
 
       // Group commissions by client Link
       const clientMap: Map<string, {
@@ -1443,9 +1444,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const status = row[statusIndex]?.toString().trim() || '';
         const transactionId = row[transactionIdIndex]?.toString().trim() || '';
         const orderId = row[orderIdIndex]?.toString().trim() || '';
+        const parentLink = parentLinkIndex >= 0 ? row[parentLinkIndex]?.toString().trim() : '';
 
         if (!link) {
           console.log(`[MY-CLIENTS] Row ${i + 1}: Skipping - no link`);
+          continue;
+        }
+
+        // Skip child locations (locations with a Parent Link)
+        if (parentLink) {
+          console.log(`[MY-CLIENTS] Row ${i + 1}: Skipping child location - has parent link ${parentLink}`);
           continue;
         }
 
@@ -1563,9 +1571,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             if (storeLink) {
               const normalized = normalizeLink(storeLink);
-              // Prefer DBA over Name (same as Top Clients)
+              // Prefer DBA over Name, fallback to 'Unknown' (never show UUID)
               storeMap.set(normalized, {
-                name: dba || name || storeLink,
+                name: dba || name || 'Unknown',
                 category: storeCategory,
                 contact: pocName,
               });
