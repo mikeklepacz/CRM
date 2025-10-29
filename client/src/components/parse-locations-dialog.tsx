@@ -54,9 +54,7 @@ export function ParseLocationsDialog({
   const [searchingIndex, setSearchingIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [verifiedStores, setVerifiedStores] = useState<any[]>([]);
-  const [verificationNotFound, setVerificationNotFound] = useState<ParsedStore[]>([]);
-  const { toast} = useToast();
+  const { toast } = useToast();
 
   const parseAndMatchMutation = useMutation({
     mutationFn: async () => {
@@ -147,72 +145,6 @@ export function ParseLocationsDialog({
       toast({
         title: "Store Linked",
         description: "Successfully linked store manually",
-      });
-    },
-  });
-
-  const googleVerifyMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest('POST', '/api/stores/google-verify', {
-        unmatchedEntries: unmatchedStores,
-      });
-    },
-    onSuccess: (data) => {
-      setVerifiedStores(data.verified || []);
-      setVerificationNotFound(data.notFound || []);
-      
-      // Clear unmatched stores since they're now categorized into verified/not-found
-      setUnmatchedStores([]);
-      
-      toast({
-        title: "Google Verification Complete",
-        description: `Verified ${data.summary.verified} out of ${data.summary.total} entries`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Verification Failed",
-        description: error.message || "Failed to verify with Google Maps",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const importVerifiedMutation = useMutation({
-    mutationFn: async () => {
-      if (!storeSheetId) throw new Error("Store sheet ID is required");
-      
-      // Import all verified stores
-      const importPromises = verifiedStores.map(verified =>
-        apiRequest('POST', '/api/stores/import-new', {
-          store: {
-            name: verified.google.name,
-            address: verified.google.address,
-            city: verified.google.city,
-            state: verified.google.state,
-            zip: verified.google.zip,
-            phone: verified.google.phone,
-            website: verified.google.website,
-          },
-          sheetId: storeSheetId,
-        })
-      );
-      
-      return await Promise.all(importPromises);
-    },
-    onSuccess: (results) => {
-      setVerifiedStores([]);
-      
-      toast({
-        title: "Import Complete",
-        description: `Successfully imported ${results.length} verified stores`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Import Failed",
-        description: error.message || "Failed to import verified stores",
-        variant: "destructive",
       });
     },
   });
@@ -407,78 +339,10 @@ export function ParseLocationsDialog({
               </div>
             )}
 
-            {/* Google Verified Stores */}
-            {verifiedStores.length > 0 && (
-              <div className="flex flex-col gap-2 flex-1 overflow-hidden">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-green-600">Google Verified ({verifiedStores.length})</h3>
-                  <Button
-                    size="sm"
-                    onClick={() => importVerifiedMutation.mutate()}
-                    disabled={importVerifiedMutation.isPending}
-                    data-testid="button-import-all-verified"
-                  >
-                    {importVerifiedMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-3 w-3 mr-1" />
-                        Import All Verified
-                      </>
-                    )}
-                  </Button>
-                </div>
-                <ScrollArea className="flex-1 border rounded-md">
-                  <div className="p-4 space-y-3">
-                    {verifiedStores.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 border rounded-md bg-green-50 dark:bg-green-950/20"
-                        data-testid={`verified-store-${idx}`}
-                      >
-                        <div className="font-medium mb-1">{item.google.name}</div>
-                        <div className="text-sm text-muted-foreground space-y-0.5">
-                          <div>{item.google.address}</div>
-                          <div>{item.google.city}, {item.google.state} {item.google.zip}</div>
-                          {item.google.phone && <div>{item.google.phone}</div>}
-                          {item.google.rating && (
-                            <div className="text-xs">
-                              ⭐ {item.google.rating} ({item.google.reviews} reviews)
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
-
             {/* Unmatched Stores */}
             {unmatchedStores.length > 0 && (
               <div className="flex flex-col gap-2 flex-1 overflow-hidden min-h-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-red-600">Unmatched Entries ({unmatchedStores.length})</h3>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => googleVerifyMutation.mutate()}
-                    disabled={googleVerifyMutation.isPending}
-                    data-testid="button-google-verify"
-                  >
-                    {googleVerifyMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      "Select All & Google Verify"
-                    )}
-                  </Button>
-                </div>
+                <h3 className="text-sm font-semibold text-red-600">Unmatched Entries ({unmatchedStores.length})</h3>
                 <ScrollArea className="flex-1 border rounded-md">
                   <div className="p-4 space-y-3">
                     {unmatchedStores.map((item, idx) => (

@@ -480,11 +480,10 @@ export default function MapSearch() {
   });
 
   const saveToSheetMutation = useMutation({
-    mutationFn: async ({ placeId, category, name }: { placeId: string; category: string; name?: string }) => {
+    mutationFn: async ({ placeId, category }: { placeId: string; category: string }) => {
       return await apiRequest("POST", "/api/maps/save-to-sheet", {
         placeId,
         category,
-        name,
       });
     },
     onSuccess: (data) => {
@@ -522,16 +521,11 @@ export default function MapSearch() {
     for (let i = 0; i < selectedArray.length; i += BATCH_SIZE) {
       const batch = selectedArray.slice(i, i + BATCH_SIZE);
       
-      // Process current batch in parallel, including business name from search results
+      // Process current batch in parallel
       const results = await Promise.allSettled(
-        batch.map(placeId => {
-          const place = searchResults.find(p => p.place_id === placeId);
-          return apiRequest("POST", "/api/maps/save-to-sheet", { 
-            placeId, 
-            category,
-            name: place?.name 
-          });
-        })
+        batch.map(placeId =>
+          apiRequest("POST", "/api/maps/save-to-sheet", { placeId, category })
+        )
       );
 
       // Count successes and failures
@@ -625,8 +619,7 @@ export default function MapSearch() {
       });
       return;
     }
-    const place = searchResults.find(p => p.place_id === placeId);
-    saveToSheetMutation.mutate({ placeId, category, name: place?.name });
+    saveToSheetMutation.mutate({ placeId, category });
   };
 
   // Toggle place selection

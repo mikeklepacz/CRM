@@ -6653,93 +6653,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Verify unmatched entries with Google Maps API
-  app.post('/api/stores/google-verify', isAuthenticatedCustom, async (req: any, res) => {
-    try {
-      const { unmatchedEntries } = req.body;
-
-      if (!unmatchedEntries || !Array.isArray(unmatchedEntries) || unmatchedEntries.length === 0) {
-        return res.status(400).json({ message: 'Unmatched entries array is required' });
-      }
-
-      const verified: any[] = [];
-      const notFound: any[] = [];
-
-      // Process each unmatched entry
-      for (const entry of unmatchedEntries) {
-        try {
-          // Build search query from available data
-          const searchParts: string[] = [];
-          
-          if (entry.name) searchParts.push(entry.name);
-          if (entry.address) searchParts.push(entry.address);
-          if (entry.city) searchParts.push(entry.city);
-          if (entry.state) searchParts.push(entry.state);
-
-          const searchQuery = searchParts.join(' ');
-
-          if (!searchQuery.trim()) {
-            notFound.push(entry);
-            continue;
-          }
-
-          // Query Google Maps API
-          const searchResults = await googleMaps.searchPlaces(searchQuery);
-
-          if (searchResults.results && searchResults.results.length > 0) {
-            // Take the first (best) result
-            const topResult = searchResults.results[0];
-
-            // Get detailed information for this place
-            const placeDetails = await googleMaps.getPlaceDetails(topResult.place_id);
-
-            if (placeDetails) {
-              // Parse the address components
-              const parsedAddress = googleMaps.parseFullAddress(placeDetails.formatted_address);
-
-              verified.push({
-                original: entry,
-                google: {
-                  name: topResult.name || placeDetails.name,
-                  address: parsedAddress.address,
-                  city: parsedAddress.city,
-                  state: parsedAddress.state,
-                  zip: parsedAddress.zip,
-                  phone: placeDetails.formatted_phone_number || placeDetails.international_phone_number || '',
-                  website: placeDetails.website || '',
-                  link: placeDetails.url || '',
-                  rating: topResult.rating,
-                  reviews: topResult.user_ratings_total,
-                  placeId: placeDetails.place_id,
-                }
-              });
-            } else {
-              notFound.push(entry);
-            }
-          } else {
-            notFound.push(entry);
-          }
-        } catch (error: any) {
-          console.error(`Error verifying entry ${entry.name}:`, error);
-          notFound.push(entry);
-        }
-      }
-
-      res.json({
-        verified,
-        notFound,
-        summary: {
-          total: unmatchedEntries.length,
-          verified: verified.length,
-          notFound: notFound.length,
-        }
-      });
-    } catch (error: any) {
-      console.error("Error verifying with Google Maps:", error);
-      res.status(500).json({ message: error.message || "Failed to verify with Google Maps" });
-    }
-  });
-
   // ===== DBA PARENT-CHILD MANAGEMENT ENDPOINTS =====
 
   // Create a parent DBA record (can be corporate office or existing location)
@@ -6758,7 +6671,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         address,
         city,
         state,
-        zip,
         phone,
         email,
         childLinks // Array of child store links to get category from
@@ -6915,7 +6827,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storeAddressIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'address');
       const storeCityIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'city');
       const storeStateIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'state');
-      const storeZipIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'zip code');
       const storePhoneIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'phone');
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
 
@@ -6928,7 +6839,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (storeAddressIndex !== -1) storeRow[storeAddressIndex] = address || '';
       if (storeCityIndex !== -1) storeRow[storeCityIndex] = city || '';
       if (storeStateIndex !== -1) storeRow[storeStateIndex] = state || '';
-      if (storeZipIndex !== -1 && zip) storeRow[storeZipIndex] = zip;
       if (storePhoneIndex !== -1) storeRow[storePhoneIndex] = phone || '';
       if (storeEmailIndex !== -1) storeRow[storeEmailIndex] = email || '';
       if (categoryIndex !== -1) storeRow[categoryIndex] = category;
@@ -11349,7 +11259,7 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/maps/save-to-sheet', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { placeId, category, name: providedName } = req.body;
+      const { placeId, category } = req.body;
 
       if (!placeId || !category) {
         return res.status(400).json({ message: 'Place ID and category are required' });
@@ -11362,11 +11272,8 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'Place not found' });
       }
 
-      // Use provided name from search results if available, otherwise fall back to placeDetails
-      const businessName = providedName || placeDetails.name;
-
-      // Parse address into street, city, state, ZIP components for separate CRM columns
-      const { address: street, city, state, zip } = googleMaps.parseFullAddress(placeDetails.formatted_address);
+      // Parse address into street, city, state components for separate CRM columns
+      const { street, city, state } = googleMaps.parseAddressComponents(placeDetails.formatted_address);
 
       // Find Store Database sheet for this category
       const sheets = await storage.getAllActiveGoogleSheets();
@@ -11383,50 +11290,34 @@ Use this store information to provide context-aware responses. When helping draf
         return weekdayText[0] || '';
       };
 
-      // Read headers to find column positions
-      const headerRange = `${storeSheet.sheetName}!1:1`;
-      const headerResponse = await googleSheets.readSheetData(storeSheet.spreadsheetId, headerRange);
-      const headers = headerResponse.values?.[0] || [];
-      
-      // Find column indexes dynamically
-      const nameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'store name');
-      const typeIndex = headers.findIndex((h: string) => h.toLowerCase() === 'type');
-      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
-      const memberSinceIndex = headers.findIndex((h: string) => h.toLowerCase() === 'member since');
-      const addressIndex = headers.findIndex((h: string) => h.toLowerCase() === 'address');
-      const cityIndex = headers.findIndex((h: string) => h.toLowerCase() === 'city');
-      const stateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'state');
-      const zipIndex = headers.findIndex((h: string) => h.toLowerCase() === 'zip code');
-      const phoneIndex = headers.findIndex((h: string) => h.toLowerCase() === 'phone');
-      const websiteIndex = headers.findIndex((h: string) => h.toLowerCase() === 'website');
-      const emailIndex = headers.findIndex((h: string) => h.toLowerCase() === 'email');
-      const followersIndex = headers.findIndex((h: string) => h.toLowerCase() === 'followers');
-      const tagsIndex = headers.findIndex((h: string) => h.toLowerCase() === 'tags');
-      const hoursIndex = headers.findIndex((h: string) => h.toLowerCase() === 'hours');
-      const dbaIndex = headers.findIndex((h: string) => h.toLowerCase() === 'dba');
-      const vibeScoreIndex = headers.findIndex((h: string) => h.toLowerCase() === 'vibe score');
-      const summaryIndex = headers.findIndex((h: string) => h.toLowerCase() === 'sales-ready summary');
-      const agentIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent');
-      const openIndex = headers.findIndex((h: string) => h.toLowerCase() === 'open');
-      const categoryIndex = headers.findIndex((h: string) => h.toLowerCase() === 'category');
+      // Prepare row data for Google Sheet
+      // Columns: A=Name, B=Type, C=Link, D=Member Since, E=Address, F=City, G=State, 
+      //          H=Phone, I=Website, J=Email, K=Followers, L=Tags, M=Hours, N=DBA, 
+      //          O=Vibe Score, P=Sales-ready Summary, Q=Agent Name, R=OPEN, S=Category
+      const row = [
+        placeDetails.name || '',                                    // A: Name
+        placeDetails.types?.[0] || '',                             // B: Type
+        placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeDetails.place_id}`, // C: Link
+        '',                                                  // D: Member Since (blank)
+        street,                                                // E: Address (street only) (e.g., "23 N Harlem Ave")
+        city,                                                // F: City (e.g., "Oak Park")
+        state,                                               // G: State (e.g., "Illinois")
+        placeDetails.formatted_phone_number || placeDetails.international_phone_number || '', // H: Phone
+        placeDetails.website || '',                                // I: Website
+        '',                                                  // J: Email (blank)
+        '',                                                  // K: Followers (blank)
+        '',                                                  // L: Tags (blank)
+        formatHours(placeDetails.opening_hours?.weekday_text),     // M: Hours (sample)
+        '',                                                  // N: DBA (blank)
+        '',                                                  // O: Vibe Score (blank)
+        '',                                                  // P: Sales-ready Summary (blank)
+        '',                                                  // Q: Agent Name (blank - unclaimed)
+        placeDetails.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE', // R: OPEN (based on business status)
+        category,                                            // S: Category
+      ];
 
-      // Build row with data in correct column positions
-      const row = new Array(headers.length).fill('');
-      if (nameIndex >= 0) row[nameIndex] = businessName || '';
-      if (typeIndex >= 0) row[typeIndex] = placeDetails.types?.[0] || '';
-      if (linkIndex >= 0) row[linkIndex] = placeDetails.url || `https://www.google.com/maps/place/?q=place_id:${placeDetails.place_id}`;
-      if (addressIndex >= 0) row[addressIndex] = street;
-      if (cityIndex >= 0) row[cityIndex] = city;
-      if (stateIndex >= 0) row[stateIndex] = state;
-      if (zipIndex >= 0 && zip) row[zipIndex] = zip;
-      if (phoneIndex >= 0) row[phoneIndex] = placeDetails.formatted_phone_number || placeDetails.international_phone_number || '';
-      if (websiteIndex >= 0) row[websiteIndex] = placeDetails.website || '';
-      if (hoursIndex >= 0) row[hoursIndex] = formatHours(placeDetails.opening_hours?.weekday_text);
-      if (openIndex >= 0) row[openIndex] = placeDetails.business_status === 'OPERATIONAL' ? 'TRUE' : 'FALSE';
-      if (categoryIndex >= 0) row[categoryIndex] = category;
-
-      // Append to Google Sheet
-      const range = `${storeSheet.sheetName}!A:ZZ`;
+      // Append to Google Sheet (A through S = 19 columns)
+      const range = `${storeSheet.sheetName}!A:S`;
       await googleSheets.appendSheetData(storeSheet.spreadsheetId, range, [row]);
 
       // Record this place_id to prevent duplicates in future searches
@@ -11435,7 +11326,7 @@ Use this store information to provide context-aware responses. When helping draf
       res.json({ 
         message: 'Place saved successfully to Store Database',
         place: {
-          name: businessName,
+          name: placeDetails.name,
           address: placeDetails.formatted_address,
           category
         }
