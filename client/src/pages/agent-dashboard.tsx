@@ -192,8 +192,15 @@ export default function AgentDashboard() {
 
     // Status filter
     if (status !== "all") {
-      const clientStatus = client.data?.['Status'] || client.data?.['status'];
-      if (clientStatus !== status) return false;
+      const googleSheetsStatus = client.data?.['Status'] || client.data?.['status'];
+      const databaseStatus = client.status; // 'claimed', 'unassigned', etc.
+      
+      // Check both Google Sheets status and database status
+      // This allows filtering by admin-created statuses AND system statuses like "Claimed"
+      const matchesGoogleSheets = googleSheetsStatus === status;
+      const matchesDatabase = databaseStatus?.toLowerCase() === status.toLowerCase();
+      
+      if (!matchesGoogleSheets && !matchesDatabase) return false;
     }
 
     // Inactivity filter
