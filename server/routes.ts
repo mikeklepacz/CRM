@@ -6278,8 +6278,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Helper to extract city, state from address line
       const parseCityState = (line: string) => {
-        // Pattern: "City, ST ZIP" or "City ST ZIP"
-        const match = line.match(/([A-Za-z\s]+),?\s+([A-Z]{2})\s+\d{5}/);
+        // Pattern: Match city (1-4 words) followed by state and ZIP at END of line
+        // Format: "...City Name, ST ZIP" or "...City Name ST ZIP"
+        // City is the last 1-4 words before the state abbreviation
+        const match = line.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*,?\s+([A-Z]{2})\s+\d{5}(?:-\d{4})?$/);
         if (match) {
           return { city: match[1].trim().toLowerCase(), state: match[2].toLowerCase() };
         }
