@@ -1025,7 +1025,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                               {multiLocationMode && (
                                 <div className="space-y-4 pl-6 border-l-2 border-primary/20">
                                   <div className="space-y-2">
-                                    <Label htmlFor="dba_name">DBA / Company Name</Label>
+                                    <Label htmlFor="dba_name">
+                                      DBA / Company Name <span className="text-red-600">*</span>
+                                    </Label>
                                     <Input
                                       id="dba_name"
                                       data-testid="input-dba-name"
@@ -1033,10 +1035,15 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       onChange={(e) => setDbaName(e.target.value)}
                                       placeholder="e.g., House of Dank, Green Thumb Industries"
                                     />
+                                    {selectedStores.length > 0 && (
+                                      <p className="text-xs text-red-600 font-medium">
+                                        ⚠ If you modify this field after adding locations, they will be deleted!
+                                      </p>
+                                    )}
                                   </div>
 
                                   {/* Parent creation type */}
-                                  <div className="space-y-3 p-3 bg-muted/30 rounded-md">
+                                  <div className="space-y-3 p-3 bg-muted/30 rounded-md" style={{ opacity: !dbaName.trim() ? 0.5 : 1, pointerEvents: !dbaName.trim() ? 'none' : 'auto' }}>
                                     <Label>Parent Record</Label>
                                     <div className="space-y-2">
                                       <div className="flex items-center space-x-2">
@@ -1187,7 +1194,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
                                   {/* Head Office selection */}
                                   {selectedStores.length > 0 && (
-                                    <div className="space-y-2 p-3 bg-muted/30 rounded-md">
+                                    <div className="space-y-2 p-3 bg-muted/30 rounded-md" style={{ opacity: !dbaName.trim() ? 0.5 : 1, pointerEvents: !dbaName.trim() ? 'none' : 'auto' }}>
                                       <Label htmlFor="select-head-office">Head Office Location (optional)</Label>
                                       <p className="text-xs text-muted-foreground">
                                         Select which location is the corporate headquarters
@@ -1195,6 +1202,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       <Select
                                         value={headOfficeLink}
                                         onValueChange={setHeadOfficeLink}
+                                        disabled={!dbaName.trim()}
                                       >
                                         <SelectTrigger id="select-head-office" data-testid="select-head-office">
                                           <SelectValue placeholder="Choose head office (or skip)" />
@@ -1231,7 +1239,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                   )}
 
                                   {/* New stores being added to DBA */}
-                                  <div className="space-y-2">
+                                  <div className="space-y-2" style={{ opacity: !dbaName.trim() ? 0.5 : 1 }}>
                                     <div className="flex items-center justify-between">
                                       <Label>Selected Locations ({selectedStores.length})</Label>
                                       <div className="flex gap-2">
@@ -1241,6 +1249,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           size="sm"
                                           onClick={() => setParseLocationsDialog(true)}
                                           data-testid="button-parse-locations"
+                                          disabled={!dbaName.trim()}
                                         >
                                           <FileText className="h-4 w-4 mr-2" />
                                           Parse Locations
@@ -1251,6 +1260,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           size="sm"
                                           onClick={() => setStoreSearchDialog(true)}
                                           data-testid="button-add-locations"
+                                          disabled={!dbaName.trim()}
                                         >
                                           <Search className="h-4 w-4 mr-2" />
                                           Add Locations
