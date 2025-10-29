@@ -138,7 +138,7 @@ export function ParseLocationsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl h-[95vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Parse Store Locations</DialogTitle>
           <DialogDescription>
@@ -244,9 +244,9 @@ export function ParseLocationsDialog({
 
             {/* Unmatched Stores */}
             {unmatchedStores.length > 0 && (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 flex-1 overflow-hidden min-h-0">
                 <h3 className="text-sm font-semibold text-red-600">Unmatched Entries ({unmatchedStores.length})</h3>
-                <ScrollArea className="max-h-32 border rounded-md">
+                <ScrollArea className="flex-1 border rounded-md">
                   <div className="p-4 space-y-2">
                     {unmatchedStores.map((item, idx) => (
                       <div
