@@ -12008,9 +12008,12 @@ Use this store information to provide context-aware responses. When helping draf
   app.post('/api/drive/folders', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      console.log('🔍 [DRIVE FOLDER ADD] Request body:', JSON.stringify(req.body, null, 2));
       const { name, folderUrl } = req.body;
+      console.log('🔍 [DRIVE FOLDER ADD] Extracted values - name:', name, 'folderUrl:', folderUrl);
 
       if (!name || !folderUrl) {
+        console.log('❌ [DRIVE FOLDER ADD] Validation failed - missing name or URL');
         return res.status(400).json({ message: 'Folder name and URL are required' });
       }
 
