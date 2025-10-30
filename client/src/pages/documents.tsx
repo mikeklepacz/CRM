@@ -2,14 +2,32 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Upload, FileIcon, Download, Trash2, FolderOpen, AlertCircle } from "lucide-react";
+import { Loader2, FileIcon, Download, FolderOpen, Trash2, ExternalLink, Settings } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface DriveFile {
   id: string;
@@ -24,118 +42,86 @@ interface DriveFile {
 
 interface DriveFolder {
   id: string;
-  category: string;
+  name: string;
   folderId: string;
-  folderName: string;
+  createdBy: string;
 }
 
 export default function Documents() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderUrl, setNewFolderUrl] = useState("");
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
 
-  const { data: folders } = useQuery<DriveFolder[]>({
+  const { data: folders, isLoading: foldersLoading } = useQuery<DriveFolder[]>({
     queryKey: ['/api/drive/folders'],
   });
 
   const { data: files, isLoading: filesLoading } = useQuery<DriveFile[]>({
-    queryKey: ['/api/drive/files', selectedCategory],
-    enabled: !!selectedCategory,
+    queryKey: ['/api/drive/files', selectedFolder],
+    enabled: !!selectedFolder,
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const response = await fetch('/api/drive/upload', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
+  const addFolderMutation = useMutation({
+    mutationFn: async (data: { name: string; folderUrl: string }) => {
+      return await apiRequest('POST', '/api/drive/folders', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/drive/folders'] });
+      toast({
+        title: "Success",
+        description: "Folder added successfully",
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Upload failed');
+      setNewFolderName("");
+      setNewFolderUrl("");
+      setIsAddDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add folder",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteFolderMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest('DELETE', `/api/drive/folders/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/drive/folders'] });
+      toast({
+        title: "Success",
+        description: "Folder removed successfully",
+      });
+      setFolderToDelete(null);
+      if (selectedFolder === folderToDelete) {
+        setSelectedFolder(null);
       }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/drive/files', selectedCategory] });
-      toast({
-        title: "Success",
-        description: "File uploaded successfully",
-      });
-      setUploadFile(null);
-      const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
     },
     onError: (error: any) => {
       toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload file",
+        title: "Error",
+        description: error.message || "Failed to remove folder",
         variant: "destructive",
       });
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (fileId: string) => {
-      return await apiRequest('DELETE', `/api/drive/files/${fileId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/drive/files', selectedCategory] });
-      toast({
-        title: "Success",
-        description: "File deleted successfully",
-      });
-    },
-    onError: (error: any) => {
+  const handleAddFolder = () => {
+    if (!newFolderName.trim() || !newFolderUrl.trim()) {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete file",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleUpload = () => {
-    if (!uploadFile || !selectedCategory) {
-      toast({
-        title: "Error",
-        description: "Please select a file and category",
+        description: "Please provide both folder name and URL",
         variant: "destructive",
       });
       return;
     }
-
-    const formData = new FormData();
-    formData.append('file', uploadFile);
-    formData.append('category', selectedCategory);
-    uploadMutation.mutate(formData);
-  };
-
-  const handleDownload = async (fileId: string, fileName: string) => {
-    try {
-      const response = await fetch(`/api/drive/download/${fileId}`, {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) throw new Error('Download failed');
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      toast({
-        title: "Download Failed",
-        description: "Failed to download file",
-        variant: "destructive",
-      });
-    }
+    addFolderMutation.mutate({ name: newFolderName.trim(), folderUrl: newFolderUrl.trim() });
   };
 
   const formatFileSize = (bytes: string) => {
@@ -147,121 +133,176 @@ export default function Documents() {
     return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   };
 
-  const getFileIcon = (mimeType: string) => {
-    if (mimeType.startsWith('image/')) return '🖼️';
-    if (mimeType.startsWith('video/')) return '🎥';
-    if (mimeType.includes('pdf')) return '📄';
-    if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
-    if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊';
-    if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return '📽️';
-    if (mimeType.includes('zip') || mimeType.includes('compressed')) return '🗜️';
-    return '📎';
-  };
+  const selectedFolderData = folders?.find(f => f.name === selectedFolder);
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">Documents</h2>
-        <p className="text-muted-foreground">Access and manage your files by category</p>
-      </div>
-
-      <Card>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Select Category</label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger data-testid="select-category">
-                  <SelectValue placeholder="Choose a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {folders?.map((folder) => (
-                    <SelectItem key={folder.id} value={folder.category}>
-                      <div className="flex items-center gap-2">
-                        <FolderOpen className="h-4 w-4" />
-                        {folder.category}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedCategory && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Upload File</label>
-                <div className="flex gap-2">
+    <div className="container mx-auto px-4 py-6 h-[calc(100vh-100px)]">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-semibold text-foreground">Documents</h2>
+          <p className="text-muted-foreground">Browse files from your Google Drive folders</p>
+        </div>
+        {user?.role === 'admin' && (
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-folder">
+                <Settings className="h-4 w-4 mr-2" />
+                Manage Folders
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Drive Folder</DialogTitle>
+                <DialogDescription>
+                  Paste the full Google Drive folder URL and give it a name
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="folder-name">Folder Name</Label>
                   <Input
-                    id="file-upload"
-                    type="file"
-                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                    className="flex-1"
-                    data-testid="input-file-upload"
+                    id="folder-name"
+                    placeholder="e.g., Cannabis, Pets"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    data-testid="input-folder-name"
                   />
-                  <Button
-                    onClick={handleUpload}
-                    disabled={uploadMutation.isPending || !uploadFile}
-                    data-testid="button-upload"
-                  >
-                    {uploadMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                    Upload
-                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="folder-url">Google Drive Folder URL</Label>
+                  <Input
+                    id="folder-url"
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    value={newFolderUrl}
+                    onChange={(e) => setNewFolderUrl(e.target.value)}
+                    data-testid="input-folder-url"
+                  />
                 </div>
               </div>
-            )}
-          </div>
+              <DialogFooter>
+                <Button
+                  onClick={handleAddFolder}
+                  disabled={addFolderMutation.isPending}
+                  data-testid="button-submit-folder"
+                >
+                  {addFolderMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Add Folder
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
 
-          {!selectedCategory ? (
-            <div className="text-center p-12 text-muted-foreground">
-              <FolderOpen className="h-16 w-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">Select a category to view files</p>
-              <p className="text-sm">Choose a category from the dropdown above</p>
-            </div>
-          ) : filesLoading ? (
-            <div className="flex items-center justify-center p-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : !files || files.length === 0 ? (
-            <div className="text-center p-12 text-muted-foreground">
-              <FileIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">No files in this category</p>
-              <p className="text-sm">Upload your first file using the form above</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Files in {selectedCategory}</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {files.map((file) => (
-                  <Card key={file.id} className="hover-elevate group">
-                    <CardContent className="p-3">
-                      <div className="space-y-3">
+      <div className="grid grid-cols-12 gap-6 h-full">
+        <Card className="col-span-3">
+          <CardHeader>
+            <CardTitle className="text-base">Folders</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {foldersLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !folders || folders.length === 0 ? (
+              <div className="p-6 text-center text-muted-foreground">
+                <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No folders configured</p>
+                {user?.role === 'admin' && (
+                  <p className="text-xs mt-1">Click "Manage Folders" to add one</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1 p-2">
+                {folders.map((folder) => (
+                  <div key={folder.id} className="flex items-center gap-2">
+                    <Button
+                      variant={selectedFolder === folder.name ? "secondary" : "ghost"}
+                      className="flex-1 justify-start"
+                      onClick={() => setSelectedFolder(folder.name)}
+                      data-testid={`button-folder-${folder.name}`}
+                    >
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      {folder.name}
+                    </Button>
+                    {user?.role === 'admin' && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setFolderToDelete(folder.id)}
+                        data-testid={`button-delete-folder-${folder.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-9">
+          <CardContent className="p-6">
+            {!selectedFolder ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <FolderOpen className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Select a folder to view files</p>
+                  <p className="text-sm">Choose a folder from the list on the left</p>
+                </div>
+              </div>
+            ) : filesLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : !files || files.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <FileIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">No files in this folder</p>
+                  <p className="text-sm">This folder is currently empty</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium">{selectedFolder}</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`https://drive.google.com/drive/folders/${selectedFolderData?.folderId}`, '_blank')}
+                    data-testid="button-open-drive"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open in Drive
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {files.map((file) => (
+                    <Card key={file.id} className="hover-elevate">
+                      <CardContent className="p-3 space-y-3">
                         <div
                           className="aspect-square rounded-md bg-muted flex items-center justify-center overflow-hidden cursor-pointer"
                           onClick={() => window.open(file.webViewLink, '_blank')}
-                          data-testid={`thumbnail-${file.id}`}
+                          data-testid={`file-thumbnail-${file.id}`}
                         >
-                          {file.mimeType.startsWith('image/') && file.thumbnailLink ? (
-                            <img
-                              src={file.thumbnailLink}
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : file.mimeType.startsWith('video/') && file.thumbnailLink ? (
+                          {file.thumbnailLink ? (
                             <img
                               src={file.thumbnailLink}
                               alt={file.name}
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <span className="text-5xl">{getFileIcon(file.mimeType)}</span>
+                            <FileIcon className="h-12 w-12 text-muted-foreground" />
                           )}
                         </div>
                         <div className="space-y-1">
-                          <p className="font-medium text-sm truncate" title={file.name} data-testid={`file-name-${file.id}`}>
+                          <p
+                            className="font-medium text-sm truncate"
+                            title={file.name}
+                            data-testid={`file-name-${file.id}`}
+                          >
                             {file.name}
                           </p>
                           <div className="text-xs text-muted-foreground space-y-0.5">
@@ -273,64 +314,52 @@ export default function Documents() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 text-xs"
+                            className="flex-1"
                             onClick={() => window.open(file.webViewLink, '_blank')}
                             data-testid={`button-view-${file.id}`}
                           >
+                            <ExternalLink className="h-3 w-3 mr-1" />
                             View
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleDownload(file.id, file.name)}
+                            onClick={() => window.open(file.webViewLink, '_blank')}
+                            title="Download via Drive"
                             data-testid={`button-download-${file.id}`}
                           >
                             <Download className="h-3 w-3" />
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                data-testid={`button-delete-${file.id}`}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete file?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will permanently delete "{file.name}" from Google Drive. This action cannot be undone.
-                                  {user?.role !== 'admin' && (
-                                    <div className="mt-2 flex items-start gap-2 text-orange-600 dark:text-orange-400">
-                                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                                      <span className="text-xs">You can only delete files you uploaded.</span>
-                                    </div>
-                                  )}
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteMutation.mutate(file.id)}
-                                  data-testid={`button-confirm-delete-${file.id}`}
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <AlertDialog open={!!folderToDelete} onOpenChange={() => setFolderToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Folder?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the folder from your document browser. Files in Google Drive will not be affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => folderToDelete && deleteFolderMutation.mutate(folderToDelete)}
+              data-testid="button-confirm-delete-folder"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
