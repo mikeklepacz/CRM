@@ -18,6 +18,65 @@ interface AIChatProps {
   className?: string;
 }
 
+// Helper function to clean and format AI output
+function formatAIContent(content: string): string {
+  // Remove source citations like [6:17*source] or [6:0*source]
+  let cleaned = content.replace(/\s*\[[\d:]+\*source\]\s*/g, '');
+  
+  // Remove any remaining bracketed references at the end
+  cleaned = cleaned.replace(/\s*\[\d+:\d+\]\s*$/g, '');
+  
+  // Clean up any extra whitespace
+  cleaned = cleaned.trim();
+  
+  return cleaned;
+}
+
+// Helper function to render formatted text with basic markdown support
+function renderFormattedText(content: string): JSX.Element[] {
+  const formattedContent = formatAIContent(content);
+  const lines = formattedContent.split('\n');
+  const result: JSX.Element[] = [];
+  
+  lines.forEach((line, lineIndex) => {
+    const parts: (string | JSX.Element)[] = [];
+    let lastIndex = 0;
+    
+    // Find all **text** patterns for bold
+    const boldRegex = /\*\*(.+?)\*\*/g;
+    let match;
+    
+    while ((match = boldRegex.exec(line)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push(line.substring(lastIndex, match.index));
+      }
+      // Add bold text
+      parts.push(<strong key={`bold-${lineIndex}-${match.index}`}>{match[1]}</strong>);
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // Add remaining text
+    if (lastIndex < line.length) {
+      parts.push(line.substring(lastIndex));
+    }
+    
+    // If no parts were added, add the whole line
+    if (parts.length === 0) {
+      parts.push(line);
+    }
+    
+    result.push(
+      <span key={`line-${lineIndex}`}>
+        {parts}
+        {lineIndex < lines.length - 1 && <br />}
+      </span>
+    );
+  });
+  
+  return result;
+}
+
 export function AIChat({ className }: AIChatProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -195,7 +254,13 @@ export function AIChat({ className }: AIChatProps) {
                       : 'bg-muted'
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  {msg.role === 'assistant' ? (
+                    <div className="text-sm leading-relaxed">
+                      {renderFormattedText(msg.content)}
+                    </div>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  )}
                 </div>
                 {msg.role === 'user' && (
                   <div className="flex-shrink-0">
