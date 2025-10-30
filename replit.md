@@ -40,6 +40,13 @@ The application is built around a client dashboard unifying data from "Store Dat
     - Distinct styling for script references in chat.
     - Smart template variables with intelligent fallbacks (e.g., `{{pocEmail}}` falls back to `{{email}}`).
     - Email generation protocol with explicit priority for POC email, general email, or user confirmation.
+- **Document Browser**: Simplified Google Drive integration for browsing and downloading files:
+    - Admin pastes full Google Drive folder URLs to add folders
+    - System automatically extracts folder ID from any Drive URL format
+    - Real-time file listing directly from Drive API (no local caching)
+    - Folder list on left, file browser on right with thumbnails
+    - Direct downloads and viewing via Drive links
+    - Only stores folder name → Drive folder ID mapping in database
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management and preference storage.
