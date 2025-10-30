@@ -1,14 +1,21 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, FileIcon, Download, FolderOpen, Trash2, ExternalLink, Settings, List, LayoutGrid } from "lucide-react";
+import { Loader2, FileIcon, Download, FolderOpen, Trash2, ExternalLink, Settings, List, LayoutGrid, ArrowUpDown } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +55,8 @@ interface DriveFolder {
   createdBy: string;
 }
 
+type SortOption = 'name-asc' | 'name-desc' | 'size-asc' | 'size-desc' | 'date-asc' | 'date-desc';
+
 export default function Documents() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -57,6 +66,7 @@ export default function Documents() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortOption, setSortOption] = useState<SortOption>('name-asc');
 
   const { data: folders, isLoading: foldersLoading } = useQuery<DriveFolder[]>({
     queryKey: ['/api/drive/folders'],
@@ -68,6 +78,29 @@ export default function Documents() {
     queryKey: [`/api/drive/files/${selectedFolder?.folderId}`],
     enabled: !!selectedFolder?.folderId,
   });
+
+  const sortedFiles = useMemo(() => {
+    if (!files) return [];
+    
+    const sorted = [...files];
+    
+    switch (sortOption) {
+      case 'name-asc':
+        return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      case 'name-desc':
+        return sorted.sort((a, b) => b.name.localeCompare(a.name));
+      case 'size-asc':
+        return sorted.sort((a, b) => parseInt(a.size || '0') - parseInt(b.size || '0'));
+      case 'size-desc':
+        return sorted.sort((a, b) => parseInt(b.size || '0') - parseInt(a.size || '0'));
+      case 'date-asc':
+        return sorted.sort((a, b) => new Date(a.modifiedTime).getTime() - new Date(b.modifiedTime).getTime());
+      case 'date-desc':
+        return sorted.sort((a, b) => new Date(b.modifiedTime).getTime() - new Date(a.modifiedTime).getTime());
+      default:
+        return sorted;
+    }
+  }, [files, sortOption]);
 
   const addFolderMutation = useMutation({
     mutationFn: async (data: { name: string; folderUrl: string }) => {
@@ -271,6 +304,20 @@ export default function Documents() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-medium">{selectedFolder?.name}</h3>
                   <div className="flex items-center gap-2">
+                    <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
+                      <SelectTrigger className="w-[180px]" data-testid="select-sort">
+                        <ArrowUpDown className="h-4 w-4 mr-2" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                        <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+                        <SelectItem value="size-asc">Size (Smallest)</SelectItem>
+                        <SelectItem value="size-desc">Size (Largest)</SelectItem>
+                        <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                        <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <div className="flex items-center border rounded-md">
                       <Button
                         variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
@@ -305,7 +352,7 @@ export default function Documents() {
 
                 {viewMode === 'grid' ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {files.map((file) => (
+                    {sortedFiles.map((file) => (
                       <Card key={file.id} className="hover-elevate">
                         <CardContent className="p-3 space-y-3">
                           <div
@@ -372,7 +419,7 @@ export default function Documents() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {files.map((file) => (
+                      {sortedFiles.map((file) => (
                         <TableRow key={file.id} className="hover-elevate">
                           <TableCell>
                             <div className="flex items-center gap-3">
