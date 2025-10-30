@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -65,6 +65,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <Button variant="ghost" size="sm" data-testid="nav-clients">
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Clients
+                </Button>
+              </Link>
+              <Link href="/documents">
+                <Button variant="ghost" size="sm" data-testid="nav-documents">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Documents
                 </Button>
               </Link>
               <Link href="/map-search">

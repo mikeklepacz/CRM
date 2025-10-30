@@ -9,6 +9,7 @@ import { SalesReports } from "@/components/sales-reports";
 import { OpenAIManagement } from "@/components/openai-management";
 import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
 import { WebhookManagement } from "@/components/webhook-management";
+import { DriveFolderConfig } from "@/components/drive-folder-config";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useQuery } from "@tanstack/react-query";
@@ -98,6 +99,7 @@ export default function AdminDashboard() {
           <TabsTrigger value="webhooks" data-testid="tab-webhooks">Webhooks</TabsTrigger>
           <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
+          <TabsTrigger value="assets" data-testid="tab-assets">Assets</TabsTrigger>
           <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
         </TabsList>
 
@@ -123,6 +125,10 @@ export default function AdminDashboard() {
 
         <TabsContent value="sheets">
           <GoogleSheetsSync />
+        </TabsContent>
+
+        <TabsContent value="assets">
+          <DriveFolderConfig />
         </TabsContent>
 
         <TabsContent value="sync">

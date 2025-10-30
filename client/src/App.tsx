@@ -22,6 +22,7 @@ import SalesDashboard from "@/pages/sales-dashboard";
 import SalesAssistant from "@/pages/sales-assistant";
 import MapSearch from "@/pages/map-search";
 import MapSearchSettings from "@/pages/map-search-settings";
+import Documents from "@/pages/documents";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -65,6 +66,7 @@ function Router() {
           <Switch>
             <Route path="/settings" component={Settings} />
             <Route path="/clients" component={ClientDashboard} />
+            <Route path="/documents" component={Documents} />
             <Route path="/map-search" component={MapSearch} />
             <Route path="/map-search-settings" component={MapSearchSettings} />
             <Route path="/sales" component={SalesDashboard} />
