@@ -50,7 +50,7 @@ interface DriveFolder {
 export default function Documents() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderUrl, setNewFolderUrl] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -60,9 +60,11 @@ export default function Documents() {
     queryKey: ['/api/drive/folders'],
   });
 
+  const selectedFolder = folders?.find(f => f.id === selectedFolderId);
+
   const { data: files, isLoading: filesLoading } = useQuery<DriveFile[]>({
-    queryKey: ['/api/drive/files', selectedFolder],
-    enabled: !!selectedFolder,
+    queryKey: [`/api/drive/files/${selectedFolder?.folderId}`],
+    enabled: !!selectedFolder?.folderId,
   });
 
   const addFolderMutation = useMutation({
@@ -92,16 +94,16 @@ export default function Documents() {
     mutationFn: async (id: string) => {
       return await apiRequest('DELETE', `/api/drive/folders/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: (_data, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/drive/folders'] });
       toast({
         title: "Success",
         description: "Folder removed successfully",
       });
-      setFolderToDelete(null);
-      if (selectedFolder === folderToDelete) {
-        setSelectedFolder(null);
+      if (selectedFolderId === deletedId) {
+        setSelectedFolderId(null);
       }
+      setFolderToDelete(null);
     },
     onError: (error: any) => {
       toast({
@@ -132,8 +134,6 @@ export default function Documents() {
     if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
     return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   };
-
-  const selectedFolderData = folders?.find(f => f.name === selectedFolder);
 
   return (
     <div className="container mx-auto px-4 py-6 h-[calc(100vh-100px)]">
@@ -217,9 +217,9 @@ export default function Documents() {
                 {folders.map((folder) => (
                   <div key={folder.id} className="flex items-center gap-2">
                     <Button
-                      variant={selectedFolder === folder.name ? "secondary" : "ghost"}
+                      variant={selectedFolderId === folder.id ? "secondary" : "ghost"}
                       className="flex-1 justify-start"
-                      onClick={() => setSelectedFolder(folder.name)}
+                      onClick={() => setSelectedFolderId(folder.id)}
                       data-testid={`button-folder-${folder.name}`}
                     >
                       <FolderOpen className="h-4 w-4 mr-2" />
@@ -267,11 +267,11 @@ export default function Documents() {
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium">{selectedFolder}</h3>
+                  <h3 className="text-lg font-medium">{selectedFolder?.name}</h3>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open(`https://drive.google.com/drive/folders/${selectedFolderData?.folderId}`, '_blank')}
+                    onClick={() => window.open(`https://drive.google.com/drive/folders/${selectedFolder?.folderId}`, '_blank')}
                     data-testid="button-open-drive"
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />

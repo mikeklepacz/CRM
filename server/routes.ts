@@ -12058,17 +12058,11 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // List files in a folder by name
-  app.get('/api/drive/files/:folderName', isAuthenticatedCustom, async (req, res) => {
+  // List files in a folder by Drive folder ID
+  app.get('/api/drive/files/:driveFolderId', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { folderName } = req.params;
-      const folderConfig = await storage.getDriveFolderByName(folderName);
-      
-      if (!folderConfig) {
-        return res.status(404).json({ message: 'Folder not found' });
-      }
-
-      const files = await googleDrive.listFilesInFolder(folderConfig.folderId);
+      const { driveFolderId } = req.params;
+      const files = await googleDrive.listFilesInFolder(driveFolderId);
       res.json(files);
     } catch (error: any) {
       console.error('Error listing Drive files:', error);
