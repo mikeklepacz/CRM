@@ -5,9 +5,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, FileIcon, Download, FolderOpen, Trash2, ExternalLink, Settings } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Loader2, FileIcon, Download, FolderOpen, Trash2, ExternalLink, Settings, List, LayoutGrid } from "lucide-react";
+import { formatDistanceToNow, format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -55,6 +56,7 @@ export default function Documents() {
   const [newFolderUrl, setNewFolderUrl] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const { data: folders, isLoading: foldersLoading } = useQuery<DriveFolder[]>({
     queryKey: ['/api/drive/folders'],
@@ -268,73 +270,164 @@ export default function Documents() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-medium">{selectedFolder?.name}</h3>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open(`https://drive.google.com/drive/folders/${selectedFolder?.folderId}`, '_blank')}
-                    data-testid="button-open-drive"
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Open in Drive
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center border rounded-md">
+                      <Button
+                        variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewMode('grid')}
+                        className="rounded-r-none"
+                        data-testid="button-view-grid"
+                      >
+                        <LayoutGrid className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewMode('list')}
+                        className="rounded-l-none"
+                        data-testid="button-view-list"
+                      >
+                        <List className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(`https://drive.google.com/drive/folders/${selectedFolder?.folderId}`, '_blank')}
+                      data-testid="button-open-drive"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Open in Drive
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {files.map((file) => (
-                    <Card key={file.id} className="hover-elevate">
-                      <CardContent className="p-3 space-y-3">
-                        <div
-                          className="aspect-square rounded-md bg-muted flex items-center justify-center overflow-hidden cursor-pointer"
-                          onClick={() => window.open(file.webViewLink, '_blank')}
-                          data-testid={`file-thumbnail-${file.id}`}
-                        >
-                          {file.thumbnailLink ? (
-                            <img
-                              src={file.thumbnailLink}
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <FileIcon className="h-12 w-12 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <p
-                            className="font-medium text-sm truncate"
-                            title={file.name}
-                            data-testid={`file-name-${file.id}`}
+
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {files.map((file) => (
+                      <Card key={file.id} className="hover-elevate">
+                        <CardContent className="p-3 space-y-3">
+                          <div
+                            className="aspect-square rounded-md bg-muted flex items-center justify-center overflow-hidden cursor-pointer"
+                            onClick={() => window.open(file.webViewLink, '_blank')}
+                            data-testid={`file-thumbnail-${file.id}`}
                           >
-                            {file.name}
-                          </p>
-                          <div className="text-xs text-muted-foreground space-y-0.5">
-                            <div>{formatFileSize(file.size)}</div>
-                            <div>{formatDistanceToNow(new Date(file.modifiedTime), { addSuffix: true })}</div>
+                            {file.thumbnailLink ? (
+                              <img
+                                src={file.thumbnailLink}
+                                alt={file.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <FileIcon className="h-12 w-12 text-muted-foreground" />
+                            )}
                           </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1"
-                            onClick={() => window.open(file.webViewLink, '_blank')}
-                            data-testid={`button-view-${file.id}`}
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(file.webViewLink, '_blank')}
-                            title="Download via Drive"
-                            data-testid={`button-download-${file.id}`}
-                          >
-                            <Download className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                          <div className="space-y-1">
+                            <p
+                              className="font-medium text-sm truncate"
+                              title={file.name}
+                              data-testid={`file-name-${file.id}`}
+                            >
+                              {file.name}
+                            </p>
+                            <div className="text-xs text-muted-foreground space-y-0.5">
+                              <div>{formatFileSize(file.size)}</div>
+                              <div>{formatDistanceToNow(new Date(file.modifiedTime), { addSuffix: true })}</div>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => window.open(file.webViewLink, '_blank')}
+                              data-testid={`button-view-${file.id}`}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(file.webViewLink, '_blank')}
+                              title="Download via Drive"
+                              data-testid={`button-download-${file.id}`}
+                            >
+                              <Download className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Size</TableHead>
+                        <TableHead>Modified</TableHead>
+                        <TableHead className="w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {files.map((file) => (
+                        <TableRow key={file.id} className="hover-elevate">
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                                {file.thumbnailLink ? (
+                                  <img
+                                    src={file.thumbnailLink}
+                                    alt={file.name}
+                                    className="h-10 w-10 rounded object-cover"
+                                  />
+                                ) : (
+                                  <FileIcon className="h-5 w-5 text-muted-foreground" />
+                                )}
+                              </div>
+                              <span
+                                className="font-medium cursor-pointer hover:underline"
+                                onClick={() => window.open(file.webViewLink, '_blank')}
+                                data-testid={`file-name-${file.id}`}
+                              >
+                                {file.name}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatFileSize(file.size)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {format(new Date(file.modifiedTime), 'MMM d, yyyy')}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => window.open(file.webViewLink, '_blank')}
+                                data-testid={`button-view-${file.id}`}
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => window.open(file.webViewLink, '_blank')}
+                                title="Download via Drive"
+                                data-testid={`button-download-${file.id}`}
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             )}
           </CardContent>
