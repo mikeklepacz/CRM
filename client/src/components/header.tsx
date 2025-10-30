@@ -67,12 +67,6 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   Clients
                 </Button>
               </Link>
-              <Link href="/documents">
-                <Button variant="ghost" size="sm" data-testid="nav-documents">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Documents
-                </Button>
-              </Link>
               <Link href="/map-search">
                 <Button variant="ghost" size="sm" data-testid="nav-map-search">
                   <MapPin className="mr-2 h-4 w-4" />
@@ -89,6 +83,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <Button variant="ghost" size="sm" data-testid="nav-assistant">
                   <Bot className="mr-2 h-4 w-4" />
                   Sales Assistant
+                </Button>
+              </Link>
+              <Link href="/documents">
+                <Button variant="ghost" size="sm" data-testid="nav-documents">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Documents
                 </Button>
               </Link>
             </nav>
