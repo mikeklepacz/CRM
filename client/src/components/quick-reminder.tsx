@@ -71,6 +71,23 @@ export function QuickReminder({
   const customerTimezone = detectTimezoneFromAddress(storeAddress, storeCity, storeState);
   const agentTimezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  // Calculate the converted date if using customer timezone
+  const getConvertedDate = () => {
+    if (!date || !time || !useCustomerTimezone || !customerTimezone) return null;
+    
+    try {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const customerDateTimeStr = `${dateStr}T${time}:00`;
+      const utcDate = fromZonedTime(customerDateTimeStr, customerTimezone);
+      const agentDateStr = formatInTimeZone(utcDate, agentTimezone, 'yyyy-MM-dd');
+      return agentDateStr;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const convertedDateStr = getConvertedDate();
+  
   // Fetch reminders for selected date
   const selectedDateStr = date ? format(date, 'yyyy-MM-dd') : null;
   const { data: dateReminders, isLoading: isLoadingReminders, error: remindersError, refetch: refetchReminders } = useQuery({
@@ -82,6 +99,18 @@ export function QuickReminder({
       return response.json();
     },
     enabled: !!selectedDateStr,
+  });
+
+  // Fetch reminders for converted date when using customer timezone
+  const { data: convertedDateReminders, isLoading: isLoadingConvertedReminders } = useQuery({
+    queryKey: ['/api/reminders/by-date', convertedDateStr],
+    queryFn: async () => {
+      if (!convertedDateStr) return { reminders: [] };
+      const response = await fetch(`/api/reminders/by-date/${convertedDateStr}`);
+      if (!response.ok) throw new Error('Failed to fetch reminders');
+      return response.json();
+    },
+    enabled: !!convertedDateStr && convertedDateStr !== selectedDateStr,
   });
 
   // Update checkbox default when defaultTimezoneMode changes
@@ -173,6 +202,70 @@ export function QuickReminder({
   };
 
   const timePreview = getTimeConversionPreview();
+
+  // Check for time conflicts - need to account for timezone conversion and date changes
+  const getConflictCheckResult = () => {
+    if (!date || !time) return { hasConflict: false, isLoading: false };
+    
+    // Calculate the actual date and time that will be saved (accounting for timezone conversion)
+    let finalTime = time;
+    let agentDateStr = format(date, 'yyyy-MM-dd');
+    
+    if (useCustomerTimezone && customerTimezone) {
+      try {
+        // User picked time in customer's timezone, convert to agent's timezone
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const customerDateTimeStr = `${dateStr}T${time}:00`;
+        
+        // Convert customer's local time to UTC
+        const utcDate = fromZonedTime(customerDateTimeStr, customerTimezone);
+        
+        // Convert UTC to agent's timezone and extract both time and date
+        finalTime = formatInTimeZone(utcDate, agentTimezone, 'HH:mm');
+        agentDateStr = formatInTimeZone(utcDate, agentTimezone, 'yyyy-MM-dd');
+      } catch (error) {
+        console.error('Error converting timezone for conflict check:', error);
+        // If conversion fails, use original time/date as fallback
+      }
+    }
+    
+    // Determine which set of reminders to check
+    let remindersToCheck = dateReminders;
+    
+    // If timezone conversion caused a date change, use the converted date's reminders
+    const selectedDateStr = format(date, 'yyyy-MM-dd');
+    if (agentDateStr !== selectedDateStr) {
+      // If the converted date reminders are still loading, we can't complete the check yet
+      if (isLoadingConvertedReminders) {
+        return { hasConflict: false, isLoading: true };
+      }
+      remindersToCheck = convertedDateReminders;
+    } else {
+      // Same day - check if the base reminders are still loading
+      if (isLoadingReminders) {
+        return { hasConflict: false, isLoading: true };
+      }
+    }
+    
+    if (!remindersToCheck?.reminders) {
+      return { hasConflict: false, isLoading: false };
+    }
+    
+    // Get the final time in minutes for comparison
+    const [hours, minutes] = finalTime.split(':').map(Number);
+    const selectedTimeInMinutes = hours * 60 + minutes;
+    
+    // Check if any existing reminder has the same time
+    const hasConflict = remindersToCheck.reminders.some((reminder: any) => {
+      const [reminderHours, reminderMinutes] = reminder.scheduledTime.split(':').map(Number);
+      const reminderTimeInMinutes = reminderHours * 60 + reminderMinutes;
+      return reminderTimeInMinutes === selectedTimeInMinutes;
+    });
+    
+    return { hasConflict, isLoading: false };
+  };
+
+  const { hasConflict: timeConflict, isLoading: isCheckingConflict } = getConflictCheckResult();
 
   // Determine which contact info to display
   const displayEmail = pocEmail || defaultEmail;
@@ -480,13 +573,24 @@ export function QuickReminder({
         </p>
       )}
 
+      {timeConflict && (
+        <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20" data-testid="conflict-warning">
+          <p className="text-sm text-destructive font-medium">
+            Scheduling conflict
+          </p>
+          <p className="text-xs text-destructive/80 mt-1">
+            You already have a reminder at {formatReminderTime(time)} on this date
+          </p>
+        </div>
+      )}
+
       <Button
         onClick={handleSave}
-        disabled={!note.trim() || !date || isSaving}
+        disabled={!note.trim() || !date || isSaving || timeConflict || isCheckingConflict}
         className="w-full"
         data-testid="button-save-reminder"
       >
-        {isSaving ? "Saving..." : "Save Reminder"}
+        {isSaving ? "Saving..." : isCheckingConflict ? "Checking..." : "Save Reminder"}
       </Button>
     </div>
   );
