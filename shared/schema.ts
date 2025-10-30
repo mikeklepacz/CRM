@@ -837,34 +837,15 @@ export const ticketReplies = pgTable("ticket_replies", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Google Drive folder configuration - category-based folders
+// Google Drive folder configuration - simple folder browser
 export const driveFolders = pgTable("drive_folders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  category: varchar("category", { length: 100 }).notNull().unique(), // 'pets', 'cannabis', 'general', etc.
-  folderId: varchar("folder_id").notNull(), // Google Drive folder ID
-  folderName: varchar("folder_name").notNull(),
+  name: varchar("name", { length: 100 }).notNull().unique(), // Display name (e.g., "Cannabis", "Sales Materials")
+  folderId: varchar("folder_id").notNull(), // Google Drive folder ID (extracted from URL)
   createdBy: varchar("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
-
-// Google Drive files tracking - metadata cache
-export const driveFiles = pgTable("drive_files", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  driveFileId: varchar("drive_file_id").notNull().unique(), // Google Drive file ID
-  folderId: varchar("folder_id").notNull().references(() => driveFolders.id),
-  fileName: varchar("file_name").notNull(),
-  mimeType: varchar("mime_type", { length: 200 }),
-  fileSize: bigint("file_size", { mode: "number" }), // File size in bytes
-  uploadedBy: varchar("uploaded_by").references(() => users.id),
-  webViewLink: text("web_view_link"),
-  webContentLink: text("web_content_link"),
-  thumbnailLink: text("thumbnail_link"),
-  lastSyncedAt: timestamp("last_synced_at").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_drive_files_folder").on(table.folderId),
-]);
 
 export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
@@ -882,12 +863,6 @@ export const insertDriveFolderSchema = createInsertSchema(driveFolders).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
-});
-
-export const insertDriveFileSchema = createInsertSchema(driveFiles).omit({
-  id: true,
-  createdAt: true,
-  lastSyncedAt: true,
 });
 
 // Types
@@ -950,5 +925,3 @@ export type TicketReply = typeof ticketReplies.$inferSelect;
 export type InsertTicketReply = z.infer<typeof insertTicketReplySchema>;
 export type DriveFolder = typeof driveFolders.$inferSelect;
 export type InsertDriveFolder = z.infer<typeof insertDriveFolderSchema>;
-export type DriveFile = typeof driveFiles.$inferSelect;
-export type InsertDriveFile = z.infer<typeof insertDriveFileSchema>;

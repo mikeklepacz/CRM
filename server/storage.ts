@@ -30,7 +30,6 @@ import {
   ticketReplies,
   callHistory,
   driveFolders,
-  driveFiles,
   type User,
   type UpsertUser,
   type Ticket,
@@ -88,8 +87,6 @@ import {
   type InsertCallHistory,
   type DriveFolder,
   type InsertDriveFolder,
-  type DriveFile,
-  type InsertDriveFile,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -296,20 +293,10 @@ export interface IStorage {
   // Drive Folder operations
   getAllDriveFolders(): Promise<DriveFolder[]>;
   getDriveFolder(id: string): Promise<DriveFolder | undefined>;
-  getDriveFolderByCategory(category: string): Promise<DriveFolder | undefined>;
+  getDriveFolderByName(name: string): Promise<DriveFolder | undefined>;
   createDriveFolder(folder: InsertDriveFolder): Promise<DriveFolder>;
   updateDriveFolder(id: string, updates: Partial<InsertDriveFolder>): Promise<DriveFolder>;
   deleteDriveFolder(id: string): Promise<void>;
-  
-  // Drive File operations
-  getAllDriveFiles(): Promise<DriveFile[]>;
-  getDriveFilesByFolder(folderId: string): Promise<DriveFile[]>;
-  getDriveFile(id: string): Promise<DriveFile | undefined>;
-  getDriveFileByDriveId(driveFileId: string): Promise<DriveFile | undefined>;
-  createDriveFile(file: InsertDriveFile): Promise<DriveFile>;
-  updateDriveFile(id: string, updates: Partial<InsertDriveFile>): Promise<DriveFile>;
-  deleteDriveFile(id: string): Promise<void>;
-  deleteDriveFileByDriveId(driveFileId: string): Promise<void>;
   
   // Follow-up Center operations
   getFollowUpClients(userId: string, userRole: string): Promise<{
@@ -1780,8 +1767,8 @@ export class DatabaseStorage implements IStorage {
     return folder;
   }
 
-  async getDriveFolderByCategory(category: string): Promise<DriveFolder | undefined> {
-    const [folder] = await db.select().from(driveFolders).where(eq(driveFolders.category, category));
+  async getDriveFolderByName(name: string): Promise<DriveFolder | undefined> {
+    const [folder] = await db.select().from(driveFolders).where(eq(driveFolders.name, name));
     return folder;
   }
 
@@ -1801,47 +1788,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDriveFolder(id: string): Promise<void> {
     await db.delete(driveFolders).where(eq(driveFolders.id, id));
-  }
-
-  // Drive File operations
-  async getAllDriveFiles(): Promise<DriveFile[]> {
-    return await db.select().from(driveFiles);
-  }
-
-  async getDriveFilesByFolder(folderId: string): Promise<DriveFile[]> {
-    return await db.select().from(driveFiles).where(eq(driveFiles.folderId, folderId));
-  }
-
-  async getDriveFile(id: string): Promise<DriveFile | undefined> {
-    const [file] = await db.select().from(driveFiles).where(eq(driveFiles.id, id));
-    return file;
-  }
-
-  async getDriveFileByDriveId(driveFileId: string): Promise<DriveFile | undefined> {
-    const [file] = await db.select().from(driveFiles).where(eq(driveFiles.driveFileId, driveFileId));
-    return file;
-  }
-
-  async createDriveFile(file: InsertDriveFile): Promise<DriveFile> {
-    const [newFile] = await db.insert(driveFiles).values(file).returning();
-    return newFile;
-  }
-
-  async updateDriveFile(id: string, updates: Partial<InsertDriveFile>): Promise<DriveFile> {
-    const [updated] = await db
-      .update(driveFiles)
-      .set(updates)
-      .where(eq(driveFiles.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteDriveFile(id: string): Promise<void> {
-    await db.delete(driveFiles).where(eq(driveFiles.id, id));
-  }
-
-  async deleteDriveFileByDriveId(driveFileId: string): Promise<void> {
-    await db.delete(driveFiles).where(eq(driveFiles.driveFileId, driveFileId));
   }
   
   async getFollowUpClients(userId: string, userRole: string): Promise<{
