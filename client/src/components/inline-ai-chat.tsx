@@ -23,11 +23,11 @@ interface InlineAIChatProps {
 
 // Helper function to clean and format AI output
 function formatAIContent(content: string): string {
-  // Remove source citations like [6:17*source] or [6:0*source]
-  let cleaned = content.replace(/\s*\[[\d:]+\*source\]\s*/g, '');
+  // Remove ALL source citations - match any pattern like [number:number{ANY_CHAR}source]
+  let cleaned = content.replace(/\s*\[\d+:\d+[^\]]*source\]\s*/gi, '');
   
-  // Remove any remaining bracketed references at the end
-  cleaned = cleaned.replace(/\s*\[\d+:\d+\]\s*$/g, '');
+  // Remove any remaining bracketed number references
+  cleaned = cleaned.replace(/\s*\[\d+:\d+\]\s*/g, '');
   
   // Clean up any extra whitespace
   cleaned = cleaned.trim();
@@ -35,27 +35,59 @@ function formatAIContent(content: string): string {
   return cleaned;
 }
 
-// Helper function to render formatted text with basic markdown support
+// Helper function to render formatted text with comprehensive markdown support
 function renderFormattedText(content: string): JSX.Element[] {
   const formattedContent = formatAIContent(content);
   const lines = formattedContent.split('\n');
   const result: JSX.Element[] = [];
   
   lines.forEach((line, lineIndex) => {
-    const parts: (string | JSX.Element)[] = [];
-    let lastIndex = 0;
+    // Check for headers first
+    const h3Match = line.match(/^###\s+(.+)$/);
+    const h2Match = line.match(/^##\s+(.+)$/);
+    const h1Match = line.match(/^#\s+(.+)$/);
     
-    // Find all **text** patterns for bold
-    const boldRegex = /\*\*(.+?)\*\*/g;
+    if (h3Match) {
+      result.push(<h3 key={`line-${lineIndex}`} className="text-base font-semibold mt-3 mb-2">{h3Match[1]}</h3>);
+      return;
+    }
+    if (h2Match) {
+      result.push(<h2 key={`line-${lineIndex}`} className="text-lg font-semibold mt-4 mb-2">{h2Match[1]}</h2>);
+      return;
+    }
+    if (h1Match) {
+      result.push(<h1 key={`line-${lineIndex}`} className="text-xl font-bold mt-4 mb-3">{h1Match[1]}</h1>);
+      return;
+    }
+    
+    // Process inline markdown (bold, italic, code)
+    const parts: (string | JSX.Element)[] = [];
+    let remaining = line;
+    let partIndex = 0;
+    
+    // Process bold **text**, italic *text*, and inline code `text`
+    const inlineRegex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+    let lastIndex = 0;
     let match;
     
-    while ((match = boldRegex.exec(line)) !== null) {
+    while ((match = inlineRegex.exec(line)) !== null) {
       // Add text before the match
       if (match.index > lastIndex) {
         parts.push(line.substring(lastIndex, match.index));
       }
-      // Add bold text
-      parts.push(<strong key={`bold-${lineIndex}-${match.index}`}>{match[1]}</strong>);
+      
+      // Determine what type of match this is
+      if (match[0].startsWith('**')) {
+        // Bold
+        parts.push(<strong key={`part-${lineIndex}-${partIndex++}`}>{match[2]}</strong>);
+      } else if (match[0].startsWith('`')) {
+        // Inline code
+        parts.push(<code key={`part-${lineIndex}-${partIndex++}`} className="bg-muted px-1 rounded text-xs">{match[4]}</code>);
+      } else if (match[0].startsWith('*')) {
+        // Italic
+        parts.push(<em key={`part-${lineIndex}-${partIndex++}`}>{match[3]}</em>);
+      }
+      
       lastIndex = match.index + match[0].length;
     }
     
