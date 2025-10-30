@@ -628,7 +628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/sheets/callback`;
-      const scope = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly';
+      const scope = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive';
 
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);

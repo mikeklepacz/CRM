@@ -19,6 +19,7 @@ interface DriveFile {
   modifiedTime: string;
   webViewLink: string;
   iconLink?: string;
+  thumbnailLink?: string;
 }
 
 interface DriveFolder {
@@ -231,30 +232,48 @@ export default function Documents() {
               <p className="text-sm">Upload your first file using the form above</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium mb-4">Files in {selectedCategory}</h3>
-              <div className="grid gap-2">
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium">Files in {selectedCategory}</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {files.map((file) => (
-                  <Card key={file.id} className="hover-elevate">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className="text-2xl flex-shrink-0">{getFileIcon(file.mimeType)}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate" data-testid={`file-name-${file.id}`}>
-                              {file.name}
-                            </p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span>{formatFileSize(file.size)}</span>
-                              <span>•</span>
-                              <span>{formatDistanceToNow(new Date(file.modifiedTime), { addSuffix: true })}</span>
-                            </div>
+                  <Card key={file.id} className="hover-elevate group">
+                    <CardContent className="p-3">
+                      <div className="space-y-3">
+                        <div
+                          className="aspect-square rounded-md bg-muted flex items-center justify-center overflow-hidden cursor-pointer"
+                          onClick={() => window.open(file.webViewLink, '_blank')}
+                          data-testid={`thumbnail-${file.id}`}
+                        >
+                          {file.mimeType.startsWith('image/') && file.thumbnailLink ? (
+                            <img
+                              src={file.thumbnailLink}
+                              alt={file.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : file.mimeType.startsWith('video/') && file.thumbnailLink ? (
+                            <img
+                              src={file.thumbnailLink}
+                              alt={file.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-5xl">{getFileIcon(file.mimeType)}</span>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-medium text-sm truncate" title={file.name} data-testid={`file-name-${file.id}`}>
+                            {file.name}
+                          </p>
+                          <div className="text-xs text-muted-foreground space-y-0.5">
+                            <div>{formatFileSize(file.size)}</div>
+                            <div>{formatDistanceToNow(new Date(file.modifiedTime), { addSuffix: true })}</div>
                           </div>
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-1">
                           <Button
                             size="sm"
                             variant="outline"
+                            className="flex-1 text-xs"
                             onClick={() => window.open(file.webViewLink, '_blank')}
                             data-testid={`button-view-${file.id}`}
                           >
@@ -266,7 +285,7 @@ export default function Documents() {
                             onClick={() => handleDownload(file.id, file.name)}
                             data-testid={`button-download-${file.id}`}
                           >
-                            <Download className="h-4 w-4" />
+                            <Download className="h-3 w-3" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -275,7 +294,7 @@ export default function Documents() {
                                 variant="outline"
                                 data-testid={`button-delete-${file.id}`}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
