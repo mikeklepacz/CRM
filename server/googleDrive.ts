@@ -64,6 +64,8 @@ export async function listFilesInFolder(folderId: string) {
       fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, thumbnailLink, iconLink)',
       orderBy: 'modifiedTime desc',
       pageSize: 1000,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
     });
 
     return response.data.files || [];
@@ -96,6 +98,7 @@ export async function uploadFileToDrive(
       requestBody: fileMetadata,
       media,
       fields: 'id, name, mimeType, size, webViewLink, webContentLink, thumbnailLink',
+      supportsAllDrives: true,
     });
 
     return response.data;
@@ -110,7 +113,7 @@ export async function downloadFileFromDrive(fileId: string) {
 
   try {
     const response = await drive.files.get(
-      { fileId, alt: 'media' },
+      { fileId, alt: 'media', supportsAllDrives: true },
       { responseType: 'stream' }
     );
 
@@ -125,7 +128,7 @@ export async function deleteFileFromDrive(fileId: string) {
   const drive = await getSystemGoogleDriveClient();
 
   try {
-    await drive.files.delete({ fileId });
+    await drive.files.delete({ fileId, supportsAllDrives: true });
     return { success: true };
   } catch (error: any) {
     console.error('Error deleting file from Drive:', error);
@@ -140,6 +143,7 @@ export async function getFolderInfo(folderId: string) {
     const response = await drive.files.get({
       fileId: folderId,
       fields: 'id, name, mimeType, webViewLink',
+      supportsAllDrives: true,
     });
 
     return response.data;
