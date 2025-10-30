@@ -11971,6 +11971,28 @@ Use this store information to provide context-aware responses. When helping draf
   // Google Drive routes
   const upload = multer({ storage: multer.memoryStorage() });
 
+  // Helper to extract folder ID from Drive URL
+  function extractFolderId(input: string): string {
+    // If it's already just an ID (alphanumeric), return it
+    if (/^[a-zA-Z0-9_-]+$/.test(input)) {
+      return input;
+    }
+    
+    // Extract from various Drive URL formats
+    const patterns = [
+      /\/folders\/([a-zA-Z0-9_-]+)/,  // /folders/{id}
+      /\/drive\/folders\/([a-zA-Z0-9_-]+)/,  // /drive/folders/{id}
+      /[?&]id=([a-zA-Z0-9_-]+)/,  // ?id={id}
+    ];
+    
+    for (const pattern of patterns) {
+      const match = input.match(pattern);
+      if (match) return match[1];
+    }
+    
+    throw new Error('Invalid Drive folder URL. Please provide a valid Google Drive folder link or ID.');
+  }
+
   // Get all configured Drive folders (admin only)
   app.get('/api/drive/folders', isAuthenticatedCustom, async (req, res) => {
     try {
@@ -11982,49 +12004,42 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Configure a Drive folder for a category (admin only)
+  // Add a Drive folder - accepts full URL or folder ID (admin only)
   app.post('/api/drive/folders', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { category, folderId } = req.body;
+      const { name, folderUrl } = req.body;
 
-      if (!category || !folderId) {
-        return res.status(400).json({ message: 'Category and folder ID are required' });
+      if (!name || !folderUrl) {
+        return res.status(400).json({ message: 'Folder name and URL are required' });
       }
 
-      const folderInfo = await googleDrive.getFolderInfo(folderId);
+      const folderId = extractFolderId(folderUrl);
       
       const folder = await storage.createDriveFolder({
-        category,
+        name,
         folderId,
-        folderName: folderInfo.name || 'Unnamed Folder',
         createdBy: userId,
       });
 
       res.json(folder);
     } catch (error: any) {
       console.error('Error creating Drive folder:', error);
-      res.status(500).json({ message: error.message || 'Failed to configure folder' });
+      res.status(500).json({ message: error.message || 'Failed to add folder' });
     }
   });
 
-  // Update a Drive folder configuration (admin only)
+  // Update a Drive folder (admin only)
   app.put('/api/drive/folders/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { folderId } = req.body;
+      const { name, folderUrl } = req.body;
 
-      if (!folderId) {
-        return res.status(400).json({ message: 'Folder ID is required' });
-      }
+      const updates: any = {};
+      if (name) updates.name = name;
+      if (folderUrl) updates.folderId = extractFolderId(folderUrl);
 
-      const folderInfo = await googleDrive.getFolderInfo(folderId);
-      
-      const folder = await storage.updateDriveFolder(id, {
-        folderId,
-        folderName: folderInfo.name || 'Unnamed Folder',
-      });
-
+      const folder = await storage.updateDriveFolder(id, updates);
       res.json(folder);
     } catch (error: any) {
       console.error('Error updating Drive folder:', error);
@@ -12043,39 +12058,17 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // List files in a category folder
-  app.get('/api/drive/files', isAuthenticatedCustom, async (req, res) => {
+  // List files in a folder by name
+  app.get('/api/drive/files/:folderName', isAuthenticatedCustom, async (req, res) => {
     try {
-      const { category } = req.query;
-
-      if (!category) {
-        return res.status(400).json({ message: 'Category is required' });
-      }
-
-      const folderConfig = await storage.getDriveFolderByCategory(category as string);
+      const { folderName } = req.params;
+      const folderConfig = await storage.getDriveFolderByName(folderName);
       
       if (!folderConfig) {
-        return res.status(404).json({ message: 'No folder configured for this category' });
+        return res.status(404).json({ message: 'Folder not found' });
       }
 
       const files = await googleDrive.listFilesInFolder(folderConfig.folderId);
-      
-      for (const file of files) {
-        const existing = await storage.getDriveFileByDriveId(file.id!);
-        if (!existing) {
-          await storage.createDriveFile({
-            driveFileId: file.id!,
-            folderId: folderConfig.id,
-            fileName: file.name!,
-            mimeType: file.mimeType || null,
-            fileSize: file.size ? parseInt(file.size) : null,
-            webViewLink: file.webViewLink || null,
-            webContentLink: file.webContentLink || null,
-            thumbnailLink: file.thumbnailLink || null,
-          });
-        }
-      }
-
       res.json(files);
     } catch (error: any) {
       console.error('Error listing Drive files:', error);
@@ -12083,20 +12076,19 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Upload a file to a category folder
-  app.post('/api/drive/upload', isAuthenticatedCustom, upload.single('file'), async (req: any, res) => {
+  // Upload a file to a folder
+  app.post('/api/drive/upload/:folderName', isAuthenticatedCustom, upload.single('file'), async (req: any, res) => {
     try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { category } = req.body;
+      const { folderName } = req.params;
 
-      if (!category || !req.file) {
-        return res.status(400).json({ message: 'Category and file are required' });
+      if (!req.file) {
+        return res.status(400).json({ message: 'File is required' });
       }
 
-      const folderConfig = await storage.getDriveFolderByCategory(category);
+      const folderConfig = await storage.getDriveFolderByName(folderName);
       
       if (!folderConfig) {
-        return res.status(404).json({ message: 'No folder configured for this category' });
+        return res.status(404).json({ message: 'Folder not found' });
       }
 
       const uploadedFile = await googleDrive.uploadFileToDrive(
@@ -12106,18 +12098,6 @@ Use this store information to provide context-aware responses. When helping draf
         req.file.buffer
       );
 
-      await storage.createDriveFile({
-        driveFileId: uploadedFile.id!,
-        folderId: folderConfig.id,
-        fileName: uploadedFile.name!,
-        mimeType: uploadedFile.mimeType || null,
-        fileSize: uploadedFile.size ? parseInt(uploadedFile.size) : null,
-        uploadedBy: userId,
-        webViewLink: uploadedFile.webViewLink || null,
-        webContentLink: uploadedFile.webContentLink || null,
-        thumbnailLink: uploadedFile.thumbnailLink || null,
-      });
-
       res.json(uploadedFile);
     } catch (error: any) {
       console.error('Error uploading file:', error);
@@ -12125,49 +12105,11 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Download a file
-  app.get('/api/drive/download/:fileId', isAuthenticatedCustom, async (req, res) => {
+  // Delete a file from Drive (admin only)
+  app.delete('/api/drive/files/:fileId', isAuthenticatedCustom, isAdmin, async (req, res) => {
     try {
       const { fileId } = req.params;
-      
-      const fileMetadata = await storage.getDriveFileByDriveId(fileId);
-      
-      if (!fileMetadata) {
-        return res.status(404).json({ message: 'File not found' });
-      }
-
-      const fileStream = await googleDrive.downloadFileFromDrive(fileId);
-      
-      res.setHeader('Content-Type', fileMetadata.mimeType || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${fileMetadata.fileName}"`);
-      
-      fileStream.pipe(res);
-    } catch (error: any) {
-      console.error('Error downloading file:', error);
-      res.status(500).json({ message: error.message || 'Failed to download file' });
-    }
-  });
-
-  // Delete a file
-  app.delete('/api/drive/files/:fileId', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      const { fileId } = req.params;
-      
-      const fileMetadata = await storage.getDriveFileByDriveId(fileId);
-      
-      if (!fileMetadata) {
-        return res.status(404).json({ message: 'File not found' });
-      }
-
-      if (user?.role !== 'admin' && fileMetadata.uploadedBy !== userId) {
-        return res.status(403).json({ message: 'You can only delete files you uploaded' });
-      }
-
       await googleDrive.deleteFileFromDrive(fileId);
-      await storage.deleteDriveFileByDriveId(fileId);
-
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error deleting file:', error);
