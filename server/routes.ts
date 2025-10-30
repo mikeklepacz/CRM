@@ -14,6 +14,8 @@ import { v4 as uuidv4 } from "uuid";
 import * as googleSheets from "./googleSheets";
 import * as googleMaps from "./googleMaps";
 import * as commissionService from "./commission-service";
+import * as googleDrive from "./googleDrive";
+import multer from "multer";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
@@ -11963,6 +11965,213 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error fetching follow-up center data:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch follow-up data' });
+    }
+  });
+
+  // Google Drive routes
+  const upload = multer({ storage: multer.memoryStorage() });
+
+  // Get all configured Drive folders (admin only)
+  app.get('/api/drive/folders', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const folders = await storage.getAllDriveFolders();
+      res.json(folders);
+    } catch (error: any) {
+      console.error('Error fetching Drive folders:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch folders' });
+    }
+  });
+
+  // Configure a Drive folder for a category (admin only)
+  app.post('/api/drive/folders', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { category, folderId } = req.body;
+
+      if (!category || !folderId) {
+        return res.status(400).json({ message: 'Category and folder ID are required' });
+      }
+
+      const folderInfo = await googleDrive.getFolderInfo(folderId);
+      
+      const folder = await storage.createDriveFolder({
+        category,
+        folderId,
+        folderName: folderInfo.name || 'Unnamed Folder',
+        createdBy: userId,
+      });
+
+      res.json(folder);
+    } catch (error: any) {
+      console.error('Error creating Drive folder:', error);
+      res.status(500).json({ message: error.message || 'Failed to configure folder' });
+    }
+  });
+
+  // Update a Drive folder configuration (admin only)
+  app.put('/api/drive/folders/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { folderId } = req.body;
+
+      if (!folderId) {
+        return res.status(400).json({ message: 'Folder ID is required' });
+      }
+
+      const folderInfo = await googleDrive.getFolderInfo(folderId);
+      
+      const folder = await storage.updateDriveFolder(id, {
+        folderId,
+        folderName: folderInfo.name || 'Unnamed Folder',
+      });
+
+      res.json(folder);
+    } catch (error: any) {
+      console.error('Error updating Drive folder:', error);
+      res.status(500).json({ message: error.message || 'Failed to update folder' });
+    }
+  });
+
+  // Delete a Drive folder configuration (admin only)
+  app.delete('/api/drive/folders/:id', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      await storage.deleteDriveFolder(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting Drive folder:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete folder' });
+    }
+  });
+
+  // List files in a category folder
+  app.get('/api/drive/files', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { category } = req.query;
+
+      if (!category) {
+        return res.status(400).json({ message: 'Category is required' });
+      }
+
+      const folderConfig = await storage.getDriveFolderByCategory(category as string);
+      
+      if (!folderConfig) {
+        return res.status(404).json({ message: 'No folder configured for this category' });
+      }
+
+      const files = await googleDrive.listFilesInFolder(folderConfig.folderId);
+      
+      for (const file of files) {
+        const existing = await storage.getDriveFileByDriveId(file.id!);
+        if (!existing) {
+          await storage.createDriveFile({
+            driveFileId: file.id!,
+            folderId: folderConfig.id,
+            fileName: file.name!,
+            mimeType: file.mimeType || null,
+            fileSize: file.size ? parseInt(file.size) : null,
+            webViewLink: file.webViewLink || null,
+            webContentLink: file.webContentLink || null,
+            thumbnailLink: file.thumbnailLink || null,
+          });
+        }
+      }
+
+      res.json(files);
+    } catch (error: any) {
+      console.error('Error listing Drive files:', error);
+      res.status(500).json({ message: error.message || 'Failed to list files' });
+    }
+  });
+
+  // Upload a file to a category folder
+  app.post('/api/drive/upload', isAuthenticatedCustom, upload.single('file'), async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { category } = req.body;
+
+      if (!category || !req.file) {
+        return res.status(400).json({ message: 'Category and file are required' });
+      }
+
+      const folderConfig = await storage.getDriveFolderByCategory(category);
+      
+      if (!folderConfig) {
+        return res.status(404).json({ message: 'No folder configured for this category' });
+      }
+
+      const uploadedFile = await googleDrive.uploadFileToDrive(
+        folderConfig.folderId,
+        req.file.originalname,
+        req.file.mimetype,
+        req.file.buffer
+      );
+
+      await storage.createDriveFile({
+        driveFileId: uploadedFile.id!,
+        folderId: folderConfig.id,
+        fileName: uploadedFile.name!,
+        mimeType: uploadedFile.mimeType || null,
+        fileSize: uploadedFile.size ? parseInt(uploadedFile.size) : null,
+        uploadedBy: userId,
+        webViewLink: uploadedFile.webViewLink || null,
+        webContentLink: uploadedFile.webContentLink || null,
+        thumbnailLink: uploadedFile.thumbnailLink || null,
+      });
+
+      res.json(uploadedFile);
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      res.status(500).json({ message: error.message || 'Failed to upload file' });
+    }
+  });
+
+  // Download a file
+  app.get('/api/drive/download/:fileId', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      
+      const fileMetadata = await storage.getDriveFileByDriveId(fileId);
+      
+      if (!fileMetadata) {
+        return res.status(404).json({ message: 'File not found' });
+      }
+
+      const fileStream = await googleDrive.downloadFileFromDrive(fileId);
+      
+      res.setHeader('Content-Type', fileMetadata.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileMetadata.fileName}"`);
+      
+      fileStream.pipe(res);
+    } catch (error: any) {
+      console.error('Error downloading file:', error);
+      res.status(500).json({ message: error.message || 'Failed to download file' });
+    }
+  });
+
+  // Delete a file
+  app.delete('/api/drive/files/:fileId', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { fileId } = req.params;
+      
+      const fileMetadata = await storage.getDriveFileByDriveId(fileId);
+      
+      if (!fileMetadata) {
+        return res.status(404).json({ message: 'File not found' });
+      }
+
+      if (user?.role !== 'admin' && fileMetadata.uploadedBy !== userId) {
+        return res.status(403).json({ message: 'You can only delete files you uploaded' });
+      }
+
+      await googleDrive.deleteFileFromDrive(fileId);
+      await storage.deleteDriveFileByDriveId(fileId);
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting file:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete file' });
     }
   });
 
