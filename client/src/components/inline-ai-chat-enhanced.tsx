@@ -468,9 +468,24 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     }
   };
 
-  const copyMessageToClipboard = (content: string) => {
-    navigator.clipboard.writeText(content);
-    toast({ title: "Copied", description: "Message copied to clipboard" });
+  const copyMessageToClipboard = async (content: string) => {
+    // Check if user has selected text
+    const selectedText = window.getSelection()?.toString().trim();
+    const textToCopy = selectedText || content;
+    
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      toast({ 
+        title: "Copied", 
+        description: selectedText ? "Selected text copied to clipboard" : "Message copied to clipboard" 
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      });
+    }
   };
 
   const autoDetectPlaceholders = (content: string): string => {
@@ -571,9 +586,53 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     return result;
   };
 
+  const handleTemplateTypeChange = (newType: "Email" | "Script") => {
+    if (newType === builderType) return; // No change
+    
+    if (newType === "Email") {
+      // Switching from Script to Email - try to parse email format first
+      if (builderContent.trim()) {
+        const parsed = parseEmailTemplate(builderContent);
+        if (parsed) {
+          // Successfully parsed structured email format
+          setEmailTo(parsed.to);
+          setEmailSubject(parsed.subject);
+          setEmailBody(parsed.body);
+        } else {
+          // No structured format, just use as body
+          setEmailTo("{{email}}");
+          setEmailSubject("");
+          setEmailBody(builderContent);
+        }
+        setBuilderContent(""); // Clear script content
+      }
+    } else {
+      // Switching from Email to Script - combine email fields into script content
+      if (emailTo || emailSubject || emailBody) {
+        // Format as email template if there's subject/to, otherwise just use body
+        if (emailSubject || emailTo !== "{{email}}") {
+          const scriptContent = formatEmailTemplate(emailTo, emailSubject, emailBody);
+          setBuilderContent(scriptContent);
+        } else {
+          setBuilderContent(emailBody);
+        }
+        // Clear email fields
+        setEmailTo("{{email}}");
+        setEmailSubject("");
+        setEmailBody("");
+      }
+    }
+    
+    setBuilderType(newType);
+  };
+
   const makeTemplateFromMessage = (content: string) => {
+    // Check if user has selected text - if so, use that instead of full content
+    const selectedText = window.getSelection()?.toString().trim();
+    const contentToUse = selectedText || content;
+    
     // Try to parse as email format first (with To:/Subject:/Body: headers)
-    const parsed = parseEmailTemplate(content);
+    const parsed = parseEmailTemplate(contentToUse);
 
     if (parsed) {
       // It's an email format - apply placeholder detection to each field separately
@@ -586,14 +645,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       // Intelligent email detection: Look for email-like patterns
       const emailPattern = /^(hi|hey|hello|dear|greetings)/i;
       const signaturePattern = /(best|regards|thanks|sincerely|cheers)/i;
-      const hasEmailStructure = emailPattern.test(content.trim()) || signaturePattern.test(content);
+      const hasEmailStructure = emailPattern.test(contentToUse.trim()) || signaturePattern.test(contentToUse);
 
       if (hasEmailStructure) {
         // It looks like an email, even without explicit headers
         setBuilderType("Email");
 
         // Try to extract a subject from the first line if it's short
-        const lines = content.trim().split('\n').filter(l => l.trim());
+        const lines = contentToUse.trim().split('\n').filter(l => l.trim());
         const firstLine = lines[0] || "";
         const isSubjectLine = firstLine.length < 80 && !emailPattern.test(firstLine);
 
@@ -606,13 +665,13 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
           // No clear subject, put everything in body
           setEmailTo(autoDetectPlaceholders("{{email}}"));
           setEmailSubject("");
-          setEmailBody(autoDetectPlaceholders(content));
+          setEmailBody(autoDetectPlaceholders(contentToUse));
         }
         setBuilderContent(""); // Clear script content
       } else {
         // It's a script/general content
         setBuilderType("Script");
-        setBuilderContent(autoDetectPlaceholders(content));
+        setBuilderContent(autoDetectPlaceholders(contentToUse));
         // Clear email fields
         setEmailTo("{{email}}");
         setEmailSubject("");
@@ -628,7 +687,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
     toast({ 
       title: "Template created", 
-      description: "Common placeholders detected and converted to variables" 
+      description: selectedText ? "Selected text converted to template" : "Common placeholders detected and converted to variables" 
     });
   };
 
@@ -1992,14 +2051,14 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
           {/* Builder View */}
           {templateBuilderView === "builder" && (
             <div className="flex-1 flex flex-col min-h-0 px-6 pt-6 pb-6">
-              <div className="space-y-4 flex-1">
+              <div className="space-y-4 flex-1 flex flex-col min-h-0">
                 {/* Type & Title - Side by Side */}
                 <div className="flex gap-4">
                   <div className="w-[200px] space-y-2">
                     <label className="text-sm font-semibold">Type</label>
                     <Select
                       value={builderType}
-                      onValueChange={(value: "Email" | "Script") => setBuilderType(value)}
+                      onValueChange={(value: "Email" | "Script") => handleTemplateTypeChange(value)}
                     >
                       <SelectTrigger data-testid="select-builder-type">
                         <SelectValue />
