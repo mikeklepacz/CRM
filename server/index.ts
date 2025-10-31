@@ -7,7 +7,14 @@ const app = express();
 // Trust Replit proxy for proper protocol detection (must be before routes)
 app.set('trust proxy', true);
 
-app.use(express.json({ limit: '10mb' }));
+// Capture raw body for webhook signature validation
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req: any, res, buf, encoding) => {
+    // Store raw body for webhook signature validation
+    req.rawBody = buf.toString(encoding || 'utf8');
+  }
+}));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 app.use((req, res, next) => {

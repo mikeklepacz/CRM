@@ -327,8 +327,8 @@ export interface IStorage {
   }>;
   
   // ElevenLabs settings operations
-  getElevenLabsConfig(): Promise<{ apiKey: string; twilioNumber?: string } | undefined>;
-  updateElevenLabsConfig(config: { apiKey: string; twilioNumber?: string }): Promise<void>;
+  getElevenLabsConfig(): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string } | undefined>;
+  updateElevenLabsConfig(config: { apiKey: string; twilioNumber?: string; webhookSecret?: string }): Promise<void>;
   getAllElevenLabsAgents(): Promise<ElevenlabsAgent[]>;
   getElevenLabsAgent(id: string): Promise<ElevenlabsAgent | undefined>;
   getDefaultElevenLabsAgent(): Promise<ElevenlabsAgent | undefined>;
@@ -1901,21 +1901,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ElevenLabs settings operations
-  async getElevenLabsConfig(): Promise<{ apiKey: string; twilioNumber?: string } | undefined> {
+  async getElevenLabsConfig(): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string } | undefined> {
     const [config] = await db.select().from(elevenlabsConfig).limit(1);
     if (!config) return undefined;
     return {
       apiKey: config.apiKey,
-      twilioNumber: config.twilioNumber || undefined
+      twilioNumber: config.twilioNumber || undefined,
+      webhookSecret: config.webhookSecret || undefined
     };
   }
 
-  async updateElevenLabsConfig(configData: { apiKey: string; twilioNumber?: string }): Promise<void> {
+  async updateElevenLabsConfig(configData: { apiKey: string; twilioNumber?: string; webhookSecret?: string }): Promise<void> {
     // Delete old config and insert new (single row table)
     await db.delete(elevenlabsConfig);
     await db.insert(elevenlabsConfig).values({
       apiKey: configData.apiKey,
-      twilioNumber: configData.twilioNumber || null
+      twilioNumber: configData.twilioNumber || null,
+      webhookSecret: configData.webhookSecret || null
     });
   }
 

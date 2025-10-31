@@ -15,6 +15,8 @@ import * as googleSheets from "./googleSheets";
 import * as googleMaps from "./googleMaps";
 import * as commissionService from "./commission-service";
 import * as googleDrive from "./googleDrive";
+import { analyzeCallTranscript } from "./openai-reflection";
+import { validateElevenLabsSignature } from "./webhook-validation";
 import multer from "multer";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
@@ -675,6 +677,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error setting default agent:", error);
       res.status(500).json({ message: error.message || "Failed to set default agent" });
+    }
+  });
+
+  // ===== VOICE AI CALLING ENDPOINTS =====
+  
+  // Webhook receiver for ElevenLabs post-call transcription
+  app.post('/api/elevenlabs/webhook', async (req: any, res) => {
+    try {
+      const payload = req.body;
+      console.log('Received ElevenLabs webhook:', JSON.stringify(payload, null, 2));
+
+      // SECURITY: Validate webhook signature
+      const config = await storage.getElevenLabsConfig();
+      if (config?.webhookSecret) {
+        const signature = req.headers['elevenlabs-signature'] as string | undefined;
+        const rawBody = (req as any).rawBody;
+        
+        if (!rawBody) {
+          console.error('Raw body not available for signature validation');
+          return res.status(500).json({ error: 'Server configuration error' });
+        }
+        
+        const isValid = validateElevenLabsSignature(signature, rawBody, config.webhookSecret);
+        if (!isValid) {
+          console.error('Invalid webhook signature - rejecting request');
+          return res.status(401).json({ error: 'Invalid signature' });
+        }
+        console.log('✅ Webhook signature validated');
+      } else {
+        console.warn('⚠️  No webhook secret configured - skipping signature validation');
+      }
+
+      // Verify webhook type
+      if (payload.type !== 'post_call_transcription') {
+        console.log('Ignoring non-transcription webhook');
+        return res.status(200).json({ status: 'ignored', reason: 'Not a transcription webhook' });
+      }
+
+      const data = payload.data;
+      const conversationId = data.conversation_id;
+
+      if (!conversationId) {
+        console.error('Missing conversation_id in webhook payload');
+        return res.status(400).json({ error: 'Missing conversation_id' });
+      }
+
+      // Log the webhook event
+      await storage.createCallEvent({
+        conversationId,
+        eventType: 'webhook_received',
+        status: data.status,
+        payload: data,
+      });
+
+      // Check if session already exists (avoid duplicates)
+      let session = await storage.getCallSessionByConversationId(conversationId);
+
+      // Extract metadata from ElevenLabs payload
+      const metadata = data.metadata || {};
+      const clientData = data.conversation_initiation_client_data || {};
+      const analysis = data.analysis || {};
+
+      // Calculate endedAt from start time + duration (more accurate than new Date())
+      const startedAt = metadata.start_time_unix_secs 
+        ? new Date(metadata.start_time_unix_secs * 1000)
+        : new Date();
+      const endedAt = (metadata.start_time_unix_secs && metadata.call_duration_secs)
+        ? new Date((metadata.start_time_unix_secs + metadata.call_duration_secs) * 1000)
+        : (data.status === 'done' ? new Date() : null);
+
+      if (!session) {
+        // Create new call session (this means webhook arrived before our initiate-call response)
+        console.log('Creating new session from webhook for conversation:', conversationId);
+
+        session = await storage.createCallSession({
+          conversationId,
+          agentId: data.agent_id,
+          clientId: clientData.clientId || '',
+          initiatedByUserId: clientData.initiatedByUserId || null,
+          phoneNumber: clientData.phoneNumber || '',
+          status: data.status === 'done' ? 'completed' : data.status,
+          callDurationSecs: metadata.call_duration_secs || null,
+          costCredits: metadata.cost || null,
+          startedAt,
+          endedAt,
+          callSuccessful: analysis.call_successful || null,
+          storeSnapshot: clientData.storeSnapshot || null,
+        });
+      } else {
+        // Update existing session with webhook data
+        await storage.updateCallSessionByConversationId(conversationId, {
+          status: data.status === 'done' ? 'completed' : data.status,
+          callDurationSecs: metadata.call_duration_secs || null,
+          costCredits: metadata.cost || null,
+          endedAt,
+          callSuccessful: analysis.call_successful || null,
+        });
+      }
+
+      // IDEMPOTENCY: Store transcripts only if they don't already exist
+      if (data.transcript && Array.isArray(data.transcript)) {
+        const existingTranscripts = await storage.getCallTranscripts(conversationId);
+        
+        if (existingTranscripts.length === 0) {
+          const transcripts = data.transcript.map((item: any) => ({
+            conversationId,
+            role: item.role,
+            message: item.message,
+            timeInCallSecs: item.time_in_call_secs || null,
+            toolCalls: item.tool_calls || null,
+            toolResults: item.tool_results || null,
+            metrics: item.conversation_turn_metrics || null,
+          }));
+
+          await storage.bulkCreateCallTranscripts(transcripts);
+          console.log(`Stored ${transcripts.length} transcript messages`);
+        } else {
+          console.log(`Transcripts already exist for conversation ${conversationId} - skipping duplicate insert`);
+        }
+      }
+
+      // Trigger OpenAI reflection job asynchronously (don't block webhook response)
+      if (data.status === 'done' && data.transcript && data.transcript.length > 0) {
+        // Fire and forget - run async without blocking the webhook response
+        analyzeCallTranscript(conversationId).catch(err => {
+          console.error('Async error in OpenAI reflection:', err);
+        });
+      }
+
+      res.status(200).json({ status: 'received', conversationId });
+    } catch (error: any) {
+      console.error('Error processing ElevenLabs webhook:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
 

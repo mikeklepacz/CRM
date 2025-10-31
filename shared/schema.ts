@@ -853,6 +853,7 @@ export const elevenlabsConfig = pgTable("elevenlabs_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   apiKey: text("api_key").notNull(), // ElevenLabs API key
   twilioNumber: varchar("twilio_number", { length: 50 }), // Twilio phone number for outbound calls
+  webhookSecret: text("webhook_secret"), // Shared secret for webhook HMAC validation
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
