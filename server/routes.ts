@@ -1842,6 +1842,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Toggle voice access for a user (admin only)
+  app.patch('/api/users/:userId/voice-access', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { hasVoiceAccess } = req.body;
+
+      if (typeof hasVoiceAccess !== 'boolean') {
+        return res.status(400).json({ message: "hasVoiceAccess must be a boolean" });
+      }
+
+      // Update the user's voice access
+      const [updatedUser] = await db
+        .update(users)
+        .set({ hasVoiceAccess, updatedAt: new Date() })
+        .where(eq(users.id, userId))
+        .returning();
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({ user: updatedUser });
+    } catch (error: any) {
+      console.error("Error updating voice access:", error);
+      res.status(500).json({ message: error.message || "Failed to update voice access" });
+    }
+  });
+
   // Get sales report data (admin only)
   app.get('/api/reports/sales-data', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
