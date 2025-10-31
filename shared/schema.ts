@@ -852,7 +852,8 @@ export const driveFolders = pgTable("drive_folders", {
 export const elevenlabsConfig = pgTable("elevenlabs_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   apiKey: text("api_key").notNull(), // ElevenLabs API key
-  twilioNumber: varchar("twilio_number", { length: 50 }), // Twilio phone number for outbound calls
+  phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls
+  twilioNumber: varchar("twilio_number", { length: 50 }), // Twilio phone number (for display only)
   webhookSecret: text("webhook_secret"), // Shared secret for webhook HMAC validation
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

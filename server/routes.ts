@@ -813,6 +813,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Initiate outbound call via ElevenLabs API
+  app.post('/api/elevenlabs/initiate-call', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { phoneNumber, agentId, clientId, storeSnapshot } = req.body;
+      
+      if (!phoneNumber || !agentId) {
+        return res.status(400).json({ error: 'phoneNumber and agentId are required' });
+      }
+
+      // Get ElevenLabs configuration
+      const config = await storage.getElevenLabsConfig();
+      if (!config?.apiKey) {
+        return res.status(500).json({ error: 'ElevenLabs API key not configured' });
+      }
+      if (!config?.phoneNumberId) {
+        return res.status(500).json({ error: 'ElevenLabs phone number ID not configured' });
+      }
+
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+
+      // Prepare ElevenLabs API request (Twilio outbound call)
+      const elevenlabsApiUrl = `https://api.elevenlabs.io/v1/convai/twilio/outbound-call`;
+      const requestBody = {
+        agent_id: agentId,
+        agent_phone_number_id: config.phoneNumberId,
+        to_number: phoneNumber,
+        conversation_initiation_client_data: {
+          phoneNumber,
+          clientId: clientId || '',
+          initiatedByUserId: userId,
+          storeSnapshot: storeSnapshot || null,
+        },
+      };
+
+      console.log('Initiating call to ElevenLabs:', JSON.stringify(requestBody, null, 2));
+
+      // Call ElevenLabs API
+      const response = await fetch(elevenlabsApiUrl, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': config.apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('ElevenLabs API error:', response.status, errorText);
+        return res.status(response.status).json({ 
+          error: `ElevenLabs API error: ${response.statusText}`,
+          details: errorText 
+        });
+      }
+
+      const data = await response.json();
+      // ElevenLabs returns conversationId in camelCase
+      const conversationId = data.conversationId ?? data.conversation_id;
+
+      if (!conversationId) {
+        console.error('ElevenLabs API returned no conversation ID:', data);
+        return res.status(502).json({ 
+          error: 'Invalid response from ElevenLabs API',
+          details: 'No conversation ID returned' 
+        });
+      }
+
+      console.log('Call initiated successfully:', conversationId);
+
+      // Create initial call session in database
+      const session = await storage.createCallSession({
+        conversationId,
+        agentId,
+        clientId: clientId || '',
+        initiatedByUserId: userId,
+        phoneNumber,
+        status: 'initiated',
+        storeSnapshot: storeSnapshot || null,
+      });
+
+      // Log the initiation event
+      await storage.createCallEvent({
+        conversationId,
+        eventType: 'call_initiated',
+        status: 'initiated',
+        payload: { phoneNumber, agentId, userId },
+      });
+
+      res.status(200).json({
+        conversationId,
+        sessionId: session.id,
+        status: 'initiated',
+      });
+    } catch (error: any) {
+      console.error('Error initiating call:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // ===== SYSTEM-WIDE GOOGLE SHEETS OAUTH (ADMIN ONLY) =====
   app.get('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
