@@ -177,7 +177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("Session save error:", saveErr);
             return res.status(500).json({ message: "Session save failed" });
           }
-          res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role } });
+          res.json({ message: "Login successful", user: { id: user.id, username: user.username, role: user.role, hasVoiceAccess: user.hasVoiceAccess ?? false } });
         });
       });
     } catch (error: any) {
@@ -1784,6 +1784,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           agentName: user.agentName,
           role: user.role,
           isActive: user.isActive ?? (user as any).is_active ?? true,
+          hasVoiceAccess: user.hasVoiceAccess ?? false,
           totalSales,
           grossIncome: grossIncome.toFixed(2),
           createdAt: user.createdAt,

@@ -115,14 +115,32 @@ export async function setupAuth(app: Express) {
         if (!fullUser) {
           return cb(new Error('User not found'));
         }
-        // Return password auth user with a flag to skip token expiry checks
-        cb(null, { ...user, skipTokenCheck: true });
+        // Return password auth user with fresh data and a flag to skip token expiry checks
+        cb(null, { 
+          ...user, 
+          role: fullUser.role,
+          hasVoiceAccess: fullUser.hasVoiceAccess ?? false,
+          skipTokenCheck: true 
+        });
       } catch (error) {
         cb(error);
       }
     } else {
-      // For Replit Auth users, just return the session data
-      cb(null, user);
+      // For Replit Auth users, fetch fresh user data as well
+      try {
+        const fullUser = await storage.getUser(user.claims.sub);
+        if (fullUser) {
+          cb(null, { 
+            ...user, 
+            role: fullUser.role,
+            hasVoiceAccess: fullUser.hasVoiceAccess ?? false
+          });
+        } else {
+          cb(null, user);
+        }
+      } catch (error) {
+        cb(null, user);
+      }
     }
   });
 

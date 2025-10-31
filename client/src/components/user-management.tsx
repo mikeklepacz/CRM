@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { UserPlus, Mail, User as UserIcon, Briefcase, Lock, Shield, DollarSign, TrendingUp, Loader2, UserX, UserCheck, Trash2 } from "lucide-react";
@@ -23,6 +24,7 @@ interface UserWithMetrics {
   agentName: string | null;
   role: string;
   isActive?: boolean;
+  hasVoiceAccess?: boolean;
   totalSales: number;
   grossIncome: string;
   createdAt: string;
@@ -151,6 +153,27 @@ export function UserManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle voice access mutation
+  const toggleVoiceAccessMutation = useMutation({
+    mutationFn: async ({ userId, hasVoiceAccess }: { userId: string; hasVoiceAccess: boolean }) => {
+      return await apiRequest("PATCH", `/api/users/${userId}/voice-access`, { hasVoiceAccess });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      toast({
+        title: "Success",
+        description: "Voice access updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update voice access",
         variant: "destructive",
       });
     },
@@ -479,6 +502,7 @@ export function UserManagement() {
                       <TableHead>Email</TableHead>
                       <TableHead>Agent Name</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Voice Access</TableHead>
                       <TableHead>Referred By</TableHead>
                       <TableHead className="text-right">Total Sales</TableHead>
                       <TableHead className="text-right">Gross Income</TableHead>
@@ -488,7 +512,7 @@ export function UserManagement() {
                   <TableBody>
                     {displayedUsers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                           No active users found
                         </TableCell>
                       </TableRow>
@@ -507,6 +531,24 @@ export function UserManagement() {
                               {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
                               {user.role}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={user.role === 'admin' || user.hasVoiceAccess}
+                                disabled={user.role === 'admin' || toggleVoiceAccessMutation.isPending}
+                                onCheckedChange={(checked) => {
+                                  toggleVoiceAccessMutation.mutate({
+                                    userId: user.id,
+                                    hasVoiceAccess: checked as boolean,
+                                  });
+                                }}
+                                data-testid={`checkbox-voice-access-${user.id}`}
+                              />
+                              <span className="text-sm text-muted-foreground">
+                                {user.role === 'admin' ? '(Admin)' : ''}
+                              </span>
+                            </div>
                           </TableCell>
                           <TableCell>
                             {user.referredBy ? (
@@ -558,6 +600,7 @@ export function UserManagement() {
                       <TableHead>Email</TableHead>
                       <TableHead>Agent Name</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Voice Access</TableHead>
                       <TableHead>Referred By</TableHead>
                       <TableHead className="text-right">Total Sales</TableHead>
                       <TableHead className="text-right">Gross Income</TableHead>
@@ -567,7 +610,7 @@ export function UserManagement() {
                   <TableBody>
                     {displayedUsers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                           No inactive users found
                         </TableCell>
                       </TableRow>
@@ -586,6 +629,24 @@ export function UserManagement() {
                               {user.role === 'admin' && <Shield className="h-3 w-3 mr-1" />}
                               {user.role}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={user.role === 'admin' || user.hasVoiceAccess}
+                                disabled={user.role === 'admin' || toggleVoiceAccessMutation.isPending}
+                                onCheckedChange={(checked) => {
+                                  toggleVoiceAccessMutation.mutate({
+                                    userId: user.id,
+                                    hasVoiceAccess: checked as boolean,
+                                  });
+                                }}
+                                data-testid={`checkbox-voice-access-${user.id}`}
+                              />
+                              <span className="text-sm text-muted-foreground">
+                                {user.role === 'admin' ? '(Admin)' : ''}
+                              </span>
+                            </div>
                           </TableCell>
                           <TableCell>
                             {user.referredBy ? (
