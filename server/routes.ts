@@ -912,6 +912,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all ElevenLabs agents
+  app.get('/api/elevenlabs/agents', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const agents = await storage.getAllElevenLabsAgents();
+      res.json(agents);
+    } catch (error: any) {
+      console.error('Error fetching agents:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Get call sessions (history) with optional filtering
+  app.get('/api/call-sessions', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const { limit, offset, clientId, status } = req.query;
+
+      // If user is not admin and doesn't have voice access, deny
+      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Agent users can only see their own initiated calls
+      const filters: any = {};
+      if (user?.role !== 'admin') {
+        filters.initiatedByUserId = userId;
+      }
+      if (clientId) {
+        filters.clientId = clientId;
+      }
+      if (status) {
+        filters.status = status;
+      }
+
+      const sessions = await storage.getCallSessions(filters, {
+        limit: limit ? parseInt(limit as string) : 50,
+        offset: offset ? parseInt(offset as string) : 0,
+      });
+
+      res.json(sessions);
+    } catch (error: any) {
+      console.error('Error fetching call sessions:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Get single call session with transcripts
+  app.get('/api/call-sessions/:conversationId', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { conversationId } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      const session = await storage.getCallSessionByConversationId(conversationId);
+      if (!session) {
+        return res.status(404).json({ error: 'Call session not found' });
+      }
+
+      // Check access: admin can see all, agents can only see their own
+      if (user?.role !== 'admin' && session.initiatedByUserId !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const transcripts = await storage.getCallTranscripts(conversationId);
+
+      res.json({
+        session,
+        transcripts,
+      });
+    } catch (error: any) {
+      console.error('Error fetching call session:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // ===== SYSTEM-WIDE GOOGLE SHEETS OAUTH (ADMIN ONLY) =====
   app.get('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
