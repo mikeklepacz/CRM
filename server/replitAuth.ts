@@ -123,12 +123,13 @@ export async function setupAuth(app: Express) {
           skipTokenCheck: true 
         });
       } catch (error) {
+        console.error('Error deserializing password auth user:', error);
         cb(error);
       }
     } else {
       // For Replit Auth users, fetch fresh user data as well
       try {
-        const fullUser = await storage.getUser(user.claims.sub);
+        const fullUser = await storage.getUser(user.claims?.sub);
         if (fullUser) {
           cb(null, { 
             ...user, 
@@ -136,9 +137,12 @@ export async function setupAuth(app: Express) {
             hasVoiceAccess: fullUser.hasVoiceAccess ?? false
           });
         } else {
+          // If can't find user, return session data as-is
           cb(null, user);
         }
       } catch (error) {
+        console.error('Error deserializing Replit auth user:', error);
+        // On error, return session data as-is instead of failing
         cb(null, user);
       }
     }
