@@ -41,6 +41,7 @@ export const users = pgTable("users", {
   meetingLink: text("meeting_link"), // Agent's meeting/calendar link (e.g., Calendly, Google Meet)
   referredBy: varchar("referred_by").references(() => users.id), // MLM: who referred this user
   isActive: boolean("is_active").notNull().default(true), // Active/Inactive status for deactivating agents
+  hasVoiceAccess: boolean("has_voice_access").notNull().default(false), // Access to Voice AI calling features (admins always have access)
   signature: text("signature"), // Custom email signature for AI-generated emails
   gmailLabels: text("gmail_labels").array(), // Gmail labels to auto-apply to drafts
   emailPreference: varchar("email_preference", { length: 20 }).default('mailto'), // 'gmail_draft' or 'mailto'
