@@ -868,6 +868,108 @@ export const elevenlabsAgents = pgTable("elevenlabs_agents", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Voice AI Call Sessions - main call records with AI analysis
+export const callSessions = pgTable("call_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").unique(), // ElevenLabs conversation ID
+  callSid: varchar("call_sid"), // Twilio call SID
+  agentId: varchar("agent_id").notNull(), // ElevenLabs agent ID used
+  clientId: varchar("client_id").notNull().references(() => clients.id), // Which store/client was called
+  initiatedByUserId: varchar("initiated_by_user_id").references(() => users.id), // Which user started the call
+  phoneNumber: varchar("phone_number", { length: 50 }).notNull(),
+  status: varchar("status", { length: 50 }).notNull().default('initiated'), // 'initiated', 'in-progress', 'completed', 'failed', 'no-answer'
+  callDurationSecs: integer("call_duration_secs"),
+  costCredits: integer("cost_credits"),
+  startedAt: timestamp("started_at").defaultNow(),
+  endedAt: timestamp("ended_at"),
+  // AI Analysis (Step 2 - OpenAI Reflection)
+  aiAnalysis: jsonb("ai_analysis").$type<{
+    summary?: string;
+    sentiment?: string;
+    customerMood?: string;
+    mainObjection?: string;
+    keyMoment?: string;
+    agentStrengths?: string;
+    lessonLearned?: string;
+  }>(),
+  // Business Outcomes
+  callSuccessful: boolean("call_successful"),
+  interestLevel: varchar("interest_level", { length: 20 }), // 'hot', 'warm', 'cold', 'not-interested'
+  followUpNeeded: boolean("follow_up_needed").default(false),
+  followUpDate: timestamp("follow_up_date"),
+  nextAction: text("next_action"),
+  // Denormalized store snapshot for historical integrity
+  storeSnapshot: jsonb("store_snapshot").$type<Record<string, any>>(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_call_sessions_client").on(table.clientId),
+  index("idx_call_sessions_user").on(table.initiatedByUserId),
+  index("idx_call_sessions_status").on(table.status),
+  index("idx_call_sessions_started").on(table.startedAt),
+]);
+
+// Call Transcripts - conversation messages
+export const callTranscripts = pgTable("call_transcripts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull(), // Links to callSessions
+  role: varchar("role", { length: 20 }).notNull(), // 'agent' or 'user'
+  message: text("message").notNull(),
+  timeInCallSecs: integer("time_in_call_secs"),
+  toolCalls: jsonb("tool_calls"),
+  toolResults: jsonb("tool_results"),
+  metrics: jsonb("metrics").$type<Record<string, any>>(), // Latency, TTFB, etc.
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_call_transcripts_conversation").on(table.conversationId),
+]);
+
+// Call Events - status timeline and webhook payloads for debugging
+export const callEvents = pgTable("call_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull(),
+  eventType: varchar("event_type", { length: 50 }).notNull(), // 'webhook_received', 'status_change', 'error'
+  status: varchar("status", { length: 50 }),
+  payload: jsonb("payload").$type<Record<string, any>>(), // Full webhook payload for debugging
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_call_events_conversation").on(table.conversationId),
+]);
+
+// Call Campaigns - batch calling campaigns
+export const callCampaigns = pgTable("call_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  agentId: varchar("agent_id").notNull(), // Which ElevenLabs agent to use
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
+  storeFilter: jsonb("store_filter").$type<Record<string, any>>(), // Filters used: {"status": "claimed", "state": "CA"}
+  totalStores: integer("total_stores").default(0),
+  status: varchar("status", { length: 50 }).notNull().default('scheduled'), // 'scheduled', 'in-progress', 'completed', 'cancelled'
+  scheduledStart: timestamp("scheduled_start"),
+  completedAt: timestamp("completed_at"),
+  callsCompleted: integer("calls_completed").default(0),
+  callsSuccessful: integer("calls_successful").default(0),
+  callsFailed: integer("calls_failed").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_call_campaigns_user").on(table.createdByUserId),
+  index("idx_call_campaigns_status").on(table.status),
+]);
+
+// Call Campaign Targets - join table for campaign -> store mapping
+export const callCampaignTargets = pgTable("call_campaign_targets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => callCampaigns.id, { onDelete: 'cascade' }),
+  clientId: varchar("client_id").notNull().references(() => clients.id),
+  callSessionId: varchar("call_session_id").references(() => callSessions.id), // Links to actual call once made
+  targetStatus: varchar("target_status", { length: 50 }).default('pending'), // 'pending', 'completed', 'failed', 'skipped'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_campaign_targets_campaign").on(table.campaignId),
+  index("idx_campaign_targets_client").on(table.clientId),
+]);
+
 export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
@@ -896,6 +998,33 @@ export const insertElevenlabsAgentSchema = createInsertSchema(elevenlabsAgents).
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const insertCallSessionSchema = createInsertSchema(callSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCallTranscriptSchema = createInsertSchema(callTranscripts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCallEventSchema = createInsertSchema(callEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCallCampaignSchema = createInsertSchema(callCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCallCampaignTargetSchema = createInsertSchema(callCampaignTargets).omit({
+  id: true,
+  createdAt: true,
 });
 
 // Types
@@ -962,3 +1091,13 @@ export type ElevenlabsConfig = typeof elevenlabsConfig.$inferSelect;
 export type InsertElevenlabsConfig = z.infer<typeof insertElevenlabsConfigSchema>;
 export type ElevenlabsAgent = typeof elevenlabsAgents.$inferSelect;
 export type InsertElevenlabsAgent = z.infer<typeof insertElevenlabsAgentSchema>;
+export type CallSession = typeof callSessions.$inferSelect;
+export type InsertCallSession = z.infer<typeof insertCallSessionSchema>;
+export type CallTranscript = typeof callTranscripts.$inferSelect;
+export type InsertCallTranscript = z.infer<typeof insertCallTranscriptSchema>;
+export type CallEvent = typeof callEvents.$inferSelect;
+export type InsertCallEvent = z.infer<typeof insertCallEventSchema>;
+export type CallCampaign = typeof callCampaigns.$inferSelect;
+export type InsertCallCampaign = z.infer<typeof insertCallCampaignSchema>;
+export type CallCampaignTarget = typeof callCampaignTargets.$inferSelect;
+export type InsertCallCampaignTarget = z.infer<typeof insertCallCampaignTargetSchema>;
