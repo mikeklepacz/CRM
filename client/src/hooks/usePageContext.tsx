@@ -1,6 +1,8 @@
+
 import { useLocation } from 'wouter';
 
-export function usePageContext() {
+// Navigation hook - returns location and navigate function
+export function useNavigation() {
   const [location, setLocation] = useLocation();
   
   return {
@@ -18,6 +20,7 @@ interface PageContextData {
   [key: string]: any;
 }
 
+// Page context hook - returns page-specific context data
 export function usePageContext(): PageContextData | null {
   const [location] = useLocation();
 
