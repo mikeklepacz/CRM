@@ -31,8 +31,9 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
-const apiKeySchema = z.object({
+const configSchema = z.object({
   apiKey: z.string().min(1, "API key is required"),
+  twilioNumber: z.string().optional(),
 });
 
 const agentSchema = z.object({
@@ -56,9 +57,9 @@ export function VoiceSettings() {
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [isAddAgentOpen, setIsAddAgentOpen] = useState(false);
 
-  // Fetch API key
-  const { data: apiKeyData } = useQuery<{ apiKey: string }>({
-    queryKey: ['/api/elevenlabs/api-key'],
+  // Fetch config (API key + Twilio number)
+  const { data: configData } = useQuery<{ apiKey: string; twilioNumber?: string }>({
+    queryKey: ['/api/elevenlabs/config'],
   });
 
   // Fetch agents
@@ -67,13 +68,14 @@ export function VoiceSettings() {
   });
 
   const agents = agentsData?.agents || [];
-  const hasApiKey = !!apiKeyData?.apiKey;
+  const hasApiKey = !!configData?.apiKey;
 
-  // API Key form
-  const apiKeyForm = useForm<z.infer<typeof apiKeySchema>>({
-    resolver: zodResolver(apiKeySchema),
+  // Config form (API key + Twilio number)
+  const configForm = useForm<z.infer<typeof configSchema>>({
+    resolver: zodResolver(configSchema),
     defaultValues: {
-      apiKey: apiKeyData?.apiKey || "",
+      apiKey: configData?.apiKey || "",
+      twilioNumber: configData?.twilioNumber || "",
     },
   });
 
@@ -87,15 +89,15 @@ export function VoiceSettings() {
     },
   });
 
-  const updateApiKeyMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof apiKeySchema>) => {
-      return await apiRequest("PUT", "/api/elevenlabs/api-key", data);
+  const updateConfigMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof configSchema>) => {
+      return await apiRequest("PUT", "/api/elevenlabs/config", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/api-key'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/config'] });
       toast({
         title: "Success",
-        description: "API key updated successfully",
+        description: "Configuration updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -201,14 +203,14 @@ export function VoiceSettings() {
             </Alert>
           )}
 
-          <Form {...apiKeyForm}>
-            <form onSubmit={apiKeyForm.handleSubmit((data) => updateApiKeyMutation.mutate(data))} className="space-y-4">
+          <Form {...configForm}>
+            <form onSubmit={configForm.handleSubmit((data) => updateConfigMutation.mutate(data))} className="space-y-4">
               <FormField
-                control={apiKeyForm.control}
+                control={configForm.control}
                 name="apiKey"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>API Key</FormLabel>
+                    <FormLabel>ElevenLabs API Key</FormLabel>
                     <FormControl>
                       <div className="flex gap-2">
                         <Input
@@ -243,15 +245,36 @@ export function VoiceSettings() {
                 )}
               />
 
+              <FormField
+                control={configForm.control}
+                name="twilioNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Twilio Phone Number (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="+1234567890"
+                        data-testid="input-twilio-number"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Your Twilio phone number for outbound calls (e.g., +1234567890)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <Button
                 type="submit"
-                disabled={updateApiKeyMutation.isPending}
-                data-testid="button-save-api-key"
+                disabled={updateConfigMutation.isPending}
+                data-testid="button-save-config"
               >
-                {updateApiKeyMutation.isPending && (
+                {updateConfigMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Save API Key
+                Save Configuration
               </Button>
             </form>
           </Form>

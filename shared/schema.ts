@@ -848,10 +848,11 @@ export const driveFolders = pgTable("drive_folders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// ElevenLabs API configuration (stores API key)
+// ElevenLabs API configuration (stores API key and Twilio number)
 export const elevenlabsConfig = pgTable("elevenlabs_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   apiKey: text("api_key").notNull(), // ElevenLabs API key
+  twilioNumber: varchar("twilio_number", { length: 50 }), // Twilio phone number for outbound calls
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

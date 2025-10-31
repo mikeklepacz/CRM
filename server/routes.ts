@@ -579,8 +579,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== ELEVENLABS VOICE SETTINGS (ADMIN ONLY) =====
-  const elevenLabsApiKeySchema = z.object({
+  const elevenLabsConfigSchema = z.object({
     apiKey: z.string().min(1, "API key is required"),
+    twilioNumber: z.string().optional(),
   });
 
   const elevenLabsAgentSchema = z.object({
@@ -590,29 +591,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     isDefault: z.boolean().optional(),
   });
 
-  // API Key endpoints
-  app.get('/api/elevenlabs/api-key', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // Config endpoints (API key + Twilio number)
+  app.get('/api/elevenlabs/config', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const apiKey = await storage.getElevenLabsApiKey();
-      res.json({ apiKey: apiKey || "" });
+      const config = await storage.getElevenLabsConfig();
+      res.json(config || { apiKey: "", twilioNumber: "" });
     } catch (error: any) {
-      console.error("Error fetching ElevenLabs API key:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch API key" });
+      console.error("Error fetching ElevenLabs config:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch config" });
     }
   });
 
-  app.put('/api/elevenlabs/api-key', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.put('/api/elevenlabs/config', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const validation = elevenLabsApiKeySchema.safeParse(req.body);
+      const validation = elevenLabsConfigSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      await storage.updateElevenLabsApiKey(validation.data.apiKey);
-      res.json({ message: "API key updated successfully" });
+      await storage.updateElevenLabsConfig(validation.data);
+      res.json({ message: "ElevenLabs configuration updated successfully" });
     } catch (error: any) {
-      console.error("Error updating ElevenLabs API key:", error);
-      res.status(500).json({ message: error.message || "Failed to update API key" });
+      console.error("Error updating ElevenLabs config:", error);
+      res.status(500).json({ message: error.message || "Failed to update config" });
     }
   });
 
