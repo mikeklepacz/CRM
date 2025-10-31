@@ -1,0 +1,53 @@
+Step 1: Capture every transcript in your CRM as a first-class record.  Step 2 — Teach the System to Reflect
+
+Every new transcript triggers a short reflection pipeline inside your CRM.
+You already have OpenAI integrated, so this is just automation logic.
+
+When a transcript is saved:
+	1.	CRM queues a background task (no blocking UI).
+	2.	Task sends a structured prompt to OpenAI like:
+
+Summarize this call for sales context.
+Identify:
+- customer's mood and intent
+- main objection (if any)
+- what phrase or moment caused the turn
+- what the agent did well
+- one actionable improvement for the next call
+	3.	Store that result in a new column: ai_summary, sentiment, lesson.
+	4.	The next time an agent opens the “Call History,” they can see both the raw transcript and the “AI reflection.”
+
+That gives your system short-term memory — a reflection on every event.  Step 3 — Build the Daily Feedback Cycle
+
+At the end of each day, your CRM runs a simple aggregation:
+	•	How many calls ended with interested?
+	•	What words or questions show up most in those transcripts?
+	•	Which agent voice was used?
+
+You can have OpenAI (or a simple SQL + embedding model) cluster patterns:
+
+“The most successful 20% of calls shared these phrases: ‘local sourcing’, ‘handmade in Poland’, ‘sample shipment’.”
+
+Feed those patterns back into a “training feed” table.
+That feed powers your next-day voice adjustments.  Step 4 — Introduce Evolution Prompts
+
+Once you’ve got 50–100 calls logged, you can let the system begin proposing its own changes.
+
+Give OpenAI access to:
+	•	recent summaries
+	•	success metrics
+	•	script templates
+
+Then run a nightly process:
+
+“Based on yesterday’s top-performing calls, rewrite the opening line and closing offer to improve conversion.”
+
+You’ll approve or reject each proposal manually for now.
+Later, you can let it A/B-test both versions on live calls.  Step 5 — Close the Feedback Loop
+
+Everything above feeds two dashboards:
+	1.	Learning Dashboard — what’s improving, what’s plateauing.
+	2.	Mutation Log — every script or phrasing change the system proposed and its measured effect.
+
+That’s the foundation of an evolutionary system.
+It doesn’t require new models — just consistent data flow, structured analysis, and approval before deployment.

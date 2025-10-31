@@ -1,0 +1,104 @@
+My short term plan is that I will be able to reply “Holly” the cold caller towards any “claimed” status prospects that I want to. Right now I am planning on logging in as Mike Klepacz, then I am going to claim shops. Then I will log back in as Admin so that we are able to Get Holly to call into Mikes Claimed. Then we will test.      The 5 Cards in Detail:
+1. Start Calling
+* Opens: Full page wizard
+* Function: Select stores from your database → initiate AI-powered calls
+* Flow:
+    * Filter/search stores (unclaimed, your stores, by state, etc.)
+    * Select which agent to use
+    * Click to initiate call → triggers ElevenLabs API
+    * Real-time call status updates
+* Data: Creates records in call_sessions table
+* Access: Agents with hasVoiceAccess  In this space I want to be able to have rows of options.  Here is a scenario. We have a bank of prospects that have been claimed (status claimed) but have never been contacted and they are without POC details. That is for the cold caller.  Then we have the scenario where they are (interested) and there is a follow up date. That would be a follow up agent, they are trying to close, they can make new followup dates and continue to follow up. Until they close.   I would really need to think of more scenarios.   One thing that I think of is the ability to follow up for other agents. Surely they will fall through the cracks and we can pick things back up again.   
+2. Call History
+* Opens: Full page
+* Function: View all past calls with recordings & transcripts
+* Features:
+    * List of calls with date, store name, duration, outcome
+    * Play audio recordings (from Twilio)
+    * Read AI-generated transcripts
+    * Filter by date, agent, outcome
+* Data: Reads from call_sessions + call_events + call_recordings tables
+* Access: Agents see their calls, admins see all  We would need to look into how this data is shared from 11 labs. I would like the ability to analyze transcripts and figure out were we can do things better.   
+3. Batch Calls
+* Opens: Page or modal for campaign scheduling
+* Function: Schedule multiple calls at once
+* Flow:
+    * Select multiple stores (bulk selection)
+    * Choose agent and time slots
+    * Schedule campaign to run automatically
+    * Track campaign progress
+* Data: Creates call_campaigns table with scheduled calls
+* Access: Likely admin-only for now  This morning what I was thinking is that we allow the agents to look at the stores database so that they know when to call during business hours. I was thinking that we could make many calls in a day but I am not sure what the limit is for call. I was told that in theory bots could call 10000 places at once. I am not sure the limits of Eleven labs  
+4. Call Analytics
+* Opens: Full page dashboard
+* Function: Performance metrics and insights
+* Metrics:
+    * Call success rates
+    * Average call duration
+    * Conversion rates (calls → closed deals)
+    * Best performing agents/scripts
+    * Integration with commission data
+* Data: Aggregates from call_sessions + commissions tables
+* Access: Admins see all, agents see their stats  For sure analysis will be key to making this work.   
+5. Voice Settings (on Voice page)
+* Opens: Lightweight modal
+* Function: Quick session preferences for agents
+* Settings:
+    * Select which agent to use by default
+    * View current Twilio number (read-only)
+    * Session-specific preferences
+* Access: All voice-enabled users
+* Note: NOT for API keys/system config (that's Admin Dashboard)
+   Step 1: Capture every transcript in your CRM as a first-class record.  Step 2 — Teach the System to Reflect
+
+Every new transcript triggers a short reflection pipeline inside your CRM.
+You already have OpenAI integrated, so this is just automation logic.
+
+When a transcript is saved:
+	1.	CRM queues a background task (no blocking UI).
+	2.	Task sends a structured prompt to OpenAI like:
+
+Summarize this call for sales context.
+Identify:
+- customer's mood and intent
+- main objection (if any)
+- what phrase or moment caused the turn
+- what the agent did well
+- one actionable improvement for the next call
+	3.	Store that result in a new column: ai_summary, sentiment, lesson.
+	4.	The next time an agent opens the “Call History,” they can see both the raw transcript and the “AI reflection.”
+
+That gives your system short-term memory — a reflection on every event.  Step 3 — Build the Daily Feedback Cycle
+
+At the end of each day, your CRM runs a simple aggregation:
+	•	How many calls ended with interested?
+	•	What words or questions show up most in those transcripts?
+	•	Which agent voice was used?
+
+You can have OpenAI (or a simple SQL + embedding model) cluster patterns:
+
+“The most successful 20% of calls shared these phrases: ‘local sourcing’, ‘handmade in Poland’, ‘sample shipment’.”
+
+Feed those patterns back into a “training feed” table.
+That feed powers your next-day voice adjustments.  Step 4 — Introduce Evolution Prompts
+
+Once you’ve got 50–100 calls logged, you can let the system begin proposing its own changes.
+
+Give OpenAI access to:
+	•	recent summaries
+	•	success metrics
+	•	script templates
+
+Then run a nightly process:
+
+“Based on yesterday’s top-performing calls, rewrite the opening line and closing offer to improve conversion.”
+
+You’ll approve or reject each proposal manually for now.
+Later, you can let it A/B-test both versions on live calls.  Step 5 — Close the Feedback Loop
+
+Everything above feeds two dashboards:
+	1.	Learning Dashboard — what’s improving, what’s plateauing.
+	2.	Mutation Log — every script or phrasing change the system proposed and its measured effect.
+
+That’s the foundation of an evolutionary system.
+It doesn’t require new models — just consistent data flow, structured analysis, and approval before deployment.      we want to use smart filtering to find the high follower, high vibe but we need to be able to filter the vibe.     
