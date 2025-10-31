@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,60 +19,83 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { Phone, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Phone, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Star } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
-const elevenLabsSchema = z.object({
+const apiKeySchema = z.object({
   apiKey: z.string().min(1, "API key is required"),
-  agentId: z.string().min(1, "Agent ID is required"),
-  phoneNumber: z.string().optional(),
 });
 
-type ElevenLabsSettings = {
-  apiKey: string;
+const agentSchema = z.object({
+  name: z.string().min(1, "Agent name is required"),
+  agentId: z.string().min(1, "Agent ID is required"),
+  description: z.string().optional(),
+});
+
+type Agent = {
+  id: string;
+  name: string;
   agentId: string;
-  phoneNumber?: string;
+  description?: string;
+  isDefault: boolean;
 };
 
 export function VoiceSettings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showApiKey, setShowApiKey] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [isAddAgentOpen, setIsAddAgentOpen] = useState(false);
 
-  // Fetch ElevenLabs settings
-  const { data: settings, isLoading } = useQuery<ElevenLabsSettings>({
-    queryKey: ['/api/elevenlabs/settings'],
+  // Fetch API key
+  const { data: apiKeyData } = useQuery<{ apiKey: string }>({
+    queryKey: ['/api/elevenlabs/api-key'],
   });
 
-  const form = useForm<z.infer<typeof elevenLabsSchema>>({
-    resolver: zodResolver(elevenLabsSchema),
+  // Fetch agents
+  const { data: agentsData } = useQuery<{ agents: Agent[] }>({
+    queryKey: ['/api/elevenlabs/agents'],
+  });
+
+  const agents = agentsData?.agents || [];
+  const hasApiKey = !!apiKeyData?.apiKey;
+
+  // API Key form
+  const apiKeyForm = useForm<z.infer<typeof apiKeySchema>>({
+    resolver: zodResolver(apiKeySchema),
     defaultValues: {
-      apiKey: settings?.apiKey || "",
-      agentId: settings?.agentId || "",
-      phoneNumber: settings?.phoneNumber || "",
+      apiKey: apiKeyData?.apiKey || "",
     },
   });
 
-  // Update form when settings load
-  useEffect(() => {
-    if (settings) {
-      form.reset({
-        apiKey: settings.apiKey || "",
-        agentId: settings.agentId || "",
-        phoneNumber: settings.phoneNumber || "",
-      });
-    }
-  }, [settings, form]);
+  // Agent form
+  const agentForm = useForm<z.infer<typeof agentSchema>>({
+    resolver: zodResolver(agentSchema),
+    defaultValues: {
+      name: "",
+      agentId: "",
+      description: "",
+    },
+  });
 
-  const updateSettingsMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof elevenLabsSchema>) => {
-      return await apiRequest("PUT", "/api/elevenlabs/settings", data);
+  const updateApiKeyMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof apiKeySchema>) => {
+      return await apiRequest("PUT", "/api/elevenlabs/api-key", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/api-key'] });
       toast({
         title: "Success",
-        description: "ElevenLabs settings updated successfully",
+        description: "API key updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -83,55 +107,104 @@ export function VoiceSettings() {
     },
   });
 
-  const onSubmit = (data: z.infer<typeof elevenLabsSchema>) => {
-    updateSettingsMutation.mutate(data);
-  };
+  const createAgentMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof agentSchema>) => {
+      return await apiRequest("POST", "/api/elevenlabs/agents", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+      setIsAddAgentOpen(false);
+      agentForm.reset();
+      toast({
+        title: "Success",
+        description: "Agent added successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const deleteAgentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/elevenlabs/agents/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+      toast({
+        title: "Success",
+        description: "Agent deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
-  const hasSettings = settings?.apiKey && settings?.agentId;
+  const setDefaultMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("PUT", `/api/elevenlabs/agents/${id}/set-default`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+      toast({
+        title: "Success",
+        description: "Default agent updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <div className="space-y-6">
+      {/* API Key Card */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Phone className="h-5 w-5" />
-            <CardTitle>ElevenLabs Configuration</CardTitle>
+            <CardTitle>ElevenLabs API Key</CardTitle>
           </div>
           <CardDescription>
-            Configure your ElevenLabs API credentials and conversational AI agent settings
+            Your ElevenLabs API key is used for all voice calling features
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {hasSettings && (
+          {hasApiKey && (
             <Alert className="mb-6">
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                ElevenLabs is configured and ready to use. Update your settings below if needed.
+                API key is configured and ready to use
               </AlertDescription>
             </Alert>
           )}
           
-          {!hasSettings && (
+          {!hasApiKey && (
             <Alert className="mb-6">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Please configure your ElevenLabs credentials to enable voice calling features.
+                Please configure your API key to enable voice features
               </AlertDescription>
             </Alert>
           )}
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <Form {...apiKeyForm}>
+            <form onSubmit={apiKeyForm.handleSubmit((data) => updateApiKeyMutation.mutate(data))} className="space-y-4">
               <FormField
-                control={form.control}
+                control={apiKeyForm.control}
                 name="apiKey"
                 render={({ field }) => (
                   <FormItem>
@@ -142,7 +215,7 @@ export function VoiceSettings() {
                           {...field}
                           type={showApiKey ? "text" : "password"}
                           placeholder="sk_..."
-                          data-testid="input-elevenlabs-api-key"
+                          data-testid="input-api-key"
                         />
                         <Button
                           type="button"
@@ -170,91 +243,169 @@ export function VoiceSettings() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="agentId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Agent ID</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="Your conversational AI agent ID"
-                        data-testid="input-elevenlabs-agent-id"
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Find your Agent ID in your ElevenLabs dashboard under Conversational AI
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="phoneNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Twilio Phone Number (Optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="+1234567890"
-                        data-testid="input-phone-number"
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Your Twilio phone number for making calls (managed by ElevenLabs)
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <Button
                 type="submit"
-                disabled={updateSettingsMutation.isPending}
-                data-testid="button-save-voice-settings"
+                disabled={updateApiKeyMutation.isPending}
+                data-testid="button-save-api-key"
               >
-                {updateSettingsMutation.isPending && (
+                {updateApiKeyMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Save Settings
+                Save API Key
               </Button>
             </form>
           </Form>
         </CardContent>
       </Card>
 
+      {/* Agents Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Integration Status</CardTitle>
-          <CardDescription>
-            Current status of your ElevenLabs voice integration
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Voice Agents</CardTitle>
+              <CardDescription>
+                Manage your ElevenLabs conversational AI agents
+              </CardDescription>
+            </div>
+            <Dialog open={isAddAgentOpen} onOpenChange={setIsAddAgentOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-agent">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Agent
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Voice Agent</DialogTitle>
+                  <DialogDescription>
+                    Add a new ElevenLabs conversational AI agent
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...agentForm}>
+                  <form onSubmit={agentForm.handleSubmit((data) => createAgentMutation.mutate(data))} className="space-y-4">
+                    <FormField
+                      control={agentForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Agent Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Sales Cold Caller" data-testid="input-agent-name" />
+                          </FormControl>
+                          <FormDescription>
+                            A descriptive name for this agent (e.g., "Sales Cold Caller", "Follow-up Agent")
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={agentForm.control}
+                      name="agentId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Agent ID</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="abc123..." data-testid="input-agent-id" />
+                          </FormControl>
+                          <FormDescription>
+                            Find this in your ElevenLabs dashboard under Conversational AI
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={agentForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description (Optional)</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} placeholder="Used for initial cold calls to new leads" data-testid="input-agent-description" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <Button
+                      type="submit"
+                      disabled={createAgentMutation.isPending}
+                      data-testid="button-save-agent"
+                      className="w-full"
+                    >
+                      {createAgentMutation.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Add Agent
+                    </Button>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">API Key</span>
-              <span className="text-sm text-muted-foreground">
-                {hasSettings ? "✓ Configured" : "Not configured"}
-              </span>
+          {agents.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No agents configured yet. Add your first agent to get started.</p>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Agent ID</span>
-              <span className="text-sm text-muted-foreground">
-                {settings?.agentId || "Not configured"}
-              </span>
+          ) : (
+            <div className="space-y-3">
+              {agents.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="flex items-start justify-between p-4 border rounded-lg hover-elevate"
+                  data-testid={`agent-card-${agent.id}`}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-medium">{agent.name}</h4>
+                      {agent.isDefault && (
+                        <Badge variant="default" data-testid="badge-default-agent">
+                          <Star className="h-3 w-3 mr-1" />
+                          Default
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Agent ID: {agent.agentId}
+                    </p>
+                    {agent.description && (
+                      <p className="text-sm text-muted-foreground">
+                        {agent.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {!agent.isDefault && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDefaultMutation.mutate(agent.id)}
+                        data-testid={`button-set-default-${agent.id}`}
+                      >
+                        <Star className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteAgentMutation.mutate(agent.id)}
+                      disabled={deleteAgentMutation.isPending}
+                      data-testid={`button-delete-agent-${agent.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Phone Number</span>
-              <span className="text-sm text-muted-foreground">
-                {settings?.phoneNumber || "Not configured"}
-              </span>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

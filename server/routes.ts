@@ -579,36 +579,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== ELEVENLABS VOICE SETTINGS (ADMIN ONLY) =====
-  const elevenLabsSchema = z.object({
+  const elevenLabsApiKeySchema = z.object({
     apiKey: z.string().min(1, "API key is required"),
-    agentId: z.string().min(1, "Agent ID is required"),
-    phoneNumber: z.string().optional(),
   });
 
-  app.get('/api/elevenlabs/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  const elevenLabsAgentSchema = z.object({
+    name: z.string().min(1, "Agent name is required"),
+    agentId: z.string().min(1, "Agent ID is required"),
+    description: z.string().optional(),
+    isDefault: z.boolean().optional(),
+  });
+
+  // API Key endpoints
+  app.get('/api/elevenlabs/api-key', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const settings = await storage.getElevenLabsSettings();
-      res.json(settings || { apiKey: "", agentId: "", phoneNumber: "" });
+      const apiKey = await storage.getElevenLabsApiKey();
+      res.json({ apiKey: apiKey || "" });
     } catch (error: any) {
-      console.error("Error fetching ElevenLabs settings:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch settings" });
+      console.error("Error fetching ElevenLabs API key:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch API key" });
     }
   });
 
-  app.put('/api/elevenlabs/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.put('/api/elevenlabs/api-key', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const validation = elevenLabsSchema.safeParse(req.body);
+      const validation = elevenLabsApiKeySchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      const { apiKey, agentId, phoneNumber } = validation.data;
-      await storage.updateElevenLabsSettings({ apiKey, agentId, phoneNumber });
-
-      res.json({ message: "ElevenLabs settings updated successfully" });
+      await storage.updateElevenLabsApiKey(validation.data.apiKey);
+      res.json({ message: "API key updated successfully" });
     } catch (error: any) {
-      console.error("Error updating ElevenLabs settings:", error);
-      res.status(500).json({ message: error.message || "Failed to update settings" });
+      console.error("Error updating ElevenLabs API key:", error);
+      res.status(500).json({ message: error.message || "Failed to update API key" });
+    }
+  });
+
+  // Agent endpoints
+  app.get('/api/elevenlabs/agents', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const agents = await storage.getAllElevenLabsAgents();
+      res.json({ agents });
+    } catch (error: any) {
+      console.error("Error fetching ElevenLabs agents:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch agents" });
+    }
+  });
+
+  app.post('/api/elevenlabs/agents', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const validation = elevenLabsAgentSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const agent = await storage.createElevenLabsAgent(validation.data);
+      res.json(agent);
+    } catch (error: any) {
+      console.error("Error creating ElevenLabs agent:", error);
+      res.status(500).json({ message: error.message || "Failed to create agent" });
+    }
+  });
+
+  app.put('/api/elevenlabs/agents/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const validation = elevenLabsAgentSchema.partial().safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const agent = await storage.updateElevenLabsAgent(req.params.id, validation.data);
+      res.json(agent);
+    } catch (error: any) {
+      console.error("Error updating ElevenLabs agent:", error);
+      res.status(500).json({ message: error.message || "Failed to update agent" });
+    }
+  });
+
+  app.delete('/api/elevenlabs/agents/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      await storage.deleteElevenLabsAgent(req.params.id);
+      res.json({ message: "Agent deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting ElevenLabs agent:", error);
+      res.status(500).json({ message: error.message || "Failed to delete agent" });
+    }
+  });
+
+  app.put('/api/elevenlabs/agents/:id/set-default', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      await storage.setDefaultElevenLabsAgent(req.params.id);
+      res.json({ message: "Default agent set successfully" });
+    } catch (error: any) {
+      console.error("Error setting default agent:", error);
+      res.status(500).json({ message: error.message || "Failed to set default agent" });
     }
   });
 

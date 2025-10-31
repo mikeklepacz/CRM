@@ -30,6 +30,8 @@ import {
   ticketReplies,
   callHistory,
   driveFolders,
+  elevenlabsConfig,
+  elevenlabsAgents,
   type User,
   type UpsertUser,
   type Ticket,
@@ -87,6 +89,10 @@ import {
   type InsertCallHistory,
   type DriveFolder,
   type InsertDriveFolder,
+  type ElevenlabsConfig,
+  type InsertElevenlabsConfig,
+  type ElevenlabsAgent,
+  type InsertElevenlabsAgent,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -306,8 +312,15 @@ export interface IStorage {
   }>;
   
   // ElevenLabs settings operations
-  getElevenLabsSettings(): Promise<{ apiKey: string; agentId: string; phoneNumber?: string } | undefined>;
-  updateElevenLabsSettings(settings: { apiKey: string; agentId: string; phoneNumber?: string }): Promise<void>;
+  getElevenLabsApiKey(): Promise<string | undefined>;
+  updateElevenLabsApiKey(apiKey: string): Promise<void>;
+  getAllElevenLabsAgents(): Promise<ElevenlabsAgent[]>;
+  getElevenLabsAgent(id: string): Promise<ElevenlabsAgent | undefined>;
+  getDefaultElevenLabsAgent(): Promise<ElevenlabsAgent | undefined>;
+  createElevenLabsAgent(agent: InsertElevenlabsAgent): Promise<ElevenlabsAgent>;
+  updateElevenLabsAgent(id: string, updates: Partial<InsertElevenlabsAgent>): Promise<ElevenlabsAgent>;
+  deleteElevenLabsAgent(id: string): Promise<void>;
+  setDefaultElevenLabsAgent(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1845,23 +1858,55 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ElevenLabs settings operations
-  async getElevenLabsSettings(): Promise<{ apiKey: string; agentId: string; phoneNumber?: string } | undefined> {
-    const result = await db.query(`SELECT api_key, agent_id, phone_number FROM elevenlabs_settings ORDER BY id DESC LIMIT 1`);
-    if (result.rows.length === 0) return undefined;
-    return {
-      apiKey: result.rows[0].api_key,
-      agentId: result.rows[0].agent_id,
-      phoneNumber: result.rows[0].phone_number || undefined
-    };
+  async getElevenLabsApiKey(): Promise<string | undefined> {
+    const [config] = await db.select().from(elevenlabsConfig).limit(1);
+    return config?.apiKey;
   }
 
-  async updateElevenLabsSettings(settings: { apiKey: string; agentId: string; phoneNumber?: string }): Promise<void> {
-    // Delete old settings and insert new ones (simple approach for single-row table)
-    await db.query(`DELETE FROM elevenlabs_settings`);
-    await db.query(
-      `INSERT INTO elevenlabs_settings (api_key, agent_id, phone_number) VALUES ($1, $2, $3)`,
-      [settings.apiKey, settings.agentId, settings.phoneNumber || null]
-    );
+  async updateElevenLabsApiKey(apiKey: string): Promise<void> {
+    // Delete old config and insert new (single row table)
+    await db.delete(elevenlabsConfig);
+    await db.insert(elevenlabsConfig).values({ apiKey });
+  }
+
+  async getAllElevenLabsAgents(): Promise<ElevenlabsAgent[]> {
+    return await db.select().from(elevenlabsAgents);
+  }
+
+  async getElevenLabsAgent(id: string): Promise<ElevenlabsAgent | undefined> {
+    const [agent] = await db.select().from(elevenlabsAgents).where(eq(elevenlabsAgents.id, id));
+    return agent;
+  }
+
+  async getDefaultElevenLabsAgent(): Promise<ElevenlabsAgent | undefined> {
+    const [agent] = await db.select().from(elevenlabsAgents).where(eq(elevenlabsAgents.isDefault, true)).limit(1);
+    return agent;
+  }
+
+  async createElevenLabsAgent(agent: InsertElevenlabsAgent): Promise<ElevenlabsAgent> {
+    const [newAgent] = await db.insert(elevenlabsAgents).values(agent).returning();
+    return newAgent;
+  }
+
+  async updateElevenLabsAgent(id: string, updates: Partial<InsertElevenlabsAgent>): Promise<ElevenlabsAgent> {
+    const [updated] = await db.update(elevenlabsAgents)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(elevenlabsAgents.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteElevenLabsAgent(id: string): Promise<void> {
+    await db.delete(elevenlabsAgents).where(eq(elevenlabsAgents.id, id));
+  }
+
+  async setDefaultElevenLabsAgent(id: string): Promise<void> {
+    // First, set all agents to non-default
+    await db.update(elevenlabsAgents).set({ isDefault: false });
+    // Then set the specified agent as default
+    await db.update(elevenlabsAgents)
+      .set({ isDefault: true })
+      .where(eq(elevenlabsAgents.id, id));
   }
 }
 
