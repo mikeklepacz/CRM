@@ -2,12 +2,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Phone, PhoneCall, Clock, Users, BarChart3 } from "lucide-react";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { useEffect } from "react";
 
 export default function Voice() {
   const { user } = useAuth();
-  const [, setLocation] = useNavigate();
+  const [, setLocation] = useLocation();
 
   // Redirect if user doesn't have voice access
   useEffect(() => {
