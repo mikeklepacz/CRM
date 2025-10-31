@@ -10,6 +10,7 @@ import { OpenAIManagement } from "@/components/openai-management";
 import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
 import { WebhookManagement } from "@/components/webhook-management";
 import { DriveFolderConfig } from "@/components/drive-folder-config";
+import { VoiceSettings } from "@/components/voice-settings";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useQuery } from "@tanstack/react-query";
@@ -97,6 +98,7 @@ export default function AdminDashboard() {
           <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
           <TabsTrigger value="webhooks" data-testid="tab-webhooks">Webhooks</TabsTrigger>
+          <TabsTrigger value="voice" data-testid="tab-voice">Voice</TabsTrigger>
           <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
           <TabsTrigger value="assets" data-testid="tab-assets">Assets</TabsTrigger>
@@ -117,6 +119,10 @@ export default function AdminDashboard() {
 
         <TabsContent value="webhooks">
           <WebhookManagement />
+        </TabsContent>
+
+        <TabsContent value="voice">
+          <VoiceSettings />
         </TabsContent>
 
         <TabsContent value="openai">

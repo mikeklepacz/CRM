@@ -578,6 +578,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== ELEVENLABS VOICE SETTINGS (ADMIN ONLY) =====
+  const elevenLabsSchema = z.object({
+    apiKey: z.string().min(1, "API key is required"),
+    agentId: z.string().min(1, "Agent ID is required"),
+    phoneNumber: z.string().optional(),
+  });
+
+  app.get('/api/elevenlabs/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const settings = await storage.getElevenLabsSettings();
+      res.json(settings || { apiKey: "", agentId: "", phoneNumber: "" });
+    } catch (error: any) {
+      console.error("Error fetching ElevenLabs settings:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch settings" });
+    }
+  });
+
+  app.put('/api/elevenlabs/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const validation = elevenLabsSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: validation.error.errors[0].message });
+      }
+
+      const { apiKey, agentId, phoneNumber } = validation.data;
+      await storage.updateElevenLabsSettings({ apiKey, agentId, phoneNumber });
+
+      res.json({ message: "ElevenLabs settings updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating ElevenLabs settings:", error);
+      res.status(500).json({ message: error.message || "Failed to update settings" });
+    }
+  });
+
   // ===== SYSTEM-WIDE GOOGLE SHEETS OAUTH (ADMIN ONLY) =====
   app.get('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

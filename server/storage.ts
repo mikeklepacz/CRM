@@ -304,6 +304,10 @@ export interface IStorage {
     interestedGoingCold: Array<Client & { daysSinceContact: number }>;
     closedWonReorder: Array<Client & { daysSinceOrder: number }>;
   }>;
+  
+  // ElevenLabs settings operations
+  getElevenLabsSettings(): Promise<{ apiKey: string; agentId: string; phoneNumber?: string } | undefined>;
+  updateElevenLabsSettings(settings: { apiKey: string; agentId: string; phoneNumber?: string }): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1838,6 +1842,26 @@ export class DatabaseStorage implements IStorage {
       interestedGoingCold,
       closedWonReorder
     };
+  }
+
+  // ElevenLabs settings operations
+  async getElevenLabsSettings(): Promise<{ apiKey: string; agentId: string; phoneNumber?: string } | undefined> {
+    const result = await db.query(`SELECT api_key, agent_id, phone_number FROM elevenlabs_settings ORDER BY id DESC LIMIT 1`);
+    if (result.rows.length === 0) return undefined;
+    return {
+      apiKey: result.rows[0].api_key,
+      agentId: result.rows[0].agent_id,
+      phoneNumber: result.rows[0].phone_number || undefined
+    };
+  }
+
+  async updateElevenLabsSettings(settings: { apiKey: string; agentId: string; phoneNumber?: string }): Promise<void> {
+    // Delete old settings and insert new ones (simple approach for single-row table)
+    await db.query(`DELETE FROM elevenlabs_settings`);
+    await db.query(
+      `INSERT INTO elevenlabs_settings (api_key, agent_id, phone_number) VALUES ($1, $2, $3)`,
+      [settings.apiKey, settings.agentId, settings.phoneNumber || null]
+    );
   }
 }
 
