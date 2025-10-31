@@ -32,6 +32,11 @@ import {
   driveFolders,
   elevenlabsConfig,
   elevenlabsAgents,
+  callSessions,
+  callTranscripts,
+  callEvents,
+  callCampaigns,
+  callCampaignTargets,
   type User,
   type UpsertUser,
   type Ticket,
@@ -93,6 +98,16 @@ import {
   type InsertElevenlabsConfig,
   type ElevenlabsAgent,
   type InsertElevenlabsAgent,
+  type CallSession,
+  type InsertCallSession,
+  type CallTranscript,
+  type InsertCallTranscript,
+  type CallEvent,
+  type InsertCallEvent,
+  type CallCampaign,
+  type InsertCallCampaign,
+  type CallCampaignTarget,
+  type InsertCallCampaignTarget,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
@@ -321,6 +336,34 @@ export interface IStorage {
   updateElevenLabsAgent(id: string, updates: Partial<InsertElevenlabsAgent>): Promise<ElevenlabsAgent>;
   deleteElevenLabsAgent(id: string): Promise<void>;
   setDefaultElevenLabsAgent(id: string): Promise<void>;
+
+  // Voice AI Call Sessions operations
+  createCallSession(session: InsertCallSession): Promise<CallSession>;
+  getCallSession(id: string): Promise<CallSession | undefined>;
+  getCallSessionByConversationId(conversationId: string): Promise<CallSession | undefined>;
+  getCallSessions(filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]>;
+  updateCallSession(id: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
+  updateCallSessionByConversationId(conversationId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
+
+  // Call Transcripts operations
+  createCallTranscript(transcript: InsertCallTranscript): Promise<CallTranscript>;
+  getCallTranscripts(conversationId: string): Promise<CallTranscript[]>;
+  bulkCreateCallTranscripts(transcripts: InsertCallTranscript[]): Promise<void>;
+
+  // Call Events operations
+  createCallEvent(event: InsertCallEvent): Promise<CallEvent>;
+  getCallEvents(conversationId: string): Promise<CallEvent[]>;
+
+  // Call Campaigns operations
+  createCallCampaign(campaign: InsertCallCampaign): Promise<CallCampaign>;
+  getCallCampaign(id: string): Promise<CallCampaign | undefined>;
+  getCallCampaigns(filters?: { createdByUserId?: string; status?: string }): Promise<CallCampaign[]>;
+  updateCallCampaign(id: string, updates: Partial<InsertCallCampaign>): Promise<CallCampaign>;
+
+  // Call Campaign Targets operations
+  createCallCampaignTarget(target: InsertCallCampaignTarget): Promise<CallCampaignTarget>;
+  getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]>;
+  updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1914,6 +1957,128 @@ export class DatabaseStorage implements IStorage {
     await db.update(elevenlabsAgents)
       .set({ isDefault: true })
       .where(eq(elevenlabsAgents.id, id));
+  }
+
+  // Voice AI Call Sessions operations
+  async createCallSession(session: InsertCallSession): Promise<CallSession> {
+    const [newSession] = await db.insert(callSessions).values(session).returning();
+    return newSession;
+  }
+
+  async getCallSession(id: string): Promise<CallSession | undefined> {
+    const [session] = await db.select().from(callSessions).where(eq(callSessions.id, id));
+    return session;
+  }
+
+  async getCallSessionByConversationId(conversationId: string): Promise<CallSession | undefined> {
+    const [session] = await db.select().from(callSessions).where(eq(callSessions.conversationId, conversationId));
+    return session;
+  }
+
+  async getCallSessions(filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]> {
+    const conditions = [];
+    if (filters?.clientId) conditions.push(eq(callSessions.clientId, filters.clientId));
+    if (filters?.initiatedByUserId) conditions.push(eq(callSessions.initiatedByUserId, filters.initiatedByUserId));
+    if (filters?.status) conditions.push(eq(callSessions.status, filters.status));
+
+    if (conditions.length === 0) {
+      return await db.select().from(callSessions).orderBy(desc(callSessions.startedAt));
+    }
+    return await db.select().from(callSessions).where(and(...conditions)).orderBy(desc(callSessions.startedAt));
+  }
+
+  async updateCallSession(id: string, updates: Partial<InsertCallSession>): Promise<CallSession> {
+    const [updated] = await db.update(callSessions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(callSessions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateCallSessionByConversationId(conversationId: string, updates: Partial<InsertCallSession>): Promise<CallSession> {
+    const [updated] = await db.update(callSessions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(callSessions.conversationId, conversationId))
+      .returning();
+    return updated;
+  }
+
+  // Call Transcripts operations
+  async createCallTranscript(transcript: InsertCallTranscript): Promise<CallTranscript> {
+    const [newTranscript] = await db.insert(callTranscripts).values(transcript).returning();
+    return newTranscript;
+  }
+
+  async getCallTranscripts(conversationId: string): Promise<CallTranscript[]> {
+    return await db.select().from(callTranscripts)
+      .where(eq(callTranscripts.conversationId, conversationId))
+      .orderBy(callTranscripts.timeInCallSecs);
+  }
+
+  async bulkCreateCallTranscripts(transcripts: InsertCallTranscript[]): Promise<void> {
+    if (transcripts.length === 0) return;
+    await db.insert(callTranscripts).values(transcripts);
+  }
+
+  // Call Events operations
+  async createCallEvent(event: InsertCallEvent): Promise<CallEvent> {
+    const [newEvent] = await db.insert(callEvents).values(event).returning();
+    return newEvent;
+  }
+
+  async getCallEvents(conversationId: string): Promise<CallEvent[]> {
+    return await db.select().from(callEvents)
+      .where(eq(callEvents.conversationId, conversationId))
+      .orderBy(callEvents.createdAt);
+  }
+
+  // Call Campaigns operations
+  async createCallCampaign(campaign: InsertCallCampaign): Promise<CallCampaign> {
+    const [newCampaign] = await db.insert(callCampaigns).values(campaign).returning();
+    return newCampaign;
+  }
+
+  async getCallCampaign(id: string): Promise<CallCampaign | undefined> {
+    const [campaign] = await db.select().from(callCampaigns).where(eq(callCampaigns.id, id));
+    return campaign;
+  }
+
+  async getCallCampaigns(filters?: { createdByUserId?: string; status?: string }): Promise<CallCampaign[]> {
+    const conditions = [];
+    if (filters?.createdByUserId) conditions.push(eq(callCampaigns.createdByUserId, filters.createdByUserId));
+    if (filters?.status) conditions.push(eq(callCampaigns.status, filters.status));
+
+    if (conditions.length === 0) {
+      return await db.select().from(callCampaigns).orderBy(desc(callCampaigns.createdAt));
+    }
+    return await db.select().from(callCampaigns).where(and(...conditions)).orderBy(desc(callCampaigns.createdAt));
+  }
+
+  async updateCallCampaign(id: string, updates: Partial<InsertCallCampaign>): Promise<CallCampaign> {
+    const [updated] = await db.update(callCampaigns)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(callCampaigns.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Call Campaign Targets operations
+  async createCallCampaignTarget(target: InsertCallCampaignTarget): Promise<CallCampaignTarget> {
+    const [newTarget] = await db.insert(callCampaignTargets).values(target).returning();
+    return newTarget;
+  }
+
+  async getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]> {
+    return await db.select().from(callCampaignTargets)
+      .where(eq(callCampaignTargets.campaignId, campaignId));
+  }
+
+  async updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget> {
+    const [updated] = await db.update(callCampaignTargets)
+      .set(updates)
+      .where(eq(callCampaignTargets.id, id))
+      .returning();
+    return updated;
   }
 }
 
