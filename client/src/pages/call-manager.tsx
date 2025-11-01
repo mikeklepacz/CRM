@@ -17,6 +17,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 interface ElevenLabsAgent {
+  id: string;
   agent_id: string;
   name: string;
   phone_number_id: string;
@@ -103,7 +104,7 @@ export default function CallManager() {
 
   // Batch call mutation
   const batchCallMutation = useMutation({
-    mutationFn: async (data: { agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean }) => {
+    mutationFn: async (data: { agent_record_id: string; agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean }) => {
       return apiRequest('POST', '/api/elevenlabs/batch-call', data);
     },
     onSuccess: () => {
@@ -181,13 +182,14 @@ export default function CallManager() {
       }
     }
 
-    const agent = agents.find(a => a.agent_id === selectedAgent);
+    const agent = agents.find(a => a.id === selectedAgent);
     if (!agent) return;
 
     // Build payload with store links for auto-scheduling
     const selectedStoreData = eligibleStores.filter(store => selectedStores.has(store.link));
 
-    const payload: { agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean } = {
+    const payload: { agent_record_id: string; agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean } = {
+      agent_record_id: agent.id,
       agent_id: agent.agent_id,
       phone_number_id: agent.phone_number_id,
       stores: Array.from(selectedStores),
@@ -315,12 +317,12 @@ export default function CallManager() {
                   }} disabled={agentsLoading}>
                     <SelectTrigger data-testid="select-agent">
                       <SelectValue placeholder={agentsLoading ? "Loading agents..." : "Choose an agent"}>
-                        {selectedAgent && agents.find(a => a.agent_id === selectedAgent)?.name}
+                        {selectedAgent && agents.find(a => a.id === selectedAgent)?.name}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {agents.map(agent => (
-                        <SelectItem key={agent.agent_id} value={agent.agent_id} data-testid={`select-agent-${agent.agent_id}`}>
+                        <SelectItem key={agent.id} value={agent.id} data-testid={`select-agent-${agent.id}`}>
                           {agent.name}
                         </SelectItem>
                       ))}

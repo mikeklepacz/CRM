@@ -1801,9 +1801,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
-      const { agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule } = req.body;
+      const { agent_record_id, agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule } = req.body;
       
       console.log('[BatchCall] Request received:', {
+        agent_record_id,
         agent_id,
         phone_number_id,
         stores_count: stores?.length,
@@ -1813,15 +1814,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         auto_schedule,
       });
       
-      if (!agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
-        console.error('[BatchCall] Validation failed: missing agent_id or stores');
-        return res.status(400).json({ error: 'Agent ID and stores array required' });
+      if (!agent_record_id || !agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
+        console.error('[BatchCall] Validation failed: missing agent_record_id, agent_id, or stores');
+        return res.status(400).json({ error: 'Agent record ID, agent ID, and stores array required' });
       }
 
-      // Verify agent exists and has required fields
-      const agent = await storage.getElevenLabsAgent(agent_id);
+      // Verify agent exists and has required fields using the database record ID
+      const agent = await storage.getElevenLabsAgent(agent_record_id);
       if (!agent) {
-        console.error('[BatchCall] Agent not found:', agent_id);
+        console.error('[BatchCall] Agent not found:', agent_record_id);
         return res.status(404).json({ error: 'Agent not found' });
       }
       
@@ -1845,7 +1846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         agentPhoneNumberId: agent.phoneNumberId
       });
 
-      // Create campaign with appropriate scheduling
+      // Create campaign with appropriate scheduling - use database record ID
       let scheduledStart = new Date();
       if (scheduled_for) {
         scheduledStart = new Date(scheduled_for);
@@ -1854,7 +1855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const campaign = await storage.createCallCampaign({
         name: name || `${scenario || 'Batch'} Campaign - ${new Date().toLocaleDateString()}`,
         scenario: scenario || 'custom',
-        agentId: agent_id,
+        agentId: agent_record_id,
         createdByUserId: userId,
         storeFilter: { scenario },
         totalStores: stores.length,
