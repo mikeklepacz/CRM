@@ -1331,7 +1331,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const agents = await storage.getAllElevenLabsAgents();
-      res.json(agents);
+      
+      // Transform to snake_case for frontend compatibility
+      const transformedAgents = agents.map(agent => ({
+        id: agent.id,
+        name: agent.name,
+        agent_id: agent.agentId,
+        phone_number_id: agent.phoneNumberId,
+        description: agent.description,
+        is_default: agent.isDefault,
+      }));
+      
+      console.log('[API] Returning agents:', transformedAgents.map(a => ({ name: a.name, agent_id: a.agent_id, phone_number_id: a.phone_number_id })));
+      
+      res.json(transformedAgents);
     } catch (error: any) {
       console.error('Error fetching agents:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
