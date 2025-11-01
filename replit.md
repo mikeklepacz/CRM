@@ -47,6 +47,21 @@ The application is built around a client dashboard unifying data from "Store Dat
     - Folder list on left, file browser on right with thumbnails
     - Direct downloads and viewing via Drive links
     - Only stores folder name → Drive folder ID mapping in database
+- **ElevenLabs AI Voice Calling**: Automated outbound AI voice calling system integrated with Call Manager:
+    - Multi-agent support with distinct phone numbers per AI agent
+    - Three calling scenarios: Cold Calls, Follow-Ups, Recovery
+    - Queue management with immediate, scheduled, and auto-scheduling modes
+    - Real-time call status tracking and campaign management
+    - Webhook integration for call events and transcript capture
+    - **AI Call Analytics**: Performance metrics dashboard with success rates, average durations, interest level tracking, and call history with full transcripts
+    - **AI Insights (Admin-Only)**: OpenAI-powered analysis of call performance data that identifies:
+        * Common objections raised by prospects with frequency tracking
+        * Success patterns from high-performing calls
+        * Sentiment analysis across all conversations (positive/neutral/negative distribution)
+        * Actionable coaching recommendations for improving AI agent performance
+        * Date range and agent filtering (7 days, 30 days, custom)
+        * PII redaction (phone numbers) before analysis
+        * Limited to 100 calls per analysis to control OpenAI costs
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management and preference storage.
