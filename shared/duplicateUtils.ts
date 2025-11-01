@@ -265,24 +265,136 @@ export function detectDuplicates(
   return duplicateGroups.sort((a, b) => b.stores.length - a.stores.length);
 }
 
+export interface StatusHierarchy {
+  [statusName: string]: number; // Maps status name to displayOrder
+}
+
 /**
- * Smart select: automatically select stores with less information in each duplicate group
- * Returns array of Link values to delete
+ * Determine which status is "better" (further along in sales pipeline)
+ * Returns:
+ * - Positive number if status1 is better
+ * - Negative number if status2 is better
+ * - 0 if equal or unknown
  */
-export function smartSelectDuplicates(duplicateGroups: DuplicateGroup[]): string[] {
-  const toDelete: string[] = [];
+export function compareStatuses(
+  status1: string | null | undefined,
+  status2: string | null | undefined,
+  statusHierarchy: StatusHierarchy
+): number {
+  // Empty/null status is worst
+  if (!status1 && !status2) return 0;
+  if (!status1) return -1;
+  if (!status2) return 1;
   
-  duplicateGroups.forEach(group => {
-    // Sort stores by field count (descending) - most info first
-    const sortedStores = [...group.stores].sort((a, b) => {
+  const order1 = statusHierarchy[status1] ?? -1;
+  const order2 = statusHierarchy[status2] ?? -1;
+  
+  return order1 - order2;
+}
+
+/**
+ * Select the keeper store from a duplicate group
+ * Priority:
+ * 1. Claimed over unclaimed
+ * 2. If both claimed, keep the one with better status
+ * 3. If neither claimed or equal status, keep the one with more data
+ */
+export function selectKeeper(
+  stores: StoreRecord[],
+  statusHierarchy: StatusHierarchy
+): StoreRecord {
+  if (stores.length === 0) throw new Error('Cannot select keeper from empty group');
+  if (stores.length === 1) return stores[0];
+  
+  // Separate claimed and unclaimed
+  const claimed = stores.filter(s => s.Agent && s.Agent.trim() !== '');
+  const unclaimed = stores.filter(s => !s.Agent || s.Agent.trim() === '');
+  
+  // If we have claimed stores, pick from those
+  if (claimed.length > 0) {
+    // Sort by status (best first), then by field count
+    const sorted = [...claimed].sort((a, b) => {
+      const statusCompare = compareStatuses(a.Status, b.Status, statusHierarchy);
+      if (statusCompare !== 0) return -statusCompare; // Negative to get best first
       return countNonEmptyFields(b) - countNonEmptyFields(a);
     });
+    return sorted[0];
+  }
+  
+  // All unclaimed - pick the one with most data
+  const sorted = [...unclaimed].sort((a, b) => {
+    return countNonEmptyFields(b) - countNonEmptyFields(a);
+  });
+  return sorted[0];
+}
+
+/**
+ * Merge data from source store into target store
+ * - Copies non-empty fields from source to target if target's field is empty
+ * - For Status field: only upgrades to better status, never downgrades
+ * Returns updated target store
+ */
+export function mergeStoreData(
+  target: StoreRecord,
+  source: StoreRecord,
+  statusHierarchy: StatusHierarchy
+): StoreRecord {
+  const merged = { ...target };
+  
+  // All possible fields to merge (excluding Link which is the key)
+  const fieldsToCheck = Object.keys(source).filter(key => key !== 'Link');
+  
+  for (const field of fieldsToCheck) {
+    const sourceValue = source[field];
+    const targetValue = target[field];
     
-    // Keep the first store (most complete), mark rest for deletion
-    sortedStores.slice(1).forEach(store => {
-      toDelete.push(store.Link);
+    // Skip if source has no value
+    if (sourceValue === null || sourceValue === undefined || sourceValue === '') {
+      continue;
+    }
+    
+    // Special handling for Status field
+    if (field === 'Status') {
+      const statusCompare = compareStatuses(sourceValue, targetValue, statusHierarchy);
+      // Only upgrade to better status
+      if (statusCompare > 0) {
+        merged[field] = sourceValue;
+      }
+      continue;
+    }
+    
+    // For all other fields, copy if target is empty
+    if (targetValue === null || targetValue === undefined || targetValue === '') {
+      merged[field] = sourceValue;
+    }
+  }
+  
+  return merged;
+}
+
+/**
+ * Smart select: automatically select stores for deletion in each duplicate group
+ * Returns array of objects with Link to delete and Link to keep
+ */
+export function smartSelectDuplicates(
+  duplicateGroups: DuplicateGroup[],
+  statusHierarchy: StatusHierarchy
+): Array<{ deleteLink: string; keepLink: string }> {
+  const deletions: Array<{ deleteLink: string; keepLink: string }> = [];
+  
+  duplicateGroups.forEach(group => {
+    const keeper = selectKeeper(group.stores, statusHierarchy);
+    
+    // Mark all others for deletion
+    group.stores.forEach(store => {
+      if (store.Link !== keeper.Link) {
+        deletions.push({
+          deleteLink: store.Link,
+          keepLink: keeper.Link,
+        });
+      }
     });
   });
   
-  return toDelete;
+  return deletions;
 }
