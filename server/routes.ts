@@ -1183,6 +1183,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update the global config with the first phone number ID if not already set
       if (!config.phoneNumberId && phoneNumbers.length > 0) {
         await storage.updateElevenLabsConfig({
+          apiKey: config.apiKey, // Must include apiKey to avoid constraint violation
+          twilioNumber: config.twilioNumber,
+          webhookSecret: config.webhookSecret,
           phoneNumberId: phoneNumbers[0].phone_number_id,
         });
         console.log('[PhoneSync] Updated global config with phone number ID:', phoneNumbers[0].phone_number_id);
