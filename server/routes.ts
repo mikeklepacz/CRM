@@ -1745,6 +1745,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           agentName,
           status,
         };
+      }).filter((store: any) => {
+        // Exclude DBA children - they have no businessName
+        return store.businessName && store.businessName.trim().length > 0;
       });
       
       res.json(storesWithHours);
