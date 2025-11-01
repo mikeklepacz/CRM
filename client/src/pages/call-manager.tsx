@@ -22,12 +22,20 @@ interface ElevenLabsAgent {
   phone_number_id: string;
 }
 
+interface HoursScheduleEntry {
+  day: string;
+  hours: string;
+  isToday: boolean;
+  isClosed: boolean;
+}
+
 interface EligibleStore {
   link: string;
   businessName: string;
   state: string;
   phone: string;
   hours: string;
+  hoursSchedule?: HoursScheduleEntry[];
   isOpen: boolean;
   agentName?: string;
   status?: string;
@@ -511,19 +519,32 @@ export default function CallManager() {
                                 {store.phone || "N/A"}
                               </TableCell>
                               <TableCell data-testid={`text-hours-${store.link}`}>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-                                    {store.hours || "N/A"}
-                                  </span>
-                                  {store.isOpen ? (
-                                    <Badge variant="default" className="bg-green-600" data-testid={`badge-open-${store.link}`}>
-                                      Open
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="secondary" data-testid={`badge-closed-${store.link}`}>
-                                      Closed
-                                    </Badge>
-                                  )}
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                    {store.hoursSchedule && store.hoursSchedule.length > 0 ? (
+                                      store.hoursSchedule.map((entry, idx) => (
+                                        <div key={idx} className={`flex items-center gap-2 text-sm ${entry.isToday ? 'font-medium' : 'text-muted-foreground'}`}>
+                                          <span className="w-20 flex-shrink-0">{entry.day}:</span>
+                                          <span className={entry.isClosed ? 'text-destructive' : ''}>{entry.hours}</span>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">
+                                        {store.hours || "N/A"}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex-shrink-0">
+                                    {store.isOpen ? (
+                                      <Badge variant="default" className="bg-green-600" data-testid={`badge-open-${store.link}`}>
+                                        Open
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="destructive" data-testid={`badge-closed-${store.link}`}>
+                                        Closed
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
                               </TableCell>
                               <TableCell data-testid={`text-status-${store.link}`}>

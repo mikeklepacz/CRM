@@ -300,6 +300,111 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
   }
 }
 
+// Parse hours string into structured day-by-day schedule
+function parseHoursToStructured(hoursStr: string): Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> {
+  const dayMap: Record<string, number> = {
+    'sun': 0, 'sunday': 0,
+    'mon': 1, 'monday': 1,
+    'tue': 2, 'tuesday': 2, 'tues': 2,
+    'wed': 3, 'wednesday': 3,
+    'thu': 4, 'thursday': 4, 'thurs': 4,
+    'fri': 5, 'friday': 5,
+    'sat': 6, 'saturday': 6
+  };
+  
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const currentDay = new Date().getDay();
+  
+  if (!hoursStr) {
+    return [];
+  }
+  
+  const hoursLower = hoursStr.toLowerCase();
+  
+  // Handle 24/7
+  if (hoursLower.includes('24/7') || hoursLower.includes('24 hours')) {
+    return [{ day: 'Every day', hours: '24 hours', isToday: false, isClosed: false }];
+  }
+  
+  // Parse segments
+  const segments = hoursStr.split(/[,;]/);
+  const schedule: Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> = [];
+  
+  for (const segment of segments) {
+    const segmentTrimmed = segment.trim();
+    const segmentLower = segmentTrimmed.toLowerCase();
+    
+    // Check for day ranges (Mon-Fri, Mon-Wed, etc.)
+    const rangeMatch = segmentLower.match(/(mon|tue|wed|thu|fri|sat|sun)[a-z]*\s*-\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
+    if (rangeMatch) {
+      const startDay = dayMap[rangeMatch[1]];
+      const endDay = dayMap[rangeMatch[2]];
+      
+      if (startDay !== undefined && endDay !== undefined) {
+        // Extract the day range display name
+        const dayRangeText = segmentTrimmed.match(/[A-Z][a-z]*\s*-\s*[A-Z][a-z]*/)?.[0] || '';
+        
+        // Extract hours part
+        const hoursMatch = segmentTrimmed.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
+        const isClosed = segmentLower.includes('closed');
+        
+        const hoursText = isClosed ? 'Closed' : (hoursMatch ? `${hoursMatch[1]} - ${hoursMatch[2]}` : segmentTrimmed.replace(dayRangeText, '').trim());
+        
+        // Check if today is in this range
+        let appliesToToday = false;
+        if (startDay <= endDay) {
+          appliesToToday = currentDay >= startDay && currentDay <= endDay;
+        } else {
+          appliesToToday = currentDay >= startDay || currentDay <= endDay;
+        }
+        
+        schedule.push({
+          day: dayRangeText,
+          hours: hoursText,
+          isToday: appliesToToday,
+          isClosed
+        });
+        continue;
+      }
+    }
+    
+    // Check for specific single days
+    let foundDay = false;
+    for (const [dayName, dayNum] of Object.entries(dayMap)) {
+      if (segmentLower.startsWith(dayName)) {
+        foundDay = true;
+        const dayDisplay = dayNames[dayNum];
+        const isClosed = segmentLower.includes('closed');
+        
+        // Extract hours part
+        const hoursMatch = segmentTrimmed.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
+        const hoursText = isClosed ? 'Closed' : (hoursMatch ? `${hoursMatch[1]} - ${hoursMatch[2]}` : segmentTrimmed.replace(dayDisplay, '').trim());
+        
+        schedule.push({
+          day: dayDisplay,
+          hours: hoursText,
+          isToday: dayNum === currentDay,
+          isClosed
+        });
+        break;
+      }
+    }
+    
+    // If no specific day found and it's the only segment, assume all days
+    if (!foundDay && segments.length === 1) {
+      const isClosed = segmentLower.includes('closed');
+      schedule.push({
+        day: 'Every day',
+        hours: isClosed ? 'Closed' : segmentTrimmed,
+        isToday: false,
+        isClosed
+      });
+    }
+  }
+  
+  return schedule;
+}
+
 // Check if store is currently open based on hours string and state
 function checkIfStoreOpen(hoursStr: string, state: string): boolean {
   try {
@@ -1641,13 +1746,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const agentName = store['Agent Name'] || '';
         const status = store['Status'] || '';
         
+        // Parse hours into structured schedule
+        const hoursSchedule = parseHoursToStructured(hours);
+        const isOpen = checkIfStoreOpen(hours, state);
+        
         return {
           link,
           businessName: name,
           state,
           phone,
           hours,
-          isOpen: checkIfStoreOpen(hours, state),
+          hoursSchedule,
+          isOpen,
           agentName,
           status,
         };
