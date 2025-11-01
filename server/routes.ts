@@ -21,7 +21,7 @@ import multer from "multer";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
-import { zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
+import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import {
   insertConversationSchema,
   insertProjectSchema,
@@ -140,15 +140,15 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
     // Get timezone for state
     const timezone = STATE_TIMEZONES[state] || STATE_TIMEZONES[state.toUpperCase()] || 'America/New_York';
     
-    // Get current time in store's timezone
-    const now = new Date();
-    const storeTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    // Get current time in UTC and convert to store's timezone
+    const nowUtc = new Date();
+    const storeTime = toZonedTime(nowUtc, timezone);
     
     const hoursLower = hoursStr.toLowerCase();
     
     // Check for 24/7
     if (hoursLower.includes('24/7') || hoursLower.includes('24 hours') || hoursLower === 'open 24 hours') {
-      return now; // Can call immediately
+      return nowUtc; // Can call immediately
     }
     
     // Day name mappings
@@ -162,7 +162,7 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
       'sat': 6, 'saturday': 6
     };
     
-    // Helper to parse time string
+    // Helper to parse time string to minutes since midnight
     const parseTime = (timeStr: string): number | null => {
       const match = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
       if (!match) return null;
@@ -242,23 +242,35 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
       }
     }
     
-    // Find next available time window
-    const currentDay = storeTime.getDay();
-    const currentMinutes = storeTime.getHours() * 60 + storeTime.getMinutes();
+    // Extract date components from store's local time using formatInTimeZone to avoid host-timezone contamination
+    const year = parseInt(formatInTimeZone(nowUtc, timezone, 'yyyy'));
+    const month = parseInt(formatInTimeZone(nowUtc, timezone, 'MM'));
+    const dateNum = parseInt(formatInTimeZone(nowUtc, timezone, 'dd'));
+    const currentDay = parseInt(formatInTimeZone(nowUtc, timezone, 'i')) % 7; // 'i' is ISO day (1-7), convert to JS (0-6)
+    const hour = parseInt(formatInTimeZone(nowUtc, timezone, 'HH'));
+    const minute = parseInt(formatInTimeZone(nowUtc, timezone, 'mm'));
+    const currentMinutes = hour * 60 + minute;
+    
+    // Helper to build ISO date string and convert to UTC
+    const buildScheduledTime = (y: number, m: number, d: number, minutes: number): Date => {
+      const hour = Math.floor(minutes / 60);
+      const min = minutes % 60;
+      // Build ISO string in local time format: YYYY-MM-DDTHH:mm:ss
+      const isoString = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+      // Parse as local time in the store's timezone
+      return fromZonedTime(isoString, timezone);
+    };
     
     // Try today first
     if (daySchedules[currentDay]) {
       for (const range of daySchedules[currentDay]) {
         if (currentMinutes < range.open) {
           // Schedule for opening time today
-          const scheduleTime = new Date(storeTime);
-          scheduleTime.setHours(Math.floor(range.open / 60), range.open % 60, 0, 0);
-          // Convert store local time to UTC
-          return zonedTimeToUtc(scheduleTime, timezone);
+          return buildScheduledTime(year, month, dateNum, range.open);
         }
         if (currentMinutes >= range.open && currentMinutes < range.close) {
           // Currently open, schedule immediately
-          return now;
+          return nowUtc;
         }
       }
     }
@@ -268,19 +280,20 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
       const nextDay = (currentDay + dayOffset) % 7;
       if (daySchedules[nextDay] && daySchedules[nextDay].length > 0) {
         const firstRange = daySchedules[nextDay][0];
-        const scheduleTime = new Date(storeTime);
-        scheduleTime.setDate(scheduleTime.getDate() + dayOffset);
-        scheduleTime.setHours(Math.floor(firstRange.open / 60), firstRange.open % 60, 0, 0);
-        // Convert store local time to UTC
-        return zonedTimeToUtc(scheduleTime, timezone);
+        // Calculate the date for this day offset
+        const targetDate = new Date(year, month - 1, dateNum + dayOffset); // month-1 because JS uses 0-indexed months
+        return buildScheduledTime(
+          targetDate.getFullYear(),
+          targetDate.getMonth() + 1,
+          targetDate.getDate(),
+          firstRange.open
+        );
       }
     }
     
     // Fallback: schedule for tomorrow 9am store time
-    const fallbackTime = new Date(storeTime);
-    fallbackTime.setDate(fallbackTime.getDate() + 1);
-    fallbackTime.setHours(9, 0, 0, 0);
-    return zonedTimeToUtc(fallbackTime, timezone);
+    const tomorrow = new Date(year, month - 1, dateNum + 1);
+    return buildScheduledTime(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate(), 540); // 540 minutes = 9am
   } catch (error) {
     console.error('Error calculating next call time:', error);
     return new Date(); // Fallback to now
