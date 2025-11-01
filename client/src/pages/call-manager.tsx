@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -123,6 +123,12 @@ export default function CallManager() {
   const [selectedAgentFilters, setSelectedAgentFilters] = useState<Set<string>>(new Set());
   const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
   const [selectedCallForDialog, setSelectedCallForDialog] = useState<{ conversationId: string; callData: any } | null>(null);
+  
+  // AI Insights state
+  const [insightsDateRange, setInsightsDateRange] = useState<'7days' | '30days' | 'custom'>('30days');
+  const [insightsStartDate, setInsightsStartDate] = useState<string>('');
+  const [insightsEndDate, setInsightsEndDate] = useState<string>('');
+  const [insightsAgentFilter, setInsightsAgentFilter] = useState<string>('all');
   
   // Analytics filters
   const [analyticsAgentFilter, setAnalyticsAgentFilter] = useState<string>("all");
@@ -396,6 +402,45 @@ export default function CallManager() {
     }
   };
 
+  // AI Insights mutation
+  const analyzeCallsMutation = useMutation({
+    mutationFn: async () => {
+      let startDate, endDate;
+      const now = new Date();
+      
+      if (insightsDateRange === '7days') {
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        endDate = now.toISOString();
+      } else if (insightsDateRange === '30days') {
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        endDate = now.toISOString();
+      } else {
+        startDate = insightsStartDate;
+        endDate = insightsEndDate;
+      }
+
+      return await apiRequest('POST', '/api/elevenlabs/analyze-calls', {
+        startDate,
+        endDate,
+        agentId: insightsAgentFilter !== 'all' ? insightsAgentFilter : undefined,
+        limit: 50,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Analysis Complete",
+        description: "AI insights have been generated from your call data",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze calls",
+      });
+    },
+  });
+
   // Use stats from API
   const queueStats = {
     active: callQueueStats?.activeCalls || 0,
@@ -417,11 +462,12 @@ export default function CallManager() {
           </p>
         </div>
 
-        {/* Top-level tabs: Voice Hub and AI Call Analytics */}
+        {/* Top-level tabs: Voice Hub, AI Call Analytics, and AI Insights */}
         <Tabs defaultValue="voice-hub" className="space-y-6">
           <TabsList>
             <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
             <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
+            <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
           </TabsList>
 
           <TabsContent value="voice-hub" className="space-y-6">
@@ -1056,6 +1102,251 @@ export default function CallManager() {
             </Tabs>
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="ai-insights" className="space-y-6">
+            {/* AI Insights Section */}
+            <Card data-testid="card-ai-insights">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2" data-testid="text-ai-insights-title">
+                  <Brain className="h-5 w-5" />
+                  AI Insights
+                </CardTitle>
+                <CardDescription data-testid="text-ai-insights-description">
+                  Analyze call patterns, objections, and success factors using AI-powered analysis
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Filters */}
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="insights-date-range">Date Range</Label>
+                    <Select 
+                      value={insightsDateRange} 
+                      onValueChange={(value: any) => setInsightsDateRange(value)}
+                    >
+                      <SelectTrigger id="insights-date-range" className="w-[180px]" data-testid="select-insights-date-range">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7days">Last 7 Days</SelectItem>
+                        <SelectItem value="30days">Last 30 Days</SelectItem>
+                        <SelectItem value="custom">Custom Range</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {insightsDateRange === 'custom' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="insights-start-date">Start Date</Label>
+                        <Input
+                          id="insights-start-date"
+                          type="date"
+                          value={insightsStartDate}
+                          onChange={(e) => setInsightsStartDate(e.target.value)}
+                          data-testid="input-insights-start-date"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="insights-end-date">End Date</Label>
+                        <Input
+                          id="insights-end-date"
+                          type="date"
+                          value={insightsEndDate}
+                          onChange={(e) => setInsightsEndDate(e.target.value)}
+                          data-testid="input-insights-end-date"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="insights-agent-filter">AI Agent</Label>
+                    <Select 
+                      value={insightsAgentFilter} 
+                      onValueChange={setInsightsAgentFilter}
+                    >
+                      <SelectTrigger id="insights-agent-filter" className="w-[200px]" data-testid="select-insights-agent">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Agents</SelectItem>
+                        {agents?.map((agent: ElevenLabsAgent) => (
+                          <SelectItem key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button 
+                    onClick={() => analyzeCallsMutation.mutate()}
+                    disabled={analyzeCallsMutation.isPending}
+                    data-testid="button-analyze-calls"
+                  >
+                    {analyzeCallsMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        Analyze Calls
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Insights Results */}
+                {analyzeCallsMutation.data && (
+                  <div className="space-y-6 mt-6">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      Analysis completed for {analyzeCallsMutation.data.callCount} calls
+                    </div>
+
+                    {/* Common Objections */}
+                    {analyzeCallsMutation.data.commonObjections && analyzeCallsMutation.data.commonObjections.length > 0 && (
+                      <Card data-testid="card-common-objections">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <MessageSquare className="h-5 w-5" />
+                            Common Objections
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {analyzeCallsMutation.data.commonObjections.map((objection: any, idx: number) => (
+                              <div key={idx} className="border rounded-lg p-4" data-testid={`objection-${idx}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="font-medium">{objection.objection}</p>
+                                  <Badge variant="secondary" data-testid={`objection-frequency-${idx}`}>
+                                    {objection.frequency}x
+                                  </Badge>
+                                </div>
+                                {objection.exampleConversations && objection.exampleConversations.length > 0 && (
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    Examples: {objection.exampleConversations.slice(0, 2).join(', ')}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Success Patterns */}
+                    {analyzeCallsMutation.data.successPatterns && analyzeCallsMutation.data.successPatterns.length > 0 && (
+                      <Card data-testid="card-success-patterns">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <TrendingUp className="h-5 w-5 text-green-500" />
+                            Success Patterns
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {analyzeCallsMutation.data.successPatterns.map((pattern: any, idx: number) => (
+                              <div key={idx} className="border rounded-lg p-4" data-testid={`pattern-${idx}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="font-medium">{pattern.pattern}</p>
+                                  <Badge variant="secondary" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                                    {pattern.frequency}x
+                                  </Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Sentiment Analysis */}
+                    {analyzeCallsMutation.data.sentimentAnalysis && (
+                      <Card data-testid="card-sentiment-analysis">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <BarChart3 className="h-5 w-5" />
+                            Sentiment Analysis
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-green-500">
+                                {analyzeCallsMutation.data.sentimentAnalysis.positive}%
+                              </div>
+                              <p className="text-sm text-muted-foreground">Positive</p>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-yellow-500">
+                                {analyzeCallsMutation.data.sentimentAnalysis.neutral}%
+                              </div>
+                              <p className="text-sm text-muted-foreground">Neutral</p>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-red-500">
+                                {analyzeCallsMutation.data.sentimentAnalysis.negative}%
+                              </div>
+                              <p className="text-sm text-muted-foreground">Negative</p>
+                            </div>
+                          </div>
+                          {analyzeCallsMutation.data.sentimentAnalysis.trends && (
+                            <p className="text-sm text-muted-foreground border-t pt-4">
+                              {analyzeCallsMutation.data.sentimentAnalysis.trends}
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Coaching Recommendations */}
+                    {analyzeCallsMutation.data.coachingRecommendations && analyzeCallsMutation.data.coachingRecommendations.length > 0 && (
+                      <Card data-testid="card-coaching-recommendations">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <Lightbulb className="h-5 w-5 text-yellow-500" />
+                            Coaching Recommendations
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {analyzeCallsMutation.data.coachingRecommendations.map((rec: any, idx: number) => (
+                              <div key={idx} className="border rounded-lg p-4" data-testid={`recommendation-${idx}`}>
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <p className="font-medium">{rec.title}</p>
+                                  <Badge 
+                                    variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
+                                    data-testid={`recommendation-priority-${idx}`}
+                                  >
+                                    {rec.priority}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground">{rec.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {!analyzeCallsMutation.data && !analyzeCallsMutation.isPending && (
+                  <div className="text-center py-12 bg-muted/20 rounded-lg">
+                    <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground" data-testid="text-no-insights">
+                      Select filters and click "Analyze Calls" to generate AI-powered insights
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
