@@ -609,8 +609,16 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         );
       }
 
-      await Promise.all(promises);
-      return { closeDialog, storeChanges, trackerChanges };
+      console.log('💾 Starting save mutation', { storeChanges, trackerChanges });
+      
+      try {
+        await Promise.all(promises);
+        console.log('✅ All promises resolved successfully');
+        return { closeDialog, storeChanges, trackerChanges };
+      } catch (error) {
+        console.error('❌ Promise.all failed:', error);
+        throw error;
+      }
     },
     onMutate: async (variables) => {
       // Cancel any outgoing refetches to avoid overwriting our optimistic update
@@ -642,35 +650,56 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       return { previousData };
     },
     onSuccess: async (data) => {
-      setInitialData(formData); // Update initial data so changes are no longer "unsaved"
+      console.log('✅ onSuccess fired!', data);
+      
+      try {
+        setInitialData(formData); // Update initial data so changes are no longer "unsaved"
 
-      // Auto-claim unclaimed stores after successfully saving (if not already claimed via tracker upsert)
-      const isUnclaimed = !row._trackerRowIndex;
-      const linkValue = formData.link || getLinkValue(row);
-      const joinColumn = "link";
+        // Auto-claim unclaimed stores after successfully saving (if not already claimed via tracker upsert)
+        const isUnclaimed = !row._trackerRowIndex;
+        const linkValue = formData.link || getLinkValue(row);
+        const joinColumn = "link";
 
-      if (isUnclaimed && linkValue && trackerSheetId) {
-        try {
-          await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
-            linkValue,
-            column: "Agent",  // Claim with Agent column
-            value: "",  // Empty value, just claiming
-            joinColumn,
-          });
-        } catch (error) {
-          // Soft error - don't block the user
-          console.error("Auto-claim failed:", error);
+        if (isUnclaimed && linkValue && trackerSheetId) {
+          try {
+            console.log('🔄 Auto-claiming store...');
+            await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
+              linkValue,
+              column: "Agent",  // Claim with Agent column
+              value: "",  // Empty value, just claiming
+              joinColumn,
+            });
+            console.log('✅ Auto-claim successful');
+          } catch (error) {
+            // Soft error - don't block the user
+            console.error("Auto-claim failed:", error);
+          }
         }
-      }
 
-      // If AI Assistant is open, trigger context update with latest field values
-      if (showAssistant) {
-        setContextUpdateTrigger(prev => prev + 1);
-      }
+        // Show success toast
+        toast({
+          title: "✅ Saved",
+          description: "Changes saved successfully",
+          duration: 3000,
+        });
 
-      // Only close if requested
-      if (data?.closeDialog) {
-        onOpenChange(false);
+        // If AI Assistant is open, trigger context update with latest field values
+        if (showAssistant) {
+          setContextUpdateTrigger(prev => prev + 1);
+        }
+
+        // Only close if requested
+        if (data?.closeDialog) {
+          onOpenChange(false);
+        }
+      } catch (error) {
+        console.error('❌ Error in onSuccess handler:', error);
+        // Show error but don't crash
+        toast({
+          title: "⚠️ Partial Save",
+          description: "Changes were saved but there was an issue with follow-up actions",
+          variant: "destructive",
+        });
       }
     },
     onError: (error: Error, variables, context: any) => {
@@ -748,10 +777,19 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   };
 
   const handleSave = () => {
+    console.log('🔘 Save button clicked');
+    console.log('📊 Current state:', { 
+      formData, 
+      initialData, 
+      rowIndex: row._storeRowIndex,
+      trackerRowIndex: row._trackerRowIndex,
+      link: formData.link || getLinkValue(row)
+    });
     saveMutation.mutate({ closeDialog: false });
   };
 
   const handleSaveAndExit = () => {
+    console.log('🔘 Save & Exit button clicked');
     saveMutation.mutate({ closeDialog: true });
   };
 
