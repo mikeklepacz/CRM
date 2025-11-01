@@ -966,11 +966,18 @@ export const callCampaignTargets = pgTable("call_campaign_targets", {
   campaignId: varchar("campaign_id").notNull().references(() => callCampaigns.id, { onDelete: 'cascade' }),
   clientId: varchar("client_id").notNull().references(() => clients.id),
   callSessionId: varchar("call_session_id").references(() => callSessions.id), // Links to actual call once made
-  targetStatus: varchar("target_status", { length: 50 }).default('pending'), // 'pending', 'completed', 'failed', 'skipped'
+  targetStatus: varchar("target_status", { length: 50 }).default('pending'), // 'pending', 'in-progress', 'completed', 'failed', 'skipped'
+  scheduledFor: timestamp("scheduled_for"), // When this specific call should be made
+  attemptCount: integer("attempt_count").default(0), // Number of call attempts made
+  nextAttemptAt: timestamp("next_attempt_at"), // When to next attempt this call
+  externalConversationId: varchar("external_conversation_id"), // ElevenLabs conversation ID
+  lastError: text("last_error"), // Error message from last failed attempt
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_campaign_targets_campaign").on(table.campaignId),
   index("idx_campaign_targets_client").on(table.clientId),
+  index("idx_campaign_targets_next_attempt").on(table.nextAttemptAt),
+  index("idx_campaign_targets_status").on(table.targetStatus),
 ]);
 
 export const insertTicketSchema = createInsertSchema(tickets).omit({

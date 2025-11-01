@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { callDispatcher } from "./call_dispatcher";
 
 const app = express();
 
@@ -79,5 +80,13 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    setInterval(() => {
+      callDispatcher.processQueuedCalls().catch(err => {
+        console.error('[CallDispatcher] Error in background worker:', err);
+      });
+    }, 30000);
+    
+    log('[CallDispatcher] Background worker started (runs every 30s)');
   });
 })();

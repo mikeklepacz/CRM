@@ -110,7 +110,7 @@ import {
   type InsertCallCampaignTarget,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, inArray, sql, desc } from "drizzle-orm";
+import { eq, and, or, inArray, sql, desc, lte, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from 'uuid';
 
 export interface IStorage {
@@ -363,7 +363,9 @@ export interface IStorage {
   // Call Campaign Targets operations
   createCallCampaignTarget(target: InsertCallCampaignTarget): Promise<CallCampaignTarget>;
   getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]>;
+  getCallTargetsReadyForCalling(): Promise<CallCampaignTarget[]>;
   updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget>;
+  incrementCampaignCalls(campaignId: string, type: 'successful' | 'failed'): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2077,12 +2079,48 @@ export class DatabaseStorage implements IStorage {
       .where(eq(callCampaignTargets.campaignId, campaignId));
   }
 
+  async getCallTargetsReadyForCalling(): Promise<CallCampaignTarget[]> {
+    const now = new Date();
+    return await db.select().from(callCampaignTargets)
+      .where(
+        and(
+          eq(callCampaignTargets.targetStatus, 'pending'),
+          or(
+            lte(callCampaignTargets.nextAttemptAt, now),
+            isNull(callCampaignTargets.nextAttemptAt)
+          )
+        )
+      )
+      .orderBy(callCampaignTargets.nextAttemptAt)
+      .limit(50);
+  }
+
   async updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget> {
     const [updated] = await db.update(callCampaignTargets)
       .set(updates)
       .where(eq(callCampaignTargets.id, id))
       .returning();
     return updated;
+  }
+
+  async incrementCampaignCalls(campaignId: string, type: 'successful' | 'failed'): Promise<void> {
+    const campaign = await this.getCallCampaign(campaignId);
+    if (!campaign) return;
+
+    const updates: any = {
+      callsCompleted: (campaign.callsCompleted || 0) + 1,
+      updatedAt: new Date(),
+    };
+
+    if (type === 'successful') {
+      updates.callsSuccessful = (campaign.callsSuccessful || 0) + 1;
+    } else {
+      updates.callsFailed = (campaign.callsFailed || 0) + 1;
+    }
+
+    await db.update(callCampaigns)
+      .set(updates)
+      .where(eq(callCampaigns.id, campaignId));
   }
 }
 

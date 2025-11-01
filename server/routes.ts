@@ -1573,6 +1573,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             campaignId: campaign.id,
             clientId: client.id,
             targetStatus: 'pending',
+            attemptCount: 0,
           };
 
           // Auto-schedule: calculate optimal call time based on business hours
@@ -1585,11 +1586,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const optimalTime = calculateNextAvailableCallTime(hours, state);
               if (optimalTime) {
                 targetData.scheduledFor = optimalTime;
+                targetData.nextAttemptAt = optimalTime;
                 console.log(`Auto-scheduled call for ${storeLink} at ${optimalTime.toISOString()} (store hours: ${hours}, state: ${state})`);
+              } else {
+                targetData.nextAttemptAt = new Date();
               }
+            } else {
+              targetData.nextAttemptAt = new Date();
             }
           } else if (scheduled_for) {
             targetData.scheduledFor = scheduledStart;
+            targetData.nextAttemptAt = scheduledStart;
+          } else {
+            targetData.nextAttemptAt = new Date();
           }
 
           await storage.createCallCampaignTarget(targetData);
