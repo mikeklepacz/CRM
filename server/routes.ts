@@ -2297,7 +2297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const clientIdentifier = phoneNumber;
           
           // Find or create client
-          let client = await storage.getClientByIdentifier(clientIdentifier);
+          let client = await storage.getClientByUniqueIdentifier(clientIdentifier);
           if (!client) {
             client = await storage.createClient({
               uniqueIdentifier: clientIdentifier,
