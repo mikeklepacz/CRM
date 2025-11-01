@@ -6051,13 +6051,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Commission Tracker sheet not found" });
       }
 
-      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+      const { spreadsheetId, sheetName } = trackerSheet;
 
-      if (trackerRows.length === 0) {
-        return res.status(400).json({ message: "Tracker sheet is empty" });
+      console.log('[AUTO-CLAIM] Step 1: Check if row exists');
+      
+      // STEP 1: Check if row exists
+      const rowExists = await verifyTrackerRowExists(spreadsheetId, sheetName, link);
+      
+      if (!rowExists) {
+        console.log('[AUTO-CLAIM] Step 2: Row does not exist, creating basic tracker row');
+        
+        // STEP 2: Create basic tracker row (Link, Agent Name, Status='Claimed')
+        const created = await createBasicTrackerRow(spreadsheetId, sheetName, link, user.agentName);
+        
+        if (!created) {
+          return res.status(500).json({ 
+            message: "Failed to create tracker row. Please try again." 
+          });
+        }
+        
+        console.log('[AUTO-CLAIM] Step 3: Basic row created and verified');
+      } else {
+        console.log('[AUTO-CLAIM] Row already exists, proceeding to update Agent Name');
       }
 
+      // STEP 3: Now find the row and update Agent Name (row is guaranteed to exist)
+      const trackerRange = `${sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(spreadsheetId, trackerRange);
       const trackerHeaders = trackerRows[0];
       const trackerLinkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
       const trackerAgentIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
@@ -6066,60 +6086,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Link column not found in tracker" });
       }
 
-      // Check if row exists in tracker (using normalized link comparison)
+      // Find the row index
       const normalizedInputLink = normalizeLink(link);
-      let existingTrackerRow = -1;
+      let rowIndex = -1;
       
       for (let i = 1; i < trackerRows.length; i++) {
         const rowLink = trackerRows[i][trackerLinkIndex];
         if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
-          existingTrackerRow = i + 1; // 1-indexed
-          console.log('[AUTO-CLAIM] Found existing row at index:', existingTrackerRow);
+          rowIndex = i + 1; // 1-indexed
           break;
         }
       }
 
-      if (existingTrackerRow > 0) {
-        // Update existing row with agent name (Commission Tracker ONLY)
-        if (trackerAgentIndex !== -1) {
-          const agentColLetter = String.fromCharCode(65 + trackerAgentIndex);
-          const agentCellRange = `${trackerSheet.sheetName}!${agentColLetter}${existingTrackerRow}`;
-          console.log('[AUTO-CLAIM] Writing agent to Commission Tracker:', agentCellRange, '=', user.agentName);
-          await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentCellRange, [[user.agentName]]);
-        }
-        // Write Column O (time) timestamp for claim
-        await googleSheets.writeCommissionTrackerTimestamp(
-          trackerSheet.spreadsheetId,
-          trackerSheet.sheetName,
-          existingTrackerRow,
-          'O'
-        );
-        res.json({ message: "Store claimed in Commission Tracker (Agent Name in Store DB will auto-sync)", claimed: true });
-      } else {
-        // Create new row in Commission Tracker ONLY
-        console.log('[AUTO-CLAIM] Creating new tracker row');
-        const newTrackerRow = new Array(trackerHeaders.length).fill('');
-        if (trackerLinkIndex !== -1) newTrackerRow[trackerLinkIndex] = link;
-        if (trackerAgentIndex !== -1) newTrackerRow[trackerAgentIndex] = user.agentName;
-        
-        // Set Status to 'Claimed'
-        const trackerStatusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
-        if (trackerStatusIndex !== -1) newTrackerRow[trackerStatusIndex] = 'Claimed';
-        
-        await googleSheets.appendSheetData(trackerSheet.spreadsheetId, `${trackerSheet.sheetName}`, [newTrackerRow]);
-        
-        // Write Column O (time) timestamp for new claim
-        const newRowNumber = trackerRows.length + 1;
-        await googleSheets.writeCommissionTrackerTimestamp(
-          trackerSheet.spreadsheetId,
-          trackerSheet.sheetName,
-          newRowNumber,
-          'O'
-        );
-        
-        console.log('[AUTO-CLAIM] New row appended to Commission Tracker');
-        res.json({ message: "Store claimed in Commission Tracker (Agent Name in Store DB will auto-sync)", claimed: true });
+      if (rowIndex === -1) {
+        return res.status(500).json({ 
+          message: "Tracker row was created but cannot be found. Please refresh and try again." 
+        });
       }
+
+      console.log('[AUTO-CLAIM] Step 4: Updating Agent Name in row', rowIndex);
+
+      // Update Agent Name
+      if (trackerAgentIndex !== -1) {
+        const agentColLetter = String.fromCharCode(65 + trackerAgentIndex);
+        const agentCellRange = `${sheetName}!${agentColLetter}${rowIndex}`;
+        await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.agentName]]);
+      }
+      
+      // Write Column O (time) timestamp for claim
+      await googleSheets.writeCommissionTrackerTimestamp(
+        spreadsheetId,
+        sheetName,
+        rowIndex,
+        'O'
+      );
+      
+      console.log('[AUTO-CLAIM] Success! Store claimed at row', rowIndex);
+      res.json({ message: "Store claimed in Commission Tracker (Agent Name in Store DB will auto-sync)", claimed: true });
     } catch (error: any) {
       console.error("Error auto-claiming store:", error);
       res.status(500).json({ message: error.message || "Failed to auto-claim store" });
@@ -6137,7 +6140,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Link value and join column are required" });
       }
 
-      console.log('[CLAIM-STORE] Request:', { linkValue, column, value, joinColumn, agentName: user?.agentName });
+      if (!user?.agentName) {
+        return res.status(400).json({ message: "Agent name not set in profile" });
+      }
+
+      console.log('[CLAIM-STORE] Request:', { linkValue, column, value, joinColumn, agentName: user.agentName });
 
       // CRITICAL: ONLY write to Commission Tracker - Store Database syncs via Google Sheets formulas
       const sheets = await storage.getAllActiveGoogleSheets();
@@ -6149,97 +6156,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
-      // Read all tracker data
+      console.log('[CLAIM-STORE] Step 1: Check if row exists for link:', linkValue);
+      
+      // STEP 1: Check if row exists
+      const rowExists = await verifyTrackerRowExists(spreadsheetId, sheetName, linkValue);
+      
+      if (!rowExists) {
+        console.log('[CLAIM-STORE] Step 2: Row does not exist, creating basic tracker row');
+        
+        // STEP 2: Create basic tracker row (Link, Agent Name, Status='Claimed')
+        const created = await createBasicTrackerRow(spreadsheetId, sheetName, linkValue, user.agentName);
+        
+        if (!created) {
+          return res.status(500).json({ 
+            message: "Failed to create tracker row. Please try again." 
+          });
+        }
+        
+        console.log('[CLAIM-STORE] Step 3: Basic row created and verified');
+      } else {
+        console.log('[CLAIM-STORE] Row already exists, proceeding to update');
+      }
+
+      // STEP 3: Now find the row and update the fields (row is guaranteed to exist)
       const dataRange = `${sheetName}!A:ZZ`;
       const rows = await googleSheets.readSheetData(spreadsheetId, dataRange);
       const headers = rows[0] || [];
 
-      console.log('[CLAIM-STORE] Commission Tracker headers:', headers);
-
-      // Find the link column index (Column A)
       const linkColumnIndex = headers.findIndex(h => h.toLowerCase() === joinColumn.toLowerCase());
       if (linkColumnIndex === -1) {
         return res.status(400).json({ message: "Link column not found in Commission Tracker" });
       }
 
-      // Check if row already exists with this link (using normalized comparison)
+      // Find the row index
       const normalizedInputLink = normalizeLink(linkValue.trim());
-      let existingRowIndex = -1;
+      let rowIndex = -1;
 
       for (let i = 1; i < rows.length; i++) {
         const rowLink = rows[i][linkColumnIndex];
         const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
 
         if (rowLink && normalizedRowLink === normalizedInputLink) {
-          existingRowIndex = i + 1; // +1 because sheets are 1-indexed
-          console.log('[CLAIM-STORE] Found existing row at index:', existingRowIndex);
+          rowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
         }
       }
 
-      if (existingRowIndex !== -1) {
-        // Row exists - update Agent Name (Column D) and optionally the requested column
-        const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
-        
-        if (agentNameIndex !== -1 && user?.agentName) {
-          const agentColLetter = String.fromCharCode(65 + agentNameIndex);
-          const agentCellRange = `${sheetName}!${agentColLetter}${existingRowIndex}`;
-          console.log('[CLAIM-STORE] Writing agent to Commission Tracker:', agentCellRange, '=', user.agentName);
-          await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.agentName]]);
-        }
-
-        // Update the requested column if provided
-        if (column && value !== undefined) {
-          const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
-          if (colIndex !== -1) {
-            const columnLetter = String.fromCharCode(65 + colIndex);
-            const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
-            console.log('[CLAIM-STORE] Writing column value:', cellRange, '=', value);
-            await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value || '']]);
-          }
-        }
-
-        clearUserCache(userId);
-        res.json({ message: "Store claimed in Commission Tracker (Agent Name in Store DB will auto-sync)", existingRow: true });
-      } else {
-        // Row doesn't exist - create new row in Commission Tracker ONLY
-        console.log('[CLAIM-STORE] Creating new tracker row');
-        const newRow = headers.map(() => '');
-
-        // Set Link (Column A)
-        if (linkColumnIndex !== -1) {
-          newRow[linkColumnIndex] = linkValue;
-        }
-
-        // Set Agent Name (Column D)
-        const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
-        if (agentNameIndex !== -1 && user?.agentName) {
-          newRow[agentNameIndex] = user.agentName;
-          console.log('[CLAIM-STORE] Setting Agent Name at index', agentNameIndex, '=', user.agentName);
-        }
-
-        // Set Status to 'Claimed' (Column H)
-        const statusColumnIndex = headers.findIndex(h => h.toLowerCase() === 'status');
-        if (statusColumnIndex !== -1) {
-          newRow[statusColumnIndex] = 'Claimed';
-        }
-
-        // Set the column being edited if provided
-        if (column && value !== undefined) {
-          const editColumnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
-          if (editColumnIndex !== -1) {
-            newRow[editColumnIndex] = value;
-          }
-        }
-
-        // Append to Commission Tracker ONLY
-        const appendRange = `${sheetName}!A:ZZ`;
-        await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
-        console.log('[CLAIM-STORE] New row appended to Commission Tracker');
-
-        clearUserCache(userId);
-        res.json({ message: "Store claimed in Commission Tracker (Agent Name in Store DB will auto-sync)", newRow: true });
+      if (rowIndex === -1) {
+        return res.status(500).json({ 
+          message: "Tracker row was created but cannot be found. Please refresh and try again." 
+        });
       }
+
+      console.log('[CLAIM-STORE] Step 4: Updating fields in row', rowIndex);
+
+      // Update Agent Name (ensure it's set)
+      const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
+      if (agentNameIndex !== -1) {
+        const agentColLetter = String.fromCharCode(65 + agentNameIndex);
+        const agentCellRange = `${sheetName}!${agentColLetter}${rowIndex}`;
+        await googleSheets.writeSheetData(spreadsheetId, agentCellRange, [[user.agentName]]);
+      }
+
+      // Update the requested column if provided
+      if (column && value !== undefined) {
+        const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
+        if (colIndex !== -1) {
+          const columnLetter = String.fromCharCode(65 + colIndex);
+          const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
+          console.log('[CLAIM-STORE] Writing column value:', cellRange, '=', value);
+          await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value || '']]);
+        }
+      }
+
+      clearUserCache(userId);
+      console.log('[CLAIM-STORE] Success! Store claimed and updated at row', rowIndex);
+      res.json({ message: "Store claimed in Commission Tracker (Agent Name in Store DB will auto-sync)", claimed: true });
     } catch (error: any) {
       console.error("Error claiming store:", error);
       res.status(500).json({ message: error.message || "Failed to claim store" });
