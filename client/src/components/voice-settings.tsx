@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,6 +31,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { AICallAnalytics } from "@/components/ai-call-analytics";
 
 const configSchema = z.object({
   apiKey: z.string().min(1, "API key is required"),
@@ -228,18 +230,24 @@ export function VoiceSettings() {
   });
 
   return (
-    <div className="space-y-6">
-      {/* API Key Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
-            <CardTitle>ElevenLabs API Key</CardTitle>
-          </div>
-          <CardDescription>
-            Your ElevenLabs API key is used for all voice calling features
-          </CardDescription>
-        </CardHeader>
+    <Tabs defaultValue="voice-hub" className="space-y-6">
+      <TabsList>
+        <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
+        <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="voice-hub" className="space-y-6">
+        {/* API Key Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Phone className="h-5 w-5" />
+              <CardTitle>ElevenLabs API Key</CardTitle>
+            </div>
+            <CardDescription>
+              Your ElevenLabs API key is used for all voice calling features
+            </CardDescription>
+          </CardHeader>
         <CardContent>
           {hasApiKey && (
             <Alert className="mb-6">
@@ -618,6 +626,11 @@ export function VoiceSettings() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </TabsContent>
+
+      <TabsContent value="ai-analytics">
+        <AICallAnalytics />
+      </TabsContent>
+    </Tabs>
   );
 }
