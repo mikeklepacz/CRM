@@ -2314,10 +2314,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Parse dates
           const startedAt = metadata.start_time_unix_secs 
-            ? new Date(metadata.start_time_unix_secs * 1000).toISOString()
-            : new Date().toISOString();
+            ? new Date(metadata.start_time_unix_secs * 1000)
+            : new Date();
           const endedAt = metadata.end_time_unix_secs
-            ? new Date(metadata.end_time_unix_secs * 1000).toISOString()
+            ? new Date(metadata.end_time_unix_secs * 1000)
             : startedAt;
 
           // Determine success
