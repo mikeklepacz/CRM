@@ -1,0 +1,77 @@
+I'll analyze the code that creates new tracker rows and explain what's happening in each case.
+
+Analysis of New Tracker Row Creation
+After reviewing the codebase, here are all the locations where new Commission Tracker rows are created:
+
+1. Auto-Claim Store (/api/stores/auto-claim)
+Location: server/routes.ts lines ~2580-2650
+
+What it does:
+
+Creates a basic tracker row when an agent interacts with an unclaimed store
+Uses createBasicTrackerRow() helper function
+Sets: Link, Agent Name, Status='Claimed'
+Problem: After calling appendSheetData(), it waits 2 seconds and re-reads the entire sheet to find the newly created row by searching through all rows
+2. Claim Store (/api/sheets/:id/claim-store)
+Location: server/routes.ts lines ~2650-2750
+
+What it does:
+
+Similar to auto-claim, creates a basic tracker row
+Also uses createBasicTrackerRow() helper
+Then updates specific columns if requested
+Problem: Same issue - searches for the row after creation instead of using the returned range
+3. Claim Store with Contact Action (/api/sheets/:id/claim-store-with-contact)
+Location: server/routes.ts lines ~2750-2900
+
+What it does:
+
+Creates a full tracker row with contact details
+Sets: Link, Agent Name, Status, Follow-up Date, Next Action, Notes, Point of Contact
+Problem: Uses appendSheetData() but doesn't capture the returned range
+4. Tracker Upsert (/api/sheets/tracker/upsert)
+Location: server/routes.ts lines ~2450-2580
+
+What it does:
+
+Most complex - creates OR updates tracker rows
+Uses createBasicTrackerRow() if row doesn't exist
+Then searches for the row to update specific fields
+Problem: After creation, waits 2 seconds, re-reads sheet, searches from end
+5. WooCommerce Order Matching (/api/orders/:orderId/match)
+Location: server/routes.ts lines ~1420-1550
+
+What it does:
+
+Creates tracker rows for matched WooCommerce orders
+Can create multiple rows if order matches multiple stores
+Sets: Link, Order ID, Transaction ID, Agent Name, Date, POC Email
+Problem: Uses appendSheetData() without capturing the range
+6. Helper Function: createBasicTrackerRow()
+Location: server/routes.ts lines ~2400-2450
+
+What it does:
+
+Shared helper used by multiple endpoints
+Creates minimal row: Link, Agent Name, Status='Claimed'
+Appends to sheet using appendSheetData()
+Returns boolean success/failure, NOT the row index
+Root Problem: This is where we should capture and return the updatedRange from Google Sheets API
+The Core Issue
+All these functions share the same fundamental problem:
+
+// Current approach (WRONG)
+await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
+// Row is created, but we don't know which row number it got
+// Then later...
+await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+const rows = await googleSheets.readSheetData(spreadsheetId, range); // Re-read entire sheet
+// Search through all rows to find the one we just created
+The Google Sheets API actually returns the row index in response.updates.updatedRange, but we're ignoring it.
+
+The Fix
+I need to:
+
+Modify appendSheetData() in server/googleSheets.ts to return the row index from response.updates.updatedRange
+Update createBasicTrackerRow() to return the row index instead of boolean
+Update all calling functions to use the returned row index instead of searching
