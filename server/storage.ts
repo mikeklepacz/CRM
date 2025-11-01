@@ -31,6 +31,7 @@ import {
   callHistory,
   driveFolders,
   elevenLabsConfig,
+  elevenLabsPhoneNumbers,
   elevenLabsAgents,
   callSessions,
   callTranscripts,
@@ -96,6 +97,8 @@ import {
   type InsertDriveFolder,
   type ElevenLabsConfig,
   type InsertElevenLabsConfig,
+  type ElevenLabsPhoneNumber,
+  type InsertElevenLabsPhoneNumber,
   type ElevenLabsAgent,
   type InsertElevenLabsAgent,
   type CallSession,
@@ -328,7 +331,14 @@ export interface IStorage {
   
   // ElevenLabs settings operations
   getElevenLabsConfig(): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string } | undefined>;
-  updateElevenLabsConfig(config: { apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void>;
+  updateElevenLabsConfig(config: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void>;
+  
+  // ElevenLabs Phone Numbers operations
+  getAllElevenLabsPhoneNumbers(): Promise<ElevenLabsPhoneNumber[]>;
+  getElevenLabsPhoneNumber(phoneNumberId: string): Promise<ElevenLabsPhoneNumber | undefined>;
+  upsertElevenLabsPhoneNumber(phoneData: InsertElevenLabsPhoneNumber): Promise<ElevenLabsPhoneNumber>;
+  deleteElevenLabsPhoneNumber(phoneNumberId: string): Promise<void>;
+  
   getAllElevenLabsAgents(): Promise<ElevenLabsAgent[]>;
   getElevenLabsAgent(id: string): Promise<ElevenLabsAgent | undefined>;
   getDefaultElevenLabsAgent(): Promise<ElevenLabsAgent | undefined>;
@@ -1915,15 +1925,53 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async updateElevenLabsConfig(configData: { apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void> {
+  async updateElevenLabsConfig(configData: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void> {
+    // Get existing config first to preserve values
+    const existing = await this.getElevenLabsConfig();
+    
+    // Merge with existing values (only update provided fields)
+    const merged = {
+      apiKey: configData.apiKey !== undefined ? configData.apiKey : (existing?.apiKey ?? ''),
+      twilioNumber: configData.twilioNumber !== undefined ? configData.twilioNumber : (existing?.twilioNumber ?? null),
+      webhookSecret: configData.webhookSecret !== undefined ? configData.webhookSecret : (existing?.webhookSecret ?? null),
+      phoneNumberId: configData.phoneNumberId !== undefined ? configData.phoneNumberId : (existing?.phoneNumberId ?? null)
+    };
+    
     // Delete old config and insert new (single row table)
     await db.delete(elevenLabsConfig);
-    await db.insert(elevenLabsConfig).values({
-      apiKey: configData.apiKey,
-      twilioNumber: configData.twilioNumber || null,
-      webhookSecret: configData.webhookSecret || null,
-      phoneNumberId: configData.phoneNumberId || null
-    });
+    await db.insert(elevenLabsConfig).values(merged);
+  }
+
+  // ElevenLabs Phone Numbers operations
+  async getAllElevenLabsPhoneNumbers(): Promise<ElevenLabsPhoneNumber[]> {
+    return await db.select().from(elevenLabsPhoneNumbers);
+  }
+
+  async getElevenLabsPhoneNumber(phoneNumberId: string): Promise<ElevenLabsPhoneNumber | undefined> {
+    const [phone] = await db.select().from(elevenLabsPhoneNumbers).where(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneNumberId));
+    return phone;
+  }
+
+  async upsertElevenLabsPhoneNumber(phoneData: InsertElevenLabsPhoneNumber): Promise<ElevenLabsPhoneNumber> {
+    // Check if phone number already exists
+    const existing = await this.getElevenLabsPhoneNumber(phoneData.phoneNumberId);
+    
+    if (existing) {
+      // Update existing phone number
+      const [updated] = await db.update(elevenLabsPhoneNumbers)
+        .set({ ...phoneData, updatedAt: new Date() })
+        .where(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneData.phoneNumberId))
+        .returning();
+      return updated;
+    } else {
+      // Insert new phone number
+      const [newPhone] = await db.insert(elevenLabsPhoneNumbers).values(phoneData).returning();
+      return newPhone;
+    }
+  }
+
+  async deleteElevenLabsPhoneNumber(phoneNumberId: string): Promise<void> {
+    await db.delete(elevenLabsPhoneNumbers).where(eq(elevenLabsPhoneNumbers.phoneNumberId, phoneNumberId));
   }
 
   async getAllElevenLabsAgents(): Promise<ElevenLabsAgent[]> {

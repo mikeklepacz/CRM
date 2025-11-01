@@ -47,6 +47,8 @@ type Agent = {
   name: string;
   agent_id: string;
   phone_number_id?: string | null;
+  phone_number?: string | null;
+  phone_label?: string | null;
   description?: string;
   is_default: boolean;
 };
@@ -431,10 +433,30 @@ export function VoiceSettings() {
                     <p className="text-sm text-muted-foreground mb-2">
                       Agent ID: {agent.agent_id}
                     </p>
-                    {agent.phone_number_id && (
-                      <p className="text-xs text-muted-foreground">
-                        Phone: {agent.phone_number_id}
-                      </p>
+                    {agent.phone_number && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <Phone className="h-4 w-4 text-primary" />
+                        <p className="text-sm font-medium">
+                          {agent.phone_number}
+                          {agent.phone_label && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({agent.phone_label})
+                            </span>
+                          )}
+                        </p>
+                        <Badge variant="outline" className="ml-auto">
+                          <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                          Synced
+                        </Badge>
+                      </div>
+                    )}
+                    {!agent.phone_number && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground italic">
+                          No phone number assigned
+                        </p>
+                      </div>
                     )}
                     {agent.description && (
                       <p className="text-sm text-muted-foreground">

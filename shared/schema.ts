@@ -860,11 +860,21 @@ export const elevenLabsConfig = pgTable("elevenlabs_config", {
 });
 
 // ElevenLabs conversational AI agents
+// ElevenLabs Phone Numbers - stores available phone numbers from ElevenLabs
+export const elevenLabsPhoneNumbers = pgTable("elevenlabs_phone_numbers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  phoneNumberId: varchar("phone_number_id", { length: 255 }).notNull().unique(), // ElevenLabs phone number ID
+  phoneNumber: varchar("phone_number", { length: 50 }).notNull(), // Actual phone number (e.g., +1-845-668-4367)
+  label: varchar("label", { length: 255 }), // Optional label/name for this number
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const elevenLabsAgents = pgTable("elevenlabs_agents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(), // Display name (e.g., "Sales Cold Caller")
   agentId: varchar("agent_id", { length: 255 }).notNull(), // ElevenLabs agent ID
-  phoneNumberId: varchar("phone_number_id", { length: 255 }).notNull(), // ElevenLabs phone number ID for outbound calls
+  phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls (nullable)
   description: text("description"), // Purpose/description of this agent
   isDefault: boolean("is_default").default(false), // Default agent for calls
   createdAt: timestamp("created_at").defaultNow(),
@@ -1004,6 +1014,15 @@ export const insertElevenLabsConfigSchema = createInsertSchema(elevenLabsConfig)
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertElevenLabsPhoneNumberSchema = createInsertSchema(elevenLabsPhoneNumbers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertElevenLabsPhoneNumber = z.infer<typeof insertElevenLabsPhoneNumberSchema>;
+export type ElevenLabsPhoneNumber = typeof elevenLabsPhoneNumbers.$inferSelect;
 
 export const insertElevenLabsAgentSchema = createInsertSchema(elevenLabsAgents).omit({
   id: true,

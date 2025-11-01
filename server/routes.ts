@@ -1180,29 +1180,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ message: 'No phone numbers found in ElevenLabs account', phoneNumbers: [] });
       }
 
-      // Update the global config with the first phone number ID if not already set
-      if (!config.phoneNumberId && phoneNumbers.length > 0) {
-        await storage.updateElevenLabsConfig({
-          apiKey: config.apiKey, // Must include apiKey to avoid constraint violation
-          twilioNumber: config.twilioNumber,
-          webhookSecret: config.webhookSecret,
-          phoneNumberId: phoneNumbers[0].phone_number_id,
-        });
-        console.log('[PhoneSync] Updated global config with phone number ID:', phoneNumbers[0].phone_number_id);
+      // Store phone numbers in database
+      let storedCount = 0;
+      for (const phone of phoneNumbers) {
+        try {
+          await storage.upsertElevenLabsPhoneNumber({
+            phoneNumberId: phone.phone_number_id,
+            phoneNumber: phone.number || phone.phone_number || '',
+            label: phone.label || phone.name || null,
+          });
+          storedCount++;
+          console.log(`[PhoneSync] Stored phone number: ${phone.number || phone.phone_number} (ID: ${phone.phone_number_id})`);
+        } catch (err: any) {
+          console.error(`[PhoneSync] Failed to store phone number ${phone.phone_number_id}:`, err.message);
+        }
       }
 
-      // Get all agents
+      // Assign first phone number to agents that don't have one yet
       const agents = await storage.getAllElevenLabsAgents();
       let updatedCount = 0;
 
-      // Update each agent with the phone number ID
       for (const agent of agents) {
         if (!agent.phoneNumberId && phoneNumbers.length > 0) {
-          // Use the first phone number for all agents (you can customize this logic)
+          // Use the first phone number for agents without assigned numbers
           await storage.updateElevenLabsAgent(agent.id, {
             phoneNumberId: phoneNumbers[0].phone_number_id,
           });
-          console.log(`[PhoneSync] Updated agent ${agent.name} with phone number ID: ${phoneNumbers[0].phone_number_id}`);
+          console.log(`[PhoneSync] Assigned phone ${phoneNumbers[0].phone_number_id} to agent ${agent.name}`);
           updatedCount++;
         }
       }
@@ -1481,6 +1485,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all ElevenLabs agents (with voice access check)
+  // Get all phone numbers
+  app.get('/api/elevenlabs/phone-numbers', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers();
+      res.json(phoneNumbers);
+    } catch (error: any) {
+      console.error('Error fetching phone numbers:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   app.get('/api/elevenlabs/agents', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
@@ -1492,18 +1507,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const agents = await storage.getAllElevenLabsAgents();
+      const phoneNumbers = await storage.getAllElevenLabsPhoneNumbers();
       
-      // Transform to snake_case for frontend compatibility
-      const transformedAgents = agents.map(agent => ({
-        id: agent.id,
-        name: agent.name,
-        agent_id: agent.agentId,
-        phone_number_id: agent.phoneNumberId,
-        description: agent.description,
-        is_default: agent.isDefault,
-      }));
+      // Create a map of phone number IDs to phone numbers for quick lookup
+      const phoneMap = new Map(phoneNumbers.map(p => [p.phoneNumberId, p]));
       
-      console.log('[API] Returning agents:', transformedAgents.map(a => ({ name: a.name, agent_id: a.agent_id, phone_number_id: a.phone_number_id })));
+      // Transform to snake_case for frontend compatibility and include phone number
+      const transformedAgents = agents.map(agent => {
+        const phone = agent.phoneNumberId ? phoneMap.get(agent.phoneNumberId) : null;
+        return {
+          id: agent.id,
+          name: agent.name,
+          agent_id: agent.agentId,
+          phone_number_id: agent.phoneNumberId,
+          phone_number: phone?.phoneNumber || null,
+          phone_label: phone?.label || null,
+          description: agent.description,
+          is_default: agent.isDefault,
+        };
+      });
+      
+      console.log('[API] Returning agents:', transformedAgents.map(a => ({ 
+        name: a.name, 
+        agent_id: a.agent_id, 
+        phone_number_id: a.phone_number_id,
+        phone_number: a.phone_number 
+      })));
       
       res.json(transformedAgents);
     } catch (error: any) {
