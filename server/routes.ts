@@ -5928,7 +5928,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Append new row (range matches array length to avoid touching non-existent columns)
-        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}`, [newRow]);
+        const appendRange = `${sheetName}!A:ZZ`;
+        await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
 
         // Invalidate cache after successful creation
         clearUserCache(userId);
