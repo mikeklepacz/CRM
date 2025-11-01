@@ -93,7 +93,7 @@ export default function CallManager() {
 
   // Batch call mutation
   const batchCallMutation = useMutation({
-    mutationFn: async (data: { agent_id: string; phone_number_id: string; stores: string[]; scheduled_for?: string; auto_schedule?: boolean }) => {
+    mutationFn: async (data: { agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean }) => {
       return apiRequest('POST', '/api/elevenlabs/batch-call', data);
     },
     onSuccess: () => {
@@ -174,16 +174,22 @@ export default function CallManager() {
     const agent = agents.find(a => a.agent_id === selectedAgent);
     if (!agent) return;
 
-    const payload: { agent_id: string; phone_number_id: string; stores: string[]; scheduled_for?: string; auto_schedule?: boolean } = {
+    // Build payload with store links for auto-scheduling
+    const selectedStoreData = eligibleStores.filter(store => selectedStores.has(store.link));
+
+    const payload: { agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean } = {
       agent_id: agent.agent_id,
       phone_number_id: agent.phone_number_id,
       stores: Array.from(selectedStores),
+      scenario: activeScenario,
     };
 
-    if (schedulingMode === 'scheduled' && scheduledTime) {
-      payload.scheduled_for = new Date(scheduledTime).toISOString();
-    } else if (schedulingMode === 'auto') {
+    // Include full store data for auto-scheduling
+    if (schedulingMode === 'auto') {
       payload.auto_schedule = true;
+      payload.store_data = selectedStoreData;
+    } else if (schedulingMode === 'scheduled' && scheduledTime) {
+      payload.scheduled_for = new Date(scheduledTime).toISOString();
     }
 
     batchCallMutation.mutate(payload);

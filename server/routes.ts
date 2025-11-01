@@ -21,6 +21,7 @@ import multer from "multer";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
+import { zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
 import {
   insertConversationSchema,
   insertProjectSchema,
@@ -252,8 +253,8 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
           // Schedule for opening time today
           const scheduleTime = new Date(storeTime);
           scheduleTime.setHours(Math.floor(range.open / 60), range.open % 60, 0, 0);
-          // Convert back from store timezone to UTC
-          return new Date(scheduleTime.toLocaleString('en-US', { timeZone: 'UTC' }));
+          // Convert store local time to UTC
+          return zonedTimeToUtc(scheduleTime, timezone);
         }
         if (currentMinutes >= range.open && currentMinutes < range.close) {
           // Currently open, schedule immediately
@@ -270,8 +271,8 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
         const scheduleTime = new Date(storeTime);
         scheduleTime.setDate(scheduleTime.getDate() + dayOffset);
         scheduleTime.setHours(Math.floor(firstRange.open / 60), firstRange.open % 60, 0, 0);
-        // Convert back to UTC
-        return new Date(scheduleTime.toLocaleString('en-US', { timeZone: 'UTC' }));
+        // Convert store local time to UTC
+        return zonedTimeToUtc(scheduleTime, timezone);
       }
     }
     
@@ -279,7 +280,7 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
     const fallbackTime = new Date(storeTime);
     fallbackTime.setDate(fallbackTime.getDate() + 1);
     fallbackTime.setHours(9, 0, 0, 0);
-    return new Date(fallbackTime.toLocaleString('en-US', { timeZone: 'UTC' }));
+    return zonedTimeToUtc(fallbackTime, timezone);
   } catch (error) {
     console.error('Error calculating next call time:', error);
     return new Date(); // Fallback to now
@@ -1509,7 +1510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
-      const { agent_id, phone_number_id, stores, scenario, name, scheduled_for, auto_schedule } = req.body;
+      const { agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule } = req.body;
       
       if (!agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
         return res.status(400).json({ error: 'Agent ID and stores array required' });
@@ -1532,15 +1533,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scheduledStart,
       });
 
+      // Create map of store link to store data for efficient lookup
+      const storeDataMap = new Map();
+      if (store_data && Array.isArray(store_data)) {
+        for (const store of store_data) {
+          if (store.link) {
+            storeDataMap.set(store.link, store);
+          }
+        }
+      }
+
       // Create campaign targets for each store
       for (const storeLink of stores) {
         // Find existing client by unique identifier
         let client = await storage.getClientByUniqueIdentifier(storeLink);
         
-        // If client doesn't exist, we need the store data to get business hours for auto-scheduling
-        // In auto-schedule mode, stores should include hours and state data
+        // If client doesn't exist and we have store data, create it
+        if (!client && storeDataMap.has(storeLink)) {
+          const storeInfo = storeDataMap.get(storeLink);
+          client = await storage.createClient({
+            uniqueIdentifier: storeLink,
+            googleSheetId: storeInfo.sheetId || 'unknown', // Will need to pass this
+            data: storeInfo,
+            status: storeInfo.status || 'unassigned',
+          });
+        }
         
-        // Create campaign target
+        // Create campaign target if we have a client
         if (client) {
           const targetData: any = {
             campaignId: campaign.id,
@@ -1549,14 +1568,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
 
           // Auto-schedule: calculate optimal call time based on business hours
-          if (auto_schedule && client.data) {
-            const hours = client.data.Hours || client.data.hours || client.data.businessHours || '';
-            const state = client.data.State || client.data.state || '';
+          if (auto_schedule) {
+            const storeInfo = storeDataMap.get(storeLink) || client.data || {};
+            const hours = storeInfo.Hours || storeInfo.hours || storeInfo.businessHours || '';
+            const state = storeInfo.State || storeInfo.state || '';
             
             if (hours && state) {
               const optimalTime = calculateNextAvailableCallTime(hours, state);
               if (optimalTime) {
                 targetData.scheduledFor = optimalTime;
+                console.log(`Auto-scheduled call for ${storeLink} at ${optimalTime.toISOString()} (store hours: ${hours}, state: ${state})`);
               }
             }
           } else if (scheduled_for) {
