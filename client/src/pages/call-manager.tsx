@@ -173,10 +173,33 @@ export default function CallManager() {
   });
 
   // Fetch call analytics
-  const { data: analyticsData, isLoading: analyticsLoading } = useQuery<CallAnalyticsData>({
+  const { data: analyticsData, isLoading: analyticsLoading, refetch: refetchAnalytics } = useQuery<CallAnalyticsData>({
     queryKey: ['/api/elevenlabs/call-analytics'],
     enabled: hasAccess,
   });
+
+  // Fetch Google Sheets data for store details dialog
+  const { data: sheetsData } = useQuery<{ sheets: { id: string; sheetPurpose: string }[] }>({
+    queryKey: ['/api/sheets'],
+    enabled: hasAccess,
+  });
+
+  const sheets = sheetsData?.sheets || [];
+  const storeSheetId = sheets.find(s => s.sheetPurpose === 'Store Database')?.id;
+  const trackerSheetId = sheets.find(s => s.sheetPurpose === 'commissions')?.id;
+
+  // Fetch user preferences for status options
+  const { data: userPreferences } = useQuery<{
+    statusOptions?: string[];
+    lightModeColors?: { statusColors?: { [status: string]: { background: string; text: string } } };
+    darkModeColors?: { statusColors?: { [status: string]: { background: string; text: string } } };
+  }>({
+    queryKey: ['/api/user/preferences'],
+  });
+
+  const statusOptions = userPreferences?.statusOptions || [];
+  const statusColors = userPreferences?.lightModeColors?.statusColors || {};
+  const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
 
   // Filter analytics data based on selected filters
   const filteredAnalyticsData = useMemo(() => {
@@ -1361,6 +1384,13 @@ export default function CallManager() {
         onOpenChange={setIsCallDialogOpen}
         conversationId={selectedCallForDialog?.conversationId || null}
         callData={selectedCallForDialog?.callData || null}
+        trackerSheetId={trackerSheetId}
+        storeSheetId={storeSheetId}
+        refetch={refetchAnalytics}
+        statusOptions={statusOptions}
+        statusColors={statusColors}
+        contextUpdateTrigger={contextUpdateTrigger}
+        setContextUpdateTrigger={setContextUpdateTrigger}
       />
     </div>
   );

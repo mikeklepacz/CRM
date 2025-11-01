@@ -556,23 +556,23 @@ export function CallDetailDialog({
       </DialogContent>
     </Dialog>
 
-      {/* Store Details Dialog */}
-      {session?.storeSnapshot && trackerSheetId && storeSheetId && (
-        <StoreDetailsDialog
-          open={storeDialogOpen}
-          onOpenChange={setStoreDialogOpen}
-          row={session.storeSnapshot}
-          trackerSheetId={trackerSheetId}
-          storeSheetId={storeSheetId}
-          refetch={refetch || (async () => {})}
-          currentColors={currentColors || {}}
-          statusOptions={statusOptions}
-          statusColors={statusColors}
-          contextUpdateTrigger={contextUpdateTrigger}
-          setContextUpdateTrigger={setContextUpdateTrigger || (() => {})}
-          loadDefaultScriptTrigger={loadDefaultScriptTrigger}
-        />
-      )}
+    {/* Store Details Dialog */}
+    {session?.storeSnapshot && trackerSheetId && storeSheetId && (
+      <StoreDetailsDialog
+        open={storeDialogOpen}
+        onOpenChange={setStoreDialogOpen}
+        row={session.storeSnapshot}
+        trackerSheetId={trackerSheetId}
+        storeSheetId={storeSheetId}
+        refetch={refetch || (async () => {})}
+        currentColors={currentColors || {}}
+        statusOptions={statusOptions}
+        statusColors={statusColors}
+        contextUpdateTrigger={contextUpdateTrigger}
+        setContextUpdateTrigger={setContextUpdateTrigger || (() => {})}
+        loadDefaultScriptTrigger={loadDefaultScriptTrigger}
+      />
+    )}
     </>
   );
 }
