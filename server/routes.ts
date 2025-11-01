@@ -1171,7 +1171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      const phoneNumbers = response.data.phone_numbers ?? [];
+      // ElevenLabs returns array directly, not wrapped in phone_numbers field
+      const phoneNumbers = Array.isArray(response.data) ? response.data : (response.data.phone_numbers ?? []);
       console.log('[PhoneSync] Received response:', JSON.stringify(response.data, null, 2));
       console.log('[PhoneSync] Extracted phone numbers:', JSON.stringify(phoneNumbers, null, 2));
 
