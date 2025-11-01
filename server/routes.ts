@@ -2274,10 +2274,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Check if this conversation already exists
           const existing = await storage.getCallSessionByConversationId(conversationId);
-          if (existing) {
-            skippedCount++;
-            continue;
-          }
 
           // Fetch full conversation details
           const detailResponse = await axios.get(
@@ -2335,22 +2331,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
           }
 
-          // Create call session
-          const session = await storage.createCallSession({
-            conversationId,
-            agentId: details.agent_id,
-            clientId: client.id,
-            phoneNumber,
-            status: details.status === 'done' ? 'completed' : details.status,
-            callDurationSecs: durationSecs,
-            startedAt,
-            endedAt,
-            callSuccessful,
-            aiAnalysis,
-            interestLevel: null,
-            followUpNeeded: false,
-            storeSnapshot: details.conversation_initiation_client_data,
-          });
+          // If conversation exists, delete old transcripts and update
+          if (existing) {
+            // Delete old transcripts
+            await storage.deleteCallTranscripts(conversationId);
+            
+            // Update call session
+            await storage.updateCallSession(existing.id, {
+              agentId: details.agent_id,
+              status: details.status === 'done' ? 'completed' : details.status,
+              callDurationSecs: durationSecs,
+              startedAt,
+              endedAt,
+              callSuccessful,
+              aiAnalysis,
+            });
+            
+            console.log(`[Sync] Updated conversation ${conversationId}`);
+          } else {
+            // Create new call session
+            await storage.createCallSession({
+              conversationId,
+              agentId: details.agent_id,
+              clientId: client.id,
+              phoneNumber,
+              status: details.status === 'done' ? 'completed' : details.status,
+              callDurationSecs: durationSecs,
+              startedAt,
+              endedAt,
+              callSuccessful,
+              aiAnalysis,
+              interestLevel: null,
+              followUpNeeded: false,
+              storeSnapshot: details.conversation_initiation_client_data,
+            });
+            
+            console.log(`[Sync] Created conversation ${conversationId}`);
+          }
 
           // Store transcripts
           if (details.transcript && Array.isArray(details.transcript)) {
@@ -2367,7 +2384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           importedCount++;
-          console.log(`[Sync] Imported conversation ${conversationId}`);
+
         } catch (convError: any) {
           console.error(`[Sync] Error processing conversation:`, convError);
           errorCount++;

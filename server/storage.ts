@@ -359,6 +359,7 @@ export interface IStorage {
   createCallTranscript(transcript: InsertCallTranscript): Promise<CallTranscript>;
   getCallTranscripts(conversationId: string): Promise<CallTranscript[]>;
   bulkCreateCallTranscripts(transcripts: InsertCallTranscript[]): Promise<void>;
+  deleteCallTranscripts(conversationId: string): Promise<void>;
 
   // AI Insights helper operations
   getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number }): Promise<Array<{
@@ -2080,6 +2081,10 @@ export class DatabaseStorage implements IStorage {
   async bulkCreateCallTranscripts(transcripts: InsertCallTranscript[]): Promise<void> {
     if (transcripts.length === 0) return;
     await db.insert(callTranscripts).values(transcripts);
+  }
+
+  async deleteCallTranscripts(conversationId: string): Promise<void> {
+    await db.delete(callTranscripts).where(eq(callTranscripts.conversationId, conversationId));
   }
 
   // AI Insights helper operations
