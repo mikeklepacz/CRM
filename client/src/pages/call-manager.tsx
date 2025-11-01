@@ -17,6 +17,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CallDetailDialog } from "@/components/call-detail-dialog";
+import { useCustomTheme } from "@/hooks/use-custom-theme";
 
 interface ElevenLabsAgent {
   id: string;
@@ -188,17 +189,8 @@ export default function CallManager() {
   const storeSheetId = sheets.find(s => s.sheetPurpose === 'Store Database')?.id;
   const trackerSheetId = sheets.find(s => s.sheetPurpose === 'commissions')?.id;
 
-  // Fetch user preferences for status options
-  const { data: userPreferences } = useQuery<{
-    statusOptions?: string[];
-    lightModeColors?: { statusColors?: { [status: string]: { background: string; text: string } } };
-    darkModeColors?: { statusColors?: { [status: string]: { background: string; text: string } } };
-  }>({
-    queryKey: ['/api/user/preferences'],
-  });
-
-  const statusOptions = userPreferences?.statusOptions || [];
-  const statusColors = userPreferences?.lightModeColors?.statusColors || {};
+  // Get status options and colors from custom theme hook
+  const { statusOptions, statusColors, currentColors } = useCustomTheme();
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
 
   // Filter analytics data based on selected filters
@@ -1387,6 +1379,7 @@ export default function CallManager() {
         trackerSheetId={trackerSheetId}
         storeSheetId={storeSheetId}
         refetch={refetchAnalytics}
+        currentColors={currentColors}
         statusOptions={statusOptions}
         statusColors={statusColors}
         contextUpdateTrigger={contextUpdateTrigger}
