@@ -300,8 +300,18 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
   }
 }
 
-// Parse hours string into structured day-by-day schedule with timezone awareness
+// Parse hours string into compact segments with timezone-aware status
 function parseHoursToStructured(hoursStr: string, state: string): Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> {
+  if (!hoursStr) {
+    return [];
+  }
+  
+  // Get current day in store's timezone
+  const timezone = STATE_TIMEZONES[state] || STATE_TIMEZONES[state?.toUpperCase()] || 'America/New_York';
+  const now = new Date();
+  const storeTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+  const currentDay = storeTime.getDay();
+  
   const dayMap: Record<string, number> = {
     'sun': 0, 'sunday': 0,
     'mon': 1, 'monday': 1,
@@ -312,150 +322,68 @@ function parseHoursToStructured(hoursStr: string, state: string): Array<{ day: s
     'sat': 6, 'saturday': 6
   };
   
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  
-  // Get current day in store's timezone
-  const timezone = STATE_TIMEZONES[state] || STATE_TIMEZONES[state?.toUpperCase()] || 'America/New_York';
-  const now = new Date();
-  const storeTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-  const currentDay = storeTime.getDay();
-  
-  if (!hoursStr) {
-    return [];
-  }
-  
   const hoursLower = hoursStr.toLowerCase();
   
   // Handle 24/7
   if (hoursLower.includes('24/7') || hoursLower.includes('24 hours')) {
-    return dayNames.map((dayName, idx) => ({
-      day: dayName,
-      hours: '24 hours',
-      isToday: idx === currentDay,
-      isClosed: false
-    }));
+    return [{ day: 'Every day', hours: '24 hours', isToday: true, isClosed: false }];
   }
   
-  // Parse segments
-  const segments = hoursStr.split(/[,;]/);
-  const daySchedule: Record<number, { hours: string[]; isClosed: boolean }> = {};
-  let lastDayContext: number[] = [];
+  // Parse segments and keep them compact
+  const segments = hoursStr.split(/[,;]/).map(s => s.trim()).filter(s => s);
+  const schedule: Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> = [];
   
   for (const segment of segments) {
-    const segmentTrimmed = segment.trim();
-    const segmentLower = segmentTrimmed.toLowerCase();
+    const segmentLower = segment.toLowerCase();
     const isClosed = segmentLower.includes('closed');
     
-    // Extract hours part
-    const hoursMatch = segmentTrimmed.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
-    const hoursText = hoursMatch ? `${hoursMatch[1]} - ${hoursMatch[2]}` : '';
+    // Extract day range or single day
+    const rangeMatch = segmentLower.match(/(mon|tue|wed|thu|fri|sat|sun)[a-z]*\s*[-–]\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
+    const singleDayMatch = segmentLower.match(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
     
-    // Check for "Daily" or "Everyday" keywords
+    let dayLabel = '';
+    let appliesToToday = false;
+    
     if (segmentLower.includes('daily') || segmentLower.includes('everyday') || segmentLower.includes('every day')) {
-      lastDayContext = [0, 1, 2, 3, 4, 5, 6];
-      for (let i = 0; i < 7; i++) {
-        if (!daySchedule[i]) {
-          daySchedule[i] = { hours: [], isClosed: false };
-        }
-        if (isClosed) {
-          daySchedule[i].isClosed = true;
-        } else if (hoursText) {
-          daySchedule[i].hours.push(hoursText);
-        }
-      }
-      continue;
-    }
-    
-    // Check for day ranges (Mon-Fri, Mon-Wed, etc.)
-    const rangeMatch = segmentLower.match(/(mon|tue|wed|thu|fri|sat|sun)[a-z]*\s*-\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
-    if (rangeMatch) {
+      dayLabel = 'Every day';
+      appliesToToday = true;
+    } else if (rangeMatch) {
+      // Keep the range compact (e.g., "Mon-Fri")
+      const dayRangeText = segment.match(/[A-Z][a-z]*\s*[-–]\s*[A-Z][a-z]*/)?.[0] || '';
+      dayLabel = dayRangeText;
+      
+      // Check if today falls in this range
       const startDay = dayMap[rangeMatch[1]];
       const endDay = dayMap[rangeMatch[2]];
-      
       if (startDay !== undefined && endDay !== undefined) {
-        // Expand range to individual days
-        const daysInRange: number[] = [];
-        let day = startDay;
-        while (true) {
-          daysInRange.push(day);
-          if (day === endDay) break;
-          day = (day + 1) % 7;
-          if (day === startDay) break; // Safety check
+        if (startDay <= endDay) {
+          appliesToToday = currentDay >= startDay && currentDay <= endDay;
+        } else {
+          appliesToToday = currentDay >= startDay || currentDay <= endDay;
         }
-        
-        lastDayContext = daysInRange;
-        for (const dayNum of daysInRange) {
-          if (!daySchedule[dayNum]) {
-            daySchedule[dayNum] = { hours: [], isClosed: false };
-          }
-          if (isClosed) {
-            daySchedule[dayNum].isClosed = true;
-          } else if (hoursText) {
-            daySchedule[dayNum].hours.push(hoursText);
-          }
-        }
-        continue;
       }
+    } else if (singleDayMatch) {
+      // Single day (e.g., "Sunday")
+      const dayNum = dayMap[singleDayMatch[1]];
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      dayLabel = dayNames[dayNum] || '';
+      appliesToToday = dayNum === currentDay;
+    } else {
+      // No specific day mentioned, assume applies to all
+      dayLabel = segment;
+      appliesToToday = true;
     }
     
-    // Check for specific single days
-    let foundDay = false;
-    for (const [dayName, dayNum] of Object.entries(dayMap)) {
-      if (segmentLower.startsWith(dayName)) {
-        foundDay = true;
-        lastDayContext = [dayNum];
-        
-        if (!daySchedule[dayNum]) {
-          daySchedule[dayNum] = { hours: [], isClosed: false };
-        }
-        if (isClosed) {
-          daySchedule[dayNum].isClosed = true;
-        } else if (hoursText) {
-          daySchedule[dayNum].hours.push(hoursText);
-        }
-        break;
-      }
-    }
+    // Extract hours part
+    const hoursMatch = segment.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
+    const hoursText = isClosed ? 'Closed' : (hoursMatch ? `${hoursMatch[1]} - ${hoursMatch[2]}` : dayLabel);
     
-    // If no day found, check if we have context from previous segment (continuation)
-    if (!foundDay && lastDayContext.length > 0 && hoursText) {
-      for (const dayNum of lastDayContext) {
-        if (!daySchedule[dayNum]) {
-          daySchedule[dayNum] = { hours: [], isClosed: false };
-        }
-        daySchedule[dayNum].hours.push(hoursText);
-      }
-      continue;
-    }
-    
-    // If no day found and no context and it's the only segment, apply to all days
-    if (!foundDay && lastDayContext.length === 0 && segments.length === 1) {
-      for (let i = 0; i < 7; i++) {
-        if (!daySchedule[i]) {
-          daySchedule[i] = { hours: [], isClosed: false };
-        }
-        if (isClosed) {
-          daySchedule[i].isClosed = true;
-        } else if (hoursText) {
-          daySchedule[i].hours.push(hoursText);
-        }
-      }
-    }
-  }
-  
-  // Convert to array format, combining multiple hour windows
-  const schedule: Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> = [];
-  for (let i = 0; i < 7; i++) {
-    const dayData = daySchedule[i];
-    if (dayData) {
-      const hoursDisplay = dayData.isClosed ? 'Closed' : (dayData.hours.length > 0 ? dayData.hours.join(', ') : 'Closed');
-      schedule.push({
-        day: dayNames[i],
-        hours: hoursDisplay,
-        isToday: i === currentDay,
-        isClosed: dayData.isClosed || (dayData.hours.length === 0)
-      });
-    }
+    schedule.push({
+      day: dayLabel,
+      hours: hoursText,
+      isToday: appliesToToday,
+      isClosed
+    });
   }
   
   return schedule;
