@@ -1065,6 +1065,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sync phone numbers from ElevenLabs API
+  app.post('/api/elevenlabs/sync-phone-numbers', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const config = await storage.getElevenLabsConfig();
+      if (!config?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+
+      console.log('[PhoneSync] Fetching phone numbers from ElevenLabs API...');
+      
+      // Call ElevenLabs API to get phone numbers
+      const response = await axios.get('https://api.elevenlabs.io/v1/convai/phone-numbers/', {
+        headers: {
+          'xi-api-key': config.apiKey,
+        },
+      });
+
+      const phoneNumbers = response.data.phone_numbers ?? [];
+      console.log('[PhoneSync] Received response:', JSON.stringify(response.data, null, 2));
+      console.log('[PhoneSync] Extracted phone numbers:', JSON.stringify(phoneNumbers, null, 2));
+
+      if (!phoneNumbers || phoneNumbers.length === 0) {
+        return res.json({ message: 'No phone numbers found in ElevenLabs account', phoneNumbers: [] });
+      }
+
+      // Update the global config with the first phone number ID if not already set
+      if (!config.phoneNumberId && phoneNumbers.length > 0) {
+        await storage.updateElevenLabsConfig({
+          phoneNumberId: phoneNumbers[0].phone_number_id,
+        });
+        console.log('[PhoneSync] Updated global config with phone number ID:', phoneNumbers[0].phone_number_id);
+      }
+
+      // Get all agents
+      const agents = await storage.getAllElevenLabsAgents();
+      let updatedCount = 0;
+
+      // Update each agent with the phone number ID
+      for (const agent of agents) {
+        if (!agent.phoneNumberId && phoneNumbers.length > 0) {
+          // Use the first phone number for all agents (you can customize this logic)
+          await storage.updateElevenLabsAgent(agent.id, {
+            phoneNumberId: phoneNumbers[0].phone_number_id,
+          });
+          console.log(`[PhoneSync] Updated agent ${agent.name} with phone number ID: ${phoneNumbers[0].phone_number_id}`);
+          updatedCount++;
+        }
+      }
+
+      res.json({
+        message: `Successfully synced ${phoneNumbers.length} phone number(s) and updated ${updatedCount} agent(s)`,
+        phoneNumbers: phoneNumbers.map((pn: any) => ({
+          phone_number: pn.phone_number,
+          phone_number_id: pn.phone_number_id,
+          provider: pn.provider,
+          label: pn.label,
+        })),
+        updatedAgents: updatedCount,
+      });
+    } catch (error: any) {
+      console.error('[PhoneSync] Error syncing phone numbers:', error.response?.data || error.message);
+      res.status(500).json({ 
+        error: error.message || 'Failed to sync phone numbers',
+        details: error.response?.data,
+      });
+    }
+  });
+
   // ===== VOICE AI CALLING ENDPOINTS =====
   
   // Webhook receiver for ElevenLabs post-call transcription
