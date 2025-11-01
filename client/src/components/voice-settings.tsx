@@ -45,9 +45,10 @@ const agentSchema = z.object({
 type Agent = {
   id: string;
   name: string;
-  agentId: string;
+  agent_id: string;
+  phone_number_id?: string | null;
   description?: string;
-  isDefault: boolean;
+  is_default: boolean;
 };
 
 export function VoiceSettings() {
@@ -420,7 +421,7 @@ export function VoiceSettings() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className="font-medium">{agent.name}</h4>
-                      {agent.isDefault && (
+                      {agent.is_default && (
                         <Badge variant="default" data-testid="badge-default-agent">
                           <Star className="h-3 w-3 mr-1" />
                           Default
@@ -428,8 +429,13 @@ export function VoiceSettings() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">
-                      Agent ID: {agent.agentId}
+                      Agent ID: {agent.agent_id}
                     </p>
+                    {agent.phone_number_id && (
+                      <p className="text-xs text-muted-foreground">
+                        Phone: {agent.phone_number_id}
+                      </p>
+                    )}
                     {agent.description && (
                       <p className="text-sm text-muted-foreground">
                         {agent.description}
@@ -437,7 +443,7 @@ export function VoiceSettings() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {!agent.isDefault && (
+                    {!agent.is_default && (
                       <Button
                         variant="ghost"
                         size="sm"
