@@ -531,7 +531,7 @@ export function CallDetailDialog({
                 </Card>
 
                 {/* Store Information */}
-                {session?.storeSnapshot && (
+                {client?.data && (
                   <Card data-testid="card-store-info">
                     <CardHeader>
                       <CardTitle className="text-base">Store Information</CardTitle>
@@ -557,11 +557,11 @@ export function CallDetailDialog({
     </Dialog>
 
     {/* Store Details Dialog */}
-    {session?.storeSnapshot && trackerSheetId && storeSheetId && (
+    {client?.data && trackerSheetId && storeSheetId && (
       <StoreDetailsDialog
         open={storeDialogOpen}
         onOpenChange={setStoreDialogOpen}
-        row={session.storeSnapshot}
+        row={client.data}
         trackerSheetId={trackerSheetId}
         storeSheetId={storeSheetId}
         refetch={refetch || (async () => {})}
