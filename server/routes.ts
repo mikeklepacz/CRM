@@ -1397,14 +1397,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { scenario } = req.params;
       
       // Get Commission Tracker sheet
-      const commissionTrackerSheetId = await storage.getCommissionTrackerSheetId();
-      if (!commissionTrackerSheetId) {
-        return res.status(404).json({ error: 'Commission Tracker sheet not configured' });
-      }
-
-      const sheet = await storage.getGoogleSheetById(commissionTrackerSheetId);
+      const sheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!sheet) {
-        return res.status(404).json({ error: 'Commission Tracker sheet not found' });
+        return res.status(404).json({ error: 'Commission Tracker sheet not configured' });
       }
 
       // Read store data from sheet
