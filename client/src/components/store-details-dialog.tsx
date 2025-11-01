@@ -532,7 +532,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
               const sheetId = storeSheetId;
               const rowIndex = row._storeRowIndex;
 
-              if (sheetId && rowIndex) {
+              if (sheetId && rowIndex !== undefined) {
                 storeChanges.push({
                   sheetId,
                   rowIndex,
@@ -563,7 +563,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         const sheetId = storeSheetId;
         const rowIndex = row._storeRowIndex;
 
-        if (sheetId && rowIndex) {
+        if (sheetId && rowIndex !== undefined) {
           // Add DBA change
           storeChanges.push({
             sheetId,
@@ -583,7 +583,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       }
 
       if (storeChanges.length === 0 && Object.keys(trackerChanges).length === 0) {
-        throw new Error("No changes to save");
+        throw new Error("No changes detected to save. If you made changes but see this error, please contact support with the store details.");
       }
 
       const promises = [];
@@ -678,10 +678,20 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       if (context?.previousData) {
         queryClient.setQueryData(["merged-data"], context.previousData);
       }
+      
+      // Log error to console for debugging
+      console.error("❌ SAVE FAILED:", error);
+      console.error("Store data:", { 
+        storeRowIndex: row._storeRowIndex, 
+        trackerRowIndex: row._trackerRowIndex,
+        link: row.link || row.Link 
+      });
+      
       toast({
-        title: "Error",
+        title: "❌ Save Failed",
         description: error.message,
         variant: "destructive",
+        duration: 10000, // 10 seconds instead of default 5
       });
     },
     onSettled: () => {
