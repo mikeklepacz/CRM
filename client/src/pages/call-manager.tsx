@@ -1254,7 +1254,10 @@ export default function CallManager() {
                                         variant="outline"
                                         className="cursor-pointer hover-elevate text-xs"
                                         onClick={() => {
-                                          setSelectedCallId(example.conversationId);
+                                          setSelectedCallForDialog({ 
+                                            conversationId: example.conversationId, 
+                                            callData: null 
+                                          });
                                           setIsCallDialogOpen(true);
                                         }}
                                         data-testid={`example-badge-${idx}-${exIdx}`}
@@ -1299,7 +1302,10 @@ export default function CallManager() {
                                         variant="outline"
                                         className="cursor-pointer hover-elevate text-xs"
                                         onClick={() => {
-                                          setSelectedCallId(example.conversationId);
+                                          setSelectedCallForDialog({ 
+                                            conversationId: example.conversationId, 
+                                            callData: null 
+                                          });
                                           setIsCallDialogOpen(true);
                                         }}
                                         data-testid={`pattern-example-badge-${idx}-${exIdx}`}
