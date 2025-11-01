@@ -36,12 +36,12 @@ interface EligibleStore {
   pocName?: string;
 }
 
-interface QueuedCall {
-  id: number;
-  storeName: string;
-  phoneNumber: string;
-  status: string;
-  createdAt: string;
+interface CallQueueStats {
+  activeCalls: number;
+  queuedCalls: number;
+  completedToday: number;
+  failedToday: number;
+  campaigns: any[];
 }
 
 type CallScenario = 'cold_calls' | 'follow_ups' | 'recovery';
@@ -85,7 +85,7 @@ export default function CallManager() {
   });
 
   // Fetch call queue status
-  const { data: callQueue = [] } = useQuery<QueuedCall[]>({
+  const { data: callQueueStats } = useQuery<CallQueueStats>({
     queryKey: ['/api/elevenlabs/call-queue'],
     enabled: hasAccess,
     refetchInterval: 5000, // Poll every 5 seconds for real-time updates
@@ -193,12 +193,12 @@ export default function CallManager() {
     recovery: "Leads from other agents that have been inactive for 30+ days. Re-engagement opportunities.",
   };
 
-  // Calculate stats
+  // Use stats from API
   const queueStats = {
-    active: callQueue.filter(c => c.status === 'calling' || c.status === 'in_progress').length,
-    queued: callQueue.filter(c => c.status === 'queued').length,
-    completed: callQueue.filter(c => c.status === 'completed').length,
-    failed: callQueue.filter(c => c.status === 'failed').length,
+    active: callQueueStats?.activeCalls || 0,
+    queued: callQueueStats?.queuedCalls || 0,
+    completed: callQueueStats?.completedToday || 0,
+    failed: callQueueStats?.failedToday || 0,
   };
 
   return (
