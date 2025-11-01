@@ -21,7 +21,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store, Bot, Download, ChevronDown } from "lucide-react";
+import { RefreshCw, Settings2, Save, ChevronLeft, ChevronRight, Maximize2, Phone, Mail, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, Calendar as CalendarIcon, Type, AlignJustify, RotateCcw, Palette, EyeOff, SortAsc, SortDesc, AlignLeft, AlignCenter, AlignRight, Search, Sparkles, Store, Bot, Download, ChevronDown, Copy } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -35,6 +35,7 @@ import { generateAndDownloadVCard } from "@/lib/vcard-utils";
 import { AddressEditDialog } from "@/components/address-edit-dialog";
 import { Loader2 } from "lucide-react";
 import { FranchiseFinderDialog } from "@/components/franchise-finder-dialog";
+import { DuplicateFinderDialog } from "@/components/duplicate-finder-dialog";
 import type { FranchiseGroup } from "@shared/franchiseUtils";
 import { SharedColorPicker } from "@/components/shared-color-picker";
 import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
@@ -427,6 +428,9 @@ export default function ClientDashboard() {
   // Franchise finder dialog state
   const [franchiseFinderOpen, setFranchiseFinderOpen] = useState(false);
   const [selectedFranchise, setSelectedFranchise] = useState<FranchiseGroup | null>(null);
+  
+  // Duplicate finder dialog state
+  const [duplicateFinderOpen, setDuplicateFinderOpen] = useState(false);
 
   // Export vCard dialog state
   const [exportVCardDialogOpen, setExportVCardDialogOpen] = useState(false);
@@ -2502,6 +2506,18 @@ export default function ClientDashboard() {
                   </Button>
                 )}
 
+                {/* Duplicate Finder - Admin Only */}
+                {isAdmin && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setDuplicateFinderOpen(true)}
+                    data-testid="button-dups"
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    DUPS
+                  </Button>
+                )}
+
                 {/* Status Filter */}
                 <Popover>
                   <PopoverTrigger asChild>
@@ -3621,6 +3637,17 @@ export default function ClientDashboard() {
           setSelectedFranchise(franchise);
           // Also clear other filters to show only franchise stores
           setShowMyStoresOnly(false);
+        }}
+      />
+
+      {/* Duplicate Finder Dialog */}
+      <DuplicateFinderDialog
+        open={duplicateFinderOpen}
+        onOpenChange={setDuplicateFinderOpen}
+        stores={data}
+        onDuplicatesDeleted={() => {
+          // Refresh the data after deletes
+          refetch();
         }}
       />
 

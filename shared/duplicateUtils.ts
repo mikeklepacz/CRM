@@ -144,13 +144,21 @@ export function countNonEmptyFields(store: StoreRecord): number {
  * - 75%+ name similarity (accounting for Med/Rec variations)
  * - Identical phone numbers
  * - Identical addresses
+ * 
+ * Note: Does NOT skip stores after grouping - allows stores to appear in multiple groups
+ * if they match on different criteria (e.g., same phone AND similar name to another store)
  */
 export function detectDuplicates(
   stores: StoreRecord[],
   similarityThreshold: number = 0.75
 ): DuplicateGroup[] {
   const duplicateGroups: DuplicateGroup[] = [];
-  const processedLinks = new Set<string>();
+  const addedPairs = new Set<string>(); // Track unique pairs to avoid duplicate groups
+  
+  // Helper to create a sorted pair key for deduplication
+  const makePairKey = (link1: string, link2: string): string => {
+    return [link1, link2].sort().join('||');
+  };
   
   // Group by phone number
   const phoneGroups = new Map<string, StoreRecord[]>();
@@ -164,7 +172,7 @@ export function detectDuplicates(
     }
   });
   
-  // Add phone-based duplicates
+  // Add phone-based duplicates and track pairs
   phoneGroups.forEach((group, phone) => {
     if (group.length > 1) {
       duplicateGroups.push({
@@ -172,15 +180,19 @@ export function detectDuplicates(
         reason: `Same phone number: ${group[0].Phone || phone}`,
         similarity: 1.0,
       });
-      group.forEach(store => processedLinks.add(store.Link));
+      
+      // Mark all pairs in this group as processed
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          addedPairs.add(makePairKey(group[i].Link, group[j].Link));
+        }
+      }
     }
   });
   
-  // Group by address
+  // Group by address (don't skip already-grouped stores)
   const addressGroups = new Map<string, StoreRecord[]>();
   stores.forEach(store => {
-    if (processedLinks.has(store.Link)) return; // Skip if already grouped by phone
-    
     const address = normalizeAddress(store.Address || '');
     if (address && address.length >= 10) {
       if (!addressGroups.has(address)) {
@@ -190,25 +202,46 @@ export function detectDuplicates(
     }
   });
   
-  // Add address-based duplicates
+  // Add address-based duplicates if they're new pairs
   addressGroups.forEach((group, address) => {
     if (group.length > 1) {
-      duplicateGroups.push({
-        stores: group,
-        reason: `Same address: ${group[0].Address || ''}`,
-        similarity: 1.0,
-      });
-      group.forEach(store => processedLinks.add(store.Link));
+      // Check if this is a genuinely new group
+      let hasNewPair = false;
+      for (let i = 0; i < group.length && !hasNewPair; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          if (!addedPairs.has(makePairKey(group[i].Link, group[j].Link))) {
+            hasNewPair = true;
+            break;
+          }
+        }
+      }
+      
+      if (hasNewPair) {
+        duplicateGroups.push({
+          stores: group,
+          reason: `Same address: ${group[0].Address || ''}`,
+          similarity: 1.0,
+        });
+        
+        // Mark pairs as processed
+        for (let i = 0; i < group.length; i++) {
+          for (let j = i + 1; j < group.length; j++) {
+            addedPairs.add(makePairKey(group[i].Link, group[j].Link));
+          }
+        }
+      }
     }
   });
   
-  // Check for name similarity
-  const remainingStores = stores.filter(s => !processedLinks.has(s.Link));
-  
-  for (let i = 0; i < remainingStores.length; i++) {
-    for (let j = i + 1; j < remainingStores.length; j++) {
-      const store1 = remainingStores[i];
-      const store2 = remainingStores[j];
+  // Check for name similarity across ALL stores (not just remaining)
+  for (let i = 0; i < stores.length; i++) {
+    for (let j = i + 1; j < stores.length; j++) {
+      const store1 = stores[i];
+      const store2 = stores[j];
+      
+      // Skip if this pair already matched
+      const pairKey = makePairKey(store1.Link, store2.Link);
+      if (addedPairs.has(pairKey)) continue;
       
       const name1 = normalizeStoreName(store1.Name || '');
       const name2 = normalizeStoreName(store2.Name || '');
@@ -223,8 +256,7 @@ export function detectDuplicates(
           reason: `Similar names (${Math.round(similarity * 100)}% match)`,
           similarity,
         });
-        processedLinks.add(store1.Link);
-        processedLinks.add(store2.Link);
+        addedPairs.add(pairKey);
       }
     }
   }
@@ -241,12 +273,12 @@ export function smartSelectDuplicates(duplicateGroups: DuplicateGroup[]): string
   const toDelete: string[] = [];
   
   duplicateGroups.forEach(group => {
-    // Sort stores by field count (ascending) - least info first
+    // Sort stores by field count (descending) - most info first
     const sortedStores = [...group.stores].sort((a, b) => {
-      return countNonEmptyFields(a) - countNonEmptyFields(b);
+      return countNonEmptyFields(b) - countNonEmptyFields(a);
     });
     
-    // Keep the first store (most info), mark rest for deletion
+    // Keep the first store (most complete), mark rest for deletion
     sortedStores.slice(1).forEach(store => {
       toDelete.push(store.Link);
     });
