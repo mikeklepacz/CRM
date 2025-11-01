@@ -1128,9 +1128,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all ElevenLabs agents
+  // Get all ElevenLabs agents (with voice access check)
   app.get('/api/elevenlabs/agents', isAuthenticatedCustom, async (req: any, res) => {
     try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Check voice access
+      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
       const agents = await storage.getAllElevenLabsAgents();
       res.json(agents);
     } catch (error: any) {
