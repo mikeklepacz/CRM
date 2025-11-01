@@ -2241,6 +2241,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sync calls from ElevenLabs (import historical conversations)
+  app.post('/api/elevenlabs/sync-calls', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const config = await storage.getElevenLabsConfig();
+      if (!config?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+
+      let importedCount = 0;
+      let skippedCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      // Fetch all conversations from ElevenLabs
+      const listResponse = await axios.get('https://api.elevenlabs.io/v1/convai/conversations', {
+        headers: {
+          'xi-api-key': config.apiKey,
+        },
+        params: {
+          limit: 100, // Fetch up to 100 recent conversations
+        },
+      });
+
+      const conversations = listResponse.data?.conversations || [];
+      console.log(`[Sync] Found ${conversations.length} conversations from ElevenLabs`);
+
+      // Process each conversation
+      for (const conv of conversations) {
+        try {
+          const conversationId = conv.conversation_id;
+          
+          // Check if this conversation already exists
+          const existing = await storage.getCallSessionByConversationId(conversationId);
+          if (existing) {
+            skippedCount++;
+            continue;
+          }
+
+          // Fetch full conversation details
+          const detailResponse = await axios.get(
+            `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}`,
+            {
+              headers: {
+                'xi-api-key': config.apiKey,
+              },
+            }
+          );
+
+          const details = detailResponse.data;
+          
+          // Extract metadata
+          const metadata = details.metadata || {};
+          const phoneNumber = metadata.caller_number || details.conversation_initiation_client_data?.phone_number || 'Unknown';
+          const clientIdentifier = phoneNumber;
+          
+          // Find or create client
+          let client = await storage.getClientByIdentifier(clientIdentifier);
+          if (!client) {
+            client = await storage.createClient({
+              uniqueIdentifier: clientIdentifier,
+              data: {
+                phoneNumber,
+                businessName: details.conversation_initiation_client_data?.business_name,
+                ...details.conversation_initiation_client_data,
+              },
+            });
+          }
+
+          // Parse duration
+          const durationSecs = metadata.conversation_duration_secs || 0;
+          
+          // Parse dates
+          const startedAt = metadata.start_time_unix_secs 
+            ? new Date(metadata.start_time_unix_secs * 1000).toISOString()
+            : new Date().toISOString();
+          const endedAt = metadata.end_time_unix_secs
+            ? new Date(metadata.end_time_unix_secs * 1000).toISOString()
+            : startedAt;
+
+          // Determine success
+          const callSuccessful = details.status === 'done';
+
+          // Parse AI analysis if available
+          let aiAnalysis = null;
+          if (details.analysis) {
+            aiAnalysis = {
+              summary: details.analysis.call_summary,
+              sentiment: details.analysis.customer_sentiment,
+              customerMood: details.analysis.customer_emotion,
+              mainObjection: details.analysis.main_objection,
+              keyMoment: details.analysis.key_moment,
+            };
+          }
+
+          // Create call session
+          const session = await storage.createCallSession({
+            conversationId,
+            agentId: details.agent_id,
+            clientId: client.id,
+            phoneNumber,
+            status: details.status === 'done' ? 'completed' : details.status,
+            callDurationSecs: durationSecs,
+            startedAt,
+            endedAt,
+            callSuccessful,
+            aiAnalysis,
+            interestLevel: null,
+            followUpNeeded: false,
+            storeSnapshot: details.conversation_initiation_client_data,
+          });
+
+          // Store transcripts
+          if (details.transcript && Array.isArray(details.transcript)) {
+            for (let i = 0; i < details.transcript.length; i++) {
+              const msg = details.transcript[i];
+              await storage.createCallTranscript({
+                conversationId,
+                sequenceNumber: i,
+                role: msg.role,
+                message: msg.message,
+                timestamp: msg.time_in_call_secs || 0,
+              });
+            }
+          }
+
+          importedCount++;
+          console.log(`[Sync] Imported conversation ${conversationId}`);
+        } catch (convError: any) {
+          console.error(`[Sync] Error processing conversation:`, convError);
+          errorCount++;
+          errors.push(convError.message || 'Unknown error');
+        }
+      }
+
+      res.json({
+        success: true,
+        imported: importedCount,
+        skipped: skippedCount,
+        errors: errorCount,
+        errorDetails: errors.slice(0, 5), // Return first 5 errors
+        total: conversations.length,
+      });
+    } catch (error: any) {
+      console.error('[Sync] Error syncing calls:', error);
+      res.status(500).json({ 
+        error: error.message || 'Failed to sync calls',
+        details: error.response?.data,
+      });
+    }
+  });
+
   // ===== SYSTEM-WIDE GOOGLE SHEETS OAUTH (ADMIN ONLY) =====
   app.get('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
