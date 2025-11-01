@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,10 +75,20 @@ export function VoiceSettings() {
   const configForm = useForm<z.infer<typeof configSchema>>({
     resolver: zodResolver(configSchema),
     defaultValues: {
-      apiKey: configData?.apiKey || "",
-      twilioNumber: configData?.twilioNumber || "",
+      apiKey: "",
+      twilioNumber: "",
     },
   });
+
+  // Update form when config data loads
+  useEffect(() => {
+    if (configData) {
+      configForm.reset({
+        apiKey: configData.apiKey || "",
+        twilioNumber: configData.twilioNumber || "",
+      });
+    }
+  }, [configData, configForm]);
 
   // Agent form
   const agentForm = useForm<z.infer<typeof agentSchema>>({
