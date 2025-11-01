@@ -845,17 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Agent endpoints
-  app.get('/api/elevenlabs/agents', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    try {
-      const agents = await storage.getAllElevenLabsAgents();
-      res.json({ agents });
-    } catch (error: any) {
-      console.error("Error fetching ElevenLabs agents:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch agents" });
-    }
-  });
-
+  // Agent management endpoints (admin only)
   app.post('/api/elevenlabs/agents', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const validation = elevenLabsAgentSchema.safeParse(req.body);

@@ -94,10 +94,7 @@ export default function CallManager() {
   // Batch call mutation
   const batchCallMutation = useMutation({
     mutationFn: async (data: { agent_id: string; phone_number_id: string; stores: string[]; scheduled_for?: string }) => {
-      return apiRequest('/api/elevenlabs/batch-call', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('POST', '/api/elevenlabs/batch-call', data);
     },
     onSuccess: () => {
       toast({
