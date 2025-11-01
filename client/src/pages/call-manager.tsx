@@ -54,7 +54,7 @@ export default function CallManager() {
   const [activeScenario, setActiveScenario] = useState<CallScenario>('cold_calls');
   const [selectedStores, setSelectedStores] = useState<Set<string>>(new Set());
   const [selectedAgent, setSelectedAgent] = useState<string>("");
-  const [schedulingMode, setSchedulingMode] = useState<'immediate' | 'scheduled'>('immediate');
+  const [schedulingMode, setSchedulingMode] = useState<'immediate' | 'scheduled' | 'auto'>('immediate');
   const [scheduledTime, setScheduledTime] = useState<string>("");
 
   // Clear selections when scenario changes
@@ -93,7 +93,7 @@ export default function CallManager() {
 
   // Batch call mutation
   const batchCallMutation = useMutation({
-    mutationFn: async (data: { agent_id: string; phone_number_id: string; stores: string[]; scheduled_for?: string }) => {
+    mutationFn: async (data: { agent_id: string; phone_number_id: string; stores: string[]; scheduled_for?: string; auto_schedule?: boolean }) => {
       return apiRequest('POST', '/api/elevenlabs/batch-call', data);
     },
     onSuccess: () => {
@@ -174,7 +174,7 @@ export default function CallManager() {
     const agent = agents.find(a => a.agent_id === selectedAgent);
     if (!agent) return;
 
-    const payload: { agent_id: string; phone_number_id: string; stores: string[]; scheduled_for?: string } = {
+    const payload: { agent_id: string; phone_number_id: string; stores: string[]; scheduled_for?: string; auto_schedule?: boolean } = {
       agent_id: agent.agent_id,
       phone_number_id: agent.phone_number_id,
       stores: Array.from(selectedStores),
@@ -182,6 +182,8 @@ export default function CallManager() {
 
     if (schedulingMode === 'scheduled' && scheduledTime) {
       payload.scheduled_for = new Date(scheduledTime).toISOString();
+    } else if (schedulingMode === 'auto') {
+      payload.auto_schedule = true;
     }
 
     batchCallMutation.mutate(payload);
@@ -288,7 +290,7 @@ export default function CallManager() {
 
                 <div>
                   <label className="text-sm font-medium mb-2 block">Scheduling</label>
-                  <RadioGroup value={schedulingMode} onValueChange={(v) => setSchedulingMode(v as 'immediate' | 'scheduled')} data-testid="radio-scheduling-mode">
+                  <RadioGroup value={schedulingMode} onValueChange={(v) => setSchedulingMode(v as 'immediate' | 'scheduled' | 'auto')} data-testid="radio-scheduling-mode">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="immediate" id="immediate" data-testid="radio-immediate" />
                       <Label htmlFor="immediate">Call Immediately</Label>
@@ -296,6 +298,10 @@ export default function CallManager() {
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="scheduled" id="scheduled" data-testid="radio-scheduled" />
                       <Label htmlFor="scheduled">Schedule for Later</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="auto" id="auto" data-testid="radio-auto" />
+                      <Label htmlFor="auto">Auto Schedule (Smart Hours)</Label>
                     </div>
                   </RadioGroup>
                 </div>
@@ -308,6 +314,7 @@ export default function CallManager() {
                     type="datetime-local"
                     value={scheduledTime}
                     onChange={(e) => setScheduledTime(e.target.value)}
+                    step="300"
                     min={(() => {
                       const now = new Date();
                       // Adjust for timezone offset to get local time string
@@ -317,6 +324,14 @@ export default function CallManager() {
                     })()}
                     data-testid="input-scheduled-time"
                   />
+                </div>
+              )}
+
+              {schedulingMode === 'auto' && (
+                <div className="rounded-md bg-muted p-3">
+                  <p className="text-sm text-muted-foreground">
+                    Calls will be automatically scheduled during each store's business hours based on their timezone and operating schedule.
+                  </p>
                 </div>
               )}
 
@@ -335,6 +350,11 @@ export default function CallManager() {
                     <>
                       <Calendar className="h-4 w-4 mr-2" />
                       Schedule {selectedStores.size > 0 ? `${selectedStores.size} ` : ''}Calls
+                    </>
+                  ) : schedulingMode === 'auto' ? (
+                    <>
+                      <Clock className="h-4 w-4 mr-2" />
+                      Auto Schedule {selectedStores.size > 0 ? `${selectedStores.size} ` : ''}Calls
                     </>
                   ) : (
                     <>
