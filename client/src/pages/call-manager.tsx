@@ -383,7 +383,15 @@ export default function CallManager() {
           </p>
         </div>
 
-        {/* Real-time Queue Stats */}
+        {/* Top-level tabs: Voice Hub and AI Call Analytics */}
+        <Tabs defaultValue="voice-hub" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
+            <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="voice-hub" className="space-y-6">
+            {/* Real-time Queue Stats */}
         <div className="grid gap-4 md:grid-cols-4">
           <Card data-testid="card-stat-active">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
@@ -693,13 +701,15 @@ export default function CallManager() {
             </CardContent>
           </Tabs>
         </Card>
+          </TabsContent>
 
-        {/* AI Call Analytics Section */}
-        <Card data-testid="card-ai-analytics">
-          <CardHeader>
-            <CardTitle>AI Call Analytics</CardTitle>
-            <CardDescription>Insights from your AI-powered calls</CardDescription>
-          </CardHeader>
+          <TabsContent value="ai-analytics" className="space-y-6">
+            {/* AI Call Analytics Section */}
+            <Card data-testid="card-ai-analytics">
+              <CardHeader>
+                <CardTitle>AI Call Analytics</CardTitle>
+                <CardDescription>Insights from your AI-powered calls</CardDescription>
+              </CardHeader>
           <CardContent>
             {/* Analytics Filters */}
             <div className="flex flex-wrap gap-4 mb-6 p-4 bg-muted/20 rounded-lg" data-testid="analytics-filters">
@@ -991,6 +1001,8 @@ export default function CallManager() {
             </Tabs>
           </CardContent>
         </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Call Detail Dialog */}
