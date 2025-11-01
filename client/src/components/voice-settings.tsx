@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,7 +30,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { AICallAnalytics } from "@/components/ai-call-analytics";
 
 const configSchema = z.object({
   apiKey: z.string().min(1, "API key is required"),
@@ -230,14 +228,8 @@ export function VoiceSettings() {
   });
 
   return (
-    <Tabs defaultValue="voice-hub" className="space-y-6">
-      <TabsList>
-        <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
-        <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="voice-hub" className="space-y-6">
-        {/* API Key Card */}
+    <div className="space-y-6">
+      {/* API Key Card */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -626,11 +618,6 @@ export function VoiceSettings() {
           </div>
         </CardContent>
       </Card>
-      </TabsContent>
-
-      <TabsContent value="ai-analytics">
-        <AICallAnalytics />
-      </TabsContent>
-    </Tabs>
+    </div>
   );
 }
