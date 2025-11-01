@@ -130,6 +130,7 @@ export default function CallManager() {
   const [insightsStartDate, setInsightsStartDate] = useState<string>('');
   const [insightsEndDate, setInsightsEndDate] = useState<string>('');
   const [insightsAgentFilter, setInsightsAgentFilter] = useState<string>('all');
+  const [persistedInsights, setPersistedInsights] = useState<any>(null);
   
   // Analytics filters
   const [analyticsAgentFilter, setAnalyticsAgentFilter] = useState<string>("all");
@@ -441,7 +442,8 @@ export default function CallManager() {
         limit: 50,
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setPersistedInsights(data);
       toast({
         title: "Analysis Complete",
         description: "AI insights have been generated from your call data",
@@ -1219,15 +1221,15 @@ export default function CallManager() {
                 </div>
 
                 {/* Insights Results */}
-                {analyzeCallsMutation.data && (
+                {persistedInsights && (
                   <div className="space-y-6 mt-6">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      Analysis completed for {analyzeCallsMutation.data.callCount} calls
+                      Analysis completed for {persistedInsights.callCount} calls
                     </div>
 
                     {/* Common Objections */}
-                    {analyzeCallsMutation.data.commonObjections && analyzeCallsMutation.data.commonObjections.length > 0 && (
+                    {persistedInsights.commonObjections && persistedInsights.commonObjections.length > 0 && (
                       <Card data-testid="card-common-objections">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-lg">
@@ -1237,7 +1239,7 @@ export default function CallManager() {
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
-                            {analyzeCallsMutation.data.commonObjections.map((objection: any, idx: number) => (
+                            {persistedInsights.commonObjections.map((objection: any, idx: number) => (
                               <div key={idx} className="border rounded-lg p-4" data-testid={`objection-${idx}`}>
                                 <div className="flex items-start justify-between gap-2">
                                   <p className="font-medium">{objection.objection}</p>
@@ -1275,7 +1277,7 @@ export default function CallManager() {
                     )}
 
                     {/* Success Patterns */}
-                    {analyzeCallsMutation.data.successPatterns && analyzeCallsMutation.data.successPatterns.length > 0 && (
+                    {persistedInsights.successPatterns && persistedInsights.successPatterns.length > 0 && (
                       <Card data-testid="card-success-patterns">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-lg">
@@ -1285,7 +1287,7 @@ export default function CallManager() {
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
-                            {analyzeCallsMutation.data.successPatterns.map((pattern: any, idx: number) => (
+                            {persistedInsights.successPatterns.map((pattern: any, idx: number) => (
                               <div key={idx} className="border rounded-lg p-4" data-testid={`pattern-${idx}`}>
                                 <div className="flex items-start justify-between gap-2">
                                   <p className="font-medium">{pattern.pattern}</p>
@@ -1323,7 +1325,7 @@ export default function CallManager() {
                     )}
 
                     {/* Sentiment Analysis */}
-                    {analyzeCallsMutation.data.sentimentAnalysis && (
+                    {persistedInsights.sentimentAnalysis && (
                       <Card data-testid="card-sentiment-analysis">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-lg">
@@ -1335,26 +1337,26 @@ export default function CallManager() {
                           <div className="grid grid-cols-3 gap-4">
                             <div className="text-center">
                               <div className="text-2xl font-bold text-green-500">
-                                {analyzeCallsMutation.data.sentimentAnalysis.positive}%
+                                {persistedInsights.sentimentAnalysis.positive}%
                               </div>
                               <p className="text-sm text-muted-foreground">Positive</p>
                             </div>
                             <div className="text-center">
                               <div className="text-2xl font-bold text-yellow-500">
-                                {analyzeCallsMutation.data.sentimentAnalysis.neutral}%
+                                {persistedInsights.sentimentAnalysis.neutral}%
                               </div>
                               <p className="text-sm text-muted-foreground">Neutral</p>
                             </div>
                             <div className="text-center">
                               <div className="text-2xl font-bold text-red-500">
-                                {analyzeCallsMutation.data.sentimentAnalysis.negative}%
+                                {persistedInsights.sentimentAnalysis.negative}%
                               </div>
                               <p className="text-sm text-muted-foreground">Negative</p>
                             </div>
                           </div>
-                          {analyzeCallsMutation.data.sentimentAnalysis.trends && (
+                          {persistedInsights.sentimentAnalysis.trends && (
                             <p className="text-sm text-muted-foreground border-t pt-4">
-                              {analyzeCallsMutation.data.sentimentAnalysis.trends}
+                              {persistedInsights.sentimentAnalysis.trends}
                             </p>
                           )}
                         </CardContent>
@@ -1362,7 +1364,7 @@ export default function CallManager() {
                     )}
 
                     {/* Coaching Recommendations */}
-                    {analyzeCallsMutation.data.coachingRecommendations && analyzeCallsMutation.data.coachingRecommendations.length > 0 && (
+                    {persistedInsights.coachingRecommendations && persistedInsights.coachingRecommendations.length > 0 && (
                       <Card data-testid="card-coaching-recommendations">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-lg">
@@ -1372,7 +1374,7 @@ export default function CallManager() {
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
-                            {analyzeCallsMutation.data.coachingRecommendations.map((rec: any, idx: number) => (
+                            {persistedInsights.coachingRecommendations.map((rec: any, idx: number) => (
                               <div key={idx} className="border rounded-lg p-4" data-testid={`recommendation-${idx}`}>
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                   <p className="font-medium">{rec.title}</p>
@@ -1394,7 +1396,7 @@ export default function CallManager() {
                 )}
 
                 {/* Empty State */}
-                {!analyzeCallsMutation.data && !analyzeCallsMutation.isPending && (
+                {!persistedInsights && !analyzeCallsMutation.isPending && (
                   <div className="text-center py-12 bg-muted/20 rounded-lg">
                     <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <p className="text-muted-foreground" data-testid="text-no-insights">
