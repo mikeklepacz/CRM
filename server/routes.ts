@@ -4975,7 +4975,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Commission Tracker sheet is empty" });
       }
 
-      const headers = headerData[0];
+      // CRITICAL: Filter out empty headers to prevent sheet pollution
+      const allHeaders = headerData[0];
+      const headers = allHeaders.filter(h => h && h.trim() !== '');
       console.log('Commission Tracker headers:', headers);
 
       // Build column map (case-insensitive)
@@ -5871,7 +5873,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return false;
       }
       
-      const headers = rows[0];
+      // CRITICAL: Filter out empty headers to prevent sheet pollution
+      const allHeaders = rows[0];
+      const headers = allHeaders.filter(h => h && h.trim() !== '');
+      
       const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
       const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
       const statusIndex = headers.findIndex(h => h.toLowerCase() === 'status');
@@ -6853,7 +6858,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
 
           if (trackerRows.length > 0) {
-            const trackerHeaders = trackerRows[0];
+            // CRITICAL: Filter out empty headers to prevent sheet pollution
+            const allTrackerHeaders = trackerRows[0];
+            const trackerHeaders = allTrackerHeaders.filter(h => h && h.trim() !== '');
             const trackerData = trackerRows.slice(1).map((row, index) => {
               const obj: any = { _trackerRowIndex: index + 2 };
               trackerHeaders.forEach((header, i) => {
@@ -7941,7 +7948,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Sheet is empty - cannot determine columns' });
       }
 
-      const headers = rows[0];
+      // CRITICAL: Filter out empty headers to prevent sheet pollution
+      const allHeaders = rows[0];
+      const headers = allHeaders.filter(h => h && h.trim() !== '');
       const nameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'store name');
       const addressIndex = headers.findIndex((h: string) => h.toLowerCase() === 'address');
       const cityIndex = headers.findIndex((h: string) => h.toLowerCase() === 'city');
@@ -12716,7 +12725,9 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(500).json({ message: 'Store Database sheet is empty or has no headers' });
       }
 
-      const headers = storeRows[0];
+      // CRITICAL: Filter out empty headers to prevent sheet pollution
+      const allHeaders = storeRows[0];
+      const headers = allHeaders.filter(h => h && h.trim() !== '');
       
       // Find column indices by header name (case-insensitive)
       const findColumnIndex = (columnName: string) => 
