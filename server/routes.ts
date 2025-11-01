@@ -2312,14 +2312,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             || details.call_duration_secs
             || 0;
           
-          // Debug logging for first conversation
-          if (conversationId === conversations[0]?.conversation_id) {
-            console.log('[Sync Debug] First conversation metadata:', JSON.stringify(metadata, null, 2));
-            console.log('[Sync Debug] Duration found:', durationSecs);
-            console.log('[Sync Debug] Details keys:', Object.keys(details));
-            console.log('[Sync Debug] Analysis field:', JSON.stringify(details.analysis, null, 2));
-          }
-          
           // Parse dates
           const startedAt = metadata.start_time_unix_secs 
             ? new Date(metadata.start_time_unix_secs * 1000)
