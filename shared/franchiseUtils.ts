@@ -96,6 +96,70 @@ function normalizePhone(phone: string): string {
 }
 
 /**
+ * Normalize address for duplicate detection
+ * - Lowercase
+ * - Remove common abbreviations (St, Ave, Rd, etc.)
+ * - Remove spaces and punctuation
+ */
+function normalizeAddress(address: string): string {
+  if (!address || typeof address !== 'string') return '';
+  
+  return address
+    .toLowerCase()
+    .replace(/\bstreet\b/g, 'st')
+    .replace(/\bavenue\b/g, 'ave')
+    .replace(/\broad\b/g, 'rd')
+    .replace(/\bdrive\b/g, 'dr')
+    .replace(/\bboulevard\b/g, 'blvd')
+    .replace(/\blane\b/g, 'ln')
+    .replace(/\bcourt\b/g, 'ct')
+    .replace(/[^a-z0-9]/g, '') // Remove all non-alphanumeric
+    .trim();
+}
+
+/**
+ * Remove duplicate listings (same phone or address) from a list of stores
+ * Keeps the first occurrence of each unique location
+ */
+function removeDuplicateListings(stores: StoreData[]): StoreData[] {
+  const seenPhones = new Set<string>();
+  const seenAddresses = new Set<string>();
+  const uniqueStores: StoreData[] = [];
+  
+  for (const store of stores) {
+    const phone = normalizePhone(store.Phone || '');
+    const address = normalizeAddress(store.Address || '');
+    
+    let isDuplicate = false;
+    
+    // Check if we've seen this phone number (if it exists and is valid)
+    if (phone && phone.length >= 10) {
+      if (seenPhones.has(phone)) {
+        isDuplicate = true;
+      } else {
+        seenPhones.add(phone);
+      }
+    }
+    
+    // Check if we've seen this address (if it exists and is meaningful)
+    if (!isDuplicate && address && address.length >= 10) {
+      if (seenAddresses.has(address)) {
+        isDuplicate = true;
+      } else {
+        seenAddresses.add(address);
+      }
+    }
+    
+    // Add to results if not a duplicate
+    if (!isDuplicate) {
+      uniqueStores.push(store);
+    }
+  }
+  
+  return uniqueStores;
+}
+
+/**
  * Detect potential franchise groups from store data
  * Groups by website first (strongest signal), then by name similarity
  */
@@ -124,13 +188,16 @@ export function detectFranchises(
 
   // Convert website groups to franchise groups
   websiteGroups.forEach((locations, domain) => {
-    if (locations.length >= minLocations && locations.length <= maxLocations) {
+    // Remove duplicate listings (same phone/address) before counting locations
+    const uniqueLocations = removeDuplicateListings(locations);
+    
+    if (uniqueLocations.length >= minLocations && uniqueLocations.length <= maxLocations) {
       // Extract brand name from the most common store name prefix
-      const brandName = findCommonPrefix(locations.map(s => s.Name));
+      const brandName = findCommonPrefix(uniqueLocations.map(s => s.Name));
       
       franchiseGroups.push({
         brandName: brandName || domain,
-        locations,
+        locations: uniqueLocations,
         commonWebsite: domain,
         matchType: 'website'
       });
@@ -153,16 +220,19 @@ export function detectFranchises(
 
   // Convert brand groups to franchise groups with multi-signal verification
   brandGroups.forEach((locations, brand) => {
-    if (locations.length >= minLocations && locations.length <= maxLocations) {
+    // Remove duplicate listings (same phone/address) before counting locations
+    const uniqueLocations = removeDuplicateListings(locations);
+    
+    if (uniqueLocations.length >= minLocations && uniqueLocations.length <= maxLocations) {
       // Additional verification: check if stores share email domain or phone patterns
       const emailDomains = new Set(
-        locations
+        uniqueLocations
           .map(s => extractEmailDomain(s.Email || ''))
           .filter(d => d && d.length > 3)
       );
       
       const phones = new Set(
-        locations
+        uniqueLocations
           .map(s => normalizePhone(s.Phone || ''))
           .filter(p => p && p.length >= 10)
       );
@@ -173,13 +243,13 @@ export function detectFranchises(
       
       // For name-based grouping, require at least one additional signal if locations > 10
       // This prevents over-grouping of common generic names
-      const needsAdditionalSignal = locations.length > 10;
+      const needsAdditionalSignal = uniqueLocations.length > 10;
       const hasAdditionalSignal = hasCommonEmail || hasCommonPhone;
       
       if (!needsAdditionalSignal || hasAdditionalSignal) {
         franchiseGroups.push({
-          brandName: locations[0].Name.split('-')[0].trim(),
-          locations,
+          brandName: uniqueLocations[0].Name.split('-')[0].trim(),
+          locations: uniqueLocations,
           matchType: 'name'
         });
       }
