@@ -2421,11 +2421,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate limit
       const callLimit = Math.min(limit || 50, 100); // Max 100 calls
 
-      // Get user's OpenAI API key
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const userIntegration = await storage.getUserIntegration(userId);
+      // Get OpenAI API key from settings
+      const openaiSettings = await storage.getOpenaiSettings();
       
-      if (!userIntegration?.openaiApiKey) {
+      if (!openaiSettings?.apiKey) {
         return res.status(400).json({ 
           error: 'OpenAI API key not configured',
           message: 'Please configure your OpenAI API key in the Sales Assistant settings first'
@@ -2516,7 +2515,7 @@ Focus on:
         },
         {
           headers: {
-            'Authorization': `Bearer ${userIntegration.openaiApiKey}`,
+            'Authorization': `Bearer ${openaiSettings.apiKey}`,
             'Content-Type': 'application/json',
           },
         }
