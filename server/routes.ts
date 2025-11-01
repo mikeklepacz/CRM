@@ -1161,6 +1161,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Update call campaign target if this was part of a campaign
+      if (clientData.campaignTargetId) {
+        const targetId = clientData.campaignTargetId;
+        
+        if (data.status === 'done') {
+          const callSuccessful = analysis.call_successful;
+          const newStatus = callSuccessful ? 'completed' : 'failed';
+          
+          await storage.updateCallCampaignTarget(targetId, {
+            targetStatus: newStatus,
+            externalConversationId: conversationId,
+          });
+          
+          console.log(`Updated campaign target ${targetId} status to ${newStatus}`);
+        }
+      }
+
       // IDEMPOTENCY: Store transcripts only if they don't already exist
       if (data.transcript && Array.isArray(data.transcript)) {
         const existingTranscripts = await storage.getCallTranscripts(conversationId);

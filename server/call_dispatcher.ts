@@ -94,6 +94,7 @@ export class CallDispatcher {
         phoneNumberId: agent.phoneNumberId,
         toNumber: phoneNumber,
         clientData: {
+          campaignTargetId: target.id,
           businessName: clientData?.Name || clientData?.name,
           link: client.uniqueIdentifier,
           scenario: campaign.scenario,
