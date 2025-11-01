@@ -420,3 +420,171 @@ export async function getUserGoogleClient(userId: string) {
     oauth2Client
   };
 }
+
+/**
+ * Merge store data from source to target, then update target in Store Database
+ * Returns the merged store data
+ */
+export async function mergeAndUpdateStore(
+  targetLink: string,
+  mergedData: Record<string, any>
+) {
+  const sheets = await getSystemGoogleSheets();
+  const storeSheetId = await storage.getStoreSheetId();
+  
+  if (!storeSheetId) {
+    throw new Error('Store Database sheet ID not configured');
+  }
+
+  // Read all data with headers
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: storeSheetId,
+    range: 'Sheet1',
+  });
+
+  const rows = response.data.values || [];
+  if (rows.length === 0) {
+    throw new Error('Store Database is empty');
+  }
+
+  const headers = rows[0];
+  const dataRows = rows.slice(1);
+
+  // Find the row with matching Link
+  const linkIndex = headers.findIndex((h: string) => h === 'Link');
+  if (linkIndex === -1) {
+    throw new Error('Link column not found in Store Database');
+  }
+
+  const targetRowIndex = dataRows.findIndex((row: any[]) => row[linkIndex] === targetLink);
+  if (targetRowIndex === -1) {
+    throw new Error('Store not found');
+  }
+
+  // Build updated row using header-based mapping
+  const filteredHeaders = headers.filter((h: string) => h && h.trim() !== '');
+  const updatedRow = filteredHeaders.map((header: string) => {
+    return mergedData[header] !== undefined ? mergedData[header] : '';
+  });
+
+  // Update the specific row
+  const rowNumber = targetRowIndex + 2; // +1 for header, +1 for 1-indexed
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: storeSheetId,
+    range: `Sheet1!A${rowNumber}`,
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [updatedRow],
+    },
+  });
+
+  return mergedData;
+}
+
+/**
+ * Delete a store from Store Database by Link value
+ * Uses the Google Sheets API to delete the entire row
+ */
+export async function deleteStoreFromSheet(link: string) {
+  const sheets = await getSystemGoogleSheets();
+  const storeSheetId = await storage.getStoreSheetId();
+  
+  if (!storeSheetId) {
+    throw new Error('Store Database sheet ID not configured');
+  }
+
+  // Read all data to find the row
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: storeSheetId,
+    range: 'Sheet1',
+  });
+
+  const rows = response.data.values || [];
+  if (rows.length === 0) {
+    throw new Error('Store Database is empty');
+  }
+
+  const headers = rows[0];
+  const linkIndex = headers.findIndex((h: string) => h === 'Link');
+  if (linkIndex === -1) {
+    throw new Error('Link column not found');
+  }
+
+  const dataRows = rows.slice(1);
+  const rowIndex = dataRows.findIndex((row: any[]) => row[linkIndex] === link);
+  
+  if (rowIndex === -1) {
+    throw new Error('Store not found');
+  }
+
+  // Delete the row using batchUpdate with DeleteDimensionRequest
+  const rowNumber = rowIndex + 1; // +1 for header row
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: storeSheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: 0, // Assuming first sheet
+            dimension: 'ROWS',
+            startIndex: rowNumber,
+            endIndex: rowNumber + 1,
+          }
+        }
+      }]
+    }
+  });
+}
+
+/**
+ * Update all Commission Tracker rows that reference oldLink to use newLink instead
+ */
+export async function updateCommissionTrackerLinks(oldLink: string, newLink: string) {
+  const sheets = await getSystemGoogleSheets();
+  const trackerSheetId = await storage.getCommissionTrackerSheetId();
+  
+  if (!trackerSheetId) {
+    throw new Error('Commission Tracker sheet ID not configured');
+  }
+
+  // Read all Commission Tracker data
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: trackerSheetId,
+    range: 'Sheet1',
+  });
+
+  const rows = response.data.values || [];
+  if (rows.length === 0) {
+    return; // Empty tracker, nothing to update
+  }
+
+  const headers = rows[0];
+  const dataRows = rows.slice(1);
+  
+  const linkIndex = headers.findIndex((h: string) => h === 'Link');
+  if (linkIndex === -1) {
+    throw new Error('Link column not found in Commission Tracker');
+  }
+
+  // Find all rows with oldLink and update them
+  const updatedRows: Array<{ range: string; values: any[][] }> = [];
+  
+  dataRows.forEach((row: any[], index: number) => {
+    if (row[linkIndex] === oldLink) {
+      const updatedRow = [...row];
+      updatedRow[linkIndex] = newLink;
+      
+      const rowNumber = index + 2; // +1 for header, +1 for 1-indexed
+      updatedRows.push({
+        range: `Sheet1!A${rowNumber}`,
+        values: [updatedRow],
+      });
+    }
+  });
+
+  // Batch update all rows
+  if (updatedRows.length > 0) {
+    await batchUpdateSheetData(trackerSheetId, updatedRows);
+    console.log(`✅ Updated ${updatedRows.length} Commission Tracker row(s) from ${oldLink} to ${newLink}`);
+  }
+}
