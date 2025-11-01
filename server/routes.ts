@@ -1509,59 +1509,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
-      const { agentId, stores, scenario, name, sheetId } = req.body;
+      const { agent_id, phone_number_id, stores, scenario, name, scheduled_for, auto_schedule } = req.body;
       
-      if (!agentId || !stores || !Array.isArray(stores) || stores.length === 0) {
+      if (!agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
         return res.status(400).json({ error: 'Agent ID and stores array required' });
       }
-      
-      if (!sheetId) {
-        return res.status(400).json({ error: 'Sheet ID is required' });
+
+      // Create campaign with appropriate scheduling
+      let scheduledStart = new Date();
+      if (scheduled_for) {
+        scheduledStart = new Date(scheduled_for);
       }
 
-      // Create campaign
       const campaign = await storage.createCallCampaign({
-        name: name || `${scenario || 'Custom'} Campaign - ${new Date().toLocaleDateString()}`,
+        name: name || `${scenario || 'Batch'} Campaign - ${new Date().toLocaleDateString()}`,
         scenario: scenario || 'custom',
-        agentId,
+        agentId: agent_id,
         createdByUserId: userId,
         storeFilter: { scenario },
         totalStores: stores.length,
         status: 'scheduled',
-        scheduledStart: new Date(),
+        scheduledStart,
       });
 
       // Create campaign targets for each store
-      // First, find or create client records for each store
-      for (const store of stores) {
-        const link = store.link || store.Link;
-        if (!link) continue; // Skip stores without a link
-        
+      for (const storeLink of stores) {
         // Find existing client by unique identifier
-        let client = await storage.getClientByUniqueIdentifier(link);
+        let client = await storage.getClientByUniqueIdentifier(storeLink);
         
-        // If client doesn't exist, create it
-        if (!client) {
-          client = await storage.createClient({
-            uniqueIdentifier: link,
-            googleSheetId: sheetId,
-            data: store,
-            status: store.Status || store.status || 'unassigned',
-          });
-        }
+        // If client doesn't exist, we need the store data to get business hours for auto-scheduling
+        // In auto-schedule mode, stores should include hours and state data
         
         // Create campaign target
-        await storage.createCallCampaignTarget({
-          campaignId: campaign.id,
-          clientId: client.id,
-          targetStatus: 'pending',
-        });
+        if (client) {
+          const targetData: any = {
+            campaignId: campaign.id,
+            clientId: client.id,
+            targetStatus: 'pending',
+          };
+
+          // Auto-schedule: calculate optimal call time based on business hours
+          if (auto_schedule && client.data) {
+            const hours = client.data.Hours || client.data.hours || client.data.businessHours || '';
+            const state = client.data.State || client.data.state || '';
+            
+            if (hours && state) {
+              const optimalTime = calculateNextAvailableCallTime(hours, state);
+              if (optimalTime) {
+                targetData.scheduledFor = optimalTime;
+              }
+            }
+          } else if (scheduled_for) {
+            targetData.scheduledFor = scheduledStart;
+          }
+
+          await storage.createCallCampaignTarget(targetData);
+        }
       }
 
       res.json({
         campaignId: campaign.id,
         totalStores: stores.length,
         status: 'queued',
+        autoScheduled: !!auto_schedule,
       });
     } catch (error: any) {
       console.error('Error creating batch call campaign:', error);
