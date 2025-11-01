@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, PhoneCall, Clock, Users, BarChart3 } from "lucide-react";
+import { PhoneCall, Clock, Users, BarChart3 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
@@ -111,27 +111,6 @@ export default function Voice() {
               </Button>
             </CardContent>
           </Card>
-
-          {/* Settings Card (Admin Only) */}
-          {user?.role === 'admin' && (
-            <Card data-testid="card-settings">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-5 w-5 text-primary" />
-                  <CardTitle>Voice Settings</CardTitle>
-                </div>
-                <CardDescription>
-                  Configure ElevenLabs and Twilio integration
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full" data-testid="button-voice-settings">
-                  <Phone className="h-4 w-4 mr-2" />
-                  Configure
-                </Button>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         {/* Coming Soon Notice */}
