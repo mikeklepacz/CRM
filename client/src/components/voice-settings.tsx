@@ -63,11 +63,9 @@ export function VoiceSettings() {
   });
 
   // Fetch agents
-  const { data: agentsData } = useQuery<{ agents: Agent[] }>({
+  const { data: agents = [] } = useQuery<Agent[]>({
     queryKey: ['/api/elevenlabs/agents'],
   });
-
-  const agents = agentsData?.agents || [];
   const hasApiKey = !!configData?.apiKey;
 
   // Config form (API key + Twilio number)
@@ -140,6 +138,26 @@ export function VoiceSettings() {
       toast({
         title: "Success",
         description: "Agent deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const syncPhoneNumbersMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/elevenlabs/sync-phone-numbers");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents'] });
+      toast({
+        title: "Success",
+        description: "Phone numbers synced from ElevenLabs successfully",
       });
     },
     onError: (error: Error) => {
@@ -291,13 +309,26 @@ export function VoiceSettings() {
                 Manage your ElevenLabs conversational AI agents
               </CardDescription>
             </div>
-            <Dialog open={isAddAgentOpen} onOpenChange={setIsAddAgentOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-agent">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Agent
-                </Button>
-              </DialogTrigger>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => syncPhoneNumbersMutation.mutate()}
+                disabled={syncPhoneNumbersMutation.isPending || !hasApiKey}
+                data-testid="button-sync-phone-numbers"
+              >
+                {syncPhoneNumbersMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                <Phone className="h-4 w-4 mr-2" />
+                Sync Phone Numbers
+              </Button>
+              <Dialog open={isAddAgentOpen} onOpenChange={setIsAddAgentOpen}>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-add-agent">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Agent
+                  </Button>
+                </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Add Voice Agent</DialogTitle>
@@ -369,7 +400,8 @@ export function VoiceSettings() {
                   </form>
                 </Form>
               </DialogContent>
-            </Dialog>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
