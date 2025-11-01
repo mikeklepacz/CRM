@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,9 +18,11 @@ import {
   ExternalLink,
   MessageSquare,
   Lightbulb,
-  Target
+  Target,
+  Store
 } from "lucide-react";
 import { format } from "date-fns";
+import { StoreDetailsDialog } from "@/components/store-details-dialog";
 
 interface CallSession {
   id: string;
@@ -64,6 +67,14 @@ interface CallDetailDialogProps {
     client: CallClient;
     transcriptCount: number;
   } | null;
+  trackerSheetId?: string;
+  storeSheetId?: string;
+  refetch?: () => Promise<any>;
+  currentColors?: any;
+  statusOptions?: string[];
+  statusColors?: { [status: string]: { background: string; text: string } };
+  contextUpdateTrigger?: number;
+  setContextUpdateTrigger?: (value: number | ((prev: number) => number)) => void;
 }
 
 interface TranscriptMessage {
@@ -83,8 +94,19 @@ export function CallDetailDialog({
   open, 
   onOpenChange, 
   conversationId, 
-  callData 
+  callData,
+  trackerSheetId,
+  storeSheetId,
+  refetch,
+  currentColors,
+  statusOptions = [],
+  statusColors = {},
+  contextUpdateTrigger = 0,
+  setContextUpdateTrigger
 }: CallDetailDialogProps) {
+  const [storeDialogOpen, setStoreDialogOpen] = useState(false);
+  const [loadDefaultScriptTrigger, setLoadDefaultScriptTrigger] = useState(0);
+
   const { data: transcriptData, isLoading } = useQuery<TranscriptResponse>({
     queryKey: ['/api/elevenlabs/call-transcript', conversationId],
     enabled: open && !!conversationId,
@@ -138,6 +160,7 @@ export function CallDetailDialog({
   const storeLink = client?.uniqueIdentifier || client?.data?.link || null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col" data-testid="dialog-call-detail">
         <DialogHeader>
@@ -508,7 +531,7 @@ export function CallDetailDialog({
                 </Card>
 
                 {/* Store Information */}
-                {storeLink && (
+                {session?.storeSnapshot && (
                   <Card data-testid="card-store-info">
                     <CardHeader>
                       <CardTitle className="text-base">Store Information</CardTitle>
@@ -517,18 +540,11 @@ export function CallDetailDialog({
                       <Button 
                         variant="outline" 
                         className="w-full" 
-                        asChild
+                        onClick={() => setStoreDialogOpen(true)}
                         data-testid="button-store-link"
                       >
-                        <a 
-                          href={storeLink} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                          View Store Details
-                        </a>
+                        <Store className="h-4 w-4 mr-2" />
+                        View Store Details
                       </Button>
                     </CardContent>
                   </Card>
@@ -539,5 +555,24 @@ export function CallDetailDialog({
         </Tabs>
       </DialogContent>
     </Dialog>
+
+      {/* Store Details Dialog */}
+      {session?.storeSnapshot && trackerSheetId && storeSheetId && (
+        <StoreDetailsDialog
+          open={storeDialogOpen}
+          onOpenChange={setStoreDialogOpen}
+          row={session.storeSnapshot}
+          trackerSheetId={trackerSheetId}
+          storeSheetId={storeSheetId}
+          refetch={refetch || (async () => {})}
+          currentColors={currentColors || {}}
+          statusOptions={statusOptions}
+          statusColors={statusColors}
+          contextUpdateTrigger={contextUpdateTrigger}
+          setContextUpdateTrigger={setContextUpdateTrigger || (() => {})}
+          loadDefaultScriptTrigger={loadDefaultScriptTrigger}
+        />
+      )}
+    </>
   );
 }
