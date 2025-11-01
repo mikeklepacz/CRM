@@ -1501,7 +1501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get BOTH sheets - Commission Tracker for status/agent, Store Database for business details
       const commissionSheet = await storage.getGoogleSheetByPurpose('commissions');
-      const storeSheet = await storage.getGoogleSheetByPurpose('store_database');
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
       
       if (!commissionSheet || !storeSheet) {
         return res.status(404).json({ error: 'Required Google Sheets not configured' });
