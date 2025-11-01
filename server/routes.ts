@@ -5824,6 +5824,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper: Verify if a tracker row exists for a given link
+  async function verifyTrackerRowExists(spreadsheetId: string, sheetName: string, link: string): Promise<boolean> {
+    try {
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+      
+      if (rows.length === 0) return false;
+      
+      const headers = rows[0];
+      const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+      
+      if (linkIndex === -1) return false;
+      
+      const normalizedInputLink = normalizeLink(link.trim());
+      
+      for (let i = 1; i < rows.length; i++) {
+        const rowLink = rows[i][linkIndex];
+        const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+        
+        if (rowLink && normalizedRowLink === normalizedInputLink) {
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('[VERIFY-TRACKER-ROW] Error:', error);
+      return false;
+    }
+  }
+
+  // Helper: Create a basic tracker row with Link, Agent Name, and Status='Claimed'
+  async function createBasicTrackerRow(
+    spreadsheetId: string, 
+    sheetName: string, 
+    link: string, 
+    agentName: string
+  ): Promise<boolean> {
+    try {
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+      
+      if (rows.length === 0) {
+        console.error('[CREATE-TRACKER-ROW] No headers found');
+        return false;
+      }
+      
+      const headers = rows[0];
+      const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+      const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
+      const statusIndex = headers.findIndex(h => h.toLowerCase() === 'status');
+      
+      if (linkIndex === -1) {
+        console.error('[CREATE-TRACKER-ROW] Link column not found');
+        return false;
+      }
+      
+      const newRow = new Array(headers.length).fill('');
+      newRow[linkIndex] = link;
+      
+      if (agentNameIndex !== -1) {
+        newRow[agentNameIndex] = agentName;
+      }
+      
+      if (statusIndex !== -1) {
+        newRow[statusIndex] = 'Claimed';
+      }
+      
+      console.log('[CREATE-TRACKER-ROW] Creating row for link:', link);
+      
+      const appendRange = `${sheetName}!A:ZZ`;
+      await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
+      
+      // Verify the row was created (wait 1 second then check)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const exists = await verifyTrackerRowExists(spreadsheetId, sheetName, link);
+      
+      if (exists) {
+        console.log('[CREATE-TRACKER-ROW] Row verified successfully');
+        return true;
+      } else {
+        console.error('[CREATE-TRACKER-ROW] Row not found after creation');
+        return false;
+      }
+    } catch (error) {
+      console.error('[CREATE-TRACKER-ROW] Error:', error);
+      return false;
+    }
+  }
+
   // Create or update row in Commission Tracker by Link
   app.post('/api/sheets/tracker/upsert', isAuthenticatedCustom, async (req: any, res) => {
     try {
@@ -5840,6 +5930,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
+      if (!currentUser.agentName) {
+        return res.status(400).json({ 
+          message: "Agent Name is required in your profile to claim stores. Please set it in Settings." 
+        });
+      }
+
       // Find Commission Tracker sheet
       const sheets = await storage.getAllActiveGoogleSheets();
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
@@ -5850,92 +5946,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
-      // Read entire tracker sheet
+      console.log('[TRACKER-UPSERT] Step 1: Check if row exists for link:', link);
+      
+      // STEP 1: Check if row exists
+      const rowExists = await verifyTrackerRowExists(spreadsheetId, sheetName, link);
+      
+      if (!rowExists) {
+        console.log('[TRACKER-UPSERT] Step 2: Row does not exist, creating basic tracker row');
+        
+        // STEP 2: Create basic tracker row (Link, Agent Name, Status='Claimed')
+        const created = await createBasicTrackerRow(spreadsheetId, sheetName, link, currentUser.agentName);
+        
+        if (!created) {
+          return res.status(500).json({ 
+            message: "Failed to create tracker row. Please try again." 
+          });
+        }
+        
+        console.log('[TRACKER-UPSERT] Step 3: Basic row created and verified');
+      } else {
+        console.log('[TRACKER-UPSERT] Row already exists, proceeding to update');
+      }
+
+      // STEP 3: Now update the specific fields (row is guaranteed to exist)
       const range = `${sheetName}!A:ZZ`;
       const rows = await googleSheets.readSheetData(spreadsheetId, range);
-
+      
       if (rows.length === 0) {
         return res.status(400).json({ message: "Tracker sheet is empty (no headers)" });
       }
 
       const headers = rows[0];
-
       const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
-      const agentNameIndex = headers.findIndex(h => h.toLowerCase() === 'agent name');
 
       if (linkIndex === -1) {
         return res.status(400).json({ message: "Link column not found in tracker sheet" });
       }
 
-      // Check if row exists with this link (using normalized comparison)
+      // Find the row index
       const normalizedInputLink = normalizeLink(link.trim());
-      let existingRowIndex = -1;
+      let rowIndex = -1;
 
       for (let i = 1; i < rows.length; i++) {
         const rowLink = rows[i][linkIndex];
         const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
 
         if (rowLink && normalizedRowLink === normalizedInputLink) {
-          existingRowIndex = i + 1; // +1 because sheets are 1-indexed
+          rowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
         }
       }
 
-      if (existingRowIndex !== -1) {
-        // Row exists - update it
-        for (const [column, value] of Object.entries(updates)) {
-          const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
-          if (colIndex !== -1) {
-            const columnLetter = String.fromCharCode(65 + colIndex);
-            const cellRange = `${sheetName}!${columnLetter}${existingRowIndex}`;
-            await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
-          }
-        }
-
-        // Invalidate cache after successful update
-        clearUserCache(userId);
-
-        res.json({ message: "Tracker row updated successfully", rowIndex: existingRowIndex });
-      } else {
-        // Row doesn't exist - create new row
-        const newRow = new Array(headers.length).fill('');
-
-        // Set Link
-        newRow[linkIndex] = link;
-
-        // Set Agent Name to claim the store
-        if (agentNameIndex !== -1) {
-          if (!currentUser.agentName) {
-            return res.status(400).json({ 
-              message: "Agent Name is required in your profile to claim stores. Please set it in Settings." 
-            });
-          }
-          newRow[agentNameIndex] = currentUser.agentName;
-        }
-
-        // Set Status to 'Claimed' when creating new tracker row
-        const statusIndex = headers.findIndex(h => h.toLowerCase() === 'status');
-        if (statusIndex !== -1) {
-          newRow[statusIndex] = 'Claimed';
-        }
-
-        // Set updated fields
-        for (const [column, value] of Object.entries(updates)) {
-          const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
-          if (colIndex !== -1) {
-            newRow[colIndex] = value as string;
-          }
-        }
-
-        // Append new row (range matches array length to avoid touching non-existent columns)
-        const appendRange = `${sheetName}!A:ZZ`;
-        await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
-
-        // Invalidate cache after successful creation
-        clearUserCache(userId);
-
-        res.json({ message: "Tracker row created successfully", claimed: true });
+      if (rowIndex === -1) {
+        return res.status(500).json({ 
+          message: "Tracker row was created but cannot be found. Please refresh and try again." 
+        });
       }
+
+      console.log('[TRACKER-UPSERT] Step 4: Updating fields in row', rowIndex);
+
+      // Update the specific fields
+      for (const [column, value] of Object.entries(updates)) {
+        const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
+        if (colIndex !== -1) {
+          const columnLetter = String.fromCharCode(65 + colIndex);
+          const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
+          await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
+        }
+      }
+
+      // Invalidate cache after successful update
+      clearUserCache(userId);
+
+      console.log('[TRACKER-UPSERT] Success! Row updated at index:', rowIndex);
+      res.json({ message: "Tracker row saved successfully", rowIndex });
     } catch (error: any) {
       console.error("Error upserting tracker row:", error);
       res.status(500).json({ message: error.message || "Failed to upsert tracker row" });
