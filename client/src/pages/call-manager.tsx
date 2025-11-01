@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -129,6 +129,7 @@ export default function CallManager() {
   const [analyticsDateFilter, setAnalyticsDateFilter] = useState<string>("all");
   const [analyticsStatusFilter, setAnalyticsStatusFilter] = useState<string>("all");
   const [analyticsInterestFilter, setAnalyticsInterestFilter] = useState<string>("all");
+  const [syncingCalls, setSyncingCalls] = useState(false);
 
   // Clear selections when scenario changes
   useEffect(() => {
@@ -360,6 +361,39 @@ export default function CallManager() {
       newFilters.add(agentName);
     }
     setSelectedAgentFilters(newFilters);
+  };
+
+  // Sync calls from ElevenLabs
+  const handleSyncFromElevenLabs = async () => {
+    setSyncingCalls(true);
+    try {
+      const data = await apiRequest('POST', '/api/elevenlabs/sync-calls');
+
+      if (data.success) {
+        toast({
+          title: "Sync Complete",
+          description: `Imported ${data.imported} new calls, skipped ${data.skipped} existing calls`,
+        });
+
+        // Refresh analytics data
+        queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/call-analytics'] });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Sync Failed",
+          description: data.error || "Failed to sync calls from ElevenLabs",
+        });
+      }
+    } catch (error: any) {
+      console.error('Error syncing calls:', error);
+      toast({
+        variant: "destructive",
+        title: "Sync Failed",
+        description: error.message || "An error occurred while syncing calls",
+      });
+    } finally {
+      setSyncingCalls(false);
+    }
   };
 
   // Use stats from API
@@ -706,9 +740,30 @@ export default function CallManager() {
           <TabsContent value="ai-analytics" className="space-y-6">
             {/* AI Call Analytics Section */}
             <Card data-testid="card-ai-analytics">
-              <CardHeader>
-                <CardTitle>AI Call Analytics</CardTitle>
-                <CardDescription>Insights from your AI-powered calls</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-6">
+                <div className="space-y-1.5">
+                  <CardTitle>AI Call Analytics</CardTitle>
+                  <CardDescription>Insights from your AI-powered calls</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSyncFromElevenLabs}
+                  disabled={syncingCalls}
+                  data-testid="button-sync-elevenlabs"
+                >
+                  {syncingCalls ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Sync from ElevenLabs
+                    </>
+                  )}
+                </Button>
               </CardHeader>
           <CardContent>
             {/* Analytics Filters */}
