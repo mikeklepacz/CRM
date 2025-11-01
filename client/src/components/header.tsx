@@ -50,59 +50,59 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
   return (
     <header className="border-b bg-card">
       <div className="container mx-auto px-4 py-3">
-        <div className="flex items-center justify-between gap-2 md:gap-4">
-          <div className="flex items-center gap-2 md:gap-6 flex-1 min-w-0">
-            <h1 className="text-lg font-semibold text-foreground whitespace-nowrap">NMU CRM</h1>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 flex-1 min-w-0 overflow-x-auto">
+            <h1 className="text-base md:text-lg font-semibold text-foreground whitespace-nowrap flex-shrink-0">NMU CRM</h1>
             
-            <nav className="flex items-center gap-1 overflow-x-auto">
+            <nav className="flex items-center gap-1 flex-shrink-0">
               <Link href={user.role === 'admin' ? '/admin' : '/agent'}>
                 <Button variant="ghost" size="sm" data-testid="nav-dashboard">
-                  <Home className="md:mr-2 h-4 w-4" />
-                  <span className="hidden md:inline">Dashboard</span>
+                  <Home className="mr-1 md:mr-2 h-4 w-4" />
+                  <span className="text-xs md:text-sm">Dashboard</span>
                 </Button>
               </Link>
               <Link href="/clients">
                 <Button variant="ghost" size="sm" data-testid="nav-clients">
-                  <BarChart3 className="md:mr-2 h-4 w-4" />
-                  <span className="hidden md:inline">Clients</span>
+                  <BarChart3 className="mr-1 md:mr-2 h-4 w-4" />
+                  <span className="text-xs md:text-sm">Clients</span>
                 </Button>
               </Link>
               <Link href="/map-search">
                 <Button variant="ghost" size="sm" data-testid="nav-map-search">
-                  <MapPin className="md:mr-2 h-4 w-4" />
-                  <span className="hidden md:inline">Map Search</span>
+                  <MapPin className="mr-1 md:mr-2 h-4 w-4" />
+                  <span className="text-xs md:text-sm">Map</span>
                 </Button>
               </Link>
               <Link href="/sales">
                 <Button variant="ghost" size="sm" data-testid="nav-sales">
-                  <TrendingUp className="md:mr-2 h-4 w-4" />
-                  <span className="hidden md:inline">Sales Analytics</span>
+                  <TrendingUp className="mr-1 md:mr-2 h-4 w-4" />
+                  <span className="text-xs md:text-sm">Sales</span>
                 </Button>
               </Link>
               <Link href="/assistant">
                 <Button variant="ghost" size="sm" data-testid="nav-assistant">
-                  <Bot className="md:mr-2 h-4 w-4" />
-                  <span className="hidden md:inline">Sales Assistant</span>
+                  <Bot className="mr-1 md:mr-2 h-4 w-4" />
+                  <span className="text-xs md:text-sm">Assistant</span>
                 </Button>
               </Link>
               <Link href="/documents">
                 <Button variant="ghost" size="sm" data-testid="nav-documents">
-                  <FileText className="md:mr-2 h-4 w-4" />
-                  <span className="hidden md:inline">Documents</span>
+                  <FileText className="mr-1 md:mr-2 h-4 w-4" />
+                  <span className="text-xs md:text-sm">Docs</span>
                 </Button>
               </Link>
               {(user.role === 'admin' || user.hasVoiceAccess) && (
                 <Link href="/call-manager">
                   <Button variant="ghost" size="sm" data-testid="nav-call-manager">
-                    <Phone className="md:mr-2 h-4 w-4" />
-                    <span className="hidden md:inline">Call Manager</span>
+                    <Phone className="mr-1 md:mr-2 h-4 w-4" />
+                    <span className="text-xs md:text-sm">Calls</span>
                   </Button>
                 </Link>
               )}
             </nav>
           </div>
           
-          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {/* BACK BURNER: Color Customizer - Admin only feature, hiding from regular users to focus on core functionality */}
             {user.role === 'admin' && (
               <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
