@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Trash2, Sparkles, AlertTriangle } from "lucide-react";
+import { Trash2, Sparkles, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { detectDuplicates, smartSelectDuplicates, countNonEmptyFields, type DuplicateGroup, type StoreRecord } from "@shared/duplicateUtils";
+import { detectDuplicates, smartSelectDuplicates, selectKeeper, countNonEmptyFields, type DuplicateGroup, type StoreRecord, type StatusHierarchy } from "@shared/duplicateUtils";
+import { useQuery } from "@tanstack/react-query";
 
 interface DuplicateFinderDialogProps {
   open: boolean;
@@ -22,8 +23,15 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
   const { toast } = useToast();
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [selectedForDeletion, setSelectedForDeletion] = useState<Set<string>>(new Set());
+  const [deletionMap, setDeletionMap] = useState<Map<string, string>>(new Map()); // deleteLink -> keeperLink
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Fetch status hierarchy
+  const { data: statusHierarchy } = useQuery<StatusHierarchy>({
+    queryKey: ['/api/statuses/hierarchy'],
+    enabled: open,
+  });
 
   // Detect duplicates when dialog opens or stores change
   useEffect(() => {
@@ -31,26 +39,63 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
       const groups = detectDuplicates(stores, 0.75);
       setDuplicateGroups(groups);
       setSelectedForDeletion(new Set());
+      setDeletionMap(new Map());
     }
   }, [open, stores]);
 
   const handleSmartSelect = () => {
-    const toDelete = smartSelectDuplicates(duplicateGroups);
-    setSelectedForDeletion(new Set(toDelete));
+    if (!statusHierarchy) {
+      toast({
+        title: "Loading",
+        description: "Status hierarchy is still loading...",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const deletions = smartSelectDuplicates(duplicateGroups, statusHierarchy);
+    const deleteSet = new Set(deletions.map(d => d.deleteLink));
+    const deleteToKeeper = new Map(deletions.map(d => [d.deleteLink, d.keepLink]));
+    
+    setSelectedForDeletion(deleteSet);
+    setDeletionMap(deleteToKeeper);
+    
     toast({
       title: "Smart Selection Complete",
-      description: `Selected ${toDelete.length} duplicates with less information`,
+      description: `Selected ${deletions.length} duplicates (keeping claimed stores with better status)`,
     });
   };
 
-  const toggleSelection = (link: string) => {
+  const toggleSelection = (link: string, groupIndex: number) => {
+    if (!statusHierarchy) return;
+
     const newSelection = new Set(selectedForDeletion);
+    const newDeletionMap = new Map(deletionMap);
+    
     if (newSelection.has(link)) {
       newSelection.delete(link);
+      newDeletionMap.delete(link);
     } else {
+      // Find the keeper for this group
+      const group = duplicateGroups[groupIndex];
+      const keeper = selectKeeper(group.stores, statusHierarchy);
+      
+      // Don't allow selecting the keeper
+      if (link === keeper.Link) {
+        toast({
+          title: "Cannot Delete Keeper",
+          description: "This store is marked as the keeper (has most complete data or best status)",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       newSelection.add(link);
+      newDeletionMap.set(link, keeper.Link);
     }
+    
     setSelectedForDeletion(newSelection);
+    setDeletionMap(newDeletionMap);
   };
 
   const handleDelete = async () => {
@@ -67,24 +112,31 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
   };
 
   const confirmDelete = async () => {
+    if (!statusHierarchy) return;
+    
     setIsDeleting(true);
     setShowConfirmDialog(false);
     
     try {
       const linksToDelete = Array.from(selectedForDeletion);
       
-      // Delete each store via API
+      // Delete each store via API with merging
       for (const link of linksToDelete) {
-        await apiRequest('DELETE', `/api/store/${encodeURIComponent(link)}`);
+        const keeperLink = deletionMap.get(link);
+        await apiRequest('DELETE', `/api/store/${encodeURIComponent(link)}`, {
+          keeperLink,
+          statusHierarchy,
+        });
       }
       
       toast({
         title: "Success",
-        description: `Deleted ${linksToDelete.length} duplicate ${linksToDelete.length === 1 ? 'store' : 'stores'}`,
+        description: `Deleted ${linksToDelete.length} duplicate ${linksToDelete.length === 1 ? 'store' : 'stores'} and merged data`,
       });
       
       // Clear selection and close dialog
       setSelectedForDeletion(new Set());
+      setDeletionMap(new Map());
       onOpenChange(false);
       
       // Trigger refresh
@@ -162,28 +214,48 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                         {group.stores.map((store, storeIndex) => {
                           const fieldCount = countNonEmptyFields(store);
                           const isSelected = selectedForDeletion.has(store.Link);
+                          const isKeeper = statusHierarchy && selectKeeper(group.stores, statusHierarchy).Link === store.Link;
+                          const isClaimed = store.Agent && store.Agent.trim() !== '';
                           
                           return (
                             <div
                               key={store.Link}
                               className={`flex items-start gap-3 p-3 rounded border ${
-                                isSelected ? 'bg-destructive/10 border-destructive' : 'hover-elevate'
+                                isSelected ? 'bg-destructive/10 border-destructive' : 
+                                isKeeper ? 'bg-primary/5 border-primary' : 
+                                'hover-elevate'
                               }`}
                               data-testid={`duplicate-store-${groupIndex}-${storeIndex}`}
                             >
                               <Checkbox
                                 checked={isSelected}
-                                onCheckedChange={() => toggleSelection(store.Link)}
+                                onCheckedChange={() => toggleSelection(store.Link, groupIndex)}
+                                disabled={isKeeper}
                                 data-testid={`checkbox-store-${groupIndex}-${storeIndex}`}
                               />
                               <div className="flex-1 space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <p className="font-medium">{store.Name}</p>
-                                  <Badge variant="secondary" data-testid={`badge-field-count-${groupIndex}-${storeIndex}`}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium">{store.Name}</p>
+                                    {isKeeper && (
+                                      <Badge variant="default" className="text-xs" data-testid={`badge-keeper-${groupIndex}-${storeIndex}`}>
+                                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                                        KEEPER
+                                      </Badge>
+                                    )}
+                                    {isClaimed && (
+                                      <Badge variant="secondary" className="text-xs" data-testid={`badge-claimed-${groupIndex}-${storeIndex}`}>
+                                        Claimed
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <Badge variant="outline" data-testid={`badge-field-count-${groupIndex}-${storeIndex}`}>
                                     {fieldCount} fields
                                   </Badge>
                                 </div>
                                 <div className="text-sm text-muted-foreground space-y-1">
+                                  {store.Agent && <p>👤 {store.Agent}</p>}
+                                  {store.Status && <p>📊 {store.Status}</p>}
                                   {store.Phone && <p>📞 {store.Phone}</p>}
                                   {store.Address && <p>📍 {store.Address}</p>}
                                   {store.Email && <p>✉️ {store.Email}</p>}
@@ -231,9 +303,17 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Deletion & Data Merge</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete {selectedForDeletion.size} duplicate {selectedForDeletion.size === 1 ? 'store' : 'stores'}? 
+              <br /><br />
+              <strong>What will happen:</strong>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Data from duplicates will be merged into the keeper stores</li>
+                <li>Commission Tracker references will be updated to the keeper stores</li>
+                <li>Duplicate rows will be permanently deleted from the Store Database</li>
+              </ul>
+              <br />
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

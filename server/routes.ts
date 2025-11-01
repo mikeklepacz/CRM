@@ -6968,6 +6968,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete a store (with optional data merging)
+  app.delete('/api/store/:link', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { link } = req.params;
+      const { keeperLink, statusHierarchy } = req.body || {};
+      const decodedLink = decodeURIComponent(link);
+
+      console.log('[DELETE-STORE] Deleting store:', decodedLink, 'Keeper:', keeperLink);
+
+      // If keeperLink is provided, merge data first
+      if (keeperLink && statusHierarchy) {
+        // Read Store Database to get both stores' data
+        const storeSheetId = await storage.getStoreSheetId();
+        if (!storeSheetId) {
+          return res.status(404).json({ message: 'Store Database not configured' });
+        }
+
+        const sheets = await googleSheets.getSystemGoogleSheets();
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: storeSheetId,
+          range: 'Sheet1',
+        });
+
+        const rows = response.data.values || [];
+        if (rows.length === 0) {
+          return res.status(404).json({ message: 'Store Database is empty' });
+        }
+
+        const headers = rows[0];
+        const dataRows = rows.slice(1);
+        const linkIndex = headers.findIndex((h: string) => h === 'Link');
+
+        // Find both stores
+        const targetRow = dataRows.find((row: any[]) => row[linkIndex] === keeperLink);
+        const sourceRow = dataRows.find((row: any[]) => row[linkIndex] === decodedLink);
+
+        if (!targetRow || !sourceRow) {
+          return res.status(404).json({ message: 'One or both stores not found' });
+        }
+
+        // Convert rows to objects
+        const target: any = {};
+        const source: any = {};
+        headers.forEach((header: string, i: number) => {
+          target[header] = targetRow[i] || '';
+          source[header] = sourceRow[i] || '';
+        });
+
+        // Merge data using utility function
+        const { mergeStoreData } = await import('../shared/duplicateUtils');
+        const merged = mergeStoreData(target, source, statusHierarchy);
+
+        // Update the keeper with merged data
+        await googleSheets.mergeAndUpdateStore(keeperLink, merged);
+        console.log('[DELETE-STORE] Merged data into keeper:', keeperLink);
+
+        // Update Commission Tracker references
+        await googleSheets.updateCommissionTrackerLinks(decodedLink, keeperLink);
+        console.log('[DELETE-STORE] Updated Commission Tracker links');
+      }
+
+      // Delete the store
+      await googleSheets.deleteStoreFromSheet(decodedLink);
+      console.log('[DELETE-STORE] Deleted store:', decodedLink);
+
+      res.json({ success: true, message: 'Store deleted successfully' });
+    } catch (error: any) {
+      console.error('[DELETE-STORE] Error:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete store' });
+    }
+  });
+
+  // Get status hierarchy for duplicate detection
+  app.get('/api/statuses/hierarchy', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const statuses = await storage.getAllStatuses();
+      
+      // Build hierarchy map: { "Status Name": displayOrder }
+      const hierarchy: Record<string, number> = {};
+      statuses.forEach(status => {
+        hierarchy[status.name] = status.displayOrder;
+      });
+
+      res.json(hierarchy);
+    } catch (error: any) {
+      console.error('[STATUS-HIERARCHY] Error:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch status hierarchy' });
+    }
+  });
+
   // Get all stores (for multi-location picker)
   app.get('/api/stores/all/:sheetId', isAuthenticatedCustom, async (req: any, res) => {
     try {
