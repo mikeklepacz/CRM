@@ -1499,29 +1499,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { scenario } = req.params;
       
-      // Get Commission Tracker sheet
-      const sheet = await storage.getGoogleSheetByPurpose('commissions');
-      if (!sheet) {
-        return res.status(404).json({ error: 'Commission Tracker sheet not configured' });
+      // Get BOTH sheets - Commission Tracker for status/agent, Store Database for business details
+      const commissionSheet = await storage.getGoogleSheetByPurpose('commissions');
+      const storeSheet = await storage.getGoogleSheetByPurpose('store_database');
+      
+      if (!commissionSheet || !storeSheet) {
+        return res.status(404).json({ error: 'Required Google Sheets not configured' });
       }
 
-      // Read store data from sheet
-      const range = `${sheet.sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, range);
+      // Read Commission Tracker data (has: Link, Status, Agent Name, Follow-Up Date, etc.)
+      const commissionRange = `${commissionSheet.sheetName}!A:ZZ`;
+      const commissionRows = await googleSheets.readSheetData(commissionSheet.spreadsheetId, commissionRange);
       
-      if (rows.length === 0) {
+      if (commissionRows.length === 0) {
         return res.json([]);
       }
 
-      // Parse store data
-      const headers = rows[0];
-      const stores = rows.slice(1).map((row: any[]) => {
+      // Parse Commission Tracker
+      const commissionHeaders = commissionRows[0];
+      const commissionData = commissionRows.slice(1).map((row: any[]) => {
         const obj: any = {};
-        headers.forEach((header: string, i: number) => {
+        commissionHeaders.forEach((header: string, i: number) => {
           obj[header] = row[i] || '';
         });
         return obj;
       });
+
+      // Read Store Database (has: Name, Phone, Hours, State, Address, etc.)
+      const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+      const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      
+      if (storeRows.length === 0) {
+        return res.json([]);
+      }
+
+      // Parse Store Database
+      const storeHeaders = storeRows[0];
+      const storeData = storeRows.slice(1).map((row: any[]) => {
+        const obj: any = {};
+        storeHeaders.forEach((header: string, i: number) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      });
+
+      // Create lookup map: Link -> Store Details
+      const storeMap = new Map();
+      storeData.forEach((store: any) => {
+        const link = store['Link'] || store['link'];
+        if (link) {
+          storeMap.set(link, store);
+        }
+      });
+
+      console.log(`[EligibleStores] Loaded ${commissionData.length} commission records and ${storeData.length} store records`);
+      console.log(`[EligibleStores] Commission headers:`, commissionHeaders);
+      console.log(`[EligibleStores] Store headers:`, storeHeaders);
+
+      // Join commission data with store data on Link column
+      const stores = commissionData.map((commission: any) => {
+        const link = commission['Link'] || commission['link'];
+        const storeDetails = storeMap.get(link) || {};
+        
+        return {
+          ...commission,
+          ...storeDetails,
+          Link: link,
+        };
+      }).filter((store: any) => store.Link);
+      
+      console.log(`[EligibleStores] Sample joined store:`, stores[0]);
       
       // Apply scenario-based filtering
       let eligibleStores = stores;
@@ -1581,15 +1628,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Map to frontend format with agent name and business hours
+      // Map to frontend format - use exact column names from sheets
       const storesWithHours = eligibleStores.map((store: any) => {
-        const hours = store['Hours'] || store['hours'] || '';
-        const state = store['State'] || store['state'] || '';
-        const name = store['Name'] || store['name'] || '';
-        const phone = store['Phone'] || store['phone'] || '';
-        const link = store['Link'] || store['link'] || '';
-        const agentName = store['Agent Name'] || store['agent_name'] || store['agentName'] || '';
-        const status = store['Status'] || store['status'] || '';
+        // From Store Database sheet
+        const name = store['Name'] || '';
+        const phone = store['Phone'] || '';
+        const hours = store['Hours'] || '';
+        const state = store['State'] || '';
+        const link = store['Link'] || '';
+        
+        // From Commission Tracker sheet
+        const agentName = store['Agent Name'] || '';
+        const status = store['Status'] || '';
         
         return {
           link,
