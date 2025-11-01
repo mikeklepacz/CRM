@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,10 +11,12 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { CallDetailDialog } from "@/components/call-detail-dialog";
 
 interface ElevenLabsAgent {
   id: string;
@@ -53,6 +55,59 @@ interface CallQueueStats {
   campaigns: any[];
 }
 
+interface CallSession {
+  id: string;
+  conversationId: string;
+  agentId: string;
+  clientId: string;
+  phoneNumber: string;
+  status: string;
+  callDurationSecs: number;
+  startedAt: string;
+  endedAt: string;
+  aiAnalysis: {
+    summary?: string;
+    sentiment?: string;
+    customerMood?: string;
+    mainObjection?: string;
+    keyMoment?: string;
+    agentStrengths?: string;
+    lessonLearned?: string;
+  } | null;
+  callSuccessful: boolean;
+  interestLevel: 'hot' | 'warm' | 'cold' | 'not-interested' | null;
+}
+
+interface CallClient {
+  id: string;
+  uniqueIdentifier: string;
+  data: any;
+}
+
+interface CallRecord {
+  session: CallSession;
+  client: CallClient;
+  transcriptCount: number;
+}
+
+interface CallAnalyticsMetrics {
+  totalCalls: number;
+  successfulCalls: number;
+  failedCalls: number;
+  avgDurationSecs: number;
+  interestLevels: {
+    hot: number;
+    warm: number;
+    cold: number;
+    notInterested: number;
+  };
+}
+
+interface CallAnalyticsData {
+  calls: CallRecord[];
+  metrics: CallAnalyticsMetrics;
+}
+
 type CallScenario = 'cold_calls' | 'follow_ups' | 'recovery';
 
 export default function CallManager() {
@@ -66,6 +121,14 @@ export default function CallManager() {
   const [schedulingMode, setSchedulingMode] = useState<'immediate' | 'scheduled' | 'auto'>('immediate');
   const [scheduledTime, setScheduledTime] = useState<string>("");
   const [selectedAgentFilters, setSelectedAgentFilters] = useState<Set<string>>(new Set());
+  const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
+  const [selectedCallForDialog, setSelectedCallForDialog] = useState<{ conversationId: string; callData: any } | null>(null);
+  
+  // Analytics filters
+  const [analyticsAgentFilter, setAnalyticsAgentFilter] = useState<string>("all");
+  const [analyticsDateFilter, setAnalyticsDateFilter] = useState<string>("all");
+  const [analyticsStatusFilter, setAnalyticsStatusFilter] = useState<string>("all");
+  const [analyticsInterestFilter, setAnalyticsInterestFilter] = useState<string>("all");
 
   // Clear selections when scenario changes
   useEffect(() => {
@@ -101,6 +164,73 @@ export default function CallManager() {
     enabled: hasAccess,
     refetchInterval: 5000, // Poll every 5 seconds for real-time updates
   });
+
+  // Fetch call analytics
+  const { data: analyticsData, isLoading: analyticsLoading } = useQuery<CallAnalyticsData>({
+    queryKey: ['/api/elevenlabs/call-analytics'],
+    enabled: hasAccess,
+  });
+
+  // Filter analytics data based on selected filters
+  const filteredAnalyticsData = useMemo(() => {
+    if (!analyticsData) return null;
+
+    // Filter calls based on selected criteria
+    const filteredCalls = analyticsData.calls.filter((call) => {
+      // Agent filter
+      if (analyticsAgentFilter !== 'all' && call.session.agentId !== analyticsAgentFilter) {
+        return false;
+      }
+
+      // Date range filter
+      if (analyticsDateFilter !== 'all' && call.session.startedAt) {
+        const callDate = new Date(call.session.startedAt);
+        const now = new Date();
+        const daysDiff = Math.floor((now.getTime() - callDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (analyticsDateFilter === 'today' && daysDiff > 0) return false;
+        if (analyticsDateFilter === '7days' && daysDiff > 7) return false;
+        if (analyticsDateFilter === '30days' && daysDiff > 30) return false;
+      }
+
+      // Status filter
+      if (analyticsStatusFilter !== 'all') {
+        if (analyticsStatusFilter === 'successful' && !call.session.callSuccessful) return false;
+        if (analyticsStatusFilter === 'failed' && call.session.callSuccessful) return false;
+      }
+
+      // Interest level filter
+      if (analyticsInterestFilter !== 'all' && call.session.interestLevel !== analyticsInterestFilter) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Recalculate metrics based on filtered calls
+    const successfulCalls = filteredCalls.filter(c => c.session.callSuccessful).length;
+    const failedCalls = filteredCalls.filter(c => !c.session.callSuccessful).length;
+    const totalDuration = filteredCalls.reduce((sum, c) => sum + (c.session.callDurationSecs || 0), 0);
+    const avgDuration = filteredCalls.length > 0 ? totalDuration / filteredCalls.length : 0;
+
+    const interestLevels = {
+      hot: filteredCalls.filter(c => c.session.interestLevel === 'hot').length,
+      warm: filteredCalls.filter(c => c.session.interestLevel === 'warm').length,
+      cold: filteredCalls.filter(c => c.session.interestLevel === 'cold').length,
+      notInterested: filteredCalls.filter(c => c.session.interestLevel === 'not-interested').length,
+    };
+
+    return {
+      calls: filteredCalls,
+      metrics: {
+        totalCalls: filteredCalls.length,
+        successfulCalls,
+        failedCalls,
+        avgDurationSecs: avgDuration,
+        interestLevels,
+      },
+    };
+  }, [analyticsData, analyticsAgentFilter, analyticsDateFilter, analyticsStatusFilter, analyticsInterestFilter]);
 
   // Batch call mutation
   const batchCallMutation = useMutation({
@@ -563,7 +693,313 @@ export default function CallManager() {
             </CardContent>
           </Tabs>
         </Card>
+
+        {/* AI Call Analytics Section */}
+        <Card data-testid="card-ai-analytics">
+          <CardHeader>
+            <CardTitle>AI Call Analytics</CardTitle>
+            <CardDescription>Insights from your AI-powered calls</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Analytics Filters */}
+            <div className="flex flex-wrap gap-4 mb-6 p-4 bg-muted/20 rounded-lg" data-testid="analytics-filters">
+              <div className="flex-1 min-w-[200px]">
+                <Label htmlFor="analytics-agent-filter" className="text-sm font-medium">AI Agent</Label>
+                <Select value={analyticsAgentFilter} onValueChange={setAnalyticsAgentFilter}>
+                  <SelectTrigger id="analytics-agent-filter" data-testid="select-analytics-agent">
+                    <SelectValue placeholder="All Agents" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Agents</SelectItem>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent.agent_id} value={agent.agent_id}>
+                        {agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex-1 min-w-[200px]">
+                <Label htmlFor="analytics-date-filter" className="text-sm font-medium">Date Range</Label>
+                <Select value={analyticsDateFilter} onValueChange={setAnalyticsDateFilter}>
+                  <SelectTrigger id="analytics-date-filter" data-testid="select-analytics-date">
+                    <SelectValue placeholder="All Time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="7days">Last 7 Days</SelectItem>
+                    <SelectItem value="30days">Last 30 Days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex-1 min-w-[200px]">
+                <Label htmlFor="analytics-status-filter" className="text-sm font-medium">Call Status</Label>
+                <Select value={analyticsStatusFilter} onValueChange={setAnalyticsStatusFilter}>
+                  <SelectTrigger id="analytics-status-filter" data-testid="select-analytics-status">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="successful">Successful</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex-1 min-w-[200px]">
+                <Label htmlFor="analytics-interest-filter" className="text-sm font-medium">Interest Level</Label>
+                <Select value={analyticsInterestFilter} onValueChange={setAnalyticsInterestFilter}>
+                  <SelectTrigger id="analytics-interest-filter" data-testid="select-analytics-interest">
+                    <SelectValue placeholder="All Levels" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Levels</SelectItem>
+                    <SelectItem value="hot">Hot</SelectItem>
+                    <SelectItem value="warm">Warm</SelectItem>
+                    <SelectItem value="cold">Cold</SelectItem>
+                    <SelectItem value="not_interested">Not Interested</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Tabs defaultValue="dashboard" data-testid="tabs-analytics">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="dashboard" data-testid="tab-dashboard">
+                  Dashboard
+                </TabsTrigger>
+                <TabsTrigger value="recent-calls" data-testid="tab-recent-calls">
+                  Recent Calls
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="dashboard" className="mt-6">
+                {analyticsLoading ? (
+                  <div className="flex justify-center py-12" data-testid="loading-analytics">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredAnalyticsData ? (
+                  <div className="space-y-6">
+                    {/* Metrics Grid */}
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                      {/* Total Calls */}
+                      <Card data-testid="card-metric-total">
+                        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
+                          <PhoneCall className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold" data-testid="text-total-calls">
+                            {filteredAnalyticsData.metrics.totalCalls}
+                          </div>
+                          <p className="text-xs text-muted-foreground">All time</p>
+                        </CardContent>
+                      </Card>
+
+                      {/* Success Rate */}
+                      <Card data-testid="card-metric-success">
+                        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+                          {filteredAnalyticsData.metrics.totalCalls > 0 && 
+                            (filteredAnalyticsData.metrics.successfulCalls / filteredAnalyticsData.metrics.totalCalls) >= 0.5 ? (
+                            <TrendingUp className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-600" />
+                          )}
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold" data-testid="text-success-rate">
+                            {filteredAnalyticsData.metrics.totalCalls > 0
+                              ? Math.round((filteredAnalyticsData.metrics.successfulCalls / filteredAnalyticsData.metrics.totalCalls) * 100)
+                              : 0}%
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {filteredAnalyticsData.metrics.successfulCalls} / {filteredAnalyticsData.metrics.totalCalls} successful
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      {/* Average Duration */}
+                      <Card data-testid="card-metric-duration">
+                        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold" data-testid="text-avg-duration">
+                            {(() => {
+                              const totalSecs = filteredAnalyticsData.metrics.avgDurationSecs;
+                              const mins = Math.floor(totalSecs / 60);
+                              const secs = Math.floor(totalSecs % 60);
+                              return `${mins}:${secs.toString().padStart(2, '0')}`;
+                            })()}
+                          </div>
+                          <p className="text-xs text-muted-foreground">Minutes:Seconds</p>
+                        </CardContent>
+                      </Card>
+
+                      {/* Interest Breakdown */}
+                      <Card data-testid="card-metric-interest">
+                        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Interest Breakdown</CardTitle>
+                          <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex flex-wrap gap-2" data-testid="interest-breakdown">
+                            <Badge variant="default" className="bg-red-600" data-testid="badge-hot">
+                              Hot: {filteredAnalyticsData.metrics.interestLevels.hot}
+                            </Badge>
+                            <Badge variant="default" className="bg-orange-600" data-testid="badge-warm">
+                              Warm: {filteredAnalyticsData.metrics.interestLevels.warm}
+                            </Badge>
+                            <Badge variant="default" className="bg-blue-600" data-testid="badge-cold">
+                              Cold: {filteredAnalyticsData.metrics.interestLevels.cold}
+                            </Badge>
+                            <Badge variant="outline" data-testid="badge-not-interested">
+                              Not Int: {filteredAnalyticsData.metrics.interestLevels.notInterested}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 bg-muted/20 rounded-lg">
+                    <p className="text-muted-foreground" data-testid="text-no-analytics">
+                      No analytics data available
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="recent-calls" className="mt-6">
+                {analyticsLoading ? (
+                  <div className="flex justify-center py-12" data-testid="loading-recent-calls">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredAnalyticsData && filteredAnalyticsData.calls.length > 0 ? (
+                  <ScrollArea className="h-[600px]" data-testid="scroll-recent-calls">
+                    <div className="space-y-4 pr-4">
+                      {filteredAnalyticsData.calls.map((call) => {
+                        const getInterestBadgeVariant = (level: string | null) => {
+                          if (!level) return { variant: 'outline' as const, className: '' };
+                          switch (level) {
+                            case 'hot':
+                              return { variant: 'default' as const, className: 'bg-red-600' };
+                            case 'warm':
+                              return { variant: 'default' as const, className: 'bg-orange-600' };
+                            case 'cold':
+                              return { variant: 'default' as const, className: 'bg-blue-600' };
+                            case 'not-interested':
+                              return { variant: 'outline' as const, className: '' };
+                            default:
+                              return { variant: 'outline' as const, className: '' };
+                          }
+                        };
+
+                        const interestBadge = getInterestBadgeVariant(call.session.interestLevel);
+                        const storeName = call.client.data?.Name || call.client.uniqueIdentifier || 'Unknown Store';
+
+                        return (
+                          <Card key={call.session.id} data-testid={`card-call-${call.session.id}`}>
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <CardTitle className="text-base" data-testid={`text-store-${call.session.id}`}>
+                                    {storeName}
+                                  </CardTitle>
+                                  <CardDescription data-testid={`text-phone-${call.session.id}`}>
+                                    {call.session.phoneNumber}
+                                  </CardDescription>
+                                </div>
+                                <div className="flex gap-2 flex-shrink-0">
+                                  {call.session.callSuccessful ? (
+                                    <Badge variant="default" className="bg-green-600" data-testid={`badge-success-${call.session.id}`}>
+                                      Success
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="destructive" data-testid={`badge-failed-${call.session.id}`}>
+                                      Failed
+                                    </Badge>
+                                  )}
+                                  {call.session.interestLevel && (
+                                    <Badge 
+                                      variant={interestBadge.variant} 
+                                      className={interestBadge.className}
+                                      data-testid={`badge-interest-${call.session.id}`}
+                                    >
+                                      {call.session.interestLevel}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1" data-testid={`text-date-${call.session.id}`}>
+                                  <Calendar className="h-3 w-3" />
+                                  {new Date(call.session.startedAt).toLocaleString()}
+                                </div>
+                                <div className="flex items-center gap-1" data-testid={`text-duration-${call.session.id}`}>
+                                  <Clock className="h-3 w-3" />
+                                  {(() => {
+                                    const mins = Math.floor(call.session.callDurationSecs / 60);
+                                    const secs = Math.floor(call.session.callDurationSecs % 60);
+                                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                                  })()}
+                                </div>
+                              </div>
+                              {call.session.aiAnalysis?.summary && (
+                                <p 
+                                  className="text-sm line-clamp-2" 
+                                  data-testid={`text-summary-${call.session.id}`}
+                                >
+                                  {call.session.aiAnalysis.summary}
+                                </p>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedCallForDialog({
+                                    conversationId: call.session.conversationId,
+                                    callData: call
+                                  });
+                                  setIsCallDialogOpen(true);
+                                }}
+                                data-testid={`button-transcript-${call.session.id}`}
+                              >
+                                View Transcript
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <div className="text-center py-12 bg-muted/20 rounded-lg">
+                    <p className="text-muted-foreground" data-testid="text-no-recent-calls">
+                      No recent calls to display
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Call Detail Dialog */}
+      <CallDetailDialog
+        open={isCallDialogOpen}
+        onOpenChange={setIsCallDialogOpen}
+        conversationId={selectedCallForDialog?.conversationId || null}
+        callData={selectedCallForDialog?.callData || null}
+      />
     </div>
   );
 }

@@ -88,11 +88,18 @@ export class CallDispatcher {
         throw new Error(`Agent not found: ${campaign.agentId}`);
       }
 
+      // Create User ID in format: Name_City_State
+      const businessName = (clientData?.Name || clientData?.name || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
+      const city = (clientData?.City || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
+      const state = (clientData?.State || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
+      const userId = `${businessName}_${city}_${state}`;
+
       const result = await this.initiateOutboundCall({
         apiKey,
         agentId: agent.agentId,
         phoneNumberId: agent.phoneNumberId,
         toNumber: phoneNumber,
+        userId,
         clientData: {
           campaignTargetId: target.id,
           businessName: clientData?.Name || clientData?.name,
@@ -129,6 +136,7 @@ export class CallDispatcher {
     agentId: string;
     phoneNumberId: string;
     toNumber: string;
+    userId?: string;
     clientData?: any;
   }): Promise<{ success: boolean; message: string; conversation_id: string | null; callSid: string | null }> {
     const url = `${ELEVENLABS_API_BASE}/convai/twilio/outbound-call`;
@@ -137,6 +145,7 @@ export class CallDispatcher {
       agent_id: params.agentId,
       agent_phone_number_id: params.phoneNumberId,
       to_number: params.toNumber,
+      user_id: params.userId, // Pass User ID to ElevenLabs for tracking
       conversation_initiation_client_data: params.clientData || {},
     };
 
