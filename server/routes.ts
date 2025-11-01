@@ -5982,7 +5982,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // STEP 3: Now update the specific fields (row is guaranteed to exist)
       const range = `${sheetName}!A:ZZ`;
-      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+      let rows = await googleSheets.readSheetData(spreadsheetId, range);
       
       if (rows.length === 0) {
         return res.status(400).json({ message: "Tracker sheet is empty (no headers)" });
@@ -5995,17 +5995,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Link column not found in tracker sheet" });
       }
 
-      // Find the row index
+      // Find the row index - search from END since we just appended
       const normalizedInputLink = normalizeLink(link.trim());
       let rowIndex = -1;
 
-      for (let i = 1; i < rows.length; i++) {
+      for (let i = rows.length - 1; i >= 1; i--) {
         const rowLink = rows[i][linkIndex];
         const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
 
         if (rowLink && normalizedRowLink === normalizedInputLink) {
           rowIndex = i + 1; // +1 because sheets are 1-indexed
           break;
+        }
+      }
+
+      // If not found, wait 1 second and try again (Google Sheets sync delay)
+      if (rowIndex === -1) {
+        console.log('[TRACKER-UPSERT] Row not found on first try, waiting 1s for Google Sheets sync...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Re-read the sheet
+        rows = await googleSheets.readSheetData(spreadsheetId, range);
+        
+        // Search again from end
+        for (let i = rows.length - 1; i >= 1; i--) {
+          const rowLink = rows[i][linkIndex];
+          const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+
+          if (rowLink && normalizedRowLink === normalizedInputLink) {
+            rowIndex = i + 1;
+            console.log('[TRACKER-UPSERT] Row found after retry at index', rowIndex);
+            break;
+          }
         }
       }
 
@@ -6026,6 +6047,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
         }
       }
+      
+      // Write Column P (updated) timestamp after updates
+      await googleSheets.writeCommissionTrackerTimestamp(
+        spreadsheetId,
+        sheetName,
+        rowIndex,
+        'P'
+      );
 
       // Invalidate cache after successful update
       clearUserCache(userId);
