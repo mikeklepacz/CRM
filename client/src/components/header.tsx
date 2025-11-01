@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -30,6 +30,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Get unread ticket count (admin only)
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -51,86 +52,130 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
     <header className="border-b bg-card">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 flex-1 min-w-0 overflow-x-auto">
-            <h1 className="text-base md:text-lg font-semibold text-foreground whitespace-nowrap flex-shrink-0">NMU CRM</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold text-foreground">NMU CRM</h1>
             
-            <nav className="flex items-center gap-1 flex-shrink-0">
+            {/* Desktop Navigation */}
+            <nav className="hidden lg:flex items-center gap-1">
               <Link href={user.role === 'admin' ? '/admin' : '/agent'}>
                 <Button variant="ghost" size="sm" data-testid="nav-dashboard">
-                  <Home className="mr-1 md:mr-2 h-4 w-4" />
-                  <span className="text-xs md:text-sm">Dashboard</span>
+                  <Home className="mr-2 h-4 w-4" />
+                  Dashboard
                 </Button>
               </Link>
               <Link href="/clients">
                 <Button variant="ghost" size="sm" data-testid="nav-clients">
-                  <BarChart3 className="mr-1 md:mr-2 h-4 w-4" />
-                  <span className="text-xs md:text-sm">Clients</span>
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Clients
                 </Button>
               </Link>
               <Link href="/map-search">
                 <Button variant="ghost" size="sm" data-testid="nav-map-search">
-                  <MapPin className="mr-1 md:mr-2 h-4 w-4" />
-                  <span className="text-xs md:text-sm">Map</span>
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Map Search
                 </Button>
               </Link>
               <Link href="/sales">
                 <Button variant="ghost" size="sm" data-testid="nav-sales">
-                  <TrendingUp className="mr-1 md:mr-2 h-4 w-4" />
-                  <span className="text-xs md:text-sm">Sales</span>
+                  <TrendingUp className="mr-2 h-4 w-4" />
+                  Sales
                 </Button>
               </Link>
               <Link href="/assistant">
                 <Button variant="ghost" size="sm" data-testid="nav-assistant">
-                  <Bot className="mr-1 md:mr-2 h-4 w-4" />
-                  <span className="text-xs md:text-sm">Assistant</span>
+                  <Bot className="mr-2 h-4 w-4" />
+                  Assistant
                 </Button>
               </Link>
               <Link href="/documents">
                 <Button variant="ghost" size="sm" data-testid="nav-documents">
-                  <FileText className="mr-1 md:mr-2 h-4 w-4" />
-                  <span className="text-xs md:text-sm">Docs</span>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Documents
                 </Button>
               </Link>
               {(user.role === 'admin' || user.hasVoiceAccess) && (
                 <Link href="/call-manager">
                   <Button variant="ghost" size="sm" data-testid="nav-call-manager">
-                    <Phone className="mr-1 md:mr-2 h-4 w-4" />
-                    <span className="text-xs md:text-sm">Calls</span>
+                    <Phone className="mr-2 h-4 w-4" />
+                    Call Manager
                   </Button>
                 </Link>
               )}
             </nav>
+
+            {/* Mobile Menu Button */}
+            <DropdownMenu open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <DropdownMenuTrigger asChild className="lg:hidden">
+                <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onClick={() => { setLocation(user.role === 'admin' ? '/admin' : '/agent'); setMobileMenuOpen(false); }}>
+                  <Home className="mr-2 h-4 w-4" />
+                  Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setLocation('/clients'); setMobileMenuOpen(false); }}>
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Clients
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setLocation('/map-search'); setMobileMenuOpen(false); }}>
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Map Search
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setLocation('/sales'); setMobileMenuOpen(false); }}>
+                  <TrendingUp className="mr-2 h-4 w-4" />
+                  Sales
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setLocation('/assistant'); setMobileMenuOpen(false); }}>
+                  <Bot className="mr-2 h-4 w-4" />
+                  Assistant
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setLocation('/documents'); setMobileMenuOpen(false); }}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Documents
+                </DropdownMenuItem>
+                {(user.role === 'admin' || user.hasVoiceAccess) && (
+                  <DropdownMenuItem onClick={() => { setLocation('/call-manager'); setMobileMenuOpen(false); }}>
+                    <Phone className="mr-2 h-4 w-4" />
+                    Call Manager
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* BACK BURNER: Color Customizer - Admin only feature, hiding from regular users to focus on core functionality */}
-            {user.role === 'admin' && (
-              <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
-            )}
-            
-            {/* Support Ticket Icon */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTicketDialogOpen(true)}
-                data-testid="button-support"
-              >
-                <Mail className="h-5 w-5" />
-              </Button>
-              {unreadCount > 0 && (
-                <Badge
-                  variant="destructive"
-                  className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-xs"
-                  data-testid="badge-unread-count"
-                >
-                  {unreadCount}
-                </Badge>
-              )}
-            </div>
-            
-            <WebhookStatusBadge />
+          <div className="flex items-center gap-2">
+            {/* Utilities Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid="button-utilities">
+                  <MoreVertical className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setTicketDialogOpen(true)}>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Support
+                  {unreadCount > 0 && (
+                    <Badge variant="destructive" className="ml-auto">{unreadCount}</Badge>
+                  )}
+                </DropdownMenuItem>
+                {user.role === 'admin' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Admin Tools</DropdownMenuLabel>
+                    <div className="px-2 py-2">
+                      <ColorCustomizer colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
+                    </div>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <ThemeToggle />
+            
+            {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2" data-testid="button-user-menu">
