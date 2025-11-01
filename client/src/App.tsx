@@ -24,6 +24,7 @@ import MapSearch from "@/pages/map-search";
 import MapSearchSettings from "@/pages/map-search-settings";
 import Documents from "@/pages/documents";
 import Voice from "@/pages/voice";
+import CallManager from "@/pages/call-manager";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -74,6 +75,9 @@ function Router() {
             <Route path="/assistant" component={SalesAssistant} />
             <Route path="/voice">
               {(user?.role === 'admin' || user?.hasVoiceAccess) ? <Voice /> : <NotFound />}
+            </Route>
+            <Route path="/call-manager">
+              {(user?.role === 'admin' || user?.hasVoiceAccess) ? <CallManager /> : <NotFound />}
             </Route>
             <Route path="/store/:storeId" component={StoreDetails} />
             <Route path="/admin">

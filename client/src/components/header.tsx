@@ -92,10 +92,10 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 </Button>
               </Link>
               {(user.role === 'admin' || user.hasVoiceAccess) && (
-                <Link href="/voice">
-                  <Button variant="ghost" size="sm" data-testid="nav-voice">
+                <Link href="/call-manager">
+                  <Button variant="ghost" size="sm" data-testid="nav-call-manager">
                     <Phone className="mr-2 h-4 w-4" />
-                    Voice
+                    Call Manager
                   </Button>
                 </Link>
               )}
