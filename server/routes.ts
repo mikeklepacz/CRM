@@ -2323,9 +2323,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let aiAnalysis = null;
           if (details.analysis) {
             aiAnalysis = {
-              summary: details.analysis.call_summary,
-              sentiment: details.analysis.customer_sentiment,
-              customerMood: details.analysis.customer_emotion,
+              summary: details.analysis.summary || details.analysis.call_summary,
+              sentiment: details.analysis.sentiment || details.analysis.customer_sentiment,
+              customerMood: details.analysis.customer_mood || details.analysis.customer_emotion,
               mainObjection: details.analysis.main_objection,
               keyMoment: details.analysis.key_moment,
             };

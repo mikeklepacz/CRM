@@ -187,7 +187,7 @@ export function CallDetailDialog({
                 </p>
               </div>
             ) : (
-              <ScrollArea className="flex-1 pr-4" data-testid="scroll-transcript">
+              <ScrollArea className="h-[500px] pr-4" data-testid="scroll-transcript">
                 <div className="space-y-4">
                   {transcripts.map((msg, index) => (
                     <div 
