@@ -2305,8 +2305,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
 
-          // Parse duration
-          const durationSecs = metadata.conversation_duration_secs || 0;
+          // Parse duration - try multiple possible field names
+          const durationSecs = metadata.conversation_duration_secs 
+            || metadata.duration_secs 
+            || metadata.call_duration_secs
+            || details.call_duration_secs
+            || 0;
+          
+          // Debug logging for first conversation
+          if (conversationId === conversations[0]?.conversation_id) {
+            console.log('[Sync Debug] First conversation metadata:', JSON.stringify(metadata, null, 2));
+            console.log('[Sync Debug] Duration found:', durationSecs);
+          }
           
           // Parse dates
           const startedAt = metadata.start_time_unix_secs 
