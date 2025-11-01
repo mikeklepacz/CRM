@@ -2523,8 +2523,40 @@ Focus on:
 
       const insights = JSON.parse(openaiResponse.data.choices[0].message.content);
 
+      // Create a map of conversation IDs to enriched metadata
+      const conversationMap = new Map(
+        callsData.map(call => [
+          call.session.conversationId,
+          {
+            conversationId: call.session.conversationId,
+            duration: call.session.callDurationSecs,
+            storeName: call.client.data?.Name || call.client.uniqueIdentifier,
+            city: call.client.data?.City || '',
+            state: call.client.data?.State || '',
+            phoneNumber: call.session.phoneNumber,
+          }
+        ])
+      );
+
+      // Enrich the insights with conversation metadata
+      const enrichObjections = (objections: any[]) => {
+        return objections.map(obj => ({
+          ...obj,
+          exampleConversations: obj.exampleConversations?.map((convId: string) => conversationMap.get(convId) || { conversationId: convId }).filter(Boolean) || []
+        }));
+      };
+
+      const enrichPatterns = (patterns: any[]) => {
+        return patterns.map(pattern => ({
+          ...pattern,
+          exampleConversations: pattern.exampleConversations?.map((convId: string) => conversationMap.get(convId) || { conversationId: convId }).filter(Boolean) || []
+        }));
+      };
+
       res.json({
         ...insights,
+        commonObjections: enrichObjections(insights.commonObjections || []),
+        successPatterns: enrichPatterns(insights.successPatterns || []),
         callCount: callsData.length,
         dateRange: {
           start: startDate || 'all time',

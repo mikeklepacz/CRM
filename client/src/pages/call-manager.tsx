@@ -1246,9 +1246,23 @@ export default function CallManager() {
                                   </Badge>
                                 </div>
                                 {objection.exampleConversations && objection.exampleConversations.length > 0 && (
-                                  <p className="text-xs text-muted-foreground mt-2">
-                                    Examples: {objection.exampleConversations.slice(0, 2).join(', ')}
-                                  </p>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    <span className="text-xs text-muted-foreground">Examples:</span>
+                                    {objection.exampleConversations.slice(0, 3).map((example: any, exIdx: number) => (
+                                      <Badge
+                                        key={exIdx}
+                                        variant="outline"
+                                        className="cursor-pointer hover-elevate text-xs"
+                                        onClick={() => {
+                                          setSelectedCallId(example.conversationId);
+                                          setIsCallDialogOpen(true);
+                                        }}
+                                        data-testid={`example-badge-${idx}-${exIdx}`}
+                                      >
+                                        {example.duration ? `${Math.floor(example.duration / 60)}:${String(example.duration % 60).padStart(2, '0')}` : ''} {example.storeName}{example.city && example.state ? `, ${example.city}, ${example.state}` : ''}
+                                      </Badge>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             ))}
@@ -1276,6 +1290,25 @@ export default function CallManager() {
                                     {pattern.frequency}x
                                   </Badge>
                                 </div>
+                                {pattern.exampleConversations && pattern.exampleConversations.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    <span className="text-xs text-muted-foreground">Examples:</span>
+                                    {pattern.exampleConversations.slice(0, 3).map((example: any, exIdx: number) => (
+                                      <Badge
+                                        key={exIdx}
+                                        variant="outline"
+                                        className="cursor-pointer hover-elevate text-xs"
+                                        onClick={() => {
+                                          setSelectedCallId(example.conversationId);
+                                          setIsCallDialogOpen(true);
+                                        }}
+                                        data-testid={`pattern-example-badge-${idx}-${exIdx}`}
+                                      >
+                                        {example.duration ? `${Math.floor(example.duration / 60)}:${String(example.duration % 60).padStart(2, '0')}` : ''} {example.storeName}{example.city && example.state ? `, ${example.city}, ${example.state}` : ''}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
