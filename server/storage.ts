@@ -362,6 +362,7 @@ export interface IStorage {
 
   // Call Campaign Targets operations
   createCallCampaignTarget(target: InsertCallCampaignTarget): Promise<CallCampaignTarget>;
+  getCallCampaignTarget(id: string): Promise<CallCampaignTarget | undefined>;
   getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]>;
   getCallTargetsReadyForCalling(): Promise<CallCampaignTarget[]>;
   updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget>;
@@ -2072,6 +2073,11 @@ export class DatabaseStorage implements IStorage {
   async createCallCampaignTarget(target: InsertCallCampaignTarget): Promise<CallCampaignTarget> {
     const [newTarget] = await db.insert(callCampaignTargets).values(target).returning();
     return newTarget;
+  }
+
+  async getCallCampaignTarget(id: string): Promise<CallCampaignTarget | undefined> {
+    const [target] = await db.select().from(callCampaignTargets).where(eq(callCampaignTargets.id, id));
+    return target;
   }
 
   async getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]> {

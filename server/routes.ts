@@ -1169,12 +1169,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const callSuccessful = analysis.call_successful;
           const newStatus = callSuccessful ? 'completed' : 'failed';
           
-          await storage.updateCallCampaignTarget(targetId, {
-            targetStatus: newStatus,
-            externalConversationId: conversationId,
-          });
-          
-          console.log(`Updated campaign target ${targetId} status to ${newStatus}`);
+          const target = await storage.getCallCampaignTarget(targetId);
+          if (target && target.targetStatus === 'in-progress') {
+            await storage.updateCallCampaignTarget(targetId, {
+              targetStatus: newStatus,
+              externalConversationId: conversationId,
+            });
+            
+            await storage.incrementCampaignCalls(target.campaignId, callSuccessful ? 'successful' : 'failed');
+            
+            console.log(`Updated campaign target ${targetId} status to ${newStatus}`);
+          }
         }
       }
 

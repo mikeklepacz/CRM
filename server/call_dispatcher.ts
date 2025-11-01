@@ -101,12 +101,6 @@ export class CallDispatcher {
         },
       });
 
-      await storage.updateCallCampaignTarget(target.id, {
-        targetStatus: 'completed',
-        externalConversationId: result.conversation_id || null,
-        lastError: null,
-      });
-
       const callSession = await storage.createCallSession({
         conversationId: result.conversation_id || `manual-${Date.now()}`,
         agentId: agent.agentId,
@@ -118,10 +112,10 @@ export class CallDispatcher {
       });
 
       await storage.updateCallCampaignTarget(target.id, {
+        externalConversationId: result.conversation_id || null,
         callSessionId: callSession.id,
+        lastError: null,
       });
-
-      await storage.incrementCampaignCalls(target.campaignId, 'successful');
 
       console.log(`[CallDispatcher] Successfully initiated call for target ${target.id}, conversation: ${result.conversation_id}`);
     } catch (error: any) {
