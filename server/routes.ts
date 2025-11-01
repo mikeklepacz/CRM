@@ -1103,6 +1103,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Register/Update ElevenLabs webhook
+  app.post('/api/elevenlabs/register-webhook', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const config = await storage.getElevenLabsConfig();
+      if (!config?.apiKey) {
+        return res.status(400).json({ message: "ElevenLabs API key not configured" });
+      }
+
+      // Get webhook URL - use REPLIT_DOMAINS for production, REPLIT_DEV_DOMAIN for dev
+      let webhookUrl: string;
+      if (process.env.REPLIT_DOMAINS) {
+        const domains = process.env.REPLIT_DOMAINS.split(',');
+        webhookUrl = `https://${domains[0]}/api/elevenlabs/webhook`;
+      } else if (process.env.REPLIT_DEV_DOMAIN) {
+        webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/elevenlabs/webhook`;
+      } else {
+        return res.status(500).json({ message: "Unable to determine webhook URL. Deploy environment not configured." });
+      }
+
+      // Call ElevenLabs API to register webhook
+      const response = await axios.post(
+        'https://api.elevenlabs.io/v1/convai/conversation/webhooks',
+        {
+          url: webhookUrl,
+          events: ['conversation_initiation_metadata', 'conversation_end', 'conversation_update']
+        },
+        {
+          headers: {
+            'xi-api-key': config.apiKey,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Store webhook secret if returned
+      if (response.data?.secret) {
+        await storage.updateElevenLabsConfig({ webhookSecret: response.data.secret });
+      }
+
+      res.json({
+        message: "Webhook registered successfully",
+        url: webhookUrl,
+        webhookId: response.data?.webhook_id,
+        events: response.data?.events || ['conversation_initiation_metadata', 'conversation_end', 'conversation_update']
+      });
+    } catch (error: any) {
+      console.error("Error registering webhook:", error.response?.data || error);
+      res.status(500).json({ 
+        message: error.response?.data?.detail?.message || error.message || "Failed to register webhook",
+        details: error.response?.data
+      });
+    }
+  });
+
+  // Get webhook status
+  app.get('/api/elevenlabs/webhook-status', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const config = await storage.getElevenLabsConfig();
+      
+      // Get webhook URL
+      let webhookUrl: string | null = null;
+      if (process.env.REPLIT_DOMAINS) {
+        const domains = process.env.REPLIT_DOMAINS.split(',');
+        webhookUrl = `https://${domains[0]}/api/elevenlabs/webhook`;
+      } else if (process.env.REPLIT_DEV_DOMAIN) {
+        webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/elevenlabs/webhook`;
+      }
+
+      res.json({
+        webhookUrl,
+        hasSecret: !!config?.webhookSecret,
+        hasApiKey: !!config?.apiKey,
+      });
+    } catch (error: any) {
+      console.error("Error fetching webhook status:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch webhook status" });
+    }
+  });
+
   // Agent management endpoints (admin only)
   app.post('/api/elevenlabs/agents', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

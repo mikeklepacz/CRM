@@ -19,7 +19,7 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { Phone, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Star } from "lucide-react";
+import { Phone, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Star, RefreshCw, Link as LinkIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
@@ -70,6 +70,11 @@ export function VoiceSettings() {
     queryKey: ['/api/elevenlabs/agents'],
   });
   const hasApiKey = !!configData?.apiKey;
+
+  // Fetch webhook status
+  const { data: webhookStatus } = useQuery<{ webhookUrl: string | null; hasSecret: boolean; hasApiKey: boolean }>({
+    queryKey: ['/api/elevenlabs/webhook-status'],
+  });
 
   // Config form (API key + Twilio number)
   const configForm = useForm<z.infer<typeof configSchema>>({
@@ -191,6 +196,26 @@ export function VoiceSettings() {
       toast({
         title: "Success",
         description: "Default agent updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const registerWebhookMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/elevenlabs/register-webhook");
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/webhook-status'] });
+      toast({
+        title: "Success",
+        description: data.message || "Webhook registered successfully",
       });
     },
     onError: (error: Error) => {
@@ -499,6 +524,98 @@ export function VoiceSettings() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Webhook Configuration Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <LinkIcon className="h-5 w-5" />
+            <CardTitle>Webhook Configuration</CardTitle>
+          </div>
+          <CardDescription>
+            Manage your ElevenLabs webhook for call status updates
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {webhookStatus?.hasSecret && (
+            <Alert>
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>
+                Webhook is configured and ready to receive call updates
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {!webhookStatus?.hasSecret && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Webhook not yet registered. Click the button below to register.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {webhookStatus?.webhookUrl && (
+            <div className="space-y-2">
+              <Label>Webhook URL</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={webhookStatus.webhookUrl}
+                  readOnly
+                  className="font-mono text-sm"
+                  data-testid="input-webhook-url"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(webhookStatus.webhookUrl || '');
+                    toast({
+                      title: "Copied",
+                      description: "Webhook URL copied to clipboard",
+                    });
+                  }}
+                  data-testid="button-copy-webhook-url"
+                >
+                  Copy
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                This URL will be registered with ElevenLabs to receive call status updates
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Button
+              onClick={() => registerWebhookMutation.mutate()}
+              disabled={registerWebhookMutation.isPending || !hasApiKey}
+              data-testid="button-register-webhook"
+            >
+              {registerWebhookMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {webhookStatus?.hasSecret ? 'Re-register Webhook' : 'Register Webhook'}
+            </Button>
+          </div>
+
+          {!hasApiKey && (
+            <p className="text-sm text-muted-foreground">
+              Please configure your API key above to enable webhook registration
+            </p>
+          )}
+
+          <div className="pt-4 border-t space-y-2">
+            <h4 className="text-sm font-medium">Webhook Events</h4>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>• Conversation Initiation - When a call starts</li>
+              <li>• Conversation Update - During the call</li>
+              <li>• Conversation End - When a call completes</li>
+            </ul>
+          </div>
         </CardContent>
       </Card>
     </div>
