@@ -5895,17 +5895,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[CREATE-TRACKER-ROW] Creating row for link:', link);
       
       const appendRange = `${sheetName}!A:ZZ`;
-      await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
+      const response = await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
       
-      // Verify the row was created (wait 1 second then check)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const exists = await verifyTrackerRowExists(spreadsheetId, sheetName, link);
+      // Check the append response - if Google accepted the write, it succeeded
+      const updatedRows = response.updates?.updatedRows || 0;
+      const updatedRange = response.updates?.updatedRange || 'unknown';
       
-      if (exists) {
-        console.log('[CREATE-TRACKER-ROW] Row verified successfully');
+      console.log('[CREATE-TRACKER-ROW] Append response:', {
+        updatedRows,
+        updatedRange,
+        updatedCells: response.updates?.updatedCells || 0
+      });
+      
+      if (updatedRows >= 1) {
+        console.log('[CREATE-TRACKER-ROW] Row created successfully at', updatedRange);
         return true;
       } else {
-        console.error('[CREATE-TRACKER-ROW] Row not found after creation');
+        console.error('[CREATE-TRACKER-ROW] Append succeeded but no rows were updated');
         return false;
       }
     } catch (error) {
