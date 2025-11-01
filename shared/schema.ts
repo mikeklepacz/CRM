@@ -942,6 +942,7 @@ export const callEvents = pgTable("call_events", {
 export const callCampaigns = pgTable("call_campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
+  scenario: varchar("scenario", { length: 50 }), // 'cold_call', 'follow_up', 'recovery', 'custom'
   agentId: varchar("agent_id").notNull(), // Which ElevenLabs agent to use
   createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
   storeFilter: jsonb("store_filter").$type<Record<string, any>>(), // Filters used: {"status": "claimed", "state": "CA"}

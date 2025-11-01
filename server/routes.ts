@@ -75,6 +75,232 @@ function setCachedData(key: string, data: any): void {
   });
 }
 
+// ============================================================================
+// Business Hours Detection Helpers
+// ============================================================================
+
+// Map states to timezones (supports both full names and 2-letter codes)
+const STATE_TIMEZONES: Record<string, string> = {
+  // Full state names
+  'Alabama': 'America/Chicago', 'Alaska': 'America/Anchorage', 'Arizona': 'America/Phoenix',
+  'Arkansas': 'America/Chicago', 'California': 'America/Los_Angeles', 'Colorado': 'America/Denver',
+  'Connecticut': 'America/New_York', 'Delaware': 'America/New_York', 'Florida': 'America/New_York',
+  'Georgia': 'America/New_York', 'Hawaii': 'Pacific/Honolulu', 'Idaho': 'America/Boise',
+  'Illinois': 'America/Chicago', 'Indiana': 'America/Indianapolis', 'Iowa': 'America/Chicago',
+  'Kansas': 'America/Chicago', 'Kentucky': 'America/New_York', 'Louisiana': 'America/Chicago',
+  'Maine': 'America/New_York', 'Maryland': 'America/New_York', 'Massachusetts': 'America/New_York',
+  'Michigan': 'America/Detroit', 'Minnesota': 'America/Chicago', 'Mississippi': 'America/Chicago',
+  'Missouri': 'America/Chicago', 'Montana': 'America/Denver', 'Nebraska': 'America/Chicago',
+  'Nevada': 'America/Los_Angeles', 'New Hampshire': 'America/New_York', 'New Jersey': 'America/New_York',
+  'New Mexico': 'America/Denver', 'New York': 'America/New_York', 'North Carolina': 'America/New_York',
+  'North Dakota': 'America/Chicago', 'Ohio': 'America/New_York', 'Oklahoma': 'America/Chicago',
+  'Oregon': 'America/Los_Angeles', 'Pennsylvania': 'America/New_York', 'Rhode Island': 'America/New_York',
+  'South Carolina': 'America/New_York', 'South Dakota': 'America/Chicago', 'Tennessee': 'America/Chicago',
+  'Texas': 'America/Chicago', 'Utah': 'America/Denver', 'Vermont': 'America/New_York',
+  'Virginia': 'America/New_York', 'Washington': 'America/Los_Angeles', 'West Virginia': 'America/New_York',
+  'Wisconsin': 'America/Chicago', 'Wyoming': 'America/Denver',
+  // 2-letter state codes
+  'AL': 'America/Chicago', 'AK': 'America/Anchorage', 'AZ': 'America/Phoenix',
+  'AR': 'America/Chicago', 'CA': 'America/Los_Angeles', 'CO': 'America/Denver',
+  'CT': 'America/New_York', 'DE': 'America/New_York', 'FL': 'America/New_York',
+  'GA': 'America/New_York', 'HI': 'Pacific/Honolulu', 'ID': 'America/Boise',
+  'IL': 'America/Chicago', 'IN': 'America/Indianapolis', 'IA': 'America/Chicago',
+  'KS': 'America/Chicago', 'KY': 'America/New_York', 'LA': 'America/Chicago',
+  'ME': 'America/New_York', 'MD': 'America/New_York', 'MA': 'America/New_York',
+  'MI': 'America/Detroit', 'MN': 'America/Chicago', 'MS': 'America/Chicago',
+  'MO': 'America/Chicago', 'MT': 'America/Denver', 'NE': 'America/Chicago',
+  'NV': 'America/Los_Angeles', 'NH': 'America/New_York', 'NJ': 'America/New_York',
+  'NM': 'America/Denver', 'NY': 'America/New_York', 'NC': 'America/New_York',
+  'ND': 'America/Chicago', 'OH': 'America/New_York', 'OK': 'America/Chicago',
+  'OR': 'America/Los_Angeles', 'PA': 'America/New_York', 'RI': 'America/New_York',
+  'SC': 'America/New_York', 'SD': 'America/Chicago', 'TN': 'America/Chicago',
+  'TX': 'America/Chicago', 'UT': 'America/Denver', 'VT': 'America/New_York',
+  'VA': 'America/New_York', 'WA': 'America/Los_Angeles', 'WV': 'America/New_York',
+  'WI': 'America/Chicago', 'WY': 'America/Denver',
+  // Canadian provinces (full names)
+  'Alberta': 'America/Edmonton', 'British Columbia': 'America/Vancouver', 'Manitoba': 'America/Winnipeg',
+  'New Brunswick': 'America/Moncton', 'Newfoundland and Labrador': 'America/St_Johns',
+  'Northwest Territories': 'America/Yellowknife', 'Nova Scotia': 'America/Halifax',
+  'Nunavut': 'America/Iqaluit', 'Ontario': 'America/Toronto', 'Prince Edward Island': 'America/Halifax',
+  'Quebec': 'America/Montreal', 'Saskatchewan': 'America/Regina', 'Yukon': 'America/Whitehorse',
+  // Canadian province codes
+  'AB': 'America/Edmonton', 'BC': 'America/Vancouver', 'MB': 'America/Winnipeg',
+  'NB': 'America/Moncton', 'NL': 'America/St_Johns', 'NT': 'America/Yellowknife',
+  'NS': 'America/Halifax', 'NU': 'America/Iqaluit', 'ON': 'America/Toronto',
+  'PE': 'America/Halifax', 'QC': 'America/Montreal', 'SK': 'America/Regina',
+  'YT': 'America/Whitehorse',
+};
+
+// Check if store is currently open based on hours string and state
+function checkIfStoreOpen(hoursStr: string, state: string): boolean {
+  try {
+    if (!hoursStr || !state) return true; // Default to open if no data
+    
+    // Get timezone for state
+    const timezone = STATE_TIMEZONES[state] || STATE_TIMEZONES[state.toUpperCase()] || 'America/New_York';
+    
+    // Get current time in store's timezone
+    const now = new Date();
+    const storeTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    const currentDay = storeTime.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const currentHour = storeTime.getHours();
+    const currentMinute = storeTime.getMinutes();
+    const currentMinutes = currentHour * 60 + currentMinute;
+    
+    const hoursLower = hoursStr.toLowerCase();
+    
+    // Check for 24/7
+    if (hoursLower.includes('24/7') || hoursLower.includes('24 hours') || hoursLower === 'open 24 hours') {
+      return true;
+    }
+    
+    // Day name mappings
+    const dayMap: Record<string, number> = {
+      'sun': 0, 'sunday': 0,
+      'mon': 1, 'monday': 1,
+      'tue': 2, 'tuesday': 2, 'tues': 2,
+      'wed': 3, 'wednesday': 3,
+      'thu': 4, 'thursday': 4, 'thurs': 4,
+      'fri': 5, 'friday': 5,
+      'sat': 6, 'saturday': 6
+    };
+    
+    // Helper to parse time string like "9am", "5:30pm", "17:00"
+    const parseTime = (timeStr: string): number | null => {
+      const match = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      if (!match) return null;
+      
+      let hour = parseInt(match[1]);
+      const min = parseInt(match[2] || '0');
+      const period = match[3]?.toLowerCase();
+      
+      if (period === 'pm' && hour !== 12) hour += 12;
+      if (period === 'am' && hour === 12) hour = 0;
+      
+      return hour * 60 + min;
+    };
+    
+    // Try to find day-specific hours for current day
+    // Examples: "Mon-Fri 9am-5pm, Sat 10am-2pm, Sun Closed"
+    //           "Mon-Fri 9am-1pm, 2pm-6pm" (multiple windows per day)
+    const segments = hoursStr.split(/[,;]/);
+    
+    // Collect all time ranges that apply to today
+    const todayRanges: Array<{ open: number; close: number }> = [];
+    let explicitlyClosed = false;
+    let lastDayContext: number | null = null;
+    
+    for (const segment of segments) {
+      const segmentLower = segment.trim().toLowerCase();
+      
+      // Check if this segment applies to current day
+      let appliesToToday = false;
+      let hasExplicitDay = false;
+      
+      // Check for day ranges (Mon-Fri, Mon-Wed, etc.)
+      const rangeMatch = segmentLower.match(/(mon|tue|wed|thu|fri|sat|sun)[a-z]*\s*-\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
+      if (rangeMatch) {
+        hasExplicitDay = true;
+        const startDay = dayMap[rangeMatch[1]];
+        const endDay = dayMap[rangeMatch[2]];
+        if (startDay !== undefined && endDay !== undefined) {
+          // Check if current day is in range
+          if (startDay <= endDay) {
+            appliesToToday = currentDay >= startDay && currentDay <= endDay;
+          } else {
+            // Wrap-around case (e.g., Sat-Mon)
+            appliesToToday = currentDay >= startDay || currentDay <= endDay;
+          }
+          // Only set context if this range applies to today
+          if (appliesToToday) {
+            lastDayContext = currentDay;
+          } else {
+            lastDayContext = null; // Reset context if range doesn't apply
+          }
+        }
+      }
+      
+      // Check for specific days (Mon, Tuesday, etc.)
+      if (!hasExplicitDay) {
+        for (const [dayName, dayNum] of Object.entries(dayMap)) {
+          if (segmentLower.startsWith(dayName)) {
+            hasExplicitDay = true;
+            if (dayNum === currentDay) {
+              appliesToToday = true;
+              lastDayContext = currentDay;
+            } else {
+              // Explicit day but not today - reset context
+              lastDayContext = null;
+            }
+            break;
+          }
+        }
+      }
+      
+      // If no day specified, check if we can carry forward previous day context
+      // This handles cases like "Mon-Fri 9am-1pm, 2pm-6pm" where the second segment has no day
+      if (!hasExplicitDay && lastDayContext !== null) {
+        appliesToToday = true; // Assume it continues the previous day context
+      }
+      
+      // If no day specified and it's the only segment, assume it applies to all days
+      if (!appliesToToday && !hasExplicitDay && segments.length === 1) {
+        appliesToToday = true;
+      }
+      
+      if (appliesToToday) {
+        // Check if this day is marked as closed
+        if (segmentLower.includes('closed')) {
+          explicitlyClosed = true;
+          continue; // Don't add to ranges, but keep checking other segments
+        }
+        
+        // Extract time range
+        const timeMatch = segment.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
+        if (timeMatch) {
+          const openMinutes = parseTime(timeMatch[1]);
+          const closeMinutes = parseTime(timeMatch[2]);
+          
+          if (openMinutes !== null && closeMinutes !== null) {
+            todayRanges.push({ open: openMinutes, close: closeMinutes });
+          }
+        }
+      }
+    }
+    
+    // If explicitly marked closed for today, return false
+    if (explicitlyClosed && todayRanges.length === 0) {
+      return false;
+    }
+    
+    // If we have time ranges for today, check if current time falls within ANY of them
+    if (todayRanges.length > 0) {
+      for (const range of todayRanges) {
+        // Handle overnight hours (e.g., 10pm-2am)
+        if (range.close < range.open) {
+          // Overnight: open if current time is after open OR before close
+          if (currentMinutes >= range.open || currentMinutes < range.close) {
+            return true;
+          }
+        } else {
+          // Normal hours: open if current time is between open and close
+          if (currentMinutes >= range.open && currentMinutes < range.close) {
+            return true;
+          }
+        }
+      }
+      // Current time doesn't fall in any of today's ranges
+      return false;
+    }
+    
+    // If we couldn't find specific hours for today, default to open
+    return true;
+  } catch (error) {
+    console.error('Error checking business hours:', error);
+    return true; // Default to open if parsing fails
+  }
+}
+
 // Clear all cache entries (for manual refresh)
 function clearAllCache(): void {
   sheetsCache.clear();
@@ -984,6 +1210,267 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('Error fetching call session:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // ===== UNIFIED CALLING CENTER ENDPOINTS =====
+  
+  // Get eligible stores for calling based on scenario
+  app.get('/api/elevenlabs/eligible-stores', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Check voice access
+      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
+      const { scenario, sheetId } = req.query;
+      
+      if (!sheetId) {
+        return res.status(400).json({ error: 'Sheet ID is required' });
+      }
+
+      // Fetch all stores from Google Sheets
+      const sheet = await storage.getGoogleSheetById(sheetId as string);
+      if (!sheet) {
+        return res.status(404).json({ error: 'Google Sheet not found' });
+      }
+
+      // Read store data from sheet
+      const range = `${sheet.sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(sheet.spreadsheetId, range);
+      
+      if (rows.length === 0) {
+        return res.json([]);
+      }
+
+      // Parse store data
+      const headers = rows[0];
+      const stores = rows.slice(1).map((row: any[]) => {
+        const obj: any = {};
+        headers.forEach((header: string, i: number) => {
+          obj[header] = row[i] || '';
+        });
+        return obj;
+      });
+      
+      // Apply scenario-based filtering
+      let eligibleStores = stores;
+      
+      if (scenario === 'cold_call') {
+        // Cold Calls: status = 'claimed' AND no last_contact_date AND no POC details
+        eligibleStores = stores.filter((store: any) => {
+          const status = store['Status'] || store['status'] || '';
+          const lastContact = store['Last Contact'] || store['last_contact_date'] || store['lastContactDate'] || '';
+          const poc = store['Point of Contact'] || store['poc'] || store['POC'] || '';
+          const pocEmail = store['POC Email'] || store['poc_email'] || '';
+          const pocPhone = store['POC Phone'] || store['poc_phone'] || '';
+          
+          return (
+            status.toLowerCase() === 'claimed' &&
+            !lastContact &&
+            !poc &&
+            !pocEmail &&
+            !pocPhone
+          );
+        });
+      } else if (scenario === 'follow_up') {
+        // Follow-Ups: status = 'interested' AND has follow_up_date that is due
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        eligibleStores = stores.filter((store: any) => {
+          const status = store['Status'] || store['status'] || '';
+          const followUpDate = store['Follow-up Date'] || store['follow_up_date'] || store['followUpDate'] || '';
+          
+          if (status.toLowerCase() !== 'interested' || !followUpDate) {
+            return false;
+          }
+          
+          try {
+            const followUpDateTime = new Date(followUpDate);
+            followUpDateTime.setHours(0, 0, 0, 0);
+            return followUpDateTime <= today;
+          } catch {
+            return false;
+          }
+        });
+      } else if (scenario === 'recovery') {
+        // Recovery: claimed by someone else AND last contact > 30 days ago
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        eligibleStores = stores.filter((store: any) => {
+          const agentName = store['Agent Name'] || store['agent_name'] || store['agentName'] || '';
+          const lastContact = store['Last Contact'] || store['last_contact_date'] || store['lastContactDate'] || '';
+          
+          // Must be claimed by someone else
+          if (!agentName || agentName === user?.agentName) {
+            return false;
+          }
+          
+          // Must have last contact > 30 days ago
+          if (!lastContact) {
+            return true; // Never contacted = definitely stale
+          }
+          
+          try {
+            const lastContactDate = new Date(lastContact);
+            return lastContactDate < thirtyDaysAgo;
+          } catch {
+            return true; // Invalid date = treat as stale
+          }
+        });
+      }
+      
+      // Add business hours indicator to each store
+      const storesWithHours = eligibleStores.map((store: any) => {
+        const hours = store['Hours'] || store['hours'] || '';
+        const state = store['State'] || store['state'] || '';
+        
+        return {
+          ...store,
+          businessHours: hours,
+          isOpenNow: checkIfStoreOpen(hours, state),
+        };
+      });
+      
+      res.json(storesWithHours);
+    } catch (error: any) {
+      console.error('Error fetching eligible stores:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Batch call - queue multiple calls
+  app.post('/api/elevenlabs/batch-call', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Check voice access
+      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
+      const { agentId, stores, scenario, name, sheetId } = req.body;
+      
+      if (!agentId || !stores || !Array.isArray(stores) || stores.length === 0) {
+        return res.status(400).json({ error: 'Agent ID and stores array required' });
+      }
+      
+      if (!sheetId) {
+        return res.status(400).json({ error: 'Sheet ID is required' });
+      }
+
+      // Create campaign
+      const campaign = await storage.createCallCampaign({
+        name: name || `${scenario || 'Custom'} Campaign - ${new Date().toLocaleDateString()}`,
+        scenario: scenario || 'custom',
+        agentId,
+        createdByUserId: userId,
+        storeFilter: { scenario },
+        totalStores: stores.length,
+        status: 'scheduled',
+        scheduledStart: new Date(),
+      });
+
+      // Create campaign targets for each store
+      // First, find or create client records for each store
+      for (const store of stores) {
+        const link = store.link || store.Link;
+        if (!link) continue; // Skip stores without a link
+        
+        // Find existing client by unique identifier
+        let client = await storage.getClientByUniqueIdentifier(link);
+        
+        // If client doesn't exist, create it
+        if (!client) {
+          client = await storage.createClient({
+            uniqueIdentifier: link,
+            googleSheetId: sheetId,
+            data: store,
+            status: store.Status || store.status || 'unassigned',
+          });
+        }
+        
+        // Create campaign target
+        await storage.createCallCampaignTarget({
+          campaignId: campaign.id,
+          clientId: client.id,
+          targetStatus: 'pending',
+        });
+      }
+
+      res.json({
+        campaignId: campaign.id,
+        totalStores: stores.length,
+        status: 'queued',
+      });
+    } catch (error: any) {
+      console.error('Error creating batch call campaign:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Get call queue status
+  app.get('/api/elevenlabs/call-queue', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Check voice access
+      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
+      // Get all active campaigns (scheduled or in-progress)
+      const scheduledCampaigns = await storage.getCallCampaigns({
+        status: 'scheduled',
+        createdByUserId: user?.role === 'admin' ? undefined : userId,
+      });
+      const inProgressCampaigns = await storage.getCallCampaigns({
+        status: 'in-progress',
+        createdByUserId: user?.role === 'admin' ? undefined : userId,
+      });
+      const campaigns = [...scheduledCampaigns, ...inProgressCampaigns];
+
+      // Get queue statistics
+      const queueStats = {
+        activeCalls: 0,
+        queuedCalls: 0,
+        completedToday: 0,
+        failedToday: 0,
+        campaigns: [] as any[],
+      };
+
+      for (const campaign of campaigns) {
+        const targets = await storage.getCallCampaignTargets(campaign.id);
+        const pending = targets.filter((t: any) => t.targetStatus === 'pending').length;
+        const completed = targets.filter((t: any) => t.targetStatus === 'completed').length;
+        const failed = targets.filter((t: any) => t.targetStatus === 'failed').length;
+        const inProgress = targets.filter((t: any) => t.targetStatus === 'in-progress').length;
+
+        queueStats.queuedCalls += pending;
+        queueStats.activeCalls += inProgress;
+        queueStats.completedToday += completed;
+        queueStats.failedToday += failed;
+
+        queueStats.campaigns.push({
+          ...campaign,
+          pending,
+          completed,
+          failed,
+          inProgress,
+        });
+      }
+
+      res.json(queueStats);
+    } catch (error: any) {
+      console.error('Error fetching call queue:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   });
