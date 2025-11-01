@@ -864,6 +864,7 @@ export const elevenLabsAgents = pgTable("elevenlabs_agents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(), // Display name (e.g., "Sales Cold Caller")
   agentId: varchar("agent_id", { length: 255 }).notNull(), // ElevenLabs agent ID
+  phoneNumberId: varchar("phone_number_id", { length: 255 }).notNull(), // ElevenLabs phone number ID for outbound calls
   description: text("description"), // Purpose/description of this agent
   isDefault: boolean("is_default").default(false), // Default agent for calls
   createdAt: timestamp("created_at").defaultNow(),
