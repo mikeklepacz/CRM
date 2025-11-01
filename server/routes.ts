@@ -5898,20 +5898,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const response = await googleSheets.appendSheetData(spreadsheetId, appendRange, [newRow]);
       
       // Check the append response - if Google accepted the write, it succeeded
+      // The API returns updates.updatedRows when successful, but we treat any
+      // HTTP 200 response (no exception) as success to handle edge cases
       const updatedRows = response.updates?.updatedRows || 0;
       const updatedRange = response.updates?.updatedRange || 'unknown';
       
       console.log('[CREATE-TRACKER-ROW] Append response:', {
         updatedRows,
         updatedRange,
-        updatedCells: response.updates?.updatedCells || 0
+        updatedCells: response.updates?.updatedCells || 0,
+        hasUpdates: !!response.updates
       });
       
-      if (updatedRows >= 1) {
-        console.log('[CREATE-TRACKER-ROW] Row created successfully at', updatedRange);
+      // If we got a response without throwing (HTTP 200), the append succeeded
+      // Google's API throws on permission/quota errors, so no exception = success
+      if (updatedRows >= 1 || !response.updates) {
+        console.log('[CREATE-TRACKER-ROW] Row created successfully', 
+          updatedRows >= 1 ? `at ${updatedRange}` : '(updates block missing, trusting HTTP 200)');
         return true;
       } else {
-        console.error('[CREATE-TRACKER-ROW] Append succeeded but no rows were updated');
+        console.error('[CREATE-TRACKER-ROW] Unexpected: updates exists but updatedRows is 0');
         return false;
       }
     } catch (error) {
