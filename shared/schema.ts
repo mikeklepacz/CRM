@@ -849,7 +849,7 @@ export const driveFolders = pgTable("drive_folders", {
 });
 
 // ElevenLabs API configuration (stores API key and Twilio number)
-export const elevenlabsConfig = pgTable("elevenlabs_config", {
+export const elevenLabsConfig = pgTable("elevenlabs_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   apiKey: text("api_key").notNull(), // ElevenLabs API key
   phoneNumberId: varchar("phone_number_id", { length: 255 }), // ElevenLabs phone number ID for outbound calls
@@ -860,7 +860,7 @@ export const elevenlabsConfig = pgTable("elevenlabs_config", {
 });
 
 // ElevenLabs conversational AI agents
-export const elevenlabsAgents = pgTable("elevenlabs_agents", {
+export const elevenLabsAgents = pgTable("elevenlabs_agents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(), // Display name (e.g., "Sales Cold Caller")
   agentId: varchar("agent_id", { length: 255 }).notNull(), // ElevenLabs agent ID
@@ -990,13 +990,13 @@ export const insertDriveFolderSchema = createInsertSchema(driveFolders).omit({
   updatedAt: true,
 });
 
-export const insertElevenlabsConfigSchema = createInsertSchema(elevenlabsConfig).omit({
+export const insertElevenLabsConfigSchema = createInsertSchema(elevenLabsConfig).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const insertElevenlabsAgentSchema = createInsertSchema(elevenlabsAgents).omit({
+export const insertElevenLabsAgentSchema = createInsertSchema(elevenLabsAgents).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1089,10 +1089,10 @@ export type TicketReply = typeof ticketReplies.$inferSelect;
 export type InsertTicketReply = z.infer<typeof insertTicketReplySchema>;
 export type DriveFolder = typeof driveFolders.$inferSelect;
 export type InsertDriveFolder = z.infer<typeof insertDriveFolderSchema>;
-export type ElevenlabsConfig = typeof elevenlabsConfig.$inferSelect;
-export type InsertElevenlabsConfig = z.infer<typeof insertElevenlabsConfigSchema>;
-export type ElevenlabsAgent = typeof elevenlabsAgents.$inferSelect;
-export type InsertElevenlabsAgent = z.infer<typeof insertElevenlabsAgentSchema>;
+export type ElevenLabsConfig = typeof elevenLabsConfig.$inferSelect;
+export type InsertElevenLabsConfig = z.infer<typeof insertElevenLabsConfigSchema>;
+export type ElevenLabsAgent = typeof elevenLabsAgents.$inferSelect;
+export type InsertElevenLabsAgent = z.infer<typeof insertElevenLabsAgentSchema>;
 export type CallSession = typeof callSessions.$inferSelect;
 export type InsertCallSession = z.infer<typeof insertCallSessionSchema>;
 export type CallTranscript = typeof callTranscripts.$inferSelect;
