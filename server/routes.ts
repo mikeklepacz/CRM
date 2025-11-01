@@ -2360,8 +2360,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 conversationId,
                 sequenceNumber: i,
                 role: msg.role,
-                message: msg.message,
-                timestamp: msg.time_in_call_secs || 0,
+                message: msg.content || msg.message || '', // Use content field from ElevenLabs API
+                timestamp: msg.timestamp || msg.time_in_call_secs || 0,
               });
             }
           }
