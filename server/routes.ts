@@ -131,6 +131,161 @@ const STATE_TIMEZONES: Record<string, string> = {
   'YT': 'America/Whitehorse',
 };
 
+// Calculate next available call time during business hours (returns null if can't determine)
+function calculateNextAvailableCallTime(hoursStr: string, state: string): Date | null {
+  try {
+    if (!hoursStr || !state) return new Date(); // Default to now if no data
+    
+    // Get timezone for state
+    const timezone = STATE_TIMEZONES[state] || STATE_TIMEZONES[state.toUpperCase()] || 'America/New_York';
+    
+    // Get current time in store's timezone
+    const now = new Date();
+    const storeTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    
+    const hoursLower = hoursStr.toLowerCase();
+    
+    // Check for 24/7
+    if (hoursLower.includes('24/7') || hoursLower.includes('24 hours') || hoursLower === 'open 24 hours') {
+      return now; // Can call immediately
+    }
+    
+    // Day name mappings
+    const dayMap: Record<string, number> = {
+      'sun': 0, 'sunday': 0,
+      'mon': 1, 'monday': 1,
+      'tue': 2, 'tuesday': 2, 'tues': 2,
+      'wed': 3, 'wednesday': 3,
+      'thu': 4, 'thursday': 4, 'thurs': 4,
+      'fri': 5, 'friday': 5,
+      'sat': 6, 'saturday': 6
+    };
+    
+    // Helper to parse time string
+    const parseTime = (timeStr: string): number | null => {
+      const match = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      if (!match) return null;
+      
+      let hour = parseInt(match[1]);
+      const min = parseInt(match[2] || '0');
+      const period = match[3]?.toLowerCase();
+      
+      if (period === 'pm' && hour !== 12) hour += 12;
+      if (period === 'am' && hour === 12) hour = 0;
+      
+      return hour * 60 + min;
+    };
+    
+    // Parse hours string to find opening times for each day
+    const segments = hoursStr.split(/[,;]/);
+    const daySchedules: Record<number, Array<{ open: number; close: number }>> = {};
+    
+    let lastDayContext: number | null = null;
+    
+    for (const segment of segments) {
+      const segmentLower = segment.trim().toLowerCase();
+      let daysToApply: number[] = [];
+      let hasExplicitDay = false;
+      
+      // Check for day ranges
+      const rangeMatch = segmentLower.match(/(mon|tue|wed|thu|fri|sat|sun)[a-z]*\s*-\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
+      if (rangeMatch) {
+        hasExplicitDay = true;
+        const startDay = dayMap[rangeMatch[1]];
+        const endDay = dayMap[rangeMatch[2]];
+        if (startDay !== undefined && endDay !== undefined) {
+          if (startDay <= endDay) {
+            for (let d = startDay; d <= endDay; d++) daysToApply.push(d);
+          } else {
+            for (let d = startDay; d <= 6; d++) daysToApply.push(d);
+            for (let d = 0; d <= endDay; d++) daysToApply.push(d);
+          }
+          lastDayContext = daysToApply[0];
+        }
+      }
+      
+      // Check for specific days
+      if (!hasExplicitDay) {
+        for (const [dayName, dayNum] of Object.entries(dayMap)) {
+          if (segmentLower.startsWith(dayName)) {
+            hasExplicitDay = true;
+            daysToApply = [dayNum];
+            lastDayContext = dayNum;
+            break;
+          }
+        }
+      }
+      
+      // Carry forward day context for continuation segments
+      if (!hasExplicitDay && lastDayContext !== null) {
+        daysToApply = [lastDayContext];
+      }
+      
+      // If no day and only segment, apply to all days
+      if (daysToApply.length === 0 && !hasExplicitDay && segments.length === 1) {
+        daysToApply = [0, 1, 2, 3, 4, 5, 6];
+      }
+      
+      // Extract time range
+      const timeMatch = segment.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
+      if (timeMatch) {
+        const openMinutes = parseTime(timeMatch[1]);
+        const closeMinutes = parseTime(timeMatch[2]);
+        
+        if (openMinutes !== null && closeMinutes !== null) {
+          for (const day of daysToApply) {
+            if (!daySchedules[day]) daySchedules[day] = [];
+            daySchedules[day].push({ open: openMinutes, close: closeMinutes });
+          }
+        }
+      }
+    }
+    
+    // Find next available time window
+    const currentDay = storeTime.getDay();
+    const currentMinutes = storeTime.getHours() * 60 + storeTime.getMinutes();
+    
+    // Try today first
+    if (daySchedules[currentDay]) {
+      for (const range of daySchedules[currentDay]) {
+        if (currentMinutes < range.open) {
+          // Schedule for opening time today
+          const scheduleTime = new Date(storeTime);
+          scheduleTime.setHours(Math.floor(range.open / 60), range.open % 60, 0, 0);
+          // Convert back from store timezone to UTC
+          return new Date(scheduleTime.toLocaleString('en-US', { timeZone: 'UTC' }));
+        }
+        if (currentMinutes >= range.open && currentMinutes < range.close) {
+          // Currently open, schedule immediately
+          return now;
+        }
+      }
+    }
+    
+    // Try next 7 days
+    for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
+      const nextDay = (currentDay + dayOffset) % 7;
+      if (daySchedules[nextDay] && daySchedules[nextDay].length > 0) {
+        const firstRange = daySchedules[nextDay][0];
+        const scheduleTime = new Date(storeTime);
+        scheduleTime.setDate(scheduleTime.getDate() + dayOffset);
+        scheduleTime.setHours(Math.floor(firstRange.open / 60), firstRange.open % 60, 0, 0);
+        // Convert back to UTC
+        return new Date(scheduleTime.toLocaleString('en-US', { timeZone: 'UTC' }));
+      }
+    }
+    
+    // Fallback: schedule for tomorrow 9am store time
+    const fallbackTime = new Date(storeTime);
+    fallbackTime.setDate(fallbackTime.getDate() + 1);
+    fallbackTime.setHours(9, 0, 0, 0);
+    return new Date(fallbackTime.toLocaleString('en-US', { timeZone: 'UTC' }));
+  } catch (error) {
+    console.error('Error calculating next call time:', error);
+    return new Date(); // Fallback to now
+  }
+}
+
 // Check if store is currently open based on hours string and state
 function checkIfStoreOpen(hoursStr: string, state: string): boolean {
   try {
