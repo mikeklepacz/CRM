@@ -29,7 +29,7 @@ interface EligibleStore {
   phone: string;
   hours: string;
   isOpen: boolean;
-  claimedBy?: string;
+  agentName?: string;
   status?: string;
   lastContactDate?: string;
   followUpDate?: string;
@@ -56,10 +56,12 @@ export default function CallManager() {
   const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [schedulingMode, setSchedulingMode] = useState<'immediate' | 'scheduled' | 'auto'>('immediate');
   const [scheduledTime, setScheduledTime] = useState<string>("");
+  const [selectedAgentFilters, setSelectedAgentFilters] = useState<Set<string>>(new Set());
 
   // Clear selections when scenario changes
   useEffect(() => {
     setSelectedStores(new Set());
+    setSelectedAgentFilters(new Set());
   }, [activeScenario]);
 
   // Redirect if user doesn't have voice access
@@ -120,10 +122,10 @@ export default function CallManager() {
 
   // Handle select all/none
   const handleSelectAll = () => {
-    if (selectedStores.size === eligibleStores.length) {
+    if (selectedStores.size === filteredStores.length) {
       setSelectedStores(new Set());
     } else {
-      setSelectedStores(new Set(eligibleStores.map(s => s.link)));
+      setSelectedStores(new Set(filteredStores.map(s => s.link)));
     }
   };
 
@@ -196,9 +198,28 @@ export default function CallManager() {
   };
 
   const scenarioDescriptions: Record<CallScenario, string> = {
-    cold_calls: "Claimed stores without any prior contact or POC. Fresh leads ready for first outreach.",
+    cold_calls: "Claimed stores ready for outreach. Filter by agent to see specific agent's claimed stores.",
     follow_ups: "Stores marked as 'Interested' with scheduled follow-up dates approaching.",
     recovery: "Leads from other agents that have been inactive for 30+ days. Re-engagement opportunities.",
+  };
+
+  // Get unique agents from stores
+  const uniqueAgents = Array.from(new Set(eligibleStores.map(s => s.agentName).filter(Boolean)));
+
+  // Filter stores by selected agents (if any filters are active)
+  const filteredStores = selectedAgentFilters.size === 0 
+    ? eligibleStores 
+    : eligibleStores.filter(store => store.agentName && selectedAgentFilters.has(store.agentName));
+
+  // Toggle agent filter
+  const handleToggleAgentFilter = (agentName: string) => {
+    const newFilters = new Set(selectedAgentFilters);
+    if (newFilters.has(agentName)) {
+      newFilters.delete(agentName);
+    } else {
+      newFilters.add(agentName);
+    }
+    setSelectedAgentFilters(newFilters);
   };
 
   // Use stats from API
@@ -401,15 +422,42 @@ export default function CallManager() {
                     </p>
                   </div>
 
+                  {/* Agent Filters - only show for cold_calls */}
+                  {activeScenario === 'cold_calls' && uniqueAgents.length > 0 && (
+                    <div className="border rounded-lg p-4">
+                      <h3 className="text-sm font-medium mb-3">Filter by Agent</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {uniqueAgents.map((agent) => {
+                          const count = eligibleStores.filter(s => s.agentName === agent).length;
+                          return (
+                            <div key={agent} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`agent-${agent}`}
+                                checked={selectedAgentFilters.has(agent)}
+                                onCheckedChange={() => handleToggleAgentFilter(agent)}
+                                data-testid={`checkbox-agent-${agent}`}
+                              />
+                              <Label htmlFor={`agent-${agent}`} className="cursor-pointer">
+                                {agent} ({count})
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Stores Table */}
                   {storesLoading ? (
                     <div className="flex justify-center py-8">
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
-                  ) : eligibleStores.length === 0 ? (
+                  ) : filteredStores.length === 0 ? (
                     <div className="text-center py-12 bg-muted/20 rounded-lg">
                       <p className="text-muted-foreground" data-testid="text-no-stores">
-                        No eligible stores found for this scenario.
+                        {selectedAgentFilters.size > 0 
+                          ? "No stores found for the selected agents." 
+                          : "No eligible stores found for this scenario."}
                       </p>
                     </div>
                   ) : (
@@ -419,12 +467,13 @@ export default function CallManager() {
                           <TableRow>
                             <TableHead className="w-12">
                               <Checkbox
-                                checked={selectedStores.size === eligibleStores.length && eligibleStores.length > 0}
+                                checked={selectedStores.size === filteredStores.length && filteredStores.length > 0}
                                 onCheckedChange={handleSelectAll}
                                 data-testid="checkbox-select-all"
                               />
                             </TableHead>
                             <TableHead>Business Name</TableHead>
+                            <TableHead>Agent</TableHead>
                             <TableHead>Location</TableHead>
                             <TableHead>Phone</TableHead>
                             <TableHead>Hours</TableHead>
@@ -432,7 +481,7 @@ export default function CallManager() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {eligibleStores.map((store) => (
+                          {filteredStores.map((store) => (
                             <TableRow key={store.link} data-testid={`row-store-${store.link}`}>
                               <TableCell>
                                 <Checkbox
@@ -443,6 +492,9 @@ export default function CallManager() {
                               </TableCell>
                               <TableCell className="font-medium" data-testid={`text-name-${store.link}`}>
                                 {store.businessName}
+                              </TableCell>
+                              <TableCell data-testid={`text-agent-${store.link}`}>
+                                <span className="text-sm">{store.agentName || "N/A"}</span>
                               </TableCell>
                               <TableCell data-testid={`text-location-${store.link}`}>
                                 <div className="flex items-center gap-1">

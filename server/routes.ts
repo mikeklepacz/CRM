@@ -1384,7 +1384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== UNIFIED CALLING CENTER ENDPOINTS =====
   
   // Get eligible stores for calling based on scenario
-  app.get('/api/elevenlabs/eligible-stores', isAuthenticatedCustom, async (req: any, res) => {
+  app.get('/api/elevenlabs/eligible-stores/:scenario', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -1394,16 +1394,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
-      const { scenario, sheetId } = req.query;
+      const { scenario } = req.params;
       
-      if (!sheetId) {
-        return res.status(400).json({ error: 'Sheet ID is required' });
+      // Get Commission Tracker sheet
+      const commissionTrackerSheetId = await storage.getCommissionTrackerSheetId();
+      if (!commissionTrackerSheetId) {
+        return res.status(404).json({ error: 'Commission Tracker sheet not configured' });
       }
 
-      // Fetch all stores from Google Sheets
-      const sheet = await storage.getGoogleSheetById(sheetId as string);
+      const sheet = await storage.getGoogleSheetById(commissionTrackerSheetId);
       if (!sheet) {
-        return res.status(404).json({ error: 'Google Sheet not found' });
+        return res.status(404).json({ error: 'Commission Tracker sheet not found' });
       }
 
       // Read store data from sheet
@@ -1427,24 +1428,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Apply scenario-based filtering
       let eligibleStores = stores;
       
-      if (scenario === 'cold_call') {
-        // Cold Calls: status = 'claimed' AND no last_contact_date AND no POC details
+      if (scenario === 'cold_calls') {
+        // Cold Calls: Simply show all stores with Status = 'Claimed'
         eligibleStores = stores.filter((store: any) => {
           const status = store['Status'] || store['status'] || '';
-          const lastContact = store['Last Contact'] || store['last_contact_date'] || store['lastContactDate'] || '';
-          const poc = store['Point of Contact'] || store['poc'] || store['POC'] || '';
-          const pocEmail = store['POC Email'] || store['poc_email'] || '';
-          const pocPhone = store['POC Phone'] || store['poc_phone'] || '';
-          
-          return (
-            status.toLowerCase() === 'claimed' &&
-            !lastContact &&
-            !poc &&
-            !pocEmail &&
-            !pocPhone
-          );
+          return status.toLowerCase() === 'claimed';
         });
-      } else if (scenario === 'follow_up') {
+      } else if (scenario === 'follow_ups') {
         // Follow-Ups: status = 'interested' AND has follow_up_date that is due
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -1493,15 +1483,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Add business hours indicator to each store
+      // Map to frontend format with agent name and business hours
       const storesWithHours = eligibleStores.map((store: any) => {
         const hours = store['Hours'] || store['hours'] || '';
         const state = store['State'] || store['state'] || '';
+        const name = store['Name'] || store['name'] || '';
+        const phone = store['Phone'] || store['phone'] || '';
+        const link = store['Link'] || store['link'] || '';
+        const agentName = store['Agent Name'] || store['agent_name'] || store['agentName'] || '';
+        const status = store['Status'] || store['status'] || '';
         
         return {
-          ...store,
-          businessHours: hours,
-          isOpenNow: checkIfStoreOpen(hours, state),
+          link,
+          businessName: name,
+          state,
+          phone,
+          hours,
+          isOpen: checkIfStoreOpen(hours, state),
+          agentName,
+          status,
         };
       });
       
