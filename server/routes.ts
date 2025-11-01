@@ -300,8 +300,8 @@ function calculateNextAvailableCallTime(hoursStr: string, state: string): Date |
   }
 }
 
-// Parse hours string into structured day-by-day schedule
-function parseHoursToStructured(hoursStr: string): Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> {
+// Parse hours string into structured day-by-day schedule with timezone awareness
+function parseHoursToStructured(hoursStr: string, state: string): Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> {
   const dayMap: Record<string, number> = {
     'sun': 0, 'sunday': 0,
     'mon': 1, 'monday': 1,
@@ -313,7 +313,12 @@ function parseHoursToStructured(hoursStr: string): Array<{ day: string; hours: s
   };
   
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const currentDay = new Date().getDay();
+  
+  // Get current day in store's timezone
+  const timezone = STATE_TIMEZONES[state] || STATE_TIMEZONES[state?.toUpperCase()] || 'America/New_York';
+  const now = new Date();
+  const storeTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+  const currentDay = storeTime.getDay();
   
   if (!hoursStr) {
     return [];
@@ -323,16 +328,43 @@ function parseHoursToStructured(hoursStr: string): Array<{ day: string; hours: s
   
   // Handle 24/7
   if (hoursLower.includes('24/7') || hoursLower.includes('24 hours')) {
-    return [{ day: 'Every day', hours: '24 hours', isToday: false, isClosed: false }];
+    return dayNames.map((dayName, idx) => ({
+      day: dayName,
+      hours: '24 hours',
+      isToday: idx === currentDay,
+      isClosed: false
+    }));
   }
   
   // Parse segments
   const segments = hoursStr.split(/[,;]/);
-  const schedule: Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> = [];
+  const daySchedule: Record<number, { hours: string[]; isClosed: boolean }> = {};
+  let lastDayContext: number[] = [];
   
   for (const segment of segments) {
     const segmentTrimmed = segment.trim();
     const segmentLower = segmentTrimmed.toLowerCase();
+    const isClosed = segmentLower.includes('closed');
+    
+    // Extract hours part
+    const hoursMatch = segmentTrimmed.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
+    const hoursText = hoursMatch ? `${hoursMatch[1]} - ${hoursMatch[2]}` : '';
+    
+    // Check for "Daily" or "Everyday" keywords
+    if (segmentLower.includes('daily') || segmentLower.includes('everyday') || segmentLower.includes('every day')) {
+      lastDayContext = [0, 1, 2, 3, 4, 5, 6];
+      for (let i = 0; i < 7; i++) {
+        if (!daySchedule[i]) {
+          daySchedule[i] = { hours: [], isClosed: false };
+        }
+        if (isClosed) {
+          daySchedule[i].isClosed = true;
+        } else if (hoursText) {
+          daySchedule[i].hours.push(hoursText);
+        }
+      }
+      continue;
+    }
     
     // Check for day ranges (Mon-Fri, Mon-Wed, etc.)
     const rangeMatch = segmentLower.match(/(mon|tue|wed|thu|fri|sat|sun)[a-z]*\s*-\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
@@ -341,29 +373,27 @@ function parseHoursToStructured(hoursStr: string): Array<{ day: string; hours: s
       const endDay = dayMap[rangeMatch[2]];
       
       if (startDay !== undefined && endDay !== undefined) {
-        // Extract the day range display name
-        const dayRangeText = segmentTrimmed.match(/[A-Z][a-z]*\s*-\s*[A-Z][a-z]*/)?.[0] || '';
-        
-        // Extract hours part
-        const hoursMatch = segmentTrimmed.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
-        const isClosed = segmentLower.includes('closed');
-        
-        const hoursText = isClosed ? 'Closed' : (hoursMatch ? `${hoursMatch[1]} - ${hoursMatch[2]}` : segmentTrimmed.replace(dayRangeText, '').trim());
-        
-        // Check if today is in this range
-        let appliesToToday = false;
-        if (startDay <= endDay) {
-          appliesToToday = currentDay >= startDay && currentDay <= endDay;
-        } else {
-          appliesToToday = currentDay >= startDay || currentDay <= endDay;
+        // Expand range to individual days
+        const daysInRange: number[] = [];
+        let day = startDay;
+        while (true) {
+          daysInRange.push(day);
+          if (day === endDay) break;
+          day = (day + 1) % 7;
+          if (day === startDay) break; // Safety check
         }
         
-        schedule.push({
-          day: dayRangeText,
-          hours: hoursText,
-          isToday: appliesToToday,
-          isClosed
-        });
+        lastDayContext = daysInRange;
+        for (const dayNum of daysInRange) {
+          if (!daySchedule[dayNum]) {
+            daySchedule[dayNum] = { hours: [], isClosed: false };
+          }
+          if (isClosed) {
+            daySchedule[dayNum].isClosed = true;
+          } else if (hoursText) {
+            daySchedule[dayNum].hours.push(hoursText);
+          }
+        }
         continue;
       }
     }
@@ -373,31 +403,57 @@ function parseHoursToStructured(hoursStr: string): Array<{ day: string; hours: s
     for (const [dayName, dayNum] of Object.entries(dayMap)) {
       if (segmentLower.startsWith(dayName)) {
         foundDay = true;
-        const dayDisplay = dayNames[dayNum];
-        const isClosed = segmentLower.includes('closed');
+        lastDayContext = [dayNum];
         
-        // Extract hours part
-        const hoursMatch = segmentTrimmed.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
-        const hoursText = isClosed ? 'Closed' : (hoursMatch ? `${hoursMatch[1]} - ${hoursMatch[2]}` : segmentTrimmed.replace(dayDisplay, '').trim());
-        
-        schedule.push({
-          day: dayDisplay,
-          hours: hoursText,
-          isToday: dayNum === currentDay,
-          isClosed
-        });
+        if (!daySchedule[dayNum]) {
+          daySchedule[dayNum] = { hours: [], isClosed: false };
+        }
+        if (isClosed) {
+          daySchedule[dayNum].isClosed = true;
+        } else if (hoursText) {
+          daySchedule[dayNum].hours.push(hoursText);
+        }
         break;
       }
     }
     
-    // If no specific day found and it's the only segment, assume all days
-    if (!foundDay && segments.length === 1) {
-      const isClosed = segmentLower.includes('closed');
+    // If no day found, check if we have context from previous segment (continuation)
+    if (!foundDay && lastDayContext.length > 0 && hoursText) {
+      for (const dayNum of lastDayContext) {
+        if (!daySchedule[dayNum]) {
+          daySchedule[dayNum] = { hours: [], isClosed: false };
+        }
+        daySchedule[dayNum].hours.push(hoursText);
+      }
+      continue;
+    }
+    
+    // If no day found and no context and it's the only segment, apply to all days
+    if (!foundDay && lastDayContext.length === 0 && segments.length === 1) {
+      for (let i = 0; i < 7; i++) {
+        if (!daySchedule[i]) {
+          daySchedule[i] = { hours: [], isClosed: false };
+        }
+        if (isClosed) {
+          daySchedule[i].isClosed = true;
+        } else if (hoursText) {
+          daySchedule[i].hours.push(hoursText);
+        }
+      }
+    }
+  }
+  
+  // Convert to array format, combining multiple hour windows
+  const schedule: Array<{ day: string; hours: string; isToday: boolean; isClosed: boolean }> = [];
+  for (let i = 0; i < 7; i++) {
+    const dayData = daySchedule[i];
+    if (dayData) {
+      const hoursDisplay = dayData.isClosed ? 'Closed' : (dayData.hours.length > 0 ? dayData.hours.join(', ') : 'Closed');
       schedule.push({
-        day: 'Every day',
-        hours: isClosed ? 'Closed' : segmentTrimmed,
-        isToday: false,
-        isClosed
+        day: dayNames[i],
+        hours: hoursDisplay,
+        isToday: i === currentDay,
+        isClosed: dayData.isClosed || (dayData.hours.length === 0)
       });
     }
   }
@@ -1746,8 +1802,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const agentName = store['Agent Name'] || '';
         const status = store['Status'] || '';
         
-        // Parse hours into structured schedule
-        const hoursSchedule = parseHoursToStructured(hours);
+        // Parse hours into structured schedule with timezone awareness
+        const hoursSchedule = parseHoursToStructured(hours, state);
         const isOpen = checkIfStoreOpen(hours, state);
         
         return {
