@@ -2392,6 +2392,140 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI Insights - Analyze calls with OpenAI
+  app.post('/api/elevenlabs/analyze-calls', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { startDate, endDate, agentId, limit } = req.body;
+      
+      // Validate limit
+      const callLimit = Math.min(limit || 50, 100); // Max 100 calls
+
+      // Get user's OpenAI API key
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const userIntegration = await storage.getUserIntegration(userId);
+      
+      if (!userIntegration?.openaiApiKey) {
+        return res.status(400).json({ 
+          error: 'OpenAI API key not configured',
+          message: 'Please configure your OpenAI API key in the Sales Assistant settings first'
+        });
+      }
+
+      // Fetch calls with transcripts
+      const callsData = await storage.getCallsWithTranscripts({
+        startDate,
+        endDate,
+        agentId,
+        limit: callLimit,
+      });
+
+      if (callsData.length === 0) {
+        return res.json({
+          message: 'No calls found for the selected filters',
+          callCount: 0,
+          commonObjections: [],
+          successPatterns: [],
+          sentimentAnalysis: { positive: 0, neutral: 0, negative: 0, trends: '' },
+          coachingRecommendations: [],
+        });
+      }
+
+      // Redact PII (phone numbers) from transcripts
+      const redactedCalls = callsData.map(call => ({
+        ...call,
+        transcripts: call.transcripts.map(t => ({
+          ...t,
+          message: t.message.replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, 'XXX-XXX-XXXX')
+        }))
+      }));
+
+      // Prepare data for OpenAI
+      const analysisData = redactedCalls.slice(0, 20).map(call => ({ // Limit to 20 for cost control
+        conversationId: call.session.conversationId,
+        duration: call.session.callDurationSecs,
+        successful: call.session.callSuccessful,
+        interestLevel: call.session.interestLevel,
+        aiAnalysis: call.session.aiAnalysis,
+        transcript: call.transcripts.map(t => `${t.role}: ${t.message}`).join('\n'),
+        storeName: call.client.data?.Name || call.client.uniqueIdentifier,
+      }));
+
+      // Create OpenAI prompt
+      const prompt = `You are an expert sales coach analyzing AI voice call performance data. Analyze the following ${analysisData.length} sales calls and provide actionable insights.
+
+CALL DATA:
+${JSON.stringify(analysisData, null, 2)}
+
+Provide a detailed analysis in the following JSON format:
+{
+  "commonObjections": [
+    { "objection": "string", "frequency": number, "exampleConversations": ["conversationId1", "conversationId2"] }
+  ],
+  "successPatterns": [
+    { "pattern": "string", "frequency": number, "exampleConversations": ["conversationId1"] }
+  ],
+  "sentimentAnalysis": {
+    "positive": number,
+    "neutral": number,
+    "negative": number,
+    "trends": "string description of sentiment trends"
+  },
+  "coachingRecommendations": [
+    { "title": "string", "description": "string", "priority": "high" | "medium" | "low" }
+  ]
+}
+
+Focus on:
+1. Common objections prospects raise and how to handle them better
+2. Patterns in successful vs unsuccessful calls
+3. Sentiment trends and customer mood analysis
+4. Specific, actionable coaching recommendations for the AI agent`;
+
+      // Call OpenAI
+      const openaiResponse = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: 'You are a sales coaching expert analyzing call data. Always respond with valid JSON.' },
+            { role: 'user', content: prompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.7,
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${userIntegration.openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const insights = JSON.parse(openaiResponse.data.choices[0].message.content);
+
+      res.json({
+        ...insights,
+        callCount: callsData.length,
+        dateRange: {
+          start: startDate || 'all time',
+          end: endDate || 'present'
+        },
+      });
+
+    } catch (error: any) {
+      console.error('[AI Insights] Error analyzing calls:', error);
+      
+      if (error.response?.status === 401) {
+        return res.status(401).json({ error: 'Invalid OpenAI API key' });
+      }
+      
+      res.status(500).json({ 
+        error: error.message || 'Failed to analyze calls',
+        details: error.response?.data,
+      });
+    }
+  });
+
   // ===== SYSTEM-WIDE GOOGLE SHEETS OAUTH (ADMIN ONLY) =====
   app.get('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

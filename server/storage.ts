@@ -360,6 +360,13 @@ export interface IStorage {
   getCallTranscripts(conversationId: string): Promise<CallTranscript[]>;
   bulkCreateCallTranscripts(transcripts: InsertCallTranscript[]): Promise<void>;
 
+  // AI Insights helper operations
+  getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number }): Promise<Array<{
+    session: CallSession;
+    transcripts: CallTranscript[];
+    client: Client;
+  }>>;
+
   // Call Events operations
   createCallEvent(event: InsertCallEvent): Promise<CallEvent>;
   getCallEvents(conversationId: string): Promise<CallEvent[]>;
@@ -2073,6 +2080,53 @@ export class DatabaseStorage implements IStorage {
   async bulkCreateCallTranscripts(transcripts: InsertCallTranscript[]): Promise<void> {
     if (transcripts.length === 0) return;
     await db.insert(callTranscripts).values(transcripts);
+  }
+
+  // AI Insights helper operations
+  async getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number }): Promise<Array<{
+    session: CallSession;
+    transcripts: CallTranscript[];
+    client: Client;
+  }>> {
+    const limit = filters.limit || 100;
+    
+    // Build query conditions
+    const conditions = [
+      eq(callSessions.status, 'completed')
+    ];
+    
+    if (filters.startDate) {
+      conditions.push(sql`${callSessions.startedAt} >= ${new Date(filters.startDate)}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${callSessions.startedAt} <= ${new Date(filters.endDate)}`);
+    }
+    if (filters.agentId) {
+      conditions.push(eq(callSessions.agentId, filters.agentId));
+    }
+
+    // Get call sessions
+    const sessions = await db.select()
+      .from(callSessions)
+      .where(and(...conditions))
+      .orderBy(desc(callSessions.startedAt))
+      .limit(limit);
+
+    // Get transcripts and clients for each session
+    const results = await Promise.all(
+      sessions.map(async (session) => {
+        const transcripts = await this.getCallTranscripts(session.conversationId!);
+        const client = await this.getClient(session.clientId);
+        
+        return {
+          session,
+          transcripts,
+          client: client!,
+        };
+      })
+    );
+
+    return results;
   }
 
   // Call Events operations
