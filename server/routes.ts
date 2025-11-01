@@ -5999,34 +5999,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const normalizedInputLink = normalizeLink(link.trim());
       let rowIndex = -1;
 
+      // FIRST: Try to find in already-loaded data (search from end)
       for (let i = rows.length - 1; i >= 1; i--) {
         const rowLink = rows[i][linkIndex];
         const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
 
         if (rowLink && normalizedRowLink === normalizedInputLink) {
           rowIndex = i + 1; // +1 because sheets are 1-indexed
+          console.log('[TRACKER-UPSERT] Found row in cached data at index', rowIndex);
           break;
         }
       }
 
-      // If not found, wait 1 second and try again (Google Sheets sync delay)
+      // If not found in cache, wait and re-read from Google (append delay)
       if (rowIndex === -1) {
-        console.log('[TRACKER-UPSERT] Row not found on first try, waiting 1s for Google Sheets sync...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('[TRACKER-UPSERT] Row not found in cache, waiting 2s for Google Sheets sync...');
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Increased to 2 seconds
         
-        // Re-read the sheet
+        // Re-read the ENTIRE sheet fresh from Google
         rows = await googleSheets.readSheetData(spreadsheetId, range);
+        console.log('[TRACKER-UPSERT] Re-read sheet, now has', rows.length - 1, 'data rows');
         
-        // Search again from end
+        // Search again from end (new rows are appended at bottom)
         for (let i = rows.length - 1; i >= 1; i--) {
           const rowLink = rows[i][linkIndex];
           const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
 
           if (rowLink && normalizedRowLink === normalizedInputLink) {
             rowIndex = i + 1;
-            console.log('[TRACKER-UPSERT] Row found after retry at index', rowIndex);
+            console.log('[TRACKER-UPSERT] Found row after refresh at index', rowIndex);
             break;
           }
+        }
+        
+        // If STILL not found, log the last few rows for debugging
+        if (rowIndex === -1) {
+          console.error('[TRACKER-UPSERT] Row still not found after refresh. Last 3 rows:');
+          for (let i = Math.max(1, rows.length - 3); i < rows.length; i++) {
+            const rowLink = rows[i][linkIndex];
+            const normalized = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+            console.error(`  Row ${i + 1}: link="${rowLink}", normalized="${normalized}"`);
+          }
+          console.error('[TRACKER-UPSERT] Expected link:', link);
+          console.error('[TRACKER-UPSERT] Expected normalized:', normalizedInputLink);
         }
       }
 
