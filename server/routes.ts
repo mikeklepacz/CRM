@@ -1542,9 +1542,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule } = req.body;
       
+      console.log('[BatchCall] Request received:', {
+        agent_id,
+        phone_number_id,
+        stores_count: stores?.length,
+        store_data_count: store_data?.length,
+        scenario,
+        scheduled_for,
+        auto_schedule,
+      });
+      
       if (!agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
+        console.error('[BatchCall] Validation failed: missing agent_id or stores');
         return res.status(400).json({ error: 'Agent ID and stores array required' });
       }
+
+      // Verify agent exists and has required fields
+      const agent = await storage.getElevenLabsAgent(agent_id);
+      if (!agent) {
+        console.error('[BatchCall] Agent not found:', agent_id);
+        return res.status(404).json({ error: 'Agent not found' });
+      }
+      
+      if (!agent.agentId || !agent.phoneNumberId) {
+        console.error('[BatchCall] Agent missing required fields:', agent);
+        return res.status(400).json({ error: 'Agent configuration incomplete - missing agentId or phoneNumberId' });
+      }
+      
+      // Validate phone_number_id - use from request if provided, otherwise use agent's configured value
+      const effectivePhoneNumberId = phone_number_id || agent.phoneNumberId;
+      if (!effectivePhoneNumberId) {
+        console.error('[BatchCall] No phone_number_id available');
+        return res.status(400).json({ error: 'Phone number ID required for outbound calling' });
+      }
+      
+      console.log('[BatchCall] Agent validated:', { 
+        name: agent.name, 
+        agentId: agent.agentId, 
+        phoneNumberId: effectivePhoneNumberId,
+        requestedPhoneNumberId: phone_number_id,
+        agentPhoneNumberId: agent.phoneNumberId
+      });
 
       // Create campaign with appropriate scheduling
       let scheduledStart = new Date();
@@ -1562,6 +1600,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'scheduled',
         scheduledStart,
       });
+      
+      console.log('[BatchCall] Campaign created:', { id: campaign.id, name: campaign.name, totalStores: stores.length });
 
       // Create map of store link to store data for efficient lookup
       const storeDataMap = new Map();
@@ -1571,9 +1611,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storeDataMap.set(store.link, store);
           }
         }
+        console.log('[BatchCall] Store data map created with', storeDataMap.size, 'entries');
       }
 
       // Create campaign targets for each store
+      let createdTargets = 0;
+      let skippedStores = 0;
+      
       for (const storeLink of stores) {
         // Find existing client by unique identifier
         let client = await storage.getClientByUniqueIdentifier(storeLink);
@@ -1581,16 +1625,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // If client doesn't exist and we have store data, create it
         if (!client && storeDataMap.has(storeLink)) {
           const storeInfo = storeDataMap.get(storeLink);
+          const phone = storeInfo.phone || storeInfo.Phone;
+          
+          if (!phone) {
+            console.warn(`[BatchCall] Skipping store ${storeLink} - no phone number in store_data`);
+            skippedStores++;
+            continue;
+          }
+          
           client = await storage.createClient({
             uniqueIdentifier: storeLink,
-            googleSheetId: storeInfo.sheetId || 'unknown', // Will need to pass this
+            googleSheetId: storeInfo.sheetId || 'unknown',
             data: storeInfo,
             status: storeInfo.status || 'unassigned',
           });
+          console.log(`[BatchCall] Created new client for store ${storeLink}`);
         }
         
         // Create campaign target if we have a client
         if (client) {
+          const clientData = client.data as any;
+          const phoneNumber = clientData?.Phone || clientData?.phone;
+          
+          if (!phoneNumber) {
+            console.warn(`[BatchCall] Skipping store ${storeLink} - no phone number in client data`);
+            skippedStores++;
+            continue;
+          }
+          
           const targetData: any = {
             campaignId: campaign.id,
             clientId: client.id,
@@ -1609,27 +1671,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (optimalTime) {
                 targetData.scheduledFor = optimalTime;
                 targetData.nextAttemptAt = optimalTime;
-                console.log(`Auto-scheduled call for ${storeLink} at ${optimalTime.toISOString()} (store hours: ${hours}, state: ${state})`);
+                console.log(`[BatchCall] Auto-scheduled call for ${storeLink} at ${optimalTime.toISOString()} (hours: ${hours}, state: ${state})`);
               } else {
                 targetData.nextAttemptAt = new Date();
+                console.log(`[BatchCall] Could not calculate optimal time for ${storeLink}, scheduling immediately`);
               }
             } else {
               targetData.nextAttemptAt = new Date();
+              console.log(`[BatchCall] Missing hours/state for ${storeLink}, scheduling immediately`);
             }
           } else if (scheduled_for) {
             targetData.scheduledFor = scheduledStart;
             targetData.nextAttemptAt = scheduledStart;
+            console.log(`[BatchCall] Scheduled call for ${storeLink} at ${scheduledStart.toISOString()}`);
           } else {
             targetData.nextAttemptAt = new Date();
+            console.log(`[BatchCall] Immediate call queued for ${storeLink}`);
           }
 
           await storage.createCallCampaignTarget(targetData);
+          createdTargets++;
+        } else {
+          console.warn(`[BatchCall] Skipping store ${storeLink} - client not found and no store_data provided`);
+          skippedStores++;
         }
       }
+      
+      console.log('[BatchCall] ====== BATCH CALL SUMMARY ======');
+      console.log('[BatchCall] Campaign:', { id: campaign.id, name: campaign.name });
+      console.log('[BatchCall] Targets created:', createdTargets, '/', stores.length);
+      console.log('[BatchCall] Targets skipped:', skippedStores);
+      console.log('[BatchCall] Scheduling:', auto_schedule ? 'Auto (Smart Hours)' : scheduled_for ? 'Scheduled' : 'Immediate');
+      console.log('[BatchCall] ================================');
 
       res.json({
         campaignId: campaign.id,
         totalStores: stores.length,
+        createdTargets,
+        skippedStores,
         status: 'queued',
         autoScheduled: !!auto_schedule,
       });

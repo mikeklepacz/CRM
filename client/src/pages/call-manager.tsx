@@ -301,9 +301,14 @@ export default function CallManager() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="text-sm font-medium mb-2 block">Select Agent</label>
-                  <Select value={selectedAgent} onValueChange={setSelectedAgent} disabled={agentsLoading}>
+                  <Select value={selectedAgent} onValueChange={(value) => {
+                    console.log('[CallManager] Agent selected:', value);
+                    setSelectedAgent(value);
+                  }} disabled={agentsLoading}>
                     <SelectTrigger data-testid="select-agent">
-                      <SelectValue placeholder={agentsLoading ? "Loading agents..." : "Choose an agent"} />
+                      <SelectValue placeholder={agentsLoading ? "Loading agents..." : "Choose an agent"}>
+                        {selectedAgent && agents.find(a => a.agent_id === selectedAgent)?.name}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {agents.map(agent => (
