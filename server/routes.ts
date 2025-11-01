@@ -6840,15 +6840,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Now handle Commission Tracker fields (notes, point_of_contact, poc_email, poc_phone)
-      const trackerFields = Object.keys(trackerColumnMapping);
-      const hasTrackerUpdates = trackerFields.some(field => field in updates);
+      // CRITICAL AUTO-CLAIM LOGIC: Always check Commission Tracker and auto-claim if unclaimed
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
 
-      if (hasTrackerUpdates) {
-        // Find Commission Tracker sheet
-        const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-
-        if (trackerSheet) {
+      if (trackerSheet) {
+        // Get user info for auto-claim
+        const currentUser = await storage.getUser(userId);
+        
+        if (currentUser && currentUser.agentName) {
           // Read Commission Tracker data
           const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
           const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
@@ -6865,6 +6864,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             // Find matching row by link (case-insensitive)
             const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+            const agentNameIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+            const statusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
+            
             const trackerRow = trackerData.find((row: any) => {
               if (linkIndex !== -1) {
                 const rowLink = row[trackerHeaders[linkIndex]];
@@ -6875,25 +6877,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             let rowIndex = trackerRow?._trackerRowIndex;
 
-            // If no tracker row exists, create one
+            // AUTO-CLAIM: If no tracker row exists, create one with agent name and status='Claimed'
             if (!trackerRow) {
-              // Append new row with link
-              const newRowIndex = trackerRows.length + 1;
+              console.log('[AUTO-CLAIM] Creating tracker row for unclaimed store:', decodedId);
+              
               const newRow = new Array(trackerHeaders.length).fill('');
 
               // Set link value
               if (linkIndex !== -1) {
                 newRow[linkIndex] = decodedId;
               }
+              
+              // Set agent name
+              if (agentNameIndex !== -1) {
+                newRow[agentNameIndex] = currentUser.agentName;
+              }
+              
+              // Set status to 'Claimed'
+              if (statusIndex !== -1) {
+                newRow[statusIndex] = 'Claimed';
+              }
 
               // Append the new row
-              const appendRange = `${trackerSheet.sheetName}!A${newRowIndex}`;
-              await googleSheets.writeSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
-
-              rowIndex = newRowIndex;
+              const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+              const response = await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
+              
+              // Extract row index from updatedRange (e.g., "Commission Tracker!A15:Z15" -> 15)
+              const updatedRange = response.updates?.updatedRange;
+              if (updatedRange) {
+                const match = updatedRange.match(/!([A-Z]+)(\d+):/);
+                if (match) {
+                  rowIndex = parseInt(match[2], 10);
+                  console.log('[AUTO-CLAIM] Created tracker row at index:', rowIndex);
+                }
+              }
             }
 
-            if (rowIndex) {
+            // Now handle tracker field updates (notes, point_of_contact, poc_email, poc_phone)
+            const trackerColumnMapping: Record<string, string> = {
+              notes: 'Notes',
+              point_of_contact: 'Point of Contact',
+              poc_email: 'POC Email',
+              poc_phone: 'POC Phone',
+            };
+            
+            const trackerFields = Object.keys(trackerColumnMapping);
+            const hasTrackerUpdates = trackerFields.some(field => field in updates);
+
+            if (hasTrackerUpdates && rowIndex) {
               // Prepare batch updates for Commission Tracker
               const trackerBatchUpdates: { range: string; values: any[][] }[] = [];
 
