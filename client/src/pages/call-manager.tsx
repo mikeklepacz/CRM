@@ -467,7 +467,9 @@ export default function CallManager() {
           <TabsList>
             <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
             <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
-            <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
+            {user?.role === 'admin' && (
+              <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="voice-hub" className="space-y-6">
@@ -1104,9 +1106,10 @@ export default function CallManager() {
         </Card>
           </TabsContent>
 
-          <TabsContent value="ai-insights" className="space-y-6">
-            {/* AI Insights Section */}
-            <Card data-testid="card-ai-insights">
+          {user?.role === 'admin' && (
+            <TabsContent value="ai-insights" className="space-y-6">
+              {/* AI Insights Section */}
+              <Card data-testid="card-ai-insights">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2" data-testid="text-ai-insights-title">
                   <Brain className="h-5 w-5" />
@@ -1348,6 +1351,7 @@ export default function CallManager() {
               </CardContent>
             </Card>
           </TabsContent>
+          )}
         </Tabs>
       </div>
 
