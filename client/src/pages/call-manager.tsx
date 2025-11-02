@@ -626,6 +626,8 @@ export default function CallManager() {
   const [insightsEndDate, setInsightsEndDate] = useState<string>('');
   const [insightsAgentFilter, setInsightsAgentFilter] = useState<string>('all');
   const [persistedInsights, setPersistedInsights] = useState<any>(null);
+  const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
+  const [insightsViewMode, setInsightsViewMode] = useState<'individual' | 'all-time'>('individual');
   
   // Analytics filters
   const [analyticsAgentFilter, setAnalyticsAgentFilter] = useState<string>("all");
@@ -992,6 +994,7 @@ export default function CallManager() {
     },
     onSuccess: (data) => {
       setPersistedInsights(data);
+      setSelectedInsightId(data.id || null);
       // Refetch historical insights after new analysis is saved
       queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/insights-history'] });
       toast({
@@ -1016,6 +1019,7 @@ export default function CallManager() {
     onSuccess: () => {
       setIsNukeDialogOpen(false);
       setPersistedInsights(null);
+      setSelectedInsightId(null);
       queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/insights-history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/call-analytics'] });
       toast({
@@ -1049,6 +1053,97 @@ export default function CallManager() {
     },
     enabled: user?.role === 'admin',
   });
+
+  // Auto-load most recent insight when history loads
+  useEffect(() => {
+    if (insightsHistory && insightsHistory.length > 0 && !persistedInsights && !selectedInsightId) {
+      const mostRecent = insightsHistory[0];
+      setPersistedInsights(mostRecent);
+      setSelectedInsightId(mostRecent.id);
+    }
+  }, [insightsHistory]);
+
+  // Function to load a specific historical insight
+  const loadHistoricalInsight = (insight: any) => {
+    setPersistedInsights(insight);
+    setSelectedInsightId(insight.id);
+    setInsightsViewMode('individual');
+  };
+
+  // Function to compute all-time aggregated summary
+  const computeAllTimeSummary = () => {
+    if (!insightsHistory || insightsHistory.length === 0) return null;
+
+    const totalCalls = insightsHistory.reduce((sum: number, insight: any) => sum + (insight.callCount || 0), 0);
+    
+    // Aggregate objections across all insights (using commonObjections)
+    const objectionMap = new Map<string, { objection: string; frequency: number }>();
+    insightsHistory.forEach((insight: any) => {
+      insight.commonObjections?.forEach((obj: any) => {
+        const existing = objectionMap.get(obj.objection) || { objection: obj.objection, frequency: 0 };
+        objectionMap.set(obj.objection, {
+          objection: obj.objection,
+          frequency: existing.frequency + (obj.frequency || 1)
+        });
+      });
+    });
+    const commonObjections = Array.from(objectionMap.values())
+      .sort((a, b) => b.frequency - a.frequency)
+      .slice(0, 10);
+
+    // Aggregate patterns across all insights (using successPatterns)
+    const patternMap = new Map<string, { pattern: string; frequency: number }>();
+    insightsHistory.forEach((insight: any) => {
+      insight.successPatterns?.forEach((pat: any) => {
+        const existing = patternMap.get(pat.pattern) || { pattern: pat.pattern, frequency: 0 };
+        patternMap.set(pat.pattern, {
+          pattern: pat.pattern,
+          frequency: existing.frequency + (pat.frequency || 1)
+        });
+      });
+    });
+    const successPatterns = Array.from(patternMap.values())
+      .sort((a, b) => b.frequency - a.frequency)
+      .slice(0, 10);
+
+    // Calculate weighted average sentiment
+    let totalPositive = 0, totalNeutral = 0, totalNegative = 0;
+    let totalWeight = 0;
+    insightsHistory.forEach((insight: any) => {
+      const weight = insight.callCount || 0;
+      totalPositive += (insight.sentimentPositive || 0) * weight;
+      totalNeutral += (insight.sentimentNeutral || 0) * weight;
+      totalNegative += (insight.sentimentNegative || 0) * weight;
+      totalWeight += weight;
+    });
+
+    const avgSentiment = totalWeight > 0 ? {
+      positive: Math.round(totalPositive / totalWeight),
+      neutral: Math.round(totalNeutral / totalWeight),
+      negative: Math.round(totalNegative / totalWeight),
+      trends: `Aggregated across ${insightsHistory.length} analyses and ${totalCalls} total calls`
+    } : { positive: 0, neutral: 0, negative: 0, trends: '' };
+
+    // Aggregate recommendations
+    const recommendationMap = new Map<string, any>();
+    insightsHistory.forEach((insight: any) => {
+      insight.recommendations?.forEach((rec: any) => {
+        if (!recommendationMap.has(rec.title)) {
+          recommendationMap.set(rec.title, rec);
+        }
+      });
+    });
+    const coachingRecommendations = Array.from(recommendationMap.values()).slice(0, 10);
+
+    return {
+      callCount: totalCalls,
+      analysisCount: insightsHistory.length,
+      commonObjections,
+      successPatterns,
+      sentimentAnalysis: avgSentiment,
+      coachingRecommendations,
+    };
+  };
 
   // Use stats from API
   const queueStats = {
@@ -1916,7 +2011,14 @@ export default function CallManager() {
                           <h4 className="text-sm font-medium mb-3">Recent Analysis History</h4>
                           <div className="space-y-2">
                             {insightsHistory.slice(0, 5).map((insight: any, idx: number) => (
-                              <div key={insight.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`historical-insight-${idx}`}>
+                              <div 
+                                key={insight.id} 
+                                className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer hover-elevate ${
+                                  selectedInsightId === insight.id ? 'border-primary bg-primary/5' : ''
+                                }`}
+                                onClick={() => loadHistoricalInsight(insight)}
+                                data-testid={`historical-insight-${idx}`}
+                              >
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 text-sm">
                                     <span className="font-medium">{new Date(insight.analyzedAt).toLocaleDateString()}</span>
@@ -1931,7 +2033,7 @@ export default function CallManager() {
                                   </div>
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {insight.objections?.length || 0} objections, {insight.patterns?.length || 0} patterns
+                                  {insight.commonObjections?.length || 0} objections, {insight.successPatterns?.length || 0} patterns
                                 </div>
                               </div>
                             ))}
@@ -1942,8 +2044,35 @@ export default function CallManager() {
                   </Card>
                 )}
 
+                {/* View Mode Toggle */}
+                {insightsHistory && insightsHistory.length > 0 && persistedInsights && (
+                  <div className="flex items-center justify-between mt-6">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={insightsViewMode === 'individual' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setInsightsViewMode('individual')}
+                        data-testid="button-view-individual"
+                      >
+                        Individual Analysis
+                      </Button>
+                      <Button
+                        variant={insightsViewMode === 'all-time' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          setInsightsViewMode('all-time');
+                          setSelectedInsightId(null);
+                        }}
+                        data-testid="button-view-all-time"
+                      >
+                        All-Time Summary
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Insights Results */}
-                {persistedInsights && (
+                {persistedInsights && insightsViewMode === 'individual' && (
                   <div className="space-y-6 mt-6">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -2116,6 +2245,142 @@ export default function CallManager() {
                     )}
                   </div>
                 )}
+
+                {/* All-Time Summary View */}
+                {insightsViewMode === 'all-time' && insightsHistory && insightsHistory.length > 0 && (() => {
+                  const allTimeSummary = computeAllTimeSummary();
+                  if (!allTimeSummary) return null;
+                  
+                  return (
+                    <div className="space-y-6 mt-6">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        Aggregated across {allTimeSummary.analysisCount} analyses • {allTimeSummary.callCount} total calls
+                      </div>
+
+                      {/* Common Objections - All Time */}
+                      {allTimeSummary.commonObjections && allTimeSummary.commonObjections.length > 0 && (
+                        <Card data-testid="card-all-time-objections">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                              <MessageSquare className="h-5 w-5" />
+                              Top Objections (All Time)
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {allTimeSummary.commonObjections.map((objection: any, idx: number) => (
+                                <div key={idx} className="border rounded-lg p-4" data-testid={`all-time-objection-${idx}`}>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="font-medium">{objection.objection}</p>
+                                    <Badge variant="secondary" data-testid={`all-time-objection-frequency-${idx}`}>
+                                      {objection.frequency}x
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Success Patterns - All Time */}
+                      {allTimeSummary.successPatterns && allTimeSummary.successPatterns.length > 0 && (
+                        <Card data-testid="card-all-time-patterns">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                              <TrendingUp className="h-5 w-5 text-green-500" />
+                              Top Success Patterns (All Time)
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {allTimeSummary.successPatterns.map((pattern: any, idx: number) => (
+                                <div key={idx} className="border rounded-lg p-4" data-testid={`all-time-pattern-${idx}`}>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="font-medium">{pattern.pattern}</p>
+                                    <Badge variant="secondary" data-testid={`all-time-pattern-frequency-${idx}`}>
+                                      {pattern.frequency}x
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Sentiment Analysis - All Time */}
+                      {allTimeSummary.sentimentAnalysis && (
+                        <Card data-testid="card-all-time-sentiment">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                              <BarChart3 className="h-5 w-5" />
+                              Average Sentiment (All Time)
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-green-500">
+                                  {allTimeSummary.sentimentAnalysis.positive}%
+                                </div>
+                                <p className="text-sm text-muted-foreground">Positive</p>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-yellow-500">
+                                  {allTimeSummary.sentimentAnalysis.neutral}%
+                                </div>
+                                <p className="text-sm text-muted-foreground">Neutral</p>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-red-500">
+                                  {allTimeSummary.sentimentAnalysis.negative}%
+                                </div>
+                                <p className="text-sm text-muted-foreground">Negative</p>
+                              </div>
+                            </div>
+                            {allTimeSummary.sentimentAnalysis.trends && (
+                              <p className="text-sm text-muted-foreground border-t pt-4">
+                                {allTimeSummary.sentimentAnalysis.trends}
+                              </p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Coaching Recommendations - All Time */}
+                      {allTimeSummary.coachingRecommendations && allTimeSummary.coachingRecommendations.length > 0 && (
+                        <Card data-testid="card-all-time-recommendations">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                              <Lightbulb className="h-5 w-5 text-yellow-500" />
+                              Key Coaching Recommendations (All Time)
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {allTimeSummary.coachingRecommendations.map((rec: any, idx: number) => (
+                                <div key={idx} className="border rounded-lg p-4" data-testid={`all-time-recommendation-${idx}`}>
+                                  <div className="flex items-start justify-between gap-2 mb-2">
+                                    <p className="font-medium">{rec.title}</p>
+                                    <Badge 
+                                      variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
+                                      data-testid={`all-time-recommendation-priority-${idx}`}
+                                    >
+                                      {rec.priority}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">{rec.description}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Empty State */}
                 {!persistedInsights && !analyzeCallsMutation.isPending && (
