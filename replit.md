@@ -74,6 +74,12 @@ The application is built around a client dashboard unifying data from "Store Dat
     - **Version Comparison**: Select any two versions to view side-by-side diff
     - **Filename Immutability**: Database trigger prevents filename changes (ElevenLabs workflow dependency)
     - **Scoped Security**: Aligner assistant completely isolated from Sales Assistant with defense-in-depth deletion controls
+    - **Google Drive Backup**: Automatic backup of every KB file version to Google Drive folder:
+        * Backup folder configured in drive_folders table ("KB Backups" → folder ID 1FWnNYjs6erCqcFapfhMyxXVIHIMIqwX9)
+        * File naming format: YYYYMMDD-FILENAME-vVERSION.txt (e.g., "20251102-02 Brand Ethos-v3.txt")
+        * Triggered after every version creation: proposal approval, ElevenLabs sync, rollback
+        * Graceful failure handling (non-blocking) - logs error but doesn't fail main operation
+        * Uses system Google OAuth credentials for upload
     - **Agent-Isolated Analysis System**: Each AI agent (Holly, Michael) has separate KB files and analysis to prevent cross-contamination:
         * **KB File Types**: Two categories maintained in kb_files table:
             - General files (agent_id IS NULL): Shared knowledge like "02 Brand Ethos.txt", "03 Sales Playbook.txt" - apply to all agents
