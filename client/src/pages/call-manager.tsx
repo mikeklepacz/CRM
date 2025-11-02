@@ -628,6 +628,7 @@ export default function CallManager() {
   const [persistedInsights, setPersistedInsights] = useState<any>(null);
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
   const [insightsViewMode, setInsightsViewMode] = useState<'individual' | 'all-time'>('individual');
+  const [analysisWorkflowStatus, setAnalysisWorkflowStatus] = useState<'idle' | 'wick-coach' | 'aligner' | 'complete' | 'error'>('idle');
   
   // Analytics filters
   const [analyticsAgentFilter, setAnalyticsAgentFilter] = useState<string>("all");
@@ -985,6 +986,9 @@ export default function CallManager() {
         endDate = insightsEndDate;
       }
 
+      // Set status to 'wick-coach' when starting
+      setAnalysisWorkflowStatus('wick-coach');
+
       return await apiRequest('POST', '/api/elevenlabs/analyze-calls', {
         startDate,
         endDate,
@@ -995,14 +999,46 @@ export default function CallManager() {
     onSuccess: (data) => {
       setPersistedInsights(data);
       setSelectedInsightId(data.id || null);
+      
+      // Wick Coach complete, now Aligner is running (backend chains automatically)
+      setAnalysisWorkflowStatus('aligner');
+      
+      // Give Aligner time to complete (it runs in background on server)
+      // Poll for proposals to detect completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const proposals = await apiRequest('GET', '/api/kb/proposals?status=pending');
+          if (proposals?.proposals && proposals.proposals.length > 0) {
+            setAnalysisWorkflowStatus('complete');
+            clearInterval(pollInterval);
+            queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+            toast({
+              title: "Full Analysis Complete!",
+              description: `Wick Coach + Aligner complete. ${proposals.proposals.length} KB proposal(s) ready for review.`,
+            });
+            // Reset status after 5 seconds
+            setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
+          }
+        } catch (error) {
+          console.error('Error polling proposals:', error);
+        }
+      }, 2000);
+      
+      // Stop polling after 30 seconds max
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (analysisWorkflowStatus === 'aligner') {
+          setAnalysisWorkflowStatus('complete');
+          setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
+        }
+      }, 30000);
+      
       // Refetch historical insights after new analysis is saved
       queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/insights-history'] });
-      toast({
-        title: "Analysis Complete",
-        description: "AI insights have been generated from your call data",
-      });
     },
     onError: (error: any) => {
+      setAnalysisWorkflowStatus('error');
+      setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
       toast({
         variant: "destructive",
         title: "Analysis Failed",
@@ -1969,6 +2005,56 @@ export default function CallManager() {
                     </div>
                   )}
                 </div>
+
+                {/* Workflow Status Banner */}
+                {analysisWorkflowStatus !== 'idle' && (
+                  <Card className={`mt-4 border-2 ${
+                    analysisWorkflowStatus === 'complete' ? 'border-green-500 bg-green-50 dark:bg-green-950' :
+                    analysisWorkflowStatus === 'error' ? 'border-red-500 bg-red-50 dark:bg-red-950' :
+                    'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                  }`} data-testid="card-workflow-status">
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-3">
+                        {analysisWorkflowStatus === 'wick-coach' && (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
+                            <div>
+                              <p className="font-semibold text-blue-900 dark:text-blue-100">Running Wick Coach Analysis...</p>
+                              <p className="text-sm text-blue-700 dark:text-blue-300">Analyzing call transcripts for insights</p>
+                            </div>
+                          </>
+                        )}
+                        {analysisWorkflowStatus === 'aligner' && (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
+                            <div>
+                              <p className="font-semibold text-blue-900 dark:text-blue-100">Wick Coach Complete → Running Aligner...</p>
+                              <p className="text-sm text-blue-700 dark:text-blue-300">Analyzing Knowledge Base files for improvement proposals</p>
+                            </div>
+                          </>
+                        )}
+                        {analysisWorkflowStatus === 'complete' && (
+                          <>
+                            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                            <div>
+                              <p className="font-semibold text-green-900 dark:text-green-100">Full Analysis Complete!</p>
+                              <p className="text-sm text-green-700 dark:text-green-300">Check the KB Library tab for improvement proposals</p>
+                            </div>
+                          </>
+                        )}
+                        {analysisWorkflowStatus === 'error' && (
+                          <>
+                            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                            <div>
+                              <p className="font-semibold text-red-900 dark:text-red-100">Analysis Failed</p>
+                              <p className="text-sm text-red-700 dark:text-red-300">Check the error message above</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Historical Trends Section */}
                 {insightsHistory && insightsHistory.length > 0 && (
