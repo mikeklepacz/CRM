@@ -2284,6 +2284,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Only delete from local database if ElevenLabs deletion succeeded (or no conversationId)
+      // First delete related call_campaign_targets records (foreign key constraint)
+      await db
+        .delete(callCampaignTargets)
+        .where(eq(callCampaignTargets.callSessionId, id));
+      
+      console.log(`[DeleteCall] Deleted call_campaign_targets for call session ${id}`);
+
+      // Then delete the call session itself
       await db
         .delete(callSessions)
         .where(eq(callSessions.id, id));
