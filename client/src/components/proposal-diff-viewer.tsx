@@ -161,22 +161,66 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
     }
   }
   
-  // Detect modifications (removed + added pair) and add word-level diffs
-  for (let idx = 0; idx < allChanges.length - 1; idx++) {
+  // Group consecutive removed/added lines into blocks, then zip them into side-by-side rows
+  const zippedChanges: DiffLine[] = [];
+  let idx = 0;
+  
+  while (idx < allChanges.length) {
     const current = allChanges[idx];
-    const next = allChanges[idx + 1];
     
-    if (current.type === 'removed' && next.type === 'added') {
-      // This is a modification - add word-level diff
-      const { oldWords, newWords } = computeWordDiff(current.oldContent!, next.newContent!);
-      current.type = 'modified';
-      current.oldWordDiff = oldWords;
-      current.newWordDiff = newWords;
-      current.newContent = next.newContent;
-      current.newLineNum = next.newLineNum;
+    if (current.type === 'unchanged') {
+      // Unchanged line - just pass through
+      zippedChanges.push(current);
+      idx++;
+    } else if (current.type === 'removed') {
+      // Collect consecutive removed lines
+      const removedBlock: typeof allChanges = [];
+      while (idx < allChanges.length && allChanges[idx].type === 'removed') {
+        removedBlock.push(allChanges[idx]);
+        idx++;
+      }
       
-      // Remove the 'added' line since we merged it
-      allChanges.splice(idx + 1, 1);
+      // Collect consecutive added lines
+      const addedBlock: typeof allChanges = [];
+      while (idx < allChanges.length && allChanges[idx].type === 'added') {
+        addedBlock.push(allChanges[idx]);
+        idx++;
+      }
+      
+      // Zip them together: create rows up to max(removed.length, added.length)
+      const maxRows = Math.max(removedBlock.length, addedBlock.length);
+      for (let i = 0; i < maxRows; i++) {
+        const oldLine = removedBlock[i];
+        const newLine = addedBlock[i];
+        
+        if (oldLine && newLine) {
+          // Both sides present - create modified row with word diff
+          const { oldWords, newWords } = computeWordDiff(oldLine.oldContent!, newLine.newContent!);
+          zippedChanges.push({
+            type: 'modified',
+            oldContent: oldLine.oldContent,
+            newContent: newLine.newContent,
+            oldLineNum: oldLine.oldLineNum,
+            newLineNum: newLine.newLineNum,
+            oldWordDiff: oldWords,
+            newWordDiff: newWords,
+          });
+        } else if (oldLine) {
+          // Only removed side - show on left
+          zippedChanges.push(oldLine);
+        } else if (newLine) {
+          // Only added side - show on right
+          zippedChanges.push(newLine);
+        }
+      }
+    } else if (current.type === 'added') {
+      // Lone added line (not following a removed block)
+      zippedChanges.push(current);
+      idx++;
+    } else {
+      // Safety fallback
+      zippedChanges.push(current);
+      idx++;
     }
   }
   
@@ -186,7 +230,7 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
   let unchangedBuffer: DiffLine[] = [];
   let contextAddedAfter = 0;
   
-  for (const line of allChanges) {
+  for (const line of zippedChanges) {
     if (line.type === 'unchanged') {
       if (currentHunk && contextAddedAfter < contextLines) {
         // Add context after change
