@@ -135,6 +135,14 @@ export function ProposalDiffViewer({
     return inlineEdits.get(index) ?? edits[index]?.new ?? '';
   };
 
+  // Calculate rows needed for textarea to show full content
+  const calculateRows = (text: string): number => {
+    const lines = text.split('\n').length;
+    const minRows = 3;
+    const maxRows = 30;
+    return Math.min(Math.max(lines, minRows), maxRows);
+  };
+
   // Approve only selected edits
   const handleApproveSelected = async () => {
     if (selectedEdits.size === 0) {
@@ -430,7 +438,8 @@ export function ProposalDiffViewer({
                         <Textarea
                           value={getNewText(idx)}
                           onChange={(e) => handleInlineEdit(idx, e.target.value)}
-                          className="rounded-md bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 text-sm text-green-900 dark:text-green-100 whitespace-pre-wrap font-mono min-h-[80px] focus-visible:ring-green-500"
+                          rows={calculateRows(getNewText(idx))}
+                          className="rounded-md bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 text-sm text-green-900 dark:text-green-100 whitespace-pre-wrap font-mono focus-visible:ring-green-500"
                           data-testid={`textarea-after-${idx}`}
                         />
                       </div>
