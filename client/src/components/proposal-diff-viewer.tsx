@@ -52,19 +52,18 @@ export function ProposalDiffViewer({
   isRejecting,
 }: ProposalDiffViewerProps) {
   const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(proposedContent);
   const [localProposedContent, setLocalProposedContent] = useState(proposedContent);
   const [localHumanEdited, setLocalHumanEdited] = useState(proposal.humanEdited || false);
-  const [editFormData, setEditFormData] = useState<Edit[]>([]);
   const [selectedEdits, setSelectedEdits] = useState<Set<number>>(new Set());
+  const [inlineEdits, setInlineEdits] = useState<Map<number, string>>(new Map());
 
   // Sync local state when proposal changes
   useEffect(() => {
     setEditedContent(proposedContent);
     setLocalProposedContent(proposedContent);
     setLocalHumanEdited(proposal.humanEdited || false);
-    setIsEditing(false);
+    setInlineEdits(new Map());
   }, [proposal.id, proposedContent, proposal.humanEdited]);
 
   // Parse edits from JSON
@@ -99,8 +98,45 @@ export function ProposalDiffViewer({
     setSelectedEdits(newSelected);
   };
 
+  // Handle inline edit of "new" text
+  const handleInlineEdit = (index: number, newValue: string) => {
+    const newInlineEdits = new Map(inlineEdits);
+    // If the value matches the original, remove the edit entry
+    if (newValue === edits[index]?.new) {
+      newInlineEdits.delete(index);
+    } else {
+      newInlineEdits.set(index, newValue);
+    }
+    setInlineEdits(newInlineEdits);
+  };
+
+  // Save inline edits to backend
+  const saveInlineEdits = () => {
+    if (inlineEdits.size === 0) return;
+
+    // Apply inline edits to the edits array
+    const updatedEdits = edits.map((edit, idx) => {
+      if (inlineEdits.has(idx)) {
+        return { ...edit, new: inlineEdits.get(idx)! };
+      }
+      return edit;
+    });
+
+    const jsonContent = JSON.stringify(updatedEdits, null, 2);
+    setEditedContent(jsonContent);
+    editMutation.mutate({ 
+      content: jsonContent,
+      savedIndices: Array.from(inlineEdits.keys())
+    });
+  };
+
+  // Get the current "new" text for an edit (either inline edited or original)
+  const getNewText = (index: number): string => {
+    return inlineEdits.get(index) ?? edits[index]?.new ?? '';
+  };
+
   // Approve only selected edits
-  const handleApproveSelected = () => {
+  const handleApproveSelected = async () => {
     if (selectedEdits.size === 0) {
       toast({
         title: "No Edits Selected",
@@ -110,64 +146,84 @@ export function ProposalDiffViewer({
       return;
     }
 
-    // If all edits are selected, just approve normally
-    if (selectedEdits.size === edits.length) {
-      onApprove?.();
-      return;
+    // If there are any inline edits, save them first
+    if (inlineEdits.size > 0) {
+      // Apply inline edits to ALL cards
+      const updatedEdits = edits.map((edit, idx) => {
+        if (inlineEdits.has(idx)) {
+          return { ...edit, new: inlineEdits.get(idx)! };
+        }
+        return edit;
+      });
+
+      // Save the full proposal with all inline edits
+      const fullJson = JSON.stringify(updatedEdits, null, 2);
+      try {
+        await apiRequest('PATCH', `/api/kb/proposals/${proposal.id}`, { proposedContent: fullJson });
+        // Update local state
+        setLocalProposedContent(fullJson);
+        setLocalHumanEdited(true);
+        setInlineEdits(new Map()); // Clear all inline edits after successful save
+        queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+        
+        toast({
+          title: "Changes Saved",
+          description: "Your edits have been saved",
+        });
+      } catch (error) {
+        toast({
+          title: "Save Failed",
+          description: "Failed to save inline edits before approval",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
-    // Otherwise, save filtered edits first, then approve
-    const selectedEditsArray = edits.filter((_, idx) => selectedEdits.has(idx));
-    const filteredJson = JSON.stringify(selectedEditsArray, null, 2);
-    setEditedContent(filteredJson); // Update state before mutation
-    
-    editMutation.mutate(filteredJson, {
-      onSuccess: () => {
-        // After saving filtered edits, approve the proposal
-        onApprove?.();
-      }
-    });
-  };
-
-  // Initialize edit form data when entering edit mode
-  const handleStartEditing = () => {
-    setEditFormData(JSON.parse(JSON.stringify(edits))); // Deep copy
-    setIsEditing(true);
-  };
-
-  // Update individual edit field
-  const updateEditField = (index: number, field: keyof Edit, value: string) => {
-    const newData = [...editFormData];
-    newData[index] = { ...newData[index], [field]: value };
-    setEditFormData(newData);
-  };
-
-  // Remove an edit
-  const removeEdit = (index: number) => {
-    const newData = editFormData.filter((_, i) => i !== index);
-    setEditFormData(newData);
-  };
-
-  // Save form data as JSON
-  const handleSaveFormEdits = () => {
-    const jsonContent = JSON.stringify(editFormData, null, 2);
-    setEditedContent(jsonContent); // Update state so mutation onSuccess sees the new content
-    editMutation.mutate(jsonContent);
+    // Now proceed with approval based on selection
+    if (selectedEdits.size === edits.length) {
+      // All edits selected, approve directly
+      onApprove?.();
+    } else {
+      // Partial selection, need to filter to selected edits only
+      const selectedEditsArray = edits.filter((_, idx) => selectedEdits.has(idx));
+      const filteredJson = JSON.stringify(selectedEditsArray, null, 2);
+      setEditedContent(filteredJson);
+      
+      editMutation.mutate({ 
+        content: filteredJson,
+        savedIndices: Array.from(selectedEdits)
+      }, {
+        onSuccess: () => {
+          onApprove?.();
+        }
+      });
+    }
   };
 
   // Edit proposal mutation
   const editMutation = useMutation({
-    mutationFn: (content: string) => 
-      apiRequest('PATCH', `/api/kb/proposals/${proposal.id}`, { proposedContent: content }),
-    onSuccess: () => {
+    mutationFn: (params: { content: string; savedIndices?: number[] }) => 
+      apiRequest('PATCH', `/api/kb/proposals/${proposal.id}`, { proposedContent: params.content }),
+    onSuccess: (_data, variables) => {
       toast({
         title: "Changes Saved",
         description: "Your edits have been saved to the proposal",
       });
       setLocalProposedContent(editedContent);
       setLocalHumanEdited(true);
+      
+      // Only clear inline edits for the indices that were saved
+      if (variables.savedIndices) {
+        const newInlineEdits = new Map(inlineEdits);
+        variables.savedIndices.forEach(idx => newInlineEdits.delete(idx));
+        setInlineEdits(newInlineEdits);
+      } else {
+        // If no specific indices, clear all
+        setInlineEdits(new Map());
+      }
+      
       queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
-      setIsEditing(false);
     },
     onError: (error: any) => {
       toast({
@@ -225,151 +281,42 @@ export function ProposalDiffViewer({
           {/* Action buttons */}
           {proposal.status === 'pending' && onApprove && onReject && (
             <div className="flex gap-2">
-              {!isEditing ? (
-                <>
-                  <Button
-                    onClick={handleStartEditing}
-                    variant="outline"
-                    data-testid="button-edit"
-                  >
-                    <Edit2 className="h-4 w-4 mr-2" />
-                    Edit Changes
-                  </Button>
-                  <Button
-                    onClick={handleApproveSelected}
-                    disabled={isApproving || isRejecting || !isValidEdits || selectedEdits.size === 0}
-                    data-testid="button-approve"
-                    className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    {isApproving ? 'Approving...' : `Approve ${selectedEdits.size === edits.length ? 'All' : selectedEdits.size} ${selectedEdits.size === 1 ? 'Change' : 'Changes'}`}
-                  </Button>
-                  <Button
-                    onClick={onReject}
-                    disabled={isApproving || isRejecting}
-                    variant="destructive"
-                    data-testid="button-reject"
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    {isRejecting ? 'Rejecting...' : 'Reject'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    onClick={handleSaveFormEdits}
-                    disabled={editMutation.isPending}
-                    data-testid="button-save-edits"
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    {editMutation.isPending ? 'Saving...' : 'Save Edits'}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setIsEditing(false);
-                      setEditFormData([]);
-                    }}
-                    variant="outline"
-                    disabled={editMutation.isPending}
-                    data-testid="button-cancel-edit"
-                  >
-                    Cancel
-                  </Button>
-                </>
+              {inlineEdits.size > 0 && (
+                <Button
+                  onClick={saveInlineEdits}
+                  disabled={editMutation.isPending}
+                  variant="outline"
+                  data-testid="button-save-edits"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {editMutation.isPending ? 'Saving...' : 'Save Edits'}
+                </Button>
               )}
+              <Button
+                onClick={handleApproveSelected}
+                disabled={isApproving || isRejecting || !isValidEdits || selectedEdits.size === 0}
+                data-testid="button-approve"
+                className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
+              >
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                {isApproving ? 'Approving...' : `Approve ${selectedEdits.size === edits.length ? 'All' : selectedEdits.size} ${selectedEdits.size === 1 ? 'Change' : 'Changes'}`}
+              </Button>
+              <Button
+                onClick={onReject}
+                disabled={isApproving || isRejecting}
+                variant="destructive"
+                data-testid="button-reject"
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                {isRejecting ? 'Rejecting...' : 'Reject'}
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Edit mode */}
-      {isEditing && (
-        <ScrollArea className="max-h-[600px]">
-          <div className="space-y-4">
-            {editFormData.map((edit, idx) => (
-              <Card key={idx} data-testid={`card-edit-form-${idx}`}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Edit {idx + 1}</CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeEdit(idx)}
-                      data-testid={`button-remove-edit-${idx}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Section */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`section-${idx}`}>Section (optional)</Label>
-                    <Input
-                      id={`section-${idx}`}
-                      value={edit.section || ''}
-                      onChange={(e) => updateEditField(idx, 'section', e.target.value)}
-                      placeholder="e.g., Pricing Transparency"
-                      data-testid={`input-section-${idx}`}
-                    />
-                  </div>
-
-                  {/* Old text */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`old-${idx}`}>Old Text</Label>
-                    <Textarea
-                      id={`old-${idx}`}
-                      value={edit.old}
-                      onChange={(e) => updateEditField(idx, 'old', e.target.value)}
-                      className="min-h-[80px]"
-                      data-testid={`textarea-old-${idx}`}
-                    />
-                  </div>
-
-                  {/* New text */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`new-${idx}`}>New Text</Label>
-                    <Textarea
-                      id={`new-${idx}`}
-                      value={edit.new}
-                      onChange={(e) => updateEditField(idx, 'new', e.target.value)}
-                      className="min-h-[80px]"
-                      data-testid={`textarea-new-${idx}`}
-                    />
-                  </div>
-
-                  {/* Reason */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`reason-${idx}`}>Reason</Label>
-                    <Textarea
-                      id={`reason-${idx}`}
-                      value={edit.reason}
-                      onChange={(e) => updateEditField(idx, 'reason', e.target.value)}
-                      className="min-h-[60px]"
-                      data-testid={`textarea-reason-${idx}`}
-                    />
-                  </div>
-
-                  {/* Evidence */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`evidence-${idx}`}>Evidence</Label>
-                    <Textarea
-                      id={`evidence-${idx}`}
-                      value={edit.evidence}
-                      onChange={(e) => updateEditField(idx, 'evidence', e.target.value)}
-                      className="min-h-[60px]"
-                      data-testid={`textarea-evidence-${idx}`}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
-
       {/* Individual edits view */}
-      {!isEditing && (
+      {(
         <>
           {!isValidEdits ? (
             <Card data-testid="card-error">
@@ -474,15 +421,18 @@ export function ProposalDiffViewer({
                         </div>
                       </div>
 
-                      {/* After */}
+                      {/* After (Editable) */}
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <div className="h-1 w-1 rounded-full bg-green-500"></div>
-                          <p className="text-sm font-medium text-green-900 dark:text-green-100">After</p>
+                          <p className="text-sm font-medium text-green-900 dark:text-green-100">After {inlineEdits.has(idx) && <span className="text-xs">(edited)</span>}</p>
                         </div>
-                        <div className="rounded-md bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 p-3" data-testid={`text-after-${idx}`}>
-                          <p className="text-sm text-green-900 dark:text-green-100 whitespace-pre-wrap font-mono">{edit.new}</p>
-                        </div>
+                        <Textarea
+                          value={getNewText(idx)}
+                          onChange={(e) => handleInlineEdit(idx, e.target.value)}
+                          className="rounded-md bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 text-sm text-green-900 dark:text-green-100 whitespace-pre-wrap font-mono min-h-[80px] focus-visible:ring-green-500"
+                          data-testid={`textarea-after-${idx}`}
+                        />
                       </div>
                     </div>
                   </CardContent>
