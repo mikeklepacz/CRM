@@ -307,72 +307,72 @@ export function ProposalDiffViewer({
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="h-[600px] w-full rounded-md border">
-            <div className="font-mono text-xs min-w-full">
-              {diffLines.map((line, idx) => (
-                <div
-                  key={idx}
-                  className={`flex border-b hover:bg-accent/5 min-w-full ${
-                    line.type === 'added'
-                      ? 'bg-green-50 dark:bg-green-950/20'
-                      : line.type === 'removed'
-                      ? 'bg-red-50 dark:bg-red-950/20'
-                      : ''
-                  }`}
-                  data-testid={`diff-line-${idx}`}
-                >
-                  {/* Line numbers and content - always show both sides */}
-                  <div className="grid grid-cols-2 gap-0 w-full min-w-full">
-                    {/* Left side (original content) - ALWAYS visible */}
-                    <div className="flex border-r min-w-0">
-                      <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
-                        {line.oldLineNum || ''}
-                      </div>
-                      <div className={`flex-1 px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words ${
-                        line.type === 'removed' 
-                          ? 'bg-red-100 dark:bg-red-900/10' 
-                          : ''
-                      }`}>
-                        {line.type === 'removed' && line.oldContent && (
-                          <span className="text-red-600 dark:text-red-400 mr-1">-</span>
-                        )}
-                        <span className={
-                          line.type === 'removed'
-                            ? 'text-red-900 dark:text-red-300' 
+            <div className="h-[600px] w-full rounded-md border overflow-auto">
+              <div className="font-mono text-xs" style={{ minWidth: '800px' }}>
+                {diffLines.map((line, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex border-b hover:bg-accent/5 ${
+                      line.type === 'added'
+                        ? 'bg-green-50 dark:bg-green-950/20'
+                        : line.type === 'removed'
+                        ? 'bg-red-50 dark:bg-red-950/20'
+                        : ''
+                    }`}
+                    data-testid={`diff-line-${idx}`}
+                  >
+                    {/* Line numbers and content - always show both sides */}
+                    <div className="grid grid-cols-2 w-full" style={{ minWidth: '800px' }}>
+                      {/* Left side (original content) - ALWAYS visible */}
+                      <div className="flex border-r" style={{ minWidth: '400px' }}>
+                        <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
+                          {line.oldLineNum || ''}
+                        </div>
+                        <div className={`flex-1 px-2 py-1 whitespace-pre-wrap break-words ${
+                          line.type === 'removed' 
+                            ? 'bg-red-100 dark:bg-red-900/10' 
                             : ''
-                        }>
-                          {line.oldContent || '\u00A0'}
-                        </span>
+                        }`}>
+                          {line.type === 'removed' && line.oldContent && (
+                            <span className="text-red-600 dark:text-red-400 mr-1">-</span>
+                          )}
+                          <span className={
+                            line.type === 'removed'
+                              ? 'text-red-900 dark:text-red-300' 
+                              : ''
+                          }>
+                            {line.oldContent || '\u00A0'}
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Right side (proposed content) - ALWAYS visible */}
-                    <div className="flex min-w-0">
-                      <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
-                        {line.newLineNum || ''}
-                      </div>
-                      <div className={`flex-1 px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words ${
-                        line.type === 'added'
-                          ? 'bg-green-100 dark:bg-green-900/10' 
-                          : ''
-                      }`}>
-                        {line.type === 'added' && line.newContent && (
-                          <span className="text-green-600 dark:text-green-400 mr-1">+</span>
-                        )}
-                        <span className={
+                      {/* Right side (proposed content) - ALWAYS visible */}
+                      <div className="flex" style={{ minWidth: '400px' }}>
+                        <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
+                          {line.newLineNum || ''}
+                        </div>
+                        <div className={`flex-1 px-2 py-1 whitespace-pre-wrap break-words ${
                           line.type === 'added'
-                            ? 'text-green-900 dark:text-green-300' 
+                            ? 'bg-green-100 dark:bg-green-900/10' 
                             : ''
-                        }>
-                          {line.newContent || '\u00A0'}
-                        </span>
+                        }`}>
+                          {line.type === 'added' && line.newContent && (
+                            <span className="text-green-600 dark:text-green-400 mr-1">+</span>
+                          )}
+                          <span className={
+                            line.type === 'added'
+                              ? 'text-green-900 dark:text-green-300' 
+                              : ''
+                          }>
+                            {line.newContent || '\u00A0'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
               </div>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       )}
