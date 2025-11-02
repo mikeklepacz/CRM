@@ -124,6 +124,27 @@ export function AlignerManagement() {
     },
   });
 
+  // Sync KB to OpenAI mutation
+  const syncKbMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/aligner/sync-kb");
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Sync Complete",
+        description: `Successfully synced ${data.synced} KB files to OpenAI. ${data.failed > 0 ? `${data.failed} failed.` : ''}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to sync KB files",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Run analysis mutation
   const runAnalysisMutation = useMutation({
     mutationFn: async (agentId: string) => {
@@ -301,17 +322,47 @@ export function AlignerManagement() {
                 Reference materials the Aligner uses when analyzing calls and proposing changes
               </CardDescription>
             </div>
-            <Button 
-              onClick={() => setUploadDialogOpen(true)}
-              disabled={!settings?.hasApiKey}
-              data-testid="button-upload-aligner-file"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload File
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={() => syncKbMutation.mutate()}
+                disabled={!settings?.hasApiKey || !aligner?.assistantId || syncKbMutation.isPending}
+                variant="outline"
+                data-testid="button-sync-kb-to-openai"
+              >
+                {syncKbMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Sync to OpenAI
+                  </>
+                )}
+              </Button>
+              <Button 
+                onClick={() => setUploadDialogOpen(true)}
+                disabled={!settings?.hasApiKey}
+                data-testid="button-upload-aligner-file"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload File
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {aligner?.assistantId && (
+            <div className="flex items-center gap-2 p-3 mb-4 border rounded-md bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+              <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+              <div className="text-sm text-blue-900 dark:text-blue-100">
+                <strong>Connected to OpenAI:</strong> Assistant ID {aligner.assistantId.substring(0, 20)}...
+                <br />
+                Click "Sync to OpenAI" to upload KB files to this assistant.
+              </div>
+            </div>
+          )}
           {!settings?.hasApiKey ? (
             <div className="flex items-center gap-2 p-4 border rounded-md bg-muted/50">
               <AlertCircle className="h-5 w-5 text-amber-600" />

@@ -3549,6 +3549,25 @@ IMPORTANT:
         return res.status(404).json({ error: 'Aligner assistant not found' });
       }
 
+      if (!assistant.assistantId) {
+        return res.status(400).json({ error: 'Aligner assistant ID not configured. Please set the assistant ID first.' });
+      }
+
+      // Get OpenAI settings
+      const openaiSettings = await storage.getOpenAISettings();
+      if (!openaiSettings?.apiKey) {
+        return res.status(400).json({ error: 'OpenAI API key not configured' });
+      }
+
+      // Update on OpenAI
+      console.log('[Aligner] Syncing instructions to OpenAI assistant:', assistant.assistantId);
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+      await openai.beta.assistants.update(assistant.assistantId, {
+        instructions: instructions,
+      });
+      console.log('[Aligner] Instructions synced to OpenAI successfully');
+
+      // Update in local database
       const updated = await storage.updateAssistant(assistant.id, { instructions });
       res.json({ assistant: updated });
     } catch (error: any) {
@@ -3606,6 +3625,110 @@ IMPORTANT:
     } catch (error: any) {
       console.error('[Aligner] Error deleting file:', error);
       res.status(500).json({ error: error.message || 'Failed to delete file' });
+    }
+  });
+
+  // Sync KB files to Aligner assistant on OpenAI
+  app.post('/api/aligner/sync-kb', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      console.log('[Aligner Sync] Starting KB files sync to OpenAI...');
+      
+      // Get Aligner assistant
+      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      if (!alignerAssistant) {
+        return res.status(404).json({ error: 'Aligner assistant not found' });
+      }
+
+      if (!alignerAssistant.assistantId) {
+        return res.status(400).json({ error: 'Aligner assistant ID not configured. Please set the assistant ID first.' });
+      }
+
+      // Get OpenAI settings
+      const openaiSettings = await storage.getOpenAISettings();
+      if (!openaiSettings?.apiKey) {
+        return res.status(400).json({ error: 'OpenAI API key not configured' });
+      }
+
+      // Get all KB files
+      const kbFiles = await storage.getAllKbFiles();
+      console.log(`[Aligner Sync] Found ${kbFiles.length} KB files to sync`);
+
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+      const syncResults = [];
+      const errors = [];
+
+      // Upload each KB file to OpenAI
+      for (const kbFile of kbFiles) {
+        try {
+          console.log(`[Aligner Sync] Processing file: ${kbFile.filename}`);
+          
+          // Get latest version content
+          const versions = await storage.getKbFileVersions(kbFile.id);
+          if (versions.length === 0) {
+            console.warn(`[Aligner Sync] No versions found for ${kbFile.filename}, skipping`);
+            continue;
+          }
+
+          const latestVersion = versions[0];
+          
+          // Create a temporary file with the content
+          const fs = await import('fs/promises');
+          const path = await import('path');
+          const os = await import('os');
+          
+          const tmpDir = os.tmpdir();
+          const tmpFilePath = path.join(tmpDir, `aligner-${Date.now()}-${kbFile.filename}`);
+          
+          await fs.writeFile(tmpFilePath, latestVersion.content, 'utf-8');
+          console.log(`[Aligner Sync] Temp file created: ${tmpFilePath}`);
+
+          // Upload to OpenAI
+          const fileStream = await fs.open(tmpFilePath, 'r');
+          const uploadedFile = await openai.files.create({
+            file: fileStream.createReadStream(),
+            purpose: 'assistants',
+          });
+          
+          await fileStream.close();
+          await fs.unlink(tmpFilePath);
+          
+          console.log(`[Aligner Sync] Uploaded ${kbFile.filename} to OpenAI: ${uploadedFile.id}`);
+
+          // Attach file to assistant
+          await openai.beta.assistants.files.create(alignerAssistant.assistantId, {
+            file_id: uploadedFile.id,
+          });
+          
+          console.log(`[Aligner Sync] Attached ${kbFile.filename} to Aligner assistant`);
+
+          syncResults.push({
+            filename: kbFile.filename,
+            openaiFileId: uploadedFile.id,
+            success: true,
+          });
+
+        } catch (error: any) {
+          console.error(`[Aligner Sync] Error syncing ${kbFile.filename}:`, error);
+          errors.push({
+            filename: kbFile.filename,
+            error: error.message,
+          });
+        }
+      }
+
+      console.log(`[Aligner Sync] Sync complete: ${syncResults.length} succeeded, ${errors.length} failed`);
+
+      res.json({
+        success: true,
+        synced: syncResults.length,
+        failed: errors.length,
+        results: syncResults,
+        errors: errors,
+      });
+
+    } catch (error: any) {
+      console.error('[Aligner Sync] Error syncing KB files:', error);
+      res.status(500).json({ error: error.message || 'Failed to sync KB files' });
     }
   });
 
