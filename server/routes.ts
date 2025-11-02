@@ -2735,8 +2735,8 @@ Focus on:
         
         const savedInsight = await storage.saveAiInsight(insightRecord, objectionsRecords, patternsRecords, recommendationsRecords);
         
-        // CHAIN TO ALIGNER: After WIC Coach completes, automatically trigger KB analysis
-        console.log('[AI Insights → Aligner] WIC Coach analysis complete, now chaining to Aligner...');
+        // CHAIN TO ALIGNER: After Wick Coach completes, automatically trigger KB analysis
+        console.log('[AI Insights → Aligner] Wick Coach analysis complete, now chaining to Aligner...');
         
         try {
           // Get Aligner assistant
@@ -2746,7 +2746,8 @@ Focus on:
             console.log('[AI Insights → Aligner] Aligner assistant not configured, skipping KB analysis');
           } else {
             // Trigger KB analysis by making an internal request to the existing endpoint
-            console.log(`[AI Insights → Aligner] Triggering KB analysis for agent ${agentId} with insight ${savedInsight.id}`);
+            const agentLabel = agentId === 'all' ? 'all agents' : `agent ${agentId}`;
+            console.log(`[AI Insights → Aligner] Triggering KB analysis for ${agentLabel} with insight ${savedInsight.id}`);
             
             // Make internal API call to the KB analysis endpoint
             await axios.post(`http://localhost:${process.env.PORT || 5000}/api/kb/analyze-and-propose`, {
@@ -3009,7 +3010,9 @@ Focus on:
         return res.status(400).json({ error: 'agentId is required. Please select an AI agent to analyze.' });
       }
 
-      console.log(`[KB Analyze] Agent ID: ${agentId}`);
+      const isAllAgents = agentId === 'all';
+      const agentLabel = isAllAgents ? 'all agents' : `agent ${agentId}`;
+      console.log(`[KB Analyze] Analyzing for ${agentLabel}`);
 
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner');
@@ -3017,54 +3020,64 @@ Focus on:
         return res.status(400).json({ error: 'Aligner assistant not configured. Please set up the Aligner assistant first.' });
       }
 
-      // Get AI insight (optional - used for WIC coach analysis context)
+      // Get AI insight (optional - used for Wick Coach analysis context)
       let insight = null;
       if (insightId) {
         insight = await storage.getAiInsightById(insightId);
         if (!insight) {
-          console.warn(`[KB Analyze] Insight ${insightId} not found, proceeding without WIC coach analysis`);
+          console.warn(`[KB Analyze] Insight ${insightId} not found, proceeding without Wick Coach analysis`);
         }
-      } else {
-        // Try to get latest insight for this agent
+      } else if (!isAllAgents) {
+        // Try to get latest insight for this specific agent
         const insights = await storage.getAiInsightsHistory({ agentId, limit: 1 });
         if (insights.length > 0) {
           insight = insights[0];
-          console.log(`[KB Analyze] Using latest WIC coach insight from ${insight.dateRangeStart}`);
+          console.log(`[KB Analyze] Using latest Wick Coach insight from ${insight.dateRangeStart}`);
         } else {
-          console.log('[KB Analyze] No WIC coach insights available, will analyze raw transcripts only');
+          console.log('[KB Analyze] No Wick Coach insights available, will analyze raw transcripts only');
         }
+      } else {
+        console.log('[KB Analyze] Analyzing for all agents - will use raw transcripts only (no agent-specific insights)');
       }
 
-      // Get KB files for this specific agent AND general files (agent_id IS NULL or undefined)
+      // Get KB files based on agent selection
       const allKbFiles = await storage.getAllKbFiles();
-      const kbFiles = allKbFiles.filter(file => 
-        file.agentId === agentId || file.agentId == null // == null catches both null and undefined
-      );
+      const kbFiles = isAllAgents
+        ? allKbFiles.filter(file => file.agentId == null) // Only general files for "all agents"
+        : allKbFiles.filter(file => file.agentId === agentId || file.agentId == null); // Specific + general for single agent
       
       if (kbFiles.length === 0) {
         return res.status(404).json({ 
-          error: `No KB files found for this agent. Please assign KB files to this agent or upload general files.` 
+          error: isAllAgents
+            ? 'No general KB files found. Please upload general files that apply to all agents.'
+            : 'No KB files found for this agent. Please assign KB files to this agent or upload general files.'
         });
       }
 
-      const agentSpecificCount = kbFiles.filter(f => f.agentId === agentId).length;
-      const generalCount = kbFiles.filter(f => f.agentId == null).length; // == null catches both null and undefined
-      console.log(`[KB Analyze] Found ${kbFiles.length} KB files for agent ${agentId} (${agentSpecificCount} agent-specific, ${generalCount} general)`);
+      if (isAllAgents) {
+        console.log(`[KB Analyze] Found ${kbFiles.length} general KB files (shared across all agents)`);
+      } else {
+        const agentSpecificCount = kbFiles.filter(f => f.agentId === agentId).length;
+        const generalCount = kbFiles.filter(f => f.agentId == null).length;
+        console.log(`[KB Analyze] Found ${kbFiles.length} KB files for ${agentLabel} (${agentSpecificCount} agent-specific, ${generalCount} general)`);
+      }
 
-      // Fetch UNANALYZED call transcripts for this agent (no truncation!)
+      // Fetch UNANALYZED call transcripts (no truncation!)
       const callsData = await storage.getCallsWithTranscripts({
-        agentId,
+        agentId: isAllAgents ? undefined : agentId, // undefined = all agents
         startDate: startDate || (insight?.dateRangeStart),
         endDate: endDate || (insight?.dateRangeEnd),
         onlyUnanalyzed: true, // Only get calls that haven't been analyzed yet
         limit: 1000, // Large limit - we'll batch if needed
       });
 
-      console.log(`[KB Analyze] Found ${callsData.length} unanalyzed calls for agent`);
+      console.log(`[KB Analyze] Found ${callsData.length} unanalyzed calls for ${agentLabel}`);
 
       if (callsData.length === 0) {
         return res.status(404).json({ 
-          error: 'No unanalyzed calls found for this agent in the specified date range.' 
+          error: isAllAgents
+            ? 'No unanalyzed calls found across all agents in the specified date range.'
+            : 'No unanalyzed calls found for this agent in the specified date range.'
         });
       }
 
@@ -3102,7 +3115,7 @@ Focus on:
         .map(file => `\n### ${file.filename}\n\`\`\`\n${file.currentContent || '(empty)'}\n\`\`\``)
         .join('\n');
 
-      // Build WIC coach analysis section (optional)
+      // Build Wick Coach analysis section (optional)
       let wickCoachSection = '';
       if (insight) {
         const objections = insight.objections
@@ -3121,7 +3134,7 @@ Focus on:
 
 ---
 
-## WIC COACH ANALYSIS:
+## WICK COACH ANALYSIS:
 **Date Range:** ${insight.dateRangeStart} to ${insight.dateRangeEnd}
 **Total Calls:** ${insight.callCount}
 **Sentiment:** ${insight.sentimentPositive} positive, ${insight.sentimentNeutral} neutral, ${insight.sentimentNegative} negative
@@ -3132,13 +3145,13 @@ ${objections || '(none)'}
 **Success Patterns Identified:**
 ${patterns || '(none)'}
 
-**WIC Coach Recommendations:**
+**Wick Coach Recommendations:**
 ${recommendations || '(none)'}`;
       }
 
       const analysisPrompt = `You are the Aligner assistant analyzing call performance data to improve the sales knowledge base.${insight ? ' You have TWO sources of information:' : ' You have access to:'}
 
-1. **RAW CALL TRANSCRIPTS** - These are the actual conversations between the AI agent and prospects${insight ? '\n2. **WIC COACH ANALYSIS** - Another AI (the "WIC coach") has already analyzed these calls and provided recommendations' : ''}
+1. **RAW CALL TRANSCRIPTS** - These are the actual conversations between the AI agent and prospects${insight ? '\n2. **WICK COACH ANALYSIS** - Another AI (the "Wick Coach") has already analyzed these calls and provided recommendations' : ''}
 
 ## YOUR ${insight ? 'DUAL-PERSPECTIVE ' : ''}MISSION:
 
@@ -3148,7 +3161,7 @@ ${recommendations || '(none)'}`;
 - What information seems to confuse prospects?
 - What topics lead to successful outcomes?
 
-${insight ? '**Second, review the WIC coach\'s analysis** to see if it caught things you missed or has different insights.\n\n**Then, synthesize BOTH perspectives** to propose KB improvements that address:\n- Issues YOU identified from transcripts\n- Valid points from the WIC coach\'s recommendations\n- Any contradictions between the two analyses (explain your reasoning)' : '**Then, propose KB improvements** based on your analysis of the transcripts.'}
+${insight ? '**Second, review the Wick Coach\'s analysis** to see if it caught things you missed or has different insights.\n\n**Then, synthesize BOTH perspectives** to propose KB improvements that address:\n- Issues YOU identified from transcripts\n- Valid points from the Wick Coach\'s recommendations\n- Any contradictions between the two analyses (explain your reasoning)' : '**Then, propose KB improvements** based on your analysis of the transcripts.'}
 
 ---
 
@@ -3164,11 +3177,11 @@ ${kbContext}
 
 ## YOUR TASK:
 
-Propose specific improvements to the knowledge base files based on ${insight ? 'BOTH your transcript analysis AND the WIC coach\'s insights' : 'your analysis of the transcripts'}. For each proposed change:
+Propose specific improvements to the knowledge base files based on ${insight ? 'BOTH your transcript analysis AND the Wick Coach\'s insights' : 'your analysis of the transcripts'}. For each proposed change:
 
 1. Identify which file(s) should be updated
 2. Explain the rationale, citing:
-   - Specific examples from transcripts${insight ? '\n   - Relevant WIC coach recommendations' : ''}
+   - Specific examples from transcripts${insight ? '\n   - Relevant Wick Coach recommendations' : ''}
 3. Provide the complete updated content for the file
 
 Respond in this exact JSON format:
@@ -3176,15 +3189,15 @@ Respond in this exact JSON format:
   "proposals": [
     {
       "filename": "exact-filename.txt",
-      "rationale": "Detailed explanation citing transcript evidence${insight ? ' and WIC coach insights' : ''}",
+      "rationale": "Detailed explanation citing transcript evidence${insight ? ' and Wick Coach insights' : ''}",
       "proposedContent": "Complete updated file content here"
     }
   ]
 }
 
 IMPORTANT: 
-- Only propose changes supported by actual evidence from transcripts${insight ? ' or WIC analysis' : ''}
-- Focus on files that belong to this specific agent (${kbFiles.map(f => f.filename).join(', ')})${insight ? '\n- If transcripts reveal issues the WIC coach missed, propose those fixes\n- If you disagree with a WIC recommendation based on transcript evidence, explain why in rationale' : ''}
+- Only propose changes supported by actual evidence from transcripts${insight ? ' or Wick Coach analysis' : ''}
+- Focus on ${isAllAgents ? 'general KB files (shared across all agents)' : `files that belong to this specific agent (${kbFiles.map(f => f.filename).join(', ')})`}${insight ? '\n- If transcripts reveal issues the Wick Coach missed, propose those fixes\n- If you disagree with a Wick Coach recommendation based on transcript evidence, explain why in rationale' : ''}
 - Do not make superficial changes just for the sake of it`;
 
       console.log('[KB Analyze] Calling Aligner assistant...');

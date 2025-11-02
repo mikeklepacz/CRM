@@ -2215,7 +2215,7 @@ export default function CallManager() {
             <AlertDialogDescription className="space-y-3 pt-2">
               <p>This will permanently delete:</p>
               <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>All AI Insights (WIC Coach analysis)</li>
+                <li>All AI Insights (Wick Coach analysis)</li>
                 <li>All KB Change Proposals (Aligner suggestions)</li>
                 <li>All objections, patterns, and recommendations</li>
                 <li>Reset all call timestamps (allows re-analysis)</li>
