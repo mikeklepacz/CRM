@@ -152,3 +152,42 @@ export async function getFolderInfo(folderId: string) {
     throw new Error(`Failed to get folder info: ${error.message}`);
   }
 }
+
+export async function backupKbFileToDrive(
+  filename: string,
+  versionNumber: number,
+  content: string
+) {
+  try {
+    // Get KB Backups folder from database
+    const backupFolder = await storage.getDriveFolderByName('KB Backups');
+    if (!backupFolder) {
+      console.warn('[KB Backup] KB Backups folder not configured, skipping Drive backup');
+      return null;
+    }
+
+    // Format: YYYYMMDD-FILENAME-vVERSION.txt
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+    const baseFilename = filename.replace(/\.txt$/, ''); // Remove .txt extension if present
+    const backupFilename = `${dateStr}-${baseFilename}-v${versionNumber}.txt`;
+
+    console.log(`[KB Backup] Uploading ${backupFilename} to Drive folder ${backupFolder.folderId}`);
+
+    // Upload to Google Drive
+    const fileBuffer = Buffer.from(content, 'utf-8');
+    const result = await uploadFileToDrive(
+      backupFolder.folderId,
+      backupFilename,
+      'text/plain',
+      fileBuffer
+    );
+
+    console.log(`[KB Backup] Successfully uploaded to Drive: ${result.webViewLink}`);
+    return result;
+  } catch (error: any) {
+    console.error('[KB Backup] Failed to backup to Drive:', error);
+    // Don't throw - backup failure shouldn't break the main operation
+    return null;
+  }
+}

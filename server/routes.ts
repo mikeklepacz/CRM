@@ -2689,6 +2689,13 @@ Focus on:
               createdBy: 'system',
             });
 
+            // Backup to Google Drive
+            await googleDrive.backupKbFileToDrive(
+              existing.filename,
+              newVersionNumber,
+              newContent
+            );
+
             // Update existing file with new content and sync version
             await storage.updateKbFile(existing.id, {
               currentContent: newContent,
@@ -2722,6 +2729,13 @@ Focus on:
             source: 'elevenlabs_sync',
             createdBy: 'system',
           });
+
+          // Backup to Google Drive
+          await googleDrive.backupKbFileToDrive(
+            newFile.filename,
+            1,
+            doc.content || ''
+          );
 
           // Update file with current_sync_version
           await storage.updateKbFile(newFile.id, {
@@ -3214,6 +3228,13 @@ IMPORTANT:
         createdBy: userId,
       });
 
+      // Backup to Google Drive
+      await googleDrive.backupKbFileToDrive(
+        file.filename,
+        newVersionNumber,
+        proposal.proposedContent
+      );
+
       // Update file with new content
       await storage.updateKbFile(file.id, {
         currentContent: proposal.proposedContent,
@@ -3286,6 +3307,13 @@ IMPORTANT:
         source: 'manual_edit',
         createdBy: userId,
       });
+
+      // Backup to Google Drive
+      await googleDrive.backupKbFileToDrive(
+        file.filename,
+        newVersionNumber,
+        targetVersion.content
+      );
 
       // Update file
       await storage.updateKbFile(id, {
