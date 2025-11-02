@@ -16,10 +16,19 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   // Fetch user preferences to get viewAsAgent state
   const { data: userPreferences } = useQuery<{
@@ -30,6 +39,7 @@ export default function AdminDashboard() {
   });
 
   const [viewAsAgent, setViewAsAgent] = useState(userPreferences?.viewAsAgent || false);
+  const [activeTab, setActiveTab] = useState("users");
 
   // Sync state when preferences load
   useEffect(() => {
@@ -93,19 +103,41 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <Tabs defaultValue="users" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
-          <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
-          <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
-          <TabsTrigger value="webhooks" data-testid="tab-webhooks">Webhooks</TabsTrigger>
-          <TabsTrigger value="voice" data-testid="tab-voice">Voice</TabsTrigger>
-          <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
-          <TabsTrigger value="aligner" data-testid="tab-aligner">Aligner</TabsTrigger>
-          <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
-          <TabsTrigger value="assets" data-testid="tab-assets">Assets</TabsTrigger>
-          <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        {/* Mobile: Dropdown */}
+        {isMobile ? (
+          <Select value={activeTab} onValueChange={setActiveTab}>
+            <SelectTrigger className="w-full" data-testid="mobile-tab-selector">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="users" data-testid="tab-users">Users</SelectItem>
+              <SelectItem value="tickets" data-testid="tab-tickets">Support Tickets</SelectItem>
+              <SelectItem value="reports" data-testid="tab-reports">Reports</SelectItem>
+              <SelectItem value="webhooks" data-testid="tab-webhooks">Webhooks</SelectItem>
+              <SelectItem value="voice" data-testid="tab-voice">Voice</SelectItem>
+              <SelectItem value="openai" data-testid="tab-openai">OpenAI</SelectItem>
+              <SelectItem value="aligner" data-testid="tab-aligner">Aligner</SelectItem>
+              <SelectItem value="sheets" data-testid="tab-sheets">Google Sheets</SelectItem>
+              <SelectItem value="assets" data-testid="tab-assets">Assets</SelectItem>
+              <SelectItem value="sync" data-testid="tab-sync">WooCommerce Sync</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          /* Desktop/Tablet: Tabs with wrapping */
+          <TabsList className="flex flex-wrap h-auto gap-1">
+            <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
+            <TabsTrigger value="tickets" data-testid="tab-tickets">Support Tickets</TabsTrigger>
+            <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
+            <TabsTrigger value="webhooks" data-testid="tab-webhooks">Webhooks</TabsTrigger>
+            <TabsTrigger value="voice" data-testid="tab-voice">Voice</TabsTrigger>
+            <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
+            <TabsTrigger value="aligner" data-testid="tab-aligner">Aligner</TabsTrigger>
+            <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
+            <TabsTrigger value="assets" data-testid="tab-assets">Assets</TabsTrigger>
+            <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
+          </TabsList>
+        )}
 
         <TabsContent value="users">
           <UserManagement />
