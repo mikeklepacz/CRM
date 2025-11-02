@@ -683,6 +683,33 @@ export default function CallManager() {
   const storeSheetId = sheets.find(s => s.sheetPurpose === 'Store Database')?.id;
   const trackerSheetId = sheets.find(s => s.sheetPurpose === 'commissions')?.id;
 
+  // Fetch user preferences for auto-trigger settings
+  const { data: preferences } = useQuery<{ autoKbAnalysis?: boolean; kbAnalysisThreshold?: number }>({
+    queryKey: ['/api/preferences'],
+    enabled: user?.role === 'admin',
+  });
+
+  // Mutation to update preferences
+  const updatePreferencesMutation = useMutation({
+    mutationFn: async (updates: { autoKbAnalysis?: boolean; kbAnalysisThreshold?: number }) => {
+      return await apiRequest('PATCH', '/api/preferences', updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/preferences'] });
+      toast({
+        title: 'Settings Updated',
+        description: 'Auto-trigger preferences saved successfully',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to update settings',
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Get status options and colors from custom theme hook
   const { statusOptions, statusColors, currentColors } = useCustomTheme();
   const [contextUpdateTrigger, setContextUpdateTrigger] = useState(0);
@@ -1789,7 +1816,7 @@ export default function CallManager() {
                         id="auto-kb-analysis"
                         checked={preferences?.autoKbAnalysis || false}
                         onCheckedChange={(checked) => {
-                          updatePreferencesMutation.mutate({ autoKbAnalysis: checked });
+                          updatePreferencesMutation.mutate({ autoKbAnalysis: checked === true });
                         }}
                         data-testid="checkbox-auto-kb-analysis"
                       />
