@@ -162,10 +162,10 @@ function KBLibraryTab() {
 
   // Batch upload mutation
   const uploadMutation = useMutation({
-    mutationFn: async (files: FileList) => {
+    mutationFn: async (files: File[]) => {
       console.log('[KB Upload] Preparing to upload', files.length, 'files');
       const formData = new FormData();
-      Array.from(files).forEach((file, idx) => {
+      files.forEach((file, idx) => {
         console.log(`[KB Upload] Adding file ${idx + 1}:`, file.name, file.size, 'bytes');
         formData.append('files', file);
       });
@@ -211,7 +211,9 @@ function KBLibraryTab() {
     console.log('[KB Upload] Files selected:', files?.length);
     if (files && files.length > 0) {
       setUploadProgress({ current: 0, total: files.length });
-      uploadMutation.mutate(files);
+      // Convert FileList to Array before passing to mutation
+      const filesArray = Array.from(files);
+      uploadMutation.mutate(filesArray);
     } else {
       console.log('[KB Upload] No files selected');
     }
