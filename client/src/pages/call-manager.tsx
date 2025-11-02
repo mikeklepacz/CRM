@@ -163,23 +163,30 @@ function KBLibraryTab() {
   // Batch upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (files: FileList) => {
+      console.log('[KB Upload] Preparing to upload', files.length, 'files');
       const formData = new FormData();
-      Array.from(files).forEach(file => {
+      Array.from(files).forEach((file, idx) => {
+        console.log(`[KB Upload] Adding file ${idx + 1}:`, file.name, file.size, 'bytes');
         formData.append('files', file);
       });
 
+      console.log('[KB Upload] Sending request...');
       const response = await fetch('/api/kb/upload-batch', {
         method: 'POST',
         body: formData,
         credentials: 'include',
       });
 
+      console.log('[KB Upload] Response status:', response.status);
       if (!response.ok) {
         const error = await response.json();
+        console.error('[KB Upload] Error:', error);
         throw new Error(error.error || 'Upload failed');
       }
 
-      return response.json();
+      const result = await response.json();
+      console.log('[KB Upload] Success:', result);
+      return result;
     },
     onSuccess: (data: any) => {
       toast({
@@ -201,9 +208,12 @@ function KBLibraryTab() {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
+    console.log('[KB Upload] Files selected:', files?.length);
     if (files && files.length > 0) {
       setUploadProgress({ current: 0, total: files.length });
       uploadMutation.mutate(files);
+    } else {
+      console.log('[KB Upload] No files selected');
     }
     // Reset input so same files can be selected again
     e.target.value = '';
@@ -332,31 +342,26 @@ function KBLibraryTab() {
                 multiple
                 accept=".txt"
                 onChange={handleFileSelect}
-                disabled={uploadMutation.isPending}
                 className="hidden"
                 data-testid="input-upload-files"
               />
-              <label htmlFor="kb-file-upload">
-                <Button
-                  disabled={uploadMutation.isPending}
-                  data-testid="button-upload-kb"
-                  asChild
-                >
-                  <span>
-                    {uploadMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Files
-                      </>
-                    )}
-                  </span>
-                </Button>
-              </label>
+              <Button
+                onClick={() => document.getElementById('kb-file-upload')?.click()}
+                disabled={uploadMutation.isPending}
+                data-testid="button-upload-kb"
+              >
+                {uploadMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Files
+                  </>
+                )}
+              </Button>
             </div>
             <Button
               onClick={() => syncMutation.mutate()}
