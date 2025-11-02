@@ -411,6 +411,7 @@ export interface IStorage {
 
   // AI Insights operations
   saveAiInsight(insight: InsertAiInsight, objections: InsertAiInsightObjection[], patterns: InsertAiInsightPattern[], recommendations: InsertAiInsightRecommendation[]): Promise<AiInsight>;
+  getAiInsightById(id: string): Promise<(AiInsight & { objections: AiInsightObjection[]; patterns: AiInsightPattern[]; recommendations: AiInsightRecommendation[] }) | undefined>;
   getAiInsightsHistory(filters?: { agentId?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Array<AiInsight & { objections: AiInsightObjection[]; patterns: AiInsightPattern[]; recommendations: AiInsightRecommendation[] }>>;
 
   // KB Management operations
@@ -2316,6 +2317,30 @@ export class DatabaseStorage implements IStorage {
     }
     
     return savedInsight;
+  }
+
+  async getAiInsightById(id: string): Promise<(AiInsight & { 
+    objections: AiInsightObjection[]; 
+    patterns: AiInsightPattern[]; 
+    recommendations: AiInsightRecommendation[] 
+  }) | undefined> {
+    const [insight] = await db.select().from(aiInsights).where(eq(aiInsights.id, id));
+    if (!insight) {
+      return undefined;
+    }
+
+    const [objections, patterns, recommendations] = await Promise.all([
+      db.select().from(aiInsightObjections).where(eq(aiInsightObjections.insightId, insight.id)),
+      db.select().from(aiInsightPatterns).where(eq(aiInsightPatterns.insightId, insight.id)),
+      db.select().from(aiInsightRecommendations).where(eq(aiInsightRecommendations.insightId, insight.id))
+    ]);
+
+    return {
+      ...insight,
+      objections,
+      patterns,
+      recommendations
+    };
   }
 
   async getAiInsightsHistory(filters?: { 

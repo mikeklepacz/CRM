@@ -2782,6 +2782,221 @@ Focus on:
     }
   });
 
+  // Analyze AI insights and generate KB improvement proposals using Aligner assistant
+  app.post('/api/kb/analyze-and-propose', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      console.log('[KB Analyze] Starting analysis and proposal generation...');
+      
+      const { insightId } = req.body;
+
+      // Get Aligner assistant
+      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      if (!alignerAssistant || !alignerAssistant.assistantId) {
+        return res.status(400).json({ error: 'Aligner assistant not configured. Please set up the Aligner assistant first.' });
+      }
+
+      // Get AI insight to analyze
+      let insight;
+      if (insightId) {
+        // Get specific insight by ID
+        insight = await storage.getAiInsightById(insightId);
+        if (!insight) {
+          return res.status(404).json({ error: 'AI insight not found' });
+        }
+      } else {
+        // Get latest insight
+        const insights = await storage.getAiInsightsHistory({ limit: 1 });
+        if (insights.length === 0) {
+          return res.status(404).json({ error: 'No AI insights available. Please run an AI analysis first.' });
+        }
+        insight = insights[0];
+      }
+
+      // Get all KB files
+      const kbFiles = await storage.getAllKbFiles();
+      if (kbFiles.length === 0) {
+        return res.status(404).json({ error: 'No KB files found. Please sync KB files from ElevenLabs first.' });
+      }
+
+      console.log(`[KB Analyze] Found ${kbFiles.length} KB files to analyze`);
+      console.log(`[KB Analyze] Analyzing insight from ${insight.dateRangeStart} to ${insight.dateRangeEnd}`);
+
+      // Build context for Aligner
+      const kbContext = kbFiles
+        .map(file => `\n### ${file.filename}\n\`\`\`\n${file.currentContent || '(empty)'}\n\`\`\``)
+        .join('\n');
+
+      const objections = insight.objections
+        .map(obj => `- ${obj.objection} (frequency: ${obj.frequency})`)
+        .join('\n');
+
+      const patterns = insight.patterns
+        .map(pat => `- ${pat.pattern} (frequency: ${pat.frequency})`)
+        .join('\n');
+
+      const recommendations = insight.recommendations
+        .map(rec => `- [${rec.priority.toUpperCase()}] ${rec.title}: ${rec.description}`)
+        .join('\n');
+
+      const analysisPrompt = `You are analyzing call performance data to improve the sales knowledge base. Your goal is to identify specific, actionable improvements to the KB files based on actual call data.
+
+**AI Call Analytics Summary:**
+- Date Range: ${insight.dateRangeStart} to ${insight.dateRangeEnd}
+- Total Calls: ${insight.callCount}
+- Sentiment: ${insight.sentimentPositive} positive, ${insight.sentimentNeutral} neutral, ${insight.sentimentNegative} negative
+
+**Common Objections:**
+${objections || '(none)'}
+
+**Success Patterns:**
+${patterns || '(none)'}
+
+**Recommendations:**
+${recommendations || '(none)'}
+
+**Current Knowledge Base Files:**
+${kbContext}
+
+---
+
+Based on this analysis, propose specific improvements to the knowledge base files. For each proposed change:
+
+1. Identify which file(s) should be updated
+2. Explain the rationale (which objection/pattern/recommendation this addresses)
+3. Provide the complete updated content for the file
+
+Respond in this exact JSON format:
+{
+  "proposals": [
+    {
+      "filename": "exact-filename.txt",
+      "rationale": "Detailed explanation of why this change is needed",
+      "proposedContent": "Complete updated file content here"
+    }
+  ]
+}
+
+IMPORTANT: Only propose changes that directly address the analysis data. Do not make changes just for the sake of it.`;
+
+      console.log('[KB Analyze] Calling Aligner assistant...');
+
+      // Initialize OpenAI client (system-level, not user-specific)
+      const systemKey = process.env.OPENAI_API_KEY;
+      if (!systemKey) {
+        return res.status(500).json({ error: 'OpenAI API key not configured' });
+      }
+
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: systemKey });
+
+      // Create a thread for this analysis
+      const thread = await openai.beta.threads.create();
+      console.log('[KB Analyze] Thread created:', thread.id);
+
+      // Add the analysis prompt as a message
+      await openai.beta.threads.messages.create(thread.id, {
+        role: 'user',
+        content: analysisPrompt
+      });
+
+      // Run the assistant
+      const run = await openai.beta.threads.runs.create(thread.id, {
+        assistant_id: alignerAssistant.assistantId
+      });
+      console.log('[KB Analyze] Run started:', run.id);
+
+      // Poll for completion
+      let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      let attempts = 0;
+      const maxAttempts = 60; // 30 seconds max
+
+      while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+        attempts++;
+      }
+
+      if (runStatus.status !== 'completed') {
+        console.error('[KB Analyze] Run did not complete:', runStatus.status);
+        return res.status(500).json({ error: `Analysis failed: ${runStatus.status}` });
+      }
+
+      console.log('[KB Analyze] Run completed successfully');
+
+      // Get the assistant's response
+      const messages = await openai.beta.threads.messages.list(thread.id);
+      const assistantMessage = messages.data.find(m => m.role === 'assistant');
+
+      if (!assistantMessage || !assistantMessage.content[0] || assistantMessage.content[0].type !== 'text') {
+        return res.status(500).json({ error: 'No response from Aligner assistant' });
+      }
+
+      const responseText = assistantMessage.content[0].text.value;
+      console.log('[KB Analyze] Response received, parsing JSON...');
+
+      // Parse the JSON response
+      let parsedResponse;
+      try {
+        // Try to extract JSON from markdown code block if present
+        const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/```\s*([\s\S]*?)\s*```/);
+        const jsonText = jsonMatch ? jsonMatch[1] : responseText;
+        parsedResponse = JSON.parse(jsonText);
+      } catch (error) {
+        console.error('[KB Analyze] Failed to parse JSON response:', error);
+        console.error('[KB Analyze] Raw response:', responseText);
+        return res.status(500).json({ error: 'Failed to parse Aligner response. Response was not valid JSON.' });
+      }
+
+      if (!parsedResponse.proposals || !Array.isArray(parsedResponse.proposals)) {
+        return res.status(500).json({ error: 'Invalid response format from Aligner assistant' });
+      }
+
+      console.log(`[KB Analyze] Creating ${parsedResponse.proposals.length} proposals...`);
+
+      // Create proposals in database
+      const createdProposals = [];
+      for (const proposal of parsedResponse.proposals) {
+        const file = await storage.getKbFileByFilename(proposal.filename);
+        if (!file) {
+          console.warn(`[KB Analyze] File not found: ${proposal.filename}, skipping`);
+          continue;
+        }
+
+        // Get latest version to use as base
+        const versions = await storage.getKbFileVersions(file.id);
+        const latestVersion = versions[0];
+
+        if (!latestVersion) {
+          console.warn(`[KB Analyze] No versions found for ${proposal.filename}, skipping`);
+          continue;
+        }
+
+        const created = await storage.createKbProposal({
+          kbFileId: file.id,
+          baseVersionId: latestVersion.id,
+          proposedContent: proposal.proposedContent,
+          rationale: proposal.rationale,
+          aiInsightId: insight.id,
+          status: 'pending',
+        });
+
+        createdProposals.push(created);
+      }
+
+      console.log(`[KB Analyze] Successfully created ${createdProposals.length} proposals`);
+
+      res.json({
+        success: true,
+        proposalsCreated: createdProposals.length,
+        proposals: createdProposals,
+        insightId: insight.id,
+      });
+    } catch (error: any) {
+      console.error('[KB Analyze] Error:', error);
+      res.status(500).json({ error: error.message || 'Failed to analyze and generate proposals' });
+    }
+  });
+
   // Approve a proposal
   app.post('/api/kb/proposals/:id/approve', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
