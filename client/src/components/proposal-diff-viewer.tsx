@@ -137,10 +137,22 @@ export function ProposalDiffViewer({
 
   // Calculate rows needed for textarea to show full content
   const calculateRows = (text: string): number => {
-    const lines = text.split('\n').length;
+    const lines = text.split('\n');
+    const charsPerLine = 60; // Approximate chars per line in mono font at this width
+    
+    // Count explicit line breaks + wrapped lines
+    let totalRows = 0;
+    lines.forEach(line => {
+      if (line.length === 0) {
+        totalRows += 1; // Empty line
+      } else {
+        totalRows += Math.ceil(line.length / charsPerLine);
+      }
+    });
+    
     const minRows = 3;
-    const maxRows = 30;
-    return Math.min(Math.max(lines, minRows), maxRows);
+    const maxRows = 50;
+    return Math.min(Math.max(totalRows, minRows), maxRows);
   };
 
   // Approve only selected edits
