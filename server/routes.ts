@@ -2732,6 +2732,9 @@ Focus on:
       const enrichedObjections = enrichObjections(insights.commonObjections || []);
       const enrichedPatterns = enrichPatterns(insights.successPatterns || []);
       
+      // Initialize alignerStatus outside try block so it's accessible in response
+      let alignerStatus = { success: false, error: null as string | null, proposalCount: 0, kbFileCount: 0 };
+      
       // Save insights to database for historical tracking
       try {
         const insightRecord = {
@@ -2773,8 +2776,6 @@ Focus on:
         
         // CHAIN TO ALIGNER: After Wick Coach completes, automatically trigger KB analysis
         console.log('[AI Insights → Aligner] Wick Coach analysis complete, now chaining to Aligner...');
-        
-        let alignerStatus = { success: false, error: null as string | null, proposalCount: 0, kbFileCount: 0 };
         
         try {
           // Get Aligner assistant

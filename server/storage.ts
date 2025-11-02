@@ -2210,7 +2210,7 @@ export class DatabaseStorage implements IStorage {
     
     await db.update(callSessions)
       .set({ lastAnalyzedAt: new Date() })
-      .where(sql`${callSessions.conversationId} = ANY(${conversationIds})`);
+      .where(inArray(callSessions.conversationId, conversationIds));
   }
 
   async nukeAllAnalysis(): Promise<{ deletedInsights: number; deletedProposals: number; resetCalls: number }> {
