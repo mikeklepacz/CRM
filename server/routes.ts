@@ -3554,7 +3554,7 @@ IMPORTANT:
       }
 
       // Get OpenAI settings
-      const openaiSettings = await storage.getOpenAISettings();
+      const openaiSettings = await storage.getOpenaiSettings();
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
@@ -3644,7 +3644,7 @@ IMPORTANT:
       }
 
       // Get OpenAI settings
-      const openaiSettings = await storage.getOpenAISettings();
+      const openaiSettings = await storage.getOpenaiSettings();
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
