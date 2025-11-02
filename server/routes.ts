@@ -2971,6 +2971,21 @@ Focus on:
       }
 
       for (const doc of documents) {
+        // Fetch full document content (list endpoint only returns metadata)
+        const docResponse = await fetch(`https://api.elevenlabs.io/v1/convai/knowledge-base/${doc.id}`, {
+          headers: {
+            'xi-api-key': elevenLabsConfig.apiKey
+          }
+        });
+        
+        if (!docResponse.ok) {
+          console.error(`[KB Sync] Failed to fetch content for ${doc.name}: ${docResponse.statusText}`);
+          continue; // Skip this document but continue with others
+        }
+        
+        const fullDoc = await docResponse.json();
+        const docContent = fullDoc.content || '';
+        
         const agentId = detectAgentId(doc.name);
         
         // Check if file already exists by elevenlabsDocId first (handles renames), then by filename
@@ -3001,7 +3016,7 @@ Focus on:
 
         if (existing) {
           // Check if content has changed
-          const newContent = doc.content || '';
+          const newContent = docContent;
           const agentIdChanged = existing.agentId !== agentId;
           
           if (existing.currentContent !== newContent) {
@@ -3055,7 +3070,7 @@ Focus on:
           const newFile = await storage.createKbFile({
             filename: doc.name,
             elevenlabsDocId: doc.id,
-            currentContent: doc.content || '',
+            currentContent: docContent,
             fileType: doc.type || 'file',
             agentId: agentId,
             lastSyncedAt: new Date(),
@@ -3065,7 +3080,7 @@ Focus on:
           const initialVersion = await storage.createKbFileVersion({
             kbFileId: newFile.id,
             versionNumber: 1,
-            content: doc.content || '',
+            content: docContent,
             source: 'elevenlabs_sync',
             createdBy: 'system',
           });
@@ -3074,7 +3089,7 @@ Focus on:
           await googleDrive.backupKbFileToDrive(
             newFile.filename,
             1,
-            doc.content || ''
+            docContent
           );
 
           // Update file with current_sync_version
