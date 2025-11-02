@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3 } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -111,6 +111,204 @@ interface CallAnalyticsData {
 }
 
 type CallScenario = 'cold_calls' | 'follow_ups' | 'recovery';
+
+// KB Library Tab Component
+function KBLibraryTab() {
+  const { toast } = useToast();
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
+
+  // Fetch KB files
+  const { data: kbData, isLoading: kbLoading, refetch: refetchKbFiles } = useQuery({
+    queryKey: ['/api/kb/files'],
+  });
+
+  const kbFiles = kbData?.files || [];
+
+  // Sync mutation
+  const syncMutation = useMutation({
+    mutationFn: () => apiRequest('/api/kb/sync', { method: 'POST' }),
+    onSuccess: (data: any) => {
+      toast({
+        title: "Sync Complete",
+        description: `Imported ${data.imported} new files, updated ${data.updated} existing files`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync from ElevenLabs",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fetch versions for selected file
+  const { data: versionsData } = useQuery({
+    queryKey: ['/api/kb/files', selectedFileId, 'versions'],
+    enabled: !!selectedFileId && isVersionDialogOpen,
+  });
+
+  const versions = versionsData?.versions || [];
+
+  return (
+    <Card data-testid="card-kb-library">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Knowledge Base Library
+            </CardTitle>
+            <CardDescription className="mt-2">
+              Manage ElevenLabs knowledge base files with version control and AI-powered improvements
+            </CardDescription>
+          </div>
+          <Button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            data-testid="button-sync-kb"
+          >
+            {syncMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Sync from ElevenLabs
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {kbLoading ? (
+          <div className="text-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+            <p className="text-muted-foreground mt-4">Loading KB files...</p>
+          </div>
+        ) : kbFiles.length === 0 ? (
+          <div className="text-center py-12 bg-muted/20 rounded-lg">
+            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">
+              No knowledge base files found. Click "Sync from ElevenLabs" to import files.
+            </p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Filename</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Last Synced</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {kbFiles.map((file: any) => (
+                <TableRow key={file.id} data-testid={`row-kb-file-${file.id}`}>
+                  <TableCell className="font-medium">{file.filename}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{file.fileType || 'file'}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {file.lastSyncedAt
+                      ? new Date(file.lastSyncedAt).toLocaleDateString()
+                      : 'Never'}
+                  </TableCell>
+                  <TableCell>
+                    {file.locked ? (
+                      <Badge variant="destructive" data-testid={`badge-locked-${file.id}`}>
+                        Locked
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" data-testid={`badge-unlocked-${file.id}`}>
+                        Unlocked
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedFileId(file.id);
+                        setIsVersionDialogOpen(true);
+                      }}
+                      data-testid={`button-view-versions-${file.id}`}
+                    >
+                      View Versions
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+
+      {/* Version History Dialog */}
+      {selectedFileId && (
+        <div
+          className={`fixed inset-0 z-50 bg-background/80 backdrop-blur-sm ${
+            isVersionDialogOpen ? 'block' : 'hidden'
+          }`}
+          onClick={() => setIsVersionDialogOpen(false)}
+        >
+          <div
+            className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-3xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Version History</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsVersionDialogOpen(false)}
+                data-testid="button-close-version-dialog"
+              >
+                ×
+              </Button>
+            </div>
+            <ScrollArea className="h-[400px]">
+              {versions.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No versions found</p>
+              ) : (
+                <div className="space-y-4">
+                  {versions.map((version: any, idx: number) => (
+                    <Card key={version.id} data-testid={`card-version-${version.id}`}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={idx === 0 ? 'default' : 'outline'}>
+                              v{version.versionNumber}
+                            </Badge>
+                            <Badge variant="secondary">{version.source}</Badge>
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(version.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                          Created by: {version.createdBy}
+                        </p>
+                        <div className="mt-2 p-3 bg-muted/50 rounded text-sm font-mono max-h-32 overflow-auto">
+                          {version.content.substring(0, 200)}
+                          {version.content.length > 200 && '...'}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export default function CallManager() {
   const { user } = useAuth();
@@ -506,7 +704,10 @@ export default function CallManager() {
             <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
             <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
             {user?.role === 'admin' && (
-              <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
+              <>
+                <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
+                <TabsTrigger value="kb-library" data-testid="tab-kb-library">KB Library</TabsTrigger>
+              </>
             )}
           </TabsList>
 
@@ -1495,6 +1696,13 @@ export default function CallManager() {
               </CardContent>
             </Card>
           </TabsContent>
+          )}
+
+          {/* KB Library Tab */}
+          {user?.role === 'admin' && (
+            <TabsContent value="kb-library" className="space-y-6">
+              <KBLibraryTab />
+            </TabsContent>
           )}
         </Tabs>
       </div>

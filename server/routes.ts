@@ -2640,6 +2640,273 @@ Focus on:
     }
   });
 
+  // ===== KB MANAGEMENT ENDPOINTS =====
+  // Sync KB files from ElevenLabs API
+  app.post('/api/kb/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const elevenLabsConfig = await storage.getElevenLabsConfig();
+      
+      if (!elevenLabsConfig?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+
+      // Fetch KB documents from ElevenLabs
+      const response = await fetch('https://api.elevenlabs.io/v1/convai/knowledge-base?page_size=100', {
+        headers: {
+          'xi-api-key': elevenLabsConfig.apiKey
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`ElevenLabs API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const documents = data.documents || [];
+
+      let imported = 0;
+      let updated = 0;
+
+      for (const doc of documents) {
+        // Check if file already exists
+        const existing = await storage.getKbFileByFilename(doc.name);
+
+        if (existing) {
+          // Check if content has changed
+          const newContent = doc.content || '';
+          if (existing.currentContent !== newContent) {
+            // Get current versions to calculate next version number
+            const versions = await storage.getKbFileVersions(existing.id);
+            const latestVersion = versions[0];
+            const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
+
+            // Create new version for the update
+            const newVersion = await storage.createKbFileVersion({
+              kbFileId: existing.id,
+              versionNumber: newVersionNumber,
+              content: newContent,
+              source: 'elevenlabs_sync',
+              createdBy: 'system',
+            });
+
+            // Update existing file with new content and sync version
+            await storage.updateKbFile(existing.id, {
+              currentContent: newContent,
+              elevenlabsDocId: doc.id,
+              currentSyncVersion: newVersion.id,
+              lastSyncedAt: new Date(),
+            });
+            updated++;
+          } else {
+            // Content unchanged, just update sync metadata
+            await storage.updateKbFile(existing.id, {
+              elevenlabsDocId: doc.id,
+              lastSyncedAt: new Date(),
+            });
+          }
+        } else {
+          // Create new file with initial version
+          const newFile = await storage.createKbFile({
+            filename: doc.name,
+            elevenlabsDocId: doc.id,
+            currentContent: doc.content || '',
+            fileType: doc.type || 'file',
+            lastSyncedAt: new Date(),
+          });
+
+          // Create initial version
+          const initialVersion = await storage.createKbFileVersion({
+            kbFileId: newFile.id,
+            versionNumber: 1,
+            content: doc.content || '',
+            source: 'elevenlabs_sync',
+            createdBy: 'system',
+          });
+
+          // Update file with current_sync_version
+          await storage.updateKbFile(newFile.id, {
+            currentSyncVersion: initialVersion.id,
+          });
+
+          imported++;
+        }
+      }
+
+      res.json({
+        success: true,
+        imported,
+        updated,
+        total: documents.length,
+      });
+    } catch (error: any) {
+      console.error('[KB] Error syncing from ElevenLabs:', error);
+      res.status(500).json({ error: error.message || 'Failed to sync KB files' });
+    }
+  });
+
+  // Get all KB files
+  app.get('/api/kb/files', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const files = await storage.getAllKbFiles();
+      res.json({ files });
+    } catch (error: any) {
+      console.error('[KB] Error fetching files:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch KB files' });
+    }
+  });
+
+  // Get version history for a file
+  app.get('/api/kb/files/:id/versions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const versions = await storage.getKbFileVersions(id);
+      res.json({ versions });
+    } catch (error: any) {
+      console.error('[KB] Error fetching versions:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch versions' });
+    }
+  });
+
+  // Get all proposals
+  app.get('/api/kb/proposals', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { status, fileId } = req.query;
+      const proposals = await storage.getKbProposals({
+        status: status as string,
+        kbFileId: fileId as string,
+      });
+      res.json({ proposals });
+    } catch (error: any) {
+      console.error('[KB] Error fetching proposals:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch proposals' });
+    }
+  });
+
+  // Approve a proposal
+  app.post('/api/kb/proposals/:id/approve', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+
+      const proposal = await storage.getKbProposalById(id);
+      if (!proposal) {
+        return res.status(404).json({ error: 'Proposal not found' });
+      }
+
+      const file = await storage.getKbFileById(proposal.kbFileId);
+      if (!file) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      // Optimistic locking check
+      const currentVersions = await storage.getKbFileVersions(file.id);
+      const latestVersion = currentVersions[0];
+
+      if (latestVersion && latestVersion.id !== proposal.baseVersionId) {
+        return res.status(409).json({
+          error: 'File has been updated since proposal was created. Please review the latest version.',
+        });
+      }
+
+      // Create new version
+      const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
+      const newVersion = await storage.createKbFileVersion({
+        kbFileId: file.id,
+        versionNumber: newVersionNumber,
+        content: proposal.proposedContent,
+        source: 'aligner_approved',
+        createdBy: userId,
+      });
+
+      // Update file with new content
+      await storage.updateKbFile(file.id, {
+        currentContent: proposal.proposedContent,
+        currentSyncVersion: newVersion.id,
+      });
+
+      // Update proposal status
+      await storage.updateKbProposal(id, {
+        status: 'approved',
+        appliedVersionId: newVersion.id,
+        reviewedAt: new Date(),
+        reviewedBy: userId,
+      });
+
+      // Push update to ElevenLabs
+      const elevenLabsConfig = await storage.getElevenLabsConfig();
+      if (elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
+        try {
+          await fetch(`https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenlabsDocId}`, {
+            method: 'PATCH',
+            headers: {
+              'xi-api-key': elevenLabsConfig.apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              content: proposal.proposedContent,
+            }),
+          });
+        } catch (error) {
+          console.error('[KB] Error pushing update to ElevenLabs:', error);
+          // Don't fail the request if ElevenLabs update fails
+        }
+      }
+
+      res.json({
+        success: true,
+        version: newVersion,
+      });
+    } catch (error: any) {
+      console.error('[KB] Error approving proposal:', error);
+      res.status(500).json({ error: error.message || 'Failed to approve proposal' });
+    }
+  });
+
+  // Rollback to a specific version
+  app.post('/api/kb/files/:id/rollback', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { versionId } = req.body;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+
+      const file = await storage.getKbFileById(id);
+      if (!file) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      const targetVersion = await storage.getKbFileVersion(versionId);
+      if (!targetVersion || targetVersion.kbFileId !== id) {
+        return res.status(404).json({ error: 'Version not found' });
+      }
+
+      // Create new version with the rollback content
+      const versions = await storage.getKbFileVersions(id);
+      const newVersionNumber = versions[0] ? versions[0].versionNumber + 1 : 1;
+
+      const newVersion = await storage.createKbFileVersion({
+        kbFileId: id,
+        versionNumber: newVersionNumber,
+        content: targetVersion.content,
+        source: 'manual_edit',
+        createdBy: userId,
+      });
+
+      // Update file
+      await storage.updateKbFile(id, {
+        currentContent: targetVersion.content,
+        currentSyncVersion: newVersion.id,
+      });
+
+      res.json({
+        success: true,
+        version: newVersion,
+      });
+    } catch (error: any) {
+      console.error('[KB] Error rolling back file:', error);
+      res.status(500).json({ error: error.message || 'Failed to rollback file' });
+    }
+  });
+
   // ===== SYSTEM-WIDE GOOGLE SHEETS OAUTH (ADMIN ONLY) =====
   app.get('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

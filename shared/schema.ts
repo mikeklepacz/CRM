@@ -1042,6 +1042,53 @@ export const aiInsightRecommendations = pgTable("ai_insight_recommendations", {
   index("idx_recommendations_insight").on(table.insightId),
 ]);
 
+// Knowledge Base Management - Self-evolving KB system
+export const kbFiles = pgTable("kb_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  elevenlabsDocId: varchar("elevenlabs_doc_id").unique(), // ID from ElevenLabs API
+  filename: varchar("filename", { length: 255 }).notNull().unique(), // Immutable, enforced by trigger
+  currentContent: text("current_content"), // Latest approved content
+  currentSyncVersion: varchar("current_sync_version"), // FK to kb_file_versions.id
+  locked: boolean("locked").default(false), // True if referenced in workflow nodes
+  fileType: varchar("file_type", { length: 50 }).default('file'), // 'file', 'url', 'text'
+  lastSyncedAt: timestamp("last_synced_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_kb_files_filename").on(table.filename),
+  index("idx_kb_files_locked_synced").on(table.locked, table.lastSyncedAt),
+]);
+
+export const kbFileVersions = pgTable("kb_file_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  kbFileId: varchar("kb_file_id").notNull().references(() => kbFiles.id, { onDelete: 'restrict' }), // Preserve history
+  versionNumber: integer("version_number").notNull(),
+  content: text("content").notNull(),
+  source: varchar("source", { length: 50 }).notNull(), // 'elevenlabs_sync', 'aligner_approved', 'manual_edit'
+  createdBy: varchar("created_by"), // User ID or 'system'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_kb_versions_file_id").on(table.kbFileId, table.createdAt),
+  index("idx_kb_versions_number").on(table.kbFileId, table.versionNumber),
+]);
+
+export const kbChangeProposals = pgTable("kb_change_proposals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  kbFileId: varchar("kb_file_id").notNull().references(() => kbFiles.id, { onDelete: 'restrict' }),
+  baseVersionId: varchar("base_version_id").notNull().references(() => kbFileVersions.id, { onDelete: 'restrict' }), // Optimistic locking
+  proposedContent: text("proposed_content").notNull(),
+  rationale: text("rationale"), // Why Aligner suggests this change
+  aiInsightId: varchar("ai_insight_id").references(() => aiInsights.id), // Which analysis triggered it
+  status: varchar("status", { length: 20 }).notNull().default('pending'), // 'pending', 'approved', 'rejected', 'applied'
+  appliedVersionId: varchar("applied_version_id").references(() => kbFileVersions.id, { onDelete: 'restrict' }), // Version created after approval
+  createdAt: timestamp("created_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: varchar("reviewed_by"), // User ID
+}, (table) => [
+  index("idx_kb_proposals_status").on(table.status, table.createdAt),
+  index("idx_kb_proposals_file_status").on(table.kbFileId, table.status),
+]);
+
 export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
@@ -1129,6 +1176,22 @@ export const insertAiInsightRecommendationSchema = createInsertSchema(aiInsightR
   createdAt: true,
 });
 
+export const insertKbFileSchema = createInsertSchema(kbFiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertKbFileVersionSchema = createInsertSchema(kbFileVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertKbChangeProposalSchema = createInsertSchema(kbChangeProposals).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -1211,3 +1274,9 @@ export type AiInsightPattern = typeof aiInsightPatterns.$inferSelect;
 export type InsertAiInsightPattern = z.infer<typeof insertAiInsightPatternSchema>;
 export type AiInsightRecommendation = typeof aiInsightRecommendations.$inferSelect;
 export type InsertAiInsightRecommendation = z.infer<typeof insertAiInsightRecommendationSchema>;
+export type KbFile = typeof kbFiles.$inferSelect;
+export type InsertKbFile = z.infer<typeof insertKbFileSchema>;
+export type KbFileVersion = typeof kbFileVersions.$inferSelect;
+export type InsertKbFileVersion = z.infer<typeof insertKbFileVersionSchema>;
+export type KbChangeProposal = typeof kbChangeProposals.$inferSelect;
+export type InsertKbChangeProposal = z.infer<typeof insertKbChangeProposalSchema>;

@@ -42,6 +42,9 @@ import {
   aiInsightObjections,
   aiInsightPatterns,
   aiInsightRecommendations,
+  kbFiles,
+  kbFileVersions,
+  kbChangeProposals,
   type User,
   type UpsertUser,
   type Ticket,
@@ -123,6 +126,12 @@ import {
   type InsertAiInsightPattern,
   type AiInsightRecommendation,
   type InsertAiInsightRecommendation,
+  type KbFile,
+  type InsertKbFile,
+  type KbFileVersion,
+  type InsertKbFileVersion,
+  type KbChangeProposal,
+  type InsertKbChangeProposal,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, isNull } from "drizzle-orm";
@@ -401,6 +410,20 @@ export interface IStorage {
   // AI Insights operations
   saveAiInsight(insight: InsertAiInsight, objections: InsertAiInsightObjection[], patterns: InsertAiInsightPattern[], recommendations: InsertAiInsightRecommendation[]): Promise<AiInsight>;
   getAiInsightsHistory(filters?: { agentId?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Array<AiInsight & { objections: AiInsightObjection[]; patterns: AiInsightPattern[]; recommendations: AiInsightRecommendation[] }>>;
+
+  // KB Management operations
+  getAllKbFiles(): Promise<KbFile[]>;
+  getKbFileById(id: string): Promise<KbFile | undefined>;
+  getKbFileByFilename(filename: string): Promise<KbFile | undefined>;
+  createKbFile(file: InsertKbFile): Promise<KbFile>;
+  updateKbFile(id: string, updates: Partial<InsertKbFile>): Promise<KbFile>;
+  createKbFileVersion(version: InsertKbFileVersion): Promise<KbFileVersion>;
+  getKbFileVersions(fileId: string): Promise<KbFileVersion[]>;
+  getKbFileVersion(id: string): Promise<KbFileVersion | undefined>;
+  createKbProposal(proposal: InsertKbChangeProposal): Promise<KbChangeProposal>;
+  getKbProposals(filters?: { status?: string; kbFileId?: string }): Promise<KbChangeProposal[]>;
+  getKbProposalById(id: string): Promise<KbChangeProposal | undefined>;
+  updateKbProposal(id: string, updates: Partial<InsertKbChangeProposal>): Promise<KbChangeProposal>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2329,6 +2352,90 @@ export class DatabaseStorage implements IStorage {
     );
     
     return enrichedInsights;
+  }
+
+  // KB Management operations
+  async getAllKbFiles(): Promise<KbFile[]> {
+    return await db.select().from(kbFiles).orderBy(kbFiles.filename);
+  }
+
+  async getKbFileById(id: string): Promise<KbFile | undefined> {
+    const [file] = await db.select().from(kbFiles).where(eq(kbFiles.id, id));
+    return file;
+  }
+
+  async getKbFileByFilename(filename: string): Promise<KbFile | undefined> {
+    const [file] = await db.select().from(kbFiles).where(eq(kbFiles.filename, filename));
+    return file;
+  }
+
+  async createKbFile(file: InsertKbFile): Promise<KbFile> {
+    const [created] = await db.insert(kbFiles).values(file).returning();
+    return created;
+  }
+
+  async updateKbFile(id: string, updates: Partial<InsertKbFile>): Promise<KbFile> {
+    const [updated] = await db
+      .update(kbFiles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(kbFiles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async createKbFileVersion(version: InsertKbFileVersion): Promise<KbFileVersion> {
+    const [created] = await db.insert(kbFileVersions).values(version).returning();
+    return created;
+  }
+
+  async getKbFileVersions(fileId: string): Promise<KbFileVersion[]> {
+    return await db
+      .select()
+      .from(kbFileVersions)
+      .where(eq(kbFileVersions.kbFileId, fileId))
+      .orderBy(desc(kbFileVersions.versionNumber));
+  }
+
+  async getKbFileVersion(id: string): Promise<KbFileVersion | undefined> {
+    const [version] = await db.select().from(kbFileVersions).where(eq(kbFileVersions.id, id));
+    return version;
+  }
+
+  async createKbProposal(proposal: InsertKbChangeProposal): Promise<KbChangeProposal> {
+    const [created] = await db.insert(kbChangeProposals).values(proposal).returning();
+    return created;
+  }
+
+  async getKbProposals(filters?: { status?: string; kbFileId?: string }): Promise<KbChangeProposal[]> {
+    let query = db.select().from(kbChangeProposals);
+    
+    const conditions = [];
+    if (filters?.status) {
+      conditions.push(eq(kbChangeProposals.status, filters.status));
+    }
+    if (filters?.kbFileId) {
+      conditions.push(eq(kbChangeProposals.kbFileId, filters.kbFileId));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(kbChangeProposals.createdAt));
+  }
+
+  async getKbProposalById(id: string): Promise<KbChangeProposal | undefined> {
+    const [proposal] = await db.select().from(kbChangeProposals).where(eq(kbChangeProposals.id, id));
+    return proposal;
+  }
+
+  async updateKbProposal(id: string, updates: Partial<InsertKbChangeProposal>): Promise<KbChangeProposal> {
+    const [updated] = await db
+      .update(kbChangeProposals)
+      .set(updates)
+      .where(eq(kbChangeProposals.id, id))
+      .returning();
+    return updated;
   }
 }
 
