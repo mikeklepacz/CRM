@@ -62,6 +62,12 @@ The application is built around a client dashboard unifying data from "Store Dat
         * Date range and agent filtering (7 days, 30 days, custom)
         * PII redaction (phone numbers) before analysis
         * Limited to 100 calls per analysis to control OpenAI costs
+        * **Unified Analysis Workflow**: Single "Analyze Calls" button chains WIC Coach analysis → Aligner KB analysis → KB proposals
+        * **Auto-Trigger System**: Optional automatic KB analysis when X unanalyzed calls per agent are reached (OFF by default)
+            - Configurable via toggle + threshold input in AI Insights tab
+            - Admin-only preference stored in user_preferences table
+            - Background job in webhook monitors unanalyzed calls and triggers full analysis chain
+            - Default threshold: 10 calls per agent
 - **Self-Evolving Knowledge Base System**: Complete KB management with version control and AI-powered improvements:
     - **KB Library Tab**: Unified interface in Call Manager with sub-tabs for Files and Proposals
     - **ElevenLabs Integration**: Bi-directional sync with ElevenLabs conversational AI knowledge base
