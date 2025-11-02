@@ -433,8 +433,10 @@ export interface IStorage {
   getAssistantBySlug(slug: string): Promise<any | undefined>;
   updateAssistant(id: string, updates: any): Promise<any>;
   getAssistantFiles(assistantId: string): Promise<any[]>;
+  getAssistantFileById(id: string): Promise<any | undefined>;
   createAssistantFile(file: any): Promise<any>;
-  deleteAssistantFile(id: string): Promise<void>;
+  // Scoped delete method enforces assistant ownership at storage layer
+  deleteAssistantFileByAssistantId(fileId: string, assistantId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2481,13 +2483,27 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(openaiAssistantFiles.uploadedAt));
   }
 
+  async getAssistantFileById(id: string): Promise<any | undefined> {
+    const [file] = await db.select().from(openaiAssistantFiles).where(eq(openaiAssistantFiles.id, id));
+    return file;
+  }
+
   async createAssistantFile(file: any): Promise<any> {
     const [created] = await db.insert(openaiAssistantFiles).values(file).returning();
     return created;
   }
 
-  async deleteAssistantFile(id: string): Promise<void> {
-    await db.delete(openaiAssistantFiles).where(eq(openaiAssistantFiles.id, id));
+  async deleteAssistantFileByAssistantId(fileId: string, assistantId: string): Promise<boolean> {
+    const result = await db
+      .delete(openaiAssistantFiles)
+      .where(
+        and(
+          eq(openaiAssistantFiles.id, fileId),
+          eq(openaiAssistantFiles.assistantId, assistantId)
+        )
+      )
+      .returning();
+    return result.length > 0;
   }
 }
 

@@ -7,6 +7,7 @@ import { GoogleSheetsSync } from "@/components/google-sheets-sync";
 import { UserManagement } from "@/components/user-management";
 import { SalesReports } from "@/components/sales-reports";
 import { OpenAIManagement } from "@/components/openai-management";
+import { AlignerManagement } from "@/components/aligner-management";
 import { AdminTicketInbox } from "@/components/admin-ticket-inbox";
 import { WebhookManagement } from "@/components/webhook-management";
 import { DriveFolderConfig } from "@/components/drive-folder-config";
@@ -100,6 +101,7 @@ export default function AdminDashboard() {
           <TabsTrigger value="webhooks" data-testid="tab-webhooks">Webhooks</TabsTrigger>
           <TabsTrigger value="voice" data-testid="tab-voice">Voice</TabsTrigger>
           <TabsTrigger value="openai" data-testid="tab-openai">OpenAI</TabsTrigger>
+          <TabsTrigger value="aligner" data-testid="tab-aligner">Aligner</TabsTrigger>
           <TabsTrigger value="sheets" data-testid="tab-sheets">Google Sheets</TabsTrigger>
           <TabsTrigger value="assets" data-testid="tab-assets">Assets</TabsTrigger>
           <TabsTrigger value="sync" data-testid="tab-sync">WooCommerce Sync</TabsTrigger>
@@ -127,6 +129,10 @@ export default function AdminDashboard() {
 
         <TabsContent value="openai">
           <OpenAIManagement />
+        </TabsContent>
+
+        <TabsContent value="aligner">
+          <AlignerManagement />
         </TabsContent>
 
         <TabsContent value="sheets">

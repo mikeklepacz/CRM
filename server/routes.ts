@@ -2984,12 +2984,112 @@ Focus on:
   // Delete file from assistant
   app.delete('/api/assistants/:assistantId/files/:fileId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const { fileId } = req.params;
+      const { assistantId, fileId } = req.params;
       
-      await storage.deleteAssistantFile(fileId);
+      // Use scoped delete that enforces assistant ownership at storage layer
+      const deleted = await storage.deleteAssistantFileByAssistantId(fileId, assistantId);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: 'File not found or does not belong to this assistant' });
+      }
+      
       res.json({ success: true });
     } catch (error: any) {
       console.error('[Assistants] Error deleting file:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete file' });
+    }
+  });
+
+  // ===== ALIGNER ASSISTANT ENDPOINTS (Scoped to 'aligner' slug) =====
+  // Get Aligner assistant details and files
+  app.get('/api/aligner', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const assistant = await storage.getAssistantBySlug('aligner');
+      
+      if (!assistant) {
+        return res.status(404).json({ error: 'Aligner assistant not found' });
+      }
+
+      const files = await storage.getAssistantFiles(assistant.id);
+      
+      res.json({ 
+        assistant: {
+          ...assistant,
+          files
+        }
+      });
+    } catch (error: any) {
+      console.error('[Aligner] Error fetching Aligner:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch Aligner' });
+    }
+  });
+
+  // Update Aligner instructions
+  app.patch('/api/aligner/instructions', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { instructions } = req.body;
+      const assistant = await storage.getAssistantBySlug('aligner');
+      
+      if (!assistant) {
+        return res.status(404).json({ error: 'Aligner assistant not found' });
+      }
+
+      const updated = await storage.updateAssistant(assistant.id, { instructions });
+      res.json({ assistant: updated });
+    } catch (error: any) {
+      console.error('[Aligner] Error updating instructions:', error);
+      res.status(500).json({ error: error.message || 'Failed to update instructions' });
+    }
+  });
+
+  // Upload file to Aligner
+  app.post('/api/aligner/files', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { filename, openaiFileId, fileSize, category } = req.body;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      const assistant = await storage.getAssistantBySlug('aligner');
+      if (!assistant) {
+        return res.status(404).json({ error: 'Aligner assistant not found' });
+      }
+
+      const file = await storage.createAssistantFile({
+        assistantId: assistant.id,
+        filename,
+        openaiFileId,
+        fileSize,
+        uploadedBy: userId,
+        category,
+      });
+
+      res.json({ file });
+    } catch (error: any) {
+      console.error('[Aligner] Error uploading file:', error);
+      res.status(500).json({ error: error.message || 'Failed to upload file' });
+    }
+  });
+
+  // Delete Aligner file
+  app.delete('/api/aligner/files/:fileId', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { fileId } = req.params;
+      
+      // Get Aligner assistant
+      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      if (!alignerAssistant) {
+        return res.status(404).json({ error: 'Aligner assistant not found' });
+      }
+
+      // Use scoped delete that enforces assistant ownership at storage layer
+      const deleted = await storage.deleteAssistantFileByAssistantId(fileId, alignerAssistant.id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: 'File not found or does not belong to Aligner assistant' });
+      }
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[Aligner] Error deleting file:', error);
       res.status(500).json({ error: error.message || 'Failed to delete file' });
     }
   });
