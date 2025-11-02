@@ -74,6 +74,14 @@ The application is built around a client dashboard unifying data from "Store Dat
     - **Version Comparison**: Select any two versions to view side-by-side diff
     - **Filename Immutability**: Database trigger prevents filename changes (ElevenLabs workflow dependency)
     - **Scoped Security**: Aligner assistant completely isolated from Sales Assistant with defense-in-depth deletion controls
+    - **Agent-Isolated Analysis System**: Each AI agent (Holly, Michael) has separate KB files and analysis to prevent cross-contamination:
+        * KB files linked to agents via `agent_id` column (ElevenLabs agent ID); UI displays friendly names via join with elevenLabsAgents table
+        * Call sessions track `last_analyzed_at` timestamp to prevent duplicate analysis
+        * Admin selects agent in Aligner UI → system filters for that agent's unanalyzed calls AND KB files only
+        * Smart batching: Processes 100 calls per batch when dataset exceeds limits; tracks progress across batches
+        * Baby-steps workflow: Make 5-10 calls → analyze → adjust KB → repeat (never re-analyze same calls)
+        * Full transcript analysis: No character truncation (conversations average 3000-4000 chars); removed 20-call limit from WIC Coach
+        * KB file assignment: Admin can assign files to specific agents or leave unassigned ("All agents")
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management and preference storage.
