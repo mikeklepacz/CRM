@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
-import { commissions, users, clients, callSessions } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { getTimezoneOffset } from "date-fns-tz";
