@@ -249,6 +249,8 @@ export const userPreferences = pgTable("user_preferences", {
   colorRowByStatus: boolean("color_row_by_status").default(false), // Color table rows based on status
   textAlign: varchar("text_align", { length: 20 }),
   freezeFirstColumn: boolean("freeze_first_column").default(false),
+  autoKbAnalysis: boolean("auto_kb_analysis").default(false), // Auto-trigger WIC Coach + Aligner when threshold is met
+  kbAnalysisThreshold: integer("kb_analysis_threshold").default(10), // Number of unanalyzed calls before auto-triggering
   loadingLogoUrl: text("loading_logo_url"), // Custom loading logo URL
   timezone: varchar("timezone", { length: 100 }), // IANA timezone (e.g., "America/New_York", "Europe/Warsaw")
   defaultTimezoneMode: varchar("default_timezone_mode", { length: 20 }).default('agent'), // 'agent' or 'customer' - default mode for new reminders
