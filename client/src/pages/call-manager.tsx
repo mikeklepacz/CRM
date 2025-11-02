@@ -121,6 +121,8 @@ function KBLibraryTab() {
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
   const [isDiffDialogOpen, setIsDiffDialogOpen] = useState(false);
+  const [selectedVersionsForDiff, setSelectedVersionsForDiff] = useState<string[]>([]);
+  const [isVersionDiffDialogOpen, setIsVersionDiffDialogOpen] = useState(false);
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
@@ -200,6 +202,27 @@ function KBLibraryTab() {
     },
   });
 
+  // Rollback mutation
+  const rollbackMutation = useMutation({
+    mutationFn: ({ fileId, versionId }: { fileId: string; versionId: string }) =>
+      apiRequest('POST', `/api/kb/files/${fileId}/rollback`, { versionId }),
+    onSuccess: () => {
+      toast({
+        title: "Rollback Complete",
+        description: "File has been rolled back to selected version",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/files', selectedFileId, 'versions'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Rollback Failed",
+        description: error.message || "Failed to rollback file",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Fetch versions for selected file
   const { data: versionsData } = useQuery({
     queryKey: ['/api/kb/files', selectedFileId, 'versions'],
@@ -212,6 +235,30 @@ function KBLibraryTab() {
   const selectedFile = selectedProposal 
     ? kbFiles.find((f: any) => f.id === selectedProposal.kbFileId)
     : null;
+
+  // Handle version selection for comparison
+  const toggleVersionSelection = (versionId: string) => {
+    setSelectedVersionsForDiff(prev => {
+      if (prev.includes(versionId)) {
+        return prev.filter(id => id !== versionId);
+      } else if (prev.length < 2) {
+        return [...prev, versionId];
+      } else {
+        // Replace first selection with new one
+        return [prev[1], versionId];
+      }
+    });
+  };
+
+  const openVersionDiff = () => {
+    if (selectedVersionsForDiff.length === 2) {
+      setIsVersionDiffDialogOpen(true);
+    }
+  };
+
+  // Get versions for diff comparison
+  const version1 = versions.find((v: any) => v.id === selectedVersionsForDiff[0]);
+  const version2 = versions.find((v: any) => v.id === selectedVersionsForDiff[1]);
 
   return (
     <Card data-testid="card-kb-library">
@@ -395,12 +442,27 @@ function KBLibraryTab() {
       </CardContent>
 
       {/* Version History Dialog */}
-      <Dialog open={isVersionDialogOpen} onOpenChange={setIsVersionDialogOpen}>
-        <DialogContent className="max-w-3xl" data-testid="dialog-version-history">
+      <Dialog open={isVersionDialogOpen} onOpenChange={(open) => {
+        setIsVersionDialogOpen(open);
+        if (!open) {
+          setSelectedVersionsForDiff([]);
+        }
+      }}>
+        <DialogContent className="max-w-4xl" data-testid="dialog-version-history">
           <DialogHeader>
-            <DialogTitle data-testid="text-dialog-title">Version History</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle data-testid="text-dialog-title">Version History</DialogTitle>
+              <Button
+                size="sm"
+                onClick={openVersionDiff}
+                disabled={selectedVersionsForDiff.length !== 2}
+                data-testid="button-compare-versions"
+              >
+                Compare Selected ({selectedVersionsForDiff.length}/2)
+              </Button>
+            </div>
           </DialogHeader>
-          <ScrollArea className="h-[400px]" data-testid="scroll-version-list">
+          <ScrollArea className="h-[500px]" data-testid="scroll-version-list">
             {versions.length === 0 ? (
               <p className="text-muted-foreground text-center py-8" data-testid="text-no-versions">
                 No versions found
@@ -408,23 +470,61 @@ function KBLibraryTab() {
             ) : (
               <div className="space-y-4">
                 {versions.map((version: any, idx: number) => (
-                  <Card key={version.id} data-testid={`card-version-${version.id}`}>
+                  <Card 
+                    key={version.id} 
+                    data-testid={`card-version-${version.id}`}
+                    className={selectedVersionsForDiff.includes(version.id) ? 'border-primary' : ''}
+                  >
                     <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge 
-                            variant={idx === 0 ? 'default' : 'outline'}
-                            data-testid={`badge-version-number-${version.id}`}
-                          >
-                            v{version.versionNumber}
-                          </Badge>
-                          <Badge variant="secondary" data-testid={`badge-version-source-${version.id}`}>
-                            {version.source}
-                          </Badge>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={selectedVersionsForDiff.includes(version.id)}
+                            onChange={() => toggleVersionSelection(version.id)}
+                            className="h-4 w-4"
+                            data-testid={`checkbox-version-${version.id}`}
+                          />
+                          <div className="flex items-center gap-2">
+                            <Badge 
+                              variant={idx === 0 ? 'default' : 'outline'}
+                              data-testid={`badge-version-number-${version.id}`}
+                            >
+                              v{version.versionNumber}
+                            </Badge>
+                            <Badge variant="secondary" data-testid={`badge-version-source-${version.id}`}>
+                              {version.source}
+                            </Badge>
+                            {idx === 0 && (
+                              <Badge variant="default" data-testid="badge-current-version">
+                                Current
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-sm text-muted-foreground" data-testid={`text-version-date-${version.id}`}>
-                          {new Date(version.createdAt).toLocaleString()}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground" data-testid={`text-version-date-${version.id}`}>
+                            {new Date(version.createdAt).toLocaleString()}
+                          </span>
+                          {idx !== 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => rollbackMutation.mutate({
+                                fileId: selectedFileId!,
+                                versionId: version.id,
+                              })}
+                              disabled={rollbackMutation.isPending}
+                              data-testid={`button-rollback-${version.id}`}
+                            >
+                              {rollbackMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                'Rollback'
+                              )}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -461,6 +561,38 @@ function KBLibraryTab() {
                 onReject={() => rejectMutation.mutate(selectedProposal.id)}
                 isApproving={approveMutation.isPending}
                 isRejecting={rejectMutation.isPending}
+              />
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Version Comparison Diff Dialog */}
+      <Dialog open={isVersionDiffDialogOpen} onOpenChange={setIsVersionDiffDialogOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh]" data-testid="dialog-version-diff">
+          <DialogHeader>
+            <DialogTitle data-testid="text-version-diff-title">
+              Compare Versions
+              {version1 && version2 && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  v{version1.versionNumber} vs v{version2.versionNumber}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[80vh]">
+            {version1 && version2 && (
+              <ProposalDiffViewer
+                proposal={{
+                  id: 'version-comparison',
+                  kbFileId: selectedFileId || '',
+                  rationale: `Comparing version ${version1.versionNumber} (${version1.source}) with version ${version2.versionNumber} (${version2.source})`,
+                  status: 'comparison',
+                  createdAt: new Date().toISOString(),
+                }}
+                currentContent={version1.content}
+                proposedContent={version2.content}
+                filename={kbFiles.find((f: any) => f.id === selectedFileId)?.filename || 'Unknown'}
               />
             )}
           </ScrollArea>
