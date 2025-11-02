@@ -2220,6 +2220,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete a call from both ElevenLabs and local database
+  app.delete('/api/elevenlabs/calls/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Check voice access
+      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
+      // Get the call session to find conversation ID
+      const session = await db
+        .select()
+        .from(callSessions)
+        .where(eq(callSessions.id, id))
+        .limit(1);
+
+      if (session.length === 0) {
+        return res.status(404).json({ error: 'Call session not found' });
+      }
+
+      const conversationId = session[0].conversationId;
+      let elevenLabsDeleted = false;
+
+      // Delete from ElevenLabs if conversation ID exists
+      if (conversationId) {
+        const elevenLabsConfig = await storage.getElevenLabsConfig();
+        if (!elevenLabsConfig?.apiKey) {
+          // API key missing - abort to prevent orphaned conversations
+          return res.status(503).json({ 
+            error: 'ElevenLabs API key not configured. Cannot delete remote conversation. Please configure API key and retry.',
+          });
+        }
+
+        try {
+          await axios.delete(
+            `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}`,
+            {
+              headers: {
+                'xi-api-key': elevenLabsConfig.apiKey,
+              }
+            }
+          );
+          console.log(`[DeleteCall] Deleted conversation ${conversationId} from ElevenLabs`);
+          elevenLabsDeleted = true;
+        } catch (elevenLabsError: any) {
+          // If 404, conversation already gone - treat as success
+          if (elevenLabsError.response?.status === 404) {
+            console.log(`[DeleteCall] Conversation ${conversationId} not found in ElevenLabs (already deleted)`);
+            elevenLabsDeleted = true;
+          } else {
+            // Other errors - abort the entire operation
+            console.error('[DeleteCall] Failed to delete from ElevenLabs:', elevenLabsError.response?.data || elevenLabsError.message);
+            return res.status(500).json({ 
+              error: 'Failed to delete call from ElevenLabs. Local deletion aborted to prevent orphaned conversations.',
+              details: elevenLabsError.response?.data || elevenLabsError.message
+            });
+          }
+        }
+      }
+
+      // Only delete from local database if ElevenLabs deletion succeeded (or no conversationId)
+      await db
+        .delete(callSessions)
+        .where(eq(callSessions.id, id));
+
+      console.log(`[DeleteCall] Deleted call session ${id} from database`);
+
+      res.json({ 
+        success: true, 
+        message: elevenLabsDeleted 
+          ? 'Call deleted successfully from both ElevenLabs and local database'
+          : 'Call deleted successfully from local database (no remote conversation)',
+        deletedFromElevenLabs: elevenLabsDeleted 
+      });
+    } catch (error: any) {
+      console.error('[DeleteCall] Error:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete call' });
+    }
+  });
+
   // Get full transcript for a specific call
   app.get('/api/elevenlabs/call-transcript/:conversationId', isAuthenticatedCustom, async (req: any, res) => {
     try {

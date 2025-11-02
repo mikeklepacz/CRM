@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -615,6 +615,8 @@ export default function CallManager() {
   const [selectedAgentFilters, setSelectedAgentFilters] = useState<Set<string>>(new Set());
   const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
   const [selectedCallForDialog, setSelectedCallForDialog] = useState<{ conversationId: string; callData: any } | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [callToDelete, setCallToDelete] = useState<string | null>(null);
   
   // AI Insights state
   const [insightsDateRange, setInsightsDateRange] = useState<'7days' | '30days' | 'custom'>('30days');
@@ -764,6 +766,32 @@ export default function CallManager() {
       toast({
         title: "Error",
         description: error.message || "Failed to queue calls",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete call mutation
+  const deleteCallMutation = useMutation({
+    mutationFn: async (callId: string) => {
+      return apiRequest('DELETE', `/api/elevenlabs/calls/${callId}`);
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Call Deleted",
+        description: data.message || "Call has been deleted successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/call-analytics'] });
+      setIsDeleteDialogOpen(false);
+      setCallToDelete(null);
+    },
+    onError: (error: any) => {
+      const errorMessage = error.details 
+        ? `${error.message}\n\nDetails: ${error.details}`
+        : error.message || "Failed to delete call";
+      toast({
+        title: "Error",
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -1578,6 +1606,18 @@ export default function CallManager() {
                                       {call.session.interestLevel}
                                     </Badge>
                                   )}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => {
+                                      setCallToDelete(call.session.id);
+                                      setIsDeleteDialogOpen(true);
+                                    }}
+                                    data-testid={`button-delete-${call.session.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
                               </div>
                             </CardHeader>
@@ -2014,6 +2054,54 @@ export default function CallManager() {
         contextUpdateTrigger={contextUpdateTrigger}
         setContextUpdateTrigger={setContextUpdateTrigger}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent data-testid="dialog-delete-call">
+          <DialogHeader>
+            <DialogTitle>Delete Call</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this call? This will permanently remove it from both ElevenLabs and your local database.
+            </p>
+            <p className="text-sm font-medium text-destructive">
+              This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setCallToDelete(null);
+              }}
+              data-testid="button-cancel-delete"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (callToDelete) {
+                  deleteCallMutation.mutate(callToDelete);
+                }
+              }}
+              disabled={deleteCallMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteCallMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Call'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
