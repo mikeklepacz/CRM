@@ -45,6 +45,8 @@ import {
   kbFiles,
   kbFileVersions,
   kbChangeProposals,
+  openaiAssistants,
+  openaiAssistantFiles,
   type User,
   type UpsertUser,
   type Ticket,
@@ -424,6 +426,15 @@ export interface IStorage {
   getKbProposals(filters?: { status?: string; kbFileId?: string }): Promise<KbChangeProposal[]>;
   getKbProposalById(id: string): Promise<KbChangeProposal | undefined>;
   updateKbProposal(id: string, updates: Partial<InsertKbChangeProposal>): Promise<KbChangeProposal>;
+
+  // OpenAI Assistant Management operations
+  getAllAssistants(): Promise<any[]>;
+  getAssistantById(id: string): Promise<any | undefined>;
+  getAssistantBySlug(slug: string): Promise<any | undefined>;
+  updateAssistant(id: string, updates: any): Promise<any>;
+  getAssistantFiles(assistantId: string): Promise<any[]>;
+  createAssistantFile(file: any): Promise<any>;
+  deleteAssistantFile(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2436,6 +2447,47 @@ export class DatabaseStorage implements IStorage {
       .where(eq(kbChangeProposals.id, id))
       .returning();
     return updated;
+  }
+
+  // OpenAI Assistant Management operations
+  async getAllAssistants(): Promise<any[]> {
+    return await db.select().from(openaiAssistants).where(eq(openaiAssistants.isActive, true));
+  }
+
+  async getAssistantById(id: string): Promise<any | undefined> {
+    const [assistant] = await db.select().from(openaiAssistants).where(eq(openaiAssistants.id, id));
+    return assistant;
+  }
+
+  async getAssistantBySlug(slug: string): Promise<any | undefined> {
+    const [assistant] = await db.select().from(openaiAssistants).where(eq(openaiAssistants.slug, slug));
+    return assistant;
+  }
+
+  async updateAssistant(id: string, updates: any): Promise<any> {
+    const [updated] = await db
+      .update(openaiAssistants)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(openaiAssistants.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getAssistantFiles(assistantId: string): Promise<any[]> {
+    return await db
+      .select()
+      .from(openaiAssistantFiles)
+      .where(eq(openaiAssistantFiles.assistantId, assistantId))
+      .orderBy(desc(openaiAssistantFiles.uploadedAt));
+  }
+
+  async createAssistantFile(file: any): Promise<any> {
+    const [created] = await db.insert(openaiAssistantFiles).values(file).returning();
+    return created;
+  }
+
+  async deleteAssistantFile(id: string): Promise<void> {
+    await db.delete(openaiAssistantFiles).where(eq(openaiAssistantFiles.id, id));
   }
 }
 

@@ -1089,6 +1089,39 @@ export const kbChangeProposals = pgTable("kb_change_proposals", {
   index("idx_kb_proposals_file_status").on(table.kbFileId, table.status),
 ]);
 
+// OpenAI Assistants - Support multiple assistants with separate instructions and knowledge bases
+export const openaiAssistants = pgTable("openai_assistants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(), // e.g., 'Sales Assistant', 'Aligner', 'Wick Coach'
+  slug: varchar("slug", { length: 100 }).notNull().unique(), // e.g., 'sales-assistant', 'aligner', 'wick-coach'
+  description: text("description"),
+  assistantId: varchar("assistant_id"), // OpenAI assistant ID
+  vectorStoreId: varchar("vector_store_id"), // OpenAI vector store ID for this assistant's KB
+  instructions: text("instructions").notNull(), // System prompt for this assistant
+  model: varchar("model", { length: 50 }).default('gpt-4o'), // OpenAI model to use
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_openai_assistants_slug").on(table.slug),
+  index("idx_openai_assistants_active").on(table.isActive),
+]);
+
+// OpenAI Assistant Files - Link knowledge base files to specific assistants
+export const openaiAssistantFiles = pgTable("openai_assistant_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assistantId: varchar("assistant_id").notNull().references(() => openaiAssistants.id, { onDelete: 'cascade' }),
+  filename: varchar("filename", { length: 255 }).notNull(),
+  openaiFileId: varchar("openai_file_id"), // OpenAI file ID
+  fileSize: integer("file_size"), // in bytes
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  category: varchar("category", { length: 100 }), // e.g., 'sales-script', 'objection-handling', 'product-info'
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  lastSyncedAt: timestamp("last_synced_at"),
+}, (table) => [
+  index("idx_assistant_files_assistant").on(table.assistantId),
+]);
+
 export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
