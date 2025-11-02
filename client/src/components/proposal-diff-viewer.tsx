@@ -306,13 +306,13 @@ export function ProposalDiffViewer({
               Current version (left) vs. Proposed changes (right)
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <ScrollArea className="h-[600px] w-full rounded-md border">
-            <div className="font-mono text-xs">
+            <div className="font-mono text-xs min-w-full">
               {diffLines.map((line, idx) => (
                 <div
                   key={idx}
-                  className={`flex border-b hover:bg-accent/5 ${
+                  className={`flex border-b hover:bg-accent/5 min-w-full ${
                     line.type === 'added'
                       ? 'bg-green-50 dark:bg-green-950/20'
                       : line.type === 'removed'
@@ -322,13 +322,13 @@ export function ProposalDiffViewer({
                   data-testid={`diff-line-${idx}`}
                 >
                   {/* Line numbers and content - always show both sides */}
-                  <div className="grid grid-cols-2 w-full">
+                  <div className="grid grid-cols-2 gap-0 w-full min-w-full">
                     {/* Left side (original content) - ALWAYS visible */}
-                    <div className="flex border-r">
+                    <div className="flex border-r min-w-0">
                       <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
                         {line.oldLineNum || ''}
                       </div>
-                      <div className={`flex-1 px-2 py-1 ${
+                      <div className={`flex-1 px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words ${
                         line.type === 'removed' 
                           ? 'bg-red-100 dark:bg-red-900/10' 
                           : ''
@@ -347,11 +347,11 @@ export function ProposalDiffViewer({
                     </div>
 
                     {/* Right side (proposed content) - ALWAYS visible */}
-                    <div className="flex">
+                    <div className="flex min-w-0">
                       <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
                         {line.newLineNum || ''}
                       </div>
-                      <div className={`flex-1 px-2 py-1 ${
+                      <div className={`flex-1 px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words ${
                         line.type === 'added'
                           ? 'bg-green-100 dark:bg-green-900/10' 
                           : ''
