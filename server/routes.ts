@@ -3780,12 +3780,38 @@ IMPORTANT:
         });
       }
 
+      // Apply edits to generate final content
+      let finalContent = latestVersion?.content || '';
+      
+      try {
+        // Parse edits from JSON
+        const edits = JSON.parse(proposal.proposedContent);
+        const editArray = Array.isArray(edits) ? edits : [edits];
+        
+        // Apply each edit in order (simple string replacement)
+        for (const edit of editArray) {
+          if (edit.old && edit.new) {
+            // Replace first occurrence of old text with new text
+            const index = finalContent.indexOf(edit.old);
+            if (index !== -1) {
+              finalContent = finalContent.substring(0, index) + edit.new + finalContent.substring(index + edit.old.length);
+            } else {
+              console.warn(`[KB Approve] Edit not applied - original text not found:`, edit.old.substring(0, 100));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[KB Approve] Failed to parse/apply edits:', error);
+        // Fall back to treating proposedContent as final content (backward compatibility)
+        finalContent = proposal.proposedContent;
+      }
+
       // Create new version
       const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
       const newVersion = await storage.createKbFileVersion({
         kbFileId: file.id,
         versionNumber: newVersionNumber,
-        content: proposal.proposedContent,
+        content: finalContent,
         source: 'aligner_approved',
         createdBy: userId,
       });
@@ -3794,12 +3820,12 @@ IMPORTANT:
       await googleDrive.backupKbFileToDrive(
         file.filename,
         newVersionNumber,
-        proposal.proposedContent
+        finalContent
       );
 
       // Update file with new content
       await storage.updateKbFile(file.id, {
-        currentContent: proposal.proposedContent,
+        currentContent: finalContent,
         currentSyncVersion: newVersion.id,
       });
 
@@ -3822,7 +3848,7 @@ IMPORTANT:
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              content: proposal.proposedContent,
+              content: finalContent,
             }),
           });
         } catch (error) {
