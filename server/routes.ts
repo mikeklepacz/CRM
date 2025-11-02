@@ -2695,65 +2695,15 @@ Focus on:
 
         if (isCount) {
           console.log('[Wick Coach] Detected counts from OpenAI (sum=' + sum + ' vs totalCalls=' + totalCalls + '), calculating percentages');
-          // Calculate exact percentages first
-          const exactPositive = totalCalls > 0 ? (positiveValue / totalCalls) * 100 : 0;
-          const exactNeutral = totalCalls > 0 ? (neutralValue / totalCalls) * 100 : 0;
-          const exactNegative = totalCalls > 0 ? (negativeValue / totalCalls) * 100 : 0;
-          
-          console.log('[Wick Coach] Exact percentages before rounding - positive:', exactPositive, 'neutral:', exactNeutral, 'negative:', exactNegative);
-          
-          // Round to whole numbers
-          let roundedPositive = Math.round(exactPositive);
-          let roundedNeutral = Math.round(exactNeutral);
-          let roundedNegative = Math.round(exactNegative);
-          
-          console.log('[Wick Coach] After rounding - positive:', roundedPositive, 'neutral:', roundedNeutral, 'negative:', roundedNegative, 'sum:', roundedPositive + roundedNeutral + roundedNegative);
-          
-          // Ensure they sum to 100% by adjusting the largest value
-          const total = roundedPositive + roundedNeutral + roundedNegative;
-          if (total !== 100 && totalCalls > 0) {
-            const diff = 100 - total;
-            console.log('[Wick Coach] Sum is', total, ', adjusting by', diff);
-            // Find the largest percentage and adjust it
-            if (roundedPositive >= roundedNeutral && roundedPositive >= roundedNegative) {
-              roundedPositive += diff;
-            } else if (roundedNeutral >= roundedPositive && roundedNeutral >= roundedNegative) {
-              roundedNeutral += diff;
-            } else {
-              roundedNegative += diff;
-            }
-          }
-          
-          insights.sentimentAnalysis.positive = roundedPositive;
-          insights.sentimentAnalysis.neutral = roundedNeutral;
-          insights.sentimentAnalysis.negative = roundedNegative;
+          // Calculate percentages and round to whole numbers
+          insights.sentimentAnalysis.positive = totalCalls > 0 ? Math.round((positiveValue / totalCalls) * 100) : 0;
+          insights.sentimentAnalysis.neutral = totalCalls > 0 ? Math.round((neutralValue / totalCalls) * 100) : 0;
+          insights.sentimentAnalysis.negative = totalCalls > 0 ? Math.round((negativeValue / totalCalls) * 100) : 0;
         } else {
           console.log('[Wick Coach] Detected percentages from OpenAI (sum=' + sum + ' closer to 100 than ' + totalCalls + '), using directly');
-          // Round the percentages
-          let roundedPositive = Math.round(positiveValue);
-          let roundedNeutral = Math.round(neutralValue);
-          let roundedNegative = Math.round(negativeValue);
-          
-          console.log('[Wick Coach] After rounding - positive:', roundedPositive, 'neutral:', roundedNeutral, 'negative:', roundedNegative, 'sum:', roundedPositive + roundedNeutral + roundedNegative);
-          
-          // Ensure they sum to 100%
-          const total = roundedPositive + roundedNeutral + roundedNegative;
-          if (total !== 100) {
-            const diff = 100 - total;
-            console.log('[Wick Coach] Sum is', total, ', adjusting by', diff);
-            // Find the largest percentage and adjust it
-            if (roundedPositive >= roundedNeutral && roundedPositive >= roundedNegative) {
-              roundedPositive += diff;
-            } else if (roundedNeutral >= roundedPositive && roundedNeutral >= roundedNegative) {
-              roundedNeutral += diff;
-            } else {
-              roundedNegative += diff;
-            }
-          }
-          
-          insights.sentimentAnalysis.positive = roundedPositive;
-          insights.sentimentAnalysis.neutral = roundedNeutral;
-          insights.sentimentAnalysis.negative = roundedNegative;
+          insights.sentimentAnalysis.positive = Math.round(positiveValue);
+          insights.sentimentAnalysis.neutral = Math.round(neutralValue);
+          insights.sentimentAnalysis.negative = Math.round(negativeValue);
         }
 
         console.log('[Wick Coach] Final percentages - positive:', insights.sentimentAnalysis.positive, 'neutral:', insights.sentimentAnalysis.neutral, 'negative:', insights.sentimentAnalysis.negative);

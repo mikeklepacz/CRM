@@ -2031,9 +2031,9 @@ export default function CallManager() {
                                     </Badge>
                                   </div>
                                   <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                                    <span className="text-green-600">+{Math.round(insight.sentimentPositive || 0)}%</span>
-                                    <span className="text-yellow-600">~{Math.round(insight.sentimentNeutral || 0)}%</span>
-                                    <span className="text-red-600">-{Math.round(insight.sentimentNegative || 0)}%</span>
+                                    <span className="text-green-600">+{insight.sentimentPositive}%</span>
+                                    <span className="text-yellow-600">~{insight.sentimentNeutral}%</span>
+                                    <span className="text-red-600">-{insight.sentimentNegative}%</span>
                                   </div>
                                 </div>
                                 <div className="text-xs text-muted-foreground">
