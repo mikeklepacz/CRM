@@ -895,6 +895,7 @@ export const callSessions = pgTable("call_sessions", {
   costCredits: integer("cost_credits"),
   startedAt: timestamp("started_at").defaultNow(),
   endedAt: timestamp("ended_at"),
+  lastAnalyzedAt: timestamp("last_analyzed_at"), // Track when call was last analyzed by Aligner to prevent duplicate analysis
   // AI Analysis (Step 2 - OpenAI Reflection)
   aiAnalysis: jsonb("ai_analysis").$type<{
     summary?: string;
@@ -920,6 +921,7 @@ export const callSessions = pgTable("call_sessions", {
   index("idx_call_sessions_user").on(table.initiatedByUserId),
   index("idx_call_sessions_status").on(table.status),
   index("idx_call_sessions_started").on(table.startedAt),
+  index("idx_call_sessions_agent_analyzed").on(table.agentId, table.lastAnalyzedAt),
 ]);
 
 // Call Transcripts - conversation messages
@@ -1049,6 +1051,7 @@ export const kbFiles = pgTable("kb_files", {
   filename: varchar("filename", { length: 255 }).notNull().unique(), // Immutable, enforced by trigger
   currentContent: text("current_content"), // Latest approved content
   currentSyncVersion: varchar("current_sync_version"), // FK to kb_file_versions.id
+  agentId: varchar("agent_id", { length: 255 }), // ElevenLabs agent ID (e.g., agent_7201k8xa9cshfmqvkd8tx3xf2j7a) - which agent this KB file is for
   locked: boolean("locked").default(false), // True if referenced in workflow nodes
   fileType: varchar("file_type", { length: 50 }).default('file'), // 'file', 'url', 'text'
   lastSyncedAt: timestamp("last_synced_at"),
@@ -1057,6 +1060,7 @@ export const kbFiles = pgTable("kb_files", {
 }, (table) => [
   index("idx_kb_files_filename").on(table.filename),
   index("idx_kb_files_locked_synced").on(table.locked, table.lastSyncedAt),
+  index("idx_kb_files_agent").on(table.agentId),
 ]);
 
 export const kbFileVersions = pgTable("kb_file_versions", {
