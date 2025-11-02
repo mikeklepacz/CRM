@@ -20,6 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CallDetailDialog } from "@/components/call-detail-dialog";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { ProposalDiffViewer } from "@/components/proposal-diff-viewer";
 
 interface ElevenLabsAgent {
   id: string;
@@ -118,13 +119,23 @@ function KBLibraryTab() {
   const { toast } = useToast();
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
+  const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
+  const [isDiffDialogOpen, setIsDiffDialogOpen] = useState(false);
 
   // Fetch KB files
-  const { data: kbData, isLoading: kbLoading, refetch: refetchKbFiles } = useQuery({
+  const { data: kbData, isLoading: kbLoading } = useQuery({
     queryKey: ['/api/kb/files'],
   });
 
   const kbFiles = kbData?.files || [];
+
+  // Fetch proposals
+  const { data: proposalsData, isLoading: proposalsLoading } = useQuery({
+    queryKey: ['/api/kb/proposals'],
+  });
+
+  const proposals = proposalsData?.proposals || [];
+  const pendingProposals = proposals.filter((p: any) => p.status === 'pending');
 
   // Sync mutation
   const syncMutation = useMutation({
@@ -145,6 +156,50 @@ function KBLibraryTab() {
     },
   });
 
+  // Approve proposal mutation
+  const approveMutation = useMutation({
+    mutationFn: (proposalId: string) => apiRequest('POST', `/api/kb/proposals/${proposalId}/approve`),
+    onSuccess: () => {
+      toast({
+        title: "Proposal Approved",
+        description: "Changes have been applied to the KB file",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
+      setIsDiffDialogOpen(false);
+      setSelectedProposal(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Approval Failed",
+        description: error.message || "Failed to approve proposal",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Reject proposal mutation
+  const rejectMutation = useMutation({
+    mutationFn: (proposalId: string) => 
+      apiRequest('POST', `/api/kb/proposals/${proposalId}/reject`),
+    onSuccess: () => {
+      toast({
+        title: "Proposal Rejected",
+        description: "Proposal has been rejected",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+      setIsDiffDialogOpen(false);
+      setSelectedProposal(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Rejection Failed",
+        description: error.message || "Failed to reject proposal",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Fetch versions for selected file
   const { data: versionsData } = useQuery({
     queryKey: ['/api/kb/files', selectedFileId, 'versions'],
@@ -152,6 +207,11 @@ function KBLibraryTab() {
   });
 
   const versions = versionsData?.versions || [];
+
+  // Find file for selected proposal
+  const selectedFile = selectedProposal 
+    ? kbFiles.find((f: any) => f.id === selectedProposal.kbFileId)
+    : null;
 
   return (
     <Card data-testid="card-kb-library">
@@ -181,74 +241,157 @@ function KBLibraryTab() {
         </div>
       </CardHeader>
       <CardContent>
-        {kbLoading ? (
-          <div className="text-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-            <p className="text-muted-foreground mt-4">Loading KB files...</p>
-          </div>
-        ) : kbFiles.length === 0 ? (
-          <div className="text-center py-12 bg-muted/20 rounded-lg">
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">
-              No knowledge base files found. Click "Sync from ElevenLabs" to import files.
-            </p>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Filename</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Last Synced</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {kbFiles.map((file: any) => (
-                <TableRow key={file.id} data-testid={`row-kb-file-${file.id}`}>
-                  <TableCell className="font-medium" data-testid={`text-filename-${file.id}`}>
-                    {file.filename}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" data-testid={`badge-filetype-${file.id}`}>
-                      {file.fileType || 'file'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground" data-testid={`text-lastsynced-${file.id}`}>
-                    {file.lastSyncedAt
-                      ? new Date(file.lastSyncedAt).toLocaleDateString()
-                      : 'Never'}
-                  </TableCell>
-                  <TableCell>
-                    {file.locked ? (
-                      <Badge variant="destructive" data-testid={`badge-locked-${file.id}`}>
-                        Locked
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" data-testid={`badge-unlocked-${file.id}`}>
-                        Unlocked
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedFileId(file.id);
-                        setIsVersionDialogOpen(true);
-                      }}
-                      data-testid={`button-view-versions-${file.id}`}
-                    >
-                      View Versions
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <Tabs defaultValue="files" data-testid="tabs-kb-sections">
+          <TabsList className="mb-4">
+            <TabsTrigger value="files" data-testid="tab-files">
+              Files ({kbFiles.length})
+            </TabsTrigger>
+            <TabsTrigger value="proposals" data-testid="tab-proposals">
+              Proposals ({pendingProposals.length} pending)
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Files Tab */}
+          <TabsContent value="files">
+            {kbLoading ? (
+              <div className="text-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                <p className="text-muted-foreground mt-4">Loading KB files...</p>
+              </div>
+            ) : kbFiles.length === 0 ? (
+              <div className="text-center py-12 bg-muted/20 rounded-lg">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  No knowledge base files found. Click "Sync from ElevenLabs" to import files.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Filename</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Last Synced</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {kbFiles.map((file: any) => (
+                    <TableRow key={file.id} data-testid={`row-kb-file-${file.id}`}>
+                      <TableCell className="font-medium" data-testid={`text-filename-${file.id}`}>
+                        {file.filename}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" data-testid={`badge-filetype-${file.id}`}>
+                          {file.fileType || 'file'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground" data-testid={`text-lastsynced-${file.id}`}>
+                        {file.lastSyncedAt
+                          ? new Date(file.lastSyncedAt).toLocaleDateString()
+                          : 'Never'}
+                      </TableCell>
+                      <TableCell>
+                        {file.locked ? (
+                          <Badge variant="destructive" data-testid={`badge-locked-${file.id}`}>
+                            Locked
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" data-testid={`badge-unlocked-${file.id}`}>
+                            Unlocked
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedFileId(file.id);
+                            setIsVersionDialogOpen(true);
+                          }}
+                          data-testid={`button-view-versions-${file.id}`}
+                        >
+                          View Versions
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </TabsContent>
+
+          {/* Proposals Tab */}
+          <TabsContent value="proposals">
+            {proposalsLoading ? (
+              <div className="text-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                <p className="text-muted-foreground mt-4">Loading proposals...</p>
+              </div>
+            ) : proposals.length === 0 ? (
+              <div className="text-center py-12 bg-muted/20 rounded-lg">
+                <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  No AI-generated proposals yet. Run an AI analysis to generate improvement suggestions.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>File</TableHead>
+                    <TableHead>Rationale</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {proposals.map((proposal: any) => (
+                    <TableRow key={proposal.id} data-testid={`row-proposal-${proposal.id}`}>
+                      <TableCell className="font-medium" data-testid={`text-proposal-file-${proposal.id}`}>
+                        {kbFiles.find((f: any) => f.id === proposal.kbFileId)?.filename || 'Unknown'}
+                      </TableCell>
+                      <TableCell className="max-w-md truncate" data-testid={`text-proposal-rationale-${proposal.id}`}>
+                        {proposal.rationale}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={
+                            proposal.status === 'pending' ? 'default' : 
+                            proposal.status === 'approved' ? 'secondary' : 
+                            'destructive'
+                          }
+                          data-testid={`badge-proposal-status-${proposal.id}`}
+                        >
+                          {proposal.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground" data-testid={`text-proposal-date-${proposal.id}`}>
+                        {new Date(proposal.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedProposal(proposal);
+                            setIsDiffDialogOpen(true);
+                          }}
+                          data-testid={`button-view-diff-${proposal.id}`}
+                        >
+                          View Diff
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
 
       {/* Version History Dialog */}
@@ -296,6 +439,29 @@ function KBLibraryTab() {
                   </Card>
                 ))}
               </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Proposal Diff Viewer Dialog */}
+      <Dialog open={isDiffDialogOpen} onOpenChange={setIsDiffDialogOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh]" data-testid="dialog-proposal-diff">
+          <DialogHeader>
+            <DialogTitle data-testid="text-diff-dialog-title">Review Proposed Changes</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[80vh]">
+            {selectedProposal && selectedFile && (
+              <ProposalDiffViewer
+                proposal={selectedProposal}
+                currentContent={selectedFile.currentContent || ''}
+                proposedContent={selectedProposal.proposedContent}
+                filename={selectedFile.filename}
+                onApprove={() => approveMutation.mutate(selectedProposal.id)}
+                onReject={() => rejectMutation.mutate(selectedProposal.id)}
+                isApproving={approveMutation.isPending}
+                isRejecting={rejectMutation.isPending}
+              />
             )}
           </ScrollArea>
         </DialogContent>

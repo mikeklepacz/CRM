@@ -2997,6 +2997,35 @@ IMPORTANT: Only propose changes that directly address the analysis data. Do not 
     }
   });
 
+  // Reject a proposal
+  app.post('/api/kb/proposals/:id/reject', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+
+      const proposal = await storage.getKbProposalById(id);
+      if (!proposal) {
+        return res.status(404).json({ error: 'Proposal not found' });
+      }
+
+      if (proposal.status !== 'pending') {
+        return res.status(400).json({ error: 'Can only reject pending proposals' });
+      }
+
+      // Update proposal status to rejected
+      await storage.updateKbProposal(id, {
+        status: 'rejected',
+        reviewedAt: new Date(),
+        reviewedBy: userId,
+      });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[KB] Error rejecting proposal:', error);
+      res.status(500).json({ error: error.message || 'Failed to reject proposal' });
+    }
+  });
+
   // Approve a proposal
   app.post('/api/kb/proposals/:id/approve', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
