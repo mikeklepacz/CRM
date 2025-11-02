@@ -1774,6 +1774,54 @@ export default function CallManager() {
                   </Button>
                 </div>
 
+                {/* Auto-Trigger KB Analysis Settings */}
+                <Card className="bg-muted/30" data-testid="card-auto-trigger-settings">
+                  <CardHeader>
+                    <CardTitle className="text-sm">Auto-Trigger KB Analysis</CardTitle>
+                    <CardDescription className="text-xs">
+                      Automatically run KB analysis after a specified number of unanalyzed calls per agent
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="auto-kb-analysis" className="text-sm">Enable Auto-Trigger</Label>
+                      <Checkbox 
+                        id="auto-kb-analysis"
+                        checked={preferences?.autoKbAnalysis || false}
+                        onCheckedChange={(checked) => {
+                          updatePreferencesMutation.mutate({ autoKbAnalysis: checked });
+                        }}
+                        data-testid="checkbox-auto-kb-analysis"
+                      />
+                    </div>
+                    {preferences?.autoKbAnalysis && (
+                      <div className="space-y-2">
+                        <Label htmlFor="kb-analysis-threshold" className="text-sm">
+                          Trigger after X unanalyzed calls
+                        </Label>
+                        <Input
+                          id="kb-analysis-threshold"
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={preferences?.kbAnalysisThreshold || 10}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            if (value >= 1 && value <= 100) {
+                              updatePreferencesMutation.mutate({ kbAnalysisThreshold: value });
+                            }
+                          }}
+                          className="w-32"
+                          data-testid="input-kb-analysis-threshold"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Analysis will run automatically when any agent reaches {preferences?.kbAnalysisThreshold || 10} unanalyzed calls
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Historical Trends Section */}
                 {insightsHistory && insightsHistory.length > 0 && (
                   <Card className="mt-6" data-testid="card-historical-trends">
