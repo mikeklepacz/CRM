@@ -3265,6 +3265,38 @@ Focus on:
     }
   });
 
+  // Helper: Fuzzy filename matching for KB files
+  // Handles variations like underscores vs spaces, case differences
+  async function findKbFileByFuzzyFilename(filename: string, allFiles?: any[]): Promise<any> {
+    // Get all KB files if not provided (for caching across multiple calls)
+    const files = allFiles || await storage.getAllKbFiles();
+    
+    // Try exact match first (fast path using cached list)
+    const exactMatch = files.find(file => file.filename === filename);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    // Normalize the search term (collapse whitespace, underscores→spaces, lowercase, trim)
+    const normalizedSearch = filename
+      .toLowerCase()
+      .trim()
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' '); // collapse multiple spaces
+    
+    // Find fuzzy match
+    const fuzzyMatch = files.find(file => {
+      const normalizedFilename = file.filename
+        .toLowerCase()
+        .trim()
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ');
+      return normalizedFilename === normalizedSearch;
+    });
+
+    return fuzzyMatch || null;
+  }
+
   // Analyze AI insights and generate KB improvement proposals using Aligner assistant
   app.post('/api/kb/analyze-and-propose', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -3553,13 +3585,18 @@ IMPORTANT:
 
       console.log(`[KB Analyze] Creating ${parsedResponse.proposals.length} proposals...`);
 
-      // Create proposals in database
+      // Create proposals in database (reuse allKbFiles already fetched earlier for agent filtering)
       const createdProposals = [];
       for (const proposal of parsedResponse.proposals) {
-        const file = await storage.getKbFileByFilename(proposal.filename);
+        // Use fuzzy matching to handle filename variations (underscores vs spaces, etc)
+        const file = await findKbFileByFuzzyFilename(proposal.filename, allKbFiles);
         if (!file) {
-          console.warn(`[KB Analyze] File not found: ${proposal.filename}, skipping`);
+          console.warn(`[KB Analyze] File not found (even with fuzzy matching): ${proposal.filename}, skipping`);
           continue;
+        }
+        
+        if (file.filename !== proposal.filename) {
+          console.log(`[KB Analyze] Fuzzy matched "${proposal.filename}" → "${file.filename}"`);
         }
 
         // Get latest version to use as base
