@@ -997,6 +997,7 @@ export default function CallManager() {
 
       // Reset all statuses and start Wick Coach
       setWickCoachStatus('running');
+      setWickCoachCallCount(0); // Will be updated on success
       setWickCoachError(null);
       setAlignerStatus('idle');
       setAlignerError(null);
@@ -2091,7 +2092,7 @@ export default function CallManager() {
                               wickCoachStatus === 'running' ? 'text-blue-700 dark:text-blue-300' :
                               'text-gray-700 dark:text-gray-300'
                             }`}>
-                              {wickCoachStatus === 'running' && `Analyzing ${wickCoachCallCount} call${wickCoachCallCount !== 1 ? 's' : ''}`}
+                              {wickCoachStatus === 'running' && 'Analyzing calls...'}
                               {wickCoachStatus === 'complete' && `Analyzed ${wickCoachCallCount} call${wickCoachCallCount !== 1 ? 's' : ''}`}
                               {wickCoachStatus === 'error' && (wickCoachError || "Analysis failed")}
                             </p>
@@ -2132,7 +2133,7 @@ export default function CallManager() {
                               'text-gray-700 dark:text-gray-300'
                             }`}>
                               {alignerStatus === 'idle' && 'Waiting for Wick Coach...'}
-                              {alignerStatus === 'running' && `Analyzing ${alignerCallCount} call${alignerCallCount !== 1 ? 's' : ''} + ${alignerKbFileCount} KB file${alignerKbFileCount !== 1 ? 's' : ''}`}
+                              {alignerStatus === 'running' && 'Analyzing calls and KB files...'}
                               {alignerStatus === 'complete' && `Completed: ${alignerCallCount} calls, ${alignerKbFileCount} KB files`}
                               {alignerStatus === 'error' && (alignerError || "Analysis failed")}
                             </p>
