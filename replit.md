@@ -62,6 +62,18 @@ The application is built around a client dashboard unifying data from "Store Dat
         * Date range and agent filtering (7 days, 30 days, custom)
         * PII redaction (phone numbers) before analysis
         * Limited to 100 calls per analysis to control OpenAI costs
+- **Self-Evolving Knowledge Base System**: Complete KB management with version control and AI-powered improvements:
+    - **KB Library Tab**: Unified interface in Call Manager with sub-tabs for Files and Proposals
+    - **ElevenLabs Integration**: Bi-directional sync with ElevenLabs conversational AI knowledge base
+    - **Version Control**: Full audit trail with kb_file_versions table tracking all changes
+    - **Aligner Assistant**: Standalone OpenAI assistant that analyzes AI Insights and proposes KB improvements
+    - **WordPress-Style Diff Review**: Side-by-side comparison UI with custom diff algorithm (no external dependencies)
+    - **Human-in-the-Loop Approval**: Admins review, approve, or reject AI-proposed changes before applying
+    - **Optimistic Locking**: Prevents race conditions during concurrent edits via baseVersionId checks
+    - **Rollback Capability**: Restore any previous version with one click, creating new audit trail entry
+    - **Version Comparison**: Select any two versions to view side-by-side diff
+    - **Filename Immutability**: Database trigger prevents filename changes (ElevenLabs workflow dependency)
+    - **Scoped Security**: Aligner assistant completely isolated from Sales Assistant with defense-in-depth deletion controls
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management and preference storage.
@@ -70,7 +82,15 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Unified Status Color System**: Status dropdown and table rows use a single source (`useCustomTheme` hook).
 - **Debug Logging**: Centralized utility (`lib/debug.ts`) for structured logging.
 - **Sales Assistant Architecture**: User's OpenAI API key stored securely. Knowledge base files uploaded to OpenAI, metadata in PostgreSQL. Uses Assistants API with file search.
-- **Database Migrations**: Manual SQL migrations (0001-0008); Drizzle metadata is absent to avoid conflicts.
+- **KB System Architecture**: 
+    - Three tables: kb_files (master), kb_file_versions (audit trail), kb_change_proposals (workflow)
+    - Custom diff algorithm in ProposalDiffViewer component (no external dependencies)
+    - Aligner assistant uses standalone management UI and API routes (/api/aligner/*), completely separate from Sales Assistant (/api/openai/*)
+    - File deletion requires both fileId and assistantId; enforced at storage layer with AND clause in WHERE condition
+    - Proposal workflow uses optimistic locking with baseVersionId checks
+    - Database trigger prevents filename changes (ON UPDATE for kb_files.filename)
+    - Version deletion prevented via ON DELETE RESTRICT foreign key constraint
+- **Database Migrations**: Manual SQL migrations (0001-0010); Drizzle metadata is absent to avoid conflicts.
 - **Google Sheets Write Operations**: All writes use header-based column mapping (read headers, find indices by name, build data dynamically) for robustness against column changes.
 
 ## External Dependencies
