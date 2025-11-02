@@ -385,11 +385,12 @@ export interface IStorage {
   deleteCallTranscripts(conversationId: string): Promise<void>;
 
   // AI Insights helper operations
-  getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number }): Promise<Array<{
+  getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number; onlyUnanalyzed?: boolean }): Promise<Array<{
     session: CallSession;
     transcripts: CallTranscript[];
     client: Client;
   }>>;
+  markCallsAsAnalyzed(conversationIds: string[]): Promise<void>;
 
   // Call Events operations
   createCallEvent(event: InsertCallEvent): Promise<CallEvent>;
@@ -2141,7 +2142,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // AI Insights helper operations
-  async getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number }): Promise<Array<{
+  async getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number; onlyUnanalyzed?: boolean }): Promise<Array<{
     session: CallSession;
     transcripts: CallTranscript[];
     client: Client;
@@ -2162,12 +2163,15 @@ export class DatabaseStorage implements IStorage {
     if (filters.agentId) {
       conditions.push(eq(callSessions.agentId, filters.agentId));
     }
+    if (filters.onlyUnanalyzed) {
+      conditions.push(sql`${callSessions.lastAnalyzedAt} IS NULL`);
+    }
 
-    // Get call sessions
+    // Get call sessions (ordered oldest to newest for chronological batch analysis)
     const sessions = await db.select()
       .from(callSessions)
       .where(and(...conditions))
-      .orderBy(desc(callSessions.startedAt))
+      .orderBy(callSessions.startedAt) // ASC for oldest-first analysis
       .limit(limit);
 
     // Get transcripts and clients for each session
@@ -2185,6 +2189,14 @@ export class DatabaseStorage implements IStorage {
     );
 
     return results;
+  }
+
+  async markCallsAsAnalyzed(conversationIds: string[]): Promise<void> {
+    if (conversationIds.length === 0) return;
+    
+    await db.update(callSessions)
+      .set({ lastAnalyzedAt: new Date() })
+      .where(sql`${callSessions.conversationId} = ANY(${conversationIds})`);
   }
 
   // Call Events operations
