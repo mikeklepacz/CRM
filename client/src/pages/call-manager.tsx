@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -206,11 +207,15 @@ function KBLibraryTab() {
             <TableBody>
               {kbFiles.map((file: any) => (
                 <TableRow key={file.id} data-testid={`row-kb-file-${file.id}`}>
-                  <TableCell className="font-medium">{file.filename}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{file.fileType || 'file'}</Badge>
+                  <TableCell className="font-medium" data-testid={`text-filename-${file.id}`}>
+                    {file.filename}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell>
+                    <Badge variant="outline" data-testid={`badge-filetype-${file.id}`}>
+                      {file.fileType || 'file'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground" data-testid={`text-lastsynced-${file.id}`}>
                     {file.lastSyncedAt
                       ? new Date(file.lastSyncedAt).toLocaleDateString()
                       : 'Never'}
@@ -247,65 +252,54 @@ function KBLibraryTab() {
       </CardContent>
 
       {/* Version History Dialog */}
-      {selectedFileId && (
-        <div
-          className={`fixed inset-0 z-50 bg-background/80 backdrop-blur-sm ${
-            isVersionDialogOpen ? 'block' : 'hidden'
-          }`}
-          onClick={() => setIsVersionDialogOpen(false)}
-        >
-          <div
-            className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-3xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Version History</h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsVersionDialogOpen(false)}
-                data-testid="button-close-version-dialog"
-              >
-                ×
-              </Button>
-            </div>
-            <ScrollArea className="h-[400px]">
-              {versions.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">No versions found</p>
-              ) : (
-                <div className="space-y-4">
-                  {versions.map((version: any, idx: number) => (
-                    <Card key={version.id} data-testid={`card-version-${version.id}`}>
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={idx === 0 ? 'default' : 'outline'}>
-                              v{version.versionNumber}
-                            </Badge>
-                            <Badge variant="secondary">{version.source}</Badge>
-                          </div>
-                          <span className="text-sm text-muted-foreground">
-                            {new Date(version.createdAt).toLocaleString()}
-                          </span>
+      <Dialog open={isVersionDialogOpen} onOpenChange={setIsVersionDialogOpen}>
+        <DialogContent className="max-w-3xl" data-testid="dialog-version-history">
+          <DialogHeader>
+            <DialogTitle data-testid="text-dialog-title">Version History</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[400px]" data-testid="scroll-version-list">
+            {versions.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8" data-testid="text-no-versions">
+                No versions found
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {versions.map((version: any, idx: number) => (
+                  <Card key={version.id} data-testid={`card-version-${version.id}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant={idx === 0 ? 'default' : 'outline'}
+                            data-testid={`badge-version-number-${version.id}`}
+                          >
+                            v{version.versionNumber}
+                          </Badge>
+                          <Badge variant="secondary" data-testid={`badge-version-source-${version.id}`}>
+                            {version.source}
+                          </Badge>
                         </div>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">
-                          Created by: {version.createdBy}
-                        </p>
-                        <div className="mt-2 p-3 bg-muted/50 rounded text-sm font-mono max-h-32 overflow-auto">
-                          {version.content.substring(0, 200)}
-                          {version.content.length > 200 && '...'}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </div>
-        </div>
-      )}
+                        <span className="text-sm text-muted-foreground" data-testid={`text-version-date-${version.id}`}>
+                          {new Date(version.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground" data-testid={`text-version-creator-${version.id}`}>
+                        Created by: {version.createdBy}
+                      </p>
+                      <div className="mt-2 p-3 bg-muted/50 rounded text-sm font-mono max-h-32 overflow-auto" data-testid={`text-version-content-${version.id}`}>
+                        {version.content.substring(0, 200)}
+                        {version.content.length > 200 && '...'}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
