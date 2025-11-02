@@ -2618,6 +2618,28 @@ Focus on:
     }
   });
 
+  // AI Insights - Get historical insights
+  app.get('/api/elevenlabs/insights-history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { agentId, startDate, endDate, limit } = req.query;
+      
+      const filters: any = {};
+      if (agentId) filters.agentId = agentId;
+      if (startDate) filters.startDate = new Date(startDate);
+      if (endDate) filters.endDate = new Date(endDate);
+      if (limit) filters.limit = parseInt(limit);
+      
+      const history = await storage.getAiInsightsHistory(filters);
+      
+      res.json({ history });
+    } catch (error: any) {
+      console.error('[AI Insights] Error retrieving insights history:', error);
+      res.status(500).json({ 
+        error: error.message || 'Failed to retrieve insights history'
+      });
+    }
+  });
+
   // ===== SYSTEM-WIDE GOOGLE SHEETS OAUTH (ADMIN ONLY) =====
   app.get('/api/auth/google/sheets/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
