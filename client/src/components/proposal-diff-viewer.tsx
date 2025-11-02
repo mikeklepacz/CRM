@@ -28,14 +28,96 @@ interface ProposalDiffViewerProps {
   isRejecting?: boolean;
 }
 
-// WordPress-style side-by-side diff implementation using LCS
-// Always shows both original and proposed content with proper alignment
-function computeLineDiff(oldText: string, newText: string) {
-  // Normalize empty inputs - empty string should be zero lines, not one empty line
+// Word-level diff for highlighting changes within a line
+function computeWordDiff(oldText: string, newText: string): { oldHighlighted: JSX.Element[]; newHighlighted: JSX.Element[] } {
+  const oldWords = oldText.split(/(\s+)/);
+  const newWords = newText.split(/(\s+)/);
+  
+  // Simple LCS for words
+  const lcs: number[][] = [];
+  for (let i = 0; i <= oldWords.length; i++) {
+    lcs[i] = [];
+    for (let j = 0; j <= newWords.length; j++) {
+      if (i === 0 || j === 0) {
+        lcs[i][j] = 0;
+      } else if (oldWords[i - 1] === newWords[j - 1]) {
+        lcs[i][j] = lcs[i - 1][j - 1] + 1;
+      } else {
+        lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
+      }
+    }
+  }
+  
+  // Backtrack to find matching words
+  const oldHighlighted: JSX.Element[] = [];
+  const newHighlighted: JSX.Element[] = [];
+  let i = oldWords.length;
+  let j = newWords.length;
+  let oldIdx = 0;
+  let newIdx = 0;
+  
+  // Build mapping of which words are in LCS
+  const oldInLCS = new Set<number>();
+  const newInLCS = new Set<number>();
+  
+  while (i > 0 && j > 0) {
+    if (oldWords[i - 1] === newWords[j - 1]) {
+      oldInLCS.add(i - 1);
+      newInLCS.add(j - 1);
+      i--;
+      j--;
+    } else if (lcs[i - 1][j] > lcs[i][j - 1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  
+  // Render old words with highlighting
+  for (let idx = 0; idx < oldWords.length; idx++) {
+    if (oldInLCS.has(idx)) {
+      oldHighlighted.push(<span key={idx}>{oldWords[idx]}</span>);
+    } else {
+      oldHighlighted.push(
+        <span key={idx} className="bg-red-200 dark:bg-red-900/40 text-red-900 dark:text-red-200">
+          {oldWords[idx]}
+        </span>
+      );
+    }
+  }
+  
+  // Render new words with highlighting
+  for (let idx = 0; idx < newWords.length; idx++) {
+    if (newInLCS.has(idx)) {
+      newHighlighted.push(<span key={idx}>{newWords[idx]}</span>);
+    } else {
+      newHighlighted.push(
+        <span key={idx} className="bg-green-200 dark:bg-green-900/40 text-green-900 dark:text-green-200">
+          {newWords[idx]}
+        </span>
+      );
+    }
+  }
+  
+  return { oldHighlighted, newHighlighted };
+}
+
+// WordPress-style unified diff (changed sections only with context)
+interface DiffHunk {
+  startLine: number;
+  lines: Array<{
+    type: 'context' | 'removed' | 'added';
+    content: string;
+    lineNum: number;
+    wordHighlighting?: JSX.Element[];
+  }>;
+}
+
+function computeUnifiedDiff(oldText: string, newText: string, contextLines = 3): DiffHunk[] {
   const oldLines = oldText === '' ? [] : oldText.split('\n');
   const newLines = newText === '' ? [] : newText.split('\n');
   
-  // Build LCS table for proper diff alignment
+  // Build LCS table
   const lcs: number[][] = [];
   for (let i = 0; i <= oldLines.length; i++) {
     lcs[i] = [];
@@ -50,13 +132,12 @@ function computeLineDiff(oldText: string, newText: string) {
     }
   }
   
-  // Backtrack through LCS to build diff
-  const result: Array<{
-    type: 'unchanged' | 'added' | 'removed';
-    oldContent: string | null;
-    newContent: string | null;
-    oldLineNum: number | null;
-    newLineNum: number | null;
+  // Backtrack to build all changes
+  const changes: Array<{
+    type: 'unchanged' | 'removed' | 'added';
+    content: string;
+    oldLineNum: number;
+    newLineNum: number;
   }> = [];
   
   let i = oldLines.length;
@@ -64,43 +145,135 @@ function computeLineDiff(oldText: string, newText: string) {
   let oldLineNum = oldLines.length;
   let newLineNum = newLines.length;
   
-  // Build diff in reverse, then reverse at end
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-      // Lines match - unchanged
-      result.unshift({
+      changes.unshift({
         type: 'unchanged',
-        oldContent: oldLines[i - 1],
-        newContent: newLines[j - 1],
+        content: oldLines[i - 1],
         oldLineNum: oldLineNum--,
         newLineNum: newLineNum--,
       });
       i--;
       j--;
     } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
-      // Line added in new version
-      result.unshift({
+      changes.unshift({
         type: 'added',
-        oldContent: null,
-        newContent: newLines[j - 1],
-        oldLineNum: null,
+        content: newLines[j - 1],
+        oldLineNum: 0,
         newLineNum: newLineNum--,
       });
       j--;
-    } else if (i > 0 && (j === 0 || lcs[i][j - 1] < lcs[i - 1][j])) {
-      // Line removed from old version
-      result.unshift({
+    } else if (i > 0) {
+      changes.unshift({
         type: 'removed',
-        oldContent: oldLines[i - 1],
-        newContent: null,
+        content: oldLines[i - 1],
         oldLineNum: oldLineNum--,
-        newLineNum: null,
+        newLineNum: 0,
       });
       i--;
     }
   }
   
-  return result;
+  // Group changes into hunks (sections with changes + context)
+  const hunks: DiffHunk[] = [];
+  let currentHunk: DiffHunk | null = null;
+  let unchangedBuffer: typeof changes = [];
+  let contextAddedAfterChange = 0; // Track context lines already added after last change
+  
+  for (let idx = 0; idx < changes.length; idx++) {
+    const change = changes[idx];
+    
+    if (change.type === 'unchanged') {
+      if (currentHunk && contextAddedAfterChange < contextLines) {
+        // Add context line after a change
+        currentHunk.lines.push({
+          type: 'context',
+          content: change.content,
+          lineNum: change.newLineNum,
+        });
+        contextAddedAfterChange++;
+      }
+      
+      // Buffer unchanged lines for potential context before next change
+      unchangedBuffer.push(change);
+      
+      // If we have enough separation, close current hunk
+      if (currentHunk && unchangedBuffer.length > contextLines) {
+        hunks.push(currentHunk);
+        currentHunk = null;
+        contextAddedAfterChange = 0;
+        // Keep last contextLines in buffer for next hunk's "before" context
+        unchangedBuffer = unchangedBuffer.slice(-contextLines);
+      }
+    } else {
+      // Changed line - start or continue hunk
+      if (!currentHunk) {
+        // Start new hunk with context before
+        const contextBefore = unchangedBuffer.slice(-contextLines);
+        currentHunk = {
+          startLine: contextBefore.length > 0 ? contextBefore[0].newLineNum : change.newLineNum || change.oldLineNum,
+          lines: [],
+        };
+        
+        contextBefore.forEach(c => {
+          currentHunk!.lines.push({
+            type: 'context',
+            content: c.content,
+            lineNum: c.newLineNum,
+          });
+        });
+      }
+      
+      // Reset context counter and buffer when we hit a change
+      unchangedBuffer = [];
+      contextAddedAfterChange = 0;
+      
+      // Check if there's a corresponding change for word-level highlighting
+      let wordHighlighting: JSX.Element[] | undefined;
+      if (change.type === 'removed') {
+        // Look ahead for matching added line
+        const nextChange = changes[idx + 1];
+        if (nextChange && nextChange.type === 'added') {
+          const { oldHighlighted, newHighlighted } = computeWordDiff(change.content, nextChange.content);
+          wordHighlighting = oldHighlighted;
+          
+          // Add removed line with word highlighting
+          currentHunk.lines.push({
+            type: 'removed',
+            content: change.content,
+            lineNum: change.oldLineNum,
+            wordHighlighting,
+          });
+          
+          // Add added line with word highlighting
+          currentHunk.lines.push({
+            type: 'added',
+            content: nextChange.content,
+            lineNum: nextChange.newLineNum,
+            wordHighlighting: newHighlighted,
+          });
+          
+          idx++; // Skip next since we handled it
+          continue;
+        }
+      }
+      
+      // Regular add/remove without word highlighting
+      currentHunk.lines.push({
+        type: change.type as 'removed' | 'added',
+        content: change.content,
+        lineNum: change.type === 'removed' ? change.oldLineNum : change.newLineNum,
+        wordHighlighting,
+      });
+    }
+  }
+  
+  // Close final hunk if exists
+  if (currentHunk) {
+    hunks.push(currentHunk);
+  }
+  
+  return hunks;
 }
 
 export function ProposalDiffViewer({
@@ -119,7 +292,7 @@ export function ProposalDiffViewer({
   const [localProposedContent, setLocalProposedContent] = useState(proposedContent);
   const [localHumanEdited, setLocalHumanEdited] = useState(proposal.humanEdited || false);
 
-  // Sync local state when proposal changes (switching between proposals)
+  // Sync local state when proposal changes
   useEffect(() => {
     setEditedContent(proposedContent);
     setLocalProposedContent(proposedContent);
@@ -136,7 +309,6 @@ export function ProposalDiffViewer({
         title: "Changes Saved",
         description: "Your edits have been saved to the proposal",
       });
-      // Update local state immediately so diff reflects changes
       setLocalProposedContent(editedContent);
       setLocalHumanEdited(true);
       queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
@@ -151,20 +323,29 @@ export function ProposalDiffViewer({
     },
   });
 
-  // Use edited content for diff if in edit mode, otherwise use local state
+  // Use edited content for diff if in edit mode
   const displayContent = isEditing ? editedContent : localProposedContent;
 
-  // Compute line-by-line diff using custom implementation
-  const diffLines = useMemo(() => {
-    return computeLineDiff(currentContent || '', displayContent || '');
+  // Compute unified diff hunks
+  const hunks = useMemo(() => {
+    return computeUnifiedDiff(currentContent || '', displayContent || '');
   }, [currentContent, displayContent]);
 
   const stats = useMemo(() => {
-    const added = diffLines.filter(l => l.type === 'added').length;
-    const removed = diffLines.filter(l => l.type === 'removed').length;
-    const unchanged = diffLines.filter(l => l.type === 'unchanged').length;
+    let added = 0;
+    let removed = 0;
+    let unchanged = 0;
+    
+    hunks.forEach(hunk => {
+      hunk.lines.forEach(line => {
+        if (line.type === 'added') added++;
+        else if (line.type === 'removed') removed++;
+        else unchanged++;
+      });
+    });
+    
     return { added, removed, unchanged, total: added + removed + unchanged };
-  }, [diffLines]);
+  }, [hunks]);
 
   return (
     <div className="space-y-4" data-testid="proposal-diff-viewer">
@@ -297,82 +478,67 @@ export function ProposalDiffViewer({
         </Card>
       )}
 
-      {/* Side-by-side diff view */}
+      {/* WordPress-style unified diff view */}
       {!isEditing && (
         <Card data-testid="card-diff-view">
           <CardHeader>
             <CardTitle>Changes</CardTitle>
             <CardDescription>
-              Current version (left) vs. Proposed changes (right)
+              Removed (red) vs. Added (green)
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-[600px] w-full rounded-md border overflow-auto">
-              <div className="font-mono text-xs" style={{ minWidth: '800px' }}>
-                {diffLines.map((line, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex border-b hover:bg-accent/5 ${
-                      line.type === 'added'
-                        ? 'bg-green-50 dark:bg-green-950/20'
-                        : line.type === 'removed'
-                        ? 'bg-red-50 dark:bg-red-950/20'
-                        : ''
-                    }`}
-                    data-testid={`diff-line-${idx}`}
-                  >
-                    {/* Line numbers and content - always show both sides */}
-                    <div className="grid grid-cols-2 w-full" style={{ minWidth: '800px' }}>
-                      {/* Left side (original content) - ALWAYS visible */}
-                      <div className="flex border-r" style={{ minWidth: '400px' }}>
-                        <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
-                          {line.oldLineNum || ''}
+            <ScrollArea className="h-[600px] w-full rounded-md border">
+              <div className="font-mono text-sm">
+                {hunks.map((hunk, hunkIdx) => (
+                  <div key={hunkIdx} className="mb-6">
+                    {hunk.lines.map((line, lineIdx) => (
+                      <div
+                        key={lineIdx}
+                        className={`flex ${
+                          line.type === 'removed'
+                            ? 'bg-red-50 dark:bg-red-950/20'
+                            : line.type === 'added'
+                            ? 'bg-green-50 dark:bg-green-950/20'
+                            : 'bg-background'
+                        }`}
+                        data-testid={`diff-line-${hunkIdx}-${lineIdx}`}
+                      >
+                        {/* Line number */}
+                        <div className="w-16 shrink-0 px-2 py-1 text-right text-muted-foreground select-none border-r">
+                          {line.lineNum || ''}
                         </div>
-                        <div className={`flex-1 px-2 py-1 whitespace-pre-wrap break-words ${
-                          line.type === 'removed' 
-                            ? 'bg-red-100 dark:bg-red-900/10' 
-                            : ''
-                        }`}>
-                          {line.type === 'removed' && line.oldContent && (
-                            <span className="text-red-600 dark:text-red-400 mr-1">-</span>
+                        
+                        {/* Line content */}
+                        <div className="flex-1 px-3 py-1 whitespace-pre-wrap break-words">
+                          {line.type === 'removed' && (
+                            <span className="text-red-600 dark:text-red-400 mr-2 select-none">−</span>
+                          )}
+                          {line.type === 'added' && (
+                            <span className="text-green-600 dark:text-green-400 mr-2 select-none">+</span>
                           )}
                           <span className={
                             line.type === 'removed'
-                              ? 'text-red-900 dark:text-red-300' 
-                              : ''
+                              ? 'text-red-900 dark:text-red-100'
+                              : line.type === 'added'
+                              ? 'text-green-900 dark:text-green-100'
+                              : 'text-foreground'
                           }>
-                            {line.oldContent || '\u00A0'}
+                            {line.wordHighlighting || line.content}
                           </span>
                         </div>
                       </div>
-
-                      {/* Right side (proposed content) - ALWAYS visible */}
-                      <div className="flex" style={{ minWidth: '400px' }}>
-                        <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
-                          {line.newLineNum || ''}
-                        </div>
-                        <div className={`flex-1 px-2 py-1 whitespace-pre-wrap break-words ${
-                          line.type === 'added'
-                            ? 'bg-green-100 dark:bg-green-900/10' 
-                            : ''
-                        }`}>
-                          {line.type === 'added' && line.newContent && (
-                            <span className="text-green-600 dark:text-green-400 mr-1">+</span>
-                          )}
-                          <span className={
-                            line.type === 'added'
-                              ? 'text-green-900 dark:text-green-300' 
-                              : ''
-                          }>
-                            {line.newContent || '\u00A0'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 ))}
+                
+                {hunks.length === 0 && (
+                  <div className="p-8 text-center text-muted-foreground">
+                    No changes detected
+                  </div>
+                )}
               </div>
-            </div>
+            </ScrollArea>
           </CardContent>
         </Card>
       )}
