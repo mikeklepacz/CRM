@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Upload, FileText, Trash2, Loader2, Save, Bot, AlertCircle, Sparkles, Info } from "lucide-react";
+import { Upload, FileText, Trash2, Loader2, Save, Bot, AlertCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function AlignerManagement() {
@@ -22,9 +22,6 @@ export function AlignerManagement() {
   const [fileName, setFileName] = useState("");
   const [fileCategory, setFileCategory] = useState("call-data");
   
-  // Analysis state
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
-
   // Fetch Aligner assistant
   const { data: alignerData, isLoading: alignerLoading } = useQuery({
     queryKey: ['/api/aligner'],
@@ -34,19 +31,6 @@ export function AlignerManagement() {
   const { data: settings } = useQuery({
     queryKey: ['/api/openai/settings'],
   });
-
-  // Fetch agents list
-  const { data: agentsData } = useQuery({
-    queryKey: ['/api/elevenlabs/agents'],
-  });
-  const agents = agentsData || [];
-
-  // Fetch unanalyzed call count for selected agent
-  const { data: callStatsData } = useQuery({
-    queryKey: ['/api/elevenlabs/call-analytics', { agentId: selectedAgentId, onlyUnanalyzed: true }],
-    enabled: !!selectedAgentId,
-  });
-  const unanalyzedCallCount = callStatsData?.calls?.length || 0;
 
   const aligner = alignerData?.assistant;
   const alignerFiles = aligner?.files || [];
@@ -145,29 +129,6 @@ export function AlignerManagement() {
     },
   });
 
-  // Run analysis mutation
-  const runAnalysisMutation = useMutation({
-    mutationFn: async (agentId: string) => {
-      return await apiRequest("POST", "/api/kb/analyze-and-propose", { agentId });
-    },
-    onSuccess: (data: any) => {
-      toast({
-        title: "Analysis Complete",
-        description: data.message || `Created ${data.proposalsCreated} proposal(s). ${data.remainingCalls > 0 ? `${data.remainingCalls} calls remaining.` : ''}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/call-analytics'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/insights-history'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Analysis Failed",
-        description: error.message || "Failed to run analysis",
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleSaveInstructions = () => {
     if (!aligner?.instructions) {
       toast({
@@ -205,27 +166,6 @@ export function AlignerManagement() {
       };
       reader.readAsText(file);
     }
-  };
-
-  const handleRunAnalysis = () => {
-    if (!selectedAgentId) {
-      toast({
-        title: "Error",
-        description: "Please select an agent to analyze",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (unanalyzedCallCount === 0) {
-      toast({
-        title: "No Calls to Analyze",
-        description: "There are no unanalyzed calls for this agent",
-      });
-      return;
-    }
-    
-    runAnalysisMutation.mutate(selectedAgentId);
   };
 
   const formatFileSize = (bytes: number) => {
@@ -416,77 +356,6 @@ export function AlignerManagement() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Run Analysis Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            Run KB Analysis
-          </CardTitle>
-          <CardDescription>
-            Analyze unanalyzed calls for a specific agent and generate KB improvement proposals
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="agent-select">Select Agent</Label>
-            <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-              <SelectTrigger id="agent-select" data-testid="select-analysis-agent">
-                <SelectValue placeholder="Choose an AI agent..." />
-              </SelectTrigger>
-              <SelectContent>
-                {agents.map((agent: any) => (
-                  <SelectItem key={agent.id} value={agent.agent_id}>
-                    {agent.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedAgentId && (
-            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md">
-              <Info className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">
-                <strong>{unanalyzedCallCount}</strong> unanalyzed call{unanalyzedCallCount !== 1 ? 's' : ''} found for this agent
-              </span>
-            </div>
-          )}
-
-          <Button 
-            onClick={handleRunAnalysis} 
-            disabled={!selectedAgentId || unanalyzedCallCount === 0 || runAnalysisMutation.isPending}
-            className="w-full"
-            data-testid="button-run-analysis"
-          >
-            {runAnalysisMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Analyzing calls...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Run Analysis
-              </>
-            )}
-          </Button>
-
-          {selectedAgentId && unanalyzedCallCount === 0 && (
-            <p className="text-sm text-muted-foreground text-center">
-              No unanalyzed calls available. Make calls first to generate analysis.
-            </p>
-          )}
-
-          <div className="pt-2 border-t">
-            <p className="text-xs text-muted-foreground">
-              <strong>How it works:</strong> The Aligner reads raw transcripts and optional WIC coach insights, 
-              then proposes KB file improvements. Only unanalyzed calls will be processed (baby-steps approach).
-            </p>
-          </div>
         </CardContent>
       </Card>
 
