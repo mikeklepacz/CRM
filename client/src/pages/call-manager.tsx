@@ -325,32 +325,38 @@ function KBLibraryTab() {
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <div className="relative">
+            <div>
               <input
+                id="kb-file-upload"
                 type="file"
                 multiple
                 accept=".txt"
                 onChange={handleFileSelect}
                 disabled={uploadMutation.isPending}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                className="hidden"
                 data-testid="input-upload-files"
               />
-              <Button
-                disabled={uploadMutation.isPending}
-                data-testid="button-upload-kb"
-              >
-                {uploadMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Files
-                  </>
-                )}
-              </Button>
+              <label htmlFor="kb-file-upload">
+                <Button
+                  disabled={uploadMutation.isPending}
+                  data-testid="button-upload-kb"
+                  asChild
+                >
+                  <span>
+                    {uploadMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Files
+                      </>
+                    )}
+                  </span>
+                </Button>
+              </label>
             </div>
             <Button
               onClick={() => syncMutation.mutate()}
