@@ -84,23 +84,23 @@ function computeWordDiff(oldText: string, newText: string): {
   return { oldWords: oldResult, newWords: newResult };
 }
 
-// WordPress-style side-by-side diff with hunks (changed sections only)
+// Unified diff format (like Git) - shows only changed sections with context
 interface DiffLine {
-  type: 'unchanged' | 'removed' | 'added' | 'modified';
-  oldContent: string | null;
-  newContent: string | null;
+  type: 'context' | 'removed' | 'added';
+  content: string;
   oldLineNum: number | null;
   newLineNum: number | null;
-  oldWordDiff?: Array<{ text: string; changed: boolean }>;
-  newWordDiff?: Array<{ text: string; changed: boolean }>;
 }
 
 interface DiffHunk {
-  startLine: number;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
   lines: DiffLine[];
 }
 
-function computeSideBySideDiff(oldText: string, newText: string, contextLines = 3): DiffHunk[] {
+function computeUnifiedDiff(oldText: string, newText: string, contextLines = 3): DiffHunk[] {
   const oldLines = oldText === '' ? [] : oldText.split('\n');
   const newLines = newText === '' ? [] : newText.split('\n');
   
@@ -130,9 +130,8 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
     if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
       // Unchanged line
       allChanges.unshift({
-        type: 'unchanged',
-        oldContent: oldLines[i - 1],
-        newContent: newLines[j - 1],
+        type: 'context',
+        content: oldLines[i - 1],
         oldLineNum: oldLineNum--,
         newLineNum: newLineNum--,
       });
@@ -142,8 +141,7 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
       // Line added
       allChanges.unshift({
         type: 'added',
-        oldContent: null,
-        newContent: newLines[j - 1],
+        content: newLines[j - 1],
         oldLineNum: null,
         newLineNum: newLineNum--,
       });
@@ -152,8 +150,7 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
       // Line removed
       allChanges.unshift({
         type: 'removed',
-        oldContent: oldLines[i - 1],
-        newContent: null,
+        content: oldLines[i - 1],
         oldLineNum: oldLineNum--,
         newLineNum: null,
       });
@@ -161,77 +158,14 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
     }
   }
   
-  // Group consecutive removed/added lines into blocks, then zip them into side-by-side rows
-  const zippedChanges: DiffLine[] = [];
-  let idx = 0;
-  
-  while (idx < allChanges.length) {
-    const current = allChanges[idx];
-    
-    if (current.type === 'unchanged') {
-      // Unchanged line - just pass through
-      zippedChanges.push(current);
-      idx++;
-    } else if (current.type === 'removed') {
-      // Collect consecutive removed lines
-      const removedBlock: typeof allChanges = [];
-      while (idx < allChanges.length && allChanges[idx].type === 'removed') {
-        removedBlock.push(allChanges[idx]);
-        idx++;
-      }
-      
-      // Collect consecutive added lines
-      const addedBlock: typeof allChanges = [];
-      while (idx < allChanges.length && allChanges[idx].type === 'added') {
-        addedBlock.push(allChanges[idx]);
-        idx++;
-      }
-      
-      // Zip them together: create rows up to max(removed.length, added.length)
-      const maxRows = Math.max(removedBlock.length, addedBlock.length);
-      for (let i = 0; i < maxRows; i++) {
-        const oldLine = removedBlock[i];
-        const newLine = addedBlock[i];
-        
-        if (oldLine && newLine) {
-          // Both sides present - create modified row with word diff
-          const { oldWords, newWords } = computeWordDiff(oldLine.oldContent!, newLine.newContent!);
-          zippedChanges.push({
-            type: 'modified',
-            oldContent: oldLine.oldContent,
-            newContent: newLine.newContent,
-            oldLineNum: oldLine.oldLineNum,
-            newLineNum: newLine.newLineNum,
-            oldWordDiff: oldWords,
-            newWordDiff: newWords,
-          });
-        } else if (oldLine) {
-          // Only removed side - show on left
-          zippedChanges.push(oldLine);
-        } else if (newLine) {
-          // Only added side - show on right
-          zippedChanges.push(newLine);
-        }
-      }
-    } else if (current.type === 'added') {
-      // Lone added line (not following a removed block)
-      zippedChanges.push(current);
-      idx++;
-    } else {
-      // Safety fallback
-      zippedChanges.push(current);
-      idx++;
-    }
-  }
-  
   // Group into hunks (changed sections with context)
   const hunks: DiffHunk[] = [];
-  let currentHunk: DiffHunk | null = null;
+  let currentHunk: { lines: DiffLine[] } | null = null;
   let unchangedBuffer: DiffLine[] = [];
   let contextAddedAfter = 0;
   
-  for (const line of zippedChanges) {
-    if (line.type === 'unchanged') {
+  for (const line of allChanges) {
+    if (line.type === 'context') {
       if (currentHunk && contextAddedAfter < contextLines) {
         // Add context after change
         currentHunk.lines.push(line);
@@ -242,7 +176,22 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
       
       // Close hunk if we have enough separation
       if (currentHunk && unchangedBuffer.length > contextLines) {
-        hunks.push(currentHunk);
+        // Calculate hunk header info
+        const firstLine = currentHunk.lines[0];
+        const lastLine = currentHunk.lines[currentHunk.lines.length - 1];
+        const oldStart = firstLine.oldLineNum || 1;
+        const newStart = firstLine.newLineNum || 1;
+        const oldCount = currentHunk.lines.filter(l => l.oldLineNum !== null).length;
+        const newCount = currentHunk.lines.filter(l => l.newLineNum !== null).length;
+        
+        hunks.push({
+          oldStart,
+          oldLines: oldCount,
+          newStart,
+          newLines: newCount,
+          lines: currentHunk.lines,
+        });
+        
         currentHunk = null;
         contextAddedAfter = 0;
         unchangedBuffer = unchangedBuffer.slice(-contextLines);
@@ -252,7 +201,6 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
       if (!currentHunk) {
         const contextBefore = unchangedBuffer.slice(-contextLines);
         currentHunk = {
-          startLine: contextBefore.length > 0 ? (contextBefore[0].newLineNum || contextBefore[0].oldLineNum || 1) : (line.newLineNum || line.oldLineNum || 1),
           lines: [...contextBefore],
         };
       }
@@ -265,7 +213,20 @@ function computeSideBySideDiff(oldText: string, newText: string, contextLines = 
   
   // Close final hunk
   if (currentHunk) {
-    hunks.push(currentHunk);
+    const firstLine = currentHunk.lines[0];
+    const lastLine = currentHunk.lines[currentHunk.lines.length - 1];
+    const oldStart = firstLine.oldLineNum || 1;
+    const newStart = firstLine.newLineNum || 1;
+    const oldCount = currentHunk.lines.filter(l => l.oldLineNum !== null).length;
+    const newCount = currentHunk.lines.filter(l => l.newLineNum !== null).length;
+    
+    hunks.push({
+      oldStart,
+      oldLines: oldCount,
+      newStart,
+      newLines: newCount,
+      lines: currentHunk.lines,
+    });
   }
   
   return hunks;
@@ -320,29 +281,25 @@ export function ProposalDiffViewer({
 
   const displayContent = isEditing ? editedContent : localProposedContent;
 
-  // Compute side-by-side diff with hunks
+  // Compute unified diff with hunks
   const hunks = useMemo(() => {
-    return computeSideBySideDiff(currentContent || '', displayContent || '');
+    return computeUnifiedDiff(currentContent || '', displayContent || '');
   }, [currentContent, displayContent]);
 
   const stats = useMemo(() => {
     let added = 0;
     let removed = 0;
-    let unchanged = 0;
+    let context = 0;
     
     hunks.forEach(hunk => {
       hunk.lines.forEach(line => {
         if (line.type === 'added') added++;
         else if (line.type === 'removed') removed++;
-        else if (line.type === 'modified') {
-          added++;
-          removed++;
-        }
-        else unchanged++;
+        else context++;
       });
     });
     
-    return { added, removed, unchanged, total: added + removed + unchanged };
+    return { added, removed, context, total: added + removed + context };
   }, [hunks]);
 
   return (
@@ -382,17 +339,11 @@ export function ProposalDiffViewer({
 
           {/* Stats */}
           <div className="flex items-center gap-4 text-sm">
-            <span className="text-muted-foreground" data-testid="text-stats-total">
-              {stats.total} lines
-            </span>
             <span className="text-green-600 dark:text-green-400" data-testid="text-stats-added">
               +{stats.added} added
             </span>
             <span className="text-red-600 dark:text-red-400" data-testid="text-stats-removed">
               -{stats.removed} removed
-            </span>
-            <span className="text-muted-foreground" data-testid="text-stats-unchanged">
-              {stats.unchanged} unchanged
             </span>
           </div>
 
@@ -476,126 +427,75 @@ export function ProposalDiffViewer({
         </Card>
       )}
 
-      {/* WordPress-style side-by-side diff */}
+      {/* Unified diff view (like Git) */}
       {!isEditing && (
         <Card data-testid="card-diff-view">
           <CardHeader>
             <CardTitle>Changes</CardTitle>
             <CardDescription>
-              Removed (red) vs. Added (green)
+              Only changed sections are shown with context. Red = removed, Green = added.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[600px] w-full rounded-md border">
               <div className="font-mono text-sm">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b bg-muted/30">
-                      <th className="w-12 px-2 py-1 text-xs text-muted-foreground text-right">#</th>
-                      <th className="px-3 py-1 text-xs text-left text-red-700 dark:text-red-400">Removed</th>
-                      <th className="w-12 px-2 py-1 text-xs text-muted-foreground text-right">#</th>
-                      <th className="px-3 py-1 text-xs text-left text-green-700 dark:text-green-400">Added</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {hunks.map((hunk, hunkIdx) => (
-                      <React.Fragment key={hunkIdx}>
-                        {/* Hunk header showing line range */}
-                        <tr className="border-b bg-muted/50">
-                          <td colSpan={4} className="px-3 py-2 text-xs font-mono text-muted-foreground">
-                            <span className="font-semibold">Section starting at line {hunk.startLine}</span>
-                            {hunkIdx > 0 && (
-                              <span className="ml-2 text-muted-foreground/70">
-                                ({hunk.startLine - (hunks[hunkIdx - 1].startLine + hunks[hunkIdx - 1].lines.length)} lines skipped)
-                              </span>
+                {hunks.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    No changes detected
+                  </div>
+                ) : (
+                  hunks.map((hunk, hunkIdx) => (
+                    <div key={hunkIdx} className="border-b last:border-b-0">
+                      {/* Hunk header - shows line range */}
+                      <div className="bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground border-b sticky top-0 z-10">
+                        @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                      </div>
+                      
+                      {/* Hunk lines */}
+                      {hunk.lines.map((line, lineIdx) => (
+                        <div
+                          key={lineIdx}
+                          className={`flex ${
+                            line.type === 'removed' 
+                              ? 'bg-red-50 dark:bg-red-950/20' 
+                              : line.type === 'added'
+                              ? 'bg-green-50 dark:bg-green-950/20'
+                              : ''
+                          }`}
+                          data-testid={`diff-line-${hunkIdx}-${lineIdx}`}
+                        >
+                          {/* Line numbers */}
+                          <div className="flex-shrink-0 px-2 py-1 text-right text-xs text-muted-foreground bg-muted/10 select-none">
+                            <span className="inline-block w-12">{line.oldLineNum || ''}</span>
+                            <span className="inline-block w-12 ml-1">{line.newLineNum || ''}</span>
+                          </div>
+                          
+                          {/* Line content with prefix */}
+                          <div className="flex-1 px-3 py-1 whitespace-pre-wrap break-words">
+                            {line.type === 'removed' && (
+                              <>
+                                <span className="text-red-600 dark:text-red-400 mr-2 select-none">−</span>
+                                <span className="text-red-900 dark:text-red-100">{line.content}</span>
+                              </>
                             )}
-                          </td>
-                        </tr>
-                        {hunk.lines.map((line, lineIdx) => (
-                          <tr 
-                            key={`${hunkIdx}-${lineIdx}`}
-                            className="border-b"
-                            data-testid={`diff-line-${hunkIdx}-${lineIdx}`}
-                          >
-                            {/* Left side (removed/old) */}
-                            <td className="w-12 px-2 py-1 text-right text-muted-foreground text-xs bg-muted/10 select-none">
-                              {line.oldLineNum || ''}
-                            </td>
-                            <td className={`px-3 py-1 whitespace-pre-wrap break-words ${
-                              line.type === 'removed' || line.type === 'modified'
-                                ? 'bg-red-50 dark:bg-red-950/20'
-                                : ''
-                            }`}>
-                              {(line.type === 'removed' || line.type === 'modified') && line.oldContent && (
-                                <>
-                                  <span className="text-red-600 dark:text-red-400 mr-2 select-none">−</span>
-                                  <span className="text-red-900 dark:text-red-100">
-                                    {line.oldWordDiff ? (
-                                      line.oldWordDiff.map((word, idx) => (
-                                        <span
-                                          key={idx}
-                                          className={word.changed ? 'bg-red-200 dark:bg-red-900/40' : ''}
-                                        >
-                                          {word.text}
-                                        </span>
-                                      ))
-                                    ) : (
-                                      line.oldContent
-                                    )}
-                                  </span>
-                                </>
-                              )}
-                              {line.type === 'unchanged' && (
-                                <span className="text-foreground">{line.oldContent}</span>
-                              )}
-                            </td>
-                            
-                            {/* Right side (added/new) */}
-                            <td className="w-12 px-2 py-1 text-right text-muted-foreground text-xs bg-muted/10 select-none">
-                              {line.newLineNum || ''}
-                            </td>
-                            <td className={`px-3 py-1 whitespace-pre-wrap break-words ${
-                              line.type === 'added' || line.type === 'modified'
-                                ? 'bg-green-50 dark:bg-green-950/20'
-                                : ''
-                            }`}>
-                              {(line.type === 'added' || line.type === 'modified') && line.newContent && (
-                                <>
-                                  <span className="text-green-600 dark:text-green-400 mr-2 select-none">+</span>
-                                  <span className="text-green-900 dark:text-green-100">
-                                    {line.newWordDiff ? (
-                                      line.newWordDiff.map((word, idx) => (
-                                        <span
-                                          key={idx}
-                                          className={word.changed ? 'bg-green-200 dark:bg-green-900/40' : ''}
-                                        >
-                                          {word.text}
-                                        </span>
-                                      ))
-                                    ) : (
-                                      line.newContent
-                                    )}
-                                  </span>
-                                </>
-                              )}
-                              {line.type === 'unchanged' && (
-                                <span className="text-foreground">{line.newContent}</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
-                    ))}
-                    
-                    {hunks.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="p-8 text-center text-muted-foreground">
-                          No changes detected
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                            {line.type === 'added' && (
+                              <>
+                                <span className="text-green-600 dark:text-green-400 mr-2 select-none">+</span>
+                                <span className="text-green-900 dark:text-green-100">{line.content}</span>
+                              </>
+                            )}
+                            {line.type === 'context' && (
+                              <>
+                                <span className="text-muted-foreground mr-2 select-none"> </span>
+                                <span className="text-foreground">{line.content}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
               </div>
             </ScrollArea>
           </CardContent>
