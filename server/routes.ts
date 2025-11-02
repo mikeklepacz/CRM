@@ -3114,6 +3114,119 @@ Focus on:
     }
   });
 
+  // Batch upload KB files from local files
+  const kbUpload = multer({ storage: multer.memoryStorage() });
+  app.post('/api/kb/upload-batch', isAuthenticatedCustom, isAdmin, kbUpload.array('files', 50), async (req: any, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+
+      console.log(`[KB Upload] Starting batch upload of ${files.length} files`);
+      
+      let imported = 0;
+      let updated = 0;
+      let skipped = 0;
+      const results = [];
+
+      for (const file of files) {
+        try {
+          const filename = file.originalname;
+          const content = file.buffer.toString('utf-8');
+
+          // Find existing KB file by filename
+          const existing = await storage.getKbFileByFilename(filename);
+
+          if (existing) {
+            // Update existing file with content
+            const versions = await storage.getKbFileVersions(existing.id);
+            const latestVersion = versions[0];
+            const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
+
+            // Create new version
+            const newVersion = await storage.createKbFileVersion({
+              kbFileId: existing.id,
+              versionNumber: newVersionNumber,
+              content,
+              source: 'manual_upload',
+              createdBy: req.user.id,
+            });
+
+            // Backup to Google Drive
+            await googleDrive.backupKbFileToDrive(
+              filename,
+              newVersionNumber,
+              content
+            );
+
+            // Update file with new content
+            await storage.updateKbFile(existing.id, {
+              currentContent: content,
+              currentSyncVersion: newVersion.id,
+            });
+
+            updated++;
+            results.push({ filename, status: 'updated', version: newVersionNumber });
+            console.log(`[KB Upload] Updated ${filename} to version ${newVersionNumber}`);
+          } else {
+            // Create new KB file
+            const newFile = await storage.createKbFile({
+              filename,
+              currentContent: content,
+              fileType: 'file',
+              lastSyncedAt: new Date(),
+            });
+
+            // Create initial version
+            const initialVersion = await storage.createKbFileVersion({
+              kbFileId: newFile.id,
+              versionNumber: 1,
+              content,
+              source: 'manual_upload',
+              createdBy: req.user.id,
+            });
+
+            // Backup to Google Drive
+            await googleDrive.backupKbFileToDrive(
+              filename,
+              1,
+              content
+            );
+
+            // Update file with current_sync_version
+            await storage.updateKbFile(newFile.id, {
+              currentSyncVersion: initialVersion.id,
+            });
+
+            imported++;
+            results.push({ filename, status: 'imported', version: 1 });
+            console.log(`[KB Upload] Imported new file ${filename}`);
+          }
+        } catch (error: any) {
+          console.error(`[KB Upload] Error processing ${file.originalname}:`, error);
+          skipped++;
+          results.push({ filename: file.originalname, status: 'error', error: error.message });
+        }
+      }
+
+      console.log(`[KB Upload] Batch upload complete: ${imported} imported, ${updated} updated, ${skipped} skipped`);
+
+      res.json({
+        success: true,
+        imported,
+        updated,
+        skipped,
+        total: files.length,
+        results,
+      });
+    } catch (error: any) {
+      console.error('[KB Upload] Error in batch upload:', error);
+      res.status(500).json({ error: error.message || 'Failed to upload files' });
+    }
+  });
+
   // Get all KB files
   app.get('/api/kb/files', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

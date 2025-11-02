@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -124,6 +124,7 @@ function KBLibraryTab() {
   const [isDiffDialogOpen, setIsDiffDialogOpen] = useState(false);
   const [selectedVersionsForDiff, setSelectedVersionsForDiff] = useState<string[]>([]);
   const [isVersionDiffDialogOpen, setIsVersionDiffDialogOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
@@ -153,11 +154,60 @@ function KBLibraryTab() {
     onError: (error: any) => {
       toast({
         title: "Sync Failed",
-        description: error.message || "Failed to sync from ElevenLabs",
+        description: error.message || "Failed to sync TO ElevenLabs",
         variant: "destructive",
       });
     },
   });
+
+  // Batch upload mutation
+  const uploadMutation = useMutation({
+    mutationFn: async (files: FileList) => {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+
+      const response = await fetch('/api/kb/upload-batch', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Upload Complete",
+        description: `Imported ${data.imported} new files, updated ${data.updated} existing files. ${data.skipped} skipped.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
+      setUploadProgress(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload files",
+        variant: "destructive",
+      });
+      setUploadProgress(null);
+    },
+  });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setUploadProgress({ current: 0, total: files.length });
+      uploadMutation.mutate(files);
+    }
+    // Reset input so same files can be selected again
+    e.target.value = '';
+  };
 
   // Approve proposal mutation
   const approveMutation = useMutation({
@@ -274,18 +324,47 @@ function KBLibraryTab() {
               Manage ElevenLabs knowledge base files with version control and AI-powered improvements
             </CardDescription>
           </div>
-          <Button
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            data-testid="button-sync-kb"
-          >
-            {syncMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Sync from ElevenLabs
-          </Button>
+          <div className="flex gap-2">
+            <div className="relative">
+              <input
+                type="file"
+                multiple
+                accept=".txt"
+                onChange={handleFileSelect}
+                disabled={uploadMutation.isPending}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                data-testid="input-upload-files"
+              />
+              <Button
+                disabled={uploadMutation.isPending}
+                data-testid="button-upload-kb"
+              >
+                {uploadMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Files
+                  </>
+                )}
+              </Button>
+            </div>
+            <Button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              data-testid="button-sync-kb"
+            >
+              {syncMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Sync TO ElevenLabs
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -310,7 +389,7 @@ function KBLibraryTab() {
               <div className="text-center py-12 bg-muted/20 rounded-lg">
                 <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground">
-                  No knowledge base files found. Click "Sync from ElevenLabs" to import files.
+                  No knowledge base files found. Click "Upload Files" to import your local KB files.
                 </p>
               </div>
             ) : (
