@@ -2212,6 +2212,24 @@ export class DatabaseStorage implements IStorage {
       .where(sql`${callSessions.conversationId} = ANY(${conversationIds})`);
   }
 
+  async nukeAllAnalysis(): Promise<{ deletedInsights: number; deletedProposals: number; resetCalls: number }> {
+    // Delete all KB change proposals
+    const deletedProposals = await db.delete(kbChangeProposals);
+    
+    // Delete all AI insights and related records (cascade will handle objections, patterns, recommendations)
+    const deletedInsights = await db.delete(aiInsights);
+    
+    // Reset all call sessions' last_analyzed_at to null so they can be re-analyzed
+    const resetCalls = await db.update(callSessions)
+      .set({ lastAnalyzedAt: null });
+    
+    return {
+      deletedInsights: Array.isArray(deletedInsights) ? deletedInsights.length : 0,
+      deletedProposals: Array.isArray(deletedProposals) ? deletedProposals.length : 0,
+      resetCalls: Array.isArray(resetCalls) ? resetCalls.length : 0,
+    };
+  }
+
   // Call Events operations
   async createCallEvent(event: InsertCallEvent): Promise<CallEvent> {
     const [newEvent] = await db.insert(callEvents).values(event).returning();

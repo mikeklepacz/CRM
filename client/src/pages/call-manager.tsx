@@ -7,12 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2 } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -617,6 +618,7 @@ export default function CallManager() {
   const [selectedCallForDialog, setSelectedCallForDialog] = useState<{ conversationId: string; callData: any } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [callToDelete, setCallToDelete] = useState<string | null>(null);
+  const [isNukeDialogOpen, setIsNukeDialogOpen] = useState(false);
   
   // AI Insights state
   const [insightsDateRange, setInsightsDateRange] = useState<'7days' | '30days' | 'custom'>('30days');
@@ -1002,6 +1004,30 @@ export default function CallManager() {
         variant: "destructive",
         title: "Analysis Failed",
         description: error.message || "Failed to analyze calls",
+      });
+    },
+  });
+
+  // Mutation to nuke all analysis data
+  const nukeAnalysisMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', '/api/elevenlabs/nuke-analysis', {});
+    },
+    onSuccess: () => {
+      setIsNukeDialogOpen(false);
+      setPersistedInsights(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/insights-history'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/call-analytics'] });
+      toast({
+        title: "Analysis Data Cleared",
+        description: "All analysis data has been reset. Calls can now be re-analyzed.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Nuke Failed",
+        description: error.message || "Failed to clear analysis data",
       });
     },
   });
@@ -1720,6 +1746,17 @@ export default function CallManager() {
               <CardContent className="space-y-6">
                 {/* Filters */}
                 <div className="flex flex-wrap items-end gap-4">
+                  {/* NUKE Button */}
+                  <Button 
+                    variant="destructive"
+                    onClick={() => setIsNukeDialogOpen(true)}
+                    className="h-10"
+                    data-testid="button-nuke-analysis"
+                  >
+                    <Bomb className="h-4 w-4 mr-2" />
+                    NUKE
+                  </Button>
+
                   <div className="space-y-2">
                     <Label htmlFor="insights-date-range">Date Range</Label>
                     <Select 
@@ -2166,6 +2203,53 @@ export default function CallManager() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* NUKE Analysis Data Confirmation Dialog */}
+      <AlertDialog open={isNukeDialogOpen} onOpenChange={setIsNukeDialogOpen}>
+        <AlertDialogContent data-testid="dialog-nuke-confirmation">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Bomb className="h-5 w-5" />
+              Clear All Analysis Data?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 pt-2">
+              <p>This will permanently delete:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>All AI Insights (WIC Coach analysis)</li>
+                <li>All KB Change Proposals (Aligner suggestions)</li>
+                <li>All objections, patterns, and recommendations</li>
+                <li>Reset all call timestamps (allows re-analysis)</li>
+              </ul>
+              <p className="font-semibold text-destructive pt-2">
+                This action cannot be undone!
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-nuke">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => nukeAnalysisMutation.mutate()}
+              disabled={nukeAnalysisMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-nuke"
+            >
+              {nukeAnalysisMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Nuking...
+                </>
+              ) : (
+                <>
+                  <Bomb className="h-4 w-4 mr-2" />
+                  NUKE IT
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
