@@ -629,6 +629,7 @@ export default function CallManager() {
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
   const [insightsViewMode, setInsightsViewMode] = useState<'individual' | 'all-time'>('individual');
   const [analysisWorkflowStatus, setAnalysisWorkflowStatus] = useState<'idle' | 'wick-coach' | 'aligner' | 'complete' | 'error'>('idle');
+  const [alignerErrorMessage, setAlignerErrorMessage] = useState<string | null>(null);
   
   // Analytics filters
   const [analyticsAgentFilter, setAnalyticsAgentFilter] = useState<string>("all");
@@ -1000,41 +1001,59 @@ export default function CallManager() {
       setPersistedInsights(data);
       setSelectedInsightId(data.id || null);
       
-      // Wick Coach complete, now Aligner is running (backend chains automatically)
-      setAnalysisWorkflowStatus('aligner');
-      
-      // Give Aligner time to complete (it runs in background on server)
-      // Poll for proposals to detect completion
-      const pollInterval = setInterval(async () => {
-        try {
-          const proposals = await apiRequest('GET', '/api/kb/proposals?status=pending');
-          if (proposals?.proposals && proposals.proposals.length > 0) {
-            setAnalysisWorkflowStatus('complete');
-            clearInterval(pollInterval);
-            queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
-            toast({
-              title: "Full Analysis Complete!",
-              description: `Wick Coach + Aligner complete. ${proposals.proposals.length} KB proposal(s) ready for review.`,
-            });
-            // Reset status after 5 seconds
-            setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
-          }
-        } catch (error) {
-          console.error('Error polling proposals:', error);
-        }
-      }, 2000);
-      
-      // Stop polling after 30 seconds max
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (analysisWorkflowStatus === 'aligner') {
-          setAnalysisWorkflowStatus('complete');
-          setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
-        }
-      }, 30000);
-      
       // Refetch historical insights after new analysis is saved
       queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/insights-history'] });
+      
+      // Check Aligner workflow status
+      if (data.alignerStatus) {
+        if (data.alignerStatus.error) {
+          // Aligner failed - show error
+          setAnalysisWorkflowStatus('error');
+          setAlignerErrorMessage(data.alignerStatus.error);
+          toast({
+            variant: "destructive",
+            title: "Aligner Failed",
+            description: data.alignerStatus.error,
+          });
+          setTimeout(() => {
+            setAnalysisWorkflowStatus('idle');
+            setAlignerErrorMessage(null);
+          }, 8000);
+        } else if (data.alignerStatus.success) {
+          // Aligner succeeded
+          setAnalysisWorkflowStatus('complete');
+          queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+          const proposalCount = data.alignerStatus.proposalCount;
+          if (proposalCount > 0) {
+            toast({
+              title: "Full Analysis Complete!",
+              description: `Wick Coach + Aligner complete. ${proposalCount} KB proposal(s) ready for review in the KB Library tab.`,
+            });
+          } else {
+            toast({
+              title: "Analysis Complete",
+              description: "Wick Coach + Aligner complete. No KB changes needed at this time.",
+            });
+          }
+          setTimeout(() => setAnalysisWorkflowStatus('idle'), 8000);
+        } else {
+          // Aligner skipped (not configured)
+          setAnalysisWorkflowStatus('complete');
+          toast({
+            title: "Wick Coach Complete",
+            description: "AI insights generated (Aligner not configured)",
+          });
+          setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
+        }
+      } else {
+        // Old response format - just show Wick Coach complete
+        setAnalysisWorkflowStatus('complete');
+        toast({
+          title: "Analysis Complete",
+          description: "AI insights have been generated from your call data",
+        });
+        setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
+      }
     },
     onError: (error: any) => {
       setAnalysisWorkflowStatus('error');
@@ -2046,8 +2065,8 @@ export default function CallManager() {
                           <>
                             <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
                             <div>
-                              <p className="font-semibold text-red-900 dark:text-red-100">Analysis Failed</p>
-                              <p className="text-sm text-red-700 dark:text-red-300">Check the error message above</p>
+                              <p className="font-semibold text-red-900 dark:text-red-100">Aligner Failed</p>
+                              <p className="text-sm text-red-700 dark:text-red-300">{alignerErrorMessage || "An error occurred during analysis"}</p>
                             </div>
                           </>
                         )}

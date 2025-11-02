@@ -2765,8 +2765,16 @@ Focus on:
         
         const savedInsight = await storage.saveAiInsight(insightRecord, objectionsRecords, patternsRecords, recommendationsRecords);
         
+        // MARK CALLS AS ANALYZED: Do this immediately after Wick Coach completes, before Aligner
+        // This prevents re-analysis even if Aligner fails
+        const conversationIds = callsData.map(call => call.session.conversationId).filter(Boolean) as string[];
+        await storage.markCallsAsAnalyzed(conversationIds);
+        console.log(`[Wick Coach] Marked ${conversationIds.length} calls as analyzed`);
+        
         // CHAIN TO ALIGNER: After Wick Coach completes, automatically trigger KB analysis
         console.log('[AI Insights → Aligner] Wick Coach analysis complete, now chaining to Aligner...');
+        
+        let alignerStatus = { success: false, error: null as string | null, proposalCount: 0 };
         
         try {
           // Get Aligner assistant
@@ -2774,6 +2782,7 @@ Focus on:
           
           if (!alignerAssistant || !alignerAssistant.assistantId) {
             console.log('[AI Insights → Aligner] Aligner assistant not configured, skipping KB analysis');
+            alignerStatus.error = 'Aligner assistant not configured';
           } else {
             // Trigger KB analysis by making an internal request to the existing endpoint
             const normalizedAgentId = agentId || 'all'; // Default to 'all' if undefined/null
@@ -2781,7 +2790,7 @@ Focus on:
             console.log(`[AI Insights → Aligner] Triggering KB analysis for ${agentLabel} with insight ${savedInsight.id}`);
             
             // Make internal API call to the KB analysis endpoint
-            await axios.post(`http://localhost:${process.env.PORT || 5000}/api/kb/analyze-and-propose`, {
+            const alignerResponse = await axios.post(`http://localhost:${process.env.PORT || 5000}/api/kb/analyze-and-propose`, {
               agentId: normalizedAgentId,
               insightId: savedInsight.id,
               startDate,
@@ -2793,9 +2802,12 @@ Focus on:
             });
             
             console.log('[AI Insights → Aligner] KB analysis completed successfully');
+            alignerStatus.success = true;
+            alignerStatus.proposalCount = alignerResponse.data?.proposalCount || 0;
           }
         } catch (alignerError: any) {
           console.error('[AI Insights → Aligner] Error during chained KB analysis:', alignerError.message);
+          alignerStatus.error = alignerError.response?.data?.error || alignerError.message || 'Aligner failed';
           // Don't fail the whole request if Aligner fails
         }
         
@@ -2813,6 +2825,7 @@ Focus on:
           start: startDate || 'all time',
           end: endDate || 'present'
         },
+        alignerStatus: alignerStatus, // Include Aligner workflow status
       });
 
     } catch (error: any) {
@@ -3324,14 +3337,14 @@ IMPORTANT:
 
       console.log('[KB Analyze] Calling Aligner assistant...');
 
-      // Initialize OpenAI client (system-level, not user-specific)
-      const systemKey = process.env.OPENAI_API_KEY;
-      if (!systemKey) {
-        return res.status(500).json({ error: 'OpenAI API key not configured' });
+      // Get OpenAI settings (use Sales Assistant's API key)
+      const openaiSettings = await storage.getOpenaiSettings();
+      if (!openaiSettings?.apiKey) {
+        return res.status(500).json({ error: 'OpenAI API key not configured. Please configure your OpenAI API key in the Sales Assistant settings first.' });
       }
 
       const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({ apiKey: systemKey });
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
       // Create a thread for this analysis
       const thread = await openai.beta.threads.create();
