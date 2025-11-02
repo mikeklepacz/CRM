@@ -2821,6 +2821,26 @@ Focus on:
       console.log(`[KB Analyze] Found ${kbFiles.length} KB files to analyze`);
       console.log(`[KB Analyze] Analyzing insight from ${insight.dateRangeStart} to ${insight.dateRangeEnd}`);
 
+      // Fetch call transcripts for the same date range and agent
+      const calls = await storage.getCallHistory({
+        startDate: insight.dateRangeStart,
+        endDate: insight.dateRangeEnd,
+        agentPhoneNumberId: insight.agentPhoneNumberId || undefined,
+        limit: 100, // Match AI insights limit
+      });
+
+      console.log(`[KB Analyze] Found ${calls.length} call transcripts to include`);
+
+      // Build transcript context (include representative samples)
+      const transcriptContext = calls
+        .filter(call => call.transcript && call.transcript.trim().length > 0)
+        .slice(0, 20) // Limit to 20 transcripts to avoid token limits
+        .map((call, idx) => {
+          const storeInfo = call.storeName ? ` (Store: ${call.storeName})` : '';
+          return `\n#### Call ${idx + 1}${storeInfo}\n- Duration: ${call.duration}s\n- Outcome: ${call.status}\n- Interest Level: ${call.interestLevel || 'N/A'}\n- Transcript:\n\`\`\`\n${call.transcript.substring(0, 1000)}${call.transcript.length > 1000 ? '...(truncated)' : ''}\n\`\`\``;
+        })
+        .join('\n');
+
       // Build context for Aligner
       const kbContext = kbFiles
         .map(file => `\n### ${file.filename}\n\`\`\`\n${file.currentContent || '(empty)'}\n\`\`\``)
@@ -2838,31 +2858,62 @@ Focus on:
         .map(rec => `- [${rec.priority.toUpperCase()}] ${rec.title}: ${rec.description}`)
         .join('\n');
 
-      const analysisPrompt = `You are analyzing call performance data to improve the sales knowledge base. Your goal is to identify specific, actionable improvements to the KB files based on actual call data.
+      const analysisPrompt = `You are the Aligner assistant analyzing call performance data to improve the sales knowledge base. You have TWO sources of information:
 
-**AI Call Analytics Summary:**
-- Date Range: ${insight.dateRangeStart} to ${insight.dateRangeEnd}
-- Total Calls: ${insight.callCount}
-- Sentiment: ${insight.sentimentPositive} positive, ${insight.sentimentNeutral} neutral, ${insight.sentimentNegative} negative
+1. **RAW CALL TRANSCRIPTS** - These are the actual conversations between the AI agent and prospects
+2. **WIC COACH ANALYSIS** - Another AI (the "WIC coach") has already analyzed these calls and provided recommendations
 
-**Common Objections:**
+## YOUR DUAL-PERSPECTIVE MISSION:
+
+**First, form your OWN independent opinion** by reading the actual call transcripts. Look for:
+- What objections are prospects actually raising?
+- What language/phrasing works well vs. poorly?
+- What information seems to confuse prospects?
+- What topics lead to successful outcomes?
+
+**Second, review the WIC coach's analysis** to see if it caught things you missed or has different insights.
+
+**Then, synthesize BOTH perspectives** to propose KB improvements that address:
+- Issues YOU identified from transcripts
+- Valid points from the WIC coach's recommendations
+- Any contradictions between the two analyses (explain your reasoning)
+
+---
+
+## RAW CALL TRANSCRIPTS:
+${transcriptContext || '(No transcripts available - rely on WIC coach analysis)'}
+
+---
+
+## WIC COACH ANALYSIS:
+**Date Range:** ${insight.dateRangeStart} to ${insight.dateRangeEnd}
+**Total Calls:** ${insight.callCount}
+**Sentiment:** ${insight.sentimentPositive} positive, ${insight.sentimentNeutral} neutral, ${insight.sentimentNegative} negative
+
+**Common Objections Identified:**
 ${objections || '(none)'}
 
-**Success Patterns:**
+**Success Patterns Identified:**
 ${patterns || '(none)'}
 
-**Recommendations:**
+**WIC Coach Recommendations:**
 ${recommendations || '(none)'}
 
-**Current Knowledge Base Files:**
+---
+
+## CURRENT KNOWLEDGE BASE FILES:
 ${kbContext}
 
 ---
 
-Based on this analysis, propose specific improvements to the knowledge base files. For each proposed change:
+## YOUR TASK:
+
+Propose specific improvements to the knowledge base files based on BOTH your transcript analysis AND the WIC coach's insights. For each proposed change:
 
 1. Identify which file(s) should be updated
-2. Explain the rationale (which objection/pattern/recommendation this addresses)
+2. Explain the rationale, citing BOTH:
+   - Specific examples from transcripts (if available)
+   - Relevant WIC coach recommendations
 3. Provide the complete updated content for the file
 
 Respond in this exact JSON format:
@@ -2870,13 +2921,17 @@ Respond in this exact JSON format:
   "proposals": [
     {
       "filename": "exact-filename.txt",
-      "rationale": "Detailed explanation of why this change is needed",
+      "rationale": "Detailed explanation citing both transcript evidence and WIC coach insights",
       "proposedContent": "Complete updated file content here"
     }
   ]
 }
 
-IMPORTANT: Only propose changes that directly address the analysis data. Do not make changes just for the sake of it.`;
+IMPORTANT: 
+- Only propose changes supported by actual evidence from transcripts or WIC analysis
+- If transcripts reveal issues the WIC coach missed, propose those fixes
+- If you disagree with a WIC recommendation based on transcript evidence, explain why in rationale
+- Do not make superficial changes just for the sake of it`;
 
       console.log('[KB Analyze] Calling Aligner assistant...');
 
@@ -2975,9 +3030,11 @@ IMPORTANT: Only propose changes that directly address the analysis data. Do not 
           kbFileId: file.id,
           baseVersionId: latestVersion.id,
           proposedContent: proposal.proposedContent,
+          originalAiContent: proposal.proposedContent, // Store original AI version
           rationale: proposal.rationale,
           aiInsightId: insight.id,
           status: 'pending',
+          humanEdited: false,
         });
 
         createdProposals.push(created);
@@ -2994,6 +3051,38 @@ IMPORTANT: Only propose changes that directly address the analysis data. Do not 
     } catch (error: any) {
       console.error('[KB Analyze] Error:', error);
       res.status(500).json({ error: error.message || 'Failed to analyze and generate proposals' });
+    }
+  });
+
+  // Edit a proposal (update proposedContent before approval)
+  app.patch('/api/kb/proposals/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { proposedContent } = req.body;
+
+      if (!proposedContent) {
+        return res.status(400).json({ error: 'proposedContent is required' });
+      }
+
+      const proposal = await storage.getKbProposalById(id);
+      if (!proposal) {
+        return res.status(404).json({ error: 'Proposal not found' });
+      }
+
+      if (proposal.status !== 'pending') {
+        return res.status(400).json({ error: 'Can only edit pending proposals' });
+      }
+
+      // Update the proposal with human edits
+      await storage.updateKbProposal(id, {
+        proposedContent,
+        humanEdited: true,
+      });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[KB] Error editing proposal:', error);
+      res.status(500).json({ error: error.message || 'Failed to edit proposal' });
     }
   });
 

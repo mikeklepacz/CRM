@@ -1,9 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, XCircle, FileText } from 'lucide-react';
+import { CheckCircle2, XCircle, FileText, Edit2, Save } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
+import { useMutation } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProposalDiffViewerProps {
   proposal: {
@@ -12,6 +16,8 @@ interface ProposalDiffViewerProps {
     rationale: string;
     status: string;
     createdAt: string;
+    humanEdited?: boolean;
+    originalAiContent?: string;
   };
   currentContent: string;
   proposedContent: string;
@@ -120,10 +126,51 @@ export function ProposalDiffViewer({
   isApproving,
   isRejecting,
 }: ProposalDiffViewerProps) {
+  const { toast } = useToast();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(proposedContent);
+  const [localProposedContent, setLocalProposedContent] = useState(proposedContent);
+  const [localHumanEdited, setLocalHumanEdited] = useState(proposal.humanEdited || false);
+
+  // Sync local state when proposal changes (switching between proposals)
+  useEffect(() => {
+    setEditedContent(proposedContent);
+    setLocalProposedContent(proposedContent);
+    setLocalHumanEdited(proposal.humanEdited || false);
+    setIsEditing(false);
+  }, [proposal.id, proposedContent, proposal.humanEdited]);
+
+  // Edit proposal mutation
+  const editMutation = useMutation({
+    mutationFn: (content: string) => 
+      apiRequest('PATCH', `/api/kb/proposals/${proposal.id}`, { proposedContent: content }),
+    onSuccess: () => {
+      toast({
+        title: "Changes Saved",
+        description: "Your edits have been saved to the proposal",
+      });
+      // Update local state immediately so diff reflects changes
+      setLocalProposedContent(editedContent);
+      setLocalHumanEdited(true);
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+      setIsEditing(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Save Failed",
+        description: error.message || "Failed to save edits",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Use edited content for diff if in edit mode, otherwise use local state
+  const displayContent = isEditing ? editedContent : localProposedContent;
+
   // Compute line-by-line diff using custom implementation
   const diffLines = useMemo(() => {
-    return computeLineDiff(currentContent || '', proposedContent || '');
-  }, [currentContent, proposedContent]);
+    return computeLineDiff(currentContent || '', displayContent || '');
+  }, [currentContent, displayContent]);
 
   const stats = useMemo(() => {
     const added = diffLines.filter(l => l.type === 'added').length;
@@ -142,6 +189,11 @@ export function ProposalDiffViewer({
               <CardTitle className="flex items-center gap-2" data-testid="text-filename">
                 <FileText className="h-5 w-5" />
                 {filename}
+                {localHumanEdited && (
+                  <Badge variant="outline" className="border-primary text-primary" data-testid="badge-human-edited">
+                    Human Edited
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription className="mt-2" data-testid="text-created-date">
                 Created {new Date(proposal.createdAt).toLocaleString()}
@@ -181,39 +233,94 @@ export function ProposalDiffViewer({
           {/* Action buttons */}
           {proposal.status === 'pending' && onApprove && onReject && (
             <div className="flex gap-2">
-              <Button
-                onClick={onApprove}
-                disabled={isApproving || isRejecting}
-                data-testid="button-approve"
-                className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
-              >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                {isApproving ? 'Approving...' : 'Approve Changes'}
-              </Button>
-              <Button
-                onClick={onReject}
-                disabled={isApproving || isRejecting}
-                variant="destructive"
-                data-testid="button-reject"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                {isRejecting ? 'Rejecting...' : 'Reject'}
-              </Button>
+              {!isEditing ? (
+                <>
+                  <Button
+                    onClick={() => setIsEditing(true)}
+                    variant="outline"
+                    data-testid="button-edit"
+                  >
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Edit Proposal
+                  </Button>
+                  <Button
+                    onClick={onApprove}
+                    disabled={isApproving || isRejecting}
+                    data-testid="button-approve"
+                    className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    {isApproving ? 'Approving...' : 'Approve Changes'}
+                  </Button>
+                  <Button
+                    onClick={onReject}
+                    disabled={isApproving || isRejecting}
+                    variant="destructive"
+                    data-testid="button-reject"
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    {isRejecting ? 'Rejecting...' : 'Reject'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={() => editMutation.mutate(editedContent)}
+                    disabled={editMutation.isPending}
+                    data-testid="button-save-edits"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {editMutation.isPending ? 'Saving...' : 'Save Edits'}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditedContent(localProposedContent);
+                    }}
+                    variant="outline"
+                    disabled={editMutation.isPending}
+                    data-testid="button-cancel-edit"
+                  >
+                    Cancel
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* Edit mode - full content editor */}
+      {isEditing && (
+        <Card data-testid="card-edit-mode">
+          <CardHeader>
+            <CardTitle>Edit Proposed Content</CardTitle>
+            <CardDescription>
+              Make changes to the AI-generated proposal before approving
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              className="font-mono text-sm min-h-[600px]"
+              data-testid="textarea-edit-content"
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Side-by-side diff view */}
-      <Card data-testid="card-diff-view">
-        <CardHeader>
-          <CardTitle>Changes</CardTitle>
-          <CardDescription>
-            Current version (left) vs. Proposed changes (right)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[600px] w-full rounded-md border">
+      {!isEditing && (
+        <Card data-testid="card-diff-view">
+          <CardHeader>
+            <CardTitle>Changes</CardTitle>
+            <CardDescription>
+              Current version (left) vs. Proposed changes (right)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[600px] w-full rounded-md border">
             <div className="font-mono text-xs">
               {diffLines.map((line, idx) => (
                 <div
@@ -269,10 +376,11 @@ export function ProposalDiffViewer({
                   </div>
                 </div>
               ))}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
