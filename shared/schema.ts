@@ -1095,6 +1095,27 @@ export const kbChangeProposals = pgTable("kb_change_proposals", {
   index("idx_kb_proposals_file_status").on(table.kbFileId, table.status),
 ]);
 
+// Analysis Jobs - Track sequential call analysis progress
+export const analysisJobs = pgTable("analysis_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: varchar("type", { length: 20 }).notNull(), // 'wick_coach', 'aligner', 'both'
+  status: varchar("status", { length: 20 }).notNull().default('queued'), // 'queued', 'running', 'completed', 'failed', 'cancelled'
+  agentId: varchar("agent_id"), // Optional filter: which ElevenLabs agent
+  totalCalls: integer("total_calls").notNull(),
+  currentCallIndex: integer("current_call_index").default(0), // Track progress through calls
+  proposalsCreated: integer("proposals_created").default(0),
+  insightId: varchar("insight_id").references(() => aiInsights.id), // Wick Coach insight if type includes wick_coach
+  triggeredBy: varchar("triggered_by").notNull(), // 'manual' or 'auto_trigger'
+  startedBy: varchar("started_by"), // User ID if manual
+  errorMessage: text("error_message"), // If failed
+  createdAt: timestamp("created_at").defaultNow(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  index("idx_analysis_jobs_status").on(table.status, table.createdAt),
+  index("idx_analysis_jobs_agent").on(table.agentId),
+]);
+
 // OpenAI Assistants - Support multiple assistants with separate instructions and knowledge bases
 export const openaiAssistants = pgTable("openai_assistants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1231,6 +1252,11 @@ export const insertKbChangeProposalSchema = createInsertSchema(kbChangeProposals
   createdAt: true,
 });
 
+export const insertAnalysisJobSchema = createInsertSchema(analysisJobs).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -1319,3 +1345,5 @@ export type KbFileVersion = typeof kbFileVersions.$inferSelect;
 export type InsertKbFileVersion = z.infer<typeof insertKbFileVersionSchema>;
 export type KbChangeProposal = typeof kbChangeProposals.$inferSelect;
 export type InsertKbChangeProposal = z.infer<typeof insertKbChangeProposalSchema>;
+export type AnalysisJob = typeof analysisJobs.$inferSelect;
+export type InsertAnalysisJob = z.infer<typeof insertAnalysisJobSchema>;
