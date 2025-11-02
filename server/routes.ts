@@ -2669,17 +2669,44 @@ Focus on:
 
       const insights = JSON.parse(openaiResponse.data.choices[0].message.content);
 
+      // Debug logging
+      console.log('[Wick Coach] OpenAI raw response:', JSON.stringify(insights.sentimentAnalysis, null, 2));
+      console.log('[Wick Coach] Total calls:', callsData.length);
+
       // Calculate sentiment percentages from raw counts
       if (insights.sentimentAnalysis) {
-        const positiveCount = insights.sentimentAnalysis.positiveCount || 0;
-        const neutralCount = insights.sentimentAnalysis.neutralCount || 0;
-        const negativeCount = insights.sentimentAnalysis.negativeCount || 0;
+        const positiveValue = insights.sentimentAnalysis.positiveCount || insights.sentimentAnalysis.positive || 0;
+        const neutralValue = insights.sentimentAnalysis.neutralCount || insights.sentimentAnalysis.neutral || 0;
+        const negativeValue = insights.sentimentAnalysis.negativeCount || insights.sentimentAnalysis.negative || 0;
         const totalCalls = callsData.length;
 
-        // Calculate percentages and round to whole numbers
-        insights.sentimentAnalysis.positive = totalCalls > 0 ? Math.round((positiveCount / totalCalls) * 100) : 0;
-        insights.sentimentAnalysis.neutral = totalCalls > 0 ? Math.round((neutralCount / totalCalls) * 100) : 0;
-        insights.sentimentAnalysis.negative = totalCalls > 0 ? Math.round((negativeCount / totalCalls) * 100) : 0;
+        console.log('[Wick Coach] Values from OpenAI - positive:', positiveValue, 'neutral:', neutralValue, 'negative:', negativeValue);
+
+        // Detect if OpenAI returned counts or percentages
+        // Compare sum against total calls - if sum is close to totalCalls, they're counts
+        // If sum is close to 100, they're percentages
+        const sum = positiveValue + neutralValue + negativeValue;
+        const diffFromTotal = Math.abs(sum - totalCalls);
+        const diffFrom100 = Math.abs(sum - 100);
+        
+        // If difference from total calls is smaller, treat as counts
+        // If difference from 100 is smaller, treat as percentages
+        const isCount = diffFromTotal < diffFrom100;
+
+        if (isCount) {
+          console.log('[Wick Coach] Detected counts from OpenAI (sum=' + sum + ' vs totalCalls=' + totalCalls + '), calculating percentages');
+          // Calculate percentages and round to whole numbers
+          insights.sentimentAnalysis.positive = totalCalls > 0 ? Math.round((positiveValue / totalCalls) * 100) : 0;
+          insights.sentimentAnalysis.neutral = totalCalls > 0 ? Math.round((neutralValue / totalCalls) * 100) : 0;
+          insights.sentimentAnalysis.negative = totalCalls > 0 ? Math.round((negativeValue / totalCalls) * 100) : 0;
+        } else {
+          console.log('[Wick Coach] Detected percentages from OpenAI (sum=' + sum + ' closer to 100 than ' + totalCalls + '), using directly');
+          insights.sentimentAnalysis.positive = Math.round(positiveValue);
+          insights.sentimentAnalysis.neutral = Math.round(neutralValue);
+          insights.sentimentAnalysis.negative = Math.round(negativeValue);
+        }
+
+        console.log('[Wick Coach] Final percentages - positive:', insights.sentimentAnalysis.positive, 'neutral:', insights.sentimentAnalysis.neutral, 'negative:', insights.sentimentAnalysis.negative);
       }
 
       // Create a map of conversation IDs to enriched metadata
@@ -2824,7 +2851,15 @@ Focus on:
       
       const history = await storage.getAiInsightsHistory(filters);
       
-      res.json({ history });
+      // Transform data: rename objections -> commonObjections, patterns -> successPatterns
+      const transformedHistory = history.map((insight: any) => ({
+        ...insight,
+        commonObjections: insight.objections,
+        successPatterns: insight.patterns,
+        analyzedAt: insight.createdAt || insight.analyzedAt,
+      }));
+      
+      res.json({ history: transformedHistory });
     } catch (error: any) {
       console.error('[AI Insights] Error retrieving insights history:', error);
       res.status(500).json({ 
