@@ -991,6 +991,57 @@ export const callCampaignTargets = pgTable("call_campaign_targets", {
   index("idx_campaign_targets_status").on(table.targetStatus),
 ]);
 
+// AI Insights - Historical tracking of call analysis
+export const aiInsights = pgTable("ai_insights", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  analyzedAt: timestamp("analyzed_at").defaultNow(),
+  dateRangeStart: timestamp("date_range_start"),
+  dateRangeEnd: timestamp("date_range_end"),
+  agentId: varchar("agent_id"), // Optional filter: which ElevenLabs agent
+  callCount: integer("call_count").notNull(),
+  sentimentPositive: integer("sentiment_positive"),
+  sentimentNeutral: integer("sentiment_neutral"),
+  sentimentNegative: integer("sentiment_negative"),
+  sentimentTrends: text("sentiment_trends"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_ai_insights_analyzed_at").on(table.analyzedAt),
+  index("idx_ai_insights_agent").on(table.agentId),
+]);
+
+export const aiInsightObjections = pgTable("ai_insight_objections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  insightId: varchar("insight_id").notNull().references(() => aiInsights.id, { onDelete: 'cascade' }),
+  objection: text("objection").notNull(),
+  frequency: integer("frequency").notNull(),
+  exampleConversations: jsonb("example_conversations"), // Array of conversation metadata
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_objections_insight").on(table.insightId),
+]);
+
+export const aiInsightPatterns = pgTable("ai_insight_patterns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  insightId: varchar("insight_id").notNull().references(() => aiInsights.id, { onDelete: 'cascade' }),
+  pattern: text("pattern").notNull(),
+  frequency: integer("frequency").notNull(),
+  exampleConversations: jsonb("example_conversations"), // Array of conversation metadata
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_patterns_insight").on(table.insightId),
+]);
+
+export const aiInsightRecommendations = pgTable("ai_insight_recommendations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  insightId: varchar("insight_id").notNull().references(() => aiInsights.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  priority: varchar("priority", { length: 20 }).notNull(), // 'high', 'medium', 'low'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_recommendations_insight").on(table.insightId),
+]);
+
 export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
@@ -1053,6 +1104,27 @@ export const insertCallCampaignSchema = createInsertSchema(callCampaigns).omit({
 });
 
 export const insertCallCampaignTargetSchema = createInsertSchema(callCampaignTargets).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAiInsightSchema = createInsertSchema(aiInsights).omit({
+  id: true,
+  analyzedAt: true,
+  createdAt: true,
+});
+
+export const insertAiInsightObjectionSchema = createInsertSchema(aiInsightObjections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAiInsightPatternSchema = createInsertSchema(aiInsightPatterns).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAiInsightRecommendationSchema = createInsertSchema(aiInsightRecommendations).omit({
   id: true,
   createdAt: true,
 });
@@ -1131,3 +1203,11 @@ export type CallCampaign = typeof callCampaigns.$inferSelect;
 export type InsertCallCampaign = z.infer<typeof insertCallCampaignSchema>;
 export type CallCampaignTarget = typeof callCampaignTargets.$inferSelect;
 export type InsertCallCampaignTarget = z.infer<typeof insertCallCampaignTargetSchema>;
+export type AiInsight = typeof aiInsights.$inferSelect;
+export type InsertAiInsight = z.infer<typeof insertAiInsightSchema>;
+export type AiInsightObjection = typeof aiInsightObjections.$inferSelect;
+export type InsertAiInsightObjection = z.infer<typeof insertAiInsightObjectionSchema>;
+export type AiInsightPattern = typeof aiInsightPatterns.$inferSelect;
+export type InsertAiInsightPattern = z.infer<typeof insertAiInsightPatternSchema>;
+export type AiInsightRecommendation = typeof aiInsightRecommendations.$inferSelect;
+export type InsertAiInsightRecommendation = z.infer<typeof insertAiInsightRecommendationSchema>;
