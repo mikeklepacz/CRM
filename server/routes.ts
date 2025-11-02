@@ -3496,19 +3496,27 @@ Propose specific improvements to the knowledge base files based on ${insight ? '
 
 Respond in this exact JSON format:
 {
-  "proposals": [
+  "edits": [
     {
-      "filename": "exact-filename.txt",
-      "rationale": "Detailed explanation citing transcript evidence${insight ? ' and Wick Coach insights' : ''}",
-      "proposedContent": "Complete updated file content here"
+      "file": "exact-filename.txt",
+      "section": "Section name for context (e.g., 'Price Objection Responses')",
+      "old": "The exact original text to replace",
+      "new": "The improved replacement text",
+      "reason": "Why this specific change improves the conversation",
+      "principle": "The underlying principle (clarity, rhythm, trust, etc.)",
+      "evidence": "Direct quote from transcript${insight ? ' or Wick Coach insight' : ''} showing the issue"
     }
   ]
 }
 
-IMPORTANT: 
+IMPORTANT:
+- Propose SPECIFIC, TARGETED EDITS - not full file rewrites
+- Each edit should change one thing for one clear reason
+- Include enough context in "old" text to locate it precisely (a sentence or paragraph)
 - Only propose changes supported by actual evidence from transcripts${insight ? ' or Wick Coach analysis' : ''}
-- Focus on ${isAllAgents ? 'general KB files (shared across all agents)' : `files that belong to this specific agent (${kbFiles.map(f => f.filename).join(', ')})`}${insight ? '\n- If transcripts reveal issues the Wick Coach missed, propose those fixes\n- If you disagree with a Wick Coach recommendation based on transcript evidence, explain why in rationale' : ''}
-- Do not make superficial changes just for the sake of it`;
+- Focus on ${isAllAgents ? 'general KB files (shared across all agents)' : `files that belong to this specific agent (${kbFiles.map(f => f.filename).join(', ')})`}${insight ? '\n- If transcripts reveal issues the Wick Coach missed, propose those fixes\n- If you disagree with a Wick Coach recommendation based on transcript evidence, explain why' : ''}
+- Do not make superficial changes just for the sake of it
+- Keep the vibe and voice intact - only fix what's broken`;
 
       console.log('[KB Analyze] Calling Aligner assistant...');
 
@@ -3531,11 +3539,12 @@ IMPORTANT:
         content: analysisPrompt
       });
 
-      // Run the assistant
+      // Run the assistant with JSON mode enforced
       const run = await openai.beta.threads.runs.create(thread.id, {
-        assistant_id: alignerAssistant.assistantId
+        assistant_id: alignerAssistant.assistantId,
+        response_format: { type: "json_object" }
       });
-      console.log('[KB Analyze] Run started:', run.id);
+      console.log('[KB Analyze] Run started with JSON mode:', run.id);
 
       // Poll for completion
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
@@ -3579,24 +3588,35 @@ IMPORTANT:
         return res.status(500).json({ error: 'Failed to parse Aligner response. Response was not valid JSON.' });
       }
 
-      if (!parsedResponse.proposals || !Array.isArray(parsedResponse.proposals)) {
-        return res.status(500).json({ error: 'Invalid response format from Aligner assistant' });
+      if (!parsedResponse.edits || !Array.isArray(parsedResponse.edits)) {
+        return res.status(500).json({ error: 'Invalid response format from Aligner assistant - expected "edits" array' });
       }
 
-      console.log(`[KB Analyze] Creating ${parsedResponse.proposals.length} proposals...`);
+      console.log(`[KB Analyze] Processing ${parsedResponse.edits.length} targeted edits...`);
 
-      // Create proposals in database (reuse allKbFiles already fetched earlier for agent filtering)
+      // Group edits by file
+      const editsByFile = new Map<string, any[]>();
+      for (const edit of parsedResponse.edits) {
+        if (!editsByFile.has(edit.file)) {
+          editsByFile.set(edit.file, []);
+        }
+        editsByFile.get(edit.file)!.push(edit);
+      }
+
+      console.log(`[KB Analyze] Edits grouped into ${editsByFile.size} file(s)`);
+
+      // Create proposals in database (one per file with all its edits)
       const createdProposals = [];
-      for (const proposal of parsedResponse.proposals) {
+      for (const [filename, fileEdits] of editsByFile) {
         // Use fuzzy matching to handle filename variations (underscores vs spaces, etc)
-        const file = await findKbFileByFuzzyFilename(proposal.filename, allKbFiles);
+        const file = await findKbFileByFuzzyFilename(filename, allKbFiles);
         if (!file) {
-          console.warn(`[KB Analyze] File not found (even with fuzzy matching): ${proposal.filename}, skipping`);
+          console.warn(`[KB Analyze] File not found (even with fuzzy matching): ${filename}, skipping ${fileEdits.length} edits`);
           continue;
         }
         
-        if (file.filename !== proposal.filename) {
-          console.log(`[KB Analyze] Fuzzy matched "${proposal.filename}" → "${file.filename}"`);
+        if (file.filename !== filename) {
+          console.log(`[KB Analyze] Fuzzy matched "${filename}" → "${file.filename}"`);
         }
 
         // Get latest version to use as base
@@ -3604,17 +3624,23 @@ IMPORTANT:
         const latestVersion = versions[0];
 
         if (!latestVersion) {
-          console.warn(`[KB Analyze] No versions found for ${proposal.filename}, skipping`);
+          console.warn(`[KB Analyze] No versions found for ${filename}, skipping`);
           continue;
         }
 
+        // Build rationale from all edits
+        const rationale = fileEdits.map((edit, idx) => 
+          `${idx + 1}. ${edit.section ? edit.section + ': ' : ''}${edit.reason} (Evidence: ${edit.evidence})`
+        ).join('\n\n');
+
+        // Store edits as JSON - we'll apply them in order when approved
         const created = await storage.createKbProposal({
           kbFileId: file.id,
           baseVersionId: latestVersion.id,
-          proposedContent: proposal.proposedContent,
-          originalAiContent: proposal.proposedContent, // Store original AI version
-          rationale: proposal.rationale,
-          aiInsightId: insight?.id || null, // Optional - may be null
+          proposedContent: JSON.stringify(fileEdits), // Store structured edits as JSON
+          originalAiContent: JSON.stringify(fileEdits), // Store original AI version
+          rationale,
+          aiInsightId: insight?.id || null,
           status: 'pending',
           humanEdited: false,
         });
