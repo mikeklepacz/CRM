@@ -128,7 +128,7 @@ function KBLibraryTab() {
 
   // Sync mutation
   const syncMutation = useMutation({
-    mutationFn: () => apiRequest('/api/kb/sync', { method: 'POST' }),
+    mutationFn: () => apiRequest('POST', '/api/kb/sync'),
     onSuccess: (data: any) => {
       toast({
         title: "Sync Complete",
