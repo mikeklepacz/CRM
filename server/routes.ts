@@ -2631,9 +2631,9 @@ Provide a detailed analysis in the following JSON format:
     { "pattern": "string", "frequency": number, "exampleConversations": ["conversationId1"] }
   ],
   "sentimentAnalysis": {
-    "positive": number,
-    "neutral": number,
-    "negative": number,
+    "positiveCount": number (count of calls with positive sentiment),
+    "neutralCount": number (count of calls with neutral sentiment),
+    "negativeCount": number (count of calls with negative sentiment),
     "trends": "string description of sentiment trends"
   },
   "coachingRecommendations": [
@@ -2668,6 +2668,19 @@ Focus on:
       );
 
       const insights = JSON.parse(openaiResponse.data.choices[0].message.content);
+
+      // Calculate sentiment percentages from raw counts
+      if (insights.sentimentAnalysis) {
+        const positiveCount = insights.sentimentAnalysis.positiveCount || 0;
+        const neutralCount = insights.sentimentAnalysis.neutralCount || 0;
+        const negativeCount = insights.sentimentAnalysis.negativeCount || 0;
+        const totalCalls = callsData.length;
+
+        // Calculate percentages and round to whole numbers
+        insights.sentimentAnalysis.positive = totalCalls > 0 ? Math.round((positiveCount / totalCalls) * 100) : 0;
+        insights.sentimentAnalysis.neutral = totalCalls > 0 ? Math.round((neutralCount / totalCalls) * 100) : 0;
+        insights.sentimentAnalysis.negative = totalCalls > 0 ? Math.round((negativeCount / totalCalls) * 100) : 0;
+      }
 
       // Create a map of conversation IDs to enriched metadata
       const conversationMap = new Map(
