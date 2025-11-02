@@ -75,13 +75,16 @@ The application is built around a client dashboard unifying data from "Store Dat
     - **Filename Immutability**: Database trigger prevents filename changes (ElevenLabs workflow dependency)
     - **Scoped Security**: Aligner assistant completely isolated from Sales Assistant with defense-in-depth deletion controls
     - **Agent-Isolated Analysis System**: Each AI agent (Holly, Michael) has separate KB files and analysis to prevent cross-contamination:
-        * KB files linked to agents via `agent_id` column (ElevenLabs agent ID); UI displays friendly names via join with elevenLabsAgents table
+        * **KB File Types**: Two categories maintained in kb_files table:
+            - General files (agent_id IS NULL): Shared knowledge like "02 Brand Ethos.txt", "03 Sales Playbook.txt" - apply to all agents
+            - Agent-specific files (agent_id = ElevenLabs agent ID): Personalized content like "Holly_Cold_Call_Script.txt" - only for that agent
+        * **Filter Logic**: When analyzing an agent's calls, system includes both general files (agent_id == null, catching both NULL and undefined) AND agent-specific files (agent_id === agentId)
         * Call sessions track `last_analyzed_at` timestamp to prevent duplicate analysis
-        * Admin selects agent in Aligner UI → system filters for that agent's unanalyzed calls AND KB files only
+        * Admin selects agent in Aligner UI → system filters for that agent's unanalyzed calls AND relevant KB files (general + agent-specific)
         * Smart batching: Processes 100 calls per batch when dataset exceeds limits; tracks progress across batches
         * Baby-steps workflow: Make 5-10 calls → analyze → adjust KB → repeat (never re-analyze same calls)
         * Full transcript analysis: No character truncation (conversations average 3000-4000 chars); removed 20-call limit from WIC Coach
-        * KB file assignment: Admin can assign files to specific agents or leave unassigned ("All agents")
+        * UI displays friendly agent names via LEFT JOIN with elevenLabsAgents table; "All agents" shown for general files
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management and preference storage.

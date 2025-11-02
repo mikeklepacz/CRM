@@ -2820,17 +2820,21 @@ Focus on:
         }
       }
 
-      // Get KB files for this specific agent only
+      // Get KB files for this specific agent AND general files (agent_id IS NULL or undefined)
       const allKbFiles = await storage.getAllKbFiles();
-      const kbFiles = allKbFiles.filter(file => file.agentId === agentId);
+      const kbFiles = allKbFiles.filter(file => 
+        file.agentId === agentId || file.agentId == null // == null catches both null and undefined
+      );
       
       if (kbFiles.length === 0) {
         return res.status(404).json({ 
-          error: `No KB files found for this agent. Please assign KB files to this agent first.` 
+          error: `No KB files found for this agent. Please assign KB files to this agent or upload general files.` 
         });
       }
 
-      console.log(`[KB Analyze] Found ${kbFiles.length} KB files for agent ${agentId}`);
+      const agentSpecificCount = kbFiles.filter(f => f.agentId === agentId).length;
+      const generalCount = kbFiles.filter(f => f.agentId == null).length; // == null catches both null and undefined
+      console.log(`[KB Analyze] Found ${kbFiles.length} KB files for agent ${agentId} (${agentSpecificCount} agent-specific, ${generalCount} general)`);
 
       // Fetch UNANALYZED call transcripts for this agent (no truncation!)
       const callsData = await storage.getCallsWithTranscripts({
