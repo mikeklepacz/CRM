@@ -2459,14 +2459,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       }));
 
-      // Prepare data for OpenAI
-      const analysisData = redactedCalls.slice(0, 20).map(call => ({ // Limit to 20 for cost control
+      // Prepare data for OpenAI (using ALL calls for comprehensive analysis - no truncation!)
+      const analysisData = redactedCalls.map(call => ({
         conversationId: call.session.conversationId,
         duration: call.session.callDurationSecs,
         successful: call.session.callSuccessful,
         interestLevel: call.session.interestLevel,
         aiAnalysis: call.session.aiAnalysis,
-        transcript: call.transcripts.map(t => `${t.role}: ${t.message}`).join('\n'),
+        transcript: call.transcripts.map(t => `${t.role}: ${t.message}`).join('\n'), // Full transcript, no character limit
         storeName: call.client.data?.Name || call.client.uniqueIdentifier,
       }));
 
@@ -2785,9 +2785,16 @@ Focus on:
   // Analyze AI insights and generate KB improvement proposals using Aligner assistant
   app.post('/api/kb/analyze-and-propose', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      console.log('[KB Analyze] Starting analysis and proposal generation...');
+      console.log('[KB Analyze] Starting agent-isolated analysis and proposal generation...');
       
-      const { insightId } = req.body;
+      const { agentId, insightId, startDate, endDate } = req.body;
+
+      // Validate agentId is provided
+      if (!agentId) {
+        return res.status(400).json({ error: 'agentId is required. Please select an AI agent to analyze.' });
+      }
+
+      console.log(`[KB Analyze] Agent ID: ${agentId}`);
 
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner');
@@ -2795,49 +2802,79 @@ Focus on:
         return res.status(400).json({ error: 'Aligner assistant not configured. Please set up the Aligner assistant first.' });
       }
 
-      // Get AI insight to analyze
-      let insight;
+      // Get AI insight (optional - used for WIC coach analysis context)
+      let insight = null;
       if (insightId) {
-        // Get specific insight by ID
         insight = await storage.getAiInsightById(insightId);
         if (!insight) {
-          return res.status(404).json({ error: 'AI insight not found' });
+          console.warn(`[KB Analyze] Insight ${insightId} not found, proceeding without WIC coach analysis`);
         }
       } else {
-        // Get latest insight
-        const insights = await storage.getAiInsightsHistory({ limit: 1 });
-        if (insights.length === 0) {
-          return res.status(404).json({ error: 'No AI insights available. Please run an AI analysis first.' });
+        // Try to get latest insight for this agent
+        const insights = await storage.getAiInsightsHistory({ agentId, limit: 1 });
+        if (insights.length > 0) {
+          insight = insights[0];
+          console.log(`[KB Analyze] Using latest WIC coach insight from ${insight.dateRangeStart}`);
+        } else {
+          console.log('[KB Analyze] No WIC coach insights available, will analyze raw transcripts only');
         }
-        insight = insights[0];
       }
 
-      // Get all KB files
-      const kbFiles = await storage.getAllKbFiles();
+      // Get KB files for this specific agent only
+      const allKbFiles = await storage.getAllKbFiles();
+      const kbFiles = allKbFiles.filter(file => file.agentId === agentId);
+      
       if (kbFiles.length === 0) {
-        return res.status(404).json({ error: 'No KB files found. Please sync KB files from ElevenLabs first.' });
+        return res.status(404).json({ 
+          error: `No KB files found for this agent. Please assign KB files to this agent first.` 
+        });
       }
 
-      console.log(`[KB Analyze] Found ${kbFiles.length} KB files to analyze`);
-      console.log(`[KB Analyze] Analyzing insight from ${insight.dateRangeStart} to ${insight.dateRangeEnd}`);
+      console.log(`[KB Analyze] Found ${kbFiles.length} KB files for agent ${agentId}`);
 
-      // Fetch call transcripts for the same date range and agent
-      const calls = await storage.getCallHistory({
-        startDate: insight.dateRangeStart,
-        endDate: insight.dateRangeEnd,
-        agentPhoneNumberId: insight.agentPhoneNumberId || undefined,
-        limit: 100, // Match AI insights limit
+      // Fetch UNANALYZED call transcripts for this agent (no truncation!)
+      const callsData = await storage.getCallsWithTranscripts({
+        agentId,
+        startDate: startDate || (insight?.dateRangeStart),
+        endDate: endDate || (insight?.dateRangeEnd),
+        onlyUnanalyzed: true, // Only get calls that haven't been analyzed yet
+        limit: 1000, // Large limit - we'll batch if needed
       });
 
-      console.log(`[KB Analyze] Found ${calls.length} call transcripts to include`);
+      console.log(`[KB Analyze] Found ${callsData.length} unanalyzed calls for agent`);
 
-      // Build transcript context (include representative samples)
-      const transcriptContext = calls
-        .filter(call => call.transcript && call.transcript.trim().length > 0)
-        .slice(0, 20) // Limit to 20 transcripts to avoid token limits
+      if (callsData.length === 0) {
+        return res.status(404).json({ 
+          error: 'No unanalyzed calls found for this agent in the specified date range.' 
+        });
+      }
+
+      // Implement smart batching: 100 calls per batch to stay within token limits
+      const BATCH_SIZE = 100;
+      const batches = [];
+      for (let i = 0; i < callsData.length; i += BATCH_SIZE) {
+        batches.push(callsData.slice(i, i + BATCH_SIZE));
+      }
+
+      console.log(`[KB Analyze] Processing ${batches.length} batch(es) of calls`);
+
+      // For now, process first batch only (user can run again for next batch)
+      const currentBatch = batches[0];
+      const batchInfo = batches.length > 1 
+        ? ` (Batch 1 of ${batches.length}, ${currentBatch.length} calls)` 
+        : ` (${currentBatch.length} calls)`;
+
+      console.log(`[KB Analyze] Analyzing${batchInfo}`);
+
+      // Build transcript context with FULL transcripts (no truncation!)
+      const transcriptContext = currentBatch
+        .filter(call => call.transcripts && call.transcripts.length > 0)
         .map((call, idx) => {
-          const storeInfo = call.storeName ? ` (Store: ${call.storeName})` : '';
-          return `\n#### Call ${idx + 1}${storeInfo}\n- Duration: ${call.duration}s\n- Outcome: ${call.status}\n- Interest Level: ${call.interestLevel || 'N/A'}\n- Transcript:\n\`\`\`\n${call.transcript.substring(0, 1000)}${call.transcript.length > 1000 ? '...(truncated)' : ''}\n\`\`\``;
+          const fullTranscript = call.transcripts
+            .map(t => `${t.role}: ${t.message}`)
+            .join('\n');
+          const storeInfo = call.client.data?.Name ? ` (Store: ${call.client.data.Name})` : '';
+          return `\n#### Call ${idx + 1}${storeInfo}\n- Duration: ${call.session.callDurationSecs || 'N/A'}s\n- Outcome: ${call.session.status}\n- Interest Level: ${call.session.interestLevel || 'N/A'}\n- Transcript:\n\`\`\`\n${fullTranscript}\n\`\`\``;
         })
         .join('\n');
 
@@ -2846,42 +2883,22 @@ Focus on:
         .map(file => `\n### ${file.filename}\n\`\`\`\n${file.currentContent || '(empty)'}\n\`\`\``)
         .join('\n');
 
-      const objections = insight.objections
-        .map(obj => `- ${obj.objection} (frequency: ${obj.frequency})`)
-        .join('\n');
+      // Build WIC coach analysis section (optional)
+      let wickCoachSection = '';
+      if (insight) {
+        const objections = insight.objections
+          .map(obj => `- ${obj.objection} (frequency: ${obj.frequency})`)
+          .join('\n');
 
-      const patterns = insight.patterns
-        .map(pat => `- ${pat.pattern} (frequency: ${pat.frequency})`)
-        .join('\n');
+        const patterns = insight.patterns
+          .map(pat => `- ${pat.pattern} (frequency: ${pat.frequency})`)
+          .join('\n');
 
-      const recommendations = insight.recommendations
-        .map(rec => `- [${rec.priority.toUpperCase()}] ${rec.title}: ${rec.description}`)
-        .join('\n');
+        const recommendations = insight.recommendations
+          .map(rec => `- [${rec.priority.toUpperCase()}] ${rec.title}: ${rec.description}`)
+          .join('\n');
 
-      const analysisPrompt = `You are the Aligner assistant analyzing call performance data to improve the sales knowledge base. You have TWO sources of information:
-
-1. **RAW CALL TRANSCRIPTS** - These are the actual conversations between the AI agent and prospects
-2. **WIC COACH ANALYSIS** - Another AI (the "WIC coach") has already analyzed these calls and provided recommendations
-
-## YOUR DUAL-PERSPECTIVE MISSION:
-
-**First, form your OWN independent opinion** by reading the actual call transcripts. Look for:
-- What objections are prospects actually raising?
-- What language/phrasing works well vs. poorly?
-- What information seems to confuse prospects?
-- What topics lead to successful outcomes?
-
-**Second, review the WIC coach's analysis** to see if it caught things you missed or has different insights.
-
-**Then, synthesize BOTH perspectives** to propose KB improvements that address:
-- Issues YOU identified from transcripts
-- Valid points from the WIC coach's recommendations
-- Any contradictions between the two analyses (explain your reasoning)
-
----
-
-## RAW CALL TRANSCRIPTS:
-${transcriptContext || '(No transcripts available - rely on WIC coach analysis)'}
+        wickCoachSection = `
 
 ---
 
@@ -2897,7 +2914,27 @@ ${objections || '(none)'}
 ${patterns || '(none)'}
 
 **WIC Coach Recommendations:**
-${recommendations || '(none)'}
+${recommendations || '(none)'}`;
+      }
+
+      const analysisPrompt = `You are the Aligner assistant analyzing call performance data to improve the sales knowledge base.${insight ? ' You have TWO sources of information:' : ' You have access to:'}
+
+1. **RAW CALL TRANSCRIPTS** - These are the actual conversations between the AI agent and prospects${insight ? '\n2. **WIC COACH ANALYSIS** - Another AI (the "WIC coach") has already analyzed these calls and provided recommendations' : ''}
+
+## YOUR ${insight ? 'DUAL-PERSPECTIVE ' : ''}MISSION:
+
+**First, form your OWN independent opinion** by reading the actual call transcripts. Look for:
+- What objections are prospects actually raising?
+- What language/phrasing works well vs. poorly?
+- What information seems to confuse prospects?
+- What topics lead to successful outcomes?
+
+${insight ? '**Second, review the WIC coach\'s analysis** to see if it caught things you missed or has different insights.\n\n**Then, synthesize BOTH perspectives** to propose KB improvements that address:\n- Issues YOU identified from transcripts\n- Valid points from the WIC coach\'s recommendations\n- Any contradictions between the two analyses (explain your reasoning)' : '**Then, propose KB improvements** based on your analysis of the transcripts.'}
+
+---
+
+## RAW CALL TRANSCRIPTS:
+${transcriptContext}${wickCoachSection}
 
 ---
 
@@ -2908,12 +2945,11 @@ ${kbContext}
 
 ## YOUR TASK:
 
-Propose specific improvements to the knowledge base files based on BOTH your transcript analysis AND the WIC coach's insights. For each proposed change:
+Propose specific improvements to the knowledge base files based on ${insight ? 'BOTH your transcript analysis AND the WIC coach\'s insights' : 'your analysis of the transcripts'}. For each proposed change:
 
 1. Identify which file(s) should be updated
-2. Explain the rationale, citing BOTH:
-   - Specific examples from transcripts (if available)
-   - Relevant WIC coach recommendations
+2. Explain the rationale, citing:
+   - Specific examples from transcripts${insight ? '\n   - Relevant WIC coach recommendations' : ''}
 3. Provide the complete updated content for the file
 
 Respond in this exact JSON format:
@@ -2921,16 +2957,15 @@ Respond in this exact JSON format:
   "proposals": [
     {
       "filename": "exact-filename.txt",
-      "rationale": "Detailed explanation citing both transcript evidence and WIC coach insights",
+      "rationale": "Detailed explanation citing transcript evidence${insight ? ' and WIC coach insights' : ''}",
       "proposedContent": "Complete updated file content here"
     }
   ]
 }
 
 IMPORTANT: 
-- Only propose changes supported by actual evidence from transcripts or WIC analysis
-- If transcripts reveal issues the WIC coach missed, propose those fixes
-- If you disagree with a WIC recommendation based on transcript evidence, explain why in rationale
+- Only propose changes supported by actual evidence from transcripts${insight ? ' or WIC analysis' : ''}
+- Focus on files that belong to this specific agent (${kbFiles.map(f => f.filename).join(', ')})${insight ? '\n- If transcripts reveal issues the WIC coach missed, propose those fixes\n- If you disagree with a WIC recommendation based on transcript evidence, explain why in rationale' : ''}
 - Do not make superficial changes just for the sake of it`;
 
       console.log('[KB Analyze] Calling Aligner assistant...');
@@ -3032,7 +3067,7 @@ IMPORTANT:
           proposedContent: proposal.proposedContent,
           originalAiContent: proposal.proposedContent, // Store original AI version
           rationale: proposal.rationale,
-          aiInsightId: insight.id,
+          aiInsightId: insight?.id || null, // Optional - may be null
           status: 'pending',
           humanEdited: false,
         });
@@ -3042,11 +3077,35 @@ IMPORTANT:
 
       console.log(`[KB Analyze] Successfully created ${createdProposals.length} proposals`);
 
+      // Mark all calls in this batch as analyzed to prevent re-analysis
+      const conversationIds = currentBatch
+        .map(call => call.session.conversationId)
+        .filter(Boolean) as string[];
+      
+      await storage.markCallsAsAnalyzed(conversationIds);
+      console.log(`[KB Analyze] Marked ${conversationIds.length} calls as analyzed`);
+
+      // Calculate remaining calls
+      const remainingCalls = callsData.length - currentBatch.length;
+      const batchMessage = batches.length > 1 
+        ? `Analyzed batch 1 of ${batches.length}. ${remainingCalls} calls remaining. Run analysis again to process next batch.`
+        : `All ${currentBatch.length} unanalyzed calls processed.`;
+
       res.json({
         success: true,
         proposalsCreated: createdProposals.length,
         proposals: createdProposals,
-        insightId: insight.id,
+        insightId: insight?.id || null,
+        agentId,
+        callsAnalyzed: currentBatch.length,
+        totalUnanalyzedCalls: callsData.length,
+        remainingCalls,
+        batchInfo: {
+          currentBatch: 1,
+          totalBatches: batches.length,
+          batchSize: currentBatch.length,
+        },
+        message: batchMessage,
       });
     } catch (error: any) {
       console.error('[KB Analyze] Error:', error);
