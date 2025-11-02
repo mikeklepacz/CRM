@@ -2960,7 +2960,7 @@ Focus on:
         const filenameChanged = existing && existing.filename !== doc.name;
         
         // If file was renamed in ElevenLabs, update filename (temporarily disable trigger)
-        if (filenameChanged) {
+        if (filenameChanged && existing) {
           console.log(`[KB Sync] File renamed in ElevenLabs: "${existing.filename}" → "${doc.name}". Updating filename.`);
           // Disable trigger temporarily to allow filename update during sync
           await db.execute(sql`ALTER TABLE kb_files DISABLE TRIGGER enforce_filename_immutability`);
