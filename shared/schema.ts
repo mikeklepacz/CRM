@@ -1002,7 +1002,7 @@ export const aiInsights = pgTable("ai_insights", {
   sentimentPositive: integer("sentiment_positive"),
   sentimentNeutral: integer("sentiment_neutral"),
   sentimentNegative: integer("sentiment_negative"),
-  sentimentTrends: text("sentiment_trends"),
+  sentimentTrendsText: text("sentiment_trends_text"), // Text description of trends
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_ai_insights_analyzed_at").on(table.analyzedAt),

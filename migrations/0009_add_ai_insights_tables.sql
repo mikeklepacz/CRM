@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS ai_insights (
   sentiment_positive INTEGER,
   sentiment_neutral INTEGER,
   sentiment_negative INTEGER,
-  sentiment_trends TEXT,
+  sentiment_trends_text TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

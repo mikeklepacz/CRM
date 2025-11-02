@@ -2566,7 +2566,7 @@ Focus on:
           sentimentPositive: insights.sentimentAnalysis?.positive || 0,
           sentimentNeutral: insights.sentimentAnalysis?.neutral || 0,
           sentimentNegative: insights.sentimentAnalysis?.negative || 0,
-          sentimentTrends: insights.sentimentAnalysis?.trends || '',
+          sentimentTrendsText: insights.sentimentAnalysis?.trends || '',
         };
         
         const objectionsRecords = enrichedObjections.map((obj: any) => ({
