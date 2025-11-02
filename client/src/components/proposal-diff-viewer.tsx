@@ -2,9 +2,12 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, XCircle, FileText, Edit2, Save, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, FileText, Edit2, Save, AlertCircle, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -53,6 +56,8 @@ export function ProposalDiffViewer({
   const [editedContent, setEditedContent] = useState(proposedContent);
   const [localProposedContent, setLocalProposedContent] = useState(proposedContent);
   const [localHumanEdited, setLocalHumanEdited] = useState(proposal.humanEdited || false);
+  const [editFormData, setEditFormData] = useState<Edit[]>([]);
+  const [selectedEdits, setSelectedEdits] = useState<Set<number>>(new Set());
 
   // Sync local state when proposal changes
   useEffect(() => {
@@ -75,6 +80,80 @@ export function ProposalDiffViewer({
   }, [localProposedContent]);
 
   const isValidEdits = edits.length > 0 && edits.every(e => e.old && e.new && e.reason);
+
+  // Initialize selected edits to all edits when edits change
+  useEffect(() => {
+    if (edits.length > 0) {
+      setSelectedEdits(new Set(edits.map((_, idx) => idx)));
+    }
+  }, [edits.length]);
+
+  // Toggle edit selection
+  const toggleEditSelection = (index: number) => {
+    const newSelected = new Set(selectedEdits);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedEdits(newSelected);
+  };
+
+  // Approve only selected edits
+  const handleApproveSelected = () => {
+    if (selectedEdits.size === 0) {
+      toast({
+        title: "No Edits Selected",
+        description: "Please select at least one edit to approve",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // If all edits are selected, just approve normally
+    if (selectedEdits.size === edits.length) {
+      onApprove?.();
+      return;
+    }
+
+    // Otherwise, save filtered edits first, then approve
+    const selectedEditsArray = edits.filter((_, idx) => selectedEdits.has(idx));
+    const filteredJson = JSON.stringify(selectedEditsArray, null, 2);
+    setEditedContent(filteredJson); // Update state before mutation
+    
+    editMutation.mutate(filteredJson, {
+      onSuccess: () => {
+        // After saving filtered edits, approve the proposal
+        onApprove?.();
+      }
+    });
+  };
+
+  // Initialize edit form data when entering edit mode
+  const handleStartEditing = () => {
+    setEditFormData(JSON.parse(JSON.stringify(edits))); // Deep copy
+    setIsEditing(true);
+  };
+
+  // Update individual edit field
+  const updateEditField = (index: number, field: keyof Edit, value: string) => {
+    const newData = [...editFormData];
+    newData[index] = { ...newData[index], [field]: value };
+    setEditFormData(newData);
+  };
+
+  // Remove an edit
+  const removeEdit = (index: number) => {
+    const newData = editFormData.filter((_, i) => i !== index);
+    setEditFormData(newData);
+  };
+
+  // Save form data as JSON
+  const handleSaveFormEdits = () => {
+    const jsonContent = JSON.stringify(editFormData, null, 2);
+    setEditedContent(jsonContent); // Update state so mutation onSuccess sees the new content
+    editMutation.mutate(jsonContent);
+  };
 
   // Edit proposal mutation
   const editMutation = useMutation({
@@ -149,21 +228,21 @@ export function ProposalDiffViewer({
               {!isEditing ? (
                 <>
                   <Button
-                    onClick={() => setIsEditing(true)}
+                    onClick={handleStartEditing}
                     variant="outline"
                     data-testid="button-edit"
                   >
                     <Edit2 className="h-4 w-4 mr-2" />
-                    Edit JSON
+                    Edit Changes
                   </Button>
                   <Button
-                    onClick={onApprove}
-                    disabled={isApproving || isRejecting || !isValidEdits}
+                    onClick={handleApproveSelected}
+                    disabled={isApproving || isRejecting || !isValidEdits || selectedEdits.size === 0}
                     data-testid="button-approve"
                     className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
                   >
                     <CheckCircle2 className="h-4 w-4 mr-2" />
-                    {isApproving ? 'Approving...' : 'Approve All Changes'}
+                    {isApproving ? 'Approving...' : `Approve ${selectedEdits.size === edits.length ? 'All' : selectedEdits.size} ${selectedEdits.size === 1 ? 'Change' : 'Changes'}`}
                   </Button>
                   <Button
                     onClick={onReject}
@@ -178,7 +257,7 @@ export function ProposalDiffViewer({
               ) : (
                 <>
                   <Button
-                    onClick={() => editMutation.mutate(editedContent)}
+                    onClick={handleSaveFormEdits}
                     disabled={editMutation.isPending}
                     data-testid="button-save-edits"
                   >
@@ -188,7 +267,7 @@ export function ProposalDiffViewer({
                   <Button
                     onClick={() => {
                       setIsEditing(false);
-                      setEditedContent(localProposedContent);
+                      setEditFormData([]);
                     }}
                     variant="outline"
                     disabled={editMutation.isPending}
@@ -205,22 +284,88 @@ export function ProposalDiffViewer({
 
       {/* Edit mode */}
       {isEditing && (
-        <Card data-testid="card-edit-mode">
-          <CardHeader>
-            <CardTitle>Edit Proposed Changes (JSON)</CardTitle>
-            <CardDescription>
-              Make changes to the AI-generated edits. Must be valid JSON array.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={editedContent}
-              onChange={(e) => setEditedContent(e.target.value)}
-              className="font-mono text-sm min-h-[600px]"
-              data-testid="textarea-edit-content"
-            />
-          </CardContent>
-        </Card>
+        <ScrollArea className="max-h-[600px]">
+          <div className="space-y-4">
+            {editFormData.map((edit, idx) => (
+              <Card key={idx} data-testid={`card-edit-form-${idx}`}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Edit {idx + 1}</CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeEdit(idx)}
+                      data-testid={`button-remove-edit-${idx}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`section-${idx}`}>Section (optional)</Label>
+                    <Input
+                      id={`section-${idx}`}
+                      value={edit.section || ''}
+                      onChange={(e) => updateEditField(idx, 'section', e.target.value)}
+                      placeholder="e.g., Pricing Transparency"
+                      data-testid={`input-section-${idx}`}
+                    />
+                  </div>
+
+                  {/* Old text */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`old-${idx}`}>Old Text</Label>
+                    <Textarea
+                      id={`old-${idx}`}
+                      value={edit.old}
+                      onChange={(e) => updateEditField(idx, 'old', e.target.value)}
+                      className="min-h-[80px]"
+                      data-testid={`textarea-old-${idx}`}
+                    />
+                  </div>
+
+                  {/* New text */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`new-${idx}`}>New Text</Label>
+                    <Textarea
+                      id={`new-${idx}`}
+                      value={edit.new}
+                      onChange={(e) => updateEditField(idx, 'new', e.target.value)}
+                      className="min-h-[80px]"
+                      data-testid={`textarea-new-${idx}`}
+                    />
+                  </div>
+
+                  {/* Reason */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`reason-${idx}`}>Reason</Label>
+                    <Textarea
+                      id={`reason-${idx}`}
+                      value={edit.reason}
+                      onChange={(e) => updateEditField(idx, 'reason', e.target.value)}
+                      className="min-h-[60px]"
+                      data-testid={`textarea-reason-${idx}`}
+                    />
+                  </div>
+
+                  {/* Evidence */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`evidence-${idx}`}>Evidence</Label>
+                    <Textarea
+                      id={`evidence-${idx}`}
+                      value={edit.evidence}
+                      onChange={(e) => updateEditField(idx, 'evidence', e.target.value)}
+                      className="min-h-[60px]"
+                      data-testid={`textarea-evidence-${idx}`}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </ScrollArea>
       )}
 
       {/* Individual edits view */}
@@ -243,21 +388,65 @@ export function ProposalDiffViewer({
           ) : (
             <div className="space-y-4">
               {edits.map((edit, idx) => (
-                <Card key={idx} data-testid={`card-edit-${idx}`}>
+                <Card key={idx} data-testid={`card-edit-${idx}`} className={!selectedEdits.has(idx) ? 'opacity-50' : ''}>
                   <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      Edit {idx + 1}
-                      {edit.section && (
-                        <Badge variant="outline" data-testid={`badge-section-${idx}`}>
-                          {edit.section}
-                        </Badge>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 flex-1">
+                        <Checkbox
+                          checked={selectedEdits.has(idx)}
+                          onCheckedChange={() => toggleEditSelection(idx)}
+                          data-testid={`checkbox-edit-${idx}`}
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            Edit {idx + 1}
+                            {edit.section && (
+                              <Badge variant="outline" data-testid={`badge-section-${idx}`}>
+                                {edit.section}
+                              </Badge>
+                            )}
+                          </CardTitle>
+                          {edit.principle && (
+                            <CardDescription data-testid={`text-principle-${idx}`}>
+                              Principle: {edit.principle}
+                            </CardDescription>
+                          )}
+                        </div>
+                      </div>
+                      {proposal.status === 'pending' && (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const newSelected = new Set([idx]);
+                              setSelectedEdits(newSelected);
+                              setTimeout(() => handleApproveSelected(), 100);
+                            }}
+                            disabled={isApproving || isRejecting}
+                            data-testid={`button-approve-single-${idx}`}
+                            className="bg-green-50 hover:bg-green-100 dark:bg-green-950 dark:hover:bg-green-900 border-green-300 dark:border-green-700"
+                          >
+                            <CheckCircle2 className="h-4 w-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const newSelected = new Set(selectedEdits);
+                              newSelected.delete(idx);
+                              setSelectedEdits(newSelected);
+                            }}
+                            data-testid={`button-skip-single-${idx}`}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Skip
+                          </Button>
+                        </div>
                       )}
-                    </CardTitle>
-                    {edit.principle && (
-                      <CardDescription data-testid={`text-principle-${idx}`}>
-                        Principle: {edit.principle}
-                      </CardDescription>
-                    )}
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Reason */}
