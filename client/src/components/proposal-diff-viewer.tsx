@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,12 +28,15 @@ interface ProposalDiffViewerProps {
   isRejecting?: boolean;
 }
 
-// Word-level diff for highlighting changes within a line
-function computeWordDiff(oldText: string, newText: string): { oldHighlighted: JSX.Element[]; newHighlighted: JSX.Element[] } {
+// Word-level diff for highlighting specific changed words within a line
+function computeWordDiff(oldText: string, newText: string): { 
+  oldWords: Array<{ text: string; changed: boolean }>;
+  newWords: Array<{ text: string; changed: boolean }>;
+} {
   const oldWords = oldText.split(/(\s+)/);
   const newWords = newText.split(/(\s+)/);
   
-  // Simple LCS for words
+  // Build LCS table for words
   const lcs: number[][] = [];
   for (let i = 0; i <= oldWords.length; i++) {
     lcs[i] = [];
@@ -48,17 +51,11 @@ function computeWordDiff(oldText: string, newText: string): { oldHighlighted: JS
     }
   }
   
-  // Backtrack to find matching words
-  const oldHighlighted: JSX.Element[] = [];
-  const newHighlighted: JSX.Element[] = [];
-  let i = oldWords.length;
-  let j = newWords.length;
-  let oldIdx = 0;
-  let newIdx = 0;
-  
-  // Build mapping of which words are in LCS
+  // Backtrack to find which words are in LCS (unchanged)
   const oldInLCS = new Set<number>();
   const newInLCS = new Set<number>();
+  let i = oldWords.length;
+  let j = newWords.length;
   
   while (i > 0 && j > 0) {
     if (oldWords[i - 1] === newWords[j - 1]) {
@@ -73,47 +70,37 @@ function computeWordDiff(oldText: string, newText: string): { oldHighlighted: JS
     }
   }
   
-  // Render old words with highlighting
-  for (let idx = 0; idx < oldWords.length; idx++) {
-    if (oldInLCS.has(idx)) {
-      oldHighlighted.push(<span key={idx}>{oldWords[idx]}</span>);
-    } else {
-      oldHighlighted.push(
-        <span key={idx} className="bg-red-200 dark:bg-red-900/40 text-red-900 dark:text-red-200">
-          {oldWords[idx]}
-        </span>
-      );
-    }
-  }
+  // Build result arrays marking changed vs unchanged words
+  const oldResult = oldWords.map((word, idx) => ({
+    text: word,
+    changed: !oldInLCS.has(idx)
+  }));
   
-  // Render new words with highlighting
-  for (let idx = 0; idx < newWords.length; idx++) {
-    if (newInLCS.has(idx)) {
-      newHighlighted.push(<span key={idx}>{newWords[idx]}</span>);
-    } else {
-      newHighlighted.push(
-        <span key={idx} className="bg-green-200 dark:bg-green-900/40 text-green-900 dark:text-green-200">
-          {newWords[idx]}
-        </span>
-      );
-    }
-  }
+  const newResult = newWords.map((word, idx) => ({
+    text: word,
+    changed: !newInLCS.has(idx)
+  }));
   
-  return { oldHighlighted, newHighlighted };
+  return { oldWords: oldResult, newWords: newResult };
 }
 
-// WordPress-style unified diff (changed sections only with context)
+// WordPress-style side-by-side diff with hunks (changed sections only)
+interface DiffLine {
+  type: 'unchanged' | 'removed' | 'added' | 'modified';
+  oldContent: string | null;
+  newContent: string | null;
+  oldLineNum: number | null;
+  newLineNum: number | null;
+  oldWordDiff?: Array<{ text: string; changed: boolean }>;
+  newWordDiff?: Array<{ text: string; changed: boolean }>;
+}
+
 interface DiffHunk {
   startLine: number;
-  lines: Array<{
-    type: 'context' | 'removed' | 'added';
-    content: string;
-    lineNum: number;
-    wordHighlighting?: JSX.Element[];
-  }>;
+  lines: DiffLine[];
 }
 
-function computeUnifiedDiff(oldText: string, newText: string, contextLines = 3): DiffHunk[] {
+function computeSideBySideDiff(oldText: string, newText: string, contextLines = 3): DiffHunk[] {
   const oldLines = oldText === '' ? [] : oldText.split('\n');
   const newLines = newText === '' ? [] : newText.split('\n');
   
@@ -132,14 +119,8 @@ function computeUnifiedDiff(oldText: string, newText: string, contextLines = 3):
     }
   }
   
-  // Backtrack to build all changes
-  const changes: Array<{
-    type: 'unchanged' | 'removed' | 'added';
-    content: string;
-    oldLineNum: number;
-    newLineNum: number;
-  }> = [];
-  
+  // Backtrack to build diff
+  const allChanges: DiffLine[] = [];
   let i = oldLines.length;
   let j = newLines.length;
   let oldLineNum = oldLines.length;
@@ -147,128 +128,98 @@ function computeUnifiedDiff(oldText: string, newText: string, contextLines = 3):
   
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-      changes.unshift({
+      // Unchanged line
+      allChanges.unshift({
         type: 'unchanged',
-        content: oldLines[i - 1],
+        oldContent: oldLines[i - 1],
+        newContent: newLines[j - 1],
         oldLineNum: oldLineNum--,
         newLineNum: newLineNum--,
       });
       i--;
       j--;
     } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
-      changes.unshift({
+      // Line added
+      allChanges.unshift({
         type: 'added',
-        content: newLines[j - 1],
-        oldLineNum: 0,
+        oldContent: null,
+        newContent: newLines[j - 1],
+        oldLineNum: null,
         newLineNum: newLineNum--,
       });
       j--;
     } else if (i > 0) {
-      changes.unshift({
+      // Line removed
+      allChanges.unshift({
         type: 'removed',
-        content: oldLines[i - 1],
+        oldContent: oldLines[i - 1],
+        newContent: null,
         oldLineNum: oldLineNum--,
-        newLineNum: 0,
+        newLineNum: null,
       });
       i--;
     }
   }
   
-  // Group changes into hunks (sections with changes + context)
+  // Detect modifications (removed + added pair) and add word-level diffs
+  for (let idx = 0; idx < allChanges.length - 1; idx++) {
+    const current = allChanges[idx];
+    const next = allChanges[idx + 1];
+    
+    if (current.type === 'removed' && next.type === 'added') {
+      // This is a modification - add word-level diff
+      const { oldWords, newWords } = computeWordDiff(current.oldContent!, next.newContent!);
+      current.type = 'modified';
+      current.oldWordDiff = oldWords;
+      current.newWordDiff = newWords;
+      current.newContent = next.newContent;
+      current.newLineNum = next.newLineNum;
+      
+      // Remove the 'added' line since we merged it
+      allChanges.splice(idx + 1, 1);
+    }
+  }
+  
+  // Group into hunks (changed sections with context)
   const hunks: DiffHunk[] = [];
   let currentHunk: DiffHunk | null = null;
-  let unchangedBuffer: typeof changes = [];
-  let contextAddedAfterChange = 0; // Track context lines already added after last change
+  let unchangedBuffer: DiffLine[] = [];
+  let contextAddedAfter = 0;
   
-  for (let idx = 0; idx < changes.length; idx++) {
-    const change = changes[idx];
-    
-    if (change.type === 'unchanged') {
-      if (currentHunk && contextAddedAfterChange < contextLines) {
-        // Add context line after a change
-        currentHunk.lines.push({
-          type: 'context',
-          content: change.content,
-          lineNum: change.newLineNum,
-        });
-        contextAddedAfterChange++;
+  for (const line of allChanges) {
+    if (line.type === 'unchanged') {
+      if (currentHunk && contextAddedAfter < contextLines) {
+        // Add context after change
+        currentHunk.lines.push(line);
+        contextAddedAfter++;
       }
       
-      // Buffer unchanged lines for potential context before next change
-      unchangedBuffer.push(change);
+      unchangedBuffer.push(line);
       
-      // If we have enough separation, close current hunk
+      // Close hunk if we have enough separation
       if (currentHunk && unchangedBuffer.length > contextLines) {
         hunks.push(currentHunk);
         currentHunk = null;
-        contextAddedAfterChange = 0;
-        // Keep last contextLines in buffer for next hunk's "before" context
+        contextAddedAfter = 0;
         unchangedBuffer = unchangedBuffer.slice(-contextLines);
       }
     } else {
       // Changed line - start or continue hunk
       if (!currentHunk) {
-        // Start new hunk with context before
         const contextBefore = unchangedBuffer.slice(-contextLines);
         currentHunk = {
-          startLine: contextBefore.length > 0 ? contextBefore[0].newLineNum : change.newLineNum || change.oldLineNum,
-          lines: [],
+          startLine: contextBefore.length > 0 ? (contextBefore[0].newLineNum || contextBefore[0].oldLineNum || 1) : (line.newLineNum || line.oldLineNum || 1),
+          lines: [...contextBefore],
         };
-        
-        contextBefore.forEach(c => {
-          currentHunk!.lines.push({
-            type: 'context',
-            content: c.content,
-            lineNum: c.newLineNum,
-          });
-        });
       }
       
-      // Reset context counter and buffer when we hit a change
       unchangedBuffer = [];
-      contextAddedAfterChange = 0;
-      
-      // Check if there's a corresponding change for word-level highlighting
-      let wordHighlighting: JSX.Element[] | undefined;
-      if (change.type === 'removed') {
-        // Look ahead for matching added line
-        const nextChange = changes[idx + 1];
-        if (nextChange && nextChange.type === 'added') {
-          const { oldHighlighted, newHighlighted } = computeWordDiff(change.content, nextChange.content);
-          wordHighlighting = oldHighlighted;
-          
-          // Add removed line with word highlighting
-          currentHunk.lines.push({
-            type: 'removed',
-            content: change.content,
-            lineNum: change.oldLineNum,
-            wordHighlighting,
-          });
-          
-          // Add added line with word highlighting
-          currentHunk.lines.push({
-            type: 'added',
-            content: nextChange.content,
-            lineNum: nextChange.newLineNum,
-            wordHighlighting: newHighlighted,
-          });
-          
-          idx++; // Skip next since we handled it
-          continue;
-        }
-      }
-      
-      // Regular add/remove without word highlighting
-      currentHunk.lines.push({
-        type: change.type as 'removed' | 'added',
-        content: change.content,
-        lineNum: change.type === 'removed' ? change.oldLineNum : change.newLineNum,
-        wordHighlighting,
-      });
+      contextAddedAfter = 0;
+      currentHunk.lines.push(line);
     }
   }
   
-  // Close final hunk if exists
+  // Close final hunk
   if (currentHunk) {
     hunks.push(currentHunk);
   }
@@ -323,12 +274,11 @@ export function ProposalDiffViewer({
     },
   });
 
-  // Use edited content for diff if in edit mode
   const displayContent = isEditing ? editedContent : localProposedContent;
 
-  // Compute unified diff hunks
+  // Compute side-by-side diff with hunks
   const hunks = useMemo(() => {
-    return computeUnifiedDiff(currentContent || '', displayContent || '');
+    return computeSideBySideDiff(currentContent || '', displayContent || '');
   }, [currentContent, displayContent]);
 
   const stats = useMemo(() => {
@@ -340,6 +290,10 @@ export function ProposalDiffViewer({
       hunk.lines.forEach(line => {
         if (line.type === 'added') added++;
         else if (line.type === 'removed') removed++;
+        else if (line.type === 'modified') {
+          added++;
+          removed++;
+        }
         else unchanged++;
       });
     });
@@ -349,7 +303,7 @@ export function ProposalDiffViewer({
 
   return (
     <div className="space-y-4" data-testid="proposal-diff-viewer">
-      {/* Header with rationale and actions */}
+      {/* Header */}
       <Card data-testid="card-proposal-header">
         <CardHeader>
           <div className="flex items-start justify-between">
@@ -458,7 +412,7 @@ export function ProposalDiffViewer({
         </CardContent>
       </Card>
 
-      {/* Edit mode - full content editor */}
+      {/* Edit mode */}
       {isEditing && (
         <Card data-testid="card-edit-mode">
           <CardHeader>
@@ -478,7 +432,7 @@ export function ProposalDiffViewer({
         </Card>
       )}
 
-      {/* WordPress-style unified diff view */}
+      {/* WordPress-style side-by-side diff */}
       {!isEditing && (
         <Card data-testid="card-diff-view">
           <CardHeader>
@@ -490,53 +444,103 @@ export function ProposalDiffViewer({
           <CardContent className="p-0">
             <ScrollArea className="h-[600px] w-full rounded-md border">
               <div className="font-mono text-sm">
-                {hunks.map((hunk, hunkIdx) => (
-                  <div key={hunkIdx} className="mb-6">
-                    {hunk.lines.map((line, lineIdx) => (
-                      <div
-                        key={lineIdx}
-                        className={`flex ${
-                          line.type === 'removed'
-                            ? 'bg-red-50 dark:bg-red-950/20'
-                            : line.type === 'added'
-                            ? 'bg-green-50 dark:bg-green-950/20'
-                            : 'bg-background'
-                        }`}
-                        data-testid={`diff-line-${hunkIdx}-${lineIdx}`}
-                      >
-                        {/* Line number */}
-                        <div className="w-16 shrink-0 px-2 py-1 text-right text-muted-foreground select-none border-r">
-                          {line.lineNum || ''}
-                        </div>
-                        
-                        {/* Line content */}
-                        <div className="flex-1 px-3 py-1 whitespace-pre-wrap break-words">
-                          {line.type === 'removed' && (
-                            <span className="text-red-600 dark:text-red-400 mr-2 select-none">−</span>
-                          )}
-                          {line.type === 'added' && (
-                            <span className="text-green-600 dark:text-green-400 mr-2 select-none">+</span>
-                          )}
-                          <span className={
-                            line.type === 'removed'
-                              ? 'text-red-900 dark:text-red-100'
-                              : line.type === 'added'
-                              ? 'text-green-900 dark:text-green-100'
-                              : 'text-foreground'
-                          }>
-                            {line.wordHighlighting || line.content}
-                          </span>
-                        </div>
-                      </div>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="w-12 px-2 py-1 text-xs text-muted-foreground text-right">#</th>
+                      <th className="px-3 py-1 text-xs text-left text-red-700 dark:text-red-400">Removed</th>
+                      <th className="w-12 px-2 py-1 text-xs text-muted-foreground text-right">#</th>
+                      <th className="px-3 py-1 text-xs text-left text-green-700 dark:text-green-400">Added</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hunks.map((hunk, hunkIdx) => (
+                      <React.Fragment key={hunkIdx}>
+                        {hunk.lines.map((line, lineIdx) => (
+                          <tr 
+                            key={`${hunkIdx}-${lineIdx}`}
+                            className="border-b"
+                            data-testid={`diff-line-${hunkIdx}-${lineIdx}`}
+                          >
+                            {/* Left side (removed/old) */}
+                            <td className="w-12 px-2 py-1 text-right text-muted-foreground text-xs bg-muted/10 select-none">
+                              {line.oldLineNum || ''}
+                            </td>
+                            <td className={`px-3 py-1 whitespace-pre-wrap break-words ${
+                              line.type === 'removed' || line.type === 'modified'
+                                ? 'bg-red-50 dark:bg-red-950/20'
+                                : ''
+                            }`}>
+                              {(line.type === 'removed' || line.type === 'modified') && line.oldContent && (
+                                <>
+                                  <span className="text-red-600 dark:text-red-400 mr-2 select-none">−</span>
+                                  <span className="text-red-900 dark:text-red-100">
+                                    {line.oldWordDiff ? (
+                                      line.oldWordDiff.map((word, idx) => (
+                                        <span
+                                          key={idx}
+                                          className={word.changed ? 'bg-red-200 dark:bg-red-900/40' : ''}
+                                        >
+                                          {word.text}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      line.oldContent
+                                    )}
+                                  </span>
+                                </>
+                              )}
+                              {line.type === 'unchanged' && (
+                                <span className="text-foreground">{line.oldContent}</span>
+                              )}
+                            </td>
+                            
+                            {/* Right side (added/new) */}
+                            <td className="w-12 px-2 py-1 text-right text-muted-foreground text-xs bg-muted/10 select-none">
+                              {line.newLineNum || ''}
+                            </td>
+                            <td className={`px-3 py-1 whitespace-pre-wrap break-words ${
+                              line.type === 'added' || line.type === 'modified'
+                                ? 'bg-green-50 dark:bg-green-950/20'
+                                : ''
+                            }`}>
+                              {(line.type === 'added' || line.type === 'modified') && line.newContent && (
+                                <>
+                                  <span className="text-green-600 dark:text-green-400 mr-2 select-none">+</span>
+                                  <span className="text-green-900 dark:text-green-100">
+                                    {line.newWordDiff ? (
+                                      line.newWordDiff.map((word, idx) => (
+                                        <span
+                                          key={idx}
+                                          className={word.changed ? 'bg-green-200 dark:bg-green-900/40' : ''}
+                                        >
+                                          {word.text}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      line.newContent
+                                    )}
+                                  </span>
+                                </>
+                              )}
+                              {line.type === 'unchanged' && (
+                                <span className="text-foreground">{line.newContent}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))}
-                  </div>
-                ))}
-                
-                {hunks.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground">
-                    No changes detected
-                  </div>
-                )}
+                    
+                    {hunks.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                          No changes detected
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </ScrollArea>
           </CardContent>
