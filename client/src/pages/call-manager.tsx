@@ -1996,8 +1996,12 @@ export default function CallManager() {
                             }))}>
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="date" />
-                              <YAxis label={{ value: 'Percentage', angle: -90, position: 'insideLeft' }} />
-                              <Tooltip />
+                              <YAxis 
+                                label={{ value: 'Percentage', angle: -90, position: 'insideLeft' }} 
+                                domain={[0, 100]}
+                                tickFormatter={(value) => `${value}%`}
+                              />
+                              <Tooltip formatter={(value) => `${value}%`} />
                               <Legend />
                               <Line type="monotone" dataKey="positive" stroke="#22c55e" strokeWidth={2} name="Positive" />
                               <Line type="monotone" dataKey="neutral" stroke="#eab308" strokeWidth={2} name="Neutral" />
