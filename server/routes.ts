@@ -2776,12 +2776,13 @@ Focus on:
             console.log('[AI Insights → Aligner] Aligner assistant not configured, skipping KB analysis');
           } else {
             // Trigger KB analysis by making an internal request to the existing endpoint
-            const agentLabel = agentId === 'all' ? 'all agents' : `agent ${agentId}`;
+            const normalizedAgentId = agentId || 'all'; // Default to 'all' if undefined/null
+            const agentLabel = normalizedAgentId === 'all' ? 'all agents' : `agent ${normalizedAgentId}`;
             console.log(`[AI Insights → Aligner] Triggering KB analysis for ${agentLabel} with insight ${savedInsight.id}`);
             
             // Make internal API call to the KB analysis endpoint
             await axios.post(`http://localhost:${process.env.PORT || 5000}/api/kb/analyze-and-propose`, {
-              agentId,
+              agentId: normalizedAgentId,
               insightId: savedInsight.id,
               startDate,
               endDate,
