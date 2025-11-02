@@ -1455,6 +1455,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         analyzeCallTranscript(conversationId).catch(err => {
           console.error('Async error in OpenAI reflection:', err);
         });
+        
+        // AUTO-TRIGGER KB ANALYSIS: Check if threshold is met for this agent
+        (async () => {
+          try {
+            const agentId = data.agent_id;
+            if (!agentId) return;
+            
+            // Get admin user preferences to check if auto-trigger is enabled
+            const allUsers = await storage.getAllUsers();
+            const adminUser = allUsers.find((u: any) => u.role === 'admin');
+            
+            if (!adminUser) {
+              console.log('[Auto-Trigger] No admin user found, skipping auto-trigger check');
+              return;
+            }
+            
+            const preferences = await storage.getUserPreferences(adminUser.id);
+            
+            if (!preferences?.autoKbAnalysis) {
+              console.log('[Auto-Trigger] Auto KB analysis is disabled');
+              return;
+            }
+            
+            const threshold = preferences.kbAnalysisThreshold || 10;
+            
+            // Count unanalyzed calls for this agent
+            const unanalyzedCalls = await storage.getCallsWithTranscripts({
+              agentId,
+              onlyUnanalyzed: true,
+              limit: threshold + 1, // +1 to check if threshold is exceeded
+            });
+            
+            const unanalyzedCount = unanalyzedCalls.length;
+            console.log(`[Auto-Trigger] Agent ${agentId} has ${unanalyzedCount} unanalyzed calls (threshold: ${threshold})`);
+            
+            if (unanalyzedCount >= threshold) {
+              console.log(`[Auto-Trigger] Threshold met! Triggering full analysis chain for agent ${agentId}...`);
+              
+              // Trigger the analysis endpoint (which chains WIC Coach → Aligner)
+              const analysisResponse = await axios.post(`http://localhost:${process.env.PORT || 5000}/api/elevenlabs/analyze-calls`, {
+                agentId,
+                limit: threshold,
+              }, {
+                timeout: 300000, // 5 minute timeout for long-running analysis
+              });
+              
+              console.log('[Auto-Trigger] Analysis chain completed successfully');
+            }
+          } catch (autoTriggerError: any) {
+            console.error('[Auto-Trigger] Error during auto-triggered analysis:', autoTriggerError.message);
+            // Don't fail the webhook - this is a background job
+          }
+        })();
       }
 
       res.status(200).json({ status: 'received', conversationId });
