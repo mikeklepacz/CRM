@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { getTimezoneOffset } from "date-fns-tz";
@@ -2881,6 +2881,14 @@ Focus on:
   });
 
   // ===== KB MANAGEMENT ENDPOINTS =====
+  // Helper function to safely delete a KB file with all dependencies
+  async function safeDeleteKbFile(fileId: string): Promise<void> {
+    // Delete in order: proposals → versions → file (respects FK constraints)
+    await db.delete(kbChangeProposals).where(eq(kbChangeProposals.kbFileId, fileId));
+    await db.delete(kbFileVersions).where(eq(kbFileVersions.kbFileId, fileId));
+    await db.delete(kbFiles).where(eq(kbFiles.id, fileId));
+  }
+
   // Sync KB files from ElevenLabs API
   app.post('/api/kb/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -2889,6 +2897,29 @@ Focus on:
       if (!elevenLabsConfig?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
+
+      // Fetch all ElevenLabs agents to create agent name → agentId mapping
+      const agents = await storage.getAllElevenLabsAgents();
+      const agentNameMap = new Map<string, string>();
+      for (const agent of agents) {
+        agentNameMap.set(agent.name.toLowerCase(), agent.agentId);
+      }
+      console.log('[KB Sync] Agent mapping:', Object.fromEntries(agentNameMap));
+
+      // Helper function to detect agent assignment from filename
+      const detectAgentId = (filename: string): string | null => {
+        // Check for pattern: "AgentName - filename.txt"
+        const match = filename.match(/^([^-]+)\s*-\s*/);
+        if (match) {
+          const agentName = match[1].trim().toLowerCase();
+          const agentId = agentNameMap.get(agentName);
+          if (agentId) {
+            console.log(`[KB Sync] Detected agent "${match[1].trim()}" for file "${filename}" → ${agentId}`);
+            return agentId;
+          }
+        }
+        return null;
+      };
 
       // Fetch KB documents from ElevenLabs
       const response = await fetch('https://api.elevenlabs.io/v1/convai/knowledge-base?page_size=100', {
@@ -2904,16 +2935,57 @@ Focus on:
       const data = await response.json();
       const documents = data.documents || [];
 
+      // Get all existing KB files to detect deletions
+      const existingFiles = await storage.getAllKbFiles();
+      const elevenLabsDocIds = new Set(documents.map((doc: any) => doc.id));
+      
       let imported = 0;
       let updated = 0;
+      let deleted = 0;
+
+      // Delete files that no longer exist in ElevenLabs
+      for (const existingFile of existingFiles) {
+        if (existingFile.elevenlabsDocId && !elevenLabsDocIds.has(existingFile.elevenlabsDocId)) {
+          console.log(`[KB Sync] Deleting file no longer in ElevenLabs: ${existingFile.filename} (${existingFile.elevenlabsDocId})`);
+          await safeDeleteKbFile(existingFile.id);
+          deleted++;
+        }
+      }
 
       for (const doc of documents) {
-        // Check if file already exists
-        const existing = await storage.getKbFileByFilename(doc.name);
+        const agentId = detectAgentId(doc.name);
+        
+        // Check if file already exists by elevenlabsDocId first (handles renames), then by filename
+        let existing = await storage.getKbFileByElevenLabsDocId(doc.id);
+        const filenameChanged = existing && existing.filename !== doc.name;
+        
+        // If file was renamed in ElevenLabs, update filename (temporarily disable trigger)
+        if (filenameChanged) {
+          console.log(`[KB Sync] File renamed in ElevenLabs: "${existing.filename}" → "${doc.name}". Updating filename.`);
+          // Disable trigger temporarily to allow filename update during sync
+          await db.execute(sql`ALTER TABLE kb_files DISABLE TRIGGER enforce_filename_immutability`);
+          try {
+            await db.update(kbFiles)
+              .set({ filename: doc.name, updatedAt: new Date() })
+              .where(eq(kbFiles.id, existing.id));
+            existing.filename = doc.name; // Update local reference
+            updated++;
+          } finally {
+            // Always re-enable trigger, even on error
+            await db.execute(sql`ALTER TABLE kb_files ENABLE TRIGGER enforce_filename_immutability`);
+          }
+        }
+        
+        // If not found by docId, try finding by filename
+        if (!existing) {
+          existing = await storage.getKbFileByFilename(doc.name);
+        }
 
         if (existing) {
           // Check if content has changed
           const newContent = doc.content || '';
+          const agentIdChanged = existing.agentId !== agentId;
+          
           if (existing.currentContent !== newContent) {
             // Get current versions to calculate next version number
             const versions = await storage.getKbFileVersions(existing.id);
@@ -2936,16 +3008,25 @@ Focus on:
               newContent
             );
 
-            // Update existing file with new content and sync version
+            // Update existing file with new content, sync version, and agent assignment
             await storage.updateKbFile(existing.id, {
               currentContent: newContent,
               elevenlabsDocId: doc.id,
               currentSyncVersion: newVersion.id,
+              agentId: agentId,
+              lastSyncedAt: new Date(),
+            });
+            updated++;
+          } else if (agentIdChanged) {
+            // Only agent assignment changed
+            await storage.updateKbFile(existing.id, {
+              elevenlabsDocId: doc.id,
+              agentId: agentId,
               lastSyncedAt: new Date(),
             });
             updated++;
           } else {
-            // Content unchanged, just update sync metadata
+            // Content and agent unchanged, just update sync metadata
             await storage.updateKbFile(existing.id, {
               elevenlabsDocId: doc.id,
               lastSyncedAt: new Date(),
@@ -2958,6 +3039,7 @@ Focus on:
             elevenlabsDocId: doc.id,
             currentContent: doc.content || '',
             fileType: doc.type || 'file',
+            agentId: agentId,
             lastSyncedAt: new Date(),
           });
 
@@ -2990,6 +3072,7 @@ Focus on:
         success: true,
         imported,
         updated,
+        deleted,
         total: documents.length,
       });
     } catch (error: any) {

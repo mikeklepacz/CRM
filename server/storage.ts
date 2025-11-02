@@ -419,6 +419,7 @@ export interface IStorage {
   getAllKbFiles(): Promise<KbFile[]>;
   getKbFileById(id: string): Promise<KbFile | undefined>;
   getKbFileByFilename(filename: string): Promise<KbFile | undefined>;
+  getKbFileByElevenLabsDocId(docId: string): Promise<KbFile | undefined>;
   createKbFile(file: InsertKbFile): Promise<KbFile>;
   updateKbFile(id: string, updates: Partial<InsertKbFile>): Promise<KbFile>;
   createKbFileVersion(version: InsertKbFileVersion): Promise<KbFileVersion>;
@@ -2448,6 +2449,11 @@ export class DatabaseStorage implements IStorage {
 
   async getKbFileByFilename(filename: string): Promise<KbFile | undefined> {
     const [file] = await db.select().from(kbFiles).where(eq(kbFiles.filename, filename));
+    return file;
+  }
+
+  async getKbFileByElevenLabsDocId(docId: string): Promise<KbFile | undefined> {
+    const [file] = await db.select().from(kbFiles).where(eq(kbFiles.elevenlabsDocId, docId));
     return file;
   }
 
