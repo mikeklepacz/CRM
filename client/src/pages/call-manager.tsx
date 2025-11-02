@@ -795,6 +795,15 @@ export default function CallManager() {
     enabled: user?.role === 'admin',
   });
 
+  // Poll for analysis job status (for progress indicator)
+  const { data: jobStatus } = useQuery<{ status: 'idle' | 'running'; job: any }>({
+    queryKey: ['/api/analysis/job-status'],
+    enabled: hasAccess,
+    refetchInterval: 2000, // Poll every 2 seconds
+  });
+
+  const runningJob = jobStatus?.status === 'running' ? jobStatus.job : null;
+
   // Mutation to update preferences
   const updatePreferencesMutation = useMutation({
     mutationFn: async (updates: { autoKbAnalysis?: boolean; kbAnalysisThreshold?: number }) => {
@@ -1345,6 +1354,38 @@ export default function CallManager() {
             Intelligently queue AI voice calls based on calling scenarios
           </p>
         </div>
+
+        {/* Analysis Progress Banner */}
+        {runningJob && (
+          <Card className="border-blue-500 bg-blue-50 dark:bg-blue-950/20" data-testid="card-analysis-progress">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-blue-900 dark:text-blue-100" data-testid="text-progress-status">
+                        Analyzing Calls: {runningJob.currentCallIndex || 0} of {runningJob.totalCalls || 0}
+                      </p>
+                      <p className="text-sm text-blue-700 dark:text-blue-300" data-testid="text-progress-details">
+                        {runningJob.type === 'aligner' ? 'KB Analysis' : 'Wick Coach Analysis'} 
+                        {runningJob.agentId && runningJob.agentId !== 'all' ? ` for agent ${runningJob.agentId}` : ' for all agents'}
+                        {runningJob.proposalsCreated > 0 && ` • ${runningJob.proposalsCreated} proposals created`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium text-blue-900 dark:text-blue-100" data-testid="text-progress-percentage">
+                        {runningJob.totalCalls > 0 
+                          ? Math.round(((runningJob.currentCallIndex || 0) / runningJob.totalCalls) * 100)
+                          : 0}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Top-level tabs: Voice Hub, AI Call Analytics, and AI Insights */}
         <Tabs defaultValue="voice-hub" className="space-y-6">

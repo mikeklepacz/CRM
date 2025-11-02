@@ -2941,6 +2941,34 @@ Ready to receive calls?`;
     }
   });
 
+  // Get running analysis job status (for progress indicator)
+  app.get('/api/analysis/job-status', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const runningJob = await storage.getRunningAnalysisJob();
+      
+      if (!runningJob) {
+        return res.json({ status: 'idle', job: null });
+      }
+      
+      // Return job progress info
+      res.json({
+        status: 'running',
+        job: {
+          id: runningJob.id,
+          type: runningJob.type,
+          agentId: runningJob.agentId,
+          currentCallIndex: runningJob.currentCallIndex,
+          totalCalls: runningJob.totalCalls,
+          proposalsCreated: runningJob.proposalsCreated,
+          startedAt: runningJob.startedAt,
+        },
+      });
+    } catch (error: any) {
+      console.error('[Job Status] Error fetching job status:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch job status' });
+    }
+  });
+
   // AI Insights - Get historical insights
   app.get('/api/elevenlabs/insights-history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
