@@ -2678,7 +2678,40 @@ Focus on:
           priority: rec.priority,
         }));
         
-        await storage.saveAiInsight(insightRecord, objectionsRecords, patternsRecords, recommendationsRecords);
+        const savedInsight = await storage.saveAiInsight(insightRecord, objectionsRecords, patternsRecords, recommendationsRecords);
+        
+        // CHAIN TO ALIGNER: After WIC Coach completes, automatically trigger KB analysis
+        console.log('[AI Insights → Aligner] WIC Coach analysis complete, now chaining to Aligner...');
+        
+        try {
+          // Get Aligner assistant
+          const alignerAssistant = await storage.getAssistantBySlug('aligner');
+          
+          if (!alignerAssistant || !alignerAssistant.assistantId) {
+            console.log('[AI Insights → Aligner] Aligner assistant not configured, skipping KB analysis');
+          } else {
+            // Trigger KB analysis by making an internal request to the existing endpoint
+            console.log(`[AI Insights → Aligner] Triggering KB analysis for agent ${agentId} with insight ${savedInsight.id}`);
+            
+            // Make internal API call to the KB analysis endpoint
+            await axios.post(`http://localhost:${process.env.PORT || 5000}/api/kb/analyze-and-propose`, {
+              agentId,
+              insightId: savedInsight.id,
+              startDate,
+              endDate,
+            }, {
+              headers: {
+                'cookie': req.headers.cookie || '', // Forward authentication
+              },
+            });
+            
+            console.log('[AI Insights → Aligner] KB analysis completed successfully');
+          }
+        } catch (alignerError: any) {
+          console.error('[AI Insights → Aligner] Error during chained KB analysis:', alignerError.message);
+          // Don't fail the whole request if Aligner fails
+        }
+        
       } catch (dbError) {
         console.error('[AI Insights] Failed to save insights to database:', dbError);
         // Don't fail the request if database save fails
