@@ -500,6 +500,17 @@ export function ProposalDiffViewer({
                   <tbody>
                     {hunks.map((hunk, hunkIdx) => (
                       <React.Fragment key={hunkIdx}>
+                        {/* Hunk header showing line range */}
+                        <tr className="border-b bg-muted/50">
+                          <td colSpan={4} className="px-3 py-2 text-xs font-mono text-muted-foreground">
+                            <span className="font-semibold">Section starting at line {hunk.startLine}</span>
+                            {hunkIdx > 0 && (
+                              <span className="ml-2 text-muted-foreground/70">
+                                ({hunk.startLine - (hunks[hunkIdx - 1].startLine + hunks[hunkIdx - 1].lines.length)} lines skipped)
+                              </span>
+                            )}
+                          </td>
+                        </tr>
                         {hunk.lines.map((line, lineIdx) => (
                           <tr 
                             key={`${hunkIdx}-${lineIdx}`}
