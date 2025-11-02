@@ -2774,7 +2774,7 @@ Focus on:
         // CHAIN TO ALIGNER: After Wick Coach completes, automatically trigger KB analysis
         console.log('[AI Insights → Aligner] Wick Coach analysis complete, now chaining to Aligner...');
         
-        let alignerStatus = { success: false, error: null as string | null, proposalCount: 0 };
+        let alignerStatus = { success: false, error: null as string | null, proposalCount: 0, kbFileCount: 0 };
         
         try {
           // Get Aligner assistant
@@ -2804,6 +2804,7 @@ Focus on:
             console.log('[AI Insights → Aligner] KB analysis completed successfully');
             alignerStatus.success = true;
             alignerStatus.proposalCount = alignerResponse.data?.proposalCount || 0;
+            alignerStatus.kbFileCount = alignerResponse.data?.kbFileCount || 0;
           }
         } catch (alignerError: any) {
           console.error('[AI Insights → Aligner] Error during chained KB analysis:', alignerError.message);
@@ -3461,7 +3462,9 @@ IMPORTANT:
       res.json({
         success: true,
         proposalsCreated: createdProposals.length,
+        proposalCount: createdProposals.length, // Add alias for consistency with frontend
         proposals: createdProposals,
+        kbFileCount: kbFiles.length, // Add KB file count for progress display
         insightId: insight?.id || null,
         agentId,
         callsAnalyzed: currentBatch.length,

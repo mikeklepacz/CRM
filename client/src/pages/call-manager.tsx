@@ -628,8 +628,16 @@ export default function CallManager() {
   const [persistedInsights, setPersistedInsights] = useState<any>(null);
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
   const [insightsViewMode, setInsightsViewMode] = useState<'individual' | 'all-time'>('individual');
-  const [analysisWorkflowStatus, setAnalysisWorkflowStatus] = useState<'idle' | 'wick-coach' | 'aligner' | 'complete' | 'error'>('idle');
-  const [alignerErrorMessage, setAlignerErrorMessage] = useState<string | null>(null);
+  
+  // Separate workflow tracking for Wick Coach and Aligner
+  const [wickCoachStatus, setWickCoachStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle');
+  const [wickCoachCallCount, setWickCoachCallCount] = useState<number>(0);
+  const [wickCoachError, setWickCoachError] = useState<string | null>(null);
+  
+  const [alignerStatus, setAlignerStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle');
+  const [alignerCallCount, setAlignerCallCount] = useState<number>(0);
+  const [alignerKbFileCount, setAlignerKbFileCount] = useState<number>(0);
+  const [alignerError, setAlignerError] = useState<string | null>(null);
   
   // Analytics filters
   const [analyticsAgentFilter, setAnalyticsAgentFilter] = useState<string>("all");
@@ -987,8 +995,11 @@ export default function CallManager() {
         endDate = insightsEndDate;
       }
 
-      // Set status to 'wick-coach' when starting
-      setAnalysisWorkflowStatus('wick-coach');
+      // Reset all statuses and start Wick Coach
+      setWickCoachStatus('running');
+      setWickCoachError(null);
+      setAlignerStatus('idle');
+      setAlignerError(null);
 
       return await apiRequest('POST', '/api/elevenlabs/analyze-calls', {
         startDate,
@@ -1001,27 +1012,37 @@ export default function CallManager() {
       setPersistedInsights(data);
       setSelectedInsightId(data.id || null);
       
+      // Wick Coach completed successfully
+      setWickCoachStatus('complete');
+      setWickCoachCallCount(data.callCount || 0);
+      
       // Refetch historical insights after new analysis is saved
       queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/insights-history'] });
       
       // Check Aligner workflow status
       if (data.alignerStatus) {
+        // Aligner started running
+        setAlignerStatus('running');
+        setAlignerCallCount(data.callCount || 0);
+        setAlignerKbFileCount(data.alignerStatus.kbFileCount || 0);
+        
         if (data.alignerStatus.error) {
           // Aligner failed - show error
-          setAnalysisWorkflowStatus('error');
-          setAlignerErrorMessage(data.alignerStatus.error);
+          setAlignerStatus('error');
+          setAlignerError(data.alignerStatus.error);
           toast({
             variant: "destructive",
             title: "Aligner Failed",
             description: data.alignerStatus.error,
           });
           setTimeout(() => {
-            setAnalysisWorkflowStatus('idle');
-            setAlignerErrorMessage(null);
+            setWickCoachStatus('idle');
+            setAlignerStatus('idle');
+            setAlignerError(null);
           }, 8000);
         } else if (data.alignerStatus.success) {
           // Aligner succeeded
-          setAnalysisWorkflowStatus('complete');
+          setAlignerStatus('complete');
           queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
           const proposalCount = data.alignerStatus.proposalCount;
           if (proposalCount > 0) {
@@ -1035,29 +1056,40 @@ export default function CallManager() {
               description: "Wick Coach + Aligner complete. No KB changes needed at this time.",
             });
           }
-          setTimeout(() => setAnalysisWorkflowStatus('idle'), 8000);
+          setTimeout(() => {
+            setWickCoachStatus('idle');
+            setAlignerStatus('idle');
+          }, 8000);
         } else {
           // Aligner skipped (not configured)
-          setAnalysisWorkflowStatus('complete');
           toast({
             title: "Wick Coach Complete",
             description: "AI insights generated (Aligner not configured)",
           });
-          setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
+          setTimeout(() => {
+            setWickCoachStatus('idle');
+            setAlignerStatus('idle');
+          }, 5000);
         }
       } else {
         // Old response format - just show Wick Coach complete
-        setAnalysisWorkflowStatus('complete');
         toast({
           title: "Analysis Complete",
           description: "AI insights have been generated from your call data",
         });
-        setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
+        setTimeout(() => {
+          setWickCoachStatus('idle');
+          setAlignerStatus('idle');
+        }, 5000);
       }
     },
     onError: (error: any) => {
-      setAnalysisWorkflowStatus('error');
-      setTimeout(() => setAnalysisWorkflowStatus('idle'), 5000);
+      setWickCoachStatus('error');
+      setWickCoachError(error.message || "Failed to analyze calls");
+      setTimeout(() => {
+        setWickCoachStatus('idle');
+        setWickCoachError(null);
+      }, 5000);
       toast({
         variant: "destructive",
         title: "Analysis Failed",
@@ -2025,54 +2057,90 @@ export default function CallManager() {
                   )}
                 </div>
 
-                {/* Workflow Status Banner */}
-                {analysisWorkflowStatus !== 'idle' && (
-                  <Card className={`mt-4 border-2 ${
-                    analysisWorkflowStatus === 'complete' ? 'border-green-500 bg-green-50 dark:bg-green-950' :
-                    analysisWorkflowStatus === 'error' ? 'border-red-500 bg-red-50 dark:bg-red-950' :
-                    'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                  }`} data-testid="card-workflow-status">
-                    <CardContent className="pt-4">
-                      <div className="flex items-center gap-3">
-                        {analysisWorkflowStatus === 'wick-coach' && (
-                          <>
+                {/* Dual Progress Bubbles */}
+                {(wickCoachStatus !== 'idle' || alignerStatus !== 'idle') && (
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="container-workflow-progress">
+                    {/* Wick Coach Bubble */}
+                    <Card className={`border-2 ${
+                      wickCoachStatus === 'complete' ? 'border-green-500 bg-green-50 dark:bg-green-950' :
+                      wickCoachStatus === 'error' ? 'border-red-500 bg-red-50 dark:bg-red-950' :
+                      wickCoachStatus === 'running' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' :
+                      'border-gray-300 bg-gray-50 dark:bg-gray-900'
+                    }`} data-testid="card-wick-coach-status">
+                      <CardContent className="pt-4">
+                        <div className="flex items-center gap-3">
+                          {wickCoachStatus === 'running' && (
                             <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-                            <div>
-                              <p className="font-semibold text-blue-900 dark:text-blue-100">Running Wick Coach Analysis...</p>
-                              <p className="text-sm text-blue-700 dark:text-blue-300">Analyzing call transcripts for insights</p>
-                            </div>
-                          </>
-                        )}
-                        {analysisWorkflowStatus === 'aligner' && (
-                          <>
-                            <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-                            <div>
-                              <p className="font-semibold text-blue-900 dark:text-blue-100">Wick Coach Complete → Running Aligner...</p>
-                              <p className="text-sm text-blue-700 dark:text-blue-300">Analyzing Knowledge Base files for improvement proposals</p>
-                            </div>
-                          </>
-                        )}
-                        {analysisWorkflowStatus === 'complete' && (
-                          <>
+                          )}
+                          {wickCoachStatus === 'complete' && (
                             <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                            <div>
-                              <p className="font-semibold text-green-900 dark:text-green-100">Full Analysis Complete!</p>
-                              <p className="text-sm text-green-700 dark:text-green-300">Check the KB Library tab for improvement proposals</p>
-                            </div>
-                          </>
-                        )}
-                        {analysisWorkflowStatus === 'error' && (
-                          <>
+                          )}
+                          {wickCoachStatus === 'error' && (
                             <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                            <div>
-                              <p className="font-semibold text-red-900 dark:text-red-100">Aligner Failed</p>
-                              <p className="text-sm text-red-700 dark:text-red-300">{alignerErrorMessage || "An error occurred during analysis"}</p>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                          )}
+                          <div className="flex-1">
+                            <p className={`font-semibold ${
+                              wickCoachStatus === 'complete' ? 'text-green-900 dark:text-green-100' :
+                              wickCoachStatus === 'error' ? 'text-red-900 dark:text-red-100' :
+                              wickCoachStatus === 'running' ? 'text-blue-900 dark:text-blue-100' :
+                              'text-gray-900 dark:text-gray-100'
+                            }`}>Wick Coach</p>
+                            <p className={`text-sm ${
+                              wickCoachStatus === 'complete' ? 'text-green-700 dark:text-green-300' :
+                              wickCoachStatus === 'error' ? 'text-red-700 dark:text-red-300' :
+                              wickCoachStatus === 'running' ? 'text-blue-700 dark:text-blue-300' :
+                              'text-gray-700 dark:text-gray-300'
+                            }`}>
+                              {wickCoachStatus === 'running' && `Analyzing ${wickCoachCallCount} call${wickCoachCallCount !== 1 ? 's' : ''}`}
+                              {wickCoachStatus === 'complete' && `Analyzed ${wickCoachCallCount} call${wickCoachCallCount !== 1 ? 's' : ''}`}
+                              {wickCoachStatus === 'error' && (wickCoachError || "Analysis failed")}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Aligner Bubble */}
+                    <Card className={`border-2 ${
+                      alignerStatus === 'complete' ? 'border-green-500 bg-green-50 dark:bg-green-950' :
+                      alignerStatus === 'error' ? 'border-red-500 bg-red-50 dark:bg-red-950' :
+                      alignerStatus === 'running' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' :
+                      'border-gray-300 bg-gray-50 dark:bg-gray-900'
+                    }`} data-testid="card-aligner-status">
+                      <CardContent className="pt-4">
+                        <div className="flex items-center gap-3">
+                          {alignerStatus === 'running' && (
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
+                          )}
+                          {alignerStatus === 'complete' && (
+                            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          )}
+                          {alignerStatus === 'error' && (
+                            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                          )}
+                          <div className="flex-1">
+                            <p className={`font-semibold ${
+                              alignerStatus === 'complete' ? 'text-green-900 dark:text-green-100' :
+                              alignerStatus === 'error' ? 'text-red-900 dark:text-red-100' :
+                              alignerStatus === 'running' ? 'text-blue-900 dark:text-blue-100' :
+                              'text-gray-900 dark:text-gray-100'
+                            }`}>Aligner (Strategist)</p>
+                            <p className={`text-sm ${
+                              alignerStatus === 'complete' ? 'text-green-700 dark:text-green-300' :
+                              alignerStatus === 'error' ? 'text-red-700 dark:text-red-300' :
+                              alignerStatus === 'running' ? 'text-blue-700 dark:text-blue-300' :
+                              'text-gray-700 dark:text-gray-300'
+                            }`}>
+                              {alignerStatus === 'idle' && 'Waiting for Wick Coach...'}
+                              {alignerStatus === 'running' && `Analyzing ${alignerCallCount} call${alignerCallCount !== 1 ? 's' : ''} + ${alignerKbFileCount} KB file${alignerKbFileCount !== 1 ? 's' : ''}`}
+                              {alignerStatus === 'complete' && `Completed: ${alignerCallCount} calls, ${alignerKbFileCount} KB files`}
+                              {alignerStatus === 'error' && (alignerError || "Analysis failed")}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 )}
 
                 {/* Historical Trends Section */}
