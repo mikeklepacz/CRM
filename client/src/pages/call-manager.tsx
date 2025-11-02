@@ -1813,6 +1813,27 @@ export default function CallManager() {
                       <Label htmlFor="auto-kb-analysis" className="text-sm cursor-pointer">
                         Auto-trigger
                       </Label>
+                      {preferences?.autoKbAnalysis && (
+                        <>
+                          <span className="text-xs text-muted-foreground">after</span>
+                          <Input
+                            id="kb-analysis-threshold"
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={preferences?.kbAnalysisThreshold || 10}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              if (value >= 1 && value <= 100) {
+                                updatePreferencesMutation.mutate({ kbAnalysisThreshold: value });
+                              }
+                            }}
+                            className="w-16 h-8"
+                            data-testid="input-kb-analysis-threshold"
+                          />
+                          <span className="text-xs text-muted-foreground">calls</span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
