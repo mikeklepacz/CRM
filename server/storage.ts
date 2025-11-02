@@ -38,6 +38,10 @@ import {
   callEvents,
   callCampaigns,
   callCampaignTargets,
+  aiInsights,
+  aiInsightObjections,
+  aiInsightPatterns,
+  aiInsightRecommendations,
   type User,
   type UpsertUser,
   type Ticket,
@@ -111,9 +115,17 @@ import {
   type InsertCallCampaign,
   type CallCampaignTarget,
   type InsertCallCampaignTarget,
+  type AiInsight,
+  type InsertAiInsight,
+  type AiInsightObjection,
+  type InsertAiInsightObjection,
+  type AiInsightPattern,
+  type InsertAiInsightPattern,
+  type AiInsightRecommendation,
+  type InsertAiInsightRecommendation,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, inArray, sql, desc, lte, isNull } from "drizzle-orm";
+import { eq, and, or, inArray, sql, desc, lte, gte, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from 'uuid';
 
 export interface IStorage {
@@ -385,6 +397,10 @@ export interface IStorage {
   getCallTargetsReadyForCalling(): Promise<CallCampaignTarget[]>;
   updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget>;
   incrementCampaignCalls(campaignId: string, type: 'successful' | 'failed'): Promise<void>;
+
+  // AI Insights operations
+  saveAiInsight(insight: InsertAiInsight, objections: InsertAiInsightObjection[], patterns: InsertAiInsightPattern[], recommendations: InsertAiInsightRecommendation[]): Promise<AiInsight>;
+  getAiInsightsHistory(filters?: { agentId?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Array<AiInsight & { objections: AiInsightObjection[]; patterns: AiInsightPattern[]; recommendations: AiInsightRecommendation[] }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2234,6 +2250,85 @@ export class DatabaseStorage implements IStorage {
     await db.update(callCampaigns)
       .set(updates)
       .where(eq(callCampaigns.id, campaignId));
+  }
+
+  // AI Insights operations
+  async saveAiInsight(
+    insight: InsertAiInsight, 
+    objections: InsertAiInsightObjection[], 
+    patterns: InsertAiInsightPattern[], 
+    recommendations: InsertAiInsightRecommendation[]
+  ): Promise<AiInsight> {
+    const [savedInsight] = await db.insert(aiInsights).values(insight).returning();
+    
+    if (objections.length > 0) {
+      await db.insert(aiInsightObjections).values(
+        objections.map(obj => ({ ...obj, insightId: savedInsight.id }))
+      );
+    }
+    
+    if (patterns.length > 0) {
+      await db.insert(aiInsightPatterns).values(
+        patterns.map(pat => ({ ...pat, insightId: savedInsight.id }))
+      );
+    }
+    
+    if (recommendations.length > 0) {
+      await db.insert(aiInsightRecommendations).values(
+        recommendations.map(rec => ({ ...rec, insightId: savedInsight.id }))
+      );
+    }
+    
+    return savedInsight;
+  }
+
+  async getAiInsightsHistory(filters?: { 
+    agentId?: string; 
+    startDate?: Date; 
+    endDate?: Date; 
+    limit?: number 
+  }): Promise<Array<AiInsight & { 
+    objections: AiInsightObjection[]; 
+    patterns: AiInsightPattern[]; 
+    recommendations: AiInsightRecommendation[] 
+  }>> {
+    let query = db.select().from(aiInsights);
+    
+    const conditions = [];
+    if (filters?.agentId) {
+      conditions.push(eq(aiInsights.agentId, filters.agentId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(aiInsights.dateRangeStart, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(aiInsights.dateRangeEnd, filters.endDate));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    const insights = await query.orderBy(desc(aiInsights.analyzedAt)).limit(filters?.limit || 50);
+    
+    const enrichedInsights = await Promise.all(
+      insights.map(async (insight) => {
+        const [objections, patterns, recommendations] = await Promise.all([
+          db.select().from(aiInsightObjections).where(eq(aiInsightObjections.insightId, insight.id)),
+          db.select().from(aiInsightPatterns).where(eq(aiInsightPatterns.insightId, insight.id)),
+          db.select().from(aiInsightRecommendations).where(eq(aiInsightRecommendations.insightId, insight.id))
+        ]);
+        
+        return {
+          ...insight,
+          objections,
+          patterns,
+          recommendations
+        };
+      })
+    );
+    
+    return enrichedInsights;
   }
 }
 
