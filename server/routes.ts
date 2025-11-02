@@ -2791,9 +2791,11 @@ Focus on:
             console.log(`[AI Insights → Aligner] Triggering KB analysis for ${agentLabel} with insight ${savedInsight.id}`);
             
             // Make internal API call to the KB analysis endpoint
+            // Pass the conversation IDs so Aligner analyzes the SAME calls Wick Coach just processed
             const alignerResponse = await axios.post(`http://localhost:${process.env.PORT || 5000}/api/kb/analyze-and-propose`, {
               agentId: normalizedAgentId,
               insightId: savedInsight.id,
+              conversationIds, // Pass the specific calls to analyze
               startDate,
               endDate,
             }, {
@@ -3140,7 +3142,7 @@ Focus on:
     try {
       console.log('[KB Analyze] Starting agent-isolated analysis and proposal generation...');
       
-      const { agentId, insightId, startDate, endDate } = req.body;
+      const { agentId, insightId, startDate, endDate, conversationIds } = req.body;
 
       // Validate agentId is provided
       if (!agentId) {
@@ -3149,7 +3151,8 @@ Focus on:
 
       const isAllAgents = agentId === 'all';
       const agentLabel = isAllAgents ? 'all agents' : `agent ${agentId}`;
-      console.log(`[KB Analyze] Analyzing for ${agentLabel}`);
+      const isChainedFromWickCoach = conversationIds && conversationIds.length > 0;
+      console.log(`[KB Analyze] Analyzing for ${agentLabel}${isChainedFromWickCoach ? ' (chained from Wick Coach)' : ''}`);
 
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner');
@@ -3199,22 +3202,32 @@ Focus on:
         console.log(`[KB Analyze] Found ${kbFiles.length} KB files for ${agentLabel} (${agentSpecificCount} agent-specific, ${generalCount} general)`);
       }
 
-      // Fetch UNANALYZED call transcripts (no truncation!)
-      const callsData = await storage.getCallsWithTranscripts({
-        agentId: isAllAgents ? undefined : agentId, // undefined = all agents
-        startDate: startDate || (insight?.dateRangeStart),
-        endDate: endDate || (insight?.dateRangeEnd),
-        onlyUnanalyzed: true, // Only get calls that haven't been analyzed yet
-        limit: 1000, // Large limit - we'll batch if needed
-      });
+      // Fetch call transcripts (no truncation!)
+      // If chained from Wick Coach, fetch the specific calls by conversationIds
+      // Otherwise, fetch only unanalyzed calls
+      const callsData = isChainedFromWickCoach
+        ? await storage.getCallsWithTranscripts({
+            agentId: isAllAgents ? undefined : agentId,
+            conversationIds, // Fetch specific calls that Wick Coach just analyzed
+            limit: 1000,
+          })
+        : await storage.getCallsWithTranscripts({
+            agentId: isAllAgents ? undefined : agentId,
+            startDate: startDate || (insight?.dateRangeStart),
+            endDate: endDate || (insight?.dateRangeEnd),
+            onlyUnanalyzed: true, // Only get calls that haven't been analyzed yet
+            limit: 1000,
+          });
 
-      console.log(`[KB Analyze] Found ${callsData.length} unanalyzed calls for ${agentLabel}`);
+      console.log(`[KB Analyze] Found ${callsData.length} ${isChainedFromWickCoach ? 'calls (from Wick Coach)' : 'unanalyzed calls'} for ${agentLabel}`);
 
       if (callsData.length === 0) {
         return res.status(404).json({ 
-          error: isAllAgents
-            ? 'No unanalyzed calls found across all agents in the specified date range.'
-            : 'No unanalyzed calls found for this agent in the specified date range.'
+          error: isChainedFromWickCoach
+            ? 'No calls found with the provided conversation IDs.'
+            : isAllAgents
+              ? 'No unanalyzed calls found across all agents in the specified date range.'
+              : 'No unanalyzed calls found for this agent in the specified date range.'
         });
       }
 
@@ -3447,12 +3460,17 @@ IMPORTANT:
       console.log(`[KB Analyze] Successfully created ${createdProposals.length} proposals`);
 
       // Mark all calls in this batch as analyzed to prevent re-analysis
-      const conversationIds = currentBatch
-        .map(call => call.session.conversationId)
-        .filter(Boolean) as string[];
-      
-      await storage.markCallsAsAnalyzed(conversationIds);
-      console.log(`[KB Analyze] Marked ${conversationIds.length} calls as analyzed`);
+      // Skip if chained from Wick Coach (already marked there)
+      if (!isChainedFromWickCoach) {
+        const conversationIdsToMark = currentBatch
+          .map(call => call.session.conversationId)
+          .filter(Boolean) as string[];
+        
+        await storage.markCallsAsAnalyzed(conversationIdsToMark);
+        console.log(`[KB Analyze] Marked ${conversationIdsToMark.length} calls as analyzed`);
+      } else {
+        console.log(`[KB Analyze] Skipping call marking (already done by Wick Coach)`);
+      }
 
       // Calculate remaining calls
       const remainingCalls = callsData.length - currentBatch.length;

@@ -2156,7 +2156,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // AI Insights helper operations
-  async getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number; onlyUnanalyzed?: boolean }): Promise<Array<{
+  async getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number; onlyUnanalyzed?: boolean; conversationIds?: string[] }): Promise<Array<{
     session: CallSession;
     transcripts: CallTranscript[];
     client: Client;
@@ -2168,17 +2168,23 @@ export class DatabaseStorage implements IStorage {
       eq(callSessions.status, 'completed')
     ];
     
-    if (filters.startDate) {
-      conditions.push(sql`${callSessions.startedAt} >= ${new Date(filters.startDate)}`);
-    }
-    if (filters.endDate) {
-      conditions.push(sql`${callSessions.startedAt} <= ${new Date(filters.endDate)}`);
-    }
-    if (filters.agentId) {
-      conditions.push(eq(callSessions.agentId, filters.agentId));
-    }
-    if (filters.onlyUnanalyzed) {
-      conditions.push(sql`${callSessions.lastAnalyzedAt} IS NULL`);
+    // If conversationIds provided, fetch those specific calls
+    if (filters.conversationIds && filters.conversationIds.length > 0) {
+      conditions.push(inArray(callSessions.conversationId, filters.conversationIds));
+    } else {
+      // Otherwise use date/agent/analyzed filters
+      if (filters.startDate) {
+        conditions.push(sql`${callSessions.startedAt} >= ${new Date(filters.startDate)}`);
+      }
+      if (filters.endDate) {
+        conditions.push(sql`${callSessions.startedAt} <= ${new Date(filters.endDate)}`);
+      }
+      if (filters.agentId) {
+        conditions.push(eq(callSessions.agentId, filters.agentId));
+      }
+      if (filters.onlyUnanalyzed) {
+        conditions.push(sql`${callSessions.lastAnalyzedAt} IS NULL`);
+      }
     }
 
     // Get call sessions (ordered oldest to newest for chronological batch analysis)
