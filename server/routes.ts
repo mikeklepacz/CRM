@@ -2695,15 +2695,57 @@ Focus on:
 
         if (isCount) {
           console.log('[Wick Coach] Detected counts from OpenAI (sum=' + sum + ' vs totalCalls=' + totalCalls + '), calculating percentages');
-          // Calculate percentages and round to whole numbers
-          insights.sentimentAnalysis.positive = totalCalls > 0 ? Math.round((positiveValue / totalCalls) * 100) : 0;
-          insights.sentimentAnalysis.neutral = totalCalls > 0 ? Math.round((neutralValue / totalCalls) * 100) : 0;
-          insights.sentimentAnalysis.negative = totalCalls > 0 ? Math.round((negativeValue / totalCalls) * 100) : 0;
+          // Calculate exact percentages first
+          const exactPositive = totalCalls > 0 ? (positiveValue / totalCalls) * 100 : 0;
+          const exactNeutral = totalCalls > 0 ? (neutralValue / totalCalls) * 100 : 0;
+          const exactNegative = totalCalls > 0 ? (negativeValue / totalCalls) * 100 : 0;
+          
+          // Round to whole numbers
+          let roundedPositive = Math.round(exactPositive);
+          let roundedNeutral = Math.round(exactNeutral);
+          let roundedNegative = Math.round(exactNegative);
+          
+          // Ensure they sum to 100% by adjusting the largest value
+          const total = roundedPositive + roundedNeutral + roundedNegative;
+          if (total !== 100 && totalCalls > 0) {
+            const diff = 100 - total;
+            // Find the largest percentage and adjust it
+            if (roundedPositive >= roundedNeutral && roundedPositive >= roundedNegative) {
+              roundedPositive += diff;
+            } else if (roundedNeutral >= roundedPositive && roundedNeutral >= roundedNegative) {
+              roundedNeutral += diff;
+            } else {
+              roundedNegative += diff;
+            }
+          }
+          
+          insights.sentimentAnalysis.positive = roundedPositive;
+          insights.sentimentAnalysis.neutral = roundedNeutral;
+          insights.sentimentAnalysis.negative = roundedNegative;
         } else {
           console.log('[Wick Coach] Detected percentages from OpenAI (sum=' + sum + ' closer to 100 than ' + totalCalls + '), using directly');
-          insights.sentimentAnalysis.positive = Math.round(positiveValue);
-          insights.sentimentAnalysis.neutral = Math.round(neutralValue);
-          insights.sentimentAnalysis.negative = Math.round(negativeValue);
+          // Round the percentages
+          let roundedPositive = Math.round(positiveValue);
+          let roundedNeutral = Math.round(neutralValue);
+          let roundedNegative = Math.round(negativeValue);
+          
+          // Ensure they sum to 100%
+          const total = roundedPositive + roundedNeutral + roundedNegative;
+          if (total !== 100) {
+            const diff = 100 - total;
+            // Find the largest percentage and adjust it
+            if (roundedPositive >= roundedNeutral && roundedPositive >= roundedNegative) {
+              roundedPositive += diff;
+            } else if (roundedNeutral >= roundedPositive && roundedNeutral >= roundedNegative) {
+              roundedNeutral += diff;
+            } else {
+              roundedNegative += diff;
+            }
+          }
+          
+          insights.sentimentAnalysis.positive = roundedPositive;
+          insights.sentimentAnalysis.neutral = roundedNeutral;
+          insights.sentimentAnalysis.negative = roundedNegative;
         }
 
         console.log('[Wick Coach] Final percentages - positive:', insights.sentimentAnalysis.positive, 'neutral:', insights.sentimentAnalysis.neutral, 'negative:', insights.sentimentAnalysis.negative);
