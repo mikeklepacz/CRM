@@ -685,17 +685,17 @@ export default function CallManager() {
 
   // Fetch user preferences for auto-trigger settings
   const { data: preferences } = useQuery<{ autoKbAnalysis?: boolean; kbAnalysisThreshold?: number }>({
-    queryKey: ['/api/preferences'],
+    queryKey: ['/api/user/preferences'],
     enabled: user?.role === 'admin',
   });
 
   // Mutation to update preferences
   const updatePreferencesMutation = useMutation({
     mutationFn: async (updates: { autoKbAnalysis?: boolean; kbAnalysisThreshold?: number }) => {
-      return await apiRequest('PATCH', '/api/preferences', updates);
+      return await apiRequest('PUT', '/api/user/preferences', updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/preferences'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
       toast({
         title: 'Settings Updated',
         description: 'Auto-trigger preferences saved successfully',

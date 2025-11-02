@@ -959,6 +959,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     defaultTimezoneMode: z.enum(['agent', 'customer']).optional(),
     timeFormat: z.enum(['12hr', '24hr']).optional(),
     defaultCalendarReminders: z.array(z.object({ method: z.string(), minutes: z.number() })).optional(),
+    autoKbAnalysis: z.boolean().optional(),
+    kbAnalysisThreshold: z.number().optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
