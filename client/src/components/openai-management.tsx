@@ -27,6 +27,7 @@ export function OpenAIManagement() {
   const [fileCategory, setFileCategory] = useState("scripts");
   const [productCategory, setProductCategory] = useState<string>("");
   const [fileDescription, setFileDescription] = useState("");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
 
   // Fetch OpenAI settings
   const { data: settings, isLoading: settingsLoading } = useQuery({
@@ -43,6 +44,12 @@ export function OpenAIManagement() {
     queryKey: ['/api/categories/active'],
   });
   const categories = categoriesData?.categories || [];
+
+  // Fetch agents list for KB file assignment
+  const { data: agentsData } = useQuery({
+    queryKey: ['/api/elevenlabs/agents'],
+  });
+  const agents = agentsData || [];
 
   useEffect(() => {
     if (settings) {
@@ -99,7 +106,7 @@ export function OpenAIManagement() {
 
   // Upload file mutation
   const uploadFileMutation = useMutation({
-    mutationFn: async (data: { filename: string; content: string; category: string; productCategory?: string; description: string }) => {
+    mutationFn: async (data: { filename: string; content: string; category: string; productCategory?: string; description: string; agentId?: string }) => {
       return await apiRequest("POST", "/api/openai/files/upload", data);
     },
     onSuccess: () => {
@@ -201,6 +208,7 @@ export function OpenAIManagement() {
       category: fileCategory,
       productCategory: productCategory || undefined,
       description: fileDescription,
+      agentId: selectedAgentId || undefined,
     });
   };
 
@@ -209,6 +217,7 @@ export function OpenAIManagement() {
     setFileCategory(file.category || "scripts");
     setProductCategory(file.productCategory || "");
     setFileDescription(file.description || "");
+    setSelectedAgentId(file.agentId || "");
     setUploadDialogOpen(true);
   };
 
@@ -297,6 +306,7 @@ export function OpenAIManagement() {
                 <TableRow>
                   <TableHead>Filename</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Agent</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Size</TableHead>
                   <TableHead>Uploaded</TableHead>
@@ -325,6 +335,13 @@ export function OpenAIManagement() {
                       <TableCell className="font-medium">{file.originalName}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">{file.category}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {file.agentName ? (
+                          <Badge variant="outline">{file.agentName}</Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">All agents</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(file.processingStatus || 'ready')}
@@ -527,6 +544,7 @@ Rules:
           setFileCategory("scripts");
           setProductCategory("");
           setFileDescription("");
+          setSelectedAgentId("");
         }
       }}>
         <DialogContent className="max-w-2xl">
@@ -606,6 +624,26 @@ Rules:
               </Select>
               <p className="text-xs text-muted-foreground">
                 Determines which sales teams can access this file
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="agentAssignment">Assign to Agent (Optional)</Label>
+              <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+                <SelectTrigger data-testid="select-kb-agent">
+                  <SelectValue placeholder="Not assigned to specific agent..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None (Available to all agents)</SelectItem>
+                  {agents.map((agent: any) => (
+                    <SelectItem key={agent.id} value={agent.agent_id}>
+                      {agent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Assign this KB file to a specific AI agent for personalized knowledge
               </p>
             </div>
 

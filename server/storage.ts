@@ -1235,12 +1235,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Knowledge base operations
-  async getAllKnowledgeBaseFiles(): Promise<KnowledgeBaseFile[]> {
-    return await db
-      .select()
+  async getAllKnowledgeBaseFiles(): Promise<any[]> {
+    const results = await db
+      .select({
+        id: knowledgeBaseFiles.id,
+        originalName: knowledgeBaseFiles.originalName,
+        openaiFileId: knowledgeBaseFiles.openaiFileId,
+        assistantId: knowledgeBaseFiles.assistantId,
+        category: knowledgeBaseFiles.category,
+        productCategory: knowledgeBaseFiles.productCategory,
+        description: knowledgeBaseFiles.description,
+        fileSize: knowledgeBaseFiles.fileSize,
+        processingStatus: knowledgeBaseFiles.processingStatus,
+        uploadedAt: knowledgeBaseFiles.uploadedAt,
+        isActive: knowledgeBaseFiles.isActive,
+        agentId: knowledgeBaseFiles.agentId,
+        agentName: elevenLabsAgents.name,
+      })
       .from(knowledgeBaseFiles)
+      .leftJoin(elevenLabsAgents, eq(knowledgeBaseFiles.agentId, elevenLabsAgents.agentId))
       .where(eq(knowledgeBaseFiles.isActive, true))
       .orderBy(desc(knowledgeBaseFiles.uploadedAt));
+    
+    return results;
   }
 
   async getKnowledgeBaseFile(id: string): Promise<KnowledgeBaseFile | undefined> {
