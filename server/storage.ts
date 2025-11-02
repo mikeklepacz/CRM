@@ -45,6 +45,7 @@ import {
   kbFiles,
   kbFileVersions,
   kbChangeProposals,
+  analysisJobs,
   openaiAssistants,
   openaiAssistantFiles,
   type User,
@@ -134,6 +135,8 @@ import {
   type InsertKbFileVersion,
   type KbChangeProposal,
   type InsertKbChangeProposal,
+  type AnalysisJob,
+  type InsertAnalysisJob,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, isNull } from "drizzle-orm";
@@ -429,6 +432,13 @@ export interface IStorage {
   getKbProposals(filters?: { status?: string; kbFileId?: string }): Promise<KbChangeProposal[]>;
   getKbProposalById(id: string): Promise<KbChangeProposal | undefined>;
   updateKbProposal(id: string, updates: Partial<InsertKbChangeProposal>): Promise<KbChangeProposal>;
+
+  // Analysis Jobs operations
+  createAnalysisJob(job: InsertAnalysisJob): Promise<AnalysisJob>;
+  getAnalysisJob(id: string): Promise<AnalysisJob | undefined>;
+  getRunningAnalysisJob(): Promise<AnalysisJob | undefined>;
+  getAnalysisJobs(filters?: { status?: string; agentId?: string; limit?: number }): Promise<AnalysisJob[]>;
+  updateAnalysisJob(id: string, updates: Partial<InsertAnalysisJob>): Promise<AnalysisJob>;
 
   // OpenAI Assistant Management operations
   getAllAssistants(): Promise<any[]>;
@@ -2528,6 +2538,58 @@ export class DatabaseStorage implements IStorage {
       .update(kbChangeProposals)
       .set(updates)
       .where(eq(kbChangeProposals.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Analysis Jobs operations
+  async createAnalysisJob(job: InsertAnalysisJob): Promise<AnalysisJob> {
+    const [newJob] = await db.insert(analysisJobs).values(job).returning();
+    return newJob;
+  }
+
+  async getAnalysisJob(id: string): Promise<AnalysisJob | undefined> {
+    const [job] = await db.select().from(analysisJobs).where(eq(analysisJobs.id, id));
+    return job;
+  }
+
+  async getRunningAnalysisJob(): Promise<AnalysisJob | undefined> {
+    const [job] = await db.select()
+      .from(analysisJobs)
+      .where(eq(analysisJobs.status, 'running'))
+      .orderBy(analysisJobs.startedAt)
+      .limit(1);
+    return job;
+  }
+
+  async getAnalysisJobs(filters?: { 
+    status?: string; 
+    agentId?: string; 
+    limit?: number 
+  }): Promise<AnalysisJob[]> {
+    let query = db.select().from(analysisJobs);
+
+    if (filters?.status) {
+      query = query.where(eq(analysisJobs.status, filters.status)) as any;
+    }
+    if (filters?.agentId) {
+      query = query.where(eq(analysisJobs.agentId, filters.agentId)) as any;
+    }
+
+    query = query.orderBy(desc(analysisJobs.createdAt)) as any;
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+
+    return await query;
+  }
+
+  async updateAnalysisJob(id: string, updates: Partial<InsertAnalysisJob>): Promise<AnalysisJob> {
+    const [updated] = await db
+      .update(analysisJobs)
+      .set(updates)
+      .where(eq(analysisJobs.id, id))
       .returning();
     return updated;
   }
