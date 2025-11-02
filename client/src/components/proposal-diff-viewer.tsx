@@ -28,88 +28,75 @@ interface ProposalDiffViewerProps {
   isRejecting?: boolean;
 }
 
-// Simple custom diff implementation
+// WordPress-style side-by-side diff implementation using LCS
+// Always shows both original and proposed content with proper alignment
 function computeLineDiff(oldText: string, newText: string) {
-  const oldLines = oldText.split('\n');
-  const newLines = newText.split('\n');
+  // Normalize empty inputs - empty string should be zero lines, not one empty line
+  const oldLines = oldText === '' ? [] : oldText.split('\n');
+  const newLines = newText === '' ? [] : newText.split('\n');
   
+  // Build LCS table for proper diff alignment
+  const lcs: number[][] = [];
+  for (let i = 0; i <= oldLines.length; i++) {
+    lcs[i] = [];
+    for (let j = 0; j <= newLines.length; j++) {
+      if (i === 0 || j === 0) {
+        lcs[i][j] = 0;
+      } else if (oldLines[i - 1] === newLines[j - 1]) {
+        lcs[i][j] = lcs[i - 1][j - 1] + 1;
+      } else {
+        lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
+      }
+    }
+  }
+  
+  // Backtrack through LCS to build diff
   const result: Array<{
     type: 'unchanged' | 'added' | 'removed';
-    content: string;
-    oldLineNum?: number;
-    newLineNum?: number;
+    oldContent: string | null;
+    newContent: string | null;
+    oldLineNum: number | null;
+    newLineNum: number | null;
   }> = [];
   
-  let oldIdx = 0;
-  let newIdx = 0;
-  let oldLineNum = 1;
-  let newLineNum = 1;
-
-  // Simple LCS-based diff
-  while (oldIdx < oldLines.length || newIdx < newLines.length) {
-    if (oldIdx >= oldLines.length) {
-      // Remaining new lines are additions
-      result.push({
-        type: 'added',
-        content: newLines[newIdx],
-        newLineNum: newLineNum++,
-      });
-      newIdx++;
-    } else if (newIdx >= newLines.length) {
-      // Remaining old lines are deletions
-      result.push({
-        type: 'removed',
-        content: oldLines[oldIdx],
-        oldLineNum: oldLineNum++,
-      });
-      oldIdx++;
-    } else if (oldLines[oldIdx] === newLines[newIdx]) {
+  let i = oldLines.length;
+  let j = newLines.length;
+  let oldLineNum = oldLines.length;
+  let newLineNum = newLines.length;
+  
+  // Build diff in reverse, then reverse at end
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
       // Lines match - unchanged
-      result.push({
+      result.unshift({
         type: 'unchanged',
-        content: oldLines[oldIdx],
-        oldLineNum: oldLineNum++,
-        newLineNum: newLineNum++,
+        oldContent: oldLines[i - 1],
+        newContent: newLines[j - 1],
+        oldLineNum: oldLineNum--,
+        newLineNum: newLineNum--,
       });
-      oldIdx++;
-      newIdx++;
-    } else {
-      // Lines differ - check if next line in new matches current old (deletion)
-      // or next line in old matches current new (addition)
-      const nextNewMatchesOld = newIdx + 1 < newLines.length && newLines[newIdx + 1] === oldLines[oldIdx];
-      const nextOldMatchesNew = oldIdx + 1 < oldLines.length && oldLines[oldIdx + 1] === newLines[newIdx];
-      
-      if (nextOldMatchesNew && !nextNewMatchesOld) {
-        // Current old line was removed
-        result.push({
-          type: 'removed',
-          content: oldLines[oldIdx],
-          oldLineNum: oldLineNum++,
-        });
-        oldIdx++;
-      } else if (nextNewMatchesOld && !nextOldMatchesNew) {
-        // Current new line was added
-        result.push({
-          type: 'added',
-          content: newLines[newIdx],
-          newLineNum: newLineNum++,
-        });
-        newIdx++;
-      } else {
-        // Lines are different but no clear pattern - show as removal + addition
-        result.push({
-          type: 'removed',
-          content: oldLines[oldIdx],
-          oldLineNum: oldLineNum++,
-        });
-        result.push({
-          type: 'added',
-          content: newLines[newIdx],
-          newLineNum: newLineNum++,
-        });
-        oldIdx++;
-        newIdx++;
-      }
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
+      // Line added in new version
+      result.unshift({
+        type: 'added',
+        oldContent: null,
+        newContent: newLines[j - 1],
+        oldLineNum: null,
+        newLineNum: newLineNum--,
+      });
+      j--;
+    } else if (i > 0 && (j === 0 || lcs[i][j - 1] < lcs[i - 1][j])) {
+      // Line removed from old version
+      result.unshift({
+        type: 'removed',
+        oldContent: oldLines[i - 1],
+        newContent: null,
+        oldLineNum: oldLineNum--,
+        newLineNum: null,
+      });
+      i--;
     }
   }
   
@@ -334,44 +321,52 @@ export function ProposalDiffViewer({
                   }`}
                   data-testid={`diff-line-${idx}`}
                 >
-                  {/* Line numbers and content */}
+                  {/* Line numbers and content - always show both sides */}
                   <div className="grid grid-cols-2 w-full">
-                    {/* Left side (old content) */}
+                    {/* Left side (original content) - ALWAYS visible */}
                     <div className="flex border-r">
-                      {line.type !== 'added' && (
-                        <>
-                          <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
-                            {line.oldLineNum}
-                          </div>
-                          <div className={`flex-1 px-2 py-1 ${
-                            line.type === 'removed' ? 'bg-red-100 dark:bg-red-900/10' : ''
-                          }`}>
-                            {line.type === 'removed' && <span className="text-red-600 dark:text-red-400 mr-1">-</span>}
-                            <span className={line.type === 'removed' ? 'text-red-900 dark:text-red-300' : ''}>
-                              {line.content || '\u00A0'}
-                            </span>
-                          </div>
-                        </>
-                      )}
+                      <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
+                        {line.oldLineNum || ''}
+                      </div>
+                      <div className={`flex-1 px-2 py-1 ${
+                        line.type === 'removed' 
+                          ? 'bg-red-100 dark:bg-red-900/10' 
+                          : ''
+                      }`}>
+                        {line.type === 'removed' && line.oldContent && (
+                          <span className="text-red-600 dark:text-red-400 mr-1">-</span>
+                        )}
+                        <span className={
+                          line.type === 'removed'
+                            ? 'text-red-900 dark:text-red-300' 
+                            : ''
+                        }>
+                          {line.oldContent || '\u00A0'}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Right side (new content) */}
+                    {/* Right side (proposed content) - ALWAYS visible */}
                     <div className="flex">
-                      {line.type !== 'removed' && (
-                        <>
-                          <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
-                            {line.newLineNum}
-                          </div>
-                          <div className={`flex-1 px-2 py-1 ${
-                            line.type === 'added' ? 'bg-green-100 dark:bg-green-900/10' : ''
-                          }`}>
-                            {line.type === 'added' && <span className="text-green-600 dark:text-green-400 mr-1">+</span>}
-                            <span className={line.type === 'added' ? 'text-green-900 dark:text-green-300' : ''}>
-                              {line.content || '\u00A0'}
-                            </span>
-                          </div>
-                        </>
-                      )}
+                      <div className="w-12 shrink-0 bg-muted/30 px-2 py-1 text-right text-muted-foreground select-none">
+                        {line.newLineNum || ''}
+                      </div>
+                      <div className={`flex-1 px-2 py-1 ${
+                        line.type === 'added'
+                          ? 'bg-green-100 dark:bg-green-900/10' 
+                          : ''
+                      }`}>
+                        {line.type === 'added' && line.newContent && (
+                          <span className="text-green-600 dark:text-green-400 mr-1">+</span>
+                        )}
+                        <span className={
+                          line.type === 'added'
+                            ? 'text-green-900 dark:text-green-300' 
+                            : ''
+                        }>
+                          {line.newContent || '\u00A0'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
