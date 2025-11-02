@@ -2553,10 +2553,50 @@ Focus on:
         }));
       };
 
+      const enrichedObjections = enrichObjections(insights.commonObjections || []);
+      const enrichedPatterns = enrichPatterns(insights.successPatterns || []);
+      
+      // Save insights to database for historical tracking
+      try {
+        const insightRecord = {
+          dateRangeStart: startDate ? new Date(startDate) : null,
+          dateRangeEnd: endDate ? new Date(endDate) : null,
+          agentId: agentId || null,
+          callCount: callsData.length,
+          sentimentPositive: insights.sentimentAnalysis?.positive || 0,
+          sentimentNeutral: insights.sentimentAnalysis?.neutral || 0,
+          sentimentNegative: insights.sentimentAnalysis?.negative || 0,
+          sentimentTrends: insights.sentimentAnalysis?.trends || '',
+        };
+        
+        const objectionsRecords = enrichedObjections.map((obj: any) => ({
+          objection: obj.objection,
+          frequency: obj.frequency,
+          exampleConversations: obj.exampleConversations || [],
+        }));
+        
+        const patternsRecords = enrichedPatterns.map((pat: any) => ({
+          pattern: pat.pattern,
+          frequency: pat.frequency,
+          exampleConversations: pat.exampleConversations || [],
+        }));
+        
+        const recommendationsRecords = (insights.coachingRecommendations || []).map((rec: any) => ({
+          title: rec.title,
+          description: rec.description,
+          priority: rec.priority,
+        }));
+        
+        await storage.saveAiInsight(insightRecord, objectionsRecords, patternsRecords, recommendationsRecords);
+      } catch (dbError) {
+        console.error('[AI Insights] Failed to save insights to database:', dbError);
+        // Don't fail the request if database save fails
+      }
+
       res.json({
         ...insights,
-        commonObjections: enrichObjections(insights.commonObjections || []),
-        successPatterns: enrichPatterns(insights.successPatterns || []),
+        commonObjections: enrichedObjections,
+        successPatterns: enrichedPatterns,
         callCount: callsData.length,
         dateRange: {
           start: startDate || 'all time',
