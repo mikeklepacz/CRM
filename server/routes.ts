@@ -2700,15 +2700,20 @@ Focus on:
           const exactNeutral = totalCalls > 0 ? (neutralValue / totalCalls) * 100 : 0;
           const exactNegative = totalCalls > 0 ? (negativeValue / totalCalls) * 100 : 0;
           
+          console.log('[Wick Coach] Exact percentages before rounding - positive:', exactPositive, 'neutral:', exactNeutral, 'negative:', exactNegative);
+          
           // Round to whole numbers
           let roundedPositive = Math.round(exactPositive);
           let roundedNeutral = Math.round(exactNeutral);
           let roundedNegative = Math.round(exactNegative);
           
+          console.log('[Wick Coach] After rounding - positive:', roundedPositive, 'neutral:', roundedNeutral, 'negative:', roundedNegative, 'sum:', roundedPositive + roundedNeutral + roundedNegative);
+          
           // Ensure they sum to 100% by adjusting the largest value
           const total = roundedPositive + roundedNeutral + roundedNegative;
           if (total !== 100 && totalCalls > 0) {
             const diff = 100 - total;
+            console.log('[Wick Coach] Sum is', total, ', adjusting by', diff);
             // Find the largest percentage and adjust it
             if (roundedPositive >= roundedNeutral && roundedPositive >= roundedNegative) {
               roundedPositive += diff;
@@ -2729,10 +2734,13 @@ Focus on:
           let roundedNeutral = Math.round(neutralValue);
           let roundedNegative = Math.round(negativeValue);
           
+          console.log('[Wick Coach] After rounding - positive:', roundedPositive, 'neutral:', roundedNeutral, 'negative:', roundedNegative, 'sum:', roundedPositive + roundedNeutral + roundedNegative);
+          
           // Ensure they sum to 100%
           const total = roundedPositive + roundedNeutral + roundedNegative;
           if (total !== 100) {
             const diff = 100 - total;
+            console.log('[Wick Coach] Sum is', total, ', adjusting by', diff);
             // Find the largest percentage and adjust it
             if (roundedPositive >= roundedNeutral && roundedPositive >= roundedNegative) {
               roundedPositive += diff;
