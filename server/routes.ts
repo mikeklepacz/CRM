@@ -39,6 +39,55 @@ import { notifyNewTicket, notifyTicketReply } from "./gmail";
 import { format } from "date-fns";
 
 // ============================================================================
+// Micro-Batching Helper for OpenAI Assistants
+// ============================================================================
+// Drip-feeds calls into OpenAI threads 1-2 at a time for higher quality analysis
+async function addCallsToThreadInMicroBatches(
+  openai: OpenAI,
+  threadId: string,
+  calls: any[],
+  callsPerBatch: number = 2
+): Promise<void> {
+  const batches = [];
+  for (let i = 0; i < calls.length; i += callsPerBatch) {
+    batches.push(calls.slice(i, i + callsPerBatch));
+  }
+
+  console.log(`[Micro-Batch] Drip-feeding ${calls.length} calls in ${batches.length} batches of ${callsPerBatch}`);
+
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    const batchLabel = `Batch ${i + 1}/${batches.length}`;
+    
+    const transcriptContent = batch
+      .filter(call => call.transcripts && call.transcripts.length > 0)
+      .map((call, idx) => {
+        const fullTranscript = call.transcripts
+          .map((t: any) => `${t.role}: ${t.message}`)
+          .join('\n');
+        const storeInfo = call.client?.data?.Name ? ` (Store: ${call.client.data.Name})` : '';
+        const overallIdx = i * callsPerBatch + idx + 1;
+        return `\n#### Call ${overallIdx}${storeInfo}\n- Duration: ${call.session?.callDurationSecs || 'N/A'}s\n- Outcome: ${call.session?.status}\n- Interest Level: ${call.session?.interestLevel || 'N/A'}\n- Transcript:\n\`\`\`\n${fullTranscript}\n\`\`\``;
+      })
+      .join('\n');
+
+    console.log(`[Micro-Batch] Adding ${batchLabel} (${batch.length} calls) to thread`);
+
+    await openai.beta.threads.messages.create(threadId, {
+      role: 'user',
+      content: `${batchLabel}:\n${transcriptContent}`
+    });
+
+    // Small delay between batches to avoid rate limits
+    if (i < batches.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  console.log(`[Micro-Batch] All ${batches.length} batches added to thread ${threadId}`);
+}
+
+// ============================================================================
 // In-Memory Cache for Google Sheets Data (30-second TTL)
 // ============================================================================
 interface CacheEntry {
@@ -2560,13 +2609,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI Insights - Analyze calls with OpenAI
+  // AI Insights - Analyze calls with OpenAI using Assistants API + Micro-Batching
   app.post('/api/elevenlabs/analyze-calls', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { startDate, endDate, agentId, limit } = req.body;
       
-      // Validate limit
-      const callLimit = Math.min(limit || 50, 100); // Max 100 calls
+      // Validate limit - no hard cap, but we'll process them in micro-batches
+      const callLimit = limit || 50;
 
       // Get OpenAI API key from settings
       const openaiSettings = await storage.getOpenaiSettings();
@@ -2576,6 +2625,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: 'OpenAI API key not configured',
           message: 'Please configure your OpenAI API key in the Sales Assistant settings first'
         });
+      }
+
+      // Get Wick Coach assistant
+      const wickCoachAssistant = await storage.getAssistantBySlug('wick-coach');
+      if (!wickCoachAssistant || !wickCoachAssistant.assistantId) {
+        return res.status(400).json({ error: 'Wick Coach assistant not configured. Please set up the Wick Coach assistant first.' });
       }
 
       // Fetch calls with transcripts
@@ -2606,24 +2661,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       }));
 
-      // Prepare data for OpenAI (using ALL calls for comprehensive analysis - no truncation!)
-      const analysisData = redactedCalls.map(call => ({
-        conversationId: call.session.conversationId,
-        duration: call.session.callDurationSecs,
-        successful: call.session.callSuccessful,
-        interestLevel: call.session.interestLevel,
-        aiAnalysis: call.session.aiAnalysis,
-        transcript: call.transcripts.map(t => `${t.role}: ${t.message}`).join('\n'), // Full transcript, no character limit
-        storeName: call.client.data?.Name || call.client.uniqueIdentifier,
-      }));
+      console.log(`[Wick Coach] Analyzing ${redactedCalls.length} calls using Assistants API with micro-batching`);
 
-      // Create OpenAI prompt
-      const prompt = `You are an expert sales coach analyzing AI voice call performance data. Analyze the following ${analysisData.length} sales calls and provide actionable insights.
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
-CALL DATA:
-${JSON.stringify(analysisData, null, 2)}
+      // Create a thread for this analysis
+      const thread = await openai.beta.threads.create();
+      console.log('[Wick Coach] Thread created:', thread.id);
 
-Provide a detailed analysis in the following JSON format:
+      // Add initial instructions
+      const initialPrompt = `You are an expert sales coach analyzing AI voice call performance data. I will drip-feed you call transcripts in small batches (1-2 calls at a time) so you can analyze each one carefully.
+
+After I've given you all the calls, I'll ask you to provide a comprehensive analysis.
+
+Provide your final analysis in this exact JSON format:
 {
   "commonObjections": [
     { "objection": "string", "frequency": number, "exampleConversations": ["conversationId1", "conversationId2"] }
@@ -2646,29 +2698,71 @@ Focus on:
 1. Common objections prospects raise and how to handle them better
 2. Patterns in successful vs unsuccessful calls
 3. Sentiment trends and customer mood analysis
-4. Specific, actionable coaching recommendations for the AI agent`;
+4. Specific, actionable coaching recommendations for the AI agent
 
-      // Call OpenAI
-      const openaiResponse = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-4o',
-          messages: [
-            { role: 'system', content: 'You are a sales coaching expert analyzing call data. Always respond with valid JSON.' },
-            { role: 'user', content: prompt }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.7,
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${openaiSettings.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+Ready to receive calls?`;
 
-      const insights = JSON.parse(openaiResponse.data.choices[0].message.content);
+      await openai.beta.threads.messages.create(thread.id, {
+        role: 'user',
+        content: initialPrompt
+      });
+
+      // Drip-feed calls using micro-batching (2 calls at a time for deep analysis)
+      await addCallsToThreadInMicroBatches(openai, thread.id, redactedCalls, 2);
+
+      // Now ask for the final analysis
+      await openai.beta.threads.messages.create(thread.id, {
+        role: 'user',
+        content: `All ${redactedCalls.length} calls have been provided. Please analyze them comprehensively and provide your response in the JSON format specified earlier.`
+      });
+
+      // Run the assistant with JSON mode
+      const run = await openai.beta.threads.runs.create(thread.id, {
+        assistant_id: wickCoachAssistant.assistantId,
+        response_format: { type: "json_object" }
+      });
+      console.log('[Wick Coach] Run started with JSON mode:', run.id);
+
+      // Poll for completion
+      let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      let attempts = 0;
+      const maxAttempts = 120; // 60 seconds max (longer timeout for micro-batching)
+
+      while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+        attempts++;
+      }
+
+      if (runStatus.status !== 'completed') {
+        console.error('[Wick Coach] Run did not complete:', runStatus.status);
+        return res.status(500).json({ error: `Analysis failed: ${runStatus.status}` });
+      }
+
+      console.log('[Wick Coach] Run completed successfully');
+
+      // Get the assistant's response
+      const messages = await openai.beta.threads.messages.list(thread.id);
+      const assistantMessage = messages.data.find(m => m.role === 'assistant');
+
+      if (!assistantMessage || !assistantMessage.content[0] || assistantMessage.content[0].type !== 'text') {
+        return res.status(500).json({ error: 'No response from Wick Coach assistant' });
+      }
+
+      const responseText = assistantMessage.content[0].text.value;
+      console.log('[Wick Coach] Response received, parsing JSON...');
+
+      // Parse the JSON response
+      let insights;
+      try {
+        const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/```\s*([\s\S]*?)\s*```/);
+        const jsonText = jsonMatch ? jsonMatch[1] : responseText;
+        insights = JSON.parse(jsonText);
+      } catch (error) {
+        console.error('[Wick Coach] Failed to parse JSON response:', error);
+        console.error('[Wick Coach] Raw response:', responseText);
+        return res.status(500).json({ error: 'Failed to parse Wick Coach response. Response was not valid JSON.' });
+      }
 
       // Validate and calculate sentiment percentages
       // OpenAI's job: analyze transcripts and return INTEGER COUNTS
@@ -3392,34 +3486,16 @@ Focus on:
         });
       }
 
-      // Implement smart batching: 100 calls per batch to stay within token limits
-      const BATCH_SIZE = 100;
-      const batches = [];
-      for (let i = 0; i < callsData.length; i += BATCH_SIZE) {
-        batches.push(callsData.slice(i, i + BATCH_SIZE));
-      }
+      console.log(`[KB Analyze] Processing ${callsData.length} calls with micro-batching (2 calls at a time)`);
 
-      console.log(`[KB Analyze] Processing ${batches.length} batch(es) of calls`);
-
-      // For now, process first batch only (user can run again for next batch)
-      const currentBatch = batches[0];
-      const batchInfo = batches.length > 1 
-        ? ` (Batch 1 of ${batches.length}, ${currentBatch.length} calls)` 
-        : ` (${currentBatch.length} calls)`;
-
-      console.log(`[KB Analyze] Analyzing${batchInfo}`);
-
-      // Build transcript context with FULL transcripts (no truncation!)
-      const transcriptContext = currentBatch
-        .filter(call => call.transcripts && call.transcripts.length > 0)
-        .map((call, idx) => {
-          const fullTranscript = call.transcripts
-            .map(t => `${t.role}: ${t.message}`)
-            .join('\n');
-          const storeInfo = call.client.data?.Name ? ` (Store: ${call.client.data.Name})` : '';
-          return `\n#### Call ${idx + 1}${storeInfo}\n- Duration: ${call.session.callDurationSecs || 'N/A'}s\n- Outcome: ${call.session.status}\n- Interest Level: ${call.session.interestLevel || 'N/A'}\n- Transcript:\n\`\`\`\n${fullTranscript}\n\`\`\``;
-        })
-        .join('\n');
+      // Redact PII (phone numbers) from transcripts
+      const redactedCalls = callsData.map(call => ({
+        ...call,
+        transcripts: call.transcripts.map((t: any) => ({
+          ...t,
+          message: t.message.replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, 'XXX-XXX-XXXX')
+        }))
+      }));
 
       // Build context for Aligner
       const kbContext = kbFiles
@@ -3460,9 +3536,25 @@ ${patterns || '(none)'}
 ${recommendations || '(none)'}`;
       }
 
-      const analysisPrompt = `You are the Aligner assistant analyzing call performance data to improve the sales knowledge base.${insight ? ' You have TWO sources of information:' : ' You have access to:'}
+      console.log('[KB Analyze] Calling Aligner assistant with micro-batching...');
 
-1. **RAW CALL TRANSCRIPTS** - These are the actual conversations between the AI agent and prospects${insight ? '\n2. **WICK COACH ANALYSIS** - Another AI (the "Wick Coach") has already analyzed these calls and provided recommendations' : ''}
+      // Get OpenAI settings (use Sales Assistant's API key)
+      const openaiSettings = await storage.getOpenaiSettings();
+      if (!openaiSettings?.apiKey) {
+        return res.status(500).json({ error: 'OpenAI API key not configured. Please configure your OpenAI API key in the Sales Assistant settings first.' });
+      }
+
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+
+      // Create a thread for this analysis
+      const thread = await openai.beta.threads.create();
+      console.log('[KB Analyze] Thread created:', thread.id);
+
+      // Add initial instructions with KB context
+      const initialPrompt = `You are the Aligner assistant analyzing call performance data to improve the sales knowledge base.${insight ? ' You have TWO sources of information:' : ' You have access to:'}
+
+1. **RAW CALL TRANSCRIPTS** - I will drip-feed you transcripts in small batches (1-2 calls at a time) so you can analyze each one carefully${insight ? '\n2. **WICK COACH ANALYSIS** - Another AI (the "Wick Coach") has already analyzed these calls and provided recommendations' : ''}
 
 ## YOUR ${insight ? 'DUAL-PERSPECTIVE ' : ''}MISSION:
 
@@ -3472,12 +3564,7 @@ ${recommendations || '(none)'}`;
 - What information seems to confuse prospects?
 - What topics lead to successful outcomes?
 
-${insight ? '**Second, review the Wick Coach\'s analysis** to see if it caught things you missed or has different insights.\n\n**Then, synthesize BOTH perspectives** to propose KB improvements that address:\n- Issues YOU identified from transcripts\n- Valid points from the Wick Coach\'s recommendations\n- Any contradictions between the two analyses (explain your reasoning)' : '**Then, propose KB improvements** based on your analysis of the transcripts.'}
-
----
-
-## RAW CALL TRANSCRIPTS:
-${transcriptContext}${wickCoachSection}
+${insight ? '**Second, review the Wick Coach\'s analysis** to see if it caught things you missed or has different insights.\n\n**Then, synthesize BOTH perspectives** to propose KB improvements that address:\n- Issues YOU identified from transcripts\n- Valid points from the Wick Coach\'s recommendations\n- Any contradictions between the two analyses (explain your reasoning)' : '**Then, propose KB improvements** based on your analysis of the transcripts.'}${wickCoachSection}
 
 ---
 
@@ -3486,14 +3573,25 @@ ${kbContext}
 
 ---
 
-## YOUR TASK:
+After I've given you all the transcripts, I'll ask you to propose KB improvements.
 
-Propose specific improvements to the knowledge base files based on ${insight ? 'BOTH your transcript analysis AND the Wick Coach\'s insights' : 'your analysis of the transcripts'}. For each proposed change:
+Ready to receive call transcripts?`;
 
+      await openai.beta.threads.messages.create(thread.id, {
+        role: 'user',
+        content: initialPrompt
+      });
+
+      // Drip-feed calls using micro-batching (2 calls at a time for deep analysis)
+      await addCallsToThreadInMicroBatches(openai, thread.id, redactedCalls, 2);
+
+      // Now ask for the final analysis
+      const finalPrompt = `All ${redactedCalls.length} calls have been provided. Now propose specific improvements to the knowledge base files based on ${insight ? 'BOTH your transcript analysis AND the Wick Coach\'s insights' : 'your analysis of the transcripts'}.
+
+For each proposed change:
 1. Identify which file(s) should be updated
-2. Explain the rationale, citing:
-   - Specific examples from transcripts${insight ? '\n   - Relevant Wick Coach recommendations' : ''}
-3. Provide the complete updated content for the file
+2. Explain the rationale, citing specific examples from transcripts${insight ? ' or Wick Coach recommendations' : ''}
+3. Provide the targeted edit
 
 Respond in this exact JSON format:
 {
@@ -3519,25 +3617,9 @@ IMPORTANT:
 - Do not make superficial changes just for the sake of it
 - Keep the vibe and voice intact - only fix what's broken`;
 
-      console.log('[KB Analyze] Calling Aligner assistant...');
-
-      // Get OpenAI settings (use Sales Assistant's API key)
-      const openaiSettings = await storage.getOpenaiSettings();
-      if (!openaiSettings?.apiKey) {
-        return res.status(500).json({ error: 'OpenAI API key not configured. Please configure your OpenAI API key in the Sales Assistant settings first.' });
-      }
-
-      const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
-
-      // Create a thread for this analysis
-      const thread = await openai.beta.threads.create();
-      console.log('[KB Analyze] Thread created:', thread.id);
-
-      // Add the analysis prompt as a message
       await openai.beta.threads.messages.create(thread.id, {
         role: 'user',
-        content: analysisPrompt
+        content: finalPrompt
       });
 
       // Run the assistant with JSON mode enforced
@@ -3550,7 +3632,7 @@ IMPORTANT:
       // Poll for completion
       let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       let attempts = 0;
-      const maxAttempts = 60; // 30 seconds max
+      const maxAttempts = 120; // 60 seconds max (longer timeout for micro-batching)
 
       while (runStatus.status !== 'completed' && runStatus.status !== 'failed' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -3651,10 +3733,10 @@ IMPORTANT:
 
       console.log(`[KB Analyze] Successfully created ${createdProposals.length} proposals`);
 
-      // Mark all calls in this batch as analyzed to prevent re-analysis
+      // Mark all calls as analyzed to prevent re-analysis
       // Skip if chained from Wick Coach (already marked there)
       if (!isChainedFromWickCoach) {
-        const conversationIdsToMark = currentBatch
+        const conversationIdsToMark = redactedCalls
           .map(call => call.session.conversationId)
           .filter(Boolean) as string[];
         
@@ -3664,29 +3746,16 @@ IMPORTANT:
         console.log(`[KB Analyze] Skipping call marking (already done by Wick Coach)`);
       }
 
-      // Calculate remaining calls
-      const remainingCalls = callsData.length - currentBatch.length;
-      const batchMessage = batches.length > 1 
-        ? `Analyzed batch 1 of ${batches.length}. ${remainingCalls} calls remaining. Run analysis again to process next batch.`
-        : `All ${currentBatch.length} unanalyzed calls processed.`;
-
       res.json({
         success: true,
         proposalsCreated: createdProposals.length,
-        proposalCount: createdProposals.length, // Add alias for consistency with frontend
+        proposalCount: createdProposals.length,
         proposals: createdProposals,
-        kbFileCount: kbFiles.length, // Add KB file count for progress display
+        kbFileCount: kbFiles.length,
         insightId: insight?.id || null,
         agentId,
-        callsAnalyzed: currentBatch.length,
-        totalUnanalyzedCalls: callsData.length,
-        remainingCalls,
-        batchInfo: {
-          currentBatch: 1,
-          totalBatches: batches.length,
-          batchSize: currentBatch.length,
-        },
-        message: batchMessage,
+        callsAnalyzed: redactedCalls.length,
+        message: `Analyzed ${redactedCalls.length} calls using micro-batching for deep analysis`,
       });
     } catch (error: any) {
       console.error('[KB Analyze] Error:', error);
