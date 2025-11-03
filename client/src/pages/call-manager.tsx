@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb, Upload } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb, Upload, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -22,6 +22,7 @@ import { CallDetailDialog } from "@/components/call-detail-dialog";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ProposalDiffViewer } from "@/components/proposal-diff-viewer";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface ElevenLabsAgent {
   id: string;
@@ -706,6 +707,8 @@ export default function CallManager() {
   const [schedulingMode, setSchedulingMode] = useState<'immediate' | 'scheduled' | 'auto'>('immediate');
   const [scheduledTime, setScheduledTime] = useState<string>("");
   const [selectedAgentFilters, setSelectedAgentFilters] = useState<Set<string>>(new Set());
+  const [selectedStateFilters, setSelectedStateFilters] = useState<string[]>([]);
+  const [showCanadaOnly, setShowCanadaOnly] = useState(false);
   const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
   const [selectedCallForDialog, setSelectedCallForDialog] = useState<{ conversationId: string; callData: any } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -742,6 +745,7 @@ export default function CallManager() {
   useEffect(() => {
     setSelectedStores(new Set());
     setSelectedAgentFilters(new Set());
+    setSelectedStateFilters([]);
   }, [activeScenario]);
 
   // Redirect if user doesn't have voice access
@@ -1030,10 +1034,38 @@ export default function CallManager() {
   // Get unique agents from stores
   const uniqueAgents = Array.from(new Set(eligibleStores.map(s => s.agentName).filter(Boolean)));
 
-  // Filter stores by selected agents (if any filters are active)
-  const filteredStores = selectedAgentFilters.size === 0 
-    ? eligibleStores 
-    : eligibleStores.filter(store => store.agentName && selectedAgentFilters.has(store.agentName));
+  // Helper function to check if a state is a Canadian province
+  const isCanadianProvince = (state: string) => {
+    const canadianProvinces = [
+      'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
+      'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador',
+      'Nova Scotia', 'Northwest Territories', 'Nunavut', 'Ontario', 'Prince Edward Island',
+      'Quebec', 'Saskatchewan', 'Yukon'
+    ];
+    return canadianProvinces.includes(state);
+  };
+
+  // Get unique states and state counts
+  const allStates = Array.from(new Set(eligibleStores.map(s => s.state).filter(Boolean))).sort();
+  const stateCounts = eligibleStores.reduce((acc, store) => {
+    if (store.state) {
+      acc[store.state] = (acc[store.state] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Filter stores by selected agents and states (if any filters are active)
+  let filteredStores = eligibleStores;
+  
+  // Apply agent filter
+  if (selectedAgentFilters.size > 0) {
+    filteredStores = filteredStores.filter(store => store.agentName && selectedAgentFilters.has(store.agentName));
+  }
+  
+  // Apply state filter
+  if (selectedStateFilters.length > 0) {
+    filteredStores = filteredStores.filter(store => store.state && selectedStateFilters.includes(store.state));
+  }
 
   // Toggle agent filter
   const handleToggleAgentFilter = (agentName: string) => {
@@ -1044,6 +1076,15 @@ export default function CallManager() {
       newFilters.add(agentName);
     }
     setSelectedAgentFilters(newFilters);
+  };
+
+  // Toggle state filter
+  const handleStateChange = (state: string, checked: boolean) => {
+    if (checked) {
+      setSelectedStateFilters([...selectedStateFilters, state]);
+    } else {
+      setSelectedStateFilters(selectedStateFilters.filter(s => s !== state));
+    }
   };
 
   // Sync calls from ElevenLabs
@@ -1585,28 +1626,133 @@ export default function CallManager() {
                     </p>
                   </div>
 
-                  {/* Agent Filters - only show for cold_calls */}
-                  {activeScenario === 'cold_calls' && uniqueAgents.length > 0 && (
-                    <div className="border rounded-lg p-4">
-                      <h3 className="text-sm font-medium mb-3">Filter by Agent</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {uniqueAgents.map((agent) => {
-                          const count = eligibleStores.filter(s => s.agentName === agent).length;
-                          return (
-                            <div key={agent} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`agent-${agent}`}
-                                checked={selectedAgentFilters.has(agent)}
-                                onCheckedChange={() => handleToggleAgentFilter(agent)}
-                                data-testid={`checkbox-agent-${agent}`}
-                              />
-                              <Label htmlFor={`agent-${agent}`} className="cursor-pointer">
-                                {agent} ({count})
-                              </Label>
+                  {/* Filters - only show for cold_calls */}
+                  {activeScenario === 'cold_calls' && (
+                    <div className="flex gap-4">
+                      {/* Agent Filter */}
+                      {uniqueAgents.length > 0 && (
+                        <div className="flex-1 border rounded-lg p-4">
+                          <h3 className="text-sm font-medium mb-3">Filter by Agent</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {uniqueAgents.map((agent) => {
+                              const count = eligibleStores.filter(s => s.agentName === agent).length;
+                              return (
+                                <div key={agent} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`agent-${agent}`}
+                                    checked={selectedAgentFilters.has(agent)}
+                                    onCheckedChange={() => handleToggleAgentFilter(agent)}
+                                    data-testid={`checkbox-agent-${agent}`}
+                                  />
+                                  <Label htmlFor={`agent-${agent}`} className="cursor-pointer">
+                                    {agent} ({count})
+                                  </Label>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* State Filter */}
+                      {allStates.length > 0 && (
+                        <div className="flex-1 border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-medium">Filter by State</h3>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" size="sm" data-testid="button-state-filter">
+                                  <Settings2 className="mr-2 h-4 w-4" />
+                                  {selectedStateFilters.length > 0
+                                    ? `${selectedStateFilters.length} state(s)`
+                                    : "Select States"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent align="end" className="w-80">
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className="font-medium">Filter by State</h4>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setSelectedStateFilters(allStates)}
+                                        data-testid="button-select-all-states"
+                                      >
+                                        All
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setSelectedStateFilters([])}
+                                        data-testid="button-clear-all-states"
+                                      >
+                                        None
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {/* Canada Checkbox */}
+                                  <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                                    <Checkbox
+                                      id="canada-toggle"
+                                      checked={showCanadaOnly}
+                                      onCheckedChange={(checked) => {
+                                        setShowCanadaOnly(!!checked);
+                                      }}
+                                      data-testid="checkbox-canada-toggle"
+                                    />
+                                    <Label
+                                      htmlFor="canada-toggle"
+                                      className="text-sm cursor-pointer flex-1 font-medium"
+                                    >
+                                      Canada
+                                    </Label>
+                                    <span className="text-xs text-muted-foreground">
+                                      ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} stores)
+                                    </span>
+                                  </div>
+
+                                  <ScrollArea className="h-64">
+                                    <div className="space-y-2">
+                                      {allStates
+                                        .filter(state => showCanadaOnly ? isCanadianProvince(state) : true)
+                                        .map((state) => (
+                                        <div key={state} className="flex items-center gap-2">
+                                          <Checkbox
+                                            id={`state-${state}`}
+                                            checked={selectedStateFilters.includes(state)}
+                                            onCheckedChange={(checked) => handleStateChange(state, checked as boolean)}
+                                            data-testid={`checkbox-state-${state}`}
+                                          />
+                                          <Label
+                                            htmlFor={`state-${state}`}
+                                            className="text-sm cursor-pointer flex-1"
+                                          >
+                                            {state}
+                                          </Label>
+                                          <span className="text-xs text-muted-foreground">
+                                            ({stateCounts[state] || 0})
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </ScrollArea>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          {selectedStateFilters.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {selectedStateFilters.map(state => (
+                                <Badge key={state} variant="secondary" className="text-xs">
+                                  {state} ({stateCounts[state] || 0})
+                                </Badge>
+                              ))}
                             </div>
-                          );
-                        })}
-                      </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
