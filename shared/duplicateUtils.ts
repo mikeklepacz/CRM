@@ -188,18 +188,67 @@ export function countNonEmptyFields(store: StoreRecord): number {
 }
 
 /**
- * Detect duplicate stores using address-first grouping strategy
- * (similar to how Franchise Finder groups by website first)
+ * Extract address location key for grouping
+ * Mirrors Franchise Finder's extractDomain - deterministic bucketing
+ * Normalizes synonyms so "123 Saint John St" and "123 St John St" match
+ */
+function extractAddressLocationKey(address: string): string {
+  if (!address) return '';
+  
+  let cleaned = address.toLowerCase()
+    // Remove unit/suite/apt/building/floor variations
+    .replace(/\s+(suite|ste|unit|apt|apartment|building|bldg|floor|fl|#)\s*[a-z0-9-]*$/i, '')
+    .replace(/\s+(suite|ste|unit|apt|apartment|building|bldg|floor|fl|#)\s+[a-z0-9-]+/gi, '')
+    // Strip ALL punctuation (periods, commas, apostrophes, slashes, etc.)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    // Normalize common street name synonyms AFTER punctuation removal
+    .replace(/\bsaint\b/g, 'st')
+    .replace(/\bmount\b/g, 'mt')
+    .replace(/\bfirst\b/g, '1st')
+    .replace(/\bsecond\b/g, '2nd')
+    .replace(/\bthird\b/g, '3rd')
+    .replace(/\bfourth\b/g, '4th')
+    .replace(/\bfifth\b/g, '5th')
+    .replace(/\bsixth\b/g, '6th')
+    .replace(/\bseventh\b/g, '7th')
+    .replace(/\beighth\b/g, '8th')
+    .replace(/\bninth\b/g, '9th')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  const words = cleaned.split(/\s+/);
+  
+  // Extract house number (handle alphanumeric like "123A")
+  const houseNum = words.find(w => /^\d+/.test(w))?.replace(/[^\d]/g, '') || '';
+  if (!houseNum) return ''; // Need a house number
+  
+  // Generic/filler words to skip
+  const skipWords = new Set([
+    'st', 'street', 'rd', 'road', 'ave', 'avenue', 'blvd', 'boulevard',
+    'ln', 'lane', 'dr', 'drive', 'ct', 'court', 'way', 'pl', 'place',
+    'pkwy', 'parkway', 'hwy', 'highway', 'n', 's', 'e', 'w',
+    'north', 'south', 'east', 'west', 'ne', 'nw', 'se', 'sw',
+    '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th' // Skip ordinals after normalization
+  ]);
+  
+  // Find ALL meaningful street words, sorted for consistency
+  const streetWords = words
+    .filter(w => !skipWords.has(w) && !/^\d+/.test(w) && w.length >= 3)
+    .sort()
+    .join('-');
+  
+  return streetWords ? `${houseNum}-${streetWords}` : '';
+}
+
+/**
+ * Detect duplicate stores using two-phase grouping (Franchise Finder pattern)
  * 
- * Strategy:
- * 1. First pass: Group stores by normalized address
- * 2. Second pass: Within each address group, check for name similarity
+ * Phase 1: Group by normalized address (exact matches)
+ * Phase 2: Group by location key (house# + street words)
  * 
- * This reduces comparisons from O(n²) to O(n) + O(groups × group_size²)
- * With 8000 stores, this goes from ~32M comparisons to ~20K operations
- * 
- * Note: Skips phone number matching to avoid flagging franchises
- * (same name + phone but different addresses = different locations)
+ * This reduces O(n²) to O(n) + O(groups × small_group_size²)
+ * With 8000 stores: ~32M comparisons → ~20K operations
  */
 export function detectDuplicates(
   stores: StoreRecord[],
@@ -207,140 +256,93 @@ export function detectDuplicates(
 ): DuplicateGroup[] {
   console.log(`[DuplicateFinder] Starting duplicate detection on ${stores.length} stores`);
   const duplicateGroups: DuplicateGroup[] = [];
-  const addedPairs = new Set<string>();
+  const processedPairs = new Set<string>();
   
-  // Helper to create a sorted pair key for deduplication
   const makePairKey = (link1: string, link2: string): string => {
     return [link1, link2].sort().join('||');
   };
   
-  // First pass: Group by exact normalized address
-  const addressGroups = new Map<string, StoreRecord[]>();
+  // Phase 1: Group by exact normalized address (like Franchise Finder groups by domain)
+  const exactAddressGroups = new Map<string, StoreRecord[]>();
   stores.forEach(store => {
-    const address = normalizeAddress(store.Address || '');
-    if (address && address.length >= 5) {
-      if (!addressGroups.has(address)) {
-        addressGroups.set(address, []);
+    const normalized = normalizeAddress(store.Address || '');
+    if (normalized && normalized.length >= 5) {
+      if (!exactAddressGroups.has(normalized)) {
+        exactAddressGroups.set(normalized, []);
       }
-      addressGroups.get(address)!.push(store);
+      exactAddressGroups.get(normalized)!.push(store);
     }
   });
   
-  // Add exact address-based duplicates
-  addressGroups.forEach((group, address) => {
+  // Convert exact address matches to duplicate groups
+  exactAddressGroups.forEach((group) => {
     if (group.length > 1) {
       duplicateGroups.push({
         stores: group,
-        reason: `Same address: ${group[0].Address || ''}`,
+        reason: `Exact address match: ${group[0].Address || ''}`,
         similarity: 1.0,
       });
       
-      // Mark pairs as processed
+      // Mark all pairs as processed
       for (let i = 0; i < group.length; i++) {
         for (let j = i + 1; j < group.length; j++) {
-          addedPairs.add(makePairKey(group[i].Link, group[j].Link));
+          processedPairs.add(makePairKey(group[i].Link, group[j].Link));
         }
       }
     }
   });
   
-  // Second pass: Group stores by canonical stem for efficient comparison
-  // This groups "123 Main St" and "123 Main St Suite A" together
-  const stemGroups = new Map<string, StoreRecord[]>();
+  // Phase 2: Group by location key (like Franchise Finder groups by brand)
+  const locationGroups = new Map<string, StoreRecord[]>();
   stores.forEach(store => {
-    const stem = extractCanonicalStem(store.Address || '');
-    if (stem) {
-      if (!stemGroups.has(stem)) {
-        stemGroups.set(stem, []);
+    const locationKey = extractAddressLocationKey(store.Address || '');
+    if (locationKey) {
+      if (!locationGroups.has(locationKey)) {
+        locationGroups.set(locationKey, []);
       }
-      stemGroups.get(stem)!.push(store);
+      locationGroups.get(locationKey)!.push(store);
     }
   });
   
-  console.log(`[DuplicateFinder] Created ${stemGroups.size} canonical stem groups from ${stores.length} stores`);
+  console.log(`[DuplicateFinder] Created ${locationGroups.size} location groups from ${stores.length} stores`);
   
-  // Check for name similarity with address confirmation within each stem group
-  stemGroups.forEach((group, stem) => {
-    if (group.length < 2) return; // Skip single-store groups
+  // Within each location group, check for name similarity (like Franchise Finder validates franchises)
+  locationGroups.forEach((group) => {
+    if (group.length < 2) return;
     
     for (let i = 0; i < group.length; i++) {
       for (let j = i + 1; j < group.length; j++) {
         const store1 = group[i];
         const store2 = group[j];
         
-        // Skip if this pair already matched
         const pairKey = makePairKey(store1.Link, store2.Link);
-        if (addedPairs.has(pairKey)) continue;
+        if (processedPairs.has(pairKey)) continue;
         
+        // Check name similarity
         const name1 = normalizeStoreName(store1.Name || '');
         const name2 = normalizeStoreName(store2.Name || '');
-        
         if (!name1 || !name2) continue;
         
-        // Split names into words
         const words1 = name1.split(/\s+/).filter(w => w.length > 2);
         const words2 = name2.split(/\s+/).filter(w => w.length > 2);
-        
         if (words1.length === 0 || words2.length === 0) continue;
         
-        // Count how many words are shared
         const sharedWords = words1.filter(w => words2.includes(w));
-        const minWordCount = Math.min(words1.length, words2.length);
-        const wordSimilarity = minWordCount > 0 ? sharedWords.length / minWordCount : 0;
+        const wordSimilarity = sharedWords.length / Math.min(words1.length, words2.length);
         
-        // Names must share at least 75% of words
-        if (wordSimilarity < similarityThreshold) continue;
-        
-        // Check if they share meaningful address words including a house number
-        const addr1 = (store1.Address || '').toLowerCase();
-        const addr2 = (store2.Address || '').toLowerCase();
-        const addrWords1 = addr1.split(/\s+/).filter(w => w.length > 0);
-        const addrWords2 = addr2.split(/\s+/).filter(w => w.length > 0);
-        
-        // Extract numeric tokens (house numbers)
-        const numericTokens1 = addrWords1.filter(w => /^\d+/.test(w));
-        const numericTokens2 = addrWords2.filter(w => /^\d+/.test(w));
-        const sharedNumbers = numericTokens1.filter(n => numericTokens2.includes(n));
-        
-        // If no shared house number, skip
-        if (sharedNumbers.length === 0) continue;
-        
-        // Filter out generic address words
-        const genericWords = new Set([
-          'st', 'street', 'rd', 'road', 'ave', 'avenue', 'blvd', 'boulevard',
-          'ln', 'lane', 'dr', 'drive', 'ct', 'court', 'way', 'pl', 'place',
-          'pkwy', 'parkway', 'hwy', 'highway', 'n', 's', 'e', 'w',
-          'north', 'south', 'east', 'west', 'ne', 'nw', 'se', 'sw',
-          'suite', 'ste', 'unit', 'apt', '#'
-        ]);
-        
-        // Get meaningful words (not numbers, not generic, at least 3 chars)
-        const meaningfulWords1 = addrWords1.filter(w => 
-          !genericWords.has(w) && !/^\d+$/.test(w) && w.length >= 3
-        );
-        const meaningfulWords2 = addrWords2.filter(w => 
-          !genericWords.has(w) && !/^\d+$/.test(w) && w.length >= 3
-        );
-        const sharedMeaningful = meaningfulWords1.filter(w => meaningfulWords2.includes(w));
-        
-        // Only add as duplicate if they share house number AND meaningful street name
-        if (sharedMeaningful.length > 0) {
+        if (wordSimilarity >= similarityThreshold) {
           duplicateGroups.push({
             stores: [store1, store2],
-            reason: `Similar names (${Math.round(wordSimilarity * 100)}% word match) + same address: ${sharedNumbers.join(', ')} ${sharedMeaningful.join(', ')}`,
+            reason: `Similar names (${Math.round(wordSimilarity * 100)}%) + same location: ${group[0].Address}`,
             similarity: wordSimilarity,
           });
-          addedPairs.add(pairKey);
+          processedPairs.add(pairKey);
         }
       }
     }
   });
   
-  // Sort by number of stores in each group (descending)
   console.log(`[DuplicateFinder] Found ${duplicateGroups.length} duplicate groups`);
-  duplicateGroups.forEach((group, idx) => {
-    console.log(`  Group ${idx + 1}: ${group.stores.length} stores - ${group.reason}`);
-  });
   return duplicateGroups.sort((a, b) => b.stores.length - a.stores.length);
 }
 
