@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Trash2, Sparkles, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { Trash2, Sparkles, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { detectDuplicates, smartSelectDuplicates, selectKeeper, countNonEmptyFields, type DuplicateGroup, type StoreRecord, type StatusHierarchy } from "@shared/duplicateUtils";
@@ -21,13 +21,10 @@ interface DuplicateFinderDialogProps {
 
 export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicatesDeleted }: DuplicateFinderDialogProps) {
   const { toast } = useToast();
-  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [selectedForDeletion, setSelectedForDeletion] = useState<Set<string>>(new Set());
   const [deletionMap, setDeletionMap] = useState<Map<string, string>>(new Map()); // deleteLink -> keeperLink
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [detectionError, setDetectionError] = useState<string | null>(null);
-  const [isDetecting, setIsDetecting] = useState(false);
 
   // Fetch status hierarchy
   const { data: statusHierarchy } = useQuery<StatusHierarchy>({
@@ -35,49 +32,41 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
     enabled: open,
   });
 
-  // Detect duplicates when dialog opens or stores change
+  // Detect duplicates using useMemo (synchronous, instant results like Franchise Finder)
+  // Returns object with groups and hasError flag - pure function, no side effects
+  const detectionResult = useMemo(() => {
+    if (!open || stores.length === 0) {
+      return { groups: [], hasError: false };
+    }
+
+    try {
+      const groups = detectDuplicates(stores, 0.75);
+      return { groups, hasError: false };
+    } catch (error: any) {
+      console.error('[DuplicateFinder] Error detecting duplicates:', error);
+      return { groups: [], hasError: true };
+    }
+  }, [open, stores]);
+
+  const duplicateGroups = detectionResult.groups;
+
+  // Show error toast when detection fails (side effect in useEffect, not render)
+  // Depends on detectionResult object so toast only fires once per detection attempt
   useEffect(() => {
-    if (!open) {
-      // Clear state when dialog closes
-      setDuplicateGroups([]);
-      setDetectionError(null);
-      setIsDetecting(false);
-      return;
+    if (detectionResult.hasError) {
+      toast({
+        title: "Detection Error",
+        description: "Failed to analyze store data for duplicates. Some data may be malformed.",
+        variant: "destructive",
+      });
     }
+  }, [detectionResult, toast]);
 
-    if (stores.length === 0) {
-      setDuplicateGroups([]);
-      setDetectionError(null);
-      return;
-    }
-
-    setIsDetecting(true);
-    setDetectionError(null);
-    
-    // Defer computation to next tick to allow dialog to open smoothly
-    const timer = setTimeout(() => {
-      try {
-        const groups = detectDuplicates(stores, 0.75);
-        setDuplicateGroups(groups);
-        setSelectedForDeletion(new Set());
-        setDeletionMap(new Map());
-      } catch (error: any) {
-        console.error('[DuplicateFinder] Error detecting duplicates:', error);
-        setDetectionError(error.message || 'Failed to detect duplicates due to data format issues');
-        setDuplicateGroups([]);
-        toast({
-          title: "Detection Error",
-          description: "Failed to analyze store data for duplicates. Some data may be malformed.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsDetecting(false);
-      }
-    }, 0);
-
-    // Only cleanup if dependencies change before timer completes
-    return () => clearTimeout(timer);
-  }, [open, stores, toast]);
+  // Reset selection when duplicateGroups change or dialog closes
+  useEffect(() => {
+    setSelectedForDeletion(new Set());
+    setDeletionMap(new Map());
+  }, [duplicateGroups, open]);
 
   const handleSmartSelect = () => {
     if (!statusHierarchy) {
@@ -217,27 +206,20 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
           <DialogHeader>
             <DialogTitle>Duplicate Store Finder</DialogTitle>
             <DialogDescription>
-              {isDetecting ? (
-                'Analyzing stores for duplicates...'
-              ) : detectionError ? (
-                'Error detecting duplicates'
-              ) : (
-                `Found ${duplicateGroups.length} duplicate ${duplicateGroups.length === 1 ? 'group' : 'groups'} with ${totalDuplicates} total stores`
-              )}
+              {detectionResult.hasError
+                ? 'Error analyzing store data'
+                : `Found ${duplicateGroups.length} duplicate ${duplicateGroups.length === 1 ? 'group' : 'groups'} with ${totalDuplicates} total stores`
+              }
             </DialogDescription>
           </DialogHeader>
 
-          {isDetecting ? (
-            <div className="py-12 text-center">
-              <Loader2 className="mx-auto h-12 w-12 mb-4 animate-spin text-muted-foreground" />
-              <p className="text-lg font-medium">Analyzing Store Data</p>
-              <p className="text-sm mt-2 text-muted-foreground">Please wait...</p>
-            </div>
-          ) : detectionError ? (
+          {detectionResult.hasError ? (
             <div className="py-12 text-center text-destructive">
               <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
               <p className="text-lg font-medium">Detection Failed</p>
-              <p className="text-sm mt-2 text-muted-foreground">{detectionError}</p>
+              <p className="text-sm mt-2 text-muted-foreground">
+                Failed to analyze store data for duplicates. Some data may be malformed.
+              </p>
               <Button
                 variant="outline"
                 onClick={() => onOpenChange(false)}
