@@ -208,10 +208,15 @@ function extractHouseNumber(address: string): string {
  * Phase 2: Group by house number, then validate name + street similarity
  * 
  * Simple, pragmatic, and fast - handles 95%+ of real-world duplicates
+ * 
+ * @param stores - Array of store records to check for duplicates
+ * @param similarityThreshold - Threshold for name similarity (default 0.75)
+ * @param nonDuplicatePairs - Optional array of pairs that have been marked as not duplicates
  */
 export function detectDuplicates(
   stores: StoreRecord[],
-  similarityThreshold: number = 0.75
+  similarityThreshold: number = 0.75,
+  nonDuplicatePairs?: Array<{link1: string, link2: string}>
 ): DuplicateGroup[] {
   console.log(`[DuplicateFinder] Starting duplicate detection on ${stores.length} stores`);
   const duplicateGroups: DuplicateGroup[] = [];
@@ -219,6 +224,22 @@ export function detectDuplicates(
   
   const makePairKey = (link1: string, link2: string): string => {
     return [link1, link2].sort().join('||');
+  };
+  
+  // Build set of non-duplicate pairs for quick lookup (normalized order)
+  const nonDuplicateSet = new Set<string>();
+  if (nonDuplicatePairs && nonDuplicatePairs.length > 0) {
+    nonDuplicatePairs.forEach(pair => {
+      const key = makePairKey(pair.link1, pair.link2);
+      nonDuplicateSet.add(key);
+    });
+    console.log(`[DuplicateFinder] Loaded ${nonDuplicateSet.size} non-duplicate pairs to exclude`);
+  }
+  
+  // Helper to check if a pair has been marked as non-duplicate
+  const isNonDuplicatePair = (link1: string, link2: string): boolean => {
+    const key = makePairKey(link1, link2);
+    return nonDuplicateSet.has(key);
   };
   
   // Phase 1: Exact normalized address matches
@@ -235,14 +256,31 @@ export function detectDuplicates(
   
   exactAddressGroups.forEach((group) => {
     if (group.length > 1) {
-      duplicateGroups.push({
-        stores: group,
-        reason: `Exact address: ${group[0].Address || ''}`,
-        similarity: 1.0,
-      });
-      for (let i = 0; i < group.length; i++) {
-        for (let j = i + 1; j < group.length; j++) {
-          processedPairs.add(makePairKey(group[i].Link, group[j].Link));
+      // Filter out any stores from the group where they've been marked as non-duplicates with each other
+      const filteredGroup: StoreRecord[] = [];
+      
+      for (const store of group) {
+        // Check if this store has been marked as non-duplicate with any already-added store
+        const hasNonDuplicateMark = filteredGroup.some(existing => 
+          isNonDuplicatePair(store.Link, existing.Link)
+        );
+        
+        if (!hasNonDuplicateMark) {
+          filteredGroup.push(store);
+        }
+      }
+      
+      // Only add group if we still have 2+ stores after filtering
+      if (filteredGroup.length > 1) {
+        duplicateGroups.push({
+          stores: filteredGroup,
+          reason: `Exact address: ${filteredGroup[0].Address || ''}`,
+          similarity: 1.0,
+        });
+        for (let i = 0; i < filteredGroup.length; i++) {
+          for (let j = i + 1; j < filteredGroup.length; j++) {
+            processedPairs.add(makePairKey(filteredGroup[i].Link, filteredGroup[j].Link));
+          }
         }
       }
     }
@@ -273,6 +311,12 @@ export function detectDuplicates(
         
         const pairKey = makePairKey(store1.Link, store2.Link);
         if (processedPairs.has(pairKey)) continue;
+        
+        // Skip if this pair has been marked as non-duplicate
+        if (isNonDuplicatePair(store1.Link, store2.Link)) {
+          console.log(`[DuplicateFinder] Skipping pair marked as non-duplicate: ${store1.Link} <-> ${store2.Link}`);
+          continue;
+        }
         
         // Check name similarity
         const name1 = normalizeStoreName(store1.Name || '');

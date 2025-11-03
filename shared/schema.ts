@@ -1149,6 +1149,18 @@ export const openaiAssistantFiles = pgTable("openai_assistant_files", {
   index("idx_assistant_files_assistant").on(table.assistantId),
 ]);
 
+// Non-Duplicates tracking table
+export const nonDuplicates = pgTable("non_duplicates", {
+  id: integer("id").primaryKey(),
+  link1: text("link1").notNull(),
+  link2: text("link2").notNull(),
+  markedByUserId: varchar("marked_by_user_id").references(() => users.id, { onDelete: 'set null' }),
+  markedAt: timestamp("marked_at").defaultNow(),
+}, (table) => [
+  index("idx_non_duplicates_links").on(table.link1, table.link2),
+  index("idx_non_duplicates_links_reverse").on(table.link2, table.link1),
+]);
+
 export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
@@ -1347,3 +1359,5 @@ export type KbChangeProposal = typeof kbChangeProposals.$inferSelect;
 export type InsertKbChangeProposal = z.infer<typeof insertKbChangeProposalSchema>;
 export type AnalysisJob = typeof analysisJobs.$inferSelect;
 export type InsertAnalysisJob = z.infer<typeof insertAnalysisJobSchema>;
+export type NonDuplicate = typeof nonDuplicates.$inferSelect;
+export type InsertNonDuplicate = Omit<typeof nonDuplicates.$inferInsert, 'id' | 'markedAt'>;

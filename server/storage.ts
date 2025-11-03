@@ -48,6 +48,7 @@ import {
   analysisJobs,
   openaiAssistants,
   openaiAssistantFiles,
+  nonDuplicates,
   type User,
   type UpsertUser,
   type Ticket,
@@ -137,6 +138,8 @@ import {
   type InsertKbChangeProposal,
   type AnalysisJob,
   type InsertAnalysisJob,
+  type NonDuplicate,
+  type InsertNonDuplicate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, isNull } from "drizzle-orm";
@@ -450,6 +453,12 @@ export interface IStorage {
   createAssistantFile(file: any): Promise<any>;
   // Scoped delete method enforces assistant ownership at storage layer
   deleteAssistantFileByAssistantId(fileId: string, assistantId: string): Promise<boolean>;
+  
+  // Non-duplicate operations
+  markAsNotDuplicate(link1: string, link2: string, userId: string): Promise<NonDuplicate>;
+  isMarkedAsNotDuplicate(link1: string, link2: string): Promise<boolean>;
+  getAllNonDuplicates(): Promise<NonDuplicate[]>;
+  removeNonDuplicateMark(link1: string, link2: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2647,6 +2656,72 @@ export class DatabaseStorage implements IStorage {
       )
       .returning();
     return result.length > 0;
+  }
+  
+  // Non-duplicate operations
+  async markAsNotDuplicate(link1: string, link2: string, userId: string): Promise<NonDuplicate> {
+    // Normalize order: always store smaller link first
+    const [first, second] = link1 < link2 ? [link1, link2] : [link2, link1];
+    
+    const [result] = await db
+      .insert(nonDuplicates)
+      .values({
+        link1: first,
+        link2: second,
+        markedByUserId: userId,
+      })
+      .onConflictDoNothing()
+      .returning();
+    
+    if (!result) {
+      // Already exists, fetch it
+      const [existing] = await db
+        .select()
+        .from(nonDuplicates)
+        .where(
+          and(
+            eq(nonDuplicates.link1, first),
+            eq(nonDuplicates.link2, second)
+          )
+        );
+      return existing;
+    }
+    
+    return result;
+  }
+
+  async isMarkedAsNotDuplicate(link1: string, link2: string): Promise<boolean> {
+    const [first, second] = link1 < link2 ? [link1, link2] : [link2, link1];
+    
+    const [result] = await db
+      .select()
+      .from(nonDuplicates)
+      .where(
+        and(
+          eq(nonDuplicates.link1, first),
+          eq(nonDuplicates.link2, second)
+        )
+      )
+      .limit(1);
+    
+    return !!result;
+  }
+
+  async getAllNonDuplicates(): Promise<NonDuplicate[]> {
+    return await db.select().from(nonDuplicates);
+  }
+
+  async removeNonDuplicateMark(link1: string, link2: string): Promise<void> {
+    const [first, second] = link1 < link2 ? [link1, link2] : [link2, link1];
+    
+    await db
+      .delete(nonDuplicates)
+      .where(
+        and(
+          eq(nonDuplicates.link1, first),
+          eq(nonDuplicates.link2, second)
+        )
+      );
   }
 }
 
