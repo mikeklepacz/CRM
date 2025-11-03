@@ -100,12 +100,19 @@ function normalizePhone(phone: string): string {
 
 /**
  * Normalize address for comparison
+ * Handles directional abbreviations and street type abbreviations
  */
 function normalizeAddress(address: string): string {
   if (!address) return '';
   
   return address
     .toLowerCase()
+    // Normalize directional abbreviations first
+    .replace(/\bwest\b|\bw\b/g, 'west')
+    .replace(/\beast\b|\be\b/g, 'east')
+    .replace(/\bnorth\b|\bn\b/g, 'north')
+    .replace(/\bsouth\b|\bs\b/g, 'south')
+    // Normalize street types
     .replace(/\bstreet\b/g, 'st')
     .replace(/\bavenue\b/g, 'ave')
     .replace(/\broad\b/g, 'rd')
@@ -113,6 +120,7 @@ function normalizeAddress(address: string): string {
     .replace(/\bboulevard\b/g, 'blvd')
     .replace(/\blane\b/g, 'ln')
     .replace(/\bcourt\b/g, 'ct')
+    // Remove all non-alphanumeric
     .replace(/[^a-z0-9]/g, '')
     .trim();
 }
@@ -152,6 +160,7 @@ export function detectDuplicates(
   stores: StoreRecord[],
   similarityThreshold: number = 0.75
 ): DuplicateGroup[] {
+  console.log(`[DuplicateFinder] Starting duplicate detection on ${stores.length} stores`);
   const duplicateGroups: DuplicateGroup[] = [];
   const addedPairs = new Set<string>(); // Track unique pairs to avoid duplicate groups
   
@@ -194,7 +203,7 @@ export function detectDuplicates(
   const addressGroups = new Map<string, StoreRecord[]>();
   stores.forEach(store => {
     const address = normalizeAddress(store.Address || '');
-    if (address && address.length >= 10) {
+    if (address && address.length >= 5) { // Lowered from 10 to 5
       if (!addressGroups.has(address)) {
         addressGroups.set(address, []);
       }
@@ -233,7 +242,8 @@ export function detectDuplicates(
     }
   });
   
-  // Check for name similarity across ALL stores (not just remaining)
+  // Check for name similarity with address/phone confirmation
+  // Simple word-based matching: names share 75%+ words AND (shared address word OR same phone)
   for (let i = 0; i < stores.length; i++) {
     for (let j = i + 1; j < stores.length; j++) {
       const store1 = stores[i];
@@ -248,13 +258,51 @@ export function detectDuplicates(
       
       if (!name1 || !name2) continue;
       
-      const similarity = jaroWinklerSimilarity(name1, name2);
+      // Split names into words
+      const words1 = name1.split(/\s+/).filter(w => w.length > 2); // Ignore short words
+      const words2 = name2.split(/\s+/).filter(w => w.length > 2);
       
-      if (similarity >= similarityThreshold) {
+      if (words1.length === 0 || words2.length === 0) continue;
+      
+      // Count how many words are shared
+      const sharedWords = words1.filter(w => words2.includes(w));
+      const minWordCount = Math.min(words1.length, words2.length);
+      const wordSimilarity = minWordCount > 0 ? sharedWords.length / minWordCount : 0;
+      
+      // Names must share at least 75% of words (based on shorter name)
+      if (wordSimilarity < 0.75) continue;
+      
+      // Now check if they share address words OR same phone
+      let hasConfirmation = false;
+      let confirmationType = '';
+      
+      // Check phone
+      const phone1 = normalizePhone(store1.Phone || '');
+      const phone2 = normalizePhone(store2.Phone || '');
+      if (phone1 && phone2 && phone1 === phone2) {
+        hasConfirmation = true;
+        confirmationType = 'same phone';
+      }
+      
+      // Check address words
+      if (!hasConfirmation) {
+        const addr1 = (store1.Address || '').toLowerCase();
+        const addr2 = (store2.Address || '').toLowerCase();
+        const addrWords1 = addr1.split(/\s+/).filter(w => w.length > 2);
+        const addrWords2 = addr2.split(/\s+/).filter(w => w.length > 2);
+        const sharedAddrWords = addrWords1.filter(w => addrWords2.includes(w));
+        if (sharedAddrWords.length > 0) {
+          hasConfirmation = true;
+          confirmationType = `shared address words: ${sharedAddrWords.join(', ')}`;
+        }
+      }
+      
+      // Only add as duplicate if we have confirmation
+      if (hasConfirmation) {
         duplicateGroups.push({
           stores: [store1, store2],
-          reason: `Similar names (${Math.round(similarity * 100)}% match)`,
-          similarity,
+          reason: `Similar names (${Math.round(wordSimilarity * 100)}% word match) + ${confirmationType}`,
+          similarity: wordSimilarity,
         });
         addedPairs.add(pairKey);
       }
@@ -262,6 +310,10 @@ export function detectDuplicates(
   }
   
   // Sort by number of stores in each group (descending)
+  console.log(`[DuplicateFinder] Found ${duplicateGroups.length} duplicate groups`);
+  duplicateGroups.forEach((group, idx) => {
+    console.log(`  Group ${idx + 1}: ${group.stores.length} stores - ${group.reason}`);
+  });
   return duplicateGroups.sort((a, b) => b.stores.length - a.stores.length);
 }
 
