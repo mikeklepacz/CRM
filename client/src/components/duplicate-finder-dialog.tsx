@@ -5,8 +5,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Trash2, Sparkles, AlertTriangle, CheckCircle2, ExternalLink, Ban } from "lucide-react";
+import { Trash2, Sparkles, AlertTriangle, CheckCircle2, ExternalLink, Ban, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { detectDuplicates, smartSelectDuplicates, selectKeeper, countNonEmptyFields, type DuplicateGroup, type StoreRecord, type StatusHierarchy } from "@shared/duplicateUtils";
@@ -46,6 +48,8 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
   const [isDeleting, setIsDeleting] = useState(false);
   const [markedAsNotDuplicate, setMarkedAsNotDuplicate] = useState<Set<string>>(new Set()); // stores marked as not duplicates
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedStates, setSelectedStates] = useState<string[]>([]);
+  const [showCanadaOnly, setShowCanadaOnly] = useState(false);
 
   // Fetch status hierarchy
   const { data: statusHierarchy } = useQuery<StatusHierarchy>({
@@ -61,6 +65,59 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
 
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [isDetecting, setIsDetecting] = useState(false);
+
+  // Helper to check if a state is a Canadian province
+  const isCanadianProvince = (state: string) => {
+    const canadianProvinces = [
+      'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
+      'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador',
+      'Nova Scotia', 'Northwest Territories', 'Nunavut', 'Ontario', 'Prince Edward Island',
+      'Quebec', 'Saskatchewan', 'Yukon'
+    ];
+    return canadianProvinces.includes(state);
+  };
+
+  // Extract all unique states from duplicate groups
+  const allStates = useMemo(() => {
+    const states = new Set<string>();
+    duplicateGroups.forEach(group => {
+      group.stores.forEach(store => {
+        if (store.State) {
+          states.add(store.State);
+        }
+      });
+    });
+    return Array.from(states).sort();
+  }, [duplicateGroups]);
+
+  // Count stores by state
+  const stateCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    duplicateGroups.forEach(group => {
+      group.stores.forEach(store => {
+        if (store.State) {
+          counts[store.State] = (counts[store.State] || 0) + 1;
+        }
+      });
+    });
+    return counts;
+  }, [duplicateGroups]);
+
+  // Filter duplicate groups by selected states
+  const filteredDuplicateGroups = useMemo(() => {
+    if (selectedStates.length === 0) {
+      return duplicateGroups;
+    }
+    return duplicateGroups.filter(group =>
+      group.stores.some(store => store.State && selectedStates.includes(store.State))
+    );
+  }, [duplicateGroups, selectedStates]);
+
+  const handleStateChange = (state: string, isChecked: boolean) => {
+    setSelectedStates(prev =>
+      isChecked ? [...prev, state] : prev.filter(s => s !== state)
+    );
+  };
 
   // Detect duplicates when dialog opens - deferred to avoid blocking UI
   useEffect(() => {
@@ -306,7 +363,9 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
             <DialogDescription>
               {isDetecting
                 ? 'Analyzing stores...'
-                : `Found ${duplicateGroups.length} duplicate ${duplicateGroups.length === 1 ? 'group' : 'groups'} with ${totalDuplicates} total stores`
+                : selectedStates.length > 0
+                  ? `Showing ${filteredDuplicateGroups.length} of ${duplicateGroups.length} duplicate groups (filtered by state)`
+                  : `Found ${duplicateGroups.length} duplicate ${duplicateGroups.length === 1 ? 'group' : 'groups'} with ${totalDuplicates} total stores`
               }
             </DialogDescription>
           </DialogHeader>
@@ -335,9 +394,88 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                     <Sparkles className="mr-2 h-4 w-4" />
                     Smart Select
                   </Button>
-                  <span className="text-sm text-muted-foreground">
-                    (Selects entries with less information)
-                  </span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" data-testid="button-state-filter">
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        {selectedStates.length > 0
+                          ? `${selectedStates.length} state(s)`
+                          : "Filter by State"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-80">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium">Filter by State</h4>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedStates(allStates)}
+                              data-testid="button-select-all-states"
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedStates([])}
+                              data-testid="button-clear-all-states"
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Canada Checkbox */}
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                          <Checkbox
+                            id="canada-toggle"
+                            checked={showCanadaOnly}
+                            onCheckedChange={(checked) => {
+                              setShowCanadaOnly(!!checked);
+                            }}
+                            data-testid="checkbox-canada-toggle"
+                          />
+                          <Label
+                            htmlFor="canada-toggle"
+                            className="text-sm cursor-pointer flex-1 font-medium"
+                          >
+                            Canada
+                          </Label>
+                          <span className="text-xs text-muted-foreground">
+                            ({allStates.filter(isCanadianProvince).reduce((sum, state) => sum + (stateCounts[state] || 0), 0)} stores)
+                          </span>
+                        </div>
+
+                        <ScrollArea className="h-64">
+                          <div className="space-y-2">
+                            {allStates
+                              .filter(state => showCanadaOnly ? isCanadianProvince(state) : !isCanadianProvince(state))
+                              .map((state) => (
+                              <div key={state} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`state-${state}`}
+                                  checked={selectedStates.includes(state)}
+                                  onCheckedChange={(checked) => handleStateChange(state, checked as boolean)}
+                                  data-testid={`checkbox-state-${state}`}
+                                />
+                                <Label
+                                  htmlFor={`state-${state}`}
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  {state}
+                                </Label>
+                                <span className="text-xs text-muted-foreground">
+                                  ({stateCounts[state] || 0})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="flex items-center gap-2">
                   {markedAsNotDuplicate.size > 0 && (
@@ -360,7 +498,7 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
 
               <ScrollArea className="h-[500px] pr-4">
                 <div className="space-y-6">
-                  {duplicateGroups.map((group, groupIndex) => {
+                  {filteredDuplicateGroups.map((group, groupIndex) => {
                     return (
                       <div key={groupIndex} className="border rounded-lg p-4 space-y-3" data-testid={`duplicate-group-${groupIndex}`}>
                         <div className="flex items-center gap-2">
