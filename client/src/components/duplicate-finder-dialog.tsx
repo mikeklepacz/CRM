@@ -19,15 +19,21 @@ interface DuplicateFinderDialogProps {
   onDuplicatesDeleted?: () => void;
 }
 
-// Helper to extract city/state from address
-function parseCityState(address: string): string {
-  if (!address) return '';
-  const parts = address.split(',').map(p => p.trim());
-  if (parts.length >= 2) {
-    const city = parts[parts.length - 2];
-    const stateZip = parts[parts.length - 1];
-    const state = stateZip.split(' ')[0];
-    return `${city}, ${state}`;
+// Helper to get city/state from store data
+function getCityState(store: StoreRecord): string {
+  // First try to use City and State fields directly
+  if (store.City && store.State) {
+    return `${store.City}, ${store.State}`;
+  }
+  // Fallback: try to parse from address if it's comma-separated
+  if (store.Address) {
+    const parts = store.Address.split(',').map(p => p.trim());
+    if (parts.length >= 2) {
+      const city = parts[parts.length - 2];
+      const stateZip = parts[parts.length - 1];
+      const state = stateZip.split(' ')[0];
+      return `${city}, ${state}`;
+    }
   }
   return '';
 }
@@ -192,8 +198,8 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
       setDuplicateGroups(newGroups);
       
       toast({
-        title: "Marked as Not Duplicate",
-        description: "This group has been removed from the list",
+        title: "Group Excluded",
+        description: `${group.stores.length} stores removed from duplicate detection. They won't appear together in future scans.`,
       });
     } catch (error: any) {
       console.error('[DuplicateFinder] Error marking as not duplicate:', error);
@@ -305,9 +311,44 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                     (Selects entries with less information)
                   </span>
                 </div>
-                <Badge variant="secondary" data-testid="badge-selection-count">
-                  {selectedForDeletion.size} selected
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {nonDuplicatePairs && nonDuplicatePairs.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          for (const pair of nonDuplicatePairs) {
+                            await apiRequest('DELETE', '/api/non-duplicates', { link1: pair.link1, link2: pair.link2 });
+                          }
+                          await queryClient.invalidateQueries({ queryKey: ['/api/non-duplicates'] });
+                          const updatedPairs = await queryClient.fetchQuery<Array<{link1: string, link2: string}>>({
+                            queryKey: ['/api/non-duplicates'],
+                          });
+                          const newGroups = detectDuplicates(stores, 0.75, updatedPairs);
+                          setDuplicateGroups(newGroups);
+                          setMarkedAsNotDuplicate(new Set());
+                          toast({
+                            title: "Exclusions Cleared",
+                            description: `Removed ${nonDuplicatePairs.length} exclusions`,
+                          });
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to clear exclusions",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      data-testid="button-clear-exclusions"
+                    >
+                      Clear {nonDuplicatePairs.length} Exclusion{nonDuplicatePairs.length !== 1 ? 's' : ''}
+                    </Button>
+                  )}
+                  <Badge variant="secondary" data-testid="badge-selection-count">
+                    {selectedForDeletion.size} selected
+                  </Badge>
+                </div>
               </div>
 
               <ScrollArea className="h-[500px] pr-4">
@@ -333,7 +374,7 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                             data-testid={`button-not-duplicate-${groupIndex}`}
                           >
                             <Ban className="mr-2 h-3 w-3" />
-                            {isMarkedNotDup ? 'Marked' : 'Not a Duplicate'}
+                            {isMarkedNotDup ? 'Group Excluded' : 'Exclude This Group'}
                           </Button>
                         </div>
 
@@ -345,7 +386,7 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                             const isSelected = selectedForDeletion.has(store.Link);
                             const isKeeper = statusHierarchy && selectKeeper(group.stores, statusHierarchy).Link === store.Link;
                             const isClaimed = store.Agent && store.Agent.trim() !== '';
-                            const cityState = parseCityState(store.Address);
+                            const cityState = getCityState(store);
                             
                             return (
                               <div
