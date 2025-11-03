@@ -44,7 +44,8 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
   const [deletionMap, setDeletionMap] = useState<Map<string, string>>(new Map()); // deleteLink -> keeperLink
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [markedAsNotDuplicate, setMarkedAsNotDuplicate] = useState<Set<string>>(new Set());
+  const [markedAsNotDuplicate, setMarkedAsNotDuplicate] = useState<Set<string>>(new Set()); // stores marked as not duplicates
+  const [isSaving, setIsSaving] = useState(false);
 
   // Fetch status hierarchy
   const { data: statusHierarchy } = useQuery<StatusHierarchy>({
@@ -162,52 +163,79 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
     }
   };
 
-  const handleMarkAsNotDuplicate = async (groupIndex: number, event?: React.MouseEvent) => {
-    if (event) {
-      event.stopPropagation();
+  const toggleNotDuplicate = (link: string) => {
+    const newMarked = new Set(markedAsNotDuplicate);
+    if (newMarked.has(link)) {
+      newMarked.delete(link);
+    } else {
+      newMarked.add(link);
+    }
+    setMarkedAsNotDuplicate(newMarked);
+  };
+
+  const handleSaveAllNotDuplicates = async () => {
+    if (markedAsNotDuplicate.size === 0) {
+      toast({
+        title: "No Markings",
+        description: "Please mark at least one store as 'Not a Duplicate'",
+        variant: "destructive",
+      });
+      return;
     }
 
+    setIsSaving(true);
+
     try {
-      const group = duplicateGroups[groupIndex];
-      const storeLinks = group.stores.map(s => s.Link);
+      // For each marked store, create pairs with all other stores in its group
+      const pairsToCreate: Array<{link1: string, link2: string}> = [];
       
-      // Mark all pairs in this group as not duplicates
-      for (let i = 0; i < storeLinks.length; i++) {
-        for (let j = i + 1; j < storeLinks.length; j++) {
-          await apiRequest('POST', '/api/non-duplicates', {
-            link1: storeLinks[i],
-            link2: storeLinks[j],
-          });
+      for (const group of duplicateGroups) {
+        const groupLinks = group.stores.map(s => s.Link);
+        const markedInGroup = groupLinks.filter(link => markedAsNotDuplicate.has(link));
+        
+        // For each marked store in this group, pair it with all other stores in the group
+        for (const markedLink of markedInGroup) {
+          for (const otherLink of groupLinks) {
+            if (markedLink !== otherLink) {
+              // Add pair (ensure no duplicates)
+              const pair = [markedLink, otherLink].sort();
+              if (!pairsToCreate.some(p => p.link1 === pair[0] && p.link2 === pair[1])) {
+                pairsToCreate.push({ link1: pair[0], link2: pair[1] });
+              }
+            }
+          }
         }
       }
-      
-      // Create a composite key for this group
-      const groupKey = storeLinks.sort().join('|');
-      setMarkedAsNotDuplicate(prev => new Set(prev).add(groupKey));
-      
-      // Invalidate the cache and fetch fresh non-duplicate pairs
+
+      // Batch create all pairs
+      for (const pair of pairsToCreate) {
+        await apiRequest('POST', '/api/non-duplicates', pair);
+      }
+
+      // Invalidate cache and refetch
       await queryClient.invalidateQueries({ queryKey: ['/api/non-duplicates'] });
-      
-      // Get the updated non-duplicate pairs
       const updatedPairs = await queryClient.fetchQuery<Array<{link1: string, link2: string}>>({
         queryKey: ['/api/non-duplicates'],
       });
-      
-      // Recompute duplicate groups with the updated pairs
+
+      // Recompute groups
       const newGroups = detectDuplicates(stores, 0.75, updatedPairs);
       setDuplicateGroups(newGroups);
-      
+      setMarkedAsNotDuplicate(new Set());
+
       toast({
-        title: "Group Excluded",
-        description: `${group.stores.length} stores removed from duplicate detection. They won't appear together in future scans.`,
+        title: "Saved",
+        description: `Marked ${markedAsNotDuplicate.size} stores as not duplicates. They won't appear in these groups again.`,
       });
     } catch (error: any) {
-      console.error('[DuplicateFinder] Error marking as not duplicate:', error);
+      console.error('[DuplicateFinder] Error saving not duplicates:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to mark as not duplicate",
+        description: error.message || "Failed to save markings",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -312,41 +340,20 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {nonDuplicatePairs && nonDuplicatePairs.length > 0 && (
+                  {markedAsNotDuplicate.size > 0 && (
                     <Button
-                      variant="ghost"
+                      variant="default"
                       size="sm"
-                      onClick={async () => {
-                        try {
-                          for (const pair of nonDuplicatePairs) {
-                            await apiRequest('DELETE', '/api/non-duplicates', { link1: pair.link1, link2: pair.link2 });
-                          }
-                          await queryClient.invalidateQueries({ queryKey: ['/api/non-duplicates'] });
-                          const updatedPairs = await queryClient.fetchQuery<Array<{link1: string, link2: string}>>({
-                            queryKey: ['/api/non-duplicates'],
-                          });
-                          const newGroups = detectDuplicates(stores, 0.75, updatedPairs);
-                          setDuplicateGroups(newGroups);
-                          setMarkedAsNotDuplicate(new Set());
-                          toast({
-                            title: "Exclusions Cleared",
-                            description: `Removed ${nonDuplicatePairs.length} exclusions`,
-                          });
-                        } catch (error: any) {
-                          toast({
-                            title: "Error",
-                            description: error.message || "Failed to clear exclusions",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
-                      data-testid="button-clear-exclusions"
+                      onClick={handleSaveAllNotDuplicates}
+                      disabled={isSaving}
+                      data-testid="button-save-all-not-duplicates"
                     >
-                      Clear {nonDuplicatePairs.length} Exclusion{nonDuplicatePairs.length !== 1 ? 's' : ''}
+                      <Ban className="mr-2 h-3 w-3" />
+                      {isSaving ? 'Saving...' : `Save All (${markedAsNotDuplicate.size})`}
                     </Button>
                   )}
                   <Badge variant="secondary" data-testid="badge-selection-count">
-                    {selectedForDeletion.size} selected
+                    {selectedForDeletion.size} selected for deletion
                   </Badge>
                 </div>
               </div>
@@ -354,28 +361,13 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
               <ScrollArea className="h-[500px] pr-4">
                 <div className="space-y-6">
                   {duplicateGroups.map((group, groupIndex) => {
-                    const groupKey = group.stores.map(s => s.Link).sort().join('|');
-                    const isMarkedNotDup = markedAsNotDuplicate.has(groupKey);
-                    
                     return (
-                      <div key={groupIndex} className={`border rounded-lg p-4 space-y-3 ${isMarkedNotDup ? 'opacity-50' : ''}`} data-testid={`duplicate-group-${groupIndex}`}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" data-testid={`badge-group-${groupIndex}-count`}>
-                              {group.stores.length} duplicates
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">{group.reason}</span>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => handleMarkAsNotDuplicate(groupIndex, e)}
-                            disabled={isMarkedNotDup}
-                            data-testid={`button-not-duplicate-${groupIndex}`}
-                          >
-                            <Ban className="mr-2 h-3 w-3" />
-                            {isMarkedNotDup ? 'Group Excluded' : 'Exclude This Group'}
-                          </Button>
+                      <div key={groupIndex} className="border rounded-lg p-4 space-y-3" data-testid={`duplicate-group-${groupIndex}`}>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" data-testid={`badge-group-${groupIndex}-count`}>
+                            {group.stores.length} duplicates
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">{group.reason}</span>
                         </div>
 
                         <Separator />
@@ -425,9 +417,21 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                                         </Badge>
                                       )}
                                     </div>
-                                    <Badge variant="outline" data-testid={`badge-field-count-${groupIndex}-${storeIndex}`}>
-                                      {fieldCount} fields
-                                    </Badge>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline" data-testid={`badge-field-count-${groupIndex}-${storeIndex}`}>
+                                        {fieldCount} fields
+                                      </Badge>
+                                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                        <Checkbox
+                                          checked={markedAsNotDuplicate.has(store.Link)}
+                                          onCheckedChange={() => toggleNotDuplicate(store.Link)}
+                                          data-testid={`checkbox-not-duplicate-${groupIndex}-${storeIndex}`}
+                                        />
+                                        <label className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => toggleNotDuplicate(store.Link)}>
+                                          Not a Duplicate
+                                        </label>
+                                      </div>
+                                    </div>
                                   </div>
                                   <div className="text-sm text-muted-foreground space-y-1">
                                     {store.Link && (
