@@ -32,35 +32,38 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
     enabled: open,
   });
 
-  // Detect duplicates using useMemo (synchronous, instant results like Franchise Finder)
-  // Returns object with groups and hasError flag - pure function, no side effects
-  const detectionResult = useMemo(() => {
-    if (!open || stores.length === 0) {
-      return { groups: [], hasError: false };
-    }
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
+  const [isDetecting, setIsDetecting] = useState(false);
 
-    try {
-      const groups = detectDuplicates(stores, 0.75);
-      return { groups, hasError: false };
-    } catch (error: any) {
-      console.error('[DuplicateFinder] Error detecting duplicates:', error);
-      return { groups: [], hasError: true };
-    }
-  }, [open, stores]);
-
-  const duplicateGroups = detectionResult.groups;
-
-  // Show error toast when detection fails (side effect in useEffect, not render)
-  // Depends on detectionResult object so toast only fires once per detection attempt
+  // Detect duplicates when dialog opens - deferred to avoid blocking UI
   useEffect(() => {
-    if (detectionResult.hasError) {
-      toast({
-        title: "Detection Error",
-        description: "Failed to analyze store data for duplicates. Some data may be malformed.",
-        variant: "destructive",
-      });
+    if (!open || stores.length === 0) {
+      setDuplicateGroups([]);
+      return;
     }
-  }, [detectionResult, toast]);
+
+    setIsDetecting(true);
+
+    // Defer detection to allow dialog to open smoothly
+    const timeoutId = setTimeout(() => {
+      try {
+        const groups = detectDuplicates(stores, 0.75);
+        setDuplicateGroups(groups);
+      } catch (error: any) {
+        console.error('[DuplicateFinder] Error detecting duplicates:', error);
+        toast({
+          title: "Detection Error",
+          description: "Failed to analyze store data for duplicates. Some data may be malformed.",
+          variant: "destructive",
+        });
+        setDuplicateGroups([]);
+      } finally {
+        setIsDetecting(false);
+      }
+    }, 4);
+
+    return () => clearTimeout(timeoutId);
+  }, [open, stores, toast]);
 
   // Reset selection when duplicateGroups change or dialog closes
   useEffect(() => {
