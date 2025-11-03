@@ -37,10 +37,25 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
 
   // Detect duplicates when dialog opens or stores change
   useEffect(() => {
-    if (open && stores.length > 0) {
-      setIsDetecting(true);
+    if (!open) {
+      // Clear state when dialog closes
+      setDuplicateGroups([]);
       setDetectionError(null);
-      
+      setIsDetecting(false);
+      return;
+    }
+
+    if (stores.length === 0) {
+      setDuplicateGroups([]);
+      setDetectionError(null);
+      return;
+    }
+
+    setIsDetecting(true);
+    setDetectionError(null);
+    
+    // Defer computation to next tick to allow dialog to open smoothly
+    const timer = setTimeout(() => {
       try {
         const groups = detectDuplicates(stores, 0.75);
         setDuplicateGroups(groups);
@@ -58,10 +73,10 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
       } finally {
         setIsDetecting(false);
       }
-    } else if (open && stores.length === 0) {
-      setDuplicateGroups([]);
-      setDetectionError(null);
-    }
+    }, 0);
+
+    // Only cleanup if dependencies change before timer completes
+    return () => clearTimeout(timer);
   }, [open, stores, toast]);
 
   const handleSmartSelect = () => {
