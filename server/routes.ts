@@ -2450,6 +2450,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let errorCount = 0;
       const errors: string[] = [];
 
+      // Get all configured agents to validate against
+      const configuredAgents = await storage.getAllElevenLabsAgents();
+      const validAgentIds = new Set(configuredAgents.map(a => a.agentId));
+      console.log(`[Sync] Configured agents:`, Array.from(validAgentIds));
+
       // Fetch all conversations from ElevenLabs
       const listResponse = await axios.get('https://api.elevenlabs.io/v1/convai/conversations', {
         headers: {
@@ -2482,6 +2487,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           );
 
           const details = detailResponse.data;
+          
+          // Skip conversations from unknown/test agents
+          if (!details.agent_id || !validAgentIds.has(details.agent_id)) {
+            console.log(`[Sync] Skipping conversation ${conversationId} - unknown agent: ${details.agent_id || 'none'}`);
+            skippedCount++;
+            continue;
+          }
           
           // Extract metadata
           const metadata = details.metadata || {};
