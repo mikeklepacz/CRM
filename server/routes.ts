@@ -3121,8 +3121,8 @@ Ready to receive calls?`;
       const filesToSkip: Array<{ filename: string; reason: string }> = [];
       const warnings: string[] = [];
 
-      // ========== PHASE 2: TIMESTAMP-BASED CONFLICT RESOLUTION ==========
-      console.log('[KB Sync] Phase 2: Resolving conflicts with timestamp comparison...');
+      // ========== PHASE 2: CRM-WINS SYNC STRATEGY ==========
+      console.log('[KB Sync] Phase 2: CRM always wins for existing files...');
 
       // Create lookup maps
       const localByDocId = new Map(localFiles.map(f => [f.elevenlabsDocId, f]).filter(([id]) => id));
@@ -3139,52 +3139,18 @@ Ready to receive calls?`;
         if (localFile) {
           processedLocalFiles.add(localFile.id);
           
-          // File exists in both places - compare timestamps
-          const localUpdatedAt = localFile.localUpdatedAt || localFile.createdAt;
-          // Use our tracked elevenLabsUpdatedAt as remote timestamp (since ElevenLabs API doesn't provide it)
-          const remoteUpdatedAt = remoteData.modifiedAt || localFile.elevenLabsUpdatedAt;
-
-          // Handle filename changes
-          if (localByDocIdMatch && localByDocIdMatch.filename !== remoteData.name) {
-            console.log(`[KB Sync] File renamed in ElevenLabs: "${localFile.filename}" → "${remoteData.name}"`);
-            // Rename will be handled during PULL operation
-          }
-
-          if (!remoteUpdatedAt) {
-            // No remote timestamp available and never synced - treat as new file
-            console.log(`[KB Sync] No remote timestamp for "${remoteData.name}" (never synced)`);
-            
-            // If content differs, prefer local (safer default)
-            if (localFile.currentContent !== remoteData.content) {
-              console.log(`[KB Sync] Content differs, pushing local version (never synced)`);
-              filesToPush.push({ localFile, remoteDocId });
-            } else {
-              filesToSkip.push({ filename: remoteData.name, reason: 'content identical' });
-            }
+          // File exists in both places - CRM ALWAYS WINS
+          // Only check if content actually differs to avoid redundant pushes
+          if (localFile.currentContent !== remoteData.content) {
+            console.log(`[KB Sync] File "${localFile.filename}" exists locally - pushing CRM version (CRM wins)`);
+            filesToPush.push({ localFile, remoteDocId });
           } else {
-            // Compare timestamps
-            const localTime = localUpdatedAt.getTime();
-            const remoteTime = remoteUpdatedAt.getTime();
-            
-            if (localTime > remoteTime) {
-              console.log(`[KB Sync] Local newer for "${localFile.filename}": local=${localUpdatedAt.toISOString()} > remote=${remoteUpdatedAt.toISOString()} → PUSH`);
-              filesToPush.push({ localFile, remoteDocId });
-            } else if (remoteTime > localTime) {
-              console.log(`[KB Sync] Remote newer for "${remoteData.name}": remote=${remoteUpdatedAt.toISOString()} > local=${localUpdatedAt.toISOString()} → PULL`);
-              filesToPull.push({ remoteDocId, remoteName: remoteData.name });
-            } else {
-              // Timestamps equal - check content to be sure
-              if (localFile.currentContent !== remoteData.content) {
-                console.log(`[KB Sync] Timestamps equal but content differs for "${localFile.filename}" → PUSH (prefer local)`);
-                filesToPush.push({ localFile, remoteDocId });
-              } else {
-                filesToSkip.push({ filename: remoteData.name, reason: 'already in sync' });
-              }
-            }
+            console.log(`[KB Sync] File "${localFile.filename}" already in sync - skipping`);
+            filesToSkip.push({ filename: remoteData.name, reason: 'content identical' });
           }
         } else {
-          // File only exists in ElevenLabs → PULL
-          console.log(`[KB Sync] File only in ElevenLabs: "${remoteData.name}" → PULL`);
+          // File only exists in ElevenLabs (new filename we don't have) → PULL
+          console.log(`[KB Sync] New file in ElevenLabs: "${remoteData.name}" → PULL`);
           filesToPull.push({ remoteDocId, remoteName: remoteData.name });
         }
       }
