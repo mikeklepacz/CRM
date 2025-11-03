@@ -70,7 +70,13 @@ The application is built around a client dashboard unifying data from "Store Dat
             - Default threshold: 10 calls per agent
 - **Self-Evolving Knowledge Base System**: Complete KB management with version control and AI-powered improvements:
     - **KB Library Tab**: Unified interface in Call Manager with sub-tabs for Files and Proposals
-    - **ElevenLabs Integration**: Bi-directional sync with ElevenLabs conversational AI knowledge base
+    - **ElevenLabs Integration**: True bidirectional sync with timestamp-based conflict resolution ("newest wins")
+        * Compares localUpdatedAt vs ElevenLabs modified timestamps
+        * Pushes local changes to ElevenLabs when local version is newer
+        * Pulls remote changes when ElevenLabs version is newer
+        * Never auto-deletes files (logs warnings for manual review)
+        * All local edits (proposal approval, rollback, upload) stamp localUpdatedAt
+        * Three-phase pipeline: discover changes → compare timestamps → execute push/pull operations
     - **Version Control**: Full audit trail with kb_file_versions table tracking all changes
     - **Aligner Assistant**: Standalone OpenAI assistant that analyzes AI Insights and proposes KB improvements
     - **WordPress-Style Diff Review**: Side-by-side comparison UI with custom diff algorithm (no external dependencies)
