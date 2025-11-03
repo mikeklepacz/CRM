@@ -9635,15 +9635,15 @@ IMPORTANT:
       // If keeperLink is provided, merge data first
       if (keeperLink && statusHierarchy) {
         // Read Store Database to get both stores' data
-        const storeSheetId = await storage.getStoreSheetId();
-        if (!storeSheetId) {
+        const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+        if (!storeSheet) {
           return res.status(404).json({ message: 'Store Database not configured' });
         }
 
         const sheets = await googleSheets.getSystemGoogleSheets();
         const response = await sheets.spreadsheets.values.get({
-          spreadsheetId: storeSheetId,
-          range: 'Sheet1',
+          spreadsheetId: storeSheet.spreadsheetId,
+          range: `${storeSheet.sheetName}!A:ZZ`,
         });
 
         const rows = response.data.values || [];
