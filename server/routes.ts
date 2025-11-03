@@ -3141,7 +3141,8 @@ Ready to receive calls?`;
           
           // File exists in both places - compare timestamps
           const localUpdatedAt = localFile.localUpdatedAt || localFile.createdAt;
-          const remoteUpdatedAt = remoteData.modifiedAt;
+          // Use our tracked elevenLabsUpdatedAt as remote timestamp (since ElevenLabs API doesn't provide it)
+          const remoteUpdatedAt = remoteData.modifiedAt || localFile.elevenLabsUpdatedAt;
 
           // Handle filename changes
           if (localByDocIdMatch && localByDocIdMatch.filename !== remoteData.name) {
@@ -3150,12 +3151,12 @@ Ready to receive calls?`;
           }
 
           if (!remoteUpdatedAt) {
-            // No remote timestamp available - use current time as remote timestamp
-            console.log(`[KB Sync] No remote timestamp for "${remoteData.name}", using current time`);
+            // No remote timestamp available and never synced - treat as new file
+            console.log(`[KB Sync] No remote timestamp for "${remoteData.name}" (never synced)`);
             
             // If content differs, prefer local (safer default)
             if (localFile.currentContent !== remoteData.content) {
-              console.log(`[KB Sync] Content differs, pushing local version (no remote timestamp)`);
+              console.log(`[KB Sync] Content differs, pushing local version (never synced)`);
               filesToPush.push({ localFile, remoteDocId });
             } else {
               filesToSkip.push({ filename: remoteData.name, reason: 'content identical' });
