@@ -2473,6 +2473,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const conversationId = conv.conversation_id;
           
+          // Skip conversations from unknown/test agents early (before fetching details)
+          if (conv.agent_id && !validAgentIds.has(conv.agent_id)) {
+            console.log(`[Sync] Skipping conversation ${conversationId} - unknown agent: ${conv.agent_id}`);
+            skippedCount++;
+            continue;
+          }
+          
           // Check if this conversation already exists
           const existing = await storage.getCallSessionByConversationId(conversationId);
 
@@ -2488,9 +2495,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const details = detailResponse.data;
           
-          // Skip conversations from unknown/test agents
+          // Double-check agent_id from full details (in case list view didn't have it)
           if (!details.agent_id || !validAgentIds.has(details.agent_id)) {
-            console.log(`[Sync] Skipping conversation ${conversationId} - unknown agent: ${details.agent_id || 'none'}`);
+            console.log(`[Sync] Skipping conversation ${conversationId} - unknown agent in details: ${details.agent_id || 'none'}`);
             skippedCount++;
             continue;
           }
