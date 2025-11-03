@@ -9640,7 +9640,7 @@ IMPORTANT:
           return res.status(404).json({ message: 'Store Database not configured' });
         }
 
-        const sheets = await googleSheets.getSystemGoogleSheets();
+        const sheets = await googleSheets.getSystemGoogleSheetClient();
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId: storeSheet.spreadsheetId,
           range: `${storeSheet.sheetName}!A:ZZ`,
