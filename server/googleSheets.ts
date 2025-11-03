@@ -429,7 +429,7 @@ export async function mergeAndUpdateStore(
   targetLink: string,
   mergedData: Record<string, any>
 ) {
-  const sheets = await getSystemGoogleSheets();
+  const sheets = await getSystemGoogleSheetClient();
   const storeSheetId = await storage.getStoreSheetId();
   
   if (!storeSheetId) {
@@ -486,7 +486,7 @@ export async function mergeAndUpdateStore(
  * Uses the Google Sheets API to delete the entire row
  */
 export async function deleteStoreFromSheet(link: string) {
-  const sheets = await getSystemGoogleSheets();
+  const sheets = await getSystemGoogleSheetClient();
   const storeSheetId = await storage.getStoreSheetId();
   
   if (!storeSheetId) {
@@ -540,7 +540,7 @@ export async function deleteStoreFromSheet(link: string) {
  * Update all Commission Tracker rows that reference oldLink to use newLink instead
  */
 export async function updateCommissionTrackerLinks(oldLink: string, newLink: string) {
-  const sheets = await getSystemGoogleSheets();
+  const sheets = await getSystemGoogleSheetClient();
   const trackerSheetId = await storage.getCommissionTrackerSheetId();
   
   if (!trackerSheetId) {
