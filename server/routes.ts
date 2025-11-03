@@ -3030,7 +3030,7 @@ Ready to receive calls?`;
     await db.delete(kbFiles).where(eq(kbFiles.id, fileId));
   }
 
-  // Sync KB files from ElevenLabs API
+  // Sync KB files with ElevenLabs API (Bidirectional with timestamp-based conflict resolution)
   app.post('/api/kb/sync', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const elevenLabsConfig = await storage.getElevenLabsConfig();
@@ -3038,6 +3038,8 @@ Ready to receive calls?`;
       if (!elevenLabsConfig?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
+
+      console.log('[KB Sync] ========== Starting Bidirectional Sync ==========');
 
       // Fetch all ElevenLabs agents to create agent name → agentId mapping
       const agents = await storage.getAllElevenLabsAgents();
@@ -3062,6 +3064,9 @@ Ready to receive calls?`;
         return null;
       };
 
+      // ========== PHASE 1: DISCOVER CHANGES ==========
+      console.log('[KB Sync] Phase 1: Discovering changes...');
+
       // Fetch KB documents from ElevenLabs
       const response = await fetch('https://api.elevenlabs.io/v1/convai/knowledge-base?page_size=100', {
         headers: {
@@ -3075,26 +3080,11 @@ Ready to receive calls?`;
 
       const data = await response.json();
       const documents = data.documents || [];
+      console.log(`[KB Sync] Found ${documents.length} documents in ElevenLabs`);
 
-      // Get all existing KB files to detect deletions
-      const existingFiles = await storage.getAllKbFiles();
-      const elevenLabsDocIds = new Set(documents.map((doc: any) => doc.id));
-      
-      let imported = 0;
-      let updated = 0;
-      let deleted = 0;
-
-      // Delete files that no longer exist in ElevenLabs
-      for (const existingFile of existingFiles) {
-        if (existingFile.elevenlabsDocId && !elevenLabsDocIds.has(existingFile.elevenlabsDocId)) {
-          console.log(`[KB Sync] Deleting file no longer in ElevenLabs: ${existingFile.filename} (${existingFile.elevenlabsDocId})`);
-          await safeDeleteKbFile(existingFile.id);
-          deleted++;
-        }
-      }
-
+      // Fetch full content for all remote documents
+      const remoteFiles = new Map<string, any>(); // docId → { name, content, modifiedAt, agentId }
       for (const doc of documents) {
-        // Fetch full document content (list endpoint only returns metadata)
         const docResponse = await fetch(`https://api.elevenlabs.io/v1/convai/knowledge-base/${doc.id}`, {
           headers: {
             'xi-api-key': elevenLabsConfig.apiKey
@@ -3103,136 +3093,338 @@ Ready to receive calls?`;
         
         if (!docResponse.ok) {
           console.error(`[KB Sync] Failed to fetch content for ${doc.name}: ${docResponse.statusText}`);
-          continue; // Skip this document but continue with others
+          continue;
         }
         
         const fullDoc = await docResponse.json();
-        const docContent = fullDoc.content || '';
         
-        const agentId = detectAgentId(doc.name);
+        // Try to extract modified date from API response (if available)
+        // ElevenLabs API may provide updated_at, modified_at, or similar field
+        const remoteModifiedAt = fullDoc.updated_at || fullDoc.modified_at || null;
         
-        // Check if file already exists by elevenlabsDocId first (handles renames), then by filename
-        let existing = await storage.getKbFileByElevenLabsDocId(doc.id);
-        const filenameChanged = existing && existing.filename !== doc.name;
-        
-        // If file was renamed in ElevenLabs, update filename (temporarily disable trigger)
-        if (filenameChanged && existing) {
-          console.log(`[KB Sync] File renamed in ElevenLabs: "${existing.filename}" → "${doc.name}". Updating filename.`);
-          // Disable trigger temporarily to allow filename update during sync
-          await db.execute(sql`ALTER TABLE kb_files DISABLE TRIGGER enforce_filename_immutability`);
-          try {
-            await db.update(kbFiles)
-              .set({ filename: doc.name, updatedAt: new Date() })
-              .where(eq(kbFiles.id, existing.id));
-            existing.filename = doc.name; // Update local reference
-            updated++;
-          } finally {
-            // Always re-enable trigger, even on error
-            await db.execute(sql`ALTER TABLE kb_files ENABLE TRIGGER enforce_filename_immutability`);
+        remoteFiles.set(doc.id, {
+          name: doc.name,
+          content: fullDoc.content || '',
+          modifiedAt: remoteModifiedAt ? new Date(remoteModifiedAt) : null,
+          agentId: detectAgentId(doc.name),
+          type: doc.type || 'file'
+        });
+      }
+
+      // Get all local KB files
+      const localFiles = await storage.getAllKbFiles();
+      console.log(`[KB Sync] Found ${localFiles.length} files in local database`);
+
+      // Build sync operation lists
+      const filesToPush: Array<{ localFile: any; remoteDocId?: string }> = [];
+      const filesToPull: Array<{ remoteDocId: string; remoteName: string }> = [];
+      const filesToSkip: Array<{ filename: string; reason: string }> = [];
+      const warnings: string[] = [];
+
+      // ========== PHASE 2: TIMESTAMP-BASED CONFLICT RESOLUTION ==========
+      console.log('[KB Sync] Phase 2: Resolving conflicts with timestamp comparison...');
+
+      // Create lookup maps
+      const localByDocId = new Map(localFiles.map(f => [f.elevenlabsDocId, f]).filter(([id]) => id));
+      const localByFilename = new Map(localFiles.map(f => [f.filename, f]));
+      const remoteDocIds = new Set(remoteFiles.keys());
+      const processedLocalFiles = new Set<string>();
+
+      // Process files that exist in ElevenLabs
+      for (const [remoteDocId, remoteData] of remoteFiles.entries()) {
+        const localByDocIdMatch = localByDocId.get(remoteDocId);
+        const localByFilenameMatch = localByFilename.get(remoteData.name);
+        const localFile = localByDocIdMatch || localByFilenameMatch;
+
+        if (localFile) {
+          processedLocalFiles.add(localFile.id);
+          
+          // File exists in both places - compare timestamps
+          const localUpdatedAt = localFile.localUpdatedAt || localFile.createdAt;
+          const remoteUpdatedAt = remoteData.modifiedAt;
+
+          // Handle filename changes
+          if (localByDocIdMatch && localByDocIdMatch.filename !== remoteData.name) {
+            console.log(`[KB Sync] File renamed in ElevenLabs: "${localFile.filename}" → "${remoteData.name}"`);
+            // Rename will be handled during PULL operation
+          }
+
+          if (!remoteUpdatedAt) {
+            // No remote timestamp available - use current time as remote timestamp
+            console.log(`[KB Sync] No remote timestamp for "${remoteData.name}", using current time`);
+            
+            // If content differs, prefer local (safer default)
+            if (localFile.currentContent !== remoteData.content) {
+              console.log(`[KB Sync] Content differs, pushing local version (no remote timestamp)`);
+              filesToPush.push({ localFile, remoteDocId });
+            } else {
+              filesToSkip.push({ filename: remoteData.name, reason: 'content identical' });
+            }
+          } else {
+            // Compare timestamps
+            const localTime = localUpdatedAt.getTime();
+            const remoteTime = remoteUpdatedAt.getTime();
+            
+            if (localTime > remoteTime) {
+              console.log(`[KB Sync] Local newer for "${localFile.filename}": local=${localUpdatedAt.toISOString()} > remote=${remoteUpdatedAt.toISOString()} → PUSH`);
+              filesToPush.push({ localFile, remoteDocId });
+            } else if (remoteTime > localTime) {
+              console.log(`[KB Sync] Remote newer for "${remoteData.name}": remote=${remoteUpdatedAt.toISOString()} > local=${localUpdatedAt.toISOString()} → PULL`);
+              filesToPull.push({ remoteDocId, remoteName: remoteData.name });
+            } else {
+              // Timestamps equal - check content to be sure
+              if (localFile.currentContent !== remoteData.content) {
+                console.log(`[KB Sync] Timestamps equal but content differs for "${localFile.filename}" → PUSH (prefer local)`);
+                filesToPush.push({ localFile, remoteDocId });
+              } else {
+                filesToSkip.push({ filename: remoteData.name, reason: 'already in sync' });
+              }
+            }
+          }
+        } else {
+          // File only exists in ElevenLabs → PULL
+          console.log(`[KB Sync] File only in ElevenLabs: "${remoteData.name}" → PULL`);
+          filesToPull.push({ remoteDocId, remoteName: remoteData.name });
+        }
+      }
+
+      // Process files that only exist locally
+      for (const localFile of localFiles) {
+        if (!processedLocalFiles.has(localFile.id)) {
+          if (localFile.elevenlabsDocId && !remoteDocIds.has(localFile.elevenlabsDocId)) {
+            // File was deleted from ElevenLabs but exists locally
+            const localUpdatedAt = localFile.localUpdatedAt || localFile.createdAt;
+            warnings.push(`File "${localFile.filename}" was deleted from ElevenLabs but exists locally (last local update: ${localUpdatedAt.toISOString()}). Not auto-deleting. Consider manual review.`);
+            console.log(`[KB Sync] WARNING: ${warnings[warnings.length - 1]}`);
+          } else {
+            // New local file never synced to ElevenLabs → PUSH
+            console.log(`[KB Sync] File only local: "${localFile.filename}" → PUSH`);
+            filesToPush.push({ localFile });
           }
         }
-        
-        // If not found by docId, try finding by filename
-        if (!existing) {
-          existing = await storage.getKbFileByFilename(doc.name);
-        }
+      }
 
-        if (existing) {
-          // Check if content has changed
-          const newContent = docContent;
-          const agentIdChanged = existing.agentId !== agentId;
-          
-          if (existing.currentContent !== newContent) {
-            // Get current versions to calculate next version number
-            const versions = await storage.getKbFileVersions(existing.id);
+      console.log(`[KB Sync] Sync plan: ${filesToPush.length} to push, ${filesToPull.length} to pull, ${filesToSkip.length} to skip`);
+
+      // ========== PHASE 3: EXECUTE SYNC OPERATIONS ==========
+      console.log('[KB Sync] Phase 3: Executing sync operations...');
+
+      let pushedCount = 0;
+      let pulledCount = 0;
+      let createdRemote = 0;
+      let createdLocal = 0;
+      let updatedRemote = 0;
+      let updatedLocal = 0;
+
+      // Execute PUSH operations (local → ElevenLabs)
+      for (const { localFile, remoteDocId } of filesToPush) {
+        try {
+          if (remoteDocId) {
+            // Update existing file in ElevenLabs
+            console.log(`[KB Sync] PUSH: Updating "${localFile.filename}" in ElevenLabs (docId: ${remoteDocId})`);
+            const updateResponse = await fetch(`https://api.elevenlabs.io/v1/convai/knowledge-base/${remoteDocId}`, {
+              method: 'PATCH',
+              headers: {
+                'xi-api-key': elevenLabsConfig.apiKey,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                content: localFile.currentContent,
+                name: localFile.filename
+              })
+            });
+
+            if (!updateResponse.ok) {
+              const errorText = await updateResponse.text();
+              console.error(`[KB Sync] Failed to update "${localFile.filename}" in ElevenLabs: ${errorText}`);
+              warnings.push(`Failed to push update for "${localFile.filename}": ${errorText}`);
+              continue;
+            }
+
+            // Update local metadata
+            await storage.updateKbFile(localFile.id, {
+              elevenlabsDocId: remoteDocId,
+              elevenLabsUpdatedAt: new Date(),
+              lastSyncedSource: 'local_to_remote',
+              lastSyncedAt: new Date()
+            });
+
+            pushedCount++;
+            updatedRemote++;
+            console.log(`[KB Sync] PUSH SUCCESS: Updated "${localFile.filename}" in ElevenLabs`);
+          } else {
+            // Create new file in ElevenLabs
+            console.log(`[KB Sync] PUSH: Creating "${localFile.filename}" in ElevenLabs`);
+            const createResponse = await fetch('https://api.elevenlabs.io/v1/convai/knowledge-base', {
+              method: 'POST',
+              headers: {
+                'xi-api-key': elevenLabsConfig.apiKey,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                name: localFile.filename,
+                content: localFile.currentContent
+              })
+            });
+
+            if (!createResponse.ok) {
+              const errorText = await createResponse.text();
+              console.error(`[KB Sync] Failed to create "${localFile.filename}" in ElevenLabs: ${errorText}`);
+              warnings.push(`Failed to push new file "${localFile.filename}": ${errorText}`);
+              continue;
+            }
+
+            const newDoc = await createResponse.json();
+
+            // Update local metadata with new docId
+            await storage.updateKbFile(localFile.id, {
+              elevenlabsDocId: newDoc.id,
+              elevenLabsUpdatedAt: new Date(),
+              lastSyncedSource: 'local_to_remote',
+              lastSyncedAt: new Date()
+            });
+
+            pushedCount++;
+            createdRemote++;
+            console.log(`[KB Sync] PUSH SUCCESS: Created "${localFile.filename}" in ElevenLabs (docId: ${newDoc.id})`);
+          }
+        } catch (error: any) {
+          console.error(`[KB Sync] Error pushing "${localFile.filename}":`, error);
+          warnings.push(`Failed to push "${localFile.filename}": ${error.message}`);
+        }
+      }
+
+      // Execute PULL operations (ElevenLabs → local)
+      for (const { remoteDocId, remoteName } of filesToPull) {
+        try {
+          const remoteData = remoteFiles.get(remoteDocId);
+          if (!remoteData) continue;
+
+          // Find local file by docId or filename
+          let localFile = localByDocId.get(remoteDocId);
+          if (!localFile) {
+            localFile = localByFilename.get(remoteName);
+          }
+
+          if (localFile) {
+            // Update existing local file
+            console.log(`[KB Sync] PULL: Updating local file "${localFile.filename}" from ElevenLabs`);
+
+            // Handle filename changes
+            if (localFile.filename !== remoteName) {
+              console.log(`[KB Sync] Renaming local file: "${localFile.filename}" → "${remoteName}"`);
+              await db.execute(sql`ALTER TABLE kb_files DISABLE TRIGGER enforce_filename_immutability`);
+              try {
+                await db.update(kbFiles)
+                  .set({ filename: remoteName, updatedAt: new Date() })
+                  .where(eq(kbFiles.id, localFile.id));
+              } finally {
+                await db.execute(sql`ALTER TABLE kb_files ENABLE TRIGGER enforce_filename_immutability`);
+              }
+            }
+
+            // Create new version
+            const versions = await storage.getKbFileVersions(localFile.id);
             const latestVersion = versions[0];
             const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
 
-            // Create new version for the update
             const newVersion = await storage.createKbFileVersion({
-              kbFileId: existing.id,
+              kbFileId: localFile.id,
               versionNumber: newVersionNumber,
-              content: newContent,
+              content: remoteData.content,
               source: 'elevenlabs_sync',
               createdBy: 'system',
             });
 
             // Backup to Google Drive
             await googleDrive.backupKbFileToDrive(
-              existing.filename,
+              remoteName,
               newVersionNumber,
-              newContent
+              remoteData.content
             );
 
-            // Update existing file with new content, sync version, and agent assignment
-            await storage.updateKbFile(existing.id, {
-              currentContent: newContent,
-              elevenlabsDocId: doc.id,
+            // Update file with new content
+            await storage.updateKbFile(localFile.id, {
+              currentContent: remoteData.content,
+              elevenlabsDocId: remoteDocId,
               currentSyncVersion: newVersion.id,
-              agentId: agentId,
-              lastSyncedAt: new Date(),
+              agentId: remoteData.agentId,
+              elevenLabsUpdatedAt: remoteData.modifiedAt || new Date(),
+              lastSyncedSource: 'remote_to_local',
+              lastSyncedAt: new Date()
             });
-            updated++;
-          } else if (agentIdChanged) {
-            // Only agent assignment changed
-            await storage.updateKbFile(existing.id, {
-              elevenlabsDocId: doc.id,
-              agentId: agentId,
-              lastSyncedAt: new Date(),
-            });
-            updated++;
+
+            pulledCount++;
+            updatedLocal++;
+            console.log(`[KB Sync] PULL SUCCESS: Updated local file "${remoteName}" (version ${newVersionNumber})`);
           } else {
-            // Content and agent unchanged, just update sync metadata
-            await storage.updateKbFile(existing.id, {
-              elevenlabsDocId: doc.id,
+            // Create new local file
+            console.log(`[KB Sync] PULL: Creating new local file "${remoteName}"`);
+
+            const newFile = await storage.createKbFile({
+              filename: remoteName,
+              elevenlabsDocId: remoteDocId,
+              currentContent: remoteData.content,
+              fileType: remoteData.type,
+              agentId: remoteData.agentId,
+              elevenLabsUpdatedAt: remoteData.modifiedAt || new Date(),
+              lastSyncedSource: 'remote_to_local',
               lastSyncedAt: new Date(),
             });
+
+            // Create initial version
+            const initialVersion = await storage.createKbFileVersion({
+              kbFileId: newFile.id,
+              versionNumber: 1,
+              content: remoteData.content,
+              source: 'elevenlabs_sync',
+              createdBy: 'system',
+            });
+
+            // Backup to Google Drive
+            await googleDrive.backupKbFileToDrive(
+              remoteName,
+              1,
+              remoteData.content
+            );
+
+            // Update file with current_sync_version
+            await storage.updateKbFile(newFile.id, {
+              currentSyncVersion: initialVersion.id,
+            });
+
+            pulledCount++;
+            createdLocal++;
+            console.log(`[KB Sync] PULL SUCCESS: Created new local file "${remoteName}"`);
           }
-        } else {
-          // Create new file with initial version
-          const newFile = await storage.createKbFile({
-            filename: doc.name,
-            elevenlabsDocId: doc.id,
-            currentContent: docContent,
-            fileType: doc.type || 'file',
-            agentId: agentId,
-            lastSyncedAt: new Date(),
-          });
-
-          // Create initial version
-          const initialVersion = await storage.createKbFileVersion({
-            kbFileId: newFile.id,
-            versionNumber: 1,
-            content: docContent,
-            source: 'elevenlabs_sync',
-            createdBy: 'system',
-          });
-
-          // Backup to Google Drive
-          await googleDrive.backupKbFileToDrive(
-            newFile.filename,
-            1,
-            docContent
-          );
-
-          // Update file with current_sync_version
-          await storage.updateKbFile(newFile.id, {
-            currentSyncVersion: initialVersion.id,
-          });
-
-          imported++;
+        } catch (error: any) {
+          console.error(`[KB Sync] Error pulling "${remoteName}":`, error);
+          warnings.push(`Failed to pull "${remoteName}": ${error.message}`);
         }
       }
 
+      console.log('[KB Sync] ========== Sync Complete ==========');
+      console.log(`[KB Sync] Pushed: ${pushedCount} (${createdRemote} created, ${updatedRemote} updated)`);
+      console.log(`[KB Sync] Pulled: ${pulledCount} (${createdLocal} created, ${updatedLocal} updated)`);
+      console.log(`[KB Sync] Skipped: ${filesToSkip.length}`);
+      console.log(`[KB Sync] Warnings: ${warnings.length}`);
+
       res.json({
         success: true,
-        imported,
-        updated,
-        deleted,
-        total: documents.length,
+        pushedCount,
+        pulledCount,
+        createdLocal,
+        createdRemote,
+        updatedLocal,
+        updatedRemote,
+        skipped: filesToSkip.length,
+        skippedFiles: filesToSkip,
+        warnings,
+        totalRemote: documents.length,
+        totalLocal: localFiles.length,
       });
     } catch (error: any) {
-      console.error('[KB] Error syncing from ElevenLabs:', error);
+      console.error('[KB Sync] Error during bidirectional sync:', error);
       res.status(500).json({ error: error.message || 'Failed to sync KB files' });
     }
   });
@@ -3288,6 +3480,7 @@ Ready to receive calls?`;
             await storage.updateKbFile(existing.id, {
               currentContent: content,
               currentSyncVersion: newVersion.id,
+              localUpdatedAt: new Date(), // Mark as locally updated for sync
             });
 
             updated++;
@@ -3925,6 +4118,7 @@ IMPORTANT:
       await storage.updateKbFile(file.id, {
         currentContent: finalContent,
         currentSyncVersion: newVersion.id,
+        localUpdatedAt: new Date(), // Mark as locally updated for sync
       });
 
       // Update proposal status
@@ -4005,6 +4199,7 @@ IMPORTANT:
       await storage.updateKbFile(id, {
         currentContent: targetVersion.content,
         currentSyncVersion: newVersion.id,
+        localUpdatedAt: new Date(), // Mark as locally updated for sync
       });
 
       res.json({

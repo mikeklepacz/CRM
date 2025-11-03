@@ -146,16 +146,25 @@ function KBLibraryTab() {
   const syncMutation = useMutation({
     mutationFn: () => apiRequest('POST', '/api/kb/sync'),
     onSuccess: (data: any) => {
+      const parts = [];
+      if (data.pushedCount > 0) parts.push(`Pushed ${data.pushedCount} to ElevenLabs`);
+      if (data.pulledCount > 0) parts.push(`Pulled ${data.pulledCount} from ElevenLabs`);
+      if (data.createdLocal > 0) parts.push(`${data.createdLocal} new local`);
+      if (data.createdRemote > 0) parts.push(`${data.createdRemote} new remote`);
+      if (data.skipped > 0) parts.push(`${data.skipped} unchanged`);
+      
+      const description = parts.length > 0 ? parts.join(', ') : 'All files in sync';
+      
       toast({
         title: "Sync Complete",
-        description: `Imported ${data.imported} new files, updated ${data.updated} existing files`,
+        description,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
     },
     onError: (error: any) => {
       toast({
         title: "Sync Failed",
-        description: error.message || "Failed to sync TO ElevenLabs",
+        description: error.message || "Failed to sync with ElevenLabs",
         variant: "destructive",
       });
     },
@@ -376,7 +385,7 @@ function KBLibraryTab() {
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              Sync TO ElevenLabs
+              Sync KB Files
             </Button>
           </div>
         </div>

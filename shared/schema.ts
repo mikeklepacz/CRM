@@ -1056,6 +1056,9 @@ export const kbFiles = pgTable("kb_files", {
   agentId: varchar("agent_id", { length: 255 }), // ElevenLabs agent ID (e.g., agent_7201k8xa9cshfmqvkd8tx3xf2j7a) - which agent this KB file is for
   locked: boolean("locked").default(false), // True if referenced in workflow nodes
   fileType: varchar("file_type", { length: 50 }).default('file'), // 'file', 'url', 'text'
+  localUpdatedAt: timestamp("local_updated_at").defaultNow(), // Timestamp of last local edit (proposal approval, upload, etc.)
+  elevenLabsUpdatedAt: timestamp("elevenlabs_updated_at"), // Timestamp from ElevenLabs API last modified date
+  lastSyncedSource: varchar("last_synced_source", { length: 20 }), // 'local_to_remote', 'remote_to_local', or null
   lastSyncedAt: timestamp("last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
