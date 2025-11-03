@@ -280,15 +280,18 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                                 isSelected ? 'bg-destructive/10 border-destructive' : 
                                 isKeeper ? 'bg-primary/5 border-primary' : 
                                 'hover-elevate'
-                              }`}
+                              } ${!isKeeper ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                               data-testid={`duplicate-store-${groupIndex}-${storeIndex}`}
+                              onClick={() => !isKeeper && toggleSelection(store.Link, groupIndex)}
                             >
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleSelection(store.Link, groupIndex)}
-                                disabled={isKeeper}
-                                data-testid={`checkbox-store-${groupIndex}-${storeIndex}`}
-                              />
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleSelection(store.Link, groupIndex)}
+                                  disabled={isKeeper}
+                                  data-testid={`checkbox-store-${groupIndex}-${storeIndex}`}
+                                />
+                              </div>
                               <div className="flex-1 space-y-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
