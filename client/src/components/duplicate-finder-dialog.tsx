@@ -65,11 +65,13 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
     return () => clearTimeout(timeoutId);
   }, [open, stores, toast]);
 
-  // Reset selection when duplicateGroups change or dialog closes
+  // Reset selection when dialog closes
   useEffect(() => {
-    setSelectedForDeletion(new Set());
-    setDeletionMap(new Map());
-  }, [duplicateGroups, open]);
+    if (!open) {
+      setSelectedForDeletion(new Set());
+      setDeletionMap(new Map());
+    }
+  }, [open]);
 
   const handleSmartSelect = () => {
     if (!statusHierarchy) {
@@ -209,28 +211,17 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
           <DialogHeader>
             <DialogTitle>Duplicate Store Finder</DialogTitle>
             <DialogDescription>
-              {detectionResult.hasError
-                ? 'Error analyzing store data'
+              {isDetecting
+                ? 'Analyzing stores...'
                 : `Found ${duplicateGroups.length} duplicate ${duplicateGroups.length === 1 ? 'group' : 'groups'} with ${totalDuplicates} total stores`
               }
             </DialogDescription>
           </DialogHeader>
 
-          {detectionResult.hasError ? (
-            <div className="py-12 text-center text-destructive">
-              <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
-              <p className="text-lg font-medium">Detection Failed</p>
-              <p className="text-sm mt-2 text-muted-foreground">
-                Failed to analyze store data for duplicates. Some data may be malformed.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                className="mt-4"
-                data-testid="button-close-error"
-              >
-                Close
-              </Button>
+          {isDetecting ? (
+            <div className="py-12 text-center text-muted-foreground">
+              <p className="text-lg font-medium">Analyzing stores...</p>
+              <p className="text-sm mt-2">This may take a moment for large datasets</p>
             </div>
           ) : duplicateGroups.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">
