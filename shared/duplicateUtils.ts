@@ -150,11 +150,10 @@ export function countNonEmptyFields(store: StoreRecord): number {
 /**
  * Detect duplicate stores based on:
  * - 75%+ name similarity (accounting for Med/Rec variations)
- * - Identical phone numbers
- * - Identical addresses
+ * - Shared address words (at least one 3+ character word)
  * 
- * Note: Does NOT skip stores after grouping - allows stores to appear in multiple groups
- * if they match on different criteria (e.g., same phone AND similar name to another store)
+ * Note: Skips phone number matching to avoid flagging franchises
+ * (same name + phone but different addresses = different locations)
  */
 export function detectDuplicates(
   stores: StoreRecord[],
@@ -168,36 +167,6 @@ export function detectDuplicates(
   const makePairKey = (link1: string, link2: string): string => {
     return [link1, link2].sort().join('||');
   };
-  
-  // Group by phone number
-  const phoneGroups = new Map<string, StoreRecord[]>();
-  stores.forEach(store => {
-    const phone = normalizePhone(store.Phone || '');
-    if (phone && phone.length >= 10) {
-      if (!phoneGroups.has(phone)) {
-        phoneGroups.set(phone, []);
-      }
-      phoneGroups.get(phone)!.push(store);
-    }
-  });
-  
-  // Add phone-based duplicates and track pairs
-  phoneGroups.forEach((group, phone) => {
-    if (group.length > 1) {
-      duplicateGroups.push({
-        stores: group,
-        reason: `Same phone number: ${group[0].Phone || phone}`,
-        similarity: 1.0,
-      });
-      
-      // Mark all pairs in this group as processed
-      for (let i = 0; i < group.length; i++) {
-        for (let j = i + 1; j < group.length; j++) {
-          addedPairs.add(makePairKey(group[i].Link, group[j].Link));
-        }
-      }
-    }
-  });
   
   // Group by address (don't skip already-grouped stores)
   const addressGroups = new Map<string, StoreRecord[]>();
@@ -242,8 +211,8 @@ export function detectDuplicates(
     }
   });
   
-  // Check for name similarity with address/phone confirmation
-  // Simple word-based matching: names share 75%+ words AND (shared address word OR same phone)
+  // Check for name similarity with address confirmation
+  // Simple word-based matching: names share 75%+ words AND shared address words
   for (let i = 0; i < stores.length; i++) {
     for (let j = i + 1; j < stores.length; j++) {
       const store1 = stores[i];
@@ -272,36 +241,44 @@ export function detectDuplicates(
       // Names must share at least 75% of words (based on shorter name)
       if (wordSimilarity < 0.75) continue;
       
-      // Now check if they share address words OR same phone
-      let hasConfirmation = false;
-      let confirmationType = '';
+      // Check if they share meaningful address words including a house number
+      const addr1 = (store1.Address || '').toLowerCase();
+      const addr2 = (store2.Address || '').toLowerCase();
+      const addrWords1 = addr1.split(/\s+/).filter(w => w.length > 0);
+      const addrWords2 = addr2.split(/\s+/).filter(w => w.length > 0);
       
-      // Check phone
-      const phone1 = normalizePhone(store1.Phone || '');
-      const phone2 = normalizePhone(store2.Phone || '');
-      if (phone1 && phone2 && phone1 === phone2) {
-        hasConfirmation = true;
-        confirmationType = 'same phone';
-      }
+      // Extract numeric tokens (house numbers)
+      const numericTokens1 = addrWords1.filter(w => /^\d+/.test(w));
+      const numericTokens2 = addrWords2.filter(w => /^\d+/.test(w));
+      const sharedNumbers = numericTokens1.filter(n => numericTokens2.includes(n));
       
-      // Check address words
-      if (!hasConfirmation) {
-        const addr1 = (store1.Address || '').toLowerCase();
-        const addr2 = (store2.Address || '').toLowerCase();
-        const addrWords1 = addr1.split(/\s+/).filter(w => w.length > 2);
-        const addrWords2 = addr2.split(/\s+/).filter(w => w.length > 2);
-        const sharedAddrWords = addrWords1.filter(w => addrWords2.includes(w));
-        if (sharedAddrWords.length > 0) {
-          hasConfirmation = true;
-          confirmationType = `shared address words: ${sharedAddrWords.join(', ')}`;
-        }
-      }
+      // If no shared house number, skip
+      if (sharedNumbers.length === 0) continue;
       
-      // Only add as duplicate if we have confirmation
-      if (hasConfirmation) {
+      // Filter out generic address words (street types, directionals, etc.)
+      const genericWords = new Set([
+        'st', 'street', 'rd', 'road', 'ave', 'avenue', 'blvd', 'boulevard',
+        'ln', 'lane', 'dr', 'drive', 'ct', 'court', 'way', 'pl', 'place',
+        'pkwy', 'parkway', 'hwy', 'highway', 'n', 's', 'e', 'w',
+        'north', 'south', 'east', 'west', 'ne', 'nw', 'se', 'sw',
+        'suite', 'ste', 'unit', 'apt', '#'
+      ]);
+      
+      // Get meaningful words (not numbers, not generic, at least 3 chars)
+      const meaningfulWords1 = addrWords1.filter(w => 
+        !genericWords.has(w) && !/^\d+$/.test(w) && w.length >= 3
+      );
+      const meaningfulWords2 = addrWords2.filter(w => 
+        !genericWords.has(w) && !/^\d+$/.test(w) && w.length >= 3
+      );
+      const sharedMeaningful = meaningfulWords1.filter(w => meaningfulWords2.includes(w));
+      
+      // Only add as duplicate if they share house number AND meaningful street name
+      // This prevents franchises at different locations from being flagged
+      if (sharedMeaningful.length > 0) {
         duplicateGroups.push({
           stores: [store1, store2],
-          reason: `Similar names (${Math.round(wordSimilarity * 100)}% word match) + ${confirmationType}`,
+          reason: `Similar names (${Math.round(wordSimilarity * 100)}% word match) + same address: ${sharedNumbers.join(', ')} ${sharedMeaningful.join(', ')}`,
           similarity: wordSimilarity,
         });
         addedPairs.add(pairKey);
