@@ -430,16 +430,16 @@ export async function mergeAndUpdateStore(
   mergedData: Record<string, any>
 ) {
   const sheets = await getSystemGoogleSheetClient();
-  const storeSheetId = await storage.getStoreSheetId();
+  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
   
-  if (!storeSheetId) {
+  if (!storeSheet) {
     throw new Error('Store Database sheet ID not configured');
   }
 
   // Read all data with headers
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: storeSheetId,
-    range: 'Sheet1',
+    spreadsheetId: storeSheet.spreadsheetId,
+    range: storeSheet.sheetName,
   });
 
   const rows = response.data.values || [];
@@ -470,8 +470,8 @@ export async function mergeAndUpdateStore(
   // Update the specific row
   const rowNumber = targetRowIndex + 2; // +1 for header, +1 for 1-indexed
   await sheets.spreadsheets.values.update({
-    spreadsheetId: storeSheetId,
-    range: `Sheet1!A${rowNumber}`,
+    spreadsheetId: storeSheet.spreadsheetId,
+    range: `${storeSheet.sheetName}!A${rowNumber}`,
     valueInputOption: 'RAW',
     requestBody: {
       values: [updatedRow],
@@ -487,16 +487,16 @@ export async function mergeAndUpdateStore(
  */
 export async function deleteStoreFromSheet(link: string) {
   const sheets = await getSystemGoogleSheetClient();
-  const storeSheetId = await storage.getStoreSheetId();
+  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
   
-  if (!storeSheetId) {
+  if (!storeSheet) {
     throw new Error('Store Database sheet ID not configured');
   }
 
   // Read all data to find the row
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: storeSheetId,
-    range: 'Sheet1',
+    spreadsheetId: storeSheet.spreadsheetId,
+    range: storeSheet.sheetName,
   });
 
   const rows = response.data.values || [];
@@ -517,15 +517,25 @@ export async function deleteStoreFromSheet(link: string) {
     throw new Error('Store not found');
   }
 
+  // Get the numeric sheet ID (gid) by looking up the sheet metadata
+  const spreadsheetInfo = await getSpreadsheetInfo(storeSheet.spreadsheetId);
+  const targetSheet = spreadsheetInfo.sheets?.find(
+    (s: any) => s.properties?.title === storeSheet.sheetName
+  );
+  
+  if (!targetSheet || targetSheet.properties?.sheetId === undefined) {
+    throw new Error(`Sheet "${storeSheet.sheetName}" not found in spreadsheet`);
+  }
+
   // Delete the row using batchUpdate with DeleteDimensionRequest
   const rowNumber = rowIndex + 1; // +1 for header row
   await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: storeSheetId,
+    spreadsheetId: storeSheet.spreadsheetId,
     requestBody: {
       requests: [{
         deleteDimension: {
           range: {
-            sheetId: 0, // Assuming first sheet
+            sheetId: targetSheet.properties.sheetId,
             dimension: 'ROWS',
             startIndex: rowNumber,
             endIndex: rowNumber + 1,
@@ -541,16 +551,16 @@ export async function deleteStoreFromSheet(link: string) {
  */
 export async function updateCommissionTrackerLinks(oldLink: string, newLink: string) {
   const sheets = await getSystemGoogleSheetClient();
-  const trackerSheetId = await storage.getCommissionTrackerSheetId();
+  const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
   
-  if (!trackerSheetId) {
+  if (!trackerSheet) {
     throw new Error('Commission Tracker sheet ID not configured');
   }
 
   // Read all Commission Tracker data
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: trackerSheetId,
-    range: 'Sheet1',
+    spreadsheetId: trackerSheet.spreadsheetId,
+    range: trackerSheet.sheetName,
   });
 
   const rows = response.data.values || [];
@@ -576,7 +586,7 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
       
       const rowNumber = index + 2; // +1 for header, +1 for 1-indexed
       updatedRows.push({
-        range: `Sheet1!A${rowNumber}`,
+        range: `${trackerSheet.sheetName}!A${rowNumber}`,
         values: [updatedRow],
       });
     }
@@ -584,7 +594,7 @@ export async function updateCommissionTrackerLinks(oldLink: string, newLink: str
 
   // Batch update all rows
   if (updatedRows.length > 0) {
-    await batchUpdateSheetData(trackerSheetId, updatedRows);
+    await batchUpdateSheetData(trackerSheet.spreadsheetId, updatedRows);
     console.log(`✅ Updated ${updatedRows.length} Commission Tracker row(s) from ${oldLink} to ${newLink}`);
   }
 }
