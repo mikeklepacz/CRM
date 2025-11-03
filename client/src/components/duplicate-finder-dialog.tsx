@@ -168,7 +168,8 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
     }
 
     try {
-      const deletions = smartSelectDuplicates(duplicateGroups, statusHierarchy);
+      // Use filtered groups so smart select only selects from visible groups
+      const deletions = smartSelectDuplicates(filteredDuplicateGroups, statusHierarchy);
       const deleteSet = new Set(deletions.map(d => d.deleteLink));
       const deleteToKeeper = new Map(deletions.map(d => [d.deleteLink, d.keepLink]));
       
@@ -189,7 +190,7 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
     }
   };
 
-  const toggleSelection = (link: string, groupIndex: number) => {
+  const toggleSelection = (link: string, group: DuplicateGroup) => {
     if (!statusHierarchy) return;
 
     try {
@@ -201,7 +202,6 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
         newDeletionMap.delete(link);
       } else {
         // Find the keeper for this group
-        const group = duplicateGroups[groupIndex];
         const keeper = selectKeeper(group.stores, statusHierarchy);
         
         newSelection.add(link);
@@ -527,12 +527,12 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
                                   'hover-elevate'
                                 } cursor-pointer`}
                                 data-testid={`duplicate-store-${groupIndex}-${storeIndex}`}
-                                onClick={() => toggleSelection(store.Link, groupIndex)}
+                                onClick={() => toggleSelection(store.Link, group)}
                               >
                                 <div onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
                                     checked={isSelected}
-                                    onCheckedChange={() => toggleSelection(store.Link, groupIndex)}
+                                    onCheckedChange={() => toggleSelection(store.Link, group)}
                                     data-testid={`checkbox-store-${groupIndex}-${storeIndex}`}
                                   />
                                 </div>
