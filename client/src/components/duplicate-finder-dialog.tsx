@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Trash2, Sparkles, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Trash2, Sparkles, AlertTriangle, CheckCircle2, ExternalLink, Ban } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { detectDuplicates, smartSelectDuplicates, selectKeeper, countNonEmptyFields, type DuplicateGroup, type StoreRecord, type StatusHierarchy } from "@shared/duplicateUtils";
 import { useQuery } from "@tanstack/react-query";
 
@@ -19,16 +19,36 @@ interface DuplicateFinderDialogProps {
   onDuplicatesDeleted?: () => void;
 }
 
+// Helper to extract city/state from address
+function parseCityState(address: string): string {
+  if (!address) return '';
+  const parts = address.split(',').map(p => p.trim());
+  if (parts.length >= 2) {
+    const city = parts[parts.length - 2];
+    const stateZip = parts[parts.length - 1];
+    const state = stateZip.split(' ')[0];
+    return `${city}, ${state}`;
+  }
+  return '';
+}
+
 export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicatesDeleted }: DuplicateFinderDialogProps) {
   const { toast } = useToast();
   const [selectedForDeletion, setSelectedForDeletion] = useState<Set<string>>(new Set());
   const [deletionMap, setDeletionMap] = useState<Map<string, string>>(new Map()); // deleteLink -> keeperLink
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [markedAsNotDuplicate, setMarkedAsNotDuplicate] = useState<Set<string>>(new Set());
 
   // Fetch status hierarchy
   const { data: statusHierarchy } = useQuery<StatusHierarchy>({
     queryKey: ['/api/statuses/hierarchy'],
+    enabled: open,
+  });
+
+  // Fetch non-duplicate pairs
+  const { data: nonDuplicatePairs } = useQuery<Array<{link1: string, link2: string}>>({
+    queryKey: ['/api/non-duplicates'],
     enabled: open,
   });
 
@@ -47,7 +67,7 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
     // Defer detection to allow dialog to open smoothly
     const timeoutId = setTimeout(() => {
       try {
-        const groups = detectDuplicates(stores, 0.75);
+        const groups = detectDuplicates(stores, 0.75, nonDuplicatePairs);
         setDuplicateGroups(groups);
       } catch (error: any) {
         console.error('[DuplicateFinder] Error detecting duplicates:', error);
@@ -63,7 +83,7 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
     }, 4);
 
     return () => clearTimeout(timeoutId);
-  }, [open, stores, toast]);
+  }, [open, stores, toast, nonDuplicatePairs]);
 
   // Reset selection when dialog closes
   useEffect(() => {
@@ -120,16 +140,6 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
         const group = duplicateGroups[groupIndex];
         const keeper = selectKeeper(group.stores, statusHierarchy);
         
-        // Don't allow selecting the keeper
-        if (link === keeper.Link) {
-          toast({
-            title: "Cannot Delete Keeper",
-            description: "This store is marked as the keeper (has most complete data or best status)",
-            variant: "destructive",
-          });
-          return;
-        }
-        
         newSelection.add(link);
         newDeletionMap.set(link, keeper.Link);
       }
@@ -141,6 +151,55 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
       toast({
         title: "Selection Error",
         description: "Failed to toggle selection for this store",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMarkAsNotDuplicate = async (groupIndex: number, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation();
+    }
+
+    try {
+      const group = duplicateGroups[groupIndex];
+      const storeLinks = group.stores.map(s => s.Link);
+      
+      // Mark all pairs in this group as not duplicates
+      for (let i = 0; i < storeLinks.length; i++) {
+        for (let j = i + 1; j < storeLinks.length; j++) {
+          await apiRequest('POST', '/api/non-duplicates', {
+            link1: storeLinks[i],
+            link2: storeLinks[j],
+          });
+        }
+      }
+      
+      // Create a composite key for this group
+      const groupKey = storeLinks.sort().join('|');
+      setMarkedAsNotDuplicate(prev => new Set(prev).add(groupKey));
+      
+      // Invalidate the cache and fetch fresh non-duplicate pairs
+      await queryClient.invalidateQueries({ queryKey: ['/api/non-duplicates'] });
+      
+      // Get the updated non-duplicate pairs
+      const updatedPairs = await queryClient.fetchQuery<Array<{link1: string, link2: string}>>({
+        queryKey: ['/api/non-duplicates'],
+      });
+      
+      // Recompute duplicate groups with the updated pairs
+      const newGroups = detectDuplicates(stores, 0.75, updatedPairs);
+      setDuplicateGroups(newGroups);
+      
+      toast({
+        title: "Marked as Not Duplicate",
+        description: "This group has been removed from the list",
+      });
+    } catch (error: any) {
+      console.error('[DuplicateFinder] Error marking as not duplicate:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to mark as not duplicate",
         variant: "destructive",
       });
     }
@@ -253,80 +312,114 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
 
               <ScrollArea className="h-[500px] pr-4">
                 <div className="space-y-6">
-                  {duplicateGroups.map((group, groupIndex) => (
-                    <div key={groupIndex} className="border rounded-lg p-4 space-y-3" data-testid={`duplicate-group-${groupIndex}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" data-testid={`badge-group-${groupIndex}-count`}>
-                            {group.stores.length} duplicates
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">{group.reason}</span>
+                  {duplicateGroups.map((group, groupIndex) => {
+                    const groupKey = group.stores.map(s => s.Link).sort().join('|');
+                    const isMarkedNotDup = markedAsNotDuplicate.has(groupKey);
+                    
+                    return (
+                      <div key={groupIndex} className={`border rounded-lg p-4 space-y-3 ${isMarkedNotDup ? 'opacity-50' : ''}`} data-testid={`duplicate-group-${groupIndex}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" data-testid={`badge-group-${groupIndex}-count`}>
+                              {group.stores.length} duplicates
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">{group.reason}</span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => handleMarkAsNotDuplicate(groupIndex, e)}
+                            disabled={isMarkedNotDup}
+                            data-testid={`button-not-duplicate-${groupIndex}`}
+                          >
+                            <Ban className="mr-2 h-3 w-3" />
+                            {isMarkedNotDup ? 'Marked' : 'Not a Duplicate'}
+                          </Button>
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-2">
+                          {group.stores.map((store, storeIndex) => {
+                            const fieldCount = countNonEmptyFields(store);
+                            const isSelected = selectedForDeletion.has(store.Link);
+                            const isKeeper = statusHierarchy && selectKeeper(group.stores, statusHierarchy).Link === store.Link;
+                            const isClaimed = store.Agent && store.Agent.trim() !== '';
+                            const cityState = parseCityState(store.Address);
+                            
+                            return (
+                              <div
+                                key={store.Link}
+                                className={`flex items-start gap-3 p-3 rounded border ${
+                                  isSelected ? 'bg-destructive/10 border-destructive' : 
+                                  isKeeper ? 'bg-primary/5 border-primary' : 
+                                  'hover-elevate'
+                                } cursor-pointer`}
+                                data-testid={`duplicate-store-${groupIndex}-${storeIndex}`}
+                                onClick={() => toggleSelection(store.Link, groupIndex)}
+                              >
+                                <div onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => toggleSelection(store.Link, groupIndex)}
+                                    data-testid={`checkbox-store-${groupIndex}-${storeIndex}`}
+                                  />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium">{store.Name}</p>
+                                      {cityState && (
+                                        <span className="text-xs text-muted-foreground">({cityState})</span>
+                                      )}
+                                      {isKeeper && (
+                                        <Badge variant="default" className="text-xs" data-testid={`badge-keeper-${groupIndex}-${storeIndex}`}>
+                                          <CheckCircle2 className="mr-1 h-3 w-3" />
+                                          KEEPER
+                                        </Badge>
+                                      )}
+                                      {isClaimed && (
+                                        <Badge variant="secondary" className="text-xs" data-testid={`badge-claimed-${groupIndex}-${storeIndex}`}>
+                                          Claimed
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <Badge variant="outline" data-testid={`badge-field-count-${groupIndex}-${storeIndex}`}>
+                                      {fieldCount} fields
+                                    </Badge>
+                                  </div>
+                                  <div className="text-sm text-muted-foreground space-y-1">
+                                    {store.Link && (
+                                      <p>
+                                        🔗{' '}
+                                        <a
+                                          href={store.Link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="hover:underline inline-flex items-center gap-1"
+                                          onClick={(e) => e.stopPropagation()}
+                                          data-testid={`link-leafly-${groupIndex}-${storeIndex}`}
+                                        >
+                                          Leafly Profile
+                                          <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                      </p>
+                                    )}
+                                    {store.Agent && <p>👤 {store.Agent}</p>}
+                                    {store.Status && <p>📊 {store.Status}</p>}
+                                    {store.Phone && <p>📞 {store.Phone}</p>}
+                                    {store.Address && <p>📍 {store.Address}</p>}
+                                    {store.Email && <p>✉️ {store.Email}</p>}
+                                    {store.Website && <p>🌐 {store.Website}</p>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-
-                      <Separator />
-
-                      <div className="space-y-2">
-                        {group.stores.map((store, storeIndex) => {
-                          const fieldCount = countNonEmptyFields(store);
-                          const isSelected = selectedForDeletion.has(store.Link);
-                          const isKeeper = statusHierarchy && selectKeeper(group.stores, statusHierarchy).Link === store.Link;
-                          const isClaimed = store.Agent && store.Agent.trim() !== '';
-                          
-                          return (
-                            <div
-                              key={store.Link}
-                              className={`flex items-start gap-3 p-3 rounded border ${
-                                isSelected ? 'bg-destructive/10 border-destructive' : 
-                                isKeeper ? 'bg-primary/5 border-primary' : 
-                                'hover-elevate'
-                              } ${!isKeeper ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                              data-testid={`duplicate-store-${groupIndex}-${storeIndex}`}
-                              onClick={() => !isKeeper && toggleSelection(store.Link, groupIndex)}
-                            >
-                              <div onClick={(e) => e.stopPropagation()}>
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => toggleSelection(store.Link, groupIndex)}
-                                  disabled={isKeeper}
-                                  data-testid={`checkbox-store-${groupIndex}-${storeIndex}`}
-                                />
-                              </div>
-                              <div className="flex-1 space-y-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-medium">{store.Name}</p>
-                                    {isKeeper && (
-                                      <Badge variant="default" className="text-xs" data-testid={`badge-keeper-${groupIndex}-${storeIndex}`}>
-                                        <CheckCircle2 className="mr-1 h-3 w-3" />
-                                        KEEPER
-                                      </Badge>
-                                    )}
-                                    {isClaimed && (
-                                      <Badge variant="secondary" className="text-xs" data-testid={`badge-claimed-${groupIndex}-${storeIndex}`}>
-                                        Claimed
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <Badge variant="outline" data-testid={`badge-field-count-${groupIndex}-${storeIndex}`}>
-                                    {fieldCount} fields
-                                  </Badge>
-                                </div>
-                                <div className="text-sm text-muted-foreground space-y-1">
-                                  {store.Agent && <p>👤 {store.Agent}</p>}
-                                  {store.Status && <p>📊 {store.Status}</p>}
-                                  {store.Phone && <p>📞 {store.Phone}</p>}
-                                  {store.Address && <p>📍 {store.Address}</p>}
-                                  {store.Email && <p>✉️ {store.Email}</p>}
-                                  {store.Website && <p>🌐 {store.Website}</p>}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
 
