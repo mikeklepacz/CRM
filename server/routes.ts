@@ -1363,9 +1363,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[Agent Prompt] Updating prompt for agent: ${agentId}`);
       console.log(`[Agent Prompt] New prompt length: ${prompt.length} characters`);
       
+      // ElevenLabs requires nested structure: conversation_config.agent.prompt.prompt
+      const updatePayload = {
+        conversation_config: {
+          agent: {
+            prompt: {
+              prompt: prompt
+            }
+          }
+        }
+      };
+      
+      console.log(`[Agent Prompt] Sending payload:`, JSON.stringify(updatePayload, null, 2));
+      
       const response = await axios.patch(
         `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
-        { prompt },
+        updatePayload,
         {
           headers: {
             'xi-api-key': config.apiKey,
@@ -3521,30 +3534,52 @@ Ready to receive calls?`;
       for (const { localFile, remoteDocId } of filesToPush) {
         try {
           if (remoteDocId) {
-            // Update existing file in ElevenLabs
-            console.log(`[KB Sync] PUSH: Updating "${localFile.filename}" in ElevenLabs (docId: ${remoteDocId})`);
-            const updateResponse = await fetch(`https://api.elevenlabs.io/v1/convai/knowledge-base/${remoteDocId}`, {
-              method: 'PATCH',
+            // Update existing file in ElevenLabs using DELETE+CREATE workflow
+            // ElevenLabs API only allows PATCH for name changes, not content updates
+            console.log(`[KB Sync] PUSH: Updating "${localFile.filename}" in ElevenLabs (DELETE+CREATE workflow, docId: ${remoteDocId})`);
+            
+            // Step 1: Delete old document
+            const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/convai/knowledge-base/${remoteDocId}`, {
+              method: 'DELETE',
+              headers: {
+                'xi-api-key': elevenLabsConfig.apiKey
+              }
+            });
+
+            if (!deleteResponse.ok) {
+              const errorText = await deleteResponse.text();
+              console.error(`[KB Sync] Failed to delete old "${localFile.filename}" in ElevenLabs: ${errorText}`);
+              warnings.push(`Failed to delete old version of "${localFile.filename}": ${errorText}`);
+              continue;
+            }
+
+            console.log(`[KB Sync] Deleted old document ${remoteDocId}, creating new version...`);
+
+            // Step 2: Create new document with same filename (maintains agent associations)
+            const createResponse = await fetch('https://api.elevenlabs.io/v1/convai/knowledge-base', {
+              method: 'POST',
               headers: {
                 'xi-api-key': elevenLabsConfig.apiKey,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                content: localFile.currentContent,
-                name: localFile.filename
+                name: localFile.filename,
+                content: localFile.currentContent
               })
             });
 
-            if (!updateResponse.ok) {
-              const errorText = await updateResponse.text();
-              console.error(`[KB Sync] Failed to update "${localFile.filename}" in ElevenLabs: ${errorText}`);
-              warnings.push(`Failed to push update for "${localFile.filename}": ${errorText}`);
+            if (!createResponse.ok) {
+              const errorText = await createResponse.text();
+              console.error(`[KB Sync] Failed to recreate "${localFile.filename}" in ElevenLabs: ${errorText}`);
+              warnings.push(`Failed to recreate "${localFile.filename}" after deletion: ${errorText}`);
               continue;
             }
 
-            // Update local metadata
+            const newDoc = await createResponse.json();
+
+            // Update local metadata with new docId
             await storage.updateKbFile(localFile.id, {
-              elevenlabsDocId: remoteDocId,
+              elevenlabsDocId: newDoc.id,
               elevenLabsUpdatedAt: new Date(),
               lastSyncedSource: 'local_to_remote',
               lastSyncedAt: new Date()
@@ -3552,7 +3587,7 @@ Ready to receive calls?`;
 
             pushedCount++;
             updatedRemote++;
-            console.log(`[KB Sync] PUSH SUCCESS: Updated "${localFile.filename}" in ElevenLabs`);
+            console.log(`[KB Sync] PUSH SUCCESS: Updated "${localFile.filename}" in ElevenLabs (new docId: ${newDoc.id})`);
           } else {
             // Create new file in ElevenLabs
             console.log(`[KB Sync] PUSH: Creating "${localFile.filename}" in ElevenLabs`);
@@ -3918,14 +3953,29 @@ Ready to receive calls?`;
 
       console.log(`[KB Update] File updated to version ${newVersionNumber}, syncing to ElevenLabs...`);
 
-      // Trigger sync to ElevenLabs (non-blocking)
+      // Trigger sync to ElevenLabs using DELETE+CREATE workflow
+      // ElevenLabs API only allows PATCH for name changes, not content updates
       const elevenLabsConfig = await storage.getElevenLabsConfig();
-      if (elevenLabsConfig?.apiKey && file.elevenLabsDocumentId) {
+      if (elevenLabsConfig?.apiKey && file.elevenLabsDocId) {
         try {
-          // Update document on ElevenLabs
-          await axios.patch(
-            `https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenLabsDocumentId}`,
-            { document_content: content },
+          // Step 1: Delete old document
+          await axios.delete(
+            `https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenLabsDocId}`,
+            {
+              headers: {
+                'xi-api-key': elevenLabsConfig.apiKey,
+              },
+            }
+          );
+          console.log(`[KB Update] Deleted old document ${file.elevenLabsDocId} from ElevenLabs`);
+
+          // Step 2: Create new document with same filename (maintains agent associations)
+          const createResponse = await axios.post(
+            'https://api.elevenlabs.io/v1/convai/knowledge-base',
+            {
+              name: file.filename,
+              content: content
+            },
             {
               headers: {
                 'xi-api-key': elevenLabsConfig.apiKey,
@@ -3933,14 +3983,17 @@ Ready to receive calls?`;
               },
             }
           );
-          console.log(`[KB Update] Successfully synced to ElevenLabs document ${file.elevenLabsDocumentId}`);
           
-          // Update lastSyncedAt
+          const newDoc = createResponse.data;
+          console.log(`[KB Update] Successfully synced to ElevenLabs (new docId: ${newDoc.id})`);
+          
+          // Update with new docId and lastSyncedAt
           await storage.updateKbFile(id, {
+            elevenlabsDocId: newDoc.id,
             lastSyncedAt: new Date(),
           });
         } catch (syncError: any) {
-          console.error(`[KB Update] Error syncing to ElevenLabs:`, syncError);
+          console.error(`[KB Update] Error syncing to ElevenLabs:`, syncError.response?.data || syncError.message);
         }
       }
 
