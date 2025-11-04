@@ -78,7 +78,10 @@ export function ProposalDiffViewer({
     }
   }, [localProposedContent]);
 
-  const isValidEdits = edits.length > 0 && edits.every(e => e.old && e.new && e.reason);
+  // Validate edits - allow empty 'old' for adding new content, but require 'new' and 'reason'
+  const isValidEdits = edits.length > 0 && edits.every(e => 
+    'old' in e && 'new' in e && 'reason' in e && e.new && e.reason
+  );
 
   // Initialize selected edits to all edits when edits change
   useEffect(() => {
