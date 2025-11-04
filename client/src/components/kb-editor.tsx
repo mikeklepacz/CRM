@@ -124,14 +124,21 @@ export function KBEditor({ className }: KBEditorProps) {
     onMutate: () => {
       setSaveStatus('saving');
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setSaveStatus('saved');
       setOriginalContent(content);
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents', selectedItemId, 'details'] });
+      
       toast({
         title: "Success",
-        description: "Agent system prompt updated on ElevenLabs",
+        description: "Agent system prompt updated on ElevenLabs. Syncing...",
       });
+      
+      // Wait 1.5 seconds for ElevenLabs to process the update before fetching
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Invalidate cache to force fresh fetch
+      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents', selectedItemId, 'details'] });
+      
       setTimeout(() => setSaveStatus('idle'), 2000);
     },
     onError: (error: any) => {

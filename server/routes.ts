@@ -1361,6 +1361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`[Agent Prompt] Updating prompt for agent: ${agentId}`);
+      console.log(`[Agent Prompt] New prompt length: ${prompt.length} characters`);
       
       const response = await axios.patch(
         `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
@@ -1374,10 +1375,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       console.log('[Agent Prompt] Successfully updated agent prompt');
+      console.log('[Agent Prompt] ElevenLabs response status:', response.status);
       res.json(response.data);
     } catch (error: any) {
-      console.error('[Agent Prompt] Error updating agent prompt:', error);
-      res.status(500).json({ error: error.message || 'Failed to update agent prompt' });
+      console.error('[Agent Prompt] Error updating agent prompt:', error.response?.data || error.message);
+      res.status(500).json({ error: error.response?.data?.detail?.message || error.message || 'Failed to update agent prompt' });
     }
   });
 
