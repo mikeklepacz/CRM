@@ -206,9 +206,14 @@ export function AlignerChat({ className }: AlignerChatProps) {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    // Use setTimeout to ensure DOM has rendered before scrolling
+    const timer = setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }, 0);
+    
+    return () => clearTimeout(timer);
   }, [messages]);
 
   // Send message mutation
