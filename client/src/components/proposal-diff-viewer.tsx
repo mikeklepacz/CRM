@@ -57,6 +57,7 @@ export function ProposalDiffViewer({
   const [localHumanEdited, setLocalHumanEdited] = useState(proposal.humanEdited || false);
   const [selectedEdits, setSelectedEdits] = useState<Set<number>>(new Set());
   const [inlineEdits, setInlineEdits] = useState<Map<number, string>>(new Map());
+  const [failedEdits, setFailedEdits] = useState<Set<number>>(new Set());
 
   // Sync local state when proposal changes
   useEffect(() => {
@@ -64,6 +65,7 @@ export function ProposalDiffViewer({
     setLocalProposedContent(proposedContent);
     setLocalHumanEdited(proposal.humanEdited || false);
     setInlineEdits(new Map());
+    setFailedEdits(new Set()); // Reset failed edits when proposal changes
   }, [proposal.id, proposedContent, proposal.humanEdited]);
 
   // Parse edits from JSON
@@ -218,8 +220,8 @@ export function ProposalDiffViewer({
 
     // Now proceed with approval based on selection
     if (editsSet.size === edits.length) {
-      // All edits selected, approve directly
-      onApprove?.();
+      // All edits selected, approve directly using internal mutation
+      approveMutation.mutate();
     } else {
       // Partial selection, need to filter to selected edits only
       const selectedEditsArray = edits.filter((_, idx) => editsSet.has(idx));
@@ -231,11 +233,80 @@ export function ProposalDiffViewer({
         savedIndices: Array.from(editsSet)
       }, {
         onSuccess: () => {
-          onApprove?.();
+          // After saving partial edits, approve using internal mutation
+          approveMutation.mutate();
         }
       });
     }
   };
+
+  // Approval mutation (internal)
+  const approveMutation = useMutation({
+    mutationFn: () => apiRequest('POST', `/api/kb/proposals/${proposal.id}/approve`),
+    onSuccess: (data: any) => {
+      // Show detailed sync status
+      if (data.elevenlabsSynced) {
+        const agentsUpdated = data.agentsUpdated || 0;
+        const agentText = agentsUpdated > 0 
+          ? ` (${agentsUpdated} agent${agentsUpdated !== 1 ? 's' : ''} updated)` 
+          : '';
+        
+        toast({
+          title: "Proposal Approved",
+          description: `Version ${data.version.versionNumber} created and synced to ElevenLabs${agentText}`,
+        });
+      } else if (data.syncError) {
+        toast({
+          title: "Partially Completed",
+          description: `Version ${data.version.versionNumber} created locally, but ElevenLabs sync failed: ${data.syncError}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Proposal Approved",
+          description: `Version ${data.version.versionNumber} created (no ElevenLabs config found)`,
+        });
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
+      
+      // Call parent's callback if provided
+      onApprove?.();
+    },
+    onError: (error: any) => {
+      // Check if this is a 422 error with detailed edit failures
+      if (error.failedEdits && Array.isArray(error.failedEdits)) {
+        // Extract failed edit numbers (1-indexed from backend, convert to 0-indexed)
+        const failedIndices = new Set(
+          error.failedEdits.map((f: any) => f.editNumber - 1)
+        );
+        
+        // Update state: mark edits as failed and auto-deselect them
+        setFailedEdits(failedIndices);
+        const newSelected = new Set(selectedEdits);
+        failedIndices.forEach(idx => newSelected.delete(idx));
+        setSelectedEdits(newSelected);
+        
+        // Build friendly error message
+        const successCount = error.totalEdits - error.failedCount;
+        const remainingCount = newSelected.size;
+        
+        toast({
+          title: "Some Edits Could Not Be Applied",
+          description: `${error.failedCount} edit(s) failed because the original text has changed. ${successCount > 0 ? `${successCount} edit(s) were applied successfully. ` : ''}${remainingCount > 0 ? `${remainingCount} edit(s) remain selected and ready to approve.` : 'Please review the failed edits marked in red.'}`,
+          variant: "destructive",
+          duration: 10000,
+        });
+      } else {
+        toast({
+          title: "Approval Failed",
+          description: error.message || error.error || "Failed to approve proposal",
+          variant: "destructive",
+        });
+      }
+    },
+  });
 
   // Edit proposal mutation
   const editMutation = useMutation({
@@ -330,16 +401,16 @@ export function ProposalDiffViewer({
               )}
               <Button
                 onClick={() => handleApproveSelected()}
-                disabled={isApproving || isRejecting || !isValidEdits || selectedEdits.size === 0}
+                disabled={approveMutation.isPending || isRejecting || !isValidEdits || selectedEdits.size === 0}
                 data-testid="button-approve"
                 className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
               >
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                {isApproving ? 'Approving...' : `Approve ${selectedEdits.size === edits.length ? 'All' : selectedEdits.size} ${selectedEdits.size === 1 ? 'Change' : 'Changes'}`}
+                {approveMutation.isPending ? 'Approving...' : `Approve ${selectedEdits.size === edits.length ? 'All' : selectedEdits.size} ${selectedEdits.size === 1 ? 'Change' : 'Changes'}`}
               </Button>
               <Button
                 onClick={onReject}
-                disabled={isApproving || isRejecting}
+                disabled={approveMutation.isPending || isRejecting}
                 variant="destructive"
                 data-testid="button-reject"
               >
@@ -370,26 +441,39 @@ export function ProposalDiffViewer({
             </Card>
           ) : (
             <div className="space-y-4">
-              {edits.map((edit, idx) => (
-                <Card key={idx} data-testid={`card-edit-${idx}`} className={!selectedEdits.has(idx) ? 'opacity-50' : ''}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1">
-                        <Checkbox
-                          checked={selectedEdits.has(idx)}
-                          onCheckedChange={() => toggleEditSelection(idx)}
-                          data-testid={`checkbox-edit-${idx}`}
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            Edit {idx + 1}
-                            {edit.section && (
-                              <Badge variant="outline" data-testid={`badge-section-${idx}`}>
-                                {edit.section}
-                              </Badge>
-                            )}
-                          </CardTitle>
+              {edits.map((edit, idx) => {
+                const isFailed = failedEdits.has(idx);
+                return (
+                  <Card 
+                    key={idx} 
+                    data-testid={`card-edit-${idx}`} 
+                    className={`${!selectedEdits.has(idx) ? 'opacity-50' : ''} ${isFailed ? 'border-red-500 dark:border-red-700 border-2' : ''}`}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 flex-1">
+                          <Checkbox
+                            checked={selectedEdits.has(idx)}
+                            onCheckedChange={() => toggleEditSelection(idx)}
+                            data-testid={`checkbox-edit-${idx}`}
+                            className="mt-1"
+                            disabled={isFailed}
+                          />
+                          <div className="flex-1">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              Edit {idx + 1}
+                              {edit.section && (
+                                <Badge variant="outline" data-testid={`badge-section-${idx}`}>
+                                  {edit.section}
+                                </Badge>
+                              )}
+                              {isFailed && (
+                                <Badge variant="destructive" className="flex items-center gap-1" data-testid={`badge-failed-${idx}`}>
+                                  <AlertCircle className="h-3 w-3" />
+                                  Text No Longer Exists
+                                </Badge>
+                              )}
+                            </CardTitle>
                           {edit.principle && (
                             <CardDescription data-testid={`text-principle-${idx}`}>
                               Principle: {edit.principle}
@@ -406,7 +490,7 @@ export function ProposalDiffViewer({
                               // Approve only this specific edit
                               handleApproveSelected(new Set([idx]));
                             }}
-                            disabled={isApproving || isRejecting}
+                            disabled={approveMutation.isPending || isRejecting || isFailed}
                             data-testid={`button-approve-single-${idx}`}
                             className="bg-green-50 hover:bg-green-100 dark:bg-green-950 dark:hover:bg-green-900 border-green-300 dark:border-green-700"
                           >
@@ -473,7 +557,8 @@ export function ProposalDiffViewer({
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
