@@ -226,12 +226,12 @@ export function KBEditor({ className }: KBEditorProps) {
               ) : (
                 agents.map((agent: any) => (
                   <Button
-                    key={agent.agentId}
-                    variant={selectedItemId === agent.agentId ? 'secondary' : 'ghost'}
+                    key={agent.agent_id}
+                    variant={selectedItemId === agent.agent_id ? 'secondary' : 'ghost'}
                     size="sm"
-                    onClick={() => setSelectedItemId(agent.agentId)}
+                    onClick={() => setSelectedItemId(agent.agent_id)}
                     className="w-full justify-start text-left"
-                    data-testid={`button-select-agent-${agent.agentId}`}
+                    data-testid={`button-select-agent-${agent.agent_id}`}
                   >
                     <User className="h-3 w-3 mr-2 flex-shrink-0" />
                     <span className="truncate text-xs">{agent.name}</span>
@@ -274,7 +274,7 @@ export function KBEditor({ className }: KBEditorProps) {
                   <>
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium text-sm">
-                      {agents.find((a: any) => a.agentId === selectedItemId)?.name} System Prompt
+                      {agents.find((a: any) => a.agent_id === selectedItemId)?.name} System Prompt
                     </span>
                   </>
                 )}
