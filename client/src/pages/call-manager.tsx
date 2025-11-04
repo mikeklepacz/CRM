@@ -238,11 +238,25 @@ function KBLibraryTab() {
   // Approve proposal mutation
   const approveMutation = useMutation({
     mutationFn: (proposalId: string) => apiRequest('POST', `/api/kb/proposals/${proposalId}/approve`),
-    onSuccess: () => {
-      toast({
-        title: "Proposal Approved",
-        description: "Changes have been applied to the KB file and synced to ElevenLabs",
-      });
+    onSuccess: (data: any) => {
+      // Show detailed sync status
+      if (data.elevenlabsSynced) {
+        toast({
+          title: "Proposal Approved",
+          description: `Version ${data.version.versionNumber} created and synced to ElevenLabs successfully`,
+        });
+      } else if (data.syncError) {
+        toast({
+          title: "Partially Completed",
+          description: `Version ${data.version.versionNumber} created locally, but ElevenLabs sync failed: ${data.syncError}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Proposal Approved",
+          description: `Version ${data.version.versionNumber} created (no ElevenLabs config found)`,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
       queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
       setIsDiffDialogOpen(false);

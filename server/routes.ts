@@ -5112,29 +5112,63 @@ IMPORTANT:
         reviewedBy: userId,
       });
 
-      // Push update to ElevenLabs
+      // Sync to ElevenLabs using DELETE+CREATE workflow
+      // ElevenLabs API only allows PATCH for name changes, not content updates
       const elevenLabsConfig = await storage.getElevenLabsConfig();
+      let syncSuccess = false;
+      let syncError = null;
+      
       if (elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
         try {
-          await fetch(`https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenlabsDocId}`, {
-            method: 'PATCH',
-            headers: {
-              'xi-api-key': elevenLabsConfig.apiKey,
-              'Content-Type': 'application/json',
+          console.log(`[KB Approve] Syncing to ElevenLabs: deleting old doc ${file.elevenlabsDocId}`);
+          
+          // Step 1: Delete old document
+          await axios.delete(
+            `https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenlabsDocId}`,
+            {
+              headers: {
+                'xi-api-key': elevenLabsConfig.apiKey,
+              },
+            }
+          );
+          console.log(`[KB Approve] Deleted old document ${file.elevenlabsDocId} from ElevenLabs`);
+
+          // Step 2: Create new document with same filename (maintains agent associations)
+          const createResponse = await axios.post(
+            'https://api.elevenlabs.io/v1/convai/knowledge-base',
+            {
+              name: file.filename,
+              content: finalContent
             },
-            body: JSON.stringify({
-              content: finalContent,
-            }),
+            {
+              headers: {
+                'xi-api-key': elevenLabsConfig.apiKey,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          
+          const newDoc = createResponse.data;
+          console.log(`[KB Approve] Successfully synced to ElevenLabs (new docId: ${newDoc.id})`);
+          
+          // Update with new docId and lastSyncedAt
+          await storage.updateKbFile(file.id, {
+            elevenlabsDocId: newDoc.id,
+            lastSyncedAt: new Date(),
           });
-        } catch (error) {
-          console.error('[KB] Error pushing update to ElevenLabs:', error);
-          // Don't fail the request if ElevenLabs update fails
+          
+          syncSuccess = true;
+        } catch (error: any) {
+          console.error('[KB Approve] Error syncing to ElevenLabs:', error.response?.data || error.message);
+          syncError = error.response?.data?.detail?.message || error.message || 'Failed to sync to ElevenLabs';
         }
       }
 
       res.json({
         success: true,
         version: newVersion,
+        elevenlabsSynced: syncSuccess,
+        syncError: syncError,
       });
     } catch (error: any) {
       console.error('[KB] Error approving proposal:', error);
