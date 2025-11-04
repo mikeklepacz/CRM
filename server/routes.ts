@@ -1304,10 +1304,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log('[Agent Details] Successfully fetched agent details');
-      console.log('[Agent Details] Response structure:', JSON.stringify(response.data, null, 2).substring(0, 1000));
-      console.log('[Agent Details] Prompt field exists?', 'prompt' in response.data);
-      console.log('[Agent Details] Prompt value:', response.data.prompt);
-      res.json(response.data);
+      console.log('[Agent Details] Full response keys:', Object.keys(response.data));
+      
+      // Log the full nested structure to find where the prompt lives
+      const data = response.data;
+      if (data.conversation_config) {
+        console.log('[Agent Details] conversation_config keys:', Object.keys(data.conversation_config));
+      }
+      if (data.platform_settings) {
+        console.log('[Agent Details] platform_settings keys:', Object.keys(data.platform_settings));
+      }
+      
+      // Extract system prompt from nested structure
+      const systemPrompt = data.prompt 
+        || data.system_prompt 
+        || data.conversation_config?.agent?.prompt
+        || data.conversation_config?.prompt
+        || data.platform_settings?.prompt
+        || '';
+      
+      console.log('[Agent Details] Extracted system prompt:', systemPrompt ? systemPrompt.substring(0, 200) + '...' : '(empty)');
+      
+      // Return the response with the prompt at the top level for easier access
+      res.json({
+        ...data,
+        prompt: systemPrompt
+      });
     } catch (error: any) {
       console.error('[Agent Details] Error fetching agent details:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch agent details' });
