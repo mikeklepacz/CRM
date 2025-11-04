@@ -1,0 +1,513 @@
+{
+  "agent_id": "agent_7101k5zvyjhmfg983brhmhkd98n6",
+  "name": "My Agent",
+  "conversation_config": {
+    "asr": {
+      "quality": "high",
+      "provider": "elevenlabs",
+      "user_input_audio_format": "pcm_8000",
+      "keywords": [
+        "string"
+      ]
+    },
+    "turn": {
+      "turn_timeout": 7,
+      "silence_end_call_timeout": -1,
+      "turn_eagerness": "patient"
+    },
+    "tts": {
+      "model_id": "eleven_turbo_v2",
+      "voice_id": "cjVigY5qzO86Huf0OWal",
+      "supported_voices": [
+        {
+          "label": "string",
+          "voice_id": "string",
+          "description": "string",
+          "language": "string",
+          "model_family": "turbo",
+          "optimize_streaming_latency": 0,
+          "stability": 0.5,
+          "speed": 1.1,
+          "similarity_boost": 0.5
+        }
+      ],
+      "agent_output_audio_format": "pcm_8000",
+      "optimize_streaming_latency": 0,
+      "stability": 0.5,
+      "speed": 1,
+      "similarity_boost": 0.8,
+      "pronunciation_dictionary_locators": [
+        {
+          "pronunciation_dictionary_id": "string",
+          "version_id": "string"
+        }
+      ]
+    },
+    "conversation": {
+      "text_only": false,
+      "max_duration_seconds": 600,
+      "client_events": [
+        "conversation_initiation_metadata"
+      ]
+    },
+    "language_presets": {},
+    "vad": {},
+    "agent": {
+      "first_message": "",
+      "language": "en",
+      "dynamic_variables": {
+        "dynamic_variable_placeholders": {}
+      },
+      "disable_first_message_interruptions": false,
+      "prompt": {
+        "prompt": "",
+        "llm": "gpt-4o-mini",
+        "reasoning_effort": "minimal",
+        "thinking_budget": 1,
+        "temperature": 0,
+        "max_tokens": -1,
+        "tool_ids": [
+          "string"
+        ],
+        "built_in_tools": {
+          "end_call": {
+            "name": "string",
+            "params": {
+              "system_tool_type": "end_call"
+            },
+            "type": "system",
+            "description": "",
+            "response_timeout_secs": 20,
+            "disable_interruptions": false,
+            "force_pre_tool_speech": false,
+            "assignments": [
+              {
+                "dynamic_variable": "string",
+                "value_path": "string",
+                "source": "response"
+              }
+            ],
+            "tool_call_sound": "typing",
+            "tool_call_sound_behavior": "auto"
+          },
+          "language_detection": {
+            "name": "string",
+            "params": {
+              "system_tool_type": "end_call"
+            },
+            "type": "system",
+            "description": "",
+            "response_timeout_secs": 20,
+            "disable_interruptions": false,
+            "force_pre_tool_speech": false,
+            "assignments": [
+              {
+                "dynamic_variable": "string",
+                "value_path": "string",
+                "source": "response"
+              }
+            ],
+            "tool_call_sound": "typing",
+            "tool_call_sound_behavior": "auto"
+          },
+          "transfer_to_agent": {
+            "name": "string",
+            "params": {
+              "system_tool_type": "end_call"
+            },
+            "type": "system",
+            "description": "",
+            "response_timeout_secs": 20,
+            "disable_interruptions": false,
+            "force_pre_tool_speech": false,
+            "assignments": [
+              {
+                "dynamic_variable": "string",
+                "value_path": "string",
+                "source": "response"
+              }
+            ],
+            "tool_call_sound": "typing",
+            "tool_call_sound_behavior": "auto"
+          },
+          "transfer_to_number": {
+            "name": "string",
+            "params": {
+              "system_tool_type": "end_call"
+            },
+            "type": "system",
+            "description": "",
+            "response_timeout_secs": 20,
+            "disable_interruptions": false,
+            "force_pre_tool_speech": false,
+            "assignments": [
+              {
+                "dynamic_variable": "string",
+                "value_path": "string",
+                "source": "response"
+              }
+            ],
+            "tool_call_sound": "typing",
+            "tool_call_sound_behavior": "auto"
+          },
+          "skip_turn": {
+            "name": "string",
+            "params": {
+              "system_tool_type": "end_call"
+            },
+            "type": "system",
+            "description": "",
+            "response_timeout_secs": 20,
+            "disable_interruptions": false,
+            "force_pre_tool_speech": false,
+            "assignments": [
+              {
+                "dynamic_variable": "string",
+                "value_path": "string",
+                "source": "response"
+              }
+            ],
+            "tool_call_sound": "typing",
+            "tool_call_sound_behavior": "auto"
+          },
+          "play_keypad_touch_tone": {
+            "name": "string",
+            "params": {
+              "system_tool_type": "end_call"
+            },
+            "type": "system",
+            "description": "",
+            "response_timeout_secs": 20,
+            "disable_interruptions": false,
+            "force_pre_tool_speech": false,
+            "assignments": [
+              {
+                "dynamic_variable": "string",
+                "value_path": "string",
+                "source": "response"
+              }
+            ],
+            "tool_call_sound": "typing",
+            "tool_call_sound_behavior": "auto"
+          },
+          "voicemail_detection": {
+            "name": "string",
+            "params": {
+              "system_tool_type": "end_call"
+            },
+            "type": "system",
+            "description": "",
+            "response_timeout_secs": 20,
+            "disable_interruptions": false,
+            "force_pre_tool_speech": false,
+            "assignments": [
+              {
+                "dynamic_variable": "string",
+                "value_path": "string",
+                "source": "response"
+              }
+            ],
+            "tool_call_sound": "typing",
+            "tool_call_sound_behavior": "auto"
+          }
+        },
+        "mcp_server_ids": [
+          "string"
+        ],
+        "native_mcp_server_ids": [
+          "string"
+        ],
+        "knowledge_base": [
+          {
+            "type": "file",
+            "name": "string",
+            "id": "string",
+            "usage_mode": "prompt"
+          }
+        ],
+        "custom_llm": {
+          "url": "string",
+          "model_id": "string",
+          "api_key": {
+            "secret_id": "string"
+          },
+          "request_headers": {},
+          "api_version": "string"
+        },
+        "ignore_default_personality": true,
+        "rag": {
+          "enabled": false,
+          "embedding_model": "e5_mistral_7b_instruct",
+          "max_vector_distance": 0.6,
+          "max_documents_length": 50000,
+          "max_retrieved_rag_chunks_count": 20
+        },
+        "timezone": "string",
+        "backup_llm_config": {
+          "preference": "default"
+        },
+        "tools": [
+          {
+            "type": "webhook",
+            "name": "string",
+            "description": "string",
+            "response_timeout_secs": 20,
+            "disable_interruptions": false,
+            "force_pre_tool_speech": false,
+            "assignments": [
+              {
+                "source": "response",
+                "dynamic_variable": "string",
+                "value_path": "string"
+              }
+            ],
+            "tool_call_sound": "typing",
+            "tool_call_sound_behavior": "auto",
+            "dynamic_variables": {
+              "dynamic_variable_placeholders": {}
+            },
+            "execution_mode": "immediate",
+            "api_schema": {
+              "url": "string",
+              "method": "GET",
+              "path_params_schema": {},
+              "query_params_schema": {
+                "properties": {},
+                "required": [
+                  "string"
+                ]
+              },
+              "request_body_schema": {
+                "type": "object",
+                "required": [
+                  "string"
+                ],
+                "description": "",
+                "properties": {}
+              },
+              "request_headers": {},
+              "auth_connection": {
+                "auth_connection_id": "string"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "metadata": {
+    "created_at_unix_secs": 1,
+    "updated_at_unix_secs": 1
+  },
+  "workflow": {
+    "edges": {
+      "entry_to_tool_a": {
+        "source": "entry_node",
+        "target": "tool_node_a",
+        "forward_condition": {
+          "condition": "Tool A condition",
+          "type": "llm"
+        }
+      },
+      "start_to_entry": {
+        "source": "start_node",
+        "target": "entry_node",
+        "forward_condition": {
+          "type": "unconditional"
+        }
+      },
+      "tool_a_to_failure": {
+        "source": "tool_node_a",
+        "target": "failure_node",
+        "forward_condition": {
+          "successful": false,
+          "type": "result"
+        }
+      },
+      "tool_a_to_tool_b": {
+        "source": "tool_node_a",
+        "target": "tool_node_b",
+        "forward_condition": {
+          "successful": true,
+          "type": "result"
+        }
+      },
+      "tool_b_to_agent_transfer": {
+        "source": "tool_node_b",
+        "target": "success_transfer",
+        "forward_condition": {
+          "type": "unconditional"
+        }
+      },
+      "tool_b_to_conversation": {
+        "source": "tool_node_b",
+        "target": "success_conversation",
+        "forward_condition": {
+          "condition": "Conversation condition",
+          "type": "llm"
+        }
+      },
+      "tool_b_to_end": {
+        "source": "tool_node_b",
+        "target": "success_end",
+        "forward_condition": {
+          "condition": "End condition",
+          "type": "llm"
+        }
+      },
+      "tool_b_to_phone": {
+        "source": "tool_node_b",
+        "target": "success_phone",
+        "forward_condition": {
+          "expression": {
+            "children": [
+              {
+                "name": "force_phone_transfer",
+                "type": "dynamic_variable"
+              },
+              {
+                "prompt": "Phone condition",
+                "type": "llm"
+              },
+              {
+                "left": {
+                  "name": "mode",
+                  "type": "dynamic_variable"
+                },
+                "right": {
+                  "type": "string_literal",
+                  "value": "dev"
+                },
+                "type": "eq_operator"
+              }
+            ],
+            "type": "or_operator"
+          },
+          "type": "expression"
+        }
+      }
+    },
+    "nodes": {
+      "entry_node": {
+        "additional_knowledge_base": [],
+        "additional_prompt": "",
+        "additional_tool_ids": [],
+        "conversation_config": {},
+        "edge_order": [
+          "entry_to_tool_a"
+        ],
+        "label": "Entry",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "type": "override_agent"
+      },
+      "failure_node": {
+        "additional_knowledge_base": [],
+        "additional_prompt": "",
+        "additional_tool_ids": [],
+        "conversation_config": {},
+        "edge_order": [],
+        "label": "Failure",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "type": "override_agent"
+      },
+      "start_node": {
+        "edge_order": [
+          "start_to_entry"
+        ],
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "type": "start"
+      },
+      "success_conversation": {
+        "additional_knowledge_base": [],
+        "additional_prompt": "",
+        "additional_tool_ids": [],
+        "conversation_config": {},
+        "edge_order": [],
+        "label": "Success A",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "type": "override_agent"
+      },
+      "success_end": {
+        "edge_order": [],
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "type": "end"
+      },
+      "success_phone": {
+        "edge_order": [],
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "transfer_destination": {
+          "phone_number": "+1234567890",
+          "type": "phone"
+        },
+        "transfer_type": "conference",
+        "type": "phone_number"
+      },
+      "success_transfer": {
+        "agent_id": "success_transfer_agent",
+        "delay_ms": 0,
+        "edge_order": [],
+        "enable_transferred_agent_first_message": false,
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "type": "standalone_agent"
+      },
+      "tool_node_a": {
+        "edge_order": [
+          "tool_a_to_failure",
+          "tool_a_to_tool_b"
+        ],
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "tools": [
+          {
+            "tool_id": "tool_a"
+          },
+          {
+            "tool_id": "tool_b"
+          }
+        ],
+        "type": "tool"
+      },
+      "tool_node_b": {
+        "edge_order": [
+          "tool_b_to_conversation",
+          "tool_b_to_end",
+          "tool_b_to_phone",
+          "tool_b_to_agent_transfer"
+        ],
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "tools": [
+          {
+            "tool_id": "tool_a"
+          }
+        ],
+        "type": "tool"
+      }
+    }
+  }
+}
