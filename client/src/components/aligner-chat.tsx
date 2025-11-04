@@ -141,7 +141,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
     }
   });
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check if API key is configured
   const { data: settings, isLoading: settingsLoading } = useQuery({
@@ -208,13 +208,21 @@ export function AlignerChat({ className }: AlignerChatProps) {
   useEffect(() => {
     // Use setTimeout to ensure DOM has rendered before scrolling
     const timer = setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }, 100);
     
     return () => clearTimeout(timer);
   }, [messages]);
+
+  // Also scroll when conversation messages load (for switching conversations)
+  useEffect(() => {
+    if (conversationMessages && conversationMessages.length > 0) {
+      const timer = setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [conversationMessages]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -483,8 +491,8 @@ export function AlignerChat({ className }: AlignerChatProps) {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-          <div className="space-y-4 max-w-4xl mx-auto">
+        <ScrollArea className="flex-1">
+          <div className="p-4 space-y-4 max-w-4xl mx-auto">
             {messages.length === 0 && !messagesLoading ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Lightbulb className="h-12 w-12 mx-auto mb-4 opacity-50 text-amber-500" />
@@ -600,6 +608,8 @@ export function AlignerChat({ className }: AlignerChatProps) {
                 </div>
               </div>
             )}
+            {/* Scroll anchor */}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
