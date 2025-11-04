@@ -204,7 +204,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
     }
   }, [conversations, selectedConversationId]);
 
-  // Scroll to bottom when messages change or when loading state changes
+  // Scroll to bottom when messages change
   useEffect(() => {
     // Use setTimeout to ensure DOM has rendered before scrolling
     const timer = setTimeout(() => {
@@ -214,7 +214,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
     }, 100);
     
     return () => clearTimeout(timer);
-  }, [messages, sendMessageMutation.isPending]);
+  }, [messages]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
