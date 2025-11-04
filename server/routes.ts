@@ -3384,13 +3384,19 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
 
       let threadId = conversation.threadId;
 
+      // Get OpenAI settings
+      const settings = await storage.getOpenaiSettings();
+      if (!settings?.apiKey) {
+        return res.status(400).json({ error: 'OpenAI API key not configured' });
+      }
+
       // Get Aligner assistant config
-      const alignerAssistant = await storage.getAlignerAssistant();
-      if (!alignerAssistant) {
+      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      if (!alignerAssistant || !alignerAssistant.assistantId) {
         return res.status(500).json({ error: 'Aligner assistant not configured' });
       }
 
-      const openai = new OpenAI({ apiKey: alignerAssistant.apiKey });
+      const openai = new OpenAI({ apiKey: settings.apiKey });
 
       // Build context with KB file list
       const allKbFiles = await storage.getAllKbFiles();
