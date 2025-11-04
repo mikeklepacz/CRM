@@ -342,13 +342,6 @@ export function AlignerChat({ className }: AlignerChatProps) {
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setMessage("");
     sendMessageMutation.mutate(userMessage);
-    
-    // Force scroll after user message
-    setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
-    }, 100);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
