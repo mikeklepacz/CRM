@@ -204,17 +204,17 @@ export function AlignerChat({ className }: AlignerChatProps) {
     }
   }, [conversations, selectedConversationId]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change or when loading state changes
   useEffect(() => {
     // Use setTimeout to ensure DOM has rendered before scrolling
     const timer = setTimeout(() => {
       if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }
-    }, 0);
+    }, 100);
     
     return () => clearTimeout(timer);
-  }, [messages]);
+  }, [messages, sendMessageMutation.isPending]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -334,6 +334,13 @@ export function AlignerChat({ className }: AlignerChatProps) {
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setMessage("");
     sendMessageMutation.mutate(userMessage);
+    
+    // Force scroll after user message
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }, 100);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
