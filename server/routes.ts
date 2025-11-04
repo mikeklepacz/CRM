@@ -2813,10 +2813,11 @@ Ready to receive calls?`;
         });
       }
 
-      // Create a map of conversation IDs to enriched metadata
-      const conversationMap = new Map(
-        callsData.map(call => [
-          call.session.conversationId,
+      // Create a map of call indices (1, 2, 3...) to enriched metadata
+      // OpenAI refers to calls by their number in the transcript ("Call 1", "Call 2", etc.)
+      const callIndexMap = new Map(
+        callsData.map((call, idx) => [
+          String(idx + 1), // Call numbers start at 1
           {
             conversationId: call.session.conversationId,
             duration: call.session.callDurationSecs,
@@ -2832,14 +2833,14 @@ Ready to receive calls?`;
       const enrichObjections = (objections: any[]) => {
         return objections.map(obj => ({
           ...obj,
-          exampleConversations: obj.exampleConversations?.map((convId: string) => conversationMap.get(convId) || { conversationId: convId }).filter(Boolean) || []
+          exampleConversations: obj.exampleConversations?.map((callNum: string) => callIndexMap.get(callNum) || { conversationId: callNum }).filter(Boolean) || []
         }));
       };
 
       const enrichPatterns = (patterns: any[]) => {
         return patterns.map(pattern => ({
           ...pattern,
-          exampleConversations: pattern.exampleConversations?.map((convId: string) => conversationMap.get(convId) || { conversationId: convId }).filter(Boolean) || []
+          exampleConversations: pattern.exampleConversations?.map((callNum: string) => callIndexMap.get(callNum) || { conversationId: callNum }).filter(Boolean) || []
         }));
       };
 
