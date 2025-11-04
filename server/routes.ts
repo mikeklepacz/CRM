@@ -664,6 +664,61 @@ function stringSimilarity(str1: string, str2: string): number {
   return 1 - (distance / maxLen);
 }
 
+// Sync a single KB file to Aligner's vector store (for auto-sync after edits)
+async function syncKbFileToAlignerVectorStore(
+  kbFileId: string,
+  content: string,
+  filename: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Get Aligner assistant
+    const alignerAssistant = await storage.getAssistantBySlug('aligner');
+    if (!alignerAssistant?.assistantId || !alignerAssistant.vectorStoreId) {
+      return { success: false, error: 'Aligner not configured with vector store' };
+    }
+
+    // Get OpenAI settings
+    const openaiSettings = await storage.getOpenaiSettings();
+    if (!openaiSettings?.apiKey) {
+      return { success: false, error: 'OpenAI API key not configured' };
+    }
+
+    const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+
+    // Create temporary file
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const os = await import('os');
+    
+    const tmpDir = os.tmpdir();
+    const tmpFilePath = path.join(tmpDir, `aligner-${Date.now()}-${filename}`);
+    
+    await fs.writeFile(tmpFilePath, content, 'utf-8');
+
+    // Upload to OpenAI
+    const fileStream = await fs.open(tmpFilePath, 'r');
+    const uploadedFile = await openai.files.create({
+      file: fileStream.createReadStream(),
+      purpose: 'assistants',
+    });
+    
+    await fileStream.close();
+    await fs.unlink(tmpFilePath);
+
+    // Add to vector store
+    await openai.beta.vectorStores.files.create(alignerAssistant.vectorStoreId, {
+      file_id: uploadedFile.id,
+    });
+
+    console.log(`[Auto-Sync] Synced ${filename} to Aligner vector store: ${uploadedFile.id}`);
+    return { success: true };
+
+  } catch (error: any) {
+    console.error(`[Auto-Sync] Failed to sync ${filename}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Convert column index to Google Sheets column letter (0 -> A, 25 -> Z, 26 -> AA, etc.)
 function columnIndexToLetter(index: number): string {
   let letter = '';
@@ -3215,19 +3270,10 @@ Ready to receive calls?`;
       const conversation = await storage.getConversation(activeConversationId);
       let threadId = conversation?.threadId;
 
-      // Fetch current KB files to provide context
-      const allKbFiles = await storage.getAllKbFiles();
-      const kbContext = allKbFiles
-        .map(file => `\n### ${file.filename}${file.agentId ? ` (Agent-specific: ${file.agentId})` : ' (General - all agents)'}\n\`\`\`\n${file.currentContent || '(empty)'}\n\`\`\``)
-        .join('\n');
-
       // Build contextual instructions for collaborative workflow
-      const contextualInstructions = `## CURRENT KNOWLEDGE BASE FILES:
-${kbContext}
-
----
-
-## YOUR ROLE & WORKFLOW:
+      // NOTE: KB files are already uploaded to OpenAI and accessible via file_search tool
+      // No need to paste full content inline (saves ~50k tokens per message!)
+      const contextualInstructions = `## YOUR ROLE & WORKFLOW:
 You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge base through collaborative discussion.
 
 **When the user pastes a call transcript or describes an issue:**
@@ -3267,8 +3313,8 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
 \`\`\`
 
 **IMPORTANT RULES:**
-- ONLY reference files that exist in the KB file list above
-- DO NOT hallucinate or invent filenames
+- Use the file_search tool to access all KB files - they're already uploaded to OpenAI
+- DO NOT hallucinate or invent filenames - search the KB to confirm files exist
 - DO NOT output JSON proposals until the user explicitly asks for them
 - Focus on DISCUSSION and COLLABORATION first
 - Be specific - cite exact quotes and explain your reasoning
@@ -4711,6 +4757,12 @@ The user has agreed to create proposals. Please output your recommended changes 
         }
       }
 
+      // Auto-sync to Aligner's vector store
+      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, content, file.filename);
+      if (!alignerSyncResult.success) {
+        console.warn(`[KB Update] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
+      }
+
       res.json(updatedFile);
     } catch (error: any) {
       console.error('[KB Update] Error updating file:', error);
@@ -5409,6 +5461,12 @@ IMPORTANT:
         }
       }
 
+      // Auto-sync to Aligner's vector store (keeps analysis up-to-date)
+      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, finalContent, file.filename);
+      if (!alignerSyncResult.success) {
+        console.warn(`[KB Approve] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
+      }
+
       res.json({
         success: true,
         version: newVersion,
@@ -5464,6 +5522,12 @@ IMPORTANT:
         currentSyncVersion: newVersion.id,
         localUpdatedAt: new Date(), // Mark as locally updated for sync
       });
+
+      // Auto-sync to Aligner's vector store
+      const alignerSyncResult = await syncKbFileToAlignerVectorStore(file.id, targetVersion.content, file.filename);
+      if (!alignerSyncResult.success) {
+        console.warn(`[KB Rollback] Aligner sync failed (non-critical): ${alignerSyncResult.error}`);
+      }
 
       res.json({
         success: true,
@@ -5681,10 +5745,10 @@ IMPORTANT:
     }
   });
 
-  // Sync KB files to Aligner assistant on OpenAI
+  // Sync KB files to Aligner assistant's vector store on OpenAI
   app.post('/api/aligner/sync-kb', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      console.log('[Aligner Sync] Starting KB files sync to OpenAI...');
+      console.log('[Aligner Sync] Starting KB files sync to OpenAI vector store...');
       
       // Get Aligner assistant
       const alignerAssistant = await storage.getAssistantBySlug('aligner');
@@ -5702,15 +5766,43 @@ IMPORTANT:
         return res.status(400).json({ error: 'OpenAI API key not configured' });
       }
 
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+
+      // Create vector store if doesn't exist
+      let vectorStoreId = alignerAssistant.vectorStoreId;
+      if (!vectorStoreId) {
+        console.log('[Aligner Sync] Creating new vector store for Aligner...');
+        const vectorStore = await openai.beta.vectorStores.create({
+          name: 'Aligner KB Files',
+        });
+        vectorStoreId = vectorStore.id;
+        
+        // Save to database
+        await storage.updateAssistant(alignerAssistant.id, { vectorStoreId });
+        
+        // Update OpenAI assistant to use vector store
+        await openai.beta.assistants.update(alignerAssistant.assistantId, {
+          tools: [{ type: 'file_search' }],
+          tool_resources: {
+            file_search: {
+              vector_store_ids: [vectorStoreId]
+            }
+          }
+        });
+        
+        console.log('[Aligner Sync] Vector store created and linked:', vectorStoreId);
+      } else {
+        console.log('[Aligner Sync] Using existing vector store:', vectorStoreId);
+      }
+
       // Get all KB files
       const kbFiles = await storage.getAllKbFiles();
       console.log(`[Aligner Sync] Found ${kbFiles.length} KB files to sync`);
 
-      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
       const syncResults = [];
       const errors = [];
 
-      // Upload each KB file to OpenAI
+      // Upload each KB file to vector store
       for (const kbFile of kbFiles) {
         try {
           console.log(`[Aligner Sync] Processing file: ${kbFile.filename}`);
@@ -5747,12 +5839,12 @@ IMPORTANT:
           
           console.log(`[Aligner Sync] Uploaded ${kbFile.filename} to OpenAI: ${uploadedFile.id}`);
 
-          // Attach file to assistant
-          await openai.beta.assistants.files.create(alignerAssistant.assistantId, {
+          // Add file to vector store
+          await openai.beta.vectorStores.files.create(vectorStoreId, {
             file_id: uploadedFile.id,
           });
           
-          console.log(`[Aligner Sync] Attached ${kbFile.filename} to Aligner assistant`);
+          console.log(`[Aligner Sync] Added ${kbFile.filename} to vector store`);
 
           syncResults.push({
             filename: kbFile.filename,
@@ -5775,6 +5867,7 @@ IMPORTANT:
         success: true,
         synced: syncResults.length,
         failed: errors.length,
+        vectorStoreId: vectorStoreId,
         results: syncResults,
         errors: errors,
       });
