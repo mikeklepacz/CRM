@@ -1316,12 +1316,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Extract system prompt from nested structure
-      const systemPrompt = data.prompt 
+      let systemPrompt = data.prompt 
         || data.system_prompt 
         || data.conversation_config?.agent?.prompt
         || data.conversation_config?.prompt
         || data.platform_settings?.prompt
         || '';
+      
+      // Handle case where prompt is an object with a 'prompt' field
+      if (typeof systemPrompt === 'object' && systemPrompt !== null) {
+        systemPrompt = systemPrompt.prompt || JSON.stringify(systemPrompt);
+      }
+      
+      // Ensure it's a string
+      systemPrompt = String(systemPrompt || '');
       
       console.log('[Agent Details] Extracted system prompt:', systemPrompt ? systemPrompt.substring(0, 200) + '...' : '(empty)');
       
