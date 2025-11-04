@@ -3982,60 +3982,30 @@ The user has agreed to create proposals. Please output your recommended changes 
       for (const { localFile, remoteDocId } of filesToPush) {
         try {
           if (remoteDocId) {
-            // Update existing file in ElevenLabs using DELETE+CREATE workflow
-            // ElevenLabs API only allows PATCH for name changes, not content updates
-            console.log(`[KB Sync] PUSH: Updating "${localFile.filename}" in ElevenLabs (DELETE+CREATE workflow, docId: ${remoteDocId})`);
+            // Update existing file in ElevenLabs using zero-downtime engine swap
+            console.log(`[KB Sync] PUSH: Updating "${localFile.filename}" in ElevenLabs (engine swap, docId: ${remoteDocId})`);
             
-            // Step 1: Delete old document
-            const deleteResponse = await fetch(`https://api.elevenlabs.io/v1/convai/knowledge-base/${remoteDocId}`, {
-              method: 'DELETE',
-              headers: {
-                'xi-api-key': elevenLabsConfig.apiKey
-              }
-            });
+            const syncResult = await syncKbDocumentToElevenLabs(
+              localFile.id,
+              localFile.filename,
+              localFile.currentContent
+            );
 
-            if (!deleteResponse.ok) {
-              const errorText = await deleteResponse.text();
-              console.error(`[KB Sync] Failed to delete old "${localFile.filename}" in ElevenLabs: ${errorText}`);
-              warnings.push(`Failed to delete old version of "${localFile.filename}": ${errorText}`);
-              continue;
+            if (syncResult.success) {
+              // Update local metadata with new docId and timestamp
+              await storage.updateKbFile(localFile.id, {
+                elevenLabsUpdatedAt: new Date(),
+                lastSyncedSource: 'local_to_remote',
+                lastSyncedAt: new Date()
+              });
+
+              pushedCount++;
+              updatedRemote++;
+              console.log(`[KB Sync] PUSH SUCCESS: Updated "${localFile.filename}" in ElevenLabs (new docId: ${syncResult.newDocId}, agents updated: ${syncResult.agentsUpdated})`);
+            } else {
+              console.error(`[KB Sync] Failed to update "${localFile.filename}" in ElevenLabs: ${syncResult.error}`);
+              warnings.push(`Failed to update "${localFile.filename}": ${syncResult.error}`);
             }
-
-            console.log(`[KB Sync] Deleted old document ${remoteDocId}, creating new version...`);
-
-            // Step 2: Create new document with same filename (maintains agent associations)
-            const createResponse = await fetch('https://api.elevenlabs.io/v1/convai/knowledge-base', {
-              method: 'POST',
-              headers: {
-                'xi-api-key': elevenLabsConfig.apiKey,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                name: localFile.filename,
-                content: localFile.currentContent
-              })
-            });
-
-            if (!createResponse.ok) {
-              const errorText = await createResponse.text();
-              console.error(`[KB Sync] Failed to recreate "${localFile.filename}" in ElevenLabs: ${errorText}`);
-              warnings.push(`Failed to recreate "${localFile.filename}" after deletion: ${errorText}`);
-              continue;
-            }
-
-            const newDoc = await createResponse.json();
-
-            // Update local metadata with new docId
-            await storage.updateKbFile(localFile.id, {
-              elevenlabsDocId: newDoc.id,
-              elevenLabsUpdatedAt: new Date(),
-              lastSyncedSource: 'local_to_remote',
-              lastSyncedAt: new Date()
-            });
-
-            pushedCount++;
-            updatedRemote++;
-            console.log(`[KB Sync] PUSH SUCCESS: Updated "${localFile.filename}" in ElevenLabs (new docId: ${newDoc.id})`);
           } else {
             // Create new file in ElevenLabs
             console.log(`[KB Sync] PUSH: Creating "${localFile.filename}" in ElevenLabs`);
