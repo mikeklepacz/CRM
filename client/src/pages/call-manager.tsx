@@ -2573,9 +2573,12 @@ export default function CallManager() {
                                         variant="outline"
                                         className="cursor-pointer hover-elevate text-xs"
                                         onClick={() => {
+                                          const callData = filteredAnalyticsData?.calls.find(
+                                            call => call.session.conversationId === example.conversationId
+                                          ) || null;
                                           setSelectedCallForDialog({ 
                                             conversationId: example.conversationId, 
-                                            callData: null 
+                                            callData 
                                           });
                                           setIsCallDialogOpen(true);
                                         }}
@@ -2621,9 +2624,12 @@ export default function CallManager() {
                                         variant="outline"
                                         className="cursor-pointer hover-elevate text-xs"
                                         onClick={() => {
+                                          const callData = filteredAnalyticsData?.calls.find(
+                                            call => call.session.conversationId === example.conversationId
+                                          ) || null;
                                           setSelectedCallForDialog({ 
                                             conversationId: example.conversationId, 
-                                            callData: null 
+                                            callData 
                                           });
                                           setIsCallDialogOpen(true);
                                         }}
