@@ -3193,7 +3193,7 @@ Ready to receive calls?`;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       
       // Get all Aligner conversations for this user
-      const conversations = await storage.getConversationsByUserId(userId);
+      const conversations = await storage.getConversations(userId);
       const alignerConversations = conversations.filter((c: any) => c.assistantType === 'aligner');
 
       if (alignerConversations.length === 0) {
@@ -3221,7 +3221,7 @@ Ready to receive calls?`;
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       
       // Get all Aligner conversations for this user
-      const conversations = await storage.getConversationsByUserId(userId);
+      const conversations = await storage.getConversations(userId);
       const alignerConversations = conversations.filter((c: any) => c.assistantType === 'aligner');
 
       // Delete all Aligner conversations and their messages
