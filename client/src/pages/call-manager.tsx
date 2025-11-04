@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb, Upload, Settings2, FileEdit } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb, Upload, Settings2, FileEdit, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -128,6 +128,8 @@ function KBLibraryTab() {
   const [selectedVersionsForDiff, setSelectedVersionsForDiff] = useState<string[]>([]);
   const [isVersionDiffDialogOpen, setIsVersionDiffDialogOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+  const [viewingVersion, setViewingVersion] = useState<any | null>(null);
+  const [isVersionViewerOpen, setIsVersionViewerOpen] = useState(false);
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
@@ -239,7 +241,7 @@ function KBLibraryTab() {
     onSuccess: () => {
       toast({
         title: "Proposal Approved",
-        description: "Changes have been applied to the KB file",
+        description: "Changes have been applied to the KB file and synced to ElevenLabs",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
       queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
@@ -247,11 +249,25 @@ function KBLibraryTab() {
       setSelectedProposal(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Approval Failed",
-        description: error.message || "Failed to approve proposal",
-        variant: "destructive",
-      });
+      // Check if this is a 422 error with detailed edit failures
+      if (error.failedEdits && Array.isArray(error.failedEdits)) {
+        const failureDetails = error.failedEdits.map((f: any) => 
+          `• Edit ${f.editNumber}: ${f.reason}`
+        ).join('\n');
+        
+        toast({
+          title: `${error.failedCount} of ${error.totalEdits} Edits Failed`,
+          description: failureDetails.substring(0, 300) + (failureDetails.length > 300 ? '...' : ''),
+          variant: "destructive",
+          duration: 10000, // Show longer for detailed errors
+        });
+      } else {
+        toast({
+          title: "Approval Failed",
+          description: error.message || error.error || "Failed to approve proposal",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -329,6 +345,41 @@ function KBLibraryTab() {
     if (selectedVersionsForDiff.length === 2) {
       setIsVersionDiffDialogOpen(true);
     }
+  };
+
+  // View full version content
+  const viewVersionContent = (version: any) => {
+    setViewingVersion(version);
+    setIsVersionViewerOpen(true);
+  };
+
+  // Load version into KB Editor
+  const loadVersionToEditor = (version: any) => {
+    if (!selectedFileId) return;
+    
+    // Create a temporary "edit" that loads this version's content
+    toast({
+      title: "Version Loaded",
+      description: `Version ${version.versionNumber} loaded into editor. You can now review and save if needed.`,
+    });
+    
+    // Close dialogs and navigate to editor
+    setIsVersionViewerOpen(false);
+    setIsVersionDialogOpen(false);
+    
+    // Trigger a refresh of the KB Editor with this content
+    // The KB Editor will need to handle loading this version's content
+    queryClient.setQueryData(['/api/kb/files'], (old: any) => {
+      if (!old) return old;
+      return {
+        ...old,
+        files: old.files.map((f: any) => 
+          f.id === selectedFileId
+            ? { ...f, currentContent: version.content }
+            : f
+        ),
+      };
+    });
   };
 
   // Get versions for diff comparison
@@ -644,9 +695,35 @@ function KBLibraryTab() {
                       <p className="text-sm text-muted-foreground" data-testid={`text-version-creator-${version.id}`}>
                         Created by: {version.createdBy}
                       </p>
-                      <div className="mt-2 p-3 bg-muted/50 rounded text-sm font-mono max-h-32 overflow-auto" data-testid={`text-version-content-${version.id}`}>
+                      <div 
+                        className="mt-2 p-3 bg-muted/50 rounded text-sm font-mono max-h-32 overflow-auto cursor-pointer hover-elevate active-elevate-2" 
+                        data-testid={`text-version-content-${version.id}`}
+                        onClick={() => viewVersionContent(version)}
+                      >
                         {version.content.substring(0, 200)}
                         {version.content.length > 200 && '...'}
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => viewVersionContent(version)}
+                          data-testid={`button-view-full-${version.id}`}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Full Content
+                        </Button>
+                        {idx !== 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => loadVersionToEditor(version)}
+                            data-testid={`button-load-version-${version.id}`}
+                          >
+                            <FileEdit className="h-4 w-4 mr-2" />
+                            Load to Editor
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -675,6 +752,49 @@ function KBLibraryTab() {
                 isApproving={approveMutation.isPending}
                 isRejecting={rejectMutation.isPending}
               />
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Version Viewer Dialog */}
+      <Dialog open={isVersionViewerOpen} onOpenChange={setIsVersionViewerOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]" data-testid="dialog-version-viewer">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle data-testid="text-version-viewer-title">
+                View Version Content
+                {viewingVersion && (
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    v{viewingVersion.versionNumber} - {viewingVersion.source}
+                  </span>
+                )}
+              </DialogTitle>
+              {viewingVersion && viewingVersion.versionNumber !== versions[0]?.versionNumber && (
+                <Button
+                  size="sm"
+                  onClick={() => loadVersionToEditor(viewingVersion)}
+                  data-testid="button-load-to-editor"
+                >
+                  <FileEdit className="h-4 w-4 mr-2" />
+                  Load to Editor
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+          <ScrollArea className="h-[70vh]" data-testid="scroll-version-content">
+            {viewingVersion && (
+              <div className="space-y-4">
+                <div className="flex gap-4 text-sm text-muted-foreground">
+                  <span>Created: {new Date(viewingVersion.createdAt).toLocaleString()}</span>
+                  <span>By: {viewingVersion.createdBy}</span>
+                </div>
+                <div className="p-4 bg-muted/30 rounded-md">
+                  <pre className="text-sm font-mono whitespace-pre-wrap" data-testid="text-full-version-content">
+                    {viewingVersion.content}
+                  </pre>
+                </div>
+              </div>
             )}
           </ScrollArea>
         </DialogContent>

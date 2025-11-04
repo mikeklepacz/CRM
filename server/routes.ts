@@ -4971,28 +4971,113 @@ IMPORTANT:
 
       // Apply edits to generate final content
       let finalContent = latestVersion?.content || '';
+      const failedEdits: Array<{ edit: any; reason: string; index: number }> = [];
       
       try {
         // Parse edits from JSON
         const edits = JSON.parse(proposal.proposedContent);
         const editArray = Array.isArray(edits) ? edits : [edits];
         
-        // Apply each edit in order (simple string replacement)
-        for (const edit of editArray) {
-          if (edit.old && edit.new) {
-            // Replace first occurrence of old text with new text
-            const index = finalContent.indexOf(edit.old);
-            if (index !== -1) {
-              finalContent = finalContent.substring(0, index) + edit.new + finalContent.substring(index + edit.old.length);
-            } else {
-              console.warn(`[KB Approve] Edit not applied - original text not found:`, edit.old.substring(0, 100));
+        // Helper function to normalize text for matching (trim whitespace, normalize line endings)
+        const normalizeForMatching = (text: string): string => {
+          return text
+            .replace(/\r\n/g, '\n')  // Normalize Windows line endings
+            .replace(/\r/g, '\n')    // Normalize old Mac line endings
+            .trim();
+        };
+        
+        // Apply each edit in order
+        for (let i = 0; i < editArray.length; i++) {
+          const edit = editArray[i];
+          
+          // For new content additions (empty 'old' field), just append
+          if ('old' in edit && edit.old === '' && edit.new) {
+            console.log(`[KB Approve] Adding new content (edit ${i + 1}/${editArray.length})`);
+            finalContent = finalContent + '\n\n' + edit.new;
+            continue;
+          }
+          
+          // For replacements, require both old and new
+          if (!edit.old || !edit.new) {
+            failedEdits.push({
+              edit,
+              reason: 'Missing old or new text',
+              index: i
+            });
+            continue;
+          }
+          
+          // Try exact match first
+          let index = finalContent.indexOf(edit.old);
+          
+          // If exact match fails, try fuzzy match (normalized)
+          if (index === -1) {
+            const normalizedOld = normalizeForMatching(edit.old);
+            const normalizedContent = normalizeForMatching(finalContent);
+            const fuzzyIndex = normalizedContent.indexOf(normalizedOld);
+            
+            if (fuzzyIndex !== -1) {
+              // Find the actual position in original content by counting characters
+              let charCount = 0;
+              let actualIndex = 0;
+              const contentWithoutWS = finalContent.replace(/\s+/g, '');
+              const targetWithoutWS = normalizedContent.substring(0, fuzzyIndex).replace(/\s+/g, '');
+              
+              for (let j = 0; j < finalContent.length; j++) {
+                if (finalContent[j].match(/\S/)) {
+                  if (charCount === targetWithoutWS.length) {
+                    actualIndex = j;
+                    break;
+                  }
+                  charCount++;
+                }
+              }
+              
+              // Use fuzzy match position
+              index = actualIndex;
+              console.log(`[KB Approve] Fuzzy match found for edit ${i + 1} at position ${index}`);
             }
           }
+          
+          if (index !== -1) {
+            // Replace text
+            finalContent = finalContent.substring(0, index) + edit.new + finalContent.substring(index + edit.old.length);
+            console.log(`[KB Approve] Edit ${i + 1}/${editArray.length} applied successfully`);
+          } else {
+            const preview = edit.old.length > 100 ? edit.old.substring(0, 100) + '...' : edit.old;
+            console.error(`[KB Approve] Edit ${i + 1} FAILED - text not found: "${preview}"`);
+            failedEdits.push({
+              edit,
+              reason: `Original text not found in current file content`,
+              index: i
+            });
+          }
         }
+        
+        // If ANY edits failed, abort the entire approval
+        if (failedEdits.length > 0) {
+          console.error(`[KB Approve] Approval FAILED: ${failedEdits.length}/${editArray.length} edits could not be applied`);
+          return res.status(422).json({
+            error: 'One or more edits could not be applied',
+            failedEdits: failedEdits.map(f => ({
+              editNumber: f.index + 1,
+              reason: f.reason,
+              oldTextPreview: f.edit.old?.substring(0, 100),
+              newTextPreview: f.edit.new?.substring(0, 100)
+            })),
+            totalEdits: editArray.length,
+            failedCount: failedEdits.length
+          });
+        }
+        
+        console.log(`[KB Approve] All ${editArray.length} edits applied successfully`);
+        
       } catch (error) {
         console.error('[KB Approve] Failed to parse/apply edits:', error);
-        // Fall back to treating proposedContent as final content (backward compatibility)
-        finalContent = proposal.proposedContent;
+        return res.status(400).json({
+          error: 'Failed to parse proposal edits',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
 
       // Create new version
