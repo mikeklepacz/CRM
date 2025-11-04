@@ -66,12 +66,13 @@ export function KBEditor({ className }: KBEditorProps) {
       // ElevenLabs API returns nested structure: { prompt: { prompt: "actual content" } }
       const promptContent = agentData.prompt?.prompt || agentData.prompt || '';
       console.log('[KB Editor] Extracted prompt content:', promptContent);
+      console.log('[KB Editor] Setting content with length:', promptContent.length);
 
       setContent(promptContent);
       setOriginalContent(promptContent);
       setSaveStatus('idle');
     }
-  }, [agentData, editorMode]);
+  }, [agentData, editorMode, selectedItemId]);
 
   // Reset when switching modes or items
   useEffect(() => {
