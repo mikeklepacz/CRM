@@ -23,6 +23,7 @@ import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ProposalDiffViewer } from "@/components/proposal-diff-viewer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AlignerChat } from "@/components/aligner-chat";
 
 interface ElevenLabsAgent {
   id: string;
@@ -1445,6 +1446,7 @@ export default function CallManager() {
             {user?.role === 'admin' && (
               <>
                 <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
+                <TabsTrigger value="aligner-chat" data-testid="tab-aligner-chat">Aligner Chat</TabsTrigger>
                 <TabsTrigger value="kb-library" data-testid="tab-kb-library">KB Library</TabsTrigger>
               </>
             )}
@@ -2866,6 +2868,28 @@ export default function CallManager() {
               </CardContent>
             </Card>
           </TabsContent>
+          )}
+
+          {/* Aligner Chat Tab */}
+          {user?.role === 'admin' && (
+            <TabsContent value="aligner-chat" className="space-y-6">
+              <Card data-testid="card-aligner-chat">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-amber-500" />
+                    Aligner Chat
+                  </CardTitle>
+                  <CardDescription>
+                    Have a conversation with the Aligner about call patterns, KB improvements, and sales strategy
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="h-[600px]">
+                    <AlignerChat />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
           )}
 
           {/* KB Library Tab */}
