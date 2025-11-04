@@ -3308,14 +3308,14 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
         assistant_id: alignerAssistant.assistantId,
       });
 
-      // Poll for completion
+      // Poll for completion (long timeout for complex transcript analysis)
       let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
       let attempts = 0;
-      const maxAttempts = 60; // 30 seconds max
+      const maxAttempts = 600; // 5 minutes max for deep analysis
 
       while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
         if (attempts >= maxAttempts) {
-          throw new Error('Aligner response timeout');
+          throw new Error('Aligner analysis timeout - transcript too complex');
         }
         await new Promise(resolve => setTimeout(resolve, 500));
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
