@@ -62,11 +62,11 @@ export function KBEditor({ className }: KBEditorProps) {
     if (editorMode === 'agent' && agentData) {
       console.log('[KB Editor] Agent data received:', agentData);
       console.log('[KB Editor] Prompt field:', agentData.prompt);
-      
+
       // ElevenLabs API returns nested structure: { prompt: { prompt: "actual content" } }
       const promptContent = agentData.prompt?.prompt || agentData.prompt || '';
       console.log('[KB Editor] Extracted prompt content:', promptContent);
-      
+
       setContent(promptContent);
       setOriginalContent(promptContent);
       setSaveStatus('idle');
@@ -126,19 +126,58 @@ export function KBEditor({ className }: KBEditorProps) {
     },
     onSuccess: async () => {
       setSaveStatus('saved');
-      setOriginalContent(content);
-      
+      const savedContent = content;
+      setOriginalContent(savedContent);
+
       toast({
         title: "Success",
-        description: "Agent system prompt updated on ElevenLabs. Syncing...",
+        description: "Agent system prompt updated. Waiting for ElevenLabs sync...",
       });
-      
-      // Wait 1.5 seconds for ElevenLabs to process the update before fetching
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Invalidate cache to force fresh fetch
-      queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/agents', selectedItemId, 'details'] });
-      
+
+      // Poll ElevenLabs API until the content matches (with timeout)
+      const maxAttempts = 10; // 10 attempts = 30 seconds max
+      const delayMs = 3000; // 3 seconds between attempts
+      let attempts = 0;
+      let synced = false;
+
+      while (attempts < maxAttempts && !synced) {
+        attempts++;
+        console.log(`[KB Editor] Polling ElevenLabs (attempt ${attempts}/${maxAttempts})...`);
+
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+
+        // Fetch fresh data from ElevenLabs
+        const response = await apiRequest("GET", `/api/elevenlabs/agents/${selectedItemId}/details`);
+        const freshPrompt = response?.prompt?.prompt || response?.prompt || '';
+
+        console.log('[KB Editor] Fresh prompt length:', freshPrompt.length, 'Expected length:', savedContent.length);
+
+        // Check if the content matches (trim to avoid whitespace issues)
+        if (freshPrompt.trim() === savedContent.trim()) {
+          synced = true;
+          console.log('[KB Editor] ✅ ElevenLabs sync confirmed!');
+
+          // Force cache invalidation with fresh data
+          queryClient.setQueryData(['/api/elevenlabs/agents', selectedItemId, 'details'], response);
+
+          toast({
+            title: "Synced",
+            description: "ElevenLabs confirmed prompt update",
+          });
+        } else {
+          console.log('[KB Editor] ⏳ Still waiting for ElevenLabs to sync...');
+        }
+      }
+
+      if (!synced) {
+        console.warn('[KB Editor] ⚠️ Sync timeout - ElevenLabs may still be processing');
+        toast({
+          title: "Warning",
+          description: "Sync timeout. ElevenLabs may still be processing the update.",
+          variant: "default",
+        });
+      }
+
       setTimeout(() => setSaveStatus('idle'), 2000);
     },
     onError: (error: any) => {
