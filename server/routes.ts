@@ -4447,13 +4447,13 @@ The user has agreed to create proposals. Please output your recommended changes 
     try {
       console.log(`[KB Sync] Starting zero-downtime sync for ${filename}`);
       
-      // Step 1: Create new document with updated content
+      // Step 1: Create new document with updated content using correct /text endpoint
       console.log(`[KB Sync] Creating new document...`);
       const createResponse = await axios.post(
-        'https://api.elevenlabs.io/v1/convai/knowledge-base',
+        'https://api.elevenlabs.io/v1/convai/knowledge-base/text',
         {
           name: filename,
-          content: newContent,
+          text: newContent,
         },
         {
           headers: {
