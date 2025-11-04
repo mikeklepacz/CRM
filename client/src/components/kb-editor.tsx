@@ -59,9 +59,11 @@ export function KBEditor({ className }: KBEditorProps) {
 
   // Update content when agent data loads
   useEffect(() => {
-    if (editorMode === 'agent' && agentData?.prompt) {
-      setContent(agentData.prompt);
-      setOriginalContent(agentData.prompt);
+    if (editorMode === 'agent' && agentData) {
+      // ElevenLabs API returns nested structure: { prompt: { prompt: "actual content" } }
+      const promptContent = agentData.prompt?.prompt || agentData.prompt || '';
+      setContent(promptContent);
+      setOriginalContent(promptContent);
       setSaveStatus('idle');
     }
   }, [agentData, editorMode]);
