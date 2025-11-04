@@ -329,7 +329,7 @@ export function ProposalDiffViewer({
                 </Button>
               )}
               <Button
-                onClick={handleApproveSelected}
+                onClick={() => handleApproveSelected()}
                 disabled={isApproving || isRejecting || !isValidEdits || selectedEdits.size === 0}
                 data-testid="button-approve"
                 className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
