@@ -3194,7 +3194,13 @@ Ready to receive calls?`;
       
       // Get all Aligner conversations for this user
       const conversations = await storage.getConversations(userId);
+      console.log('[Aligner Chat] All conversations:', conversations.map((c: any) => ({ 
+        id: c.id, 
+        title: c.title?.substring(0, 30), 
+        assistantType: c.assistantType 
+      })));
       const alignerConversations = conversations.filter((c: any) => c.assistantType === 'aligner');
+      console.log('[Aligner Chat] Filtered aligner conversations count:', alignerConversations.length);
 
       if (alignerConversations.length === 0) {
         return res.json([]);
