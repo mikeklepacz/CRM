@@ -239,11 +239,16 @@ function KBLibraryTab() {
   const approveMutation = useMutation({
     mutationFn: (proposalId: string) => apiRequest('POST', `/api/kb/proposals/${proposalId}/approve`),
     onSuccess: (data: any) => {
-      // Show detailed sync status
+      // Show detailed sync status with agent count
       if (data.elevenlabsSynced) {
+        const agentsUpdated = data.agentsUpdated || 0;
+        const agentText = agentsUpdated > 0 
+          ? ` (${agentsUpdated} agent${agentsUpdated !== 1 ? 's' : ''} updated)` 
+          : '';
+        
         toast({
           title: "Proposal Approved",
-          description: `Version ${data.version.versionNumber} created and synced to ElevenLabs successfully`,
+          description: `Version ${data.version.versionNumber} created and synced to ElevenLabs${agentText}`,
         });
       } else if (data.syncError) {
         toast({

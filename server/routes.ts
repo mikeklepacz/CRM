@@ -4327,6 +4327,323 @@ The user has agreed to create proposals. Please output your recommended changes 
     }
   });
 
+  // ===== ELEVENLABS KB SYNC HELPERS =====
+  
+  /**
+   * Find all agents that have a specific KB document in their knowledge base
+   */
+  async function getAgentsUsingDocument(apiKey: string, docId: string): Promise<string[]> {
+    try {
+      // Fetch all agents from our database
+      const agents = await storage.getAllElevenLabsAgents();
+      const agentIds: string[] = [];
+      
+      console.log(`[KB Sync] Checking ${agents.length} agents for document ${docId}`);
+      
+      // For each agent, fetch its config from ElevenLabs and check if it uses this document
+      for (const agent of agents) {
+        try {
+          const response = await axios.get(
+            `https://api.elevenlabs.io/v1/convai/agents/${agent.agentId}`,
+            {
+              headers: {
+                'xi-api-key': apiKey,
+              },
+            }
+          );
+          
+          const agentConfig = response.data;
+          const knowledgeBase = agentConfig?.conversation_config?.agent?.prompt?.knowledge_base || [];
+          
+          // Check if this agent uses the document
+          const usesDocument = knowledgeBase.some((kb: any) => kb.id === docId);
+          
+          if (usesDocument) {
+            console.log(`[KB Sync] Agent ${agent.name} (${agent.agentId}) uses document ${docId}`);
+            agentIds.push(agent.agentId);
+          }
+        } catch (error: any) {
+          console.error(`[KB Sync] Error fetching agent ${agent.agentId}:`, error.message);
+          // Continue checking other agents
+        }
+      }
+      
+      return agentIds;
+    } catch (error: any) {
+      console.error('[KB Sync] Error in getAgentsUsingDocument:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Swap old KB document with new one in an agent's knowledge base
+   */
+  async function swapAgentKbDocument(apiKey: string, agentId: string, oldDocId: string, newDocId: string): Promise<void> {
+    try {
+      // Fetch current agent config
+      const getResponse = await axios.get(
+        `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
+        {
+          headers: {
+            'xi-api-key': apiKey,
+          },
+        }
+      );
+      
+      const agentConfig = getResponse.data;
+      const knowledgeBase = agentConfig?.conversation_config?.agent?.prompt?.knowledge_base || [];
+      
+      // Replace old document ID with new one
+      const updatedKnowledgeBase = knowledgeBase.map((kb: any) => {
+        if (kb.id === oldDocId) {
+          return { ...kb, id: newDocId };
+        }
+        return kb;
+      });
+      
+      // Update agent with new knowledge base
+      await axios.patch(
+        `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
+        {
+          conversation_config: {
+            agent: {
+              prompt: {
+                knowledge_base: updatedKnowledgeBase,
+              },
+            },
+          },
+        },
+        {
+          headers: {
+            'xi-api-key': apiKey,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      console.log(`[KB Sync] Successfully swapped document in agent ${agentId}: ${oldDocId} → ${newDocId}`);
+    } catch (error: any) {
+      console.error(`[KB Sync] Error swapping document in agent ${agentId}:`, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Main KB sync workflow: Zero-downtime document swap
+   * 1. Create new document with updated content
+   * 2. Swap all dependent agents to use new document
+   * 3. Delete old document (now unused)
+   * Returns: { success: boolean, newDocId?: string, agentsUpdated?: number, error?: string }
+   */
+  async function syncKbDocumentToElevenLabs(
+    apiKey: string,
+    oldDocId: string,
+    filename: string,
+    newContent: string
+  ): Promise<{ success: boolean; newDocId?: string; agentsUpdated?: number; error?: string }> {
+    let newDocId: string | null = null;
+    const swappedAgents: string[] = []; // Track agents we've successfully swapped for rollback
+    
+    try {
+      console.log(`[KB Sync] Starting zero-downtime sync for ${filename}`);
+      
+      // Step 1: Create new document with updated content
+      console.log(`[KB Sync] Creating new document...`);
+      const createResponse = await axios.post(
+        'https://api.elevenlabs.io/v1/convai/knowledge-base',
+        {
+          name: filename,
+          content: newContent,
+        },
+        {
+          headers: {
+            'xi-api-key': apiKey,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      newDocId = createResponse.data.id;
+      console.log(`[KB Sync] Created new document: ${newDocId}`);
+      
+      // Step 2: Find all agents using the old document
+      const agentIds = await getAgentsUsingDocument(apiKey, oldDocId);
+      console.log(`[KB Sync] Found ${agentIds.length} agents using old document`);
+      
+      // Step 3: Swap each agent to use new document (track for rollback)
+      const swapErrors: string[] = [];
+      
+      for (const agentId of agentIds) {
+        try {
+          await swapAgentKbDocument(apiKey, agentId, oldDocId, newDocId);
+          swappedAgents.push(agentId); // Track successful swap
+          console.log(`[KB Sync] Successfully swapped agent ${agentId} (${swappedAgents.length}/${agentIds.length})`);
+        } catch (error: any) {
+          const errorMsg = `Agent ${agentId}: ${error.message}`;
+          swapErrors.push(errorMsg);
+          console.error(`[KB Sync] Failed to swap agent ${agentId}:`, error);
+          // CRITICAL: Stop swapping on first error to prevent inconsistent state
+          break;
+        }
+      }
+      
+      console.log(`[KB Sync] Agent swaps complete: ${swappedAgents.length}/${agentIds.length} successful`);
+      
+      // If ANY swaps failed, rollback everything
+      if (swapErrors.length > 0) {
+        console.error(`[KB Sync] Swap failed for ${swapErrors.length} agent(s), rolling back ${swappedAgents.length} successfully swapped agents...`);
+        
+        // Rollback: reverse-swap all successfully swapped agents back to old doc
+        const rollbackErrors: string[] = [];
+        const rolledBackAgents: string[] = [];
+        
+        for (const agentId of swappedAgents) {
+          try {
+            await swapAgentKbDocument(apiKey, agentId, newDocId, oldDocId);
+            rolledBackAgents.push(agentId);
+            console.log(`[KB Sync] Rolled back agent ${agentId} to old document`);
+          } catch (rollbackError: any) {
+            rollbackErrors.push(agentId);
+            console.error(`[KB Sync] CRITICAL - Failed to rollback agent ${agentId}:`, rollbackError);
+          }
+        }
+        
+        // CRITICAL: Only delete new doc if ALL rollbacks succeeded
+        if (rollbackErrors.length === 0) {
+          // Safe to delete - no agents reference new doc
+          try {
+            await axios.delete(
+              `https://api.elevenlabs.io/v1/convai/knowledge-base/${newDocId}`,
+              {
+                headers: {
+                  'xi-api-key': apiKey,
+                },
+              }
+            );
+            console.log(`[KB Sync] Deleted new document ${newDocId} (rollback complete)`);
+          } catch (deleteError) {
+            console.error(`[KB Sync] Warning: Failed to delete new document during rollback:`, deleteError);
+            // Non-fatal - agents are safe, just have orphaned doc
+          }
+          
+          return {
+            success: false,
+            error: `Failed to swap agents: ${swapErrors.join('; ')} | Rollback successful (${rolledBackAgents.length} agents restored)`,
+          };
+        } else {
+          // CRITICAL: Do NOT delete new doc - some agents still reference it
+          console.error(`[KB Sync] CRITICAL: Cannot delete new document - ${rollbackErrors.length} agents still reference it: ${rollbackErrors.join(', ')}`);
+          
+          return {
+            success: false,
+            error: `Failed to swap agents AND rollback partially failed. ${rollbackErrors.length} agents still reference NEW doc ${newDocId}: ${rollbackErrors.join(', ')}. ${rolledBackAgents.length} agents restored to OLD doc ${oldDocId}. DO NOT delete either document manually - contact support.`,
+          };
+        }
+      }
+      
+      // Step 4: Delete old document (now safe because ALL agents are using new one)
+      try {
+        console.log(`[KB Sync] Deleting old document ${oldDocId}...`);
+        await axios.delete(
+          `https://api.elevenlabs.io/v1/convai/knowledge-base/${oldDocId}`,
+          {
+            headers: {
+              'xi-api-key': apiKey,
+            },
+          }
+        );
+        console.log(`[KB Sync] Successfully deleted old document ${oldDocId}`);
+      } catch (deleteError: any) {
+        // Non-fatal - the sync succeeded even if old doc wasn't deleted
+        console.error(`[KB Sync] Warning: Failed to delete old document ${oldDocId}:`, deleteError.message);
+      }
+      
+      return {
+        success: true,
+        newDocId,
+        agentsUpdated: swappedAgents.length,
+      };
+      
+    } catch (error: any) {
+      console.error('[KB Sync] Critical error in syncKbDocumentToElevenLabs:', error);
+      
+      // CRITICAL ROLLBACK: If we created a new document and swapped any agents, reverse it
+      if (newDocId && swappedAgents.length > 0) {
+        console.error(`[KB Sync] CRITICAL - Mid-flight failure, rolling back ${swappedAgents.length} swapped agents...`);
+        
+        const rollbackErrors: string[] = [];
+        const rolledBackAgents: string[] = [];
+        
+        for (const agentId of swappedAgents) {
+          try {
+            await swapAgentKbDocument(apiKey, agentId, newDocId, oldDocId);
+            rolledBackAgents.push(agentId);
+            console.log(`[KB Sync] Emergency rollback: restored agent ${agentId} to old document`);
+          } catch (rollbackError: any) {
+            rollbackErrors.push(agentId);
+            console.error(`[KB Sync] EMERGENCY ROLLBACK FAILED for agent ${agentId}:`, rollbackError);
+          }
+        }
+        
+        // CRITICAL: Only delete new doc if ALL rollbacks succeeded
+        if (rollbackErrors.length === 0) {
+          // Safe to delete - no agents reference new doc
+          if (newDocId) {
+            try {
+              await axios.delete(
+                `https://api.elevenlabs.io/v1/convai/knowledge-base/${newDocId}`,
+                {
+                  headers: {
+                    'xi-api-key': apiKey,
+                  },
+                }
+              );
+              console.log(`[KB Sync] Cleaned up new document ${newDocId} after error (rollback successful)`);
+            } catch (cleanupError) {
+              console.error(`[KB Sync] Warning: Failed to delete new document:`, cleanupError);
+              // Non-fatal - agents are safe, just have orphaned doc
+            }
+          }
+          
+          return {
+            success: false,
+            error: `${error.message} | Emergency rollback successful (${rolledBackAgents.length} agents restored)`,
+          };
+        } else {
+          // CRITICAL: Do NOT delete new doc - some agents still reference it
+          console.error(`[KB Sync] CRITICAL: ${rollbackErrors.length} agents still reference new doc after emergency rollback: ${rollbackErrors.join(', ')}`);
+          
+          return {
+            success: false,
+            error: `${error.message} | CRITICAL: Emergency rollback partially failed. ${rollbackErrors.length} agents still reference NEW doc ${newDocId}: ${rollbackErrors.join(', ')}. ${rolledBackAgents.length} agents restored to OLD doc ${oldDocId}. DO NOT delete either document manually - contact support.`,
+          };
+        }
+      }
+      
+      // No agents were swapped, safe to clean up new doc
+      if (newDocId) {
+        try {
+          await axios.delete(
+            `https://api.elevenlabs.io/v1/convai/knowledge-base/${newDocId}`,
+            {
+              headers: {
+                'xi-api-key': apiKey,
+              },
+            }
+          );
+          console.log(`[KB Sync] Cleaned up new document ${newDocId} after error (no agents affected)`);
+        } catch (cleanupError) {
+          console.error(`[KB Sync] Failed to clean up new document:`, cleanupError);
+        }
+      }
+      
+      return {
+        success: false,
+        error: error.response?.data?.detail?.message || error.message || 'Unknown sync error',
+      };
+    }
+  }
+
   // Get all KB files
   app.get('/api/kb/files', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -4401,47 +4718,26 @@ The user has agreed to create proposals. Please output your recommended changes 
 
       console.log(`[KB Update] File updated to version ${newVersionNumber}, syncing to ElevenLabs...`);
 
-      // Trigger sync to ElevenLabs using DELETE+CREATE workflow
-      // ElevenLabs API only allows PATCH for name changes, not content updates
+      // Trigger zero-downtime sync to ElevenLabs
       const elevenLabsConfig = await storage.getElevenLabsConfig();
       if (elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
-        try {
-          // Step 1: Delete old document
-          await axios.delete(
-            `https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenlabsDocId}`,
-            {
-              headers: {
-                'xi-api-key': elevenLabsConfig.apiKey,
-              },
-            }
-          );
-          console.log(`[KB Update] Deleted old document ${file.elevenlabsDocId} from ElevenLabs`);
-
-          // Step 2: Create new document with same filename (maintains agent associations)
-          const createResponse = await axios.post(
-            'https://api.elevenlabs.io/v1/convai/knowledge-base',
-            {
-              name: file.filename,
-              content: content
-            },
-            {
-              headers: {
-                'xi-api-key': elevenLabsConfig.apiKey,
-                'Content-Type': 'application/json',
-              },
-            }
-          );
-          
-          const newDoc = createResponse.data;
-          console.log(`[KB Update] Successfully synced to ElevenLabs (new docId: ${newDoc.id})`);
+        const syncResult = await syncKbDocumentToElevenLabs(
+          elevenLabsConfig.apiKey,
+          file.elevenlabsDocId,
+          file.filename,
+          content
+        );
+        
+        if (syncResult.success && syncResult.newDocId) {
+          console.log(`[KB Update] Successfully synced to ElevenLabs (new docId: ${syncResult.newDocId}, agents updated: ${syncResult.agentsUpdated})`);
           
           // Update with new docId and lastSyncedAt
           await storage.updateKbFile(id, {
-            elevenlabsDocId: newDoc.id,
+            elevenlabsDocId: syncResult.newDocId,
             lastSyncedAt: new Date(),
           });
-        } catch (syncError: any) {
-          console.error(`[KB Update] Error syncing to ElevenLabs:`, syncError.response?.data || syncError.message);
+        } else {
+          console.error(`[KB Update] Sync failed: ${syncResult.error}`);
         }
       }
 
@@ -5112,55 +5408,34 @@ IMPORTANT:
         reviewedBy: userId,
       });
 
-      // Sync to ElevenLabs using DELETE+CREATE workflow
-      // ElevenLabs API only allows PATCH for name changes, not content updates
+      // Sync to ElevenLabs using zero-downtime document swap
       const elevenLabsConfig = await storage.getElevenLabsConfig();
       let syncSuccess = false;
       let syncError = null;
+      let agentsUpdated = 0;
       
       if (elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
-        try {
-          console.log(`[KB Approve] Syncing to ElevenLabs: deleting old doc ${file.elevenlabsDocId}`);
-          
-          // Step 1: Delete old document
-          await axios.delete(
-            `https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenlabsDocId}`,
-            {
-              headers: {
-                'xi-api-key': elevenLabsConfig.apiKey,
-              },
-            }
-          );
-          console.log(`[KB Approve] Deleted old document ${file.elevenlabsDocId} from ElevenLabs`);
-
-          // Step 2: Create new document with same filename (maintains agent associations)
-          const createResponse = await axios.post(
-            'https://api.elevenlabs.io/v1/convai/knowledge-base',
-            {
-              name: file.filename,
-              content: finalContent
-            },
-            {
-              headers: {
-                'xi-api-key': elevenLabsConfig.apiKey,
-                'Content-Type': 'application/json',
-              },
-            }
-          );
-          
-          const newDoc = createResponse.data;
-          console.log(`[KB Approve] Successfully synced to ElevenLabs (new docId: ${newDoc.id})`);
+        const syncResult = await syncKbDocumentToElevenLabs(
+          elevenLabsConfig.apiKey,
+          file.elevenlabsDocId,
+          file.filename,
+          finalContent
+        );
+        
+        if (syncResult.success && syncResult.newDocId) {
+          console.log(`[KB Approve] Successfully synced to ElevenLabs (new docId: ${syncResult.newDocId}, agents updated: ${syncResult.agentsUpdated})`);
           
           // Update with new docId and lastSyncedAt
           await storage.updateKbFile(file.id, {
-            elevenlabsDocId: newDoc.id,
+            elevenlabsDocId: syncResult.newDocId,
             lastSyncedAt: new Date(),
           });
           
           syncSuccess = true;
-        } catch (error: any) {
-          console.error('[KB Approve] Error syncing to ElevenLabs:', error.response?.data || error.message);
-          syncError = error.response?.data?.detail?.message || error.message || 'Failed to sync to ElevenLabs';
+          agentsUpdated = syncResult.agentsUpdated || 0;
+        } else {
+          console.error(`[KB Approve] Sync failed: ${syncResult.error}`);
+          syncError = syncResult.error;
         }
       }
 
@@ -5169,6 +5444,7 @@ IMPORTANT:
         version: newVersion,
         elevenlabsSynced: syncSuccess,
         syncError: syncError,
+        agentsUpdated: agentsUpdated,
       });
     } catch (error: any) {
       console.error('[KB] Error approving proposal:', error);

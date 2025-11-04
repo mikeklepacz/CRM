@@ -95,14 +95,21 @@ export function KBEditor({ className }: KBEditorProps) {
     onMutate: () => {
       setSaveStatus('saving');
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       setSaveStatus('saved');
       setOriginalContent(content);
       queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
       queryClient.invalidateQueries({ queryKey: ['/api/kb/files', selectedItemId] });
+      
+      // Show success with agent count if available
+      const agentsUpdated = data?.agentsUpdated;
+      const description = agentsUpdated
+        ? `Saved and synced to ElevenLabs (${agentsUpdated} agent${agentsUpdated !== 1 ? 's' : ''} updated)`
+        : "KB file saved and synced to ElevenLabs";
+      
       toast({
         title: "Success",
-        description: "KB file saved and synced to ElevenLabs",
+        description,
       });
       setTimeout(() => setSaveStatus('idle'), 2000);
     },
