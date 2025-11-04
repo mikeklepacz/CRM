@@ -5295,9 +5295,64 @@ IMPORTANT:
             .trim();
         };
         
-        // Apply each edit in order
-        for (let i = 0; i < editArray.length; i++) {
-          const edit = editArray[i];
+        // STEP 1: Find position of each edit in the ORIGINAL content
+        // This prevents text shifting conflicts when applying multiple edits
+        const editsWithPosition = editArray.map((edit: any, i: number) => {
+          let position = -1;
+          
+          // For new content additions (empty 'old' field), position = end of file
+          if ('old' in edit && edit.old === '' && edit.new) {
+            position = finalContent.length;
+          } else if (edit.old) {
+            // Try exact match first
+            position = finalContent.indexOf(edit.old);
+            
+            // If exact match fails, try fuzzy match (normalized)
+            if (position === -1) {
+              const normalizedOld = normalizeForMatching(edit.old);
+              const normalizedContent = normalizeForMatching(finalContent);
+              const fuzzyIndex = normalizedContent.indexOf(normalizedOld);
+              
+              if (fuzzyIndex !== -1) {
+                // Find the actual position in original content by counting characters
+                let charCount = 0;
+                let actualIndex = 0;
+                const targetWithoutWS = normalizedContent.substring(0, fuzzyIndex).replace(/\s+/g, '');
+                
+                for (let j = 0; j < finalContent.length; j++) {
+                  if (finalContent[j].match(/\S/)) {
+                    if (charCount === targetWithoutWS.length) {
+                      actualIndex = j;
+                      break;
+                    }
+                    charCount++;
+                  }
+                }
+                
+                position = actualIndex;
+              }
+            }
+          }
+          
+          return { edit, originalIndex: i, position };
+        });
+        
+        // STEP 2: Sort edits by position (descending - end of file first)
+        // This ensures changes at the end don't affect positions at the beginning
+        editsWithPosition.sort((a: any, b: any) => {
+          // Edits not found (position = -1) are applied last in their original order
+          if (a.position === -1 && b.position === -1) return a.originalIndex - b.originalIndex;
+          if (a.position === -1) return 1;
+          if (b.position === -1) return -1;
+          return b.position - a.position; // Descending order
+        });
+        
+        console.log(`[KB Approve] Applying ${editsWithPosition.length} edits in reverse position order to prevent text shifting`);
+        
+        // STEP 3: Apply each edit in sorted order
+        for (let idx = 0; idx < editsWithPosition.length; idx++) {
+          const { edit, originalIndex, position } = editsWithPosition[idx];
+          const i = originalIndex; // Use original index for error reporting
           
           // For new content additions (empty 'old' field), just append
           if ('old' in edit && edit.old === '' && edit.new) {
@@ -5316,20 +5371,19 @@ IMPORTANT:
             continue;
           }
           
-          // Try exact match first
+          // Find current position of the text (it may have shifted due to previous edits)
           let index = finalContent.indexOf(edit.old);
           
-          // If exact match fails, try fuzzy match (normalized)
+          // If exact match fails, try fuzzy match
           if (index === -1) {
             const normalizedOld = normalizeForMatching(edit.old);
             const normalizedContent = normalizeForMatching(finalContent);
             const fuzzyIndex = normalizedContent.indexOf(normalizedOld);
             
             if (fuzzyIndex !== -1) {
-              // Find the actual position in original content by counting characters
+              // Find the actual position in current content
               let charCount = 0;
               let actualIndex = 0;
-              const contentWithoutWS = finalContent.replace(/\s+/g, '');
               const targetWithoutWS = normalizedContent.substring(0, fuzzyIndex).replace(/\s+/g, '');
               
               for (let j = 0; j < finalContent.length; j++) {
@@ -5342,7 +5396,6 @@ IMPORTANT:
                 }
               }
               
-              // Use fuzzy match position
               index = actualIndex;
               console.log(`[KB Approve] Fuzzy match found for edit ${i + 1} at position ${index}`);
             }
@@ -5351,7 +5404,7 @@ IMPORTANT:
           if (index !== -1) {
             // Replace text
             finalContent = finalContent.substring(0, index) + edit.new + finalContent.substring(index + edit.old.length);
-            console.log(`[KB Approve] Edit ${i + 1}/${editArray.length} applied successfully`);
+            console.log(`[KB Approve] Edit ${i + 1}/${editArray.length} applied successfully (original position: ${position})`);
           } else {
             const preview = edit.old.length > 100 ? edit.old.substring(0, 100) + '...' : edit.old;
             console.error(`[KB Approve] Edit ${i + 1} FAILED - text not found: "${preview}"`);
