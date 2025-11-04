@@ -3349,8 +3349,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
         responseId: run.id,
         metadata: {
           model: 'gpt-4o',
-          threadId: threadId,
-          proposalsCreated: proposalsCreated.length
+          threadId: threadId
         }
       });
 
