@@ -267,7 +267,30 @@ export function AlignerChat({ className }: AlignerChatProps) {
     },
   });
 
-  // Create proposals from chat mutation
+  // Agree and create proposals in one action
+  const agreeAndCreateProposalsMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      return await apiRequest("POST", "/api/aligner/agree-and-create-proposals", { conversationId });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: data.message || `Created ${data.proposalsCreated} proposal(s)`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner/chat/history'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner/conversations', selectedConversationId, 'messages'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create proposals",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create proposals from chat mutation (for when JSON already exists)
   const createProposalsMutation = useMutation({
     mutationFn: async (conversationId: string) => {
       return await apiRequest("POST", "/api/aligner/create-proposals-from-chat", { conversationId });
@@ -498,25 +521,20 @@ export function AlignerChat({ className }: AlignerChatProps) {
                   {/* Show action buttons after assistant messages */}
                   {msg.role === 'assistant' && selectedConversationId && index === messages.length - 1 && (
                     <div className="flex gap-2 justify-start mt-2 ml-11">
-                      {/* Agree button - sends confirmation and triggers proposal creation */}
+                      {/* Agree button - creates proposals directly without showing JSON */}
                       {!hasJSONProposals(msg.content) && (
                         <Button
-                          onClick={() => {
-                            const confirmMessage = "Yes, I agree. Please create the proposal.";
-                            setMessages(prev => [...prev, { role: 'user', content: confirmMessage }]);
-                            setMessage("");
-                            sendMessageMutation.mutate(confirmMessage);
-                          }}
-                          disabled={sendMessageMutation.isPending}
+                          onClick={() => agreeAndCreateProposalsMutation.mutate(selectedConversationId)}
+                          disabled={agreeAndCreateProposalsMutation.isPending}
                           size="sm"
                           variant="default"
                           className="gap-2"
                           data-testid="button-agree-create-proposals"
                         >
-                          {sendMessageMutation.isPending ? (
+                          {agreeAndCreateProposalsMutation.isPending ? (
                             <>
                               <Loader2 className="h-3 w-3 animate-spin" />
-                              Agreeing...
+                              Creating Proposals...
                             </>
                           ) : (
                             <>
@@ -527,7 +545,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
                         </Button>
                       )}
                       
-                      {/* Create proposals button - appears after JSON output */}
+                      {/* Create proposals button - appears after JSON output (fallback for manual JSON creation) */}
                       {hasJSONProposals(msg.content) && (
                         <Button
                           onClick={() => createProposalsMutation.mutate(selectedConversationId)}

@@ -3366,6 +3366,233 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
     }
   });
 
+  // Agree and create proposals in one action - sends confirmation, gets JSON, creates proposals
+  app.post('/api/aligner/agree-and-create-proposals', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { conversationId } = req.body;
+      const userId = req.user.id;
+
+      if (!conversationId) {
+        return res.status(400).json({ error: 'conversationId required' });
+      }
+
+      // Get conversation to access threadId
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversation not found' });
+      }
+
+      let threadId = conversation.threadId;
+
+      // Get Aligner assistant config
+      const alignerAssistant = await storage.getAlignerAssistant();
+      if (!alignerAssistant) {
+        return res.status(500).json({ error: 'Aligner assistant not configured' });
+      }
+
+      const openai = new OpenAI({ apiKey: alignerAssistant.apiKey });
+
+      // Build context with KB file list
+      const allKbFiles = await storage.getAllKbFiles();
+      const kbFilesList = allKbFiles.map(f => `- ${f.filename}${f.agentId ? ` (Agent: ${f.agentId})` : ''}`).join('\n');
+
+      const contextualInstructions = `You are the Aligner, an AI assistant that helps improve knowledge base files based on call analysis.
+
+**AVAILABLE KB FILES:**
+\`\`\`
+${kbFilesList}
+\`\`\`
+
+The user has agreed to create proposals. Please output your recommended changes in this EXACT JSON format:
+
+\`\`\`json
+{
+  "edits": [
+    {
+      "file": "exact-filename.txt",
+      "section": "Section name or description",
+      "old": "text to replace",
+      "new": "replacement text",
+      "reason": "why this change improves the script",
+      "principle": "which principle this addresses",
+      "evidence": "quote from call that supports this"
+    }
+  ]
+}
+\`\`\`
+
+**IMPORTANT:**
+- ONLY reference files from the KB file list above
+- Each edit must have: file, reason, and either old/new text
+- Output ONLY the JSON, no additional commentary`;
+
+      // Create thread if needed
+      if (!threadId) {
+        const thread = await openai.beta.threads.create();
+        threadId = thread.id;
+        await storage.updateConversation(conversationId, { threadId });
+      }
+
+      // Send confirmation message
+      const confirmMessage = "Yes, I agree. Please create the proposal.";
+      
+      await storage.saveChatMessage({
+        userId,
+        conversationId,
+        role: 'user',
+        content: confirmMessage,
+        responseId: null,
+        metadata: {}
+      });
+
+      // Add context + message to thread
+      const enrichedMessage = `${contextualInstructions}\n\nUser: ${confirmMessage}`;
+      
+      await openai.beta.threads.messages.create(threadId, {
+        role: 'user',
+        content: enrichedMessage
+      });
+
+      // Run the assistant
+      const run = await openai.beta.threads.runs.create(threadId, {
+        assistant_id: alignerAssistant.assistantId,
+      });
+
+      // Poll for completion
+      let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      let attempts = 0;
+      const maxAttempts = 60;
+
+      while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+        if (attempts >= maxAttempts) {
+          throw new Error('Aligner response timeout');
+        }
+        await new Promise(resolve => setTimeout(resolve, 500));
+        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        attempts++;
+      }
+
+      if (runStatus.status !== 'completed') {
+        throw new Error(`Aligner run failed: ${runStatus.status}`);
+      }
+
+      // Get the assistant's response
+      const threadMessages = await openai.beta.threads.messages.list(threadId);
+      const assistantMessage = threadMessages.data.find(m => m.role === 'assistant');
+
+      if (!assistantMessage || !assistantMessage.content[0] || assistantMessage.content[0].type !== 'text') {
+        throw new Error('No response from Aligner assistant');
+      }
+
+      const responseText = assistantMessage.content[0].text.value;
+
+      // Save assistant response
+      await storage.saveChatMessage({
+        userId,
+        conversationId,
+        role: 'assistant',
+        content: responseText,
+        responseId: run.id,
+        metadata: {
+          model: 'gpt-4o',
+          threadId: threadId
+        }
+      });
+
+      // Extract and parse JSON proposals
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/```\s*(\{[\s\S]*?\})\s*```/);
+      
+      if (!jsonMatch) {
+        return res.status(400).json({ error: 'Aligner did not provide JSON proposals. Please try discussing the changes first.' });
+      }
+
+      const jsonText = jsonMatch[1];
+      const parsedResponse = JSON.parse(jsonText);
+      
+      if (!parsedResponse.edits || !Array.isArray(parsedResponse.edits) || parsedResponse.edits.length === 0) {
+        return res.status(400).json({ error: 'Invalid proposal format - expected "edits" array' });
+      }
+
+      // Validate edits
+      const validEdit = parsedResponse.edits.every((edit: any) => 
+        edit.file && edit.reason && (edit.old !== undefined || edit.new !== undefined)
+      );
+      
+      if (!validEdit) {
+        return res.status(400).json({ error: 'Invalid proposal schema - edits must have file, reason, and old/new fields' });
+      }
+
+      // Create proposals (reuse existing logic from create-proposals-from-chat)
+      const allKbFilesForMatching = await storage.getAllKbFiles();
+
+      // Group edits by file
+      const editsByFile = new Map<string, any[]>();
+      for (const edit of parsedResponse.edits) {
+        if (!editsByFile.has(edit.file)) {
+          editsByFile.set(edit.file, []);
+        }
+        editsByFile.get(edit.file)!.push(edit);
+      }
+
+      const createdProposals: any[] = [];
+
+      for (const [filename, edits] of editsByFile) {
+        // Fuzzy match filename
+        const matchedFile = allKbFilesForMatching.find(f => 
+          f.filename.toLowerCase() === filename.toLowerCase() ||
+          f.filename.toLowerCase().includes(filename.toLowerCase()) ||
+          filename.toLowerCase().includes(f.filename.toLowerCase())
+        );
+
+        if (!matchedFile) {
+          console.warn(`[Aligner Agree] No KB file found matching "${filename}", skipping edits`);
+          continue;
+        }
+
+        // Get current version
+        const currentVersion = await storage.getLatestKbFileVersion(matchedFile.id);
+        if (!currentVersion) {
+          console.warn(`[Aligner Agree] No version found for file ${matchedFile.id}, skipping`);
+          continue;
+        }
+
+        // Build proposed content by applying edits
+        let proposedContent = matchedFile.currentContent || '';
+        for (const edit of edits) {
+          if (edit.old && edit.new) {
+            proposedContent = proposedContent.replace(edit.old, edit.new);
+          } else if (edit.new && !edit.old) {
+            proposedContent += `\n\n${edit.new}`;
+          }
+        }
+
+        // Create proposal
+        const proposal = await storage.createKbChangeProposal({
+          fileId: matchedFile.id,
+          baseVersionId: currentVersion.id,
+          proposedContent,
+          proposalReason: edits.map(e => `${e.section || 'General'}: ${e.reason}`).join('\n\n'),
+          proposedBy: userId,
+          status: 'pending'
+        });
+
+        createdProposals.push(proposal);
+      }
+
+      res.json({
+        success: true,
+        proposalsCreated: createdProposals.length,
+        message: `Created ${createdProposals.length} proposal(s) ready for review`
+      });
+
+    } catch (error: any) {
+      console.error('[Aligner Agree] Error:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to create proposals'
+      });
+    }
+  });
+
   // Create proposals from Aligner chat discussion (explicit user action)
   app.post('/api/aligner/create-proposals-from-chat', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -3376,7 +3603,7 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       }
 
       // Get the conversation's latest assistant message
-      const messages = await storage.getChatMessages(conversationId);
+      const messages = await storage.getConversationMessages(conversationId);
       if (!messages || messages.length === 0) {
         return res.status(404).json({ error: 'No messages found in this conversation' });
       }
