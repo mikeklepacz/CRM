@@ -6,6 +6,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Send, Loader2, Trash2, User as UserIcon, AlertCircle, Lightbulb, MessageSquarePlus, ChevronLeft, FileCheck } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import type { Conversation } from "@shared/schema";
 
 interface Message {
@@ -382,30 +388,33 @@ export function AlignerChat({ className }: AlignerChatProps) {
                 </div>
               ) : (
                 conversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className={`group p-2 rounded-md cursor-pointer hover-elevate flex items-center justify-between gap-2 ${
-                      selectedConversationId === conv.id ? "bg-accent" : ""
-                    }`}
-                    onClick={() => setSelectedConversationId(conv.id)}
-                    data-testid={`aligner-conversation-${conv.id}`}
-                  >
-                    <p className="text-sm font-medium truncate flex-1">{conv.title}</p>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('Delete this conversation?')) {
-                          deleteConversationMutation.mutate(conv.id);
-                        }
-                      }}
-                      data-testid={`button-delete-conversation-${conv.id}`}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  <ContextMenu key={conv.id}>
+                    <ContextMenuTrigger asChild data-testid={`trigger-aligner-conversation-menu-${conv.id}`}>
+                      <div
+                        className={`p-2 rounded-md cursor-pointer hover-elevate ${
+                          selectedConversationId === conv.id ? "bg-accent" : ""
+                        }`}
+                        onClick={() => setSelectedConversationId(conv.id)}
+                        data-testid={`aligner-conversation-${conv.id}`}
+                      >
+                        <p className="text-sm font-medium truncate">{conv.title}</p>
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-48">
+                      <ContextMenuItem
+                        onClick={() => {
+                          if (confirm('Delete this conversation?')) {
+                            deleteConversationMutation.mutate(conv.id);
+                          }
+                        }}
+                        className="text-destructive focus:text-destructive"
+                        data-testid={`menuitem-delete-conversation-${conv.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
                 ))
               )}
             </div>
