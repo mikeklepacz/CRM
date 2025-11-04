@@ -152,9 +152,9 @@ function KBLibraryTab() {
       if (data.createdLocal > 0) parts.push(`${data.createdLocal} new local`);
       if (data.createdRemote > 0) parts.push(`${data.createdRemote} new remote`);
       if (data.skipped > 0) parts.push(`${data.skipped} unchanged`);
-      
+
       const description = parts.length > 0 ? parts.join(', ') : 'All files in sync';
-      
+
       toast({
         title: "Sync Complete",
         description,
@@ -176,7 +176,7 @@ function KBLibraryTab() {
       console.log('[KB Upload] Preparing to upload', files.length, 'files');
       const formData = new FormData();
       files.forEach((file, idx) => {
-        console.log(`[KB Upload] Adding file ${idx + 1}:`, file.name, file.size, 'bytes');
+        console.log('[KB Upload] Adding file', idx + 1, ':', file.name, file.size, 'bytes');
         formData.append('files', file);
       });
 
@@ -709,7 +709,8 @@ export default function CallManager() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+
+  const [activeTab, setActiveTab] = useState<'voice-hub' | 'ai-analytics' | 'ai-insights' | 'kb-library'>('voice-hub');
   const [activeScenario, setActiveScenario] = useState<CallScenario>('cold_calls');
   const [selectedStores, setSelectedStores] = useState<Set<string>>(new Set());
   const [selectedAgent, setSelectedAgent] = useState<string>("");
@@ -723,7 +724,7 @@ export default function CallManager() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [callToDelete, setCallToDelete] = useState<string | null>(null);
   const [isNukeDialogOpen, setIsNukeDialogOpen] = useState(false);
-  
+
   // AI Insights state
   const [insightsDateRange, setInsightsDateRange] = useState<'7days' | '30days' | 'custom'>('30days');
   const [insightsStartDate, setInsightsStartDate] = useState<string>('');
@@ -732,17 +733,17 @@ export default function CallManager() {
   const [persistedInsights, setPersistedInsights] = useState<any>(null);
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
   const [insightsViewMode, setInsightsViewMode] = useState<'individual' | 'all-time'>('individual');
-  
+
   // Separate workflow tracking for Wick Coach and Aligner
   const [wickCoachStatus, setWickCoachStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle');
   const [wickCoachCallCount, setWickCoachCallCount] = useState<number>(0);
   const [wickCoachError, setWickCoachError] = useState<string | null>(null);
-  
+
   const [alignerStatus, setAlignerStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle');
   const [alignerCallCount, setAlignerCallCount] = useState<number>(0);
   const [alignerKbFileCount, setAlignerKbFileCount] = useState<number>(0);
   const [alignerError, setAlignerError] = useState<string | null>(null);
-  
+
   // Analytics filters
   const [analyticsAgentFilter, setAnalyticsAgentFilter] = useState<string>("all");
   const [analyticsDateFilter, setAnalyticsDateFilter] = useState<string>("all");
@@ -858,7 +859,7 @@ export default function CallManager() {
         const callDate = new Date(call.session.startedAt);
         const now = new Date();
         const daysDiff = Math.floor((now.getTime() - callDate.getTime()) / (1000 * 60 * 60 * 24));
-        
+
         if (analyticsDateFilter === 'today' && daysDiff > 0) return false;
         if (analyticsDateFilter === '7days' && daysDiff > 7) return false;
         if (analyticsDateFilter === '30days' && daysDiff > 30) return false;
@@ -1065,12 +1066,12 @@ export default function CallManager() {
 
   // Filter stores by selected agents and states (if any filters are active)
   let filteredStores = eligibleStores;
-  
+
   // Apply agent filter
   if (selectedAgentFilters.size > 0) {
     filteredStores = filteredStores.filter(store => store.agentName && selectedAgentFilters.has(store.agentName));
   }
-  
+
   // Apply state filter
   if (selectedStateFilters.length > 0) {
     filteredStores = filteredStores.filter(store => store.state && selectedStateFilters.includes(store.state));
@@ -1134,7 +1135,7 @@ export default function CallManager() {
     mutationFn: async () => {
       let startDate, endDate;
       const now = new Date();
-      
+
       if (insightsDateRange === '7days') {
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
         endDate = now.toISOString();
@@ -1163,21 +1164,21 @@ export default function CallManager() {
     onSuccess: (data) => {
       setPersistedInsights(data);
       setSelectedInsightId(data.id || null);
-      
+
       // Wick Coach completed successfully
       setWickCoachStatus('complete');
       setWickCoachCallCount(data.callCount || 0);
-      
+
       // Refetch historical insights after new analysis is saved
       queryClient.invalidateQueries({ queryKey: ['/api/elevenlabs/insights-history'] });
-      
+
       // Check Aligner workflow status
       if (data.alignerStatus) {
         // Aligner started running
         setAlignerStatus('running');
         setAlignerCallCount(data.callCount || 0);
         setAlignerKbFileCount(data.alignerStatus.kbFileCount || 0);
-        
+
         if (data.alignerStatus.error) {
           // Aligner failed - show error
           setAlignerStatus('error');
@@ -1284,7 +1285,7 @@ export default function CallManager() {
         params.append('agentId', insightsAgentFilter);
       }
       params.append('limit', '10');
-      
+
       const response = await fetch(`/api/elevenlabs/insights-history?${params}`);
       if (!response.ok) throw new Error('Failed to fetch insights history');
       const data = await response.json();
@@ -1314,7 +1315,7 @@ export default function CallManager() {
     if (!insightsHistory || insightsHistory.length === 0) return null;
 
     const totalCalls = insightsHistory.reduce((sum: number, insight: any) => sum + (insight.callCount || 0), 0);
-    
+
     // Aggregate objections across all insights (using commonObjections)
     const objectionMap = new Map<string, { objection: string; frequency: number }>();
     insightsHistory.forEach((insight: any) => {
@@ -1438,7 +1439,7 @@ export default function CallManager() {
         )}
 
         {/* Top-level tabs: Voice Hub, AI Call Analytics, and AI Insights */}
-        <Tabs defaultValue="voice-hub" className="space-y-6">
+        <Tabs defaultValue="voice-hub" onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
           <TabsList>
             <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
             <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
@@ -1613,13 +1614,13 @@ export default function CallManager() {
           <Tabs value={activeScenario} onValueChange={(v) => setActiveScenario(v as CallScenario)}>
             <CardHeader>
               <TabsList className="grid w-full grid-cols-3" data-testid="tabs-scenarios">
-                <TabsTrigger value="cold_calls" data-testid="tab-cold-calls">
+                <TabsTrigger value="cold_calls">
                   Cold Calls
                 </TabsTrigger>
-                <TabsTrigger value="follow_ups" data-testid="tab-follow-ups">
+                <TabsTrigger value="follow_ups">
                   Follow-Ups
                 </TabsTrigger>
-                <TabsTrigger value="recovery" data-testid="tab-recovery">
+                <TabsTrigger value="recovery">
                   Recovery
                 </TabsTrigger>
               </TabsList>
@@ -1964,10 +1965,10 @@ export default function CallManager() {
 
             <Tabs defaultValue="dashboard" data-testid="tabs-analytics">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="dashboard" data-testid="tab-dashboard">
+                <TabsTrigger value="dashboard">
                   Dashboard
                 </TabsTrigger>
-                <TabsTrigger value="recent-calls" data-testid="tab-recent-calls">
+                <TabsTrigger value="recent-calls">
                   Recent Calls
                 </TabsTrigger>
               </TabsList>
@@ -2172,9 +2173,25 @@ export default function CallManager() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
+                                  // Fetch the full call history data if it hasn't been loaded yet
+                                  // This is crucial for the "View Transcript" button in the Call History tab
+                                  // to access the client data.
+                                  // The `callHistoryData` is fetched by the useQuery hook associated with the 'call-history' tab.
+                                  // We need to ensure this data is available before trying to find the full call data.
+                                  // If `callHistoryData` is not yet available, we can't proceed with showing the dialog accurately.
+                                  // However, the `selectedCallForDialog` state is managed here, and the `CallDetailDialog`
+                                  // component will use it. The key is that `callHistoryData` needs to be fetched.
+
+                                  // Find the full call data for this session using the loaded callHistoryData
+                                  // This assumes `callHistoryData` is available when this button is clicked.
+                                  // If the 'call-history' tab is active, `callHistoryData` should be populated.
+                                  const fullCallData = callHistoryData?.find(
+                                    c => c.session.conversationId === call.session.conversationId
+                                  );
+
                                   setSelectedCallForDialog({
                                     conversationId: call.session.conversationId,
-                                    callData: call
+                                    callData: fullCallData || null, // Pass the found full data or null
                                   });
                                   setIsCallDialogOpen(true);
                                 }}
@@ -2722,7 +2739,7 @@ export default function CallManager() {
                 {insightsViewMode === 'all-time' && insightsHistory && insightsHistory.length > 0 && (() => {
                   const allTimeSummary = computeAllTimeSummary();
                   if (!allTimeSummary) return null;
-                  
+
                   return (
                     <div className="space-y-6 mt-6">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">

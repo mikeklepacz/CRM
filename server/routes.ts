@@ -1761,6 +1761,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get enriched call history with client data and transcript counts
+  app.get('/api/elevenlabs/call-history-enriched', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
+      // Get all call sessions
+      const filters: any = {};
+      if (user?.role !== 'admin') {
+        filters.initiatedByUserId = userId;
+      }
+
+      const sessions = await storage.getCallSessions(filters, { limit: 100, offset: 0 });
+
+      // Enrich with client data and transcript counts
+      const enrichedCalls = await Promise.all(
+        sessions.map(async (session) => {
+          const transcripts = await storage.getCallTranscripts(session.conversationId);
+          let client = null;
+
+          if (session.clientId) {
+            client = await storage.getClient(session.clientId);
+          }
+
+          return {
+            session,
+            client,
+            transcriptCount: transcripts.length,
+          };
+        })
+      );
+
+      res.json(enrichedCalls);
+    } catch (error: any) {
+      console.error('Error fetching enriched call history:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // Get single call session with transcripts
   app.get('/api/call-sessions/:conversationId', isAuthenticatedCustom, async (req: any, res) => {
     try {
