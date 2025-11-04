@@ -3336,18 +3336,38 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
 
       const responseText = assistantMessage.content[0].text.value;
 
-      // Check if response contains JSON proposals
+      // Check if response contains JSON proposals AND user gave explicit confirmation
       let proposalsCreated = [];
+      
+      // Detect user confirmation signals (case-insensitive)
+      const confirmationKeywords = [
+        'yes', 'create the proposal', 'go ahead', 'propose', 'make the changes',
+        'proceed', 'looks good', 'sounds good', 'i agree', 'approved', 'do it'
+      ];
+      const userConfirmed = confirmationKeywords.some(keyword => 
+        message.toLowerCase().includes(keyword)
+      );
+      
       const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/```\s*(\{[\s\S]*?\})\s*```/);
       
-      if (jsonMatch) {
-        console.log('[Aligner Chat] Detected JSON proposals in response, creating database records...');
+      if (jsonMatch && userConfirmed) {
+        console.log('[Aligner Chat] User confirmed AND JSON proposals detected, creating database records...');
         
         try {
           const jsonText = jsonMatch[1];
           const parsedResponse = JSON.parse(jsonText);
           
-          if (parsedResponse.edits && Array.isArray(parsedResponse.edits)) {
+          // Validate it's actually our expected proposal format
+          if (parsedResponse.edits && Array.isArray(parsedResponse.edits) && parsedResponse.edits.length > 0) {
+            // Additional validation: ensure edits have required fields
+            const validEdit = parsedResponse.edits.every((edit: any) => 
+              edit.file && edit.reason && (edit.old !== undefined || edit.new !== undefined)
+            );
+            
+            if (!validEdit) {
+              console.warn('[Aligner Chat] JSON found but does not match expected proposal schema, skipping');
+              throw new Error('Invalid proposal schema');
+            }
             // Group edits by file
             const editsByFile = new Map<string, any[]>();
             for (const edit of parsedResponse.edits) {
@@ -3404,6 +3424,8 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
           console.error('[Aligner Chat] Failed to parse/create proposals from JSON:', error);
           // Don't fail the whole request - the chat response is still valuable
         }
+      } else if (jsonMatch && !userConfirmed) {
+        console.log('[Aligner Chat] JSON detected but user has not confirmed - skipping proposal creation (collaborative discussion in progress)');
       }
 
       // Save assistant response
