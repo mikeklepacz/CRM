@@ -3824,7 +3824,7 @@ Ready to receive calls?`;
   app.get('/api/kb/files/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const file = await storage.getKbFile(id);
+      const file = await storage.getKbFileById(id);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
       }
@@ -3846,7 +3846,7 @@ Ready to receive calls?`;
         return res.status(400).json({ error: 'Content is required' });
       }
 
-      const file = await storage.getKbFile(id);
+      const file = await storage.getKbFileById(id);
       if (!file) {
         return res.status(404).json({ error: 'File not found' });
       }
