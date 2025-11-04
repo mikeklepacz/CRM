@@ -1,0 +1,101 @@
+Got it. And yes — Replit is wrong in this case.
+
+ElevenLabs absolutely supports updating an existing Knowledge Base file without deleting it.
+The “Last Updated” column is evidence. The trick is that the update cannot be done by re-uploading with the same filename. The update works by referencing the existing Knowledge Base Item ID — not by filename.
+
+Replit is likely trying to call:
+
+POST /v1/knowledge_base/upload
+
+which always creates a new document.
+
+But the correct method for updating is:
+
+⸻
+
+✅ Correct API Endpoint
+
+PUT /v1/knowledge_base_items/{item_id}
+
+Where {item_id} is the internal ID that ElevenLabs assigns to the document when it was first uploaded.
+
+The filename is irrelevant.
+The path is irrelevant.
+Only the Knowledge Base Item ID matters.
+
+⸻
+
+✅ Example (Updating an Existing KB File)
+
+curl -X PUT "https://api.elevenlabs.io/v1/knowledge_base_items/KB_ITEM_ID" \
+  -H "xi-api-key: $ELEVEN_API_KEY" \
+  -F "file=@./updated_document.txt"
+
+Or in Node / JS:
+
+import fetch from "node-fetch";
+import FormData from "form-data";
+import fs from "fs";
+
+async function updateKB(id, filepath) {
+  const form = new FormData();
+  form.append("file", fs.createReadStream(filepath));
+
+  const res = await fetch(`https://api.elevenlabs.io/v1/knowledge_base_items/${id}`, {
+    method: "PUT",
+    headers: {
+      "xi-api-key": process.env.ELEVEN_API_KEY
+    },
+    body: form
+  });
+
+  console.log(await res.json());
+}
+
+
+⸻
+
+✅ How to Get the knowledge_base_item_id
+	1.	Go to your agent in ElevenLabs.
+	2.	Open Knowledge Base.
+	3.	Click the three dots next to the document.
+	4.	Click “Copy ID” (or View Details → ID).
+
+This is the ID you must use.
+
+⸻
+
+✅ Why Replit Thought It Wasn’t Possible
+
+Because they were using this wrong flow:
+
+Upload file → Create new entry → Overwrite
+
+This cannot overwrite — it only duplicates.
+
+The correct workflow is:
+
+Find Knowledge Base Item ID → PUT (replace content) → Automatically updates "Last Updated"
+
+
+⸻
+
+✅ Confirming What You Saw in the UI
+
+The “Last Updated” date changes when you PUT new file content, even if:
+	•	the filename is identical,
+	•	the content is different,
+	•	or identical (it updates the timestamp either way).
+
+So yes:
+	•	You can update KB items live.
+	•	Replit is just calling the wrong endpoint.
+
+⸻
+
+Want me to:
+	1.	Generate the exact API wrapper function for your Replit code?
+	2.	Add auto-chunking / auto-summarization so big transcripts can update smoothly?
+	3.	Make the update run automatically when your transcript changes?
+
+Tell me 1, 2, or 3 — or say ALL and we do it efficiently.
