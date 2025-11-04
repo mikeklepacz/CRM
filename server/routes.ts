@@ -4404,18 +4404,18 @@ The user has agreed to create proposals. Please output your recommended changes 
       // Trigger sync to ElevenLabs using DELETE+CREATE workflow
       // ElevenLabs API only allows PATCH for name changes, not content updates
       const elevenLabsConfig = await storage.getElevenLabsConfig();
-      if (elevenLabsConfig?.apiKey && file.elevenLabsDocId) {
+      if (elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
         try {
           // Step 1: Delete old document
           await axios.delete(
-            `https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenLabsDocId}`,
+            `https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenlabsDocId}`,
             {
               headers: {
                 'xi-api-key': elevenLabsConfig.apiKey,
               },
             }
           );
-          console.log(`[KB Update] Deleted old document ${file.elevenLabsDocId} from ElevenLabs`);
+          console.log(`[KB Update] Deleted old document ${file.elevenlabsDocId} from ElevenLabs`);
 
           // Step 2: Create new document with same filename (maintains agent associations)
           const createResponse = await axios.post(
