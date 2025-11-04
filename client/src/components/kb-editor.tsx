@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, FileText, User, Save, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, FileText, User, Save, AlertCircle, CheckCircle2, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -253,17 +253,43 @@ export function KBEditor({ className }: KBEditorProps) {
                 </div>
               ) : (
                 kbFiles.map((file: any) => (
-                  <Button
-                    key={file.id}
-                    variant={selectedItemId === file.id ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setSelectedItemId(file.id)}
-                    className="w-full justify-start text-left"
-                    data-testid={`button-select-file-${file.id}`}
-                  >
-                    <FileText className="h-3 w-3 mr-2 flex-shrink-0" />
-                    <span className="truncate text-xs">{file.filename}</span>
-                  </Button>
+                  <div key={file.id} className="flex items-center gap-1">
+                    <Button
+                      variant={selectedItemId === file.id ? 'secondary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setSelectedItemId(file.id)}
+                      className="flex-1 justify-start text-left"
+                      data-testid={`button-select-file-${file.id}`}
+                    >
+                      <FileText className="h-3 w-3 mr-2 flex-shrink-0" />
+                      <span className="truncate text-xs">{file.filename}</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 flex-shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const blob = new Blob([file.currentContent || ''], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        toast({
+                          title: "Success",
+                          description: `Downloaded ${file.filename}`,
+                        });
+                      }}
+                      data-testid={`button-download-file-${file.id}`}
+                      title="Download file"
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                  </div>
                 ))
               )
             ) : (

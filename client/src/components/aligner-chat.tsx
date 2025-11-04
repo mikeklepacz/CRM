@@ -495,29 +495,61 @@ export function AlignerChat({ className }: AlignerChatProps) {
                     )}
                   </div>
                   
-                  {/* Show "Create Proposals" button after assistant messages with JSON */}
-                  {msg.role === 'assistant' && hasJSONProposals(msg.content) && selectedConversationId && (
-                    <div className="flex gap-3 justify-start mt-2 ml-11">
-                      <Button
-                        onClick={() => createProposalsMutation.mutate(selectedConversationId)}
-                        disabled={createProposalsMutation.isPending}
-                        size="sm"
-                        variant="outline"
-                        className="gap-2"
-                        data-testid="button-create-proposals-from-chat"
-                      >
-                        {createProposalsMutation.isPending ? (
-                          <>
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Creating Proposals...
-                          </>
-                        ) : (
-                          <>
-                            <FileCheck className="h-3 w-3" />
-                            Create Proposals
-                          </>
-                        )}
-                      </Button>
+                  {/* Show action buttons after assistant messages */}
+                  {msg.role === 'assistant' && selectedConversationId && index === messages.length - 1 && (
+                    <div className="flex gap-2 justify-start mt-2 ml-11">
+                      {/* Agree button - sends confirmation and triggers proposal creation */}
+                      {!hasJSONProposals(msg.content) && (
+                        <Button
+                          onClick={() => {
+                            const confirmMessage = "Yes, I agree. Please create the proposal.";
+                            setMessages(prev => [...prev, { role: 'user', content: confirmMessage }]);
+                            setMessage("");
+                            sendMessageMutation.mutate(confirmMessage);
+                          }}
+                          disabled={sendMessageMutation.isPending}
+                          size="sm"
+                          variant="default"
+                          className="gap-2"
+                          data-testid="button-agree-create-proposals"
+                        >
+                          {sendMessageMutation.isPending ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Agreeing...
+                            </>
+                          ) : (
+                            <>
+                              <FileCheck className="h-3 w-3" />
+                              Agree & Create Proposals
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      
+                      {/* Create proposals button - appears after JSON output */}
+                      {hasJSONProposals(msg.content) && (
+                        <Button
+                          onClick={() => createProposalsMutation.mutate(selectedConversationId)}
+                          disabled={createProposalsMutation.isPending}
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          data-testid="button-create-proposals-from-chat"
+                        >
+                          {createProposalsMutation.isPending ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Creating Proposals...
+                            </>
+                          ) : (
+                            <>
+                              <FileCheck className="h-3 w-3" />
+                              Create Proposals
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
