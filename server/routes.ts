@@ -3538,6 +3538,31 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
     }
   });
 
+  // Delete individual conversation
+  app.delete('/api/conversations/:id', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const conversationId = req.params.id;
+      
+      // Verify conversation exists and belongs to user
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversation not found' });
+      }
+      if (conversation.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
+      // Delete conversation (also deletes messages via CASCADE)
+      await storage.deleteConversation(conversationId);
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[Conversation] Error deleting conversation:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete conversation' });
+    }
+  });
+
   // Clear Aligner chat history
   app.delete('/api/aligner/chat/history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
