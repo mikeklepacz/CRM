@@ -1,0 +1,76 @@
+Proposed Edits
+
+---
+file: call-flow-hempwick.yaml
+section: Open → Discovery transition
+old: 
+  Agent: Good, thanks! Just checking in—quick question for ya—do you currently carry any sustainable accessories like hemp wick or other eco‑friendly products at your shop?
+new:
+  Agent: Good, thanks! Before I jump in, can you share a bit about what sustainable items your customers ask about most these days? Are eco-friendly products, like hemp wick or similar accessories, something you’re finding interest in lately, or not so much?
+reason: Logic Gap – Discovery phase was bypassed. Agent immediately referenced hemp wick without establishing a context for prospect’s need or curiosity. This led to prospect explicitly flagging the rushed pitch and displaying reduced receptivity ("you just jumped right into that pitch huh?").
+evidence: "Well you just jumped right into that pitch huh?"
+principle: OPEN → DISCOVERY precedence; curiosity before value frame.
+
+---
+file: call-flow-hempwick.yaml
+section: Pivot statement (Discovery → Value Snapshot)
+old: 
+  Agent: Gotcha. How did the hemp wick sell for you back then—was it a steady mover, or did you see more of a slow‑burn?
+new: 
+  Agent: Gotcha. Out of curiosity, what have customers been switching to since then? Are there any eco-friendly alternatives moving off your shelves these days, or has demand cooled across the board?
+reason: Tone Drift / Repetitive Discovery – Second, redundant question on prior sales repeats "why didn’t it work," but doesn’t pivot to prospect’s actual needs or context. Fails to set up a credible value frame.
+evidence: Two consecutive questions about past hemp wick sales with no forward momentum.
+principle: Each phase must advance the conversation; discovery should surface present needs, not rehash past failures.
+
+---
+file: call-flow-hempwick.yaml
+section: Value Snapshot (Value framing)
+old: 
+  Agent: Totally get that — a lot of shops see the same thing until customers get a chance to try it. 
+  Just so you know, we’ve been making the original self‑dispensing roll in Poland for over a decade — pure hemp fiber, pure beeswax, no additives, and we turn every off‑cut into free sample sticks.  
+new:
+  Agent: That’s a familiar story—it’s tough to get customers to try something new before they see the benefit firsthand. One thing our clients love is that every roll includes sample sticks from our off-cuts, so customers can try before buying. By giving them that first experience, shops often see a new kind of demand take shape.
+reason: Brand/Value Framing – Original version was informative but lacked explicit linkage to solving the buyer's “customer try” problem. Improved version directly frames value as answer to past objection, not just a list of features.
+evidence: “a lot of shops see the same thing until customers get a chance to try it.”
+principle: Value framing must address prospect resistance, not just describe product.
+
+---
+file: call-flow-hempwick.yaml
+section: Offer → Close transition
+old:
+  Agent: If you’re open, I can put together a quick mock‑up of a custom‑branded roll for your shop and send a couple of sample pieces so you can see how the clean‑burn feel and how it looks with your logo. Would that be helpful?
+new:
+  Agent: I can show you exactly how the custom labels and samples would look for your brand, and it only takes a couple minutes to put a free preview together. If you see something you like, you’ll have all the info for a quick decision. Would you like to take a look?
+reason: Offer/CLOSE Weakness – Offer was tentative and lacked decisiveness, resulting in prospect’s skepticism about “jumping into the pitch.” Improved version projects confidence, links offer to easy next step, and clearly invites a yes/no decision, tightening rhythm and authority.
+evidence: Prospect’s “Well you just jumped right into that pitch huh?”; original agent language is apologetic.
+principle: CLOSE must be confidently and explicitly invited. Curiosity is earned before extending offer.
+
+---
+file: agent-quickstart.md
+section: Rhythm and Flow Guidelines
+old: (empty)
+new: 
+  Add clear instruction: “Never introduce the primary product or make an offer before establishing prospect context and before completing a discovery phase that confirms needs or objections. Each call must OPEN → DISCOVERY → PIVOT → VALUE SNAPSHOT → OFFER → CLOSE → EXIT, in sequence, without phase skipping.”
+reason: Recurring Timing Issue (2X per transcript) – Agents are shortcutting into OFFER or VALUE phase, undermining brand trust and discovery.
+evidence: Entire transcript - OFFER and product mention appeared before prospect context was surfaced.
+principle: Rhythm sequencing, alignment before action.
+
+---
+file: agent-quickstart.md
+section: Tone Examples
+old: (empty)
+new:
+  Example of misaligned tone: “Quick question—do you currently carry any sustainable accessories like hemp wick or other eco-friendly products at your shop?”
+  Correction: “We talk to a lot of shops exploring sustainable options. What’s been catching your customers’ attention lately?”
+reason: Tone Drift – Overused “quick question” opener is perceived as sales trope and erodes authenticity.
+evidence: "Quick question for ya—do you currently carry any sustainable accessories…”
+principle: Brand voice consistency; curiosity earns path to value.
+
+---
+
+Summary Field
+
+Total proposed edits: 5  
+Most frequent pattern category: Timing Issue (phase-skipping: early value/offer introduction before discovery).  
+Alignment status: Recovering – systemic risk of phase-skipping; upstream rhythm and tone guidance required.  
+Systemic Recommendation: Implement mandatory OPEN→DISCOVERY gating in KB/call flows; retrain on curiosity-first introductions and decisive, confident CLOSES after value is framed. Re-audit after 10 calls.
