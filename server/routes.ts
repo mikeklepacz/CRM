@@ -3211,6 +3211,80 @@ Ready to receive calls?`;
 
       const openai = new OpenAI({ apiKey: settings.apiKey });
 
+      // Get conversation to check for existing thread
+      const conversation = await storage.getConversation(activeConversationId);
+      let threadId = conversation?.threadId;
+
+      // Fetch current KB files to provide context
+      const allKbFiles = await storage.getAllKbFiles();
+      const kbContext = allKbFiles
+        .map(file => `\n### ${file.filename}${file.agentId ? ` (Agent-specific: ${file.agentId})` : ' (General - all agents)'}\n\`\`\`\n${file.currentContent || '(empty)'}\n\`\`\``)
+        .join('\n');
+
+      // Build contextual instructions for collaborative workflow
+      const contextualInstructions = `## CURRENT KNOWLEDGE BASE FILES:
+${kbContext}
+
+---
+
+## YOUR ROLE & WORKFLOW:
+You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge base through collaborative discussion.
+
+**When the user pastes a call transcript or describes an issue:**
+
+1. **ANALYZE** the transcript carefully:
+   - What objections did the prospect raise?
+   - What language/phrasing worked well or poorly?
+   - What information confused the prospect?
+   - What led to successful or unsuccessful outcomes?
+
+2. **DISCUSS** your findings with the user:
+   - Point out specific problems you identified
+   - Quote examples from the transcript
+   - Reference which KB files are relevant
+   - Explain what should change and why
+   - Ask if the user agrees with your assessment
+
+3. **PROPOSE IMPROVEMENTS** only after the user explicitly agrees:
+   - When user says "yes, create the proposal" or "go ahead and propose those changes"
+   - Respond with a JSON object containing targeted edits
+   - Use this exact format:
+
+\`\`\`json
+{
+  "edits": [
+    {
+      "file": "exact-filename.txt",
+      "section": "Section name for context",
+      "old": "Exact original text to replace",
+      "new": "Improved replacement text",
+      "reason": "Why this specific change improves conversations",
+      "principle": "Underlying principle (clarity, rhythm, trust, etc.)",
+      "evidence": "Direct quote from transcript showing the issue"
+    }
+  ]
+}
+\`\`\`
+
+**IMPORTANT RULES:**
+- ONLY reference files that exist in the KB file list above
+- DO NOT hallucinate or invent filenames
+- DO NOT output JSON proposals until the user explicitly asks for them
+- Focus on DISCUSSION and COLLABORATION first
+- Be specific - cite exact quotes and explain your reasoning
+- Keep the brand voice intact - only fix what's broken
+
+**CURRENT CONVERSATION:**
+`;
+
+      // Create or reuse thread
+      if (!threadId) {
+        const thread = await openai.beta.threads.create();
+        threadId = thread.id;
+        await storage.updateConversation(activeConversationId, { threadId });
+        console.log('[Aligner Chat] New thread created:', threadId);
+      }
+
       // Save user message
       await storage.saveChatMessage({
         userId,
@@ -3221,22 +3295,12 @@ Ready to receive calls?`;
         metadata: {}
       });
 
-      // Get conversation to check for existing thread
-      const conversation = await storage.getConversation(activeConversationId);
-      let threadId = conversation?.threadId;
-
-      // Create or reuse thread
-      if (!threadId) {
-        const thread = await openai.beta.threads.create();
-        threadId = thread.id;
-        await storage.updateConversation(activeConversationId, { threadId });
-        console.log('[Aligner Chat] New thread created:', threadId);
-      }
-
-      // Add user message to thread
+      // Add context + user message to thread
+      const enrichedMessage = `${contextualInstructions}\n\nUser: ${message}`;
+      
       await openai.beta.threads.messages.create(threadId, {
         role: 'user',
-        content: message
+        content: enrichedMessage
       });
 
       // Run the assistant
@@ -3272,6 +3336,76 @@ Ready to receive calls?`;
 
       const responseText = assistantMessage.content[0].text.value;
 
+      // Check if response contains JSON proposals
+      let proposalsCreated = [];
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/```\s*(\{[\s\S]*?\})\s*```/);
+      
+      if (jsonMatch) {
+        console.log('[Aligner Chat] Detected JSON proposals in response, creating database records...');
+        
+        try {
+          const jsonText = jsonMatch[1];
+          const parsedResponse = JSON.parse(jsonText);
+          
+          if (parsedResponse.edits && Array.isArray(parsedResponse.edits)) {
+            // Group edits by file
+            const editsByFile = new Map<string, any[]>();
+            for (const edit of parsedResponse.edits) {
+              if (!editsByFile.has(edit.file)) {
+                editsByFile.set(edit.file, []);
+              }
+              editsByFile.get(edit.file)!.push(edit);
+            }
+
+            console.log(`[Aligner Chat] Processing ${parsedResponse.edits.length} edits across ${editsByFile.size} file(s)`);
+
+            // Create proposals in database
+            for (const [filename, fileEdits] of editsByFile) {
+              // Use fuzzy matching to handle filename variations
+              const file = await findKbFileByFuzzyFilename(filename, allKbFiles);
+              if (!file) {
+                console.warn(`[Aligner Chat] File not found: ${filename}, skipping ${fileEdits.length} edits`);
+                continue;
+              }
+
+              // Get latest version to use as base
+              const versions = await storage.getKbFileVersions(file.id);
+              const latestVersion = versions[0];
+
+              if (!latestVersion) {
+                console.warn(`[Aligner Chat] No versions found for ${filename}, skipping`);
+                continue;
+              }
+
+              // Build rationale from all edits
+              const rationale = fileEdits.map((edit, idx) => 
+                `${idx + 1}. ${edit.section ? edit.section + ': ' : ''}${edit.reason} (Evidence: ${edit.evidence})`
+              ).join('\n\n');
+
+              // Store edits as JSON - we'll apply them in order when approved
+              const created = await storage.createKbProposal({
+                kbFileId: file.id,
+                baseVersionId: latestVersion.id,
+                proposedContent: JSON.stringify(fileEdits),
+                originalAiContent: JSON.stringify(fileEdits),
+                rationale,
+                aiInsightId: null,
+                status: 'pending',
+                humanEdited: false,
+              });
+
+              proposalsCreated.push(created);
+              console.log(`[Aligner Chat] Created proposal for ${filename} with ${fileEdits.length} edits`);
+            }
+
+            console.log(`[Aligner Chat] Successfully created ${proposalsCreated.length} proposals from chat`);
+          }
+        } catch (error) {
+          console.error('[Aligner Chat] Failed to parse/create proposals from JSON:', error);
+          // Don't fail the whole request - the chat response is still valuable
+        }
+      }
+
       // Save assistant response
       await storage.saveChatMessage({
         userId,
@@ -3281,13 +3415,16 @@ Ready to receive calls?`;
         responseId: run.id,
         metadata: {
           model: 'gpt-4o',
-          threadId: threadId
+          threadId: threadId,
+          proposalsCreated: proposalsCreated.length
         }
       });
 
       res.json({
         message: responseText,
         conversationId: activeConversationId,
+        proposalsCreated: proposalsCreated.length,
+        proposals: proposalsCreated,
       });
 
     } catch (error: any) {
