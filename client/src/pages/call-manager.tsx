@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { KBEditor } from "@/components/kb-editor";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb, Upload, Settings2 } from "lucide-react";
+import { PhoneCall, Clock, AlertCircle, CheckCircle2, Loader2, MapPin, Calendar, TrendingUp, TrendingDown, Download, Brain, Lightbulb, MessageSquare, BarChart3, FileText, RefreshCw, Trash2, Bomb, Upload, Settings2, FileEdit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -397,6 +398,9 @@ function KBLibraryTab() {
             <TabsTrigger value="files" data-testid="tab-files">
               Files ({kbFiles.length})
             </TabsTrigger>
+            <TabsTrigger value="editor" data-testid="tab-editor">
+              Editor
+            </TabsTrigger>
             <TabsTrigger value="proposals" data-testid="tab-proposals">
               Proposals ({pendingProposals.length} pending)
             </TabsTrigger>
@@ -472,6 +476,11 @@ function KBLibraryTab() {
                 </TableBody>
               </Table>
             )}
+          </TabsContent>
+
+          {/* Editor Tab */}
+          <TabsContent value="editor">
+            <KBEditor />
           </TabsContent>
 
           {/* Proposals Tab */}

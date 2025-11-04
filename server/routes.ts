@@ -1285,6 +1285,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get agent details including system prompt from ElevenLabs API
+  app.get('/api/elevenlabs/agents/:agentId/details', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { agentId } = req.params;
+      const config = await storage.getElevenLabsConfig();
+      
+      if (!config?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+
+      console.log(`[Agent Details] Fetching details for agent: ${agentId}`);
+      
+      const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
+        headers: {
+          'xi-api-key': config.apiKey,
+        },
+      });
+
+      console.log('[Agent Details] Successfully fetched agent details');
+      res.json(response.data);
+    } catch (error: any) {
+      console.error('[Agent Details] Error fetching agent details:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch agent details' });
+    }
+  });
+
+  // Update agent system prompt via ElevenLabs API
+  app.patch('/api/elevenlabs/agents/:agentId/prompt', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { agentId } = req.params;
+      const { prompt } = req.body;
+      
+      if (!prompt) {
+        return res.status(400).json({ error: 'Prompt is required' });
+      }
+
+      const config = await storage.getElevenLabsConfig();
+      
+      if (!config?.apiKey) {
+        return res.status(400).json({ error: 'ElevenLabs API key not configured' });
+      }
+
+      console.log(`[Agent Prompt] Updating prompt for agent: ${agentId}`);
+      
+      const response = await axios.patch(
+        `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
+        { prompt },
+        {
+          headers: {
+            'xi-api-key': config.apiKey,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('[Agent Prompt] Successfully updated agent prompt');
+      res.json(response.data);
+    } catch (error: any) {
+      console.error('[Agent Prompt] Error updating agent prompt:', error);
+      res.status(500).json({ error: error.message || 'Failed to update agent prompt' });
+    }
+  });
+
   // Sync phone numbers from ElevenLabs API
   app.post('/api/elevenlabs/sync-phone-numbers', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -3754,6 +3817,102 @@ Ready to receive calls?`;
     } catch (error: any) {
       console.error('[KB] Error fetching files:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch KB files' });
+    }
+  });
+
+  // Get single KB file by ID
+  app.get('/api/kb/files/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const file = await storage.getKbFile(id);
+      if (!file) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      res.json(file);
+    } catch (error: any) {
+      console.error('[KB] Error fetching file:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch KB file' });
+    }
+  });
+
+  // Update KB file content (creates new version + syncs to ElevenLabs + backs up to Drive)
+  app.patch('/api/kb/files/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { content } = req.body;
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+
+      if (!content) {
+        return res.status(400).json({ error: 'Content is required' });
+      }
+
+      const file = await storage.getKbFile(id);
+      if (!file) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      console.log(`[KB Update] Updating file: ${file.filename}`);
+
+      // Get existing versions to determine new version number
+      const versions = await storage.getKbFileVersions(id);
+      const latestVersion = versions[0];
+      const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1;
+
+      // Create new version
+      const newVersion = await storage.createKbFileVersion({
+        kbFileId: id,
+        versionNumber: newVersionNumber,
+        content,
+        source: 'editor',
+        createdBy: userId,
+      });
+
+      // Backup to Google Drive
+      await googleDrive.backupKbFileToDrive(
+        file.filename,
+        newVersionNumber,
+        content
+      );
+
+      // Update file with new content and mark as locally updated
+      const updatedFile = await storage.updateKbFile(id, {
+        currentContent: content,
+        currentSyncVersion: newVersion.id,
+        localUpdatedAt: new Date(),
+      });
+
+      console.log(`[KB Update] File updated to version ${newVersionNumber}, syncing to ElevenLabs...`);
+
+      // Trigger sync to ElevenLabs (non-blocking)
+      const elevenLabsConfig = await storage.getElevenLabsConfig();
+      if (elevenLabsConfig?.apiKey && file.elevenLabsDocumentId) {
+        try {
+          // Update document on ElevenLabs
+          await axios.patch(
+            `https://api.elevenlabs.io/v1/convai/knowledge-base/${file.elevenLabsDocumentId}`,
+            { document_content: content },
+            {
+              headers: {
+                'xi-api-key': elevenLabsConfig.apiKey,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          console.log(`[KB Update] Successfully synced to ElevenLabs document ${file.elevenLabsDocumentId}`);
+          
+          // Update lastSyncedAt
+          await storage.updateKbFile(id, {
+            lastSyncedAt: new Date(),
+          });
+        } catch (syncError: any) {
+          console.error(`[KB Update] Error syncing to ElevenLabs:`, syncError);
+        }
+      }
+
+      res.json(updatedFile);
+    } catch (error: any) {
+      console.error('[KB Update] Error updating file:', error);
+      res.status(500).json({ error: error.message || 'Failed to update KB file' });
     }
   });
 
