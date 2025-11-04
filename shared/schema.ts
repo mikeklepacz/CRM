@@ -420,6 +420,7 @@ export const conversations = pgTable("conversations", {
   userId: varchar("user_id").notNull().references(() => users.id),
   projectId: varchar("project_id").references(() => projects.id, { onDelete: 'set null' }),
   title: varchar("title", { length: 300 }).notNull(),
+  assistantType: varchar("assistant_type", { length: 50 }).default('sales'), // 'sales' or 'aligner'
   contextData: jsonb("context_data").$type<{
     storeName?: string;
     pocName?: string;

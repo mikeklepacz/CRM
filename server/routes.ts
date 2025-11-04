@@ -3061,6 +3061,181 @@ Ready to receive calls?`;
     }
   });
 
+  // ===== ALIGNER CHAT ENDPOINTS =====
+  // Chat with the Aligner assistant about calls, insights, and KB improvements
+  app.post('/api/aligner/chat', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { message, conversationId } = req.body;
+
+      if (!message) {
+        return res.status(400).json({ error: 'Message required' });
+      }
+
+      // Auto-create Aligner conversation if not provided
+      let activeConversationId = conversationId;
+      if (!activeConversationId) {
+        const newConversation = await storage.createConversation({
+          userId,
+          title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+          assistantType: 'aligner',
+          contextData: {},
+          projectId: null,
+        });
+        activeConversationId = newConversation.id;
+        console.log('[Aligner Chat] New conversation created:', activeConversationId);
+      }
+
+      // Get OpenAI settings
+      const settings = await storage.getOpenaiSettings();
+      if (!settings?.apiKey) {
+        return res.status(400).json({ error: 'OpenAI API key not configured' });
+      }
+
+      // Get Aligner assistant
+      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      if (!alignerAssistant || !alignerAssistant.assistantId) {
+        return res.status(400).json({ error: 'Aligner assistant not configured' });
+      }
+
+      const openai = new OpenAI({ apiKey: settings.apiKey });
+
+      // Save user message
+      await storage.saveChatMessage({
+        userId,
+        conversationId: activeConversationId,
+        role: 'user',
+        content: message,
+        responseId: null,
+        metadata: {}
+      });
+
+      // Get conversation to check for existing thread
+      const conversation = await storage.getConversation(activeConversationId);
+      let threadId = conversation?.threadId;
+
+      // Create or reuse thread
+      if (!threadId) {
+        const thread = await openai.beta.threads.create();
+        threadId = thread.id;
+        await storage.updateConversation(activeConversationId, { threadId });
+        console.log('[Aligner Chat] New thread created:', threadId);
+      }
+
+      // Add user message to thread
+      await openai.beta.threads.messages.create(threadId, {
+        role: 'user',
+        content: message
+      });
+
+      // Run the assistant
+      const run = await openai.beta.threads.runs.create(threadId, {
+        assistant_id: alignerAssistant.assistantId,
+      });
+
+      // Poll for completion
+      let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      let attempts = 0;
+      const maxAttempts = 60; // 30 seconds max
+
+      while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+        if (attempts >= maxAttempts) {
+          throw new Error('Aligner response timeout');
+        }
+        await new Promise(resolve => setTimeout(resolve, 500));
+        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        attempts++;
+      }
+
+      if (runStatus.status !== 'completed') {
+        throw new Error(`Aligner run failed: ${runStatus.status}`);
+      }
+
+      // Get the assistant's response
+      const messages = await openai.beta.threads.messages.list(threadId);
+      const assistantMessage = messages.data.find(m => m.role === 'assistant');
+
+      if (!assistantMessage || !assistantMessage.content[0] || assistantMessage.content[0].type !== 'text') {
+        throw new Error('No response from Aligner assistant');
+      }
+
+      const responseText = assistantMessage.content[0].text.value;
+
+      // Save assistant response
+      await storage.saveChatMessage({
+        userId,
+        conversationId: activeConversationId,
+        role: 'assistant',
+        content: responseText,
+        responseId: run.id,
+        metadata: {
+          model: 'gpt-4o',
+          threadId: threadId
+        }
+      });
+
+      res.json({
+        message: responseText,
+        conversationId: activeConversationId,
+      });
+
+    } catch (error: any) {
+      console.error('[Aligner Chat] Error:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to get Aligner response'
+      });
+    }
+  });
+
+  // Get Aligner chat history
+  app.get('/api/aligner/chat/history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // Get all Aligner conversations for this user
+      const conversations = await storage.getConversationsByUserId(userId);
+      const alignerConversations = conversations.filter((c: any) => c.assistantType === 'aligner');
+
+      if (alignerConversations.length === 0) {
+        return res.json([]);
+      }
+
+      // Get the most recent Aligner conversation
+      const latestConversation = alignerConversations.sort((a: any, b: any) => 
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )[0];
+
+      // Get all messages for this conversation
+      const messages = await storage.getChatMessagesByConversationId(latestConversation.id);
+      
+      res.json(messages);
+    } catch (error: any) {
+      console.error('[Aligner Chat] Error fetching history:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch chat history' });
+    }
+  });
+
+  // Clear Aligner chat history
+  app.delete('/api/aligner/chat/history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      
+      // Get all Aligner conversations for this user
+      const conversations = await storage.getConversationsByUserId(userId);
+      const alignerConversations = conversations.filter((c: any) => c.assistantType === 'aligner');
+
+      // Delete all Aligner conversations and their messages
+      for (const conv of alignerConversations) {
+        await storage.deleteConversation(conv.id);
+      }
+
+      res.json({ success: true, deletedCount: alignerConversations.length });
+    } catch (error: any) {
+      console.error('[Aligner Chat] Error clearing history:', error);
+      res.status(500).json({ error: error.message || 'Failed to clear chat history' });
+    }
+  });
+
   // ===== KB MANAGEMENT ENDPOINTS =====
   // Helper function to safely delete a KB file with all dependencies
   async function safeDeleteKbFile(fileId: string): Promise<void> {
