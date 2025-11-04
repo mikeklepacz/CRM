@@ -3608,24 +3608,17 @@ The user has agreed to create proposals. Please output your recommended changes 
           continue;
         }
 
-        // Build proposed content by applying edits
-        let proposedContent = matchedFile.currentContent || '';
-        for (const edit of edits) {
-          if (edit.old && edit.new) {
-            proposedContent = proposedContent.replace(edit.old, edit.new);
-          } else if (edit.new && !edit.old) {
-            proposedContent += `\n\n${edit.new}`;
-          }
-        }
-
-        // Create proposal
-        const proposal = await storage.createKbChangeProposal({
-          fileId: matchedFile.id,
+        // Store edits as JSON (same format as analyze-kb endpoint)
+        // This allows the diff viewer to display individual edits properly
+        const rationale = edits.map(e => `${e.section || 'General'}: ${e.reason}`).join('\n\n');
+        
+        // Create proposal with edits JSON (not final applied text)
+        const proposal = await storage.createKbProposal({
+          kbFileId: matchedFile.id,
           baseVersionId: currentVersion.id,
-          proposedContent,
-          proposalReason: edits.map(e => `${e.section || 'General'}: ${e.reason}`).join('\n\n'),
-          proposedBy: userId,
-          status: 'pending'
+          proposedContent: JSON.stringify(edits), // Store structured edits as JSON
+          rationale: rationale,
+          status: 'pending',
         });
 
         createdProposals.push(proposal);
@@ -5158,11 +5151,9 @@ IMPORTANT:
           kbFileId: file.id,
           baseVersionId: latestVersion.id,
           proposedContent: JSON.stringify(fileEdits), // Store structured edits as JSON
-          originalAiContent: JSON.stringify(fileEdits), // Store original AI version
           rationale,
           aiInsightId: insight?.id || null,
           status: 'pending',
-          humanEdited: false,
         });
 
         createdProposals.push(created);

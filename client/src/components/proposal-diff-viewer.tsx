@@ -162,6 +162,17 @@ export function ProposalDiffViewer({
   const handleApproveSelected = async (editsToApprove?: Set<number>) => {
     const editsSet = editsToApprove || selectedEdits;
     
+    // Safety check: ensure editsSet is a Set
+    if (!(editsSet instanceof Set)) {
+      console.error('[Approval] editsSet is not a Set:', editsSet);
+      toast({
+        title: "Selection Error",
+        description: "Invalid edit selection state. Please refresh and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (editsSet.size === 0) {
       toast({
         title: "No Edits Selected",
