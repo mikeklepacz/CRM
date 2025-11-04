@@ -1304,6 +1304,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log('[Agent Details] Successfully fetched agent details');
+      console.log('[Agent Details] Response structure:', JSON.stringify(response.data, null, 2).substring(0, 1000));
+      console.log('[Agent Details] Prompt field exists?', 'prompt' in response.data);
+      console.log('[Agent Details] Prompt value:', response.data.prompt);
       res.json(response.data);
     } catch (error: any) {
       console.error('[Agent Details] Error fetching agent details:', error);
