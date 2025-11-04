@@ -155,9 +155,11 @@ export function ProposalDiffViewer({
     return Math.min(Math.max(totalRows, minRows), maxRows);
   };
 
-  // Approve only selected edits
-  const handleApproveSelected = async () => {
-    if (selectedEdits.size === 0) {
+  // Approve only selected edits (or specific edits passed as parameter)
+  const handleApproveSelected = async (editsToApprove?: Set<number>) => {
+    const editsSet = editsToApprove || selectedEdits;
+    
+    if (editsSet.size === 0) {
       toast({
         title: "No Edits Selected",
         description: "Please select at least one edit to approve",
@@ -201,18 +203,18 @@ export function ProposalDiffViewer({
     }
 
     // Now proceed with approval based on selection
-    if (selectedEdits.size === edits.length) {
+    if (editsSet.size === edits.length) {
       // All edits selected, approve directly
       onApprove?.();
     } else {
       // Partial selection, need to filter to selected edits only
-      const selectedEditsArray = edits.filter((_, idx) => selectedEdits.has(idx));
+      const selectedEditsArray = edits.filter((_, idx) => editsSet.has(idx));
       const filteredJson = JSON.stringify(selectedEditsArray, null, 2);
       setEditedContent(filteredJson);
       
       editMutation.mutate({ 
         content: filteredJson,
-        savedIndices: Array.from(selectedEdits)
+        savedIndices: Array.from(editsSet)
       }, {
         onSuccess: () => {
           onApprove?.();
@@ -387,9 +389,8 @@ export function ProposalDiffViewer({
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              const newSelected = new Set([idx]);
-                              setSelectedEdits(newSelected);
-                              setTimeout(() => handleApproveSelected(), 100);
+                              // Approve only this specific edit
+                              handleApproveSelected(new Set([idx]));
                             }}
                             disabled={isApproving || isRejecting}
                             data-testid={`button-approve-single-${idx}`}
