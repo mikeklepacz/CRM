@@ -5,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Send, Loader2, Trash2, User as UserIcon, AlertCircle, Lightbulb, MessageSquarePlus, ChevronLeft } from "lucide-react";
+import { Send, Loader2, Trash2, User as UserIcon, AlertCircle, Lightbulb, MessageSquarePlus, ChevronLeft, FileCheck } from "lucide-react";
 import type { Conversation } from "@shared/schema";
 
 interface Message {
@@ -29,6 +29,19 @@ function formatAIContent(content: string): string {
   cleaned = cleaned.trim();
   
   return cleaned;
+}
+
+// Helper function to check if message contains JSON proposals
+function hasJSONProposals(content: string): boolean {
+  const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*(\{[\s\S]*?\})\s*```/);
+  if (!jsonMatch) return false;
+  
+  try {
+    const parsed = JSON.parse(jsonMatch[1]);
+    return parsed.edits && Array.isArray(parsed.edits) && parsed.edits.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 // Helper function to render formatted text with comprehensive markdown support
@@ -248,6 +261,27 @@ export function AlignerChat({ className }: AlignerChatProps) {
     },
   });
 
+  // Create proposals from chat mutation
+  const createProposalsMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      return await apiRequest("POST", "/api/aligner/create-proposals-from-chat", { conversationId });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `Created ${data.proposalsCreated} proposal(s). Review them in the Proposals tab.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create proposals from chat",
+        variant: "destructive",
+      });
+    },
+  });
+
   // New conversation handler
   const handleNewConversation = () => {
     setSelectedConversationId(null);
@@ -420,34 +454,61 @@ export function AlignerChat({ className }: AlignerChatProps) {
               </div>
             ) : (
               messages.map((msg, index) => (
-                <div
-                  key={index}
-                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  data-testid={`aligner-message-${msg.role}-${index}`}
-                >
-                  {msg.role === 'assistant' && (
-                    <div className="flex-shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
-                        <Lightbulb className="h-4 w-4 text-amber-500" />
-                      </div>
-                    </div>
-                  )}
+                <div key={index}>
                   <div
-                    className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                      msg.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
-                    }`}
+                    className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    data-testid={`aligner-message-${msg.role}-${index}`}
                   >
-                    <div className="text-sm whitespace-pre-wrap">
-                      {msg.role === 'assistant' ? renderFormattedText(msg.content) : msg.content}
-                    </div>
-                  </div>
-                  {msg.role === 'user' && (
-                    <div className="flex-shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <UserIcon className="h-4 w-4 text-primary" />
+                    {msg.role === 'assistant' && (
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+                          <Lightbulb className="h-4 w-4 text-amber-500" />
+                        </div>
                       </div>
+                    )}
+                    <div
+                      className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted'
+                      }`}
+                    >
+                      <div className="text-sm whitespace-pre-wrap">
+                        {msg.role === 'assistant' ? renderFormattedText(msg.content) : msg.content}
+                      </div>
+                    </div>
+                    {msg.role === 'user' && (
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <UserIcon className="h-4 w-4 text-primary" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Show "Create Proposals" button after assistant messages with JSON */}
+                  {msg.role === 'assistant' && hasJSONProposals(msg.content) && selectedConversationId && (
+                    <div className="flex gap-3 justify-start mt-2 ml-11">
+                      <Button
+                        onClick={() => createProposalsMutation.mutate(selectedConversationId)}
+                        disabled={createProposalsMutation.isPending}
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        data-testid="button-create-proposals-from-chat"
+                      >
+                        {createProposalsMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Creating Proposals...
+                          </>
+                        ) : (
+                          <>
+                            <FileCheck className="h-3 w-3" />
+                            Create Proposals
+                          </>
+                        )}
+                      </Button>
                     </div>
                   )}
                 </div>

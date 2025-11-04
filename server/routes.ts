@@ -3336,97 +3336,9 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
 
       const responseText = assistantMessage.content[0].text.value;
 
-      // Check if response contains JSON proposals AND user gave explicit confirmation
-      let proposalsCreated = [];
-      
-      // Detect user confirmation signals (case-insensitive)
-      const confirmationKeywords = [
-        'yes', 'create the proposal', 'go ahead', 'propose', 'make the changes',
-        'proceed', 'looks good', 'sounds good', 'i agree', 'approved', 'do it'
-      ];
-      const userConfirmed = confirmationKeywords.some(keyword => 
-        message.toLowerCase().includes(keyword)
-      );
-      
-      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/```\s*(\{[\s\S]*?\})\s*```/);
-      
-      if (jsonMatch && userConfirmed) {
-        console.log('[Aligner Chat] User confirmed AND JSON proposals detected, creating database records...');
-        
-        try {
-          const jsonText = jsonMatch[1];
-          const parsedResponse = JSON.parse(jsonText);
-          
-          // Validate it's actually our expected proposal format
-          if (parsedResponse.edits && Array.isArray(parsedResponse.edits) && parsedResponse.edits.length > 0) {
-            // Additional validation: ensure edits have required fields
-            const validEdit = parsedResponse.edits.every((edit: any) => 
-              edit.file && edit.reason && (edit.old !== undefined || edit.new !== undefined)
-            );
-            
-            if (!validEdit) {
-              console.warn('[Aligner Chat] JSON found but does not match expected proposal schema, skipping');
-              throw new Error('Invalid proposal schema');
-            }
-            // Group edits by file
-            const editsByFile = new Map<string, any[]>();
-            for (const edit of parsedResponse.edits) {
-              if (!editsByFile.has(edit.file)) {
-                editsByFile.set(edit.file, []);
-              }
-              editsByFile.get(edit.file)!.push(edit);
-            }
-
-            console.log(`[Aligner Chat] Processing ${parsedResponse.edits.length} edits across ${editsByFile.size} file(s)`);
-
-            // Create proposals in database
-            for (const [filename, fileEdits] of editsByFile) {
-              // Use fuzzy matching to handle filename variations
-              const file = await findKbFileByFuzzyFilename(filename, allKbFiles);
-              if (!file) {
-                console.warn(`[Aligner Chat] File not found: ${filename}, skipping ${fileEdits.length} edits`);
-                continue;
-              }
-
-              // Get latest version to use as base
-              const versions = await storage.getKbFileVersions(file.id);
-              const latestVersion = versions[0];
-
-              if (!latestVersion) {
-                console.warn(`[Aligner Chat] No versions found for ${filename}, skipping`);
-                continue;
-              }
-
-              // Build rationale from all edits
-              const rationale = fileEdits.map((edit, idx) => 
-                `${idx + 1}. ${edit.section ? edit.section + ': ' : ''}${edit.reason} (Evidence: ${edit.evidence})`
-              ).join('\n\n');
-
-              // Store edits as JSON - we'll apply them in order when approved
-              const created = await storage.createKbProposal({
-                kbFileId: file.id,
-                baseVersionId: latestVersion.id,
-                proposedContent: JSON.stringify(fileEdits),
-                originalAiContent: JSON.stringify(fileEdits),
-                rationale,
-                aiInsightId: null,
-                status: 'pending',
-                humanEdited: false,
-              });
-
-              proposalsCreated.push(created);
-              console.log(`[Aligner Chat] Created proposal for ${filename} with ${fileEdits.length} edits`);
-            }
-
-            console.log(`[Aligner Chat] Successfully created ${proposalsCreated.length} proposals from chat`);
-          }
-        } catch (error) {
-          console.error('[Aligner Chat] Failed to parse/create proposals from JSON:', error);
-          // Don't fail the whole request - the chat response is still valuable
-        }
-      } else if (jsonMatch && !userConfirmed) {
-        console.log('[Aligner Chat] JSON detected but user has not confirmed - skipping proposal creation (collaborative discussion in progress)');
-      }
+      // Chat endpoint is for DISCUSSION ONLY
+      // Proposals are created via separate explicit action (see /api/aligner/create-proposals-from-chat endpoint)
+      // This prevents accidental proposal creation from transcripts containing keywords like "yes"
 
       // Save assistant response
       await storage.saveChatMessage({
@@ -3445,14 +3357,134 @@ You are the Aligner assistant helping improve the ElevenLabs AI agent knowledge 
       res.json({
         message: responseText,
         conversationId: activeConversationId,
-        proposalsCreated: proposalsCreated.length,
-        proposals: proposalsCreated,
       });
 
     } catch (error: any) {
       console.error('[Aligner Chat] Error:', error);
       res.status(500).json({
         error: error.message || 'Failed to get Aligner response'
+      });
+    }
+  });
+
+  // Create proposals from Aligner chat discussion (explicit user action)
+  app.post('/api/aligner/create-proposals-from-chat', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { conversationId } = req.body;
+
+      if (!conversationId) {
+        return res.status(400).json({ error: 'conversationId required' });
+      }
+
+      // Get the conversation's latest assistant message
+      const messages = await storage.getChatMessages(conversationId);
+      if (!messages || messages.length === 0) {
+        return res.status(404).json({ error: 'No messages found in this conversation' });
+      }
+
+      // Find the most recent assistant message
+      const latestAssistantMessage = messages
+        .filter((m: any) => m.role === 'assistant')
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+      if (!latestAssistantMessage) {
+        return res.status(404).json({ error: 'No assistant messages found in this conversation' });
+      }
+
+      const responseText = latestAssistantMessage.content;
+
+      // Extract JSON proposals from the assistant's response
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/```\s*(\{[\s\S]*?\})\s*```/);
+      
+      if (!jsonMatch) {
+        return res.status(400).json({ error: 'No JSON proposals found in the latest assistant message. Ask the Aligner to create specific proposals first.' });
+      }
+
+      console.log('[Aligner Create Proposals] Parsing JSON from latest assistant message...');
+      
+      const jsonText = jsonMatch[1];
+      const parsedResponse = JSON.parse(jsonText);
+      
+      // Validate it's actually our expected proposal format
+      if (!parsedResponse.edits || !Array.isArray(parsedResponse.edits) || parsedResponse.edits.length === 0) {
+        return res.status(400).json({ error: 'Invalid proposal format - expected "edits" array with at least one edit' });
+      }
+
+      // Additional validation: ensure edits have required fields
+      const validEdit = parsedResponse.edits.every((edit: any) => 
+        edit.file && edit.reason && (edit.old !== undefined || edit.new !== undefined)
+      );
+      
+      if (!validEdit) {
+        return res.status(400).json({ error: 'Invalid proposal schema - edits must have file, reason, and old/new fields' });
+      }
+
+      // Fetch KB files for fuzzy matching
+      const allKbFiles = await storage.getAllKbFiles();
+
+      // Group edits by file
+      const editsByFile = new Map<string, any[]>();
+      for (const edit of parsedResponse.edits) {
+        if (!editsByFile.has(edit.file)) {
+          editsByFile.set(edit.file, []);
+        }
+        editsByFile.get(edit.file)!.push(edit);
+      }
+
+      console.log(`[Aligner Create Proposals] Processing ${parsedResponse.edits.length} edits across ${editsByFile.size} file(s)`);
+
+      // Create proposals in database
+      const proposalsCreated = [];
+      for (const [filename, fileEdits] of editsByFile) {
+        // Use fuzzy matching to handle filename variations
+        const file = await findKbFileByFuzzyFilename(filename, allKbFiles);
+        if (!file) {
+          console.warn(`[Aligner Create Proposals] File not found: ${filename}, skipping ${fileEdits.length} edits`);
+          continue;
+        }
+
+        // Get latest version to use as base
+        const versions = await storage.getKbFileVersions(file.id);
+        const latestVersion = versions[0];
+
+        if (!latestVersion) {
+          console.warn(`[Aligner Create Proposals] No versions found for ${filename}, skipping`);
+          continue;
+        }
+
+        // Build rationale from all edits
+        const rationale = fileEdits.map((edit, idx) => 
+          `${idx + 1}. ${edit.section ? edit.section + ': ' : ''}${edit.reason} (Evidence: ${edit.evidence})`
+        ).join('\n\n');
+
+        // Store edits as JSON - we'll apply them in order when approved
+        const created = await storage.createKbProposal({
+          kbFileId: file.id,
+          baseVersionId: latestVersion.id,
+          proposedContent: JSON.stringify(fileEdits),
+          originalAiContent: JSON.stringify(fileEdits),
+          rationale,
+          aiInsightId: null,
+          status: 'pending',
+          humanEdited: false,
+        });
+
+        proposalsCreated.push(created);
+        console.log(`[Aligner Create Proposals] Created proposal for ${filename} with ${fileEdits.length} edits`);
+      }
+
+      console.log(`[Aligner Create Proposals] Successfully created ${proposalsCreated.length} proposals from chat`);
+
+      res.json({
+        success: true,
+        proposalsCreated: proposalsCreated.length,
+        proposals: proposalsCreated,
+      });
+
+    } catch (error: any) {
+      console.error('[Aligner Create Proposals] Error:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to create proposals from chat'
       });
     }
   });
