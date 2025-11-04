@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Send, Loader2, Trash2, Bot, User as UserIcon, AlertCircle, Lightbulb } from "lucide-react";
+import { Send, Loader2, Trash2, User as UserIcon, AlertCircle, Lightbulb, MessageSquarePlus, ChevronLeft } from "lucide-react";
+import type { Conversation } from "@shared/schema";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -111,6 +111,8 @@ export function AlignerChat({ className }: AlignerChatProps) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Check if API key is configured
@@ -118,20 +120,36 @@ export function AlignerChat({ className }: AlignerChatProps) {
     queryKey: ['/api/openai/settings'],
   });
 
-  // Load chat history
-  const { data: history = [], isLoading: historyLoading } = useQuery({
+  // Load all conversations
+  const { data: conversations = [], isLoading: conversationsLoading } = useQuery<Conversation[]>({
     queryKey: ['/api/aligner/chat/history'],
   });
 
+  // Load messages for selected conversation
+  const { data: conversationMessages = [], isLoading: messagesLoading } = useQuery({
+    queryKey: ['/api/aligner/conversations', selectedConversationId, 'messages'],
+    enabled: !!selectedConversationId,
+  });
+
+  // Set messages when conversation messages load
   useEffect(() => {
-    if (history && history.length > 0) {
-      const formattedHistory = history.map((msg: any) => ({
+    if (conversationMessages && conversationMessages.length > 0) {
+      const formattedMessages = conversationMessages.map((msg: any) => ({
         role: msg.role,
         content: msg.content
       }));
-      setMessages(formattedHistory);
+      setMessages(formattedMessages);
+    } else if (selectedConversationId) {
+      setMessages([]);
     }
-  }, [history]);
+  }, [conversationMessages, selectedConversationId]);
+
+  // Auto-select most recent conversation if none selected
+  useEffect(() => {
+    if (!selectedConversationId && conversations.length > 0) {
+      setSelectedConversationId(conversations[0].id);
+    }
+  }, [conversations, selectedConversationId]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -144,7 +162,8 @@ export function AlignerChat({ className }: AlignerChatProps) {
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
       return await apiRequest("POST", "/api/aligner/chat", { 
-        message: content 
+        message: content,
+        conversationId: selectedConversationId
       });
     },
     onSuccess: (data) => {
@@ -152,7 +171,14 @@ export function AlignerChat({ className }: AlignerChatProps) {
         ...prev,
         { role: 'assistant', content: data.message }
       ]);
+      
+      // Update selected conversation if a new one was created
+      if (data.conversationId && data.conversationId !== selectedConversationId) {
+        setSelectedConversationId(data.conversationId);
+      }
+      
       queryClient.invalidateQueries({ queryKey: ['/api/aligner/chat/history'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner/conversations', selectedConversationId || data.conversationId, 'messages'] });
     },
     onError: (error: any) => {
       toast({
@@ -163,27 +189,36 @@ export function AlignerChat({ className }: AlignerChatProps) {
     },
   });
 
-  // Clear history mutation
-  const clearHistoryMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("DELETE", "/api/aligner/chat/history");
+  // Delete conversation mutation
+  const deleteConversationMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      return await apiRequest("DELETE", `/api/conversations/${conversationId}`);
     },
-    onSuccess: () => {
-      setMessages([]);
+    onSuccess: (_, deletedId) => {
+      if (deletedId === selectedConversationId) {
+        setSelectedConversationId(null);
+        setMessages([]);
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/aligner/chat/history'] });
       toast({
         title: "Success",
-        description: "Chat history cleared",
+        description: "Conversation deleted",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to clear history",
+        description: error.message || "Failed to delete conversation",
         variant: "destructive",
       });
     },
   });
+
+  // New conversation handler
+  const handleNewConversation = () => {
+    setSelectedConversationId(null);
+    setMessages([]);
+  };
 
   const handleSendMessage = () => {
     if (!message.trim()) return;
@@ -201,7 +236,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
     }
   };
 
-  if (settingsLoading || historyLoading) {
+  if (settingsLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -229,121 +264,206 @@ export function AlignerChat({ className }: AlignerChatProps) {
   }
 
   return (
-    <div className={`flex flex-col h-full ${className || ''}`}>
-      {/* Chat Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-2">
-          <Lightbulb className="h-5 w-5 text-amber-500" />
-          <h3 className="font-semibold">Aligner Chat</h3>
-        </div>
-        {messages.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (confirm('Clear all chat history?')) {
-                clearHistoryMutation.mutate();
-              }
-            }}
-            disabled={clearHistoryMutation.isPending}
-            data-testid="button-clear-aligner-history"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-4">
-          {messages.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Lightbulb className="h-12 w-12 mx-auto mb-4 opacity-50 text-amber-500" />
-              <p className="font-medium mb-2">Talk to the Aligner</p>
-              <p className="text-sm">Ask about call patterns, discuss KB improvements, or request specific changes to sales scripts.</p>
+    <div className={`flex h-full overflow-hidden ${className || ''}`}>
+      {/* Sidebar */}
+      {sidebarOpen && (
+        <div className="w-64 border-r flex flex-col">
+          <div className="p-3 border-b flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+              <h3 className="font-semibold text-sm">Aligner</h3>
             </div>
-          ) : (
-            messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                data-testid={`aligner-message-${msg.role}-${index}`}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
-                      <Lightbulb className="h-4 w-4 text-amber-500" />
-                    </div>
-                  </div>
-                )}
-                <div
-                  className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                    msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
-                  }`}
-                >
-                  <div className="text-sm whitespace-pre-wrap">
-                    {msg.role === 'assistant' ? renderFormattedText(msg.content) : msg.content}
-                  </div>
-                </div>
-                {msg.role === 'user' && (
-                  <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <UserIcon className="h-4 w-4 text-primary" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-          {sendMessageMutation.isPending && (
-            <div className="flex gap-3 justify-start">
-              <div className="flex-shrink-0">
-                <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
-                  <Lightbulb className="h-4 w-4 text-amber-500" />
-                </div>
-              </div>
-              <div className="rounded-lg px-4 py-2 bg-muted">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Thinking...
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(false)}
+              className="h-7 w-7"
+              data-testid="button-close-sidebar"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </div>
 
-      {/* Input */}
-      <div className="p-4 border-t">
-        <div className="flex gap-2">
-          <Textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder="Ask the Aligner about calls, insights, or KB improvements..."
-            className="flex-1 min-h-[60px] max-h-[200px]"
-            disabled={sendMessageMutation.isPending}
-            data-testid="input-aligner-message"
-          />
-          <Button
-            onClick={handleSendMessage}
-            disabled={!message.trim() || sendMessageMutation.isPending}
-            size="icon"
-            className="h-[60px] w-[60px]"
-            data-testid="button-send-aligner-message"
-          >
-            {sendMessageMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="p-2 border-b">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNewConversation}
+              className="w-full"
+              data-testid="button-new-aligner-chat"
+            >
+              <MessageSquarePlus className="h-4 w-4 mr-2" />
+              New Conversation
+            </Button>
+          </div>
+
+          <ScrollArea className="flex-1">
+            <div className="p-2 space-y-1">
+              {conversationsLoading ? (
+                <div className="text-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+                </div>
+              ) : conversations.length === 0 ? (
+                <div className="text-center py-8 px-2">
+                  <p className="text-sm text-muted-foreground">No conversations yet</p>
+                </div>
+              ) : (
+                conversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    className={`group p-2 rounded-md cursor-pointer hover-elevate flex items-center justify-between gap-2 ${
+                      selectedConversationId === conv.id ? "bg-accent" : ""
+                    }`}
+                    onClick={() => setSelectedConversationId(conv.id)}
+                    data-testid={`aligner-conversation-${conv.id}`}
+                  >
+                    <p className="text-sm font-medium truncate flex-1">{conv.title}</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Delete this conversation?')) {
+                          deleteConversationMutation.mutate(conv.id);
+                        }
+                      }}
+                      data-testid={`button-delete-conversation-${conv.id}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <div className="p-4 border-b flex items-center justify-between">
+          {!sidebarOpen && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(true)}
+              className="h-8 w-8 mr-2"
+              data-testid="button-open-sidebar"
+            >
+              <ChevronLeft className="h-4 w-4 rotate-180" />
+            </Button>
+          )}
+          <div className="flex items-center gap-2 flex-1">
+            <Lightbulb className="h-5 w-5 text-amber-500" />
+            <h3 className="font-semibold">
+              {selectedConversationId 
+                ? conversations.find(c => c.id === selectedConversationId)?.title || 'Aligner Chat'
+                : 'New Conversation'}
+            </h3>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+          <div className="space-y-4 max-w-4xl mx-auto">
+            {messages.length === 0 && !messagesLoading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Lightbulb className="h-12 w-12 mx-auto mb-4 opacity-50 text-amber-500" />
+                <p className="font-medium mb-2">Talk to the Aligner</p>
+                <p className="text-sm">Ask about call patterns, discuss KB improvements, or request specific changes to sales scripts.</p>
+              </div>
+            ) : messagesLoading ? (
+              <div className="text-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                <p className="text-muted-foreground mt-4">Loading messages...</p>
+              </div>
             ) : (
-              <Send className="h-4 w-4" />
+              messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  data-testid={`aligner-message-${msg.role}-${index}`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="flex-shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+                        <Lightbulb className="h-4 w-4 text-amber-500" />
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                      msg.role === 'user'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted'
+                    }`}
+                  >
+                    <div className="text-sm whitespace-pre-wrap">
+                      {msg.role === 'assistant' ? renderFormattedText(msg.content) : msg.content}
+                    </div>
+                  </div>
+                  {msg.role === 'user' && (
+                    <div className="flex-shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <UserIcon className="h-4 w-4 text-primary" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
             )}
-          </Button>
+            {sendMessageMutation.isPending && (
+              <div className="flex gap-3 justify-start">
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <Lightbulb className="h-4 w-4 text-amber-500" />
+                  </div>
+                </div>
+                <div className="rounded-lg px-4 py-2 bg-muted">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Thinking...
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        {/* Input */}
+        <div className="p-4 border-t">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex gap-2">
+              <Textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Ask the Aligner about calls, insights, or KB improvements..."
+                className="flex-1 min-h-[60px] max-h-[200px]"
+                disabled={sendMessageMutation.isPending}
+                data-testid="input-aligner-message"
+              />
+              <Button
+                onClick={handleSendMessage}
+                disabled={!message.trim() || sendMessageMutation.isPending}
+                size="icon"
+                className="h-[60px] w-[60px]"
+                data-testid="button-send-aligner-message"
+              >
+                {sendMessageMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              The Aligner can analyze calls, discuss improvements, and create KB proposals
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          The Aligner can analyze calls, discuss improvements, and create KB proposals
-        </p>
       </div>
     </div>
   );
