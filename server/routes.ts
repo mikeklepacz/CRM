@@ -3227,7 +3227,7 @@ Ready to receive calls?`;
       }
       
       // Get all messages for this conversation
-      const messages = await storage.getChatMessagesByConversationId(conversationId);
+      const messages = await storage.getConversationMessages(conversationId);
       
       res.json(messages);
     } catch (error: any) {
