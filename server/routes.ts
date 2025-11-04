@@ -3001,11 +3001,31 @@ Ready to receive calls?`;
       
       const history = await storage.getAiInsightsHistory(filters);
       
+      // Helper to convert snake_case to camelCase in conversation metadata
+      const toCamelCase = (obj: any) => {
+        if (!obj) return obj;
+        return {
+          conversationId: obj.conversationId || obj.conversation_id,
+          duration: obj.duration,
+          storeName: obj.storeName || obj.store_name,
+          city: obj.city,
+          state: obj.state,
+          phoneNumber: obj.phoneNumber || obj.phone_number,
+        };
+      };
+      
       // Transform data: rename objections -> commonObjections, patterns -> successPatterns
+      // Also normalize exampleConversations to camelCase
       const transformedHistory = history.map((insight: any) => ({
         ...insight,
-        commonObjections: insight.objections,
-        successPatterns: insight.patterns,
+        commonObjections: insight.objections?.map((obj: any) => ({
+          ...obj,
+          exampleConversations: obj.exampleConversations?.map(toCamelCase) || []
+        })) || [],
+        successPatterns: insight.patterns?.map((pat: any) => ({
+          ...pat,
+          exampleConversations: pat.exampleConversations?.map(toCamelCase) || []
+        })) || [],
         analyzedAt: insight.createdAt || insight.analyzedAt,
       }));
       
