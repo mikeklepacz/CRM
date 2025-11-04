@@ -107,11 +107,20 @@ function renderFormattedText(content: string): JSX.Element[] {
   return result;
 }
 
+const STORAGE_KEY = 'aligner-selected-conversation';
+
 export function AlignerChat({ className }: AlignerChatProps) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(() => {
+    // Restore from localStorage on mount
+    try {
+      return localStorage.getItem(STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -131,6 +140,17 @@ export function AlignerChat({ className }: AlignerChatProps) {
     enabled: !!selectedConversationId,
   });
 
+  // Persist selected conversation to localStorage
+  useEffect(() => {
+    if (selectedConversationId) {
+      try {
+        localStorage.setItem(STORAGE_KEY, selectedConversationId);
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+  }, [selectedConversationId]);
+
   // Set messages when conversation messages load
   useEffect(() => {
     if (conversationMessages && conversationMessages.length > 0) {
@@ -144,10 +164,24 @@ export function AlignerChat({ className }: AlignerChatProps) {
     }
   }, [conversationMessages, selectedConversationId]);
 
-  // Auto-select most recent conversation if none selected
+  // Auto-select most recent conversation if none selected or if selected one no longer exists
   useEffect(() => {
-    if (!selectedConversationId && conversations.length > 0) {
-      setSelectedConversationId(conversations[0].id);
+    if (conversations.length > 0) {
+      // Check if currently selected conversation still exists
+      const selectedExists = selectedConversationId && conversations.some(c => c.id === selectedConversationId);
+      
+      if (!selectedExists) {
+        // Select most recent conversation
+        setSelectedConversationId(conversations[0].id);
+      }
+    } else if (selectedConversationId) {
+      // No conversations exist, clear selection
+      setSelectedConversationId(null);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // Ignore localStorage errors
+      }
     }
   }, [conversations, selectedConversationId]);
 
@@ -218,6 +252,11 @@ export function AlignerChat({ className }: AlignerChatProps) {
   const handleNewConversation = () => {
     setSelectedConversationId(null);
     setMessages([]);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore localStorage errors
+    }
   };
 
   const handleSendMessage = () => {
