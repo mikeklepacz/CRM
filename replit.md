@@ -58,8 +58,15 @@ The application is built around a client dashboard unifying data from "Store Dat
         * Campaign-level IVR behavior setting: "Flag & End Call" vs "Flag & Navigate Menu"
         * Webhook detects 'play_keypad_touch_tone' tool usage → auto-flags store
         * Queue filtering excludes flagged stores by default
-        * Manual override available in Store Details dialog
-        * Detection method tracked for audit trail
+        * Manual override available in Store Details dialog with info tooltip
+        * Detection method tracked for audit trail (manual vs automated)
+        * **Agent Prompt Override System**: Per-call prompt customization via ElevenLabs conversation_config_override API
+            - Fetches agent's base prompt before each call to preserve sales capabilities
+            - Appends campaign-specific IVR handling instructions dynamically
+            - Flag & End Call: Instructs agent to hang up immediately when detecting IVR/voicemail
+            - Flag & Navigate Menu: Instructs agent to use play_keypad_touch_tone tool to navigate IVR menus
+            - Requires "System prompt" override enabled in agent's Security settings
+            - Reference: https://elevenlabs.io/docs/agents-platform/customization/personalization/overrides
     - **AI Call Analytics**: Performance metrics dashboard with success rates, average durations, interest level tracking, and call history with full transcripts
     - **AI Insights (Admin-Only)**: OpenAI-powered analysis of call performance data that identifies:
         * Common objections raised by prospects with frequency tracking

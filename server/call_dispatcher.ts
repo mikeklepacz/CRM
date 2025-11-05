@@ -88,6 +88,30 @@ export class CallDispatcher {
         throw new Error(`Agent not found: ${campaign.agentId}`);
       }
 
+      // Fetch agent's current prompt from ElevenLabs API to append IVR instructions
+      let agentPrompt = '';
+      try {
+        const agentDetailsResponse = await axios.get(
+          `https://api.elevenlabs.io/v1/convai/agents/${agent.agentId}`,
+          {
+            headers: {
+              'xi-api-key': apiKey,
+            },
+          }
+        );
+        
+        // Extract prompt from nested structure
+        const data = agentDetailsResponse.data;
+        agentPrompt = data.conversation_config?.agent?.prompt?.prompt
+          || data.conversation_config?.prompt
+          || '';
+        
+        console.log(`[CallDispatcher] Fetched agent prompt (${agentPrompt.length} chars)`);
+      } catch (error: any) {
+        console.error(`[CallDispatcher] Failed to fetch agent prompt:`, error.message);
+        // Continue without prompt - will use IVR instructions only
+      }
+
       // Create User ID in format: Name_City_State
       const businessName = (clientData?.Name || clientData?.name || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
       const city = (clientData?.City || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
@@ -107,6 +131,7 @@ export class CallDispatcher {
           scenario: campaign.scenario,
         },
         ivrBehavior: campaign.ivrBehavior,
+        basePrompt: agentPrompt,
       });
 
       const callSession = await storage.createCallSession({
@@ -140,6 +165,7 @@ export class CallDispatcher {
     userId?: string;
     clientData?: any;
     ivrBehavior?: string;
+    basePrompt?: string;
   }): Promise<{ success: boolean; message: string; conversation_id: string | null; callSid: string | null }> {
     const url = `${ELEVENLABS_API_BASE}/convai/twilio/outbound-call`;
 
@@ -149,10 +175,10 @@ export class CallDispatcher {
     let ivrInstructions = '';
     
     if (ivrBehaviorSetting === 'flag_and_navigate') {
-      ivrInstructions = `If you encounter an automated phone system (IVR menu), attempt to navigate it using the play_keypad_touch_tone tool to reach a live person. Listen for options like "Press 1 for Sales" or "Press 0 for Operator" and use the appropriate key press. If successful, continue with your sales pitch.`;
+      ivrInstructions = `\n\nIMPORTANT IVR HANDLING INSTRUCTIONS: If you encounter an automated phone system (IVR menu), you should attempt to navigate it using the play_keypad_touch_tone tool to reach a live person. Listen carefully for menu options like "Press 1 for Sales" or "Press 0 for Operator" and use the appropriate key press. Once you reach a live person, proceed with your normal conversation flow.`;
     } else {
       // flag_and_end (default)
-      ivrInstructions = `If you encounter an automated phone system (IVR menu) or voicemail, politely end the call immediately. Do not attempt to navigate menus or leave messages. The system will flag this number for manual follow-up.`;
+      ivrInstructions = `\n\nIMPORTANT IVR HANDLING INSTRUCTIONS: If you encounter an automated phone system (IVR menu) or voicemail, you must politely end the call immediately. Do NOT attempt to navigate menus or leave messages. Simply say goodbye and hang up. The system will automatically flag this number for manual follow-up.`;
     }
 
     const payload: any = {
@@ -163,19 +189,27 @@ export class CallDispatcher {
       conversation_initiation_client_data: params.clientData || {},
     };
 
-    // TODO: Use proper ElevenLabs prompt override parameter (e.g., prompt_override or conversation_config.agent.prompt.prompt)
-    // once the correct API parameter is confirmed. The current implementation appends instructions to the agent's
-    // prompt which should guide behavior without being spoken to the customer.
-    // For now, we'll add IVR instructions as a system-level parameter once we confirm the correct API structure.
+    // Use ElevenLabs conversation_config_override to inject IVR handling instructions
+    // We fetch the agent's base prompt and append IVR instructions to preserve existing behavior
+    // Reference: https://elevenlabs.io/docs/agents-platform/customization/personalization/overrides
+    const combinedPrompt = (params.basePrompt || '') + ivrInstructions;
+    
+    payload.conversation_config_override = {
+      agent: {
+        prompt: {
+          prompt: combinedPrompt
+        }
+      }
+    };
     
     // Add IVR behavior to client data for webhook logging
     if (payload.conversation_initiation_client_data) {
       payload.conversation_initiation_client_data.ivrBehavior = ivrBehaviorSetting;
-      payload.conversation_initiation_client_data.ivrInstructions = ivrInstructions;
     }
 
     console.log(`[CallDispatcher] IVR Behavior: ${ivrBehaviorSetting}`);
-    console.log(`[CallDispatcher] IVR Instructions: ${ivrInstructions}`);
+    console.log(`[CallDispatcher] Base prompt length: ${(params.basePrompt || '').length} chars`);
+    console.log(`[CallDispatcher] Combined prompt length: ${combinedPrompt.length} chars`);
     console.log(`[CallDispatcher] Calling ElevenLabs API: ${url}`);
     console.log(`[CallDispatcher] Payload:`, JSON.stringify(payload, null, 2));
 
