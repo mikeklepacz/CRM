@@ -3602,7 +3602,8 @@ The user has agreed to create proposals. Please output your recommended changes 
         }
 
         // Get current version
-        const currentVersion = await storage.getLatestKbFileVersion(matchedFile.id);
+        const versions = await storage.getKbFileVersions(matchedFile.id);
+        const currentVersion = versions[0];
         if (!currentVersion) {
           console.warn(`[Aligner Agree] No version found for file ${matchedFile.id}, skipping`);
           continue;
