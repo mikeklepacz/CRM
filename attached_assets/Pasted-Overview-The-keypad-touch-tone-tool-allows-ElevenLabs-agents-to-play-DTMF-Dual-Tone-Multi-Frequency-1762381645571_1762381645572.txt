@@ -1,0 +1,37 @@
+Overview
+The keypad touch tone tool allows ElevenLabs agents to play DTMF (Dual-Tone Multi-Frequency) tones during phone calls; these are the tones that are played when you press numbers on your keypad. This enables agents to interact with automated phone systems, navigate voice menus, enter extensions, input PIN codes, and perform other touch-tone operations that would typically require a human caller to press keys on their phone keypad.
+
+This system tool supports standard DTMF tones (0-9, *, #) as well as pause commands for timing control. It works seamlessly with both Twilio and SIP trunking phone integrations, automatically generating the appropriate audio tones for the underlying telephony infrastructure.
+
+Functionality
+Standard DTMF tones: Supports all standard keypad characters (0-9, *, #)
+Pause control: Includes pause commands for precise timing (w = 0.5s, W = 1.0s)
+Multi-provider support: Works with both Twilio and SIP trunking integrations
+This system tool can be used to navigate phone menus, enter extensions and input codes. The LLM determines when and what tones to play based on conversation context.
+
+The default tool description explains to the LLM powering the conversation that it has access to play these tones, and we recommend updating your agent’s system prompt to explain when the agent should call this tool.
+
+Parameters:
+
+reason (string, optional): The reason for playing the DTMF tones (e.g., “navigating to extension”, “entering PIN”)
+dtmf_tones (string, required): The DTMF sequence to play. Valid characters: 0-9, *, #, w (0.5s pause), W (1s pause)
+Function call format:
+
+{
+  "type": "function",
+  "function": {
+    "name": "play_keypad_touch_tone",
+    "arguments": "{"reason": "Navigating to customer service", "dtmf_tones": "2"}"
+  }
+}
+
+Supported characters
+The tool supports the following DTMF characters and commands:
+
+Digits: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+Special tones: * (star), # (pound/hash)
+Pause commands:
+w - Short pause (0.5 seconds)
+W - Long pause (1.0 second)
+API Implementation
+You can configure the play_keypad_touch_tone system tool when creating or updating an agent via the API. This tool requires no additional configuration parameters beyond enabling it.
