@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, FileText, Check, ChevronsUpDown } from "lucide-react";
+import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, FileText, Check, ChevronsUpDown, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -24,6 +24,7 @@ import { InlineAIChatEnhanced } from "@/components/inline-ai-chat-enhanced";
 import { ParseLocationsDialog } from "@/components/parse-locations-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 // Helper function: Case-insensitive lookup for link value
@@ -120,6 +121,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
     follow_up_date: "",
     next_action: "",
     open: "TRUE",
+    automated_line: "FALSE",
     dba: "",
     parent_link: "",
     is_parent: "",
@@ -303,6 +305,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         follow_up_date: getValue(['Follow-Up Date', 'follow_up_date']),
         next_action: getValue(['Next Action', 'next_action']),
         open: getValue(['Open', 'open']) || "TRUE",
+        automated_line: getValue(['Automated Line', 'automated_line']) || "FALSE",
         dba: getValue(['DBA', 'dba']),
         parent_link: getValue(['Parent Link', 'parent_link']),
         is_parent: getValue(['Is Parent', 'is_parent']),
@@ -455,6 +458,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
     email: { sheet: 'store', column: 'Email' },
     sales_ready_summary: { sheet: 'store', column: 'Sales-ready Summary' },
     open: { sheet: 'store', column: 'Open' },
+    automated_line: { sheet: 'store', column: 'Automated Line' },
     notes: { sheet: 'tracker', column: 'Notes' },
     point_of_contact: { sheet: 'tracker', column: 'Point of Contact' },
     poc_email: { sheet: 'tracker', column: 'POC Email' },
@@ -967,19 +971,44 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                   </Label>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="listing-active"
-                  checked={formData.open === "TRUE" || formData.open === "true"}
-                  onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
-                  data-testid="checkbox-listing-active"
-                />
-                <Label
-                  htmlFor="listing-active"
-                  className="text-sm font-medium cursor-pointer whitespace-nowrap"
-                >
-                  Listing Active
-                </Label>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="listing-active"
+                    checked={formData.open === "TRUE" || formData.open === "true"}
+                    onCheckedChange={(checked) => handleInputChange('open', checked ? "TRUE" : "FALSE")}
+                    data-testid="checkbox-listing-active"
+                  />
+                  <Label
+                    htmlFor="listing-active"
+                    className="text-sm font-medium cursor-pointer whitespace-nowrap"
+                  >
+                    Listing Active
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="automated-line"
+                    checked={formData.automated_line === "TRUE" || formData.automated_line === "true"}
+                    onCheckedChange={(checked) => handleInputChange('automated_line', checked ? "TRUE" : "FALSE")}
+                    data-testid="checkbox-automated-line"
+                  />
+                  <Label
+                    htmlFor="automated-line"
+                    className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
+                  >
+                    Automated Line
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 opacity-50" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">Indicates this phone number reaches an IVR system or voicemail.</p>
+                        <p className="text-xs">Can be detected automatically during AI calls or set manually.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </Label>
+                </div>
               </div>
             </div>
           </DialogHeader>
