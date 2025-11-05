@@ -5,7 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, FileText, User, Save, AlertCircle, CheckCircle2, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, FileText, User, Save, AlertCircle, CheckCircle2, Download, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -23,6 +24,7 @@ export function KBEditor({ className }: KBEditorProps) {
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [fileSearchQuery, setFileSearchQuery] = useState("");
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
@@ -214,11 +216,22 @@ export function KBEditor({ className }: KBEditorProps) {
   const hasUnsavedChanges = content !== originalContent;
   const isLoading = (editorMode === 'file' ? fileLoading : agentLoading);
 
+  // Fuzzy filter files based on search query (word-based matching)
+  const filteredFiles = kbFiles.filter((file: any) => {
+    if (!fileSearchQuery.trim()) return true;
+    
+    const searchWords = fileSearchQuery.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+    const filename = file.filename.toLowerCase();
+    
+    // Match if filename contains all search words
+    return searchWords.every(word => filename.includes(word));
+  });
+
   return (
     <div className={`flex gap-4 ${className || ''}`}>
       {/* Sidebar */}
       <div className="w-64 border-r">
-        <div className="p-3 border-b">
+        <div className="p-3 border-b space-y-3">
           <div className="flex gap-2">
             <Button
               variant={editorMode === 'file' ? 'default' : 'outline'}
@@ -247,6 +260,20 @@ export function KBEditor({ className }: KBEditorProps) {
               Agents
             </Button>
           </div>
+          
+          {editorMode === 'file' && (
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Filter files..."
+                value={fileSearchQuery}
+                onChange={(e) => setFileSearchQuery(e.target.value)}
+                className="h-8 pl-7 text-xs"
+                data-testid="input-file-search"
+              />
+            </div>
+          )}
         </div>
 
         <ScrollArea className="h-[calc(100vh-300px)]">
@@ -256,12 +283,14 @@ export function KBEditor({ className }: KBEditorProps) {
                 <div className="text-center py-8">
                   <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
                 </div>
-              ) : kbFiles.length === 0 ? (
+              ) : filteredFiles.length === 0 ? (
                 <div className="text-center py-8 px-2">
-                  <p className="text-xs text-muted-foreground">No KB files</p>
+                  <p className="text-xs text-muted-foreground">
+                    {fileSearchQuery.trim() ? 'No files match your search' : 'No KB files'}
+                  </p>
                 </div>
               ) : (
-                kbFiles.map((file: any) => {
+                filteredFiles.map((file: any) => {
                   const isEmpty = !file.currentContent || file.currentContent.trim() === '';
                   return (
                     <div key={file.id} className="flex items-center gap-1">
