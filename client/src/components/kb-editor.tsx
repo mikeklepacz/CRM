@@ -50,14 +50,14 @@ export function KBEditor({ className }: KBEditorProps) {
 
   // Update content when file data loads
   useEffect(() => {
-    if (editorMode === 'file' && fileData) {
+    if (editorMode === 'file' && fileData && selectedItemId) {
       // Load content even if empty - fileData exists means file was found
       const fileContent = fileData.currentContent || '';
       setContent(fileContent);
       setOriginalContent(fileContent);
       setSaveStatus('idle');
     }
-  }, [fileData, editorMode]);
+  }, [fileData, editorMode, selectedItemId]);
 
   // Update content when agent data loads
   useEffect(() => {
@@ -76,12 +76,12 @@ export function KBEditor({ className }: KBEditorProps) {
     }
   }, [agentData, editorMode, selectedItemId]);
 
-  // Reset when switching modes or items
+  // Reset when switching modes only (not when switching files/agents)
   useEffect(() => {
     setContent("");
     setOriginalContent("");
     setSaveStatus('idle');
-  }, [editorMode, selectedItemId]);
+  }, [editorMode]);
 
   // Save KB file mutation
   const saveFileMutation = useMutation({
