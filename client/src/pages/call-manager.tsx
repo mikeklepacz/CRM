@@ -603,22 +603,70 @@ function KBLibraryTab() {
               {selectedProposal ? (
                 <ProposalDiffViewer
                   proposal={selectedProposal}
+                  currentContent={selectedFile?.currentContent || ''}
+                  proposedContent={selectedProposal.proposedContent}
+                  filename={selectedFile?.filename || 'Unknown'}
                   onApprove={() => {
-                    queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
-                    queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
-                    setSelectedProposal(null);
+                    approveMutation.mutate(selectedProposal.id);
                   }}
                   onReject={() => {
-                    queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
-                    setSelectedProposal(null);
+                    rejectMutation.mutate(selectedProposal.id);
                   }}
+                  isApproving={approveMutation.isPending}
+                  isRejecting={rejectMutation.isPending}
                 />
               ) : (
-                <div className="flex items-center justify-center h-64 text-muted-foreground">
-                  <div className="text-center">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-sm">Click "View Diff" on any proposal to review side-by-side</p>
-                  </div>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground mb-4">Select a proposal to review:</p>
+                  {proposalsLoading ? (
+                    <div className="text-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                      <p className="text-muted-foreground mt-4">Loading proposals...</p>
+                    </div>
+                  ) : pendingProposals.length === 0 ? (
+                    <div className="text-center py-12 bg-muted/20 rounded-lg">
+                      <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">
+                        No pending proposals yet. Run an AI analysis to generate improvement suggestions.
+                      </p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>File</TableHead>
+                          <TableHead>Rationale</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pendingProposals.map((proposal: any) => (
+                          <TableRow key={proposal.id} data-testid={`row-proposal-split-${proposal.id}`}>
+                            <TableCell className="font-medium" data-testid={`text-proposal-file-split-${proposal.id}`}>
+                              {kbFiles.find((f: any) => f.id === proposal.kbFileId)?.filename || 'Unknown'}
+                            </TableCell>
+                            <TableCell className="max-w-md truncate" data-testid={`text-proposal-rationale-split-${proposal.id}`}>
+                              {proposal.rationale}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground" data-testid={`text-proposal-date-split-${proposal.id}`}>
+                              {new Date(proposal.createdAt).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedProposal(proposal)}
+                                data-testid={`button-view-diff-split-${proposal.id}`}
+                              >
+                                View Diff
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </div>
               )}
             </CardContent>
