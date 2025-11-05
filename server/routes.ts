@@ -5503,13 +5503,15 @@ IMPORTANT:
         reviewedBy: userId,
       });
 
-      // Sync to ElevenLabs using zero-downtime document swap
+      // Sync to ElevenLabs using zero-downtime document swap (skip for local-only files)
       const elevenLabsConfig = await storage.getElevenLabsConfig();
       let syncSuccess = false;
       let syncError = null;
       let agentsUpdated = 0;
       
-      if (elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
+      if (file.syncState === 'synced' && elevenLabsConfig?.apiKey && file.elevenlabsDocId) {
+        // File is marked as synced, attempt ElevenLabs sync
+        console.log(`[KB Approve] Syncing to ElevenLabs (file is in 'synced' state)`);
         const syncResult = await syncKbDocumentToElevenLabs(
           elevenLabsConfig.apiKey,
           file.elevenlabsDocId,
@@ -5532,6 +5534,8 @@ IMPORTANT:
           console.error(`[KB Approve] Sync failed: ${syncResult.error}`);
           syncError = syncResult.error;
         }
+      } else if (file.syncState === 'local_only') {
+        console.log(`[KB Approve] Skipping ElevenLabs sync (file is local-only)`);
       }
 
       // Auto-sync to Aligner's vector store (keeps analysis up-to-date)
@@ -5543,6 +5547,7 @@ IMPORTANT:
       res.json({
         success: true,
         version: newVersion,
+        syncState: file.syncState || 'local_only', // Tell frontend if this is local-only or synced
         elevenlabsSynced: syncSuccess,
         syncError: syncError,
         agentsUpdated: agentsUpdated,

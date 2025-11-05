@@ -266,27 +266,36 @@ export function ProposalDiffViewer({
   const approveMutation = useMutation({
     mutationFn: () => apiRequest('POST', `/api/kb/proposals/${proposal.id}/approve`),
     onSuccess: (data: any) => {
+      // CRITICAL: Store success state immediately to prevent double-click errors from hiding success
+      const successData = { ...data };
+      
       // Show detailed sync status
-      if (data.elevenlabsSynced) {
+      if (data.syncState === 'local_only') {
+        // Local-only file - no ElevenLabs sync attempted
+        toast({
+          title: "Proposal Approved (Local)",
+          description: `Version ${data.version.versionNumber} created and backed up to Google Drive. This file is local-only and not synced to ElevenLabs agents.`,
+        });
+      } else if (data.elevenlabsSynced) {
         const agentsUpdated = data.agentsUpdated || 0;
         const agentText = agentsUpdated > 0 
           ? ` (${agentsUpdated} agent${agentsUpdated !== 1 ? 's' : ''} updated)` 
           : '';
         
         toast({
-          title: "Proposal Approved",
+          title: "Proposal Approved & Synced",
           description: `Version ${data.version.versionNumber} created and synced to ElevenLabs${agentText}`,
         });
       } else if (data.syncError) {
         toast({
-          title: "Partially Completed",
-          description: `Version ${data.version.versionNumber} created locally, but ElevenLabs sync failed: ${data.syncError}`,
+          title: "Approved (Sync Failed)",
+          description: `Version ${data.version.versionNumber} created and backed up, but ElevenLabs sync failed: ${data.syncError}`,
           variant: "destructive",
         });
       } else {
         toast({
           title: "Proposal Approved",
-          description: `Version ${data.version.versionNumber} created (no ElevenLabs config found)`,
+          description: `Version ${data.version.versionNumber} created`,
         });
       }
       
