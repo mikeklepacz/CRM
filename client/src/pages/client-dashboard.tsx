@@ -602,12 +602,35 @@ export default function ClientDashboard() {
       // Auto-claim unclaimed stores after successfully editing a store column
       if (variables.shouldAutoClaimRow && variables.linkValue && trackerSheetId) {
         try {
+          // Optimistically mark as claimed in the cache
+          queryClient.setQueryData(["merged-data"], (old: any) => {
+            if (!old || !old.rows) return old;
+
+            return {
+              ...old,
+              rows: old.rows.map((row: any) => {
+                const rowLink = getLinkValue(row);
+                if (rowLink && normalizeLink(rowLink) === normalizeLink(variables.linkValue!)) {
+                  return { 
+                    ...row, 
+                    Agent: currentUser?.name || '',  // Mark as claimed by current user
+                    _hasTrackerData: true,  // Mark as having tracker data
+                  };
+                }
+                return row;
+              })
+            };
+          });
+
           await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
             linkValue: variables.linkValue,
             column: "Agent",  // Claim with Agent column
             value: "",  // Empty value, just claiming
             joinColumn,
           });
+
+          // Background refetch to get correct tracker metadata - fire and forget
+          queryClient.refetchQueries({ queryKey: ["merged-data"] });
         } catch (error) {
           // Soft error - don't block the user
           console.error("Auto-claim failed:", error);
@@ -624,10 +647,6 @@ export default function ClientDashboard() {
         description: error.message,
         variant: "destructive",
       });
-    },
-    onSettled: () => {
-      // Always refetch after error or success to sync with server
-      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
     },
   });
 
@@ -653,14 +672,50 @@ export default function ClientDashboard() {
         joinColumn,
       });
     },
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["merged-data"] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(["merged-data"]);
+
+      // Optimistically update the cache - mark as claimed
+      queryClient.setQueryData(["merged-data"], (old: any) => {
+        if (!old || !old.rows) return old;
+
+        return {
+          ...old,
+          rows: old.rows.map((row: any) => {
+            const rowLink = getLinkValue(row);
+            const storeLink = getLinkValue(variables.storeRow);
+            if (rowLink && storeLink && normalizeLink(rowLink) === normalizeLink(storeLink)) {
+              return { 
+                ...row, 
+                [variables.column]: variables.value,
+                Agent: currentUser?.name || '',  // Mark as claimed by current user
+              };
+            }
+            return row;
+          })
+        };
+      });
+
+      // Return context with the snapshot so we can rollback on error
+      return { previousData };
+    },
     onSuccess: () => {
+      // Background refetch to get correct tracker metadata - non-blocking
       queryClient.invalidateQueries({ queryKey: ["merged-data"] });
       toast({
         title: "Store Claimed",
         description: "Store claimed successfully and value updated",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables, context: any) => {
+      // Rollback to the previous value on error
+      if (context?.previousData) {
+        queryClient.setQueryData(["merged-data"], context.previousData);
+      }
       toast({
         title: "Error",
         description: error.message,
@@ -720,12 +775,35 @@ export default function ClientDashboard() {
       // Auto-claim unclaimed stores after successfully creating tracker row
       if (variables.shouldAutoClaim && variables.link && variables.trackerSheetId) {
         try {
+          // Optimistically mark as claimed in the cache
+          queryClient.setQueryData(["merged-data"], (old: any) => {
+            if (!old || !old.rows) return old;
+
+            return {
+              ...old,
+              rows: old.rows.map((row: any) => {
+                const rowLink = getLinkValue(row);
+                if (rowLink && normalizeLink(rowLink) === normalizeLink(variables.link)) {
+                  return { 
+                    ...row, 
+                    Agent: currentUser?.name || '',  // Mark as claimed by current user
+                    _hasTrackerData: true,  // Mark as having tracker data
+                  };
+                }
+                return row;
+              })
+            };
+          });
+
           await apiRequest("POST", `/api/sheets/${variables.trackerSheetId}/claim-store`, {
             linkValue: variables.link,
             column: "Agent",  // Claim with Agent column
             value: "",  // Empty value, just claiming
             joinColumn: variables.joinColumn,
           });
+
+          // Background refetch to get correct tracker metadata - fire and forget
+          queryClient.refetchQueries({ queryKey: ["merged-data"] });
         } catch (error) {
           // Soft error - don't block the user
           console.error("Auto-claim failed:", error);
@@ -742,10 +820,6 @@ export default function ClientDashboard() {
         description: error.message,
         variant: "destructive",
       });
-    },
-    onSettled: () => {
-      // Always refetch after error or success to sync with server
-      queryClient.invalidateQueries({ queryKey: ["merged-data"] });
     },
   });
 
