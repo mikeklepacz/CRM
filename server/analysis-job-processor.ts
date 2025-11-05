@@ -190,6 +190,14 @@ ${kbContext}
 
 ## YOUR TASK:
 
+**CRITICAL: Before proposing ANY edits, check if the file has content!**
+
+If a KB file is EMPTY or has minimal content (just a title/header), DO NOT try to edit it. Instead:
+- Note it in your summary: "File X is empty - needs base content before edits can be applied"
+- Skip that file entirely for edits
+
+Only propose edits for files that have substantial content to work with.
+
 Propose specific improvements to the knowledge base files based on ${insight ? 'BOTH your transcript analysis AND the Wick Coach\'s insights' : 'your analysis of the transcripts'}. For each proposed change:
 
 1. Identify which file(s) should be updated
@@ -210,7 +218,8 @@ Respond in this exact JSON format:
       "principle": "The sales principle behind this change"
     }
   ],
-  "summary": "Overall summary of proposed improvements for this batch"
+  "summary": "Overall summary of proposed improvements for this batch",
+  "emptyFiles": ["List any files that were empty and need base content"]
 }
 
 IMPORTANT EDIT FORMATTING RULES:

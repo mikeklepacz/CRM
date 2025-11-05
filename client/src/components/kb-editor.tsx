@@ -50,9 +50,11 @@ export function KBEditor({ className }: KBEditorProps) {
 
   // Update content when file data loads
   useEffect(() => {
-    if (editorMode === 'file' && fileData?.currentContent) {
-      setContent(fileData.currentContent);
-      setOriginalContent(fileData.currentContent);
+    if (editorMode === 'file' && fileData) {
+      // Load content even if empty - fileData exists means file was found
+      const fileContent = fileData.currentContent || '';
+      setContent(fileContent);
+      setOriginalContent(fileContent);
       setSaveStatus('idle');
     }
   }, [fileData, editorMode]);
