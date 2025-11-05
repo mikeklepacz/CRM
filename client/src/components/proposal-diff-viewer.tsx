@@ -58,6 +58,9 @@ export function ProposalDiffViewer({
   const [selectedEdits, setSelectedEdits] = useState<Set<number>>(new Set());
   const [inlineEdits, setInlineEdits] = useState<Map<number, string>>(new Map());
   const [failedEdits, setFailedEdits] = useState<Set<number>>(new Set());
+  
+  // Local processing flags to prevent double-clicks before React state updates
+  const [isLocallyProcessing, setIsLocallyProcessing] = useState(false);
 
   // Sync local state when proposal changes
   useEffect(() => {
@@ -67,6 +70,13 @@ export function ProposalDiffViewer({
     setInlineEdits(new Map());
     setFailedEdits(new Set()); // Reset failed edits when proposal changes
   }, [proposal.id, proposedContent, proposal.humanEdited]);
+
+  // Reset processing flag when external mutations complete
+  useEffect(() => {
+    if (!isApproving && !isRejecting) {
+      setIsLocallyProcessing(false);
+    }
+  }, [isApproving, isRejecting]);
 
   // Parse edits from JSON
   const edits = useMemo<Edit[]>(() => {
@@ -162,6 +172,12 @@ export function ProposalDiffViewer({
 
   // Approve only selected edits (or specific edits passed as parameter)
   const handleApproveSelected = async (editsToApprove?: Set<number>) => {
+    // Prevent double-clicks by checking local processing flag FIRST
+    if (isLocallyProcessing) {
+      return;
+    }
+    setIsLocallyProcessing(true);
+    
     const editsSet = editsToApprove || selectedEdits;
     
     // Safety check: ensure editsSet is a Set
@@ -172,6 +188,7 @@ export function ProposalDiffViewer({
         description: "Invalid edit selection state. Please refresh and try again.",
         variant: "destructive",
       });
+      setIsLocallyProcessing(false);
       return;
     }
     
@@ -181,6 +198,7 @@ export function ProposalDiffViewer({
         description: "Please select at least one edit to approve",
         variant: "destructive",
       });
+      setIsLocallyProcessing(false);
       return;
     }
 
@@ -214,6 +232,7 @@ export function ProposalDiffViewer({
           description: "Failed to save inline edits before approval",
           variant: "destructive",
         });
+        setIsLocallyProcessing(false);
         return;
       }
     }
@@ -235,6 +254,9 @@ export function ProposalDiffViewer({
         onSuccess: () => {
           // After saving partial edits, approve using internal mutation
           approveMutation.mutate();
+        },
+        onError: () => {
+          setIsLocallyProcessing(false);
         }
       });
     }
@@ -271,10 +293,15 @@ export function ProposalDiffViewer({
       queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
       queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
       
+      // Reset processing flag
+      setIsLocallyProcessing(false);
+      
       // Call parent's callback if provided
       onApprove?.();
     },
     onError: (error: any) => {
+      // Reset processing flag on error
+      setIsLocallyProcessing(false);
       // Check if this is a 422 error with detailed edit failures
       if (error.failedEdits && Array.isArray(error.failedEdits)) {
         // Extract failed edit numbers (1-indexed from backend, convert to 0-indexed)
@@ -391,7 +418,7 @@ export function ProposalDiffViewer({
               {inlineEdits.size > 0 && (
                 <Button
                   onClick={saveInlineEdits}
-                  disabled={editMutation.isPending}
+                  disabled={isLocallyProcessing || editMutation.isPending}
                   variant="outline"
                   data-testid="button-save-edits"
                 >
@@ -401,7 +428,7 @@ export function ProposalDiffViewer({
               )}
               <Button
                 onClick={() => handleApproveSelected()}
-                disabled={approveMutation.isPending || isRejecting || !isValidEdits || selectedEdits.size === 0}
+                disabled={isLocallyProcessing || approveMutation.isPending || isRejecting || !isValidEdits || selectedEdits.size === 0}
                 data-testid="button-approve"
                 className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
               >
@@ -409,8 +436,12 @@ export function ProposalDiffViewer({
                 {approveMutation.isPending ? 'Approving...' : `Approve ${selectedEdits.size === edits.length ? 'All' : selectedEdits.size} ${selectedEdits.size === 1 ? 'Change' : 'Changes'}`}
               </Button>
               <Button
-                onClick={onReject}
-                disabled={approveMutation.isPending || isRejecting}
+                onClick={() => {
+                  if (isLocallyProcessing) return;
+                  setIsLocallyProcessing(true);
+                  onReject?.();
+                }}
+                disabled={isLocallyProcessing || approveMutation.isPending || isRejecting}
                 variant="destructive"
                 data-testid="button-reject"
               >
@@ -490,7 +521,7 @@ export function ProposalDiffViewer({
                               // Approve only this specific edit
                               handleApproveSelected(new Set([idx]));
                             }}
-                            disabled={approveMutation.isPending || isRejecting || isFailed}
+                            disabled={isLocallyProcessing || approveMutation.isPending || isRejecting || isFailed}
                             data-testid={`button-approve-single-${idx}`}
                             className="bg-green-50 hover:bg-green-100 dark:bg-green-950 dark:hover:bg-green-900 border-green-300 dark:border-green-700"
                           >
