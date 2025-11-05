@@ -53,6 +53,13 @@ The application is built around a client dashboard unifying data from "Store Dat
     - Queue management with immediate, scheduled, and auto-scheduling modes
     - Real-time call status tracking and campaign management
     - Webhook integration for call events and transcript capture
+    - **Automated Line Detection**: System auto-detects IVR systems and voicemail via DTMF tone analysis in call transcripts
+        * Store Database requires "Automated Line" column (Column S) with TRUE/FALSE values
+        * Campaign-level IVR behavior setting: "Flag & End Call" vs "Flag & Navigate Menu"
+        * Webhook detects 'play_keypad_touch_tone' tool usage → auto-flags store
+        * Queue filtering excludes flagged stores by default
+        * Manual override available in Store Details dialog
+        * Detection method tracked for audit trail
     - **AI Call Analytics**: Performance metrics dashboard with success rates, average durations, interest level tracking, and call history with full transcripts
     - **AI Insights (Admin-Only)**: OpenAI-powered analysis of call performance data that identifies:
         * Common objections raised by prospects with frequency tracking
