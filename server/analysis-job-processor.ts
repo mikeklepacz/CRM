@@ -213,11 +213,27 @@ Respond in this exact JSON format:
   "summary": "Overall summary of proposed improvements for this batch"
 }
 
-IMPORTANT:
-- The "old" field must contain EXACT text from the current KB file (for string replacement)
-- If you want to add entirely new content, use old: "" (empty string)
+IMPORTANT EDIT FORMATTING RULES:
+
+**For REPLACING existing text:**
+- "old": Quote the EXACT text currently in the file that you want to replace
+- "new": Provide the new text that should replace it
+
+**For INSERTING new text into a specific location:**
+- "old": Quote the paragraph or section that comes RIGHT BEFORE where you want to insert
+- "new": Include that SAME paragraph + your new content appended after it
+- Example: If you want to add a qualifying question after "Do you sell hemp products?", use:
+  old: "Do you sell hemp products?"
+  new: "Do you sell hemp products?\n\nRight after introducing the call purpose, add: 'Can I quickly check—are you the person who helps decide which accessories to bring in?'"
+
+**For APPENDING to the end of the file:**
+- "old": "" (empty string)
+- "new": The new content to append
+
+**General rules:**
 - Be specific and actionable - no vague suggestions
-- Each edit should be independent and apply cleanly`;
+- Each edit should be independent and apply cleanly
+- When inserting, always include context so the system knows WHERE to insert`;
 
       // Call OpenAI Assistant with JSON mode
       const thread = await openai.beta.threads.create({
