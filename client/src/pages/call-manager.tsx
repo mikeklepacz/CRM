@@ -130,6 +130,7 @@ function KBLibraryTab() {
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [viewingVersion, setViewingVersion] = useState<any | null>(null);
   const [isVersionViewerOpen, setIsVersionViewerOpen] = useState(false);
+  const [selectedProposalIds, setSelectedProposalIds] = useState<string[]>([]);
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
@@ -311,6 +312,61 @@ function KBLibraryTab() {
       });
     },
   });
+
+  // Delete selected proposals mutation
+  const deleteProposalsMutation = useMutation({
+    mutationFn: async (proposalIds: string[]) => {
+      // Delete each proposal individually
+      const results = await Promise.all(
+        proposalIds.map(id => apiRequest('DELETE', `/api/kb/proposals/${id}`))
+      );
+      return results;
+    },
+    onSuccess: (_, proposalIds) => {
+      toast({
+        title: "Proposals Deleted",
+        description: `Successfully deleted ${proposalIds.length} proposal(s)`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+      setSelectedProposalIds([]);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete proposals",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle proposal selection
+  const toggleProposalSelection = (proposalId: string) => {
+    setSelectedProposalIds(prev =>
+      prev.includes(proposalId)
+        ? prev.filter(id => id !== proposalId)
+        : [...prev, proposalId]
+    );
+  };
+
+  // Toggle all proposals (only selects visible proposals in table)
+  const toggleAllProposals = () => {
+    const visibleProposalIds = proposals.map((p: any) => p.id);
+    const allVisibleSelected = visibleProposalIds.every(id => selectedProposalIds.includes(id));
+    
+    if (allVisibleSelected) {
+      // Deselect all visible proposals
+      setSelectedProposalIds(prev => prev.filter(id => !visibleProposalIds.includes(id)));
+    } else {
+      // Select all visible proposals (merge with existing selection)
+      setSelectedProposalIds(prev => [...new Set([...prev, ...visibleProposalIds])]);
+    }
+  };
+
+  // Delete selected proposals
+  const handleDeleteSelected = () => {
+    if (selectedProposalIds.length === 0) return;
+    deleteProposalsMutation.mutate(selectedProposalIds);
+  };
 
   // Rollback mutation
   const rollbackMutation = useMutation({
@@ -568,57 +624,100 @@ function KBLibraryTab() {
                 </p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>File</TableHead>
-                    <TableHead>Rationale</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {proposals.map((proposal: any) => (
-                    <TableRow key={proposal.id} data-testid={`row-proposal-${proposal.id}`}>
-                      <TableCell className="font-medium" data-testid={`text-proposal-file-${proposal.id}`}>
-                        {kbFiles.find((f: any) => f.id === proposal.kbFileId)?.filename || 'Unknown'}
-                      </TableCell>
-                      <TableCell className="max-w-md truncate" data-testid={`text-proposal-rationale-${proposal.id}`}>
-                        {proposal.rationale}
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant={
-                            proposal.status === 'pending' ? 'default' : 
-                            proposal.status === 'approved' ? 'secondary' : 
-                            'destructive'
-                          }
-                          data-testid={`badge-proposal-status-${proposal.id}`}
-                        >
-                          {proposal.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground" data-testid={`text-proposal-date-${proposal.id}`}>
-                        {new Date(proposal.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedProposal(proposal);
-                            setIsDiffDialogOpen(true);
-                          }}
-                          data-testid={`button-view-diff-${proposal.id}`}
-                        >
-                          View Diff
-                        </Button>
-                      </TableCell>
+              <div className="space-y-4">
+                {selectedProposalIds.length > 0 && (
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <p className="text-sm font-medium">
+                      {selectedProposalIds.length} proposal(s) selected
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleDeleteSelected}
+                      disabled={deleteProposalsMutation.isPending}
+                      data-testid="button-delete-selected"
+                    >
+                      {deleteProposalsMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Deleting...
+                        </>
+                      ) : (
+                        `Delete Selected`
+                      )}
+                    </Button>
+                  </div>
+                )}
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <input
+                          type="checkbox"
+                          checked={proposals.length > 0 && proposals.every((p: any) => selectedProposalIds.includes(p.id))}
+                          onChange={toggleAllProposals}
+                          className="h-4 w-4"
+                          data-testid="checkbox-select-all-proposals"
+                        />
+                      </TableHead>
+                      <TableHead>File</TableHead>
+                      <TableHead>Rationale</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {proposals.map((proposal: any) => (
+                      <TableRow key={proposal.id} data-testid={`row-proposal-${proposal.id}`}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selectedProposalIds.includes(proposal.id)}
+                            onChange={() => toggleProposalSelection(proposal.id)}
+                            className="h-4 w-4"
+                            data-testid={`checkbox-proposal-${proposal.id}`}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium" data-testid={`text-proposal-file-${proposal.id}`}>
+                          {kbFiles.find((f: any) => f.id === proposal.kbFileId)?.filename || 'Unknown'}
+                        </TableCell>
+                        <TableCell className="max-w-md truncate" data-testid={`text-proposal-rationale-${proposal.id}`}>
+                          {proposal.rationale}
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={
+                              proposal.status === 'pending' ? 'default' : 
+                              proposal.status === 'approved' ? 'secondary' : 
+                              'destructive'
+                            }
+                            data-testid={`badge-proposal-status-${proposal.id}`}
+                          >
+                            {proposal.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground" data-testid={`text-proposal-date-${proposal.id}`}>
+                          {new Date(proposal.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedProposal(proposal);
+                              setIsDiffDialogOpen(true);
+                            }}
+                            data-testid={`button-view-diff-${proposal.id}`}
+                          >
+                            View Diff
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </TabsContent>
         </Tabs>

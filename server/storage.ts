@@ -435,6 +435,7 @@ export interface IStorage {
   getKbProposals(filters?: { status?: string; kbFileId?: string }): Promise<KbChangeProposal[]>;
   getKbProposalById(id: string): Promise<KbChangeProposal | undefined>;
   updateKbProposal(id: string, updates: Partial<InsertKbChangeProposal>): Promise<KbChangeProposal>;
+  deleteKbProposal(id: string): Promise<boolean>;
   deleteAllKbProposals(): Promise<number>;
 
   // Analysis Jobs operations
@@ -2550,6 +2551,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(kbChangeProposals.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteKbProposal(id: string): Promise<boolean> {
+    const result = await db.delete(kbChangeProposals).where(eq(kbChangeProposals.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async deleteAllKbProposals(): Promise<number> {
