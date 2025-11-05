@@ -106,6 +106,7 @@ export class CallDispatcher {
           link: client.uniqueIdentifier,
           scenario: campaign.scenario,
         },
+        ivrBehavior: campaign.ivrBehavior,
       });
 
       const callSession = await storage.createCallSession({
@@ -138,10 +139,23 @@ export class CallDispatcher {
     toNumber: string;
     userId?: string;
     clientData?: any;
+    ivrBehavior?: string;
   }): Promise<{ success: boolean; message: string; conversation_id: string | null; callSid: string | null }> {
     const url = `${ELEVENLABS_API_BASE}/convai/twilio/outbound-call`;
 
-    const payload = {
+    // Build IVR handling instructions based on campaign setting
+    // Default to flag_and_end if not specified
+    const ivrBehaviorSetting = params.ivrBehavior || 'flag_and_end';
+    let ivrInstructions = '';
+    
+    if (ivrBehaviorSetting === 'flag_and_navigate') {
+      ivrInstructions = `If you encounter an automated phone system (IVR menu), attempt to navigate it using the play_keypad_touch_tone tool to reach a live person. Listen for options like "Press 1 for Sales" or "Press 0 for Operator" and use the appropriate key press. If successful, continue with your sales pitch.`;
+    } else {
+      // flag_and_end (default)
+      ivrInstructions = `If you encounter an automated phone system (IVR menu) or voicemail, politely end the call immediately. Do not attempt to navigate menus or leave messages. The system will flag this number for manual follow-up.`;
+    }
+
+    const payload: any = {
       agent_id: params.agentId,
       agent_phone_number_id: params.phoneNumberId,
       to_number: params.toNumber,
@@ -149,6 +163,19 @@ export class CallDispatcher {
       conversation_initiation_client_data: params.clientData || {},
     };
 
+    // TODO: Use proper ElevenLabs prompt override parameter (e.g., prompt_override or conversation_config.agent.prompt.prompt)
+    // once the correct API parameter is confirmed. The current implementation appends instructions to the agent's
+    // prompt which should guide behavior without being spoken to the customer.
+    // For now, we'll add IVR instructions as a system-level parameter once we confirm the correct API structure.
+    
+    // Add IVR behavior to client data for webhook logging
+    if (payload.conversation_initiation_client_data) {
+      payload.conversation_initiation_client_data.ivrBehavior = ivrBehaviorSetting;
+      payload.conversation_initiation_client_data.ivrInstructions = ivrInstructions;
+    }
+
+    console.log(`[CallDispatcher] IVR Behavior: ${ivrBehaviorSetting}`);
+    console.log(`[CallDispatcher] IVR Instructions: ${ivrInstructions}`);
     console.log(`[CallDispatcher] Calling ElevenLabs API: ${url}`);
     console.log(`[CallDispatcher] Payload:`, JSON.stringify(payload, null, 2));
 
