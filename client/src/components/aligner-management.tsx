@@ -56,6 +56,27 @@ export function AlignerManagement() {
     },
   });
 
+  // Update task prompt template mutation
+  const updateTaskPromptMutation = useMutation({
+    mutationFn: async (taskPromptTemplate: string) => {
+      return await apiRequest("PATCH", "/api/aligner/task-prompt", { taskPromptTemplate });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Task prompt template saved successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/aligner'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save task prompt template",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Upload file mutation
   const uploadFileMutation = useMutation({
     mutationFn: async (data: { filename: string; category: string }) => {
@@ -139,6 +160,18 @@ export function AlignerManagement() {
       return;
     }
     updateInstructionsMutation.mutate(aligner.instructions);
+  };
+
+  const handleSaveTaskPrompt = () => {
+    if (!aligner?.taskPromptTemplate) {
+      toast({
+        title: "Error",
+        description: "Please enter task prompt template",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateTaskPromptMutation.mutate(aligner.taskPromptTemplate);
   };
 
   const handleUploadFile = () => {
@@ -243,6 +276,60 @@ export function AlignerManagement() {
               <>
                 <Save className="h-4 w-4 mr-2" />
                 Save Instructions
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Task Prompt Template Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            Task Prompt Template
+          </CardTitle>
+          <CardDescription>
+            Template for dynamic task prompts sent to Aligner for each analysis job. Use placeholders like {'{{transcriptContext}}'}, {'{{kbContext}}'}, {'{{wickCoachSection}}'}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="task-prompt-template">Prompt Template</Label>
+            <Textarea
+              id="task-prompt-template"
+              value={aligner.taskPromptTemplate || ""}
+              onChange={(e) => {
+                queryClient.setQueryData(['/api/aligner'], {
+                  assistant: {
+                    ...aligner,
+                    taskPromptTemplate: e.target.value,
+                  }
+                });
+              }}
+              placeholder="You are the Aligner assistant analyzing call performance data..."
+              rows={16}
+              className="font-mono text-sm"
+              data-testid="textarea-task-prompt-template"
+            />
+            <p className="text-xs text-muted-foreground">
+              This template is used for each analysis job. Variables like {'{{transcriptContext}}'} and {'{{kbContext}}'} are replaced with actual data at runtime.
+            </p>
+          </div>
+          <Button 
+            onClick={handleSaveTaskPrompt} 
+            disabled={updateTaskPromptMutation.isPending}
+            data-testid="button-save-task-prompt"
+          >
+            {updateTaskPromptMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save Template
               </>
             )}
           </Button>
