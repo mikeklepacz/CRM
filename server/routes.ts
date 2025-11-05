@@ -4791,6 +4791,18 @@ The user has agreed to create proposals. Please output your recommended changes 
     }
   });
 
+  // Delete all proposals (admin only)
+  app.delete('/api/kb/proposals', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const deletedCount = await storage.deleteAllKbProposals();
+      console.log(`[KB] Deleted ${deletedCount} proposals`);
+      res.json({ deletedCount });
+    } catch (error: any) {
+      console.error('[KB] Error deleting proposals:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete proposals' });
+    }
+  });
+
   // Helper: Fuzzy filename matching for KB files
   // Handles variations like underscores vs spaces, case differences
   async function findKbFileByFuzzyFilename(filename: string, allFiles?: any[]): Promise<any> {
