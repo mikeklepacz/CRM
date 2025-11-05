@@ -260,22 +260,23 @@ export function KBEditor({ className }: KBEditorProps) {
     if (matches.length === 0 || !textareaRef) return;
     
     const matchPosition = matches[index];
-    textareaRef.focus();
     textareaRef.setSelectionRange(matchPosition, matchPosition + findQuery.length);
     textareaRef.scrollTop = textareaRef.scrollHeight * (matchPosition / content.length);
   };
 
   const handleNextMatch = () => {
-    if (matches.length === 0) return;
+    if (matches.length === 0 || !textareaRef) return;
     const nextIndex = (currentMatchIndex + 1) % matches.length;
     setCurrentMatchIndex(nextIndex);
+    textareaRef.focus();
     navigateToMatch(nextIndex);
   };
 
   const handlePreviousMatch = () => {
-    if (matches.length === 0) return;
+    if (matches.length === 0 || !textareaRef) return;
     const prevIndex = currentMatchIndex === 0 ? matches.length - 1 : currentMatchIndex - 1;
     setCurrentMatchIndex(prevIndex);
+    textareaRef.focus();
     navigateToMatch(prevIndex);
   };
 
@@ -320,18 +321,12 @@ export function KBEditor({ className }: KBEditorProps) {
     });
   };
 
-  // Update current match when find query, content, or match index changes
+  // Clamp current match index when matches change (e.g., after replace or content edit)
   useEffect(() => {
-    if (findQuery && matches.length > 0) {
-      // Clamp index if it's out of bounds after content changes
-      const validIndex = Math.min(currentMatchIndex, matches.length - 1);
-      if (validIndex !== currentMatchIndex) {
-        setCurrentMatchIndex(validIndex);
-      } else {
-        navigateToMatch(validIndex);
-      }
+    if (findQuery && matches.length > 0 && currentMatchIndex >= matches.length) {
+      setCurrentMatchIndex(Math.min(currentMatchIndex, matches.length - 1));
     }
-  }, [findQuery, currentMatchIndex, content, caseSensitive]);
+  }, [findQuery, matches.length, content, caseSensitive]);
 
   // Sync overlay scroll with textarea scroll
   const handleTextareaScroll = () => {
