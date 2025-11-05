@@ -261,8 +261,10 @@ export function KBEditor({ className }: KBEditorProps) {
                   <p className="text-xs text-muted-foreground">No KB files</p>
                 </div>
               ) : (
-                kbFiles.map((file: any) => (
-                  <div key={file.id} className="flex items-center gap-1">
+                kbFiles.map((file: any) => {
+                  const isEmpty = !file.currentContent || file.currentContent.trim() === '';
+                  return (
+                    <div key={file.id} className="flex items-center gap-1">
                     <Button
                       variant={selectedItemId === file.id ? 'secondary' : 'ghost'}
                       size="sm"
@@ -271,7 +273,9 @@ export function KBEditor({ className }: KBEditorProps) {
                       data-testid={`button-select-file-${file.id}`}
                     >
                       <FileText className="h-3 w-3 mr-2 flex-shrink-0" />
-                      <span className="truncate text-xs">{file.filename}</span>
+                      <span className={`truncate text-xs ${isEmpty ? 'bg-pink-100 dark:bg-pink-950/50 px-1 rounded' : ''}`}>
+                        {file.filename}
+                      </span>
                     </Button>
                     <Button
                       variant="ghost"
@@ -299,7 +303,8 @@ export function KBEditor({ className }: KBEditorProps) {
                       <Download className="h-3 w-3" />
                     </Button>
                   </div>
-                ))
+                  );
+                })
               )
             ) : (
               agentsLoading ? (
