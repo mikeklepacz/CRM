@@ -190,13 +190,8 @@ ${kbContext}
 
 ## YOUR TASK:
 
-**CRITICAL: Before proposing ANY edits, check if the file has content!**
-
-If a KB file is EMPTY or has minimal content (just a title/header), DO NOT try to edit it. Instead:
-- Note it in your summary: "File X is empty - needs base content before edits can be applied"
-- Skip that file entirely for edits
-
-Only propose edits for files that have substantial content to work with.
+**Before proposing edits, check if the file has content:**
+If a KB file is EMPTY or has minimal content (just a title/header), note it in "emptyFiles" instead of trying to edit it.
 
 Propose specific improvements to the knowledge base files based on ${insight ? 'BOTH your transcript analysis AND the Wick Coach\'s insights' : 'your analysis of the transcripts'}. For each proposed change:
 
@@ -211,7 +206,7 @@ Respond in this exact JSON format:
     {
       "file": "exact-filename.txt",
       "section": "Brief description of what section you're editing",
-      "old": "The EXACT text currently in the KB FILE that you want to replace",
+      "old": "The EXACT text currently in the file that you want to replace",
       "new": "The NEW text that should replace it",
       "reason": "Why this change improves the KB",
       "evidence": "Quote from transcript or Wick Coach that supports this",
@@ -222,61 +217,12 @@ Respond in this exact JSON format:
   "emptyFiles": ["List any files that were empty and need base content"]
 }
 
-🚨 CRITICAL: WHERE TO QUOTE FROM 🚨
-
-**THE "old" FIELD MUST CONTAIN TEXT FROM THE KB FILE, NEVER FROM TRANSCRIPTS!**
-
-Common mistake that will BREAK the system:
-❌ WRONG: Reading transcript text like "Since you said test runs are simple, that's exactly what many shops start with: a pilot batch of 1,000 custom-branded rolls, a display replica..."
-✅ CORRECT: Reading the ACTUAL text from the KB file that covers this topic
-
-**Your workflow for each edit MUST be:**
-1. Read the transcript to identify what needs improving
-2. Identify which KB file covers that topic
-3. **READ THE ACTUAL KB FILE CONTENT** (it's provided above in "CURRENT KNOWLEDGE BASE FILES")
-4. Find the relevant section **IN THE KB FILE**
-5. Copy the exact text **FROM THE KB FILE** into the "old" field
-6. Write your improved version in the "new" field
-
-**The "evidence" field is where you quote from transcripts to justify the change!**
-- "old" = quote from KB file
-- "evidence" = quote from transcript
-- DO NOT MIX THESE UP
-
-IMPORTANT EDIT FORMATTING RULES:
-
-**For REPLACING existing text:**
-- "old": Quote the EXACT text currently **IN THE KB FILE** that you want to replace
-- "new": Provide the new text that should replace it
-- The text in "old" MUST exist in the KB file content shown above
-
-**For INSERTING new text into a specific location:**
-- "old": Quote the paragraph or section **FROM THE KB FILE** that comes RIGHT BEFORE where you want to insert
-- **CRITICAL**: This text MUST exist in the KB file content shown above, NOT from transcripts
-- "new": Include that SAME paragraph + your new content appended after it
-- Example: If the KB file says "Do you sell hemp products?" and you want to add a qualifying question:
-  old: "Do you sell hemp products?" (verify this exact text exists in the KB file above!)
-  new: "Do you sell hemp products?\n\nCan I quickly check—are you the person who helps decide which accessories to bring in?"
-
-**For APPENDING to the end of the file:**
-- "old": "" (empty string)
-- "new": The new content to append
-
-**General rules:**
-- The "old" field must match text that ACTUALLY EXISTS in the KB file
-- Transcripts are evidence for WHY to make changes, not WHERE to quote from
+IMPORTANT:
+- The "old" field should contain text from the current KB file (for string replacement)
+- The "evidence" field should contain quotes from transcripts that justify the change
+- If you want to add entirely new content, use old: "" (empty string)
 - Be specific and actionable - no vague suggestions
-- Each edit should be independent and apply cleanly
-- When inserting, always include context so the system knows WHERE to insert
-
-**FINAL VERIFICATION CHECKLIST (run this before submitting):**
-Before you submit your JSON response, verify EACH edit:
-1. ✅ Open the "CURRENT KNOWLEDGE BASE FILES" section above
-2. ✅ Search for the EXACT text you put in the "old" field
-3. ✅ Confirm it exists verbatim in that KB file
-4. ❌ If the text doesn't exist, DO NOT include that edit - either find different text that does exist, or skip that edit
-
-If you cannot find matching text in the KB file, that means the file needs more base content first - add it to "emptyFiles" instead.`;
+- Each edit should be independent and apply cleanly`;
 
       // Call OpenAI Assistant with JSON mode
       const thread = await openai.beta.threads.create({
