@@ -162,67 +162,34 @@ ${patterns || '(none)'}
 ${recommendations || '(none)'}`;
       }
 
-      const analysisPrompt = `You are the Aligner assistant analyzing call performance data to improve the sales knowledge base.${insight ? ' You have TWO sources of information:' : ' You have access to:'}
+      // Load task prompt template from database and substitute variables
+      let analysisPrompt = alignerAssistant.taskPromptTemplate || '';
+      
+      // If template is empty, fall back to default (should not happen in production)
+      if (!analysisPrompt) {
+        console.warn('[Job Processor] Task prompt template is empty, using fallback');
+        analysisPrompt = 'You are the Aligner assistant. Analyze the transcripts and KB files to propose improvements.';
+      }
 
-1. **RAW CALL TRANSCRIPTS** - These are the actual conversations between the AI agent and prospects${insight ? '\n2. **WICK COACH ANALYSIS** - Another AI (the "Wick Coach") has already analyzed these calls and provided recommendations' : ''}
+      // Substitute template variables based on insight presence
+      const variables: Record<string, string> = {
+        transcriptContext,
+        kbContext,
+        wickCoachSection,
+        insightIntro: insight ? ' You have TWO sources of information:' : ' You have access to:',
+        wickCoachIntro: insight ? '\n2. **WICK COACH ANALYSIS** - Another AI (the "Wick Coach") has already analyzed these calls and provided recommendations' : '',
+        dualPerspective: insight ? 'DUAL-PERSPECTIVE ' : '',
+        synthesisSection: insight 
+          ? '**Second, review the Wick Coach\'s analysis** to see if it caught things you missed or has different insights.\n\n**Then, synthesize BOTH perspectives** to propose KB improvements that address:\n- Issues YOU identified from transcripts\n- Valid points from the Wick Coach\'s recommendations\n- Any contradictions between the two analyses (explain your reasoning)' 
+          : '**Then, propose KB improvements** based on your analysis of the transcripts.',
+        analysisSource: insight ? 'BOTH your transcript analysis AND the Wick Coach\'s insights' : 'your analysis of the transcripts',
+        wickCoachCitation: insight ? '\n   - Relevant Wick Coach recommendations' : '',
+      };
 
-## YOUR ${insight ? 'DUAL-PERSPECTIVE ' : ''}MISSION:
-
-**First, form your OWN independent opinion** by reading the actual call transcripts. Look for:
-- What objections are prospects actually raising?
-- What language/phrasing works well vs. poorly?
-- What information seems to confuse prospects?
-- What topics lead to successful outcomes?
-
-${insight ? '**Second, review the Wick Coach\'s analysis** to see if it caught things you missed or has different insights.\n\n**Then, synthesize BOTH perspectives** to propose KB improvements that address:\n- Issues YOU identified from transcripts\n- Valid points from the Wick Coach\'s recommendations\n- Any contradictions between the two analyses (explain your reasoning)' : '**Then, propose KB improvements** based on your analysis of the transcripts.'}
-
-----
-
-## RAW CALL TRANSCRIPTS:
-${transcriptContext}${wickCoachSection}
-
-----
-
-## CURRENT KNOWLEDGE BASE FILES:
-${kbContext}
-
-----
-
-## YOUR TASK:
-
-**Before proposing edits, check if the file has content:**
-If a KB file is EMPTY or has minimal content (just a title/header), note it in "emptyFiles" instead of trying to edit it.
-
-Propose specific improvements to the knowledge base files based on ${insight ? 'BOTH your transcript analysis AND the Wick Coach\'s insights' : 'your analysis of the transcripts'}. For each proposed change:
-
-1. Identify which file(s) should be updated
-2. Explain the rationale, citing:
-   - Specific examples from transcripts${insight ? '\n   - Relevant Wick Coach recommendations' : ''}
-3. Provide the exact text to change (old) and the new text (new)
-
-Respond in this exact JSON format:
-{
-  "edits": [
-    {
-      "file": "exact-filename.txt",
-      "section": "Brief description of what section you're editing",
-      "old": "The EXACT text currently in the file that you want to replace",
-      "new": "The NEW text that should replace it",
-      "reason": "Why this change improves the KB",
-      "evidence": "Quote from transcript or Wick Coach that supports this",
-      "principle": "The sales principle behind this change"
-    }
-  ],
-  "summary": "Overall summary of proposed improvements for this batch",
-  "emptyFiles": ["List any files that were empty and need base content"]
-}
-
-IMPORTANT:
-- The "old" field should contain text from the current KB file (for string replacement)
-- The "evidence" field should contain quotes from transcripts that justify the change
-- If you want to add entirely new content, use old: "" (empty string)
-- Be specific and actionable - no vague suggestions
-- Each edit should be independent and apply cleanly`;
+      // Replace all variables in template
+      for (const [key, value] of Object.entries(variables)) {
+        analysisPrompt = analysisPrompt.replace(new RegExp(`{{${key}}}`, 'g'), value);
+      }
 
       // Call OpenAI Assistant with JSON mode
       const thread = await openai.beta.threads.create({
