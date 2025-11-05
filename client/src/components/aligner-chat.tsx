@@ -132,6 +132,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(() => {
     // Restore from localStorage on mount
     try {
@@ -170,21 +171,29 @@ export function AlignerChat({ className }: AlignerChatProps) {
     }
   }, [selectedConversationId]);
 
-  // Set messages when conversation messages load
+  // Set messages when conversation messages load OR when starting new conversation
   useEffect(() => {
-    if (conversationMessages && conversationMessages.length > 0) {
+    if (!selectedConversationId) {
+      // No conversation selected = new conversation mode, clear messages
+      setMessages([]);
+    } else if (conversationMessages && conversationMessages.length > 0) {
+      // Load existing conversation messages
       const formattedMessages = conversationMessages.map((msg: any) => ({
         role: msg.role,
         content: msg.content
       }));
       setMessages(formattedMessages);
     } else if (selectedConversationId) {
+      // Selected conversation exists but has no messages yet
       setMessages([]);
     }
   }, [conversationMessages, selectedConversationId]);
 
   // Auto-select most recent conversation if none selected or if selected one no longer exists
   useEffect(() => {
+    // Don't auto-select if user is intentionally creating a new conversation
+    if (isCreatingNew) return;
+    
     if (conversations.length > 0) {
       // Check if currently selected conversation still exists
       const selectedExists = selectedConversationId && conversations.some(c => c.id === selectedConversationId);
@@ -202,7 +211,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
         // Ignore localStorage errors
       }
     }
-  }, [conversations, selectedConversationId]);
+  }, [conversations, selectedConversationId, isCreatingNew]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -241,6 +250,11 @@ export function AlignerChat({ className }: AlignerChatProps) {
       // Update selected conversation if a new one was created
       if (data.conversationId && data.conversationId !== selectedConversationId) {
         setSelectedConversationId(data.conversationId);
+      }
+      
+      // Clear "creating new" flag once conversation is created
+      if (isCreatingNew) {
+        setIsCreatingNew(false);
       }
       
       queryClient.invalidateQueries({ queryKey: ['/api/aligner/chat/history'] });
@@ -326,6 +340,7 @@ export function AlignerChat({ className }: AlignerChatProps) {
 
   // New conversation handler
   const handleNewConversation = () => {
+    setIsCreatingNew(true);
     setSelectedConversationId(null);
     setMessages([]);
     try {
@@ -430,7 +445,10 @@ export function AlignerChat({ className }: AlignerChatProps) {
                         className={`p-2 rounded-md cursor-pointer hover-elevate ${
                           selectedConversationId === conv.id ? "bg-accent" : ""
                         }`}
-                        onClick={() => setSelectedConversationId(conv.id)}
+                        onClick={() => {
+                          setSelectedConversationId(conv.id);
+                          setIsCreatingNew(false); // Clear "creating new" flag when manually selecting
+                        }}
                         data-testid={`aligner-conversation-${conv.id}`}
                       >
                         <p className="text-sm font-medium truncate">{conv.title}</p>
