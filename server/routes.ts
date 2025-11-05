@@ -1667,6 +1667,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // IVR/AUTOMATED LINE DETECTION: Check transcripts for DTMF tone usage or voicemail detection
+      if (data.transcript && Array.isArray(data.transcript) && clientData.clientId) {
+        let ivrDetected = false;
+        let detectionMethod = '';
+
+        // Whitelist of exact tool names that indicate IVR/voicemail
+        // DTMF: play_keypad_touch_tone (agent presses phone buttons to navigate IVR)
+        // Voicemail: Add specific ElevenLabs voicemail detection tool names here when confirmed
+        const IVR_TOOL_NAMES = [
+          'play_keypad_touch_tone',
+          // TODO: Add exact voicemail detection tool names from ElevenLabs API docs
+          // Examples might be: 'detect_voicemail', 'voicemail_detector', 'answering_machine_detection'
+        ];
+
+        // Scan all transcript items for tool_calls indicating IVR/voicemail
+        for (const item of data.transcript) {
+          if (item.tool_calls && Array.isArray(item.tool_calls)) {
+            for (const tool of item.tool_calls) {
+              // Check if tool name matches any known IVR detection tool
+              if (IVR_TOOL_NAMES.includes(tool.name)) {
+                ivrDetected = true;
+                
+                if (tool.name === 'play_keypad_touch_tone') {
+                  detectionMethod = 'DTMF keypad tone detected in call transcript';
+                  console.log(`[IVR Detection] DTMF tone detected in conversation ${conversationId}`);
+                } else {
+                  detectionMethod = `Voicemail/IVR detection tool triggered: ${tool.name}`;
+                  console.log(`[IVR Detection] Voicemail/IVR detected in conversation ${conversationId} (tool: ${tool.name})`);
+                }
+                break;
+              }
+            }
+          }
+          if (ivrDetected) break;
+        }
+
+        // If IVR detected, update the store's Automated Line column in Google Sheets
+        if (ivrDetected) {
+          try {
+            // Get store data to find row index and sheet info
+            const storeSnapshot = clientData.storeSnapshot;
+            if (storeSnapshot && storeSnapshot.rowIndex !== undefined && storeSnapshot.sheetId) {
+              const sheet = await storage.getGoogleSheetById(storeSnapshot.sheetId);
+              
+              if (sheet) {
+                const { spreadsheetId, sheetName } = sheet;
+                
+                // Read headers to find "Automated Line" column index (case-insensitive)
+                const headerRange = `${sheetName}!1:1`;
+                const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
+                const headers = headerRows[0] || [];
+                const columnIndex = headers.findIndex(h => h.toLowerCase() === 'automated line');
+                
+                if (columnIndex !== -1) {
+                  // Convert column index to letter (A, B, C, ..., Z, AA, AB, etc.)
+                  const columnLetter = columnIndexToLetter(columnIndex);
+                  const cellRange = `${sheetName}!${columnLetter}${storeSnapshot.rowIndex}`;
+                  
+                  // Update the cell to TRUE
+                  await googleSheets.writeSheetData(spreadsheetId, cellRange, [['TRUE']]);
+                  
+                  console.log(`[IVR Detection] ✅ Updated store ${clientData.clientId} Automated Line to TRUE`);
+                  console.log(`[IVR Detection] Method: ${detectionMethod}`);
+                } else {
+                  console.warn(`[IVR Detection] "Automated Line" column not found in sheet ${sheetName}`);
+                }
+              } else {
+                console.warn(`[IVR Detection] Sheet not found with ID ${storeSnapshot.sheetId}`);
+              }
+            } else {
+              console.warn(`[IVR Detection] Missing rowIndex or sheetId in storeSnapshot for clientId ${clientData.clientId}`);
+            }
+          } catch (ivrError: any) {
+            console.error(`[IVR Detection] Error updating Automated Line:`, ivrError.message);
+            // Don't fail the webhook - this is a non-critical feature
+          }
+        }
+      }
+
       // Trigger OpenAI reflection job asynchronously (don't block webhook response)
       if (data.status === 'done' && data.transcript && data.transcript.length > 0) {
         // Fire and forget - run async without blocking the webhook response
