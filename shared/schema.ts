@@ -1055,6 +1055,7 @@ export const kbFiles = pgTable("kb_files", {
   currentContent: text("current_content"), // Latest approved content
   currentSyncVersion: varchar("current_sync_version"), // FK to kb_file_versions.id
   agentId: varchar("agent_id", { length: 255 }), // ElevenLabs agent ID (e.g., agent_7201k8xa9cshfmqvkd8tx3xf2j7a) - which agent this KB file is for
+  syncState: varchar("sync_state", { length: 20 }).notNull().default('local_only'), // 'local_only', 'synced', 'pending_publish'
   locked: boolean("locked").default(false), // True if referenced in workflow nodes
   fileType: varchar("file_type", { length: 50 }).default('file'), // 'file', 'url', 'text'
   localUpdatedAt: timestamp("local_updated_at").defaultNow(), // Timestamp of last local edit (proposal approval, upload, etc.)
@@ -1067,6 +1068,7 @@ export const kbFiles = pgTable("kb_files", {
   index("idx_kb_files_filename").on(table.filename),
   index("idx_kb_files_locked_synced").on(table.locked, table.lastSyncedAt),
   index("idx_kb_files_agent").on(table.agentId),
+  index("idx_kb_files_sync_state").on(table.syncState),
 ]);
 
 export const kbFileVersions = pgTable("kb_file_versions", {
@@ -1087,6 +1089,8 @@ export const kbChangeProposals = pgTable("kb_change_proposals", {
   kbFileId: varchar("kb_file_id").notNull().references(() => kbFiles.id, { onDelete: 'restrict' }),
   baseVersionId: varchar("base_version_id").notNull().references(() => kbFileVersions.id, { onDelete: 'restrict' }), // Optimistic locking
   proposedContent: text("proposed_content").notNull(),
+  originalAiContent: text("original_ai_content"), // Original AI-generated content before human edits
+  humanEdited: boolean("human_edited").notNull().default(false), // Whether admin modified the proposed content
   rationale: text("rationale"), // Why Aligner suggests this change
   aiInsightId: varchar("ai_insight_id").references(() => aiInsights.id), // Which analysis triggered it
   status: varchar("status", { length: 20 }).notNull().default('pending'), // 'pending', 'approved', 'rejected', 'applied'
