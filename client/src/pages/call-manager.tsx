@@ -171,6 +171,12 @@ function KBLibraryTab() {
   const toggleSplitScreen = (checked: boolean) => {
     setSplitScreenMode(checked);
     saveSplitScreenMutation.mutate(checked);
+    
+    // If disabling split mode, clear the selected proposal
+    if (!checked) {
+      setSelectedProposal(null);
+      setIsDiffDialogOpen(false);
+    }
   };
 
   // Fetch KB files
@@ -502,8 +508,8 @@ function KBLibraryTab() {
   const version1 = versions.find((v: any) => v.id === selectedVersionsForDiff[0]);
   const version2 = versions.find((v: any) => v.id === selectedVersionsForDiff[1]);
 
-  // Render split-screen layout (when split mode enabled and proposal selected)
-  if (splitScreenMode && selectedProposal) {
+  // Render split-screen layout (when split mode enabled)
+  if (splitScreenMode) {
     return (
       <div className="flex gap-4 h-full">
         {/* Left: KB Library (50%) */}
@@ -578,31 +584,43 @@ function KBLibraryTab() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Review Proposed Changes</CardTitle>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setIsDiffDialogOpen(false)}
-                  data-testid="button-close-split"
-                >
-                  Close
-                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="split-screen-toggle-header"
+                      checked={splitScreenMode}
+                      onCheckedChange={toggleSplitScreen}
+                      data-testid="checkbox-split-screen-header"
+                    />
+                    <Label htmlFor="split-screen-toggle-header" className="cursor-pointer text-sm">
+                      Editor/Proposal View
+                    </Label>
+                  </div>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              <ProposalDiffViewer
-                proposal={selectedProposal}
-                onApprove={() => {
-                  queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
-                  queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
-                  setIsDiffDialogOpen(false);
-                  setSelectedProposal(null);
-                }}
-                onReject={() => {
-                  queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
-                  setIsDiffDialogOpen(false);
-                  setSelectedProposal(null);
-                }}
-              />
+              {selectedProposal ? (
+                <ProposalDiffViewer
+                  proposal={selectedProposal}
+                  onApprove={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+                    queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
+                    setSelectedProposal(null);
+                  }}
+                  onReject={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+                    setSelectedProposal(null);
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-64 text-muted-foreground">
+                  <div className="text-center">
+                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-sm">Click "View Diff" on any proposal to review side-by-side</p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -769,7 +787,7 @@ function KBLibraryTab() {
                   data-testid="checkbox-split-screen"
                 />
                 <Label htmlFor="split-screen-toggle" className="cursor-pointer text-sm">
-                  Pin for side-by-side review
+                  Editor/Proposal View
                 </Label>
               </div>
             )}
