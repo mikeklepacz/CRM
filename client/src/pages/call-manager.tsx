@@ -131,6 +131,47 @@ function KBLibraryTab() {
   const [viewingVersion, setViewingVersion] = useState<any | null>(null);
   const [isVersionViewerOpen, setIsVersionViewerOpen] = useState(false);
   const [selectedProposalIds, setSelectedProposalIds] = useState<string[]>([]);
+  const [splitScreenMode, setSplitScreenMode] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const desktop = window.innerWidth >= 1024;
+      setIsDesktop(desktop);
+      if (!desktop && splitScreenMode) {
+        setSplitScreenMode(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [splitScreenMode]);
+
+  // Fetch user preferences (load split-screen preference)
+  const { data: userPrefs } = useQuery<{ splitScreenProposals?: boolean }>({
+    queryKey: ['/api/user/preferences'],
+  });
+
+  // Load split-screen preference on mount
+  useEffect(() => {
+    if (userPrefs?.splitScreenProposals && isDesktop) {
+      setSplitScreenMode(true);
+    }
+  }, [userPrefs, isDesktop]);
+
+  // Save split-screen preference
+  const saveSplitScreenMutation = useMutation({
+    mutationFn: (enabled: boolean) => apiRequest('PUT', '/api/user/preferences', { splitScreenProposals: enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+    },
+  });
+
+  // Toggle split-screen mode
+  const toggleSplitScreen = (checked: boolean) => {
+    setSplitScreenMode(checked);
+    saveSplitScreenMutation.mutate(checked);
+  };
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
@@ -461,6 +502,114 @@ function KBLibraryTab() {
   const version1 = versions.find((v: any) => v.id === selectedVersionsForDiff[0]);
   const version2 = versions.find((v: any) => v.id === selectedVersionsForDiff[1]);
 
+  // Render split-screen layout
+  if (splitScreenMode && selectedProposal && isDiffDialogOpen) {
+    return (
+      <div className="flex gap-4 h-full">
+        {/* Left: KB Library (50%) */}
+        <div className="w-1/2">
+          <Card data-testid="card-kb-library">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Knowledge Base Library
+                  </CardTitle>
+                  <CardDescription className="mt-2">
+                    Manage ElevenLabs knowledge base files
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <div>
+                    <input
+                      id="kb-file-upload-split"
+                      type="file"
+                      multiple
+                      accept=".txt"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      data-testid="input-upload-files-split"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => document.getElementById('kb-file-upload-split')?.click()}
+                      disabled={uploadMutation.isPending}
+                      data-testid="button-upload-kb-split"
+                    >
+                      {uploadMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => syncMutation.mutate()}
+                    disabled={syncMutation.isPending}
+                    data-testid="button-sync-kb-split"
+                  >
+                    {syncMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Sync
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <KBEditor />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right: Proposal Viewer (50%) */}
+        <div className="w-1/2">
+          <Card className="h-full">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Review Proposed Changes</CardTitle>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsDiffDialogOpen(false)}
+                  data-testid="button-close-split"
+                >
+                  Close
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ProposalDiffViewer
+                proposal={selectedProposal}
+                onApprove={() => {
+                  queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/kb/files'] });
+                  setIsDiffDialogOpen(false);
+                  setSelectedProposal(null);
+                }}
+                onReject={() => {
+                  queryClient.invalidateQueries({ queryKey: ['/api/kb/proposals'] });
+                  setIsDiffDialogOpen(false);
+                  setSelectedProposal(null);
+                }}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card data-testid="card-kb-library">
       <CardHeader>
@@ -611,6 +760,19 @@ function KBLibraryTab() {
 
           {/* Proposals Tab */}
           <TabsContent value="proposals">
+            {isDesktop && (
+              <div className="mb-4 flex items-center gap-2 p-3 bg-muted/30 rounded-lg border">
+                <Checkbox
+                  id="split-screen-toggle"
+                  checked={splitScreenMode}
+                  onCheckedChange={toggleSplitScreen}
+                  data-testid="checkbox-split-screen"
+                />
+                <Label htmlFor="split-screen-toggle" className="cursor-pointer text-sm">
+                  Pin for side-by-side review
+                </Label>
+              </div>
+            )}
             {proposalsLoading ? (
               <div className="text-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
