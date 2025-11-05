@@ -1,0 +1,117 @@
+I'll audit the entire proposal-making system from Aligner creation through to approval. Let me trace through the complete workflow:
+
+Audit Findings
+1. Aligner Chat → Proposal Creation Flow
+Issue Found: The "Agree and create proposals" flow has redundant complexity.
+
+Currently there are TWO endpoints that create proposals from Aligner chat:
+
+/api/aligner/agree-and-create-proposals - Sends confirmation message, gets JSON, creates proposals
+/api/aligner/create-proposals-from-chat - Extracts JSON from existing messages, creates proposals
+Problem: Both endpoints essentially do the same thing but with different triggers. The agree-and-create-proposals endpoint sends a user message "Yes, I agree" then immediately tries to parse JSON from the response, which adds unnecessary complexity.
+
+Recommendation: Consolidate into a single flow where users explicitly click "Create Proposals" after reviewing Aligner's suggested edits.
+
+2. JSON Edit Format Validation
+Issue Found: Inconsistent validation of the edits JSON structure.
+
+In proposal-diff-viewer.tsx:
+
+const isValidEdits = edits.length > 0 && edits.every(e => 
+  'old' in e && 'new' in e && 'reason' in e && e.new && e.reason
+);
+This allows empty old field (for new content additions) but requires non-empty new and reason.
+
+However, in the backend approval flow (/api/kb/proposals/:id/approve), the edit application logic expects:
+
+if ('old' in edit && edit.old === '' && edit.new) {
+  // New content addition
+} else if (edit.old) {
+  // Replacement
+}
+Problem: The frontend validation doesn't check if old is at least defined, just that it exists as a key.
+
+Fix Needed:
+
+client/src/components/proposal-diff-viewer.tsx
++41
+-6
+Strengthen edit validation to match backend expectations, Add persistence for failed edit warnings across re-renders, Prevent duplicate saves on approval if edits already saved, Add warning when approving partial selection
+3. Edit Application Logic - Text Matching
+Critical Issue: The approval endpoint has sophisticated fuzzy matching and position-based edit application, but there's a gap in error reporting.
+
+When edits fail to apply (text not found), the system:
+
+Marks edits as failed ✅
+Auto-deselects failed edits ✅
+Shows toast notification ✅
+However, users can't see WHICH edits failed in the proposal viewer until they try to approve again.
+
+Fix Needed: Add visual feedback to show which edits have previously failed to apply.
+
+4. Inline Edit Saving Workflow
+Issue Found: Complex state management for inline edits with potential race conditions.
+
+The flow is:
+
+User edits "new" text in textarea → stored in inlineEdits Map
+User clicks "Save Edits" → applies ALL inline edits to proposal
+User approves → saves again if there are inline edits, then approves
+Problem: The approval flow saves inline edits AGAIN even if user already clicked "Save Edits". This causes duplicate PATCH requests.
+
+Fix Needed:
+
+5. Backend Edit Application - Critical Gap
+CRITICAL ISSUE: The backend edit application uses position-based sorting to prevent text-shifting conflicts, but there's a logical flaw in the fuzzy matching fallback.
+
+In server/routes.ts (approve endpoint):
+
+// Find current position of the text (it may have shifted due to previous edits)
+let index = finalContent.indexOf(edit.old);
+// If exact match fails, try fuzzy match
+if (index === -1) {
+  const normalizedOld = normalizeForMatching(edit.old);
+  const normalizedContent = normalizeForMatching(finalContent);
+  const fuzzyIndex = normalizedContent.indexOf(normalizedOld);
+  
+  if (fuzzyIndex !== -1) {
+    // Find the actual position in current content
+    // ...character counting logic...
+    index = actualIndex;
+  }
+}
+Problem: The character-counting logic to map fuzzy position back to actual position is complex and potentially brittle. If line endings differ between systems, this could fail.
+
+Recommendation: Add debug logging to track fuzzy match success/failure rates in production.
+
+server/routes.ts
++4
+-2
+Add debug logging for edit application tracking
+6. Partial Approval Workflow
+Issue Found: When user approves only some edits, the system:
+
+Filters to selected edits
+Saves filtered JSON as new proposal content
+Approves the proposal
+Problem: After partial approval, the non-selected edits are LOST. User can't come back later to approve the remaining edits.
+
+Current behavior: This is by design (user skipped those edits).
+
+Recommendation: Add confirmation dialog when user skips edits to make this clear.
+
+Summary
+Critical Issues:
+
+✅ Edit validation mismatch between frontend and backend
+✅ Failed edit visibility - users can't see which edits failed after approval attempt
+✅ Partial approval data loss - skipped edits disappear without warning
+Optimizations:
+4. ✅ Duplicate save prevention on approval
+
+✅ Debug logging for fuzzy match tracking
+Architecture Notes:
+
+The system is well-designed overall with position-based sorting preventing text-shift conflicts
+The agree-and-create-proposals endpoint is redundant and could be consolidated
+Fuzzy matching works but needs better observability
