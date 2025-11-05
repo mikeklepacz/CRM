@@ -546,12 +546,14 @@ export function KBEditor({ className }: KBEditorProps) {
                 )}
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
                   onClick={() => setShowFindReplace(!showFindReplace)}
+                  className={showFindReplace ? 'bg-accent' : ''}
                   data-testid="button-toggle-find-replace"
                   title="Find and Replace (Cmd+F)"
                 >
-                  <Search className="h-3 w-3" />
+                  <Search className="h-3 w-3 mr-1" />
+                  Find
                 </Button>
                 <Button
                   size="sm"
