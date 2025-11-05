@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,7 @@ export function KBEditor({ className }: KBEditorProps) {
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [textareaRef, setTextareaRef] = useState<HTMLTextAreaElement | null>(null);
   const [highlightRef, setHighlightRef] = useState<HTMLDivElement | null>(null);
+  const preserveFindOnSelectRef = useRef(false);
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
@@ -225,16 +226,23 @@ export function KBEditor({ className }: KBEditorProps) {
   const hasUnsavedChanges = content !== originalContent;
   const isLoading = (editorMode === 'file' ? fileLoading : agentLoading);
 
-  // Fuzzy filter files based on search query (word-based matching)
-  const filteredFiles = kbFiles.filter((file: any) => {
-    if (!fileSearchQuery.trim()) return true;
-    
-    const searchWords = fileSearchQuery.toLowerCase().split(/\s+/).filter(w => w.length > 0);
-    const filename = file.filename.toLowerCase();
-    
-    // Match if filename contains all search words
-    return searchWords.every(word => filename.includes(word));
-  });
+  // Search through file content for words starting with the query
+  const filteredFiles = kbFiles
+    .map((file: any) => {
+      if (!fileSearchQuery.trim()) {
+        return { ...file, matchCount: 0 };
+      }
+      
+      const query = fileSearchQuery.toLowerCase();
+      const content = (file.currentContent || '').toLowerCase();
+      
+      // Find all words that start with the query
+      const wordPattern = new RegExp(`\\b${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*`, 'g');
+      const matches = content.match(wordPattern) || [];
+      
+      return { ...file, matchCount: matches.length };
+    })
+    .filter((file: any) => !fileSearchQuery.trim() || file.matchCount > 0);
 
   // Find and Replace logic
   const findMatches = (): number[] => {
@@ -344,12 +352,17 @@ export function KBEditor({ className }: KBEditorProps) {
     }
   }, [highlightRef, textareaRef, findQuery, matches.length]);
 
-  // Reset find/replace when changing files
+  // Reset find/replace when changing files (unless preserving from search)
   useEffect(() => {
-    setShowFindReplace(false);
-    setFindQuery("");
-    setReplaceQuery("");
-    setCurrentMatchIndex(0);
+    if (!preserveFindOnSelectRef.current) {
+      setShowFindReplace(false);
+      setFindQuery("");
+      setReplaceQuery("");
+      setCurrentMatchIndex(0);
+    } else {
+      // Reset the flag after preserving once
+      preserveFindOnSelectRef.current = false;
+    }
   }, [selectedItemId]);
 
   return (
@@ -422,7 +435,18 @@ export function KBEditor({ className }: KBEditorProps) {
                     <Button
                       variant={selectedItemId === file.id ? 'secondary' : 'ghost'}
                       size="sm"
-                      onClick={() => setSelectedItemId(file.id)}
+                      onClick={() => {
+                        // Auto-populate Find box with search query if searching
+                        if (fileSearchQuery.trim()) {
+                          preserveFindOnSelectRef.current = true;
+                          setFindQuery(fileSearchQuery);
+                          setShowFindReplace(true);
+                          setCurrentMatchIndex(0);
+                        } else {
+                          preserveFindOnSelectRef.current = false;
+                        }
+                        setSelectedItemId(file.id);
+                      }}
                       className="flex-1 justify-start text-left"
                       data-testid={`button-select-file-${file.id}`}
                     >
@@ -430,6 +454,11 @@ export function KBEditor({ className }: KBEditorProps) {
                       <span className={`truncate text-xs ${isEmpty ? 'bg-pink-100 dark:bg-pink-950/50 px-1 rounded' : ''}`}>
                         {file.filename}
                       </span>
+                      {file.matchCount > 0 && (
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          {file.matchCount}
+                        </Badge>
+                      )}
                     </Button>
                     <Button
                       variant="ghost"
