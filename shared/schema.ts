@@ -262,6 +262,7 @@ export const userPreferences = pgTable("user_preferences", {
   selectedCategory: varchar("selected_category", { length: 100 }), // Category filter for CRM dashboard - users only see stores from this category
   autoLoadScript: boolean("auto_load_script").default(true), // Auto-load default script when clicking phone numbers
   viewAsAgent: boolean("view_as_agent").default(false), // For admins: toggle to view dashboard as an agent would see it
+  splitScreenProposals: boolean("split_screen_proposals").default(false), // Split-screen mode for KB proposals (desktop only)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
