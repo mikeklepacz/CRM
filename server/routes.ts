@@ -2151,7 +2151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Voice calling access required' });
       }
 
-      const { agent_record_id, agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule } = req.body;
+      const { agent_record_id, agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule, ivr_behavior } = req.body;
       
       console.log('[BatchCall] Request received:', {
         agent_record_id,
@@ -2162,6 +2162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scenario,
         scheduled_for,
         auto_schedule,
+        ivr_behavior,
       });
       
       if (!agent_record_id || !agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
@@ -2211,6 +2212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalStores: stores.length,
         status: 'scheduled',
         scheduledStart,
+        ivrBehavior: ivr_behavior || 'flag_and_end',
       });
       
       console.log('[BatchCall] Campaign created:', { id: campaign.id, name: campaign.name, totalStores: stores.length });

@@ -1191,6 +1191,7 @@ export default function CallManager() {
   const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [schedulingMode, setSchedulingMode] = useState<'immediate' | 'scheduled' | 'auto'>('immediate');
   const [scheduledTime, setScheduledTime] = useState<string>("");
+  const [ivrBehavior, setIvrBehavior] = useState<'flag_and_end' | 'flag_and_continue'>('flag_and_end');
   const [selectedAgentFilters, setSelectedAgentFilters] = useState<Set<string>>(new Set());
   const [selectedStateFilters, setSelectedStateFilters] = useState<string[]>([]);
   const [showCanadaOnly, setShowCanadaOnly] = useState(false);
@@ -1491,12 +1492,13 @@ export default function CallManager() {
     // Build payload with store links for auto-scheduling
     const selectedStoreData = eligibleStores.filter(store => selectedStores.has(store.link));
 
-    const payload: { agent_record_id: string; agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean } = {
+    const payload: { agent_record_id: string; agent_id: string; phone_number_id: string; stores: string[]; store_data?: any[]; scenario?: string; scheduled_for?: string; auto_schedule?: boolean; ivr_behavior?: string } = {
       agent_record_id: agent.id,
       agent_id: agent.agent_id,
       phone_number_id: agent.phone_number_id,
       stores: Array.from(selectedStores),
       scenario: activeScenario,
+      ivr_behavior: ivrBehavior,
     };
 
     // Include full store data for auto-scheduling
@@ -2051,6 +2053,26 @@ export default function CallManager() {
                   </p>
                 </div>
               )}
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">IVR & Voicemail Handling</label>
+                <RadioGroup value={ivrBehavior} onValueChange={(v) => setIvrBehavior(v as 'flag_and_end' | 'flag_and_continue')} data-testid="radio-ivr-behavior">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="flag_and_end" id="flag_and_end" data-testid="radio-flag-end" />
+                    <Label htmlFor="flag_and_end" className="font-normal">
+                      Flag & End Call
+                      <span className="block text-xs text-muted-foreground">Mark store as automated line and hang up immediately</span>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="flag_and_continue" id="flag_and_continue" data-testid="radio-flag-continue" />
+                    <Label htmlFor="flag_and_continue" className="font-normal">
+                      Flag & Navigate Menu
+                      <span className="block text-xs text-muted-foreground">Mark store as automated line but try to navigate IVR system</span>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
 
               <div className="flex justify-end">
                 <Button

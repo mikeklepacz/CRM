@@ -965,6 +965,7 @@ export const callCampaigns = pgTable("call_campaigns", {
   storeFilter: jsonb("store_filter").$type<Record<string, any>>(), // Filters used: {"status": "claimed", "state": "CA"}
   totalStores: integer("total_stores").default(0),
   status: varchar("status", { length: 50 }).notNull().default('scheduled'), // 'scheduled', 'in-progress', 'completed', 'cancelled'
+  ivrBehavior: varchar("ivr_behavior", { length: 50 }).default('flag_and_end'), // 'flag_and_end', 'flag_and_continue'
   scheduledStart: timestamp("scheduled_start"),
   completedAt: timestamp("completed_at"),
   callsCompleted: integer("calls_completed").default(0),
