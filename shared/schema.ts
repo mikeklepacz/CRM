@@ -1129,6 +1129,7 @@ export const openaiAssistants = pgTable("openai_assistants", {
   assistantId: varchar("assistant_id"), // OpenAI assistant ID
   vectorStoreId: varchar("vector_store_id"), // OpenAI vector store ID for this assistant's KB
   instructions: text("instructions").notNull(), // System prompt for this assistant
+  taskPromptTemplate: text("task_prompt_template"), // Template for dynamic task prompts (Aligner only) with placeholders like {{transcriptContext}}
   model: varchar("model", { length: 50 }).default('gpt-4o'), // OpenAI model to use
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
