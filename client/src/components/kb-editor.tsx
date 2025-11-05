@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { Loader2, FileText, User, Save, AlertCircle, CheckCircle2, Download, Search } from "lucide-react";
+import { Loader2, FileText, User, Save, AlertCircle, CheckCircle2, Download, Search, ChevronUp, ChevronDown, X, Replace } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -25,6 +25,15 @@ export function KBEditor({ className }: KBEditorProps) {
   const [originalContent, setOriginalContent] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [fileSearchQuery, setFileSearchQuery] = useState("");
+  
+  // Find and Replace state
+  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [replaceQuery, setReplaceQuery] = useState("");
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const [textareaRef, setTextareaRef] = useState<HTMLTextAreaElement | null>(null);
+  const [highlightRef, setHighlightRef] = useState<HTMLDivElement | null>(null);
 
   // Fetch KB files
   const { data: kbData, isLoading: kbLoading } = useQuery({
@@ -227,6 +236,127 @@ export function KBEditor({ className }: KBEditorProps) {
     return searchWords.every(word => filename.includes(word));
   });
 
+  // Find and Replace logic
+  const findMatches = (): number[] => {
+    if (!findQuery) return [];
+    
+    const matches: number[] = [];
+    const searchText = caseSensitive ? content : content.toLowerCase();
+    const query = caseSensitive ? findQuery : findQuery.toLowerCase();
+    
+    let index = searchText.indexOf(query);
+    while (index !== -1) {
+      matches.push(index);
+      index = searchText.indexOf(query, index + 1);
+    }
+    
+    return matches;
+  };
+
+  const matches = findMatches();
+  const matchCount = matches.length;
+
+  const navigateToMatch = (index: number) => {
+    if (matches.length === 0 || !textareaRef) return;
+    
+    const matchPosition = matches[index];
+    textareaRef.focus();
+    textareaRef.setSelectionRange(matchPosition, matchPosition + findQuery.length);
+    textareaRef.scrollTop = textareaRef.scrollHeight * (matchPosition / content.length);
+  };
+
+  const handleNextMatch = () => {
+    if (matches.length === 0) return;
+    const nextIndex = (currentMatchIndex + 1) % matches.length;
+    setCurrentMatchIndex(nextIndex);
+    navigateToMatch(nextIndex);
+  };
+
+  const handlePreviousMatch = () => {
+    if (matches.length === 0) return;
+    const prevIndex = currentMatchIndex === 0 ? matches.length - 1 : currentMatchIndex - 1;
+    setCurrentMatchIndex(prevIndex);
+    navigateToMatch(prevIndex);
+  };
+
+  const handleReplace = () => {
+    if (matches.length === 0 || !textareaRef) return;
+    
+    const matchPosition = matches[currentMatchIndex];
+    const before = content.substring(0, matchPosition);
+    const after = content.substring(matchPosition + findQuery.length);
+    const newContent = before + replaceQuery + after;
+    
+    setContent(newContent);
+    
+    // After replace, stay at same index (it will point to next match automatically)
+    // or wrap to 0 if we were at the last match
+    if (currentMatchIndex >= matches.length - 1 && matches.length > 1) {
+      setCurrentMatchIndex(0);
+    }
+  };
+
+  const handleReplaceAll = () => {
+    if (matches.length === 0) return;
+    
+    const searchText = caseSensitive ? content : content.toLowerCase();
+    const query = caseSensitive ? findQuery : findQuery.toLowerCase();
+    
+    let newContent = content;
+    if (caseSensitive) {
+      newContent = content.replaceAll(findQuery, replaceQuery);
+    } else {
+      // Case-insensitive replace preserving original case pattern
+      const regex = new RegExp(findQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      newContent = content.replace(regex, replaceQuery);
+    }
+    
+    setContent(newContent);
+    setCurrentMatchIndex(0);
+    
+    toast({
+      title: "Replaced All",
+      description: `Replaced ${matches.length} occurrence${matches.length !== 1 ? 's' : ''}`,
+    });
+  };
+
+  // Update current match when find query, content, or match index changes
+  useEffect(() => {
+    if (findQuery && matches.length > 0) {
+      // Clamp index if it's out of bounds after content changes
+      const validIndex = Math.min(currentMatchIndex, matches.length - 1);
+      if (validIndex !== currentMatchIndex) {
+        setCurrentMatchIndex(validIndex);
+      } else {
+        navigateToMatch(validIndex);
+      }
+    }
+  }, [findQuery, currentMatchIndex, content, caseSensitive]);
+
+  // Sync overlay scroll with textarea scroll
+  const handleTextareaScroll = () => {
+    if (textareaRef && highlightRef) {
+      highlightRef.scrollTop = textareaRef.scrollTop;
+      highlightRef.scrollLeft = textareaRef.scrollLeft;
+    }
+  };
+
+  // Sync overlay position immediately when it appears or matches change
+  useEffect(() => {
+    if (textareaRef && highlightRef && findQuery && matches.length > 0) {
+      highlightRef.scrollTop = textareaRef.scrollTop;
+      highlightRef.scrollLeft = textareaRef.scrollLeft;
+    }
+  }, [highlightRef, textareaRef, findQuery, matches.length]);
+
+  // Reset find/replace when changing files
+  useEffect(() => {
+    setShowFindReplace(false);
+    setFindQuery("");
+    setReplaceQuery("");
+    setCurrentMatchIndex(0);
+  }, [selectedItemId]);
+
   return (
     <div className={`flex gap-4 ${className || ''}`}>
       {/* Sidebar */}
@@ -421,6 +551,15 @@ export function KBEditor({ className }: KBEditorProps) {
                 )}
                 <Button
                   size="sm"
+                  variant="ghost"
+                  onClick={() => setShowFindReplace(!showFindReplace)}
+                  data-testid="button-toggle-find-replace"
+                  title="Find and Replace (Cmd+F)"
+                >
+                  <Search className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
                   onClick={handleSave}
                   disabled={!hasUnsavedChanges || saveStatus === 'saving'}
                   data-testid="button-save-editor"
@@ -440,12 +579,170 @@ export function KBEditor({ className }: KBEditorProps) {
               </div>
             </div>
 
-            {/* Editor Area */}
-            <div className="flex-1 p-3">
+            {/* Find and Replace */}
+            {showFindReplace && (
+              <div className="border-b bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-2">
+                    <Input
+                      type="text"
+                      placeholder="Find..."
+                      value={findQuery}
+                      onChange={(e) => {
+                        setFindQuery(e.target.value);
+                        setCurrentMatchIndex(0);
+                      }}
+                      className="h-8 text-sm"
+                      data-testid="input-find-query"
+                    />
+                    <Input
+                      type="text"
+                      placeholder="Replace..."
+                      value={replaceQuery}
+                      onChange={(e) => setReplaceQuery(e.target.value)}
+                      className="h-8 text-sm"
+                      data-testid="input-replace-query"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowFindReplace(false)}
+                    data-testid="button-close-find-replace"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handlePreviousMatch}
+                        disabled={matchCount === 0}
+                        data-testid="button-previous-match"
+                      >
+                        <ChevronUp className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleNextMatch}
+                        disabled={matchCount === 0}
+                        data-testid="button-next-match"
+                      >
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {matchCount > 0 ? `${currentMatchIndex + 1} of ${matchCount}` : 'No matches'}
+                      </span>
+                    </div>
+                    <Separator orientation="vertical" className="h-4" />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCaseSensitive(!caseSensitive)}
+                      className={caseSensitive ? 'bg-accent' : ''}
+                      data-testid="button-case-sensitive"
+                      title="Case sensitive"
+                    >
+                      Aa
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleReplace}
+                      disabled={matchCount === 0}
+                      data-testid="button-replace"
+                    >
+                      Replace
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleReplaceAll}
+                      disabled={matchCount === 0}
+                      data-testid="button-replace-all"
+                    >
+                      Replace All
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Editor Area with Highlights */}
+            <div className="flex-1 p-3 relative">
+              {/* Highlight overlay */}
+              {findQuery && matches.length > 0 && (
+                <div 
+                  ref={(el) => setHighlightRef(el)}
+                  className="absolute inset-3 pointer-events-none overflow-auto whitespace-pre-wrap break-words font-mono text-sm"
+                  style={{
+                    lineHeight: '1.5',
+                    padding: '0.5rem 0.75rem',
+                    color: 'transparent',
+                    userSelect: 'none',
+                  }}
+                  data-testid="highlight-overlay"
+                >
+                  {(() => {
+                    let lastIndex = 0;
+                    const parts: React.ReactNode[] = [];
+                    
+                    matches.forEach((matchIndex, idx) => {
+                      // Add text before match
+                      if (matchIndex > lastIndex) {
+                        parts.push(
+                          <span key={`text-${idx}`}>
+                            {content.substring(lastIndex, matchIndex)}
+                          </span>
+                        );
+                      }
+                      
+                      // Add highlighted match
+                      const isCurrentMatch = idx === currentMatchIndex;
+                      parts.push(
+                        <mark
+                          key={`match-${idx}`}
+                          className={isCurrentMatch ? 'bg-yellow-400 dark:bg-yellow-600' : 'bg-yellow-200 dark:bg-yellow-800'}
+                          style={{ color: 'transparent' }}
+                        >
+                          {content.substring(matchIndex, matchIndex + findQuery.length)}
+                        </mark>
+                      );
+                      
+                      lastIndex = matchIndex + findQuery.length;
+                    });
+                    
+                    // Add remaining text
+                    if (lastIndex < content.length) {
+                      parts.push(
+                        <span key="text-end">
+                          {content.substring(lastIndex)}
+                        </span>
+                      );
+                    }
+                    
+                    return parts;
+                  })()}
+                </div>
+              )}
+              
+              {/* Textarea */}
               <Textarea
+                ref={(el) => setTextareaRef(el)}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className="w-full h-full resize-none font-mono text-sm"
+                onScroll={handleTextareaScroll}
+                className="w-full h-full resize-none font-mono text-sm relative bg-transparent"
+                style={{
+                  caretColor: 'auto',
+                  color: 'inherit',
+                }}
                 placeholder={
                   editorMode === 'file'
                     ? "Edit KB file content..."
