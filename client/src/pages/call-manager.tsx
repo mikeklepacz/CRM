@@ -502,8 +502,8 @@ function KBLibraryTab() {
   const version1 = versions.find((v: any) => v.id === selectedVersionsForDiff[0]);
   const version2 = versions.find((v: any) => v.id === selectedVersionsForDiff[1]);
 
-  // Render split-screen layout
-  if (splitScreenMode && selectedProposal && isDiffDialogOpen) {
+  // Render split-screen layout (when split mode enabled and proposal selected)
+  if (splitScreenMode && selectedProposal) {
     return (
       <div className="flex gap-4 h-full">
         {/* Left: KB Library (50%) */}
@@ -1014,8 +1014,8 @@ function KBLibraryTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Proposal Diff Viewer Dialog */}
-      <Dialog open={isDiffDialogOpen} onOpenChange={setIsDiffDialogOpen}>
+      {/* Proposal Diff Viewer Dialog (only shown when NOT in split-screen mode) */}
+      <Dialog open={!splitScreenMode && isDiffDialogOpen} onOpenChange={setIsDiffDialogOpen}>
         <DialogContent className="max-w-[95vw] max-h-[95vh]" data-testid="dialog-proposal-diff">
           <DialogHeader>
             <DialogTitle data-testid="text-diff-dialog-title">Review Proposed Changes</DialogTitle>
