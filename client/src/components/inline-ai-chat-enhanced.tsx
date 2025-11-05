@@ -926,13 +926,9 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
           title: "Default Script Loaded", 
           description: `"${defaultScript.title}" ready for your call` 
         });
-      } else if (!defaultScript) {
-        toast({ 
-          title: "No Default Script", 
-          description: "Set a default script in the Template Builder",
-          variant: "destructive"
-        });
       }
+      // Always update trigger to prevent repeated checks if no default script exists
+      setLastLoadTrigger(loadDefaultScriptTrigger);
     }
   }, [loadDefaultScriptTrigger, templates, storeContext, lastLoadTrigger]);
 
