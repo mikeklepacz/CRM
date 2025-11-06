@@ -2332,6 +2332,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get call history with enriched data for Call History tab
+  app.get('/api/call-history-enriched', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin' && !user?.hasVoiceAccess) {
+        return res.status(403).json({ error: 'Voice calling access required' });
+      }
+
+      const { 
+        startDate, 
+        endDate, 
+        status, 
+        agentId, 
+        campaignId,
+        search,
+        limit = 50, 
+        offset = 0 
+      } = req.query;
+
+      // Build filters
+      const filters: any = {};
+      
+      if (startDate) {
+        filters.startDate = new Date(startDate as string);
+      }
+      if (endDate) {
+        filters.endDate = new Date(endDate as string);
+      }
+      if (status) {
+        filters.status = status;
+      }
+      if (agentId && agentId !== 'all') {
+        filters.agentId = agentId;
+      }
+      if (campaignId) {
+        filters.campaignId = campaignId;
+      }
+
+      // Get call sessions with filters
+      const sessions = await storage.getCallSessions(filters, {
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      });
+
+      // Enrich each session with client and campaign data
+      const enrichedSessions = await Promise.all(sessions.map(async (session: any) => {
+        let client = null;
+        let campaign = null;
+        let campaignName = null;
+
+        // Get client data if available
+        if (session.clientId) {
+          try {
+            client = await storage.getClient(session.clientId);
+          } catch (e) {
+            console.warn(`Could not fetch client ${session.clientId}:`, e);
+          }
+        }
+
+        // Get campaign data by finding campaign target
+        try {
+          const targets = await storage.getCallTargetsBySession(session.conversationId);
+          if (targets && targets.length > 0) {
+            const target = targets[0];
+            if (target.campaignId) {
+              campaign = await storage.getCallCampaign(target.campaignId);
+              campaignName = campaign?.name || null;
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not fetch campaign for session ${session.conversationId}:`, e);
+        }
+
+        // Get agent name
+        let agentName = 'Unknown';
+        if (session.agentId) {
+          try {
+            const agent = await storage.getElevenLabsAgent(session.agentId);
+            agentName = agent?.name || 'Unknown';
+          } catch (e) {
+            console.warn(`Could not fetch agent ${session.agentId}:`, e);
+          }
+        }
+
+        return {
+          ...session,
+          clientData: client?.data || null,
+          storeName: client?.data?.Name || client?.data?.name || 'Unknown',
+          storeLink: client?.uniqueIdentifier || null,
+          campaignName,
+          campaignScenario: campaign?.scenario || session.scenario || 'unknown',
+          agentName,
+        };
+      }));
+
+      // Apply search filter on enriched data if provided
+      let filteredSessions = enrichedSessions;
+      if (search && typeof search === 'string' && search.trim()) {
+        const searchLower = search.toLowerCase().trim();
+        filteredSessions = enrichedSessions.filter((session: any) => {
+          return (
+            session.storeName?.toLowerCase().includes(searchLower) ||
+            session.phoneNumber?.toLowerCase().includes(searchLower) ||
+            session.pocName?.toLowerCase().includes(searchLower)
+          );
+        });
+      }
+
+      res.json({
+        sessions: filteredSessions,
+        total: filteredSessions.length,
+      });
+    } catch (error: any) {
+      console.error('Error fetching enriched call history:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // ===== UNIFIED CALLING CENTER ENDPOINTS =====
   
   // Get eligible stores for calling based on scenario

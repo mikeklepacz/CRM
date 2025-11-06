@@ -412,6 +412,7 @@ export interface IStorage {
   createCallCampaignTarget(target: InsertCallCampaignTarget): Promise<CallCampaignTarget>;
   getCallCampaignTarget(id: string): Promise<CallCampaignTarget | undefined>;
   getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]>;
+  getCallTargetsBySession(conversationId: string): Promise<CallCampaignTarget[]>;
   getCallTargetsReadyForCalling(): Promise<CallCampaignTarget[]>;
   updateCallCampaignTarget(id: string, updates: Partial<InsertCallCampaignTarget>): Promise<CallCampaignTarget>;
   incrementCampaignCalls(campaignId: string, type: 'successful' | 'failed'): Promise<void>;
@@ -2315,6 +2316,11 @@ export class DatabaseStorage implements IStorage {
   async getCallCampaignTargets(campaignId: string): Promise<CallCampaignTarget[]> {
     return await db.select().from(callCampaignTargets)
       .where(eq(callCampaignTargets.campaignId, campaignId));
+  }
+
+  async getCallTargetsBySession(conversationId: string): Promise<CallCampaignTarget[]> {
+    return await db.select().from(callCampaignTargets)
+      .where(eq(callCampaignTargets.externalConversationId, conversationId));
   }
 
   async getCallTargetsReadyForCalling(): Promise<CallCampaignTarget[]> {

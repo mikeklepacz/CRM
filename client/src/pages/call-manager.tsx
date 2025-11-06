@@ -118,6 +118,23 @@ interface CallAnalyticsData {
 
 type CallScenario = 'cold_calls' | 'follow_ups' | 'recovery';
 
+interface CallHistoryComplete {
+  id: string;
+  conversationId: string;
+  callDateTime: string;
+  storeName: string;
+  link: string;
+  shippingAddress?: string;
+  pocEmail?: string;
+  pocName?: string;
+  campaign: string;
+  agentId: string;
+  status: string;
+  durationSecs: number;
+  interestLevel: 'hot' | 'warm' | 'cold' | 'not-interested' | null;
+  clientData?: any;
+}
+
 // KB Library Tab Component
 function KBLibraryTab() {
   const { toast } = useToast();
@@ -1227,6 +1244,17 @@ export default function CallManager() {
   const [analyticsInterestFilter, setAnalyticsInterestFilter] = useState<string>("all");
   const [syncingCalls, setSyncingCalls] = useState(false);
 
+  // Call History filters and pagination
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyStartDate, setHistoryStartDate] = useState<string>("");
+  const [historyEndDate, setHistoryEndDate] = useState<string>("");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<string>("all");
+  const [historyCampaignFilter, setHistoryCampaignFilter] = useState<string>("all");
+  const [historyAgentFilter, setHistoryAgentFilter] = useState<string>("all");
+  const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
+  const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
+  const [selectedStoreForDialog, setSelectedStoreForDialog] = useState<any>(null);
+
   // Clear selections when scenario changes
   useEffect(() => {
     setSelectedStores(new Set());
@@ -1920,6 +1948,7 @@ export default function CallManager() {
           <TabsList>
             <TabsTrigger value="voice-hub" data-testid="tab-voice-hub">Voice Hub</TabsTrigger>
             <TabsTrigger value="ai-analytics" data-testid="tab-ai-analytics">AI Call Analytics</TabsTrigger>
+            <TabsTrigger value="call-history" data-testid="tab-call-history">Call History</TabsTrigger>
             {user?.role === 'admin' && (
               <>
                 <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
@@ -3395,6 +3424,351 @@ export default function CallManager() {
               <KBLibraryTab />
             </TabsContent>
           )}
+
+          {/* Call History Tab */}
+          <TabsContent value="call-history" className="space-y-6">
+            <Card data-testid="card-call-history">
+              <CardHeader>
+                <CardTitle>Complete Call History</CardTitle>
+                <CardDescription>
+                  Chronological list of all ElevenLabs calls with store details, status, and extracted data
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {/* Date Range */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Start Date</Label>
+                    <Input
+                      type="date"
+                      value={historyStartDate}
+                      onChange={(e) => {
+                        setHistoryStartDate(e.target.value);
+                        setHistoryPage(1);
+                      }}
+                      className="h-8 text-xs"
+                      data-testid="input-history-start-date"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">End Date</Label>
+                    <Input
+                      type="date"
+                      value={historyEndDate}
+                      onChange={(e) => {
+                        setHistoryEndDate(e.target.value);
+                        setHistoryPage(1);
+                      }}
+                      className="h-8 text-xs"
+                      data-testid="input-history-end-date"
+                    />
+                  </div>
+
+                  {/* Status Filter */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Status</Label>
+                    <Select value={historyStatusFilter} onValueChange={(value) => { setHistoryStatusFilter(value); setHistoryPage(1); }}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-history-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="failed">Failed</SelectItem>
+                        <SelectItem value="call-ended-by-assistant">Ended by Assistant</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Campaign Filter */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Campaign</Label>
+                    <Select value={historyCampaignFilter} onValueChange={(value) => { setHistoryCampaignFilter(value); setHistoryPage(1); }}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-history-campaign">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="cold_calls">Cold Calls</SelectItem>
+                        <SelectItem value="follow_ups">Follow-Ups</SelectItem>
+                        <SelectItem value="recovery">Recovery</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Agent Filter */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Agent ID</Label>
+                    <Select value={historyAgentFilter} onValueChange={(value) => { setHistoryAgentFilter(value); setHistoryPage(1); }}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-history-agent">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {agents.map((agent) => (
+                          <SelectItem key={agent.agent_id} value={agent.agent_id}>
+                            {agent.name} ({agent.agent_id.slice(0, 8)})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Search Input */}
+                <div className="w-full md:w-96">
+                  <Input
+                    placeholder="Search store name, POC name, or agent ID..."
+                    value={historySearchQuery}
+                    onChange={(e) => {
+                      setHistorySearchQuery(e.target.value);
+                      setHistoryPage(1);
+                    }}
+                    className="h-8 text-xs"
+                    data-testid="input-history-search"
+                  />
+                </div>
+
+                {/* Table */}
+                {(() => {
+                  // Transform analytics data into call history format
+                  const transformedData: CallHistoryComplete[] = (analyticsData?.calls || []).map((call) => {
+                    const clientData = call.client.data || {};
+                    const storeSnapshot = call.session.storeSnapshot || {};
+                    
+                    return {
+                      id: call.session.id,
+                      conversationId: call.session.conversationId,
+                      callDateTime: call.session.startedAt,
+                      storeName: clientData.business_name || clientData.businessName || storeSnapshot.business_name || 'Unknown Store',
+                      link: call.client.uniqueIdentifier || clientData.link || '',
+                      shippingAddress: clientData.shipping_address || storeSnapshot.shipping_address,
+                      pocEmail: clientData.poc_email || storeSnapshot.poc_email,
+                      pocName: clientData.poc_name || storeSnapshot.poc_name,
+                      campaign: clientData.scenario || storeSnapshot.scenario || 'cold_calls',
+                      agentId: call.session.agentId,
+                      status: call.session.status,
+                      durationSecs: call.session.callDurationSecs || 0,
+                      interestLevel: call.session.interestLevel,
+                      clientData: call.client,
+                    };
+                  });
+
+                  // Apply filters
+                  const filteredData = transformedData.filter((row) => {
+                    // Date range filter
+                    if (historyStartDate && new Date(row.callDateTime) < new Date(historyStartDate)) return false;
+                    if (historyEndDate && new Date(row.callDateTime) > new Date(historyEndDate + 'T23:59:59')) return false;
+
+                    // Status filter
+                    if (historyStatusFilter !== 'all' && row.status !== historyStatusFilter) return false;
+
+                    // Campaign filter
+                    if (historyCampaignFilter !== 'all' && row.campaign !== historyCampaignFilter) return false;
+
+                    // Agent filter
+                    if (historyAgentFilter !== 'all' && row.agentId !== historyAgentFilter) return false;
+
+                    // Search query
+                    if (historySearchQuery) {
+                      const query = historySearchQuery.toLowerCase();
+                      const matchesStore = row.storeName.toLowerCase().includes(query);
+                      const matchesPOC = row.pocName?.toLowerCase().includes(query);
+                      const matchesAgent = row.agentId.toLowerCase().includes(query);
+                      if (!matchesStore && !matchesPOC && !matchesAgent) return false;
+                    }
+
+                    return true;
+                  });
+
+                  // Sort by date descending (most recent first)
+                  const sortedData = [...filteredData].sort((a, b) => 
+                    new Date(b.callDateTime).getTime() - new Date(a.callDateTime).getTime()
+                  );
+
+                  // Pagination
+                  const itemsPerPage = 20;
+                  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+                  const paginatedData = sortedData.slice(
+                    (historyPage - 1) * itemsPerPage,
+                    historyPage * itemsPerPage
+                  );
+
+                  // Format date helper
+                  const formatDate = (dateString: string) => {
+                    const date = new Date(dateString);
+                    const month = date.toLocaleString('en-US', { month: 'short' });
+                    const day = date.getDate();
+                    const time = date.toLocaleString('en-US', { 
+                      hour: 'numeric', 
+                      minute: '2-digit',
+                      hour12: true 
+                    });
+                    return `${month} ${day}, ${time}`;
+                  };
+
+                  // Format duration helper
+                  const formatDuration = (secs: number) => {
+                    const mins = Math.floor(secs / 60);
+                    const remainingSecs = secs % 60;
+                    return `${mins}m ${remainingSecs}s`;
+                  };
+
+                  // Get interest level badge variant
+                  const getInterestBadgeVariant = (level: string | null) => {
+                    if (!level) return 'secondary';
+                    if (level === 'hot') return 'default';
+                    if (level === 'warm') return 'secondary';
+                    return 'outline';
+                  };
+
+                  // Get interest level label
+                  const getInterestLabel = (level: string | null) => {
+                    if (!level) return 'None';
+                    if (level === 'hot') return 'High';
+                    if (level === 'warm') return 'Medium';
+                    if (level === 'cold') return 'Low';
+                    if (level === 'not-interested') return 'None';
+                    return level;
+                  };
+
+                  // Get status badge variant
+                  const getStatusBadgeVariant = (status: string) => {
+                    if (status === 'completed') return 'default';
+                    if (status === 'failed') return 'destructive';
+                    return 'secondary';
+                  };
+
+                  // Get campaign label
+                  const getCampaignLabel = (campaign: string) => {
+                    if (campaign === 'cold_calls') return 'Cold Calls';
+                    if (campaign === 'follow_ups') return 'Follow-Ups';
+                    if (campaign === 'recovery') return 'Recovery';
+                    return campaign;
+                  };
+
+                  return (
+                    <>
+                      {analyticsLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : sortedData.length === 0 ? (
+                        <div className="text-center py-12 text-sm text-muted-foreground">
+                          No call history found. Try adjusting your filters.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="border rounded-md">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="hover:bg-transparent">
+                                  <TableHead className="text-xs px-2 py-1">Date & Time</TableHead>
+                                  <TableHead className="text-xs px-2 py-1">Store</TableHead>
+                                  <TableHead className="text-xs px-2 py-1">Campaign</TableHead>
+                                  <TableHead className="text-xs px-2 py-1">Agent ID</TableHead>
+                                  <TableHead className="text-xs px-2 py-1">Status</TableHead>
+                                  <TableHead className="text-xs px-2 py-1">Duration</TableHead>
+                                  <TableHead className="text-xs px-2 py-1">Interest</TableHead>
+                                  <TableHead className="text-xs px-2 py-1">POC Name</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {paginatedData.map((row, idx) => (
+                                  <TableRow 
+                                    key={row.id} 
+                                    className="hover:bg-muted/50"
+                                    data-testid={`call-history-row-${idx}`}
+                                  >
+                                    <TableCell className="text-xs px-2 py-1.5">
+                                      {formatDate(row.callDateTime)}
+                                    </TableCell>
+                                    <TableCell className="text-xs px-2 py-1.5">
+                                      <button
+                                        onClick={() => {
+                                          setSelectedStoreForDialog({
+                                            link: row.link,
+                                            name: row.storeName,
+                                            shipping_address: row.shippingAddress,
+                                            poc_email: row.pocEmail,
+                                            status: row.status
+                                          });
+                                          setIsStoreDialogOpen(true);
+                                        }}
+                                        className="text-primary hover:underline text-left"
+                                        data-testid={`store-link-${idx}`}
+                                      >
+                                        {row.storeName}
+                                      </button>
+                                    </TableCell>
+                                    <TableCell className="text-xs px-2 py-1.5">
+                                      {getCampaignLabel(row.campaign)}
+                                    </TableCell>
+                                    <TableCell className="text-xs px-2 py-1.5 font-mono">
+                                      {row.agentId.slice(0, 8)}...
+                                    </TableCell>
+                                    <TableCell className="text-xs px-2 py-1.5">
+                                      <Badge variant={getStatusBadgeVariant(row.status)} className="text-xs">
+                                        {row.status}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs px-2 py-1.5">
+                                      {formatDuration(row.durationSecs)}
+                                    </TableCell>
+                                    <TableCell className="text-xs px-2 py-1.5">
+                                      <Badge variant={getInterestBadgeVariant(row.interestLevel)} className="text-xs">
+                                        {getInterestLabel(row.interestLevel)}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs px-2 py-1.5">
+                                      {row.pocName || '-'}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+
+                          {/* Pagination */}
+                          {totalPages > 1 && (
+                            <div className="flex items-center justify-between pt-4">
+                              <div className="text-xs text-muted-foreground">
+                                Showing {((historyPage - 1) * itemsPerPage) + 1} to {Math.min(historyPage * itemsPerPage, sortedData.length)} of {sortedData.length} calls
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                  disabled={historyPage === 1}
+                                  data-testid="button-history-prev"
+                                >
+                                  Previous
+                                </Button>
+                                <div className="text-xs text-muted-foreground">
+                                  Page {historyPage} of {totalPages}
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                                  disabled={historyPage === totalPages}
+                                  data-testid="button-history-next"
+                                >
+                                  Next
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -3457,6 +3831,63 @@ export default function CallManager() {
               ) : (
                 'Delete Call'
               )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Store Details Dialog */}
+      <Dialog open={isStoreDialogOpen} onOpenChange={setIsStoreDialogOpen}>
+        <DialogContent data-testid="dialog-store-details">
+          <DialogHeader>
+            <DialogTitle>Store Details</DialogTitle>
+          </DialogHeader>
+          {selectedStoreForDialog && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium">Store Name</Label>
+                <p className="text-sm text-muted-foreground mt-1">{selectedStoreForDialog.name}</p>
+              </div>
+              {selectedStoreForDialog.link && (
+                <div>
+                  <Label className="text-sm font-medium">Leafly Link</Label>
+                  <a 
+                    href={selectedStoreForDialog.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline mt-1 block"
+                  >
+                    {selectedStoreForDialog.link}
+                  </a>
+                </div>
+              )}
+              {selectedStoreForDialog.shipping_address && (
+                <div>
+                  <Label className="text-sm font-medium">Address</Label>
+                  <p className="text-sm text-muted-foreground mt-1">{selectedStoreForDialog.shipping_address}</p>
+                </div>
+              )}
+              {selectedStoreForDialog.poc_email && (
+                <div>
+                  <Label className="text-sm font-medium">POC Email</Label>
+                  <p className="text-sm text-muted-foreground mt-1">{selectedStoreForDialog.poc_email}</p>
+                </div>
+              )}
+              {selectedStoreForDialog.status && (
+                <div>
+                  <Label className="text-sm font-medium">Status</Label>
+                  <p className="text-sm text-muted-foreground mt-1 capitalize">{selectedStoreForDialog.status}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsStoreDialogOpen(false)}
+              data-testid="button-close-store-dialog"
+            >
+              Close
             </Button>
           </div>
         </DialogContent>
