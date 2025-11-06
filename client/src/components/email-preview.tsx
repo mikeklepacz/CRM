@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, ExternalLink, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 
 interface EmailPreviewProps {
@@ -15,7 +14,6 @@ interface EmailPreviewProps {
 
 export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const [isCreatingDraft, setIsCreatingDraft] = useState(false);
 
   // Fetch Gmail connection status
@@ -26,8 +24,15 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
     queryKey: ["/api/integrations/status"],
   });
 
+  // Fetch user data directly to ensure we get the latest email preference
+  const { data: userData } = useQuery<{
+    emailPreference?: string;
+  }>({
+    queryKey: ["/api/auth/user"],
+  });
+
   // Get user's email preference (default to mailto)
-  const emailPreference = (user as any)?.emailPreference || 'mailto';
+  const emailPreference = userData?.emailPreference || 'mailto';
   const gmailConnected = integrationStatus?.googleCalendarConnected || false;
 
   const handleCreateDraft = async () => {
