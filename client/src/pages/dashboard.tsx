@@ -254,7 +254,7 @@ export default function Dashboard() {
   return (
     <div className="h-[calc(100vh-4rem)] flex">
       {/* Left Column - Main Dashboard Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-y-auto">
         <div className="flex-shrink-0 px-4 py-6 space-y-6">
           <div>
             <h2 className="text-2xl font-semibold text-foreground">My Dashboard</h2>
@@ -441,8 +441,8 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Scrollable Clients Table */}
-        <div className="flex-1 overflow-auto px-4">
+        {/* Clients Table */}
+        <div className="flex-shrink-0 px-4 pb-6">
           <ClientsTable
             clients={filteredClients}
             currentUser={user}
