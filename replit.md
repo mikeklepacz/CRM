@@ -69,7 +69,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Webhook Enhancement**: Updated ElevenLabs webhook handler to:
   - Process extracted_data from analysis.extracted_data in post_call_transcription webhooks
   - Save all 19 extracted fields to call_sessions table in PostgreSQL
-  - Auto-sync POC data (name, email, phone, title) to Store Database Google Sheet when extracted
+  - Auto-sync POC data to Google Sheets: name/email/phone → Store Database, title → Commission Tracker Column T
   - Handle all 3 webhook types: call_initiation_failure, post_call_audio, post_call_transcription
   - Update campaign target status based on webhook events
 
@@ -79,9 +79,10 @@ The application is built around a client dashboard unifying data from "Store Dat
   - Instructions for configuring in ElevenLabs agent settings
 
 ### Manual Setup Required
-- **Store Database Google Sheet**: Add "POC Title" column at Column U (after POC Phone column)
+- **Commission Tracker Google Sheet**: Add "POC Title" column at Column T
   - This column will be automatically populated from call data extraction
   - Header name must be exactly "POC Title" (case-insensitive matching)
+  - System will match rows by Link and update POC Title when extracted from calls
 
 ## Deferred Features (Future Phases)
 

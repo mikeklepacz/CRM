@@ -1884,25 +1884,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[Data Extraction] ✅ Saved ${Object.keys(extractedUpdate).length} extracted fields to call_sessions`);
           }
           
-          // UPDATE POC DATA TO GOOGLE SHEETS: If POC data was extracted, update Store Database
+          // UPDATE POC DATA TO GOOGLE SHEETS
           if (clientData.clientId && clientData.storeSnapshot) {
-            const pocUpdates: { columnName: string; value: string }[] = [];
-            
-            if (extractedData.poc_name && extractedData.poc_name !== 'not provided') {
-              pocUpdates.push({ columnName: 'Point of Contact', value: extractedData.poc_name });
-            }
-            if (extractedData.poc_email && extractedData.poc_email !== 'not provided') {
-              pocUpdates.push({ columnName: 'POC EMAIL', value: extractedData.poc_email });
-            }
-            if (extractedData.poc_phone && extractedData.poc_phone !== 'not provided') {
-              pocUpdates.push({ columnName: 'POC Phone', value: extractedData.poc_phone });
-            }
-            if (extractedData.poc_title && extractedData.poc_title !== 'not provided') {
-              pocUpdates.push({ columnName: 'POC Title', value: extractedData.poc_title });
-            }
-            
-            if (pocUpdates.length > 0 && clientData.storeSnapshot.sheetId && clientData.storeSnapshot.rowIndex) {
-              try {
+            try {
+              // Update POC Name, Email, Phone in Store Database
+              const storeDbUpdates: { columnName: string; value: string }[] = [];
+              
+              if (extractedData.poc_name && extractedData.poc_name !== 'not provided') {
+                storeDbUpdates.push({ columnName: 'Point of Contact', value: extractedData.poc_name });
+              }
+              if (extractedData.poc_email && extractedData.poc_email !== 'not provided') {
+                storeDbUpdates.push({ columnName: 'POC EMAIL', value: extractedData.poc_email });
+              }
+              if (extractedData.poc_phone && extractedData.poc_phone !== 'not provided') {
+                storeDbUpdates.push({ columnName: 'POC Phone', value: extractedData.poc_phone });
+              }
+              
+              if (storeDbUpdates.length > 0 && clientData.storeSnapshot.sheetId && clientData.storeSnapshot.rowIndex) {
                 const sheet = await storage.getGoogleSheetById(clientData.storeSnapshot.sheetId);
                 if (sheet) {
                   const { spreadsheetId, sheetName } = sheet;
@@ -1912,23 +1910,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
                   const headers = headerRows[0] || [];
                   
-                  // Update each POC field
-                  for (const update of pocUpdates) {
+                  // Update each POC field in Store Database
+                  for (const update of storeDbUpdates) {
                     const columnIndex = headers.findIndex(h => h.toLowerCase() === update.columnName.toLowerCase());
                     if (columnIndex !== -1) {
                       const columnLetter = columnIndexToLetter(columnIndex);
                       const cellRange = `${sheetName}!${columnLetter}${clientData.storeSnapshot.rowIndex}`;
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[update.value]]);
-                      console.log(`[Data Extraction] ✅ Updated ${update.columnName} in Google Sheets: ${update.value}`);
+                      console.log(`[Data Extraction] ✅ Updated ${update.columnName} in Store Database: ${update.value}`);
                     } else {
-                      console.warn(`[Data Extraction] Column "${update.columnName}" not found in sheet headers`);
+                      console.warn(`[Data Extraction] Column "${update.columnName}" not found in Store Database`);
                     }
                   }
                 }
-              } catch (sheetsError: any) {
-                console.error(`[Data Extraction] Error updating POC data in Google Sheets:`, sheetsError.message);
-                // Don't fail webhook - this is non-critical
               }
+              
+              // Update POC Title in Commission Tracker (Column T)
+              if (extractedData.poc_title && extractedData.poc_title !== 'not provided') {
+                // Get Commission Tracker sheet
+                const sheets = await storage.getAllActiveGoogleSheets();
+                const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+                
+                if (trackerSheet && clientData.clientId) {
+                  const { spreadsheetId, sheetName } = trackerSheet;
+                  
+                  // Read headers to find column index for POC Title
+                  const headerRange = `${sheetName}!1:1`;
+                  const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
+                  const headers = headerRows[0] || [];
+                  
+                  // Find POC Title column (should be Column T)
+                  const pocTitleIndex = headers.findIndex(h => h.toLowerCase() === 'poc title');
+                  
+                  if (pocTitleIndex !== -1) {
+                    // Find the row by Link matching
+                    const trackerDataRange = `${sheetName}!A:T`;
+                    const trackerRows = await googleSheets.readSheetData(spreadsheetId, trackerDataRange);
+                    const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+                    
+                    if (linkIndex !== -1) {
+                      // Find matching row by comparing links
+                      const storeLink = clientData.storeSnapshot?.link || clientData.clientId;
+                      let trackerRowIndex = -1;
+                      
+                      for (let i = 1; i < trackerRows.length; i++) {
+                        const rowLink = trackerRows[i][linkIndex];
+                        if (rowLink && rowLink.toLowerCase().includes(storeLink.toLowerCase())) {
+                          trackerRowIndex = i + 1; // 1-indexed
+                          break;
+                        }
+                      }
+                      
+                      if (trackerRowIndex > 0) {
+                        const columnLetter = columnIndexToLetter(pocTitleIndex);
+                        const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
+                        await googleSheets.writeSheetData(spreadsheetId, cellRange, [[extractedData.poc_title]]);
+                        console.log(`[Data Extraction] ✅ Updated POC Title in Commission Tracker Column T: ${extractedData.poc_title}`);
+                      } else {
+                        console.warn(`[Data Extraction] Could not find matching row in Commission Tracker for link: ${storeLink}`);
+                      }
+                    }
+                  } else {
+                    console.warn(`[Data Extraction] POC Title column not found in Commission Tracker (should be Column T)`);
+                  }
+                }
+              }
+            } catch (sheetsError: any) {
+              console.error(`[Data Extraction] Error updating POC data in Google Sheets:`, sheetsError.message);
+              // Don't fail webhook - this is non-critical
             }
           }
         } catch (extractionError: any) {
