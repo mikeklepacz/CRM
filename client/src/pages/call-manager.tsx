@@ -133,6 +133,7 @@ interface CallHistoryComplete {
   durationSecs: number;
   interestLevel: 'hot' | 'warm' | 'cold' | 'not-interested' | null;
   clientData?: any;
+  storeRow?: any;
 }
 
 // KB Library Tab Component
