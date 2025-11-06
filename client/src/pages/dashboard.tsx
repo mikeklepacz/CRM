@@ -428,6 +428,7 @@ export default function Dashboard() {
                   </SelectContent>
                 </Select>
 
+                {/* HUMAN CALL HISTORY SYSTEM - Opens dialog showing manual phone calls made by agents */}
                 <Button
                   variant="outline"
                   onClick={() => setCallHistoryOpen(true)}
@@ -441,18 +442,18 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Clients Table */}
+        {/* Clients Table - HUMAN CALL HISTORY SYSTEM (For Sales Agents) */}
         <div className="flex-shrink-0 px-4 pb-6">
           <ClientsTable
             clients={filteredClients}
             currentUser={user}
             isLoading={clientsLoading}
-            onRefresh={refetchClients}
-            statusColors={statusColors}
-            statusOptions={statusOptions}
-            onOpenStoreDetails={(row: any, autoCallPhone?: string) => setStoreDetailsDialog({ open: true, row, autoCallPhone })}
-            contextUpdateTrigger={contextUpdateTrigger}
-            loadDefaultScriptTrigger={loadDefaultScriptTrigger}
+            onNotesClick={(clientId: string) => {
+              const client = filteredClients.find(c => c.id === clientId);
+              if (client) {
+                setStoreDetailsDialog({ open: true, row: client });
+              }
+            }}
           />
         </div>
 
@@ -516,6 +517,7 @@ export default function Dashboard() {
                 <WebhookManagement />
               </TabsContent>
 
+              {/* AI CALL HISTORY SYSTEM - Admin-only ElevenLabs AI voice calling (call_sessions table) */}
               <TabsContent value="voice">
                 <VoiceSettings />
               </TabsContent>
@@ -557,13 +559,13 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Call History Dialog */}
+      {/* HUMAN CALL HISTORY SYSTEM - Dialog showing manual calls made by agents (call_history table) */}
       <CallHistoryDialog
         open={callHistoryOpen}
         onOpenChange={setCallHistoryOpen}
       />
 
-      {/* Store Details Dialog */}
+      {/* HUMAN CALL HISTORY SYSTEM - Store Details Dialog where agents log manual calls */}
       {storeDetailsDialog && (
         <StoreDetailsDialog
           open={storeDetailsDialog.open}

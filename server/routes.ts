@@ -1527,7 +1527,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ===== VOICE AI CALLING ENDPOINTS =====
+  // ==================================================================================
+  // AI CALL HISTORY SYSTEM - ElevenLabs AI voice calls (call_sessions table)
+  // Admin-only feature for automated AI outbound calling
+  // NOT for manual agent calls - see /api/call-history routes for human call_history table
+  // ==================================================================================
   
   // Webhook receiver for ElevenLabs post-call transcription
   app.post('/api/elevenlabs/webhook', async (req: any, res) => {
@@ -18209,7 +18213,11 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Call History routes
+  // ==================================================================================
+  // HUMAN CALL HISTORY SYSTEM - Manual calls made by sales agents (call_history table)
+  // Used by: Sales agents clicking phone numbers or Notes/Follow up button
+  // NOT for AI voice calls - see ElevenLabs webhook routes for AI call_sessions table
+  // ==================================================================================
   app.post('/api/call-history', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
