@@ -1048,12 +1048,35 @@ export default function ClientDashboard() {
       };
 
       // Check if we have saved preferences (only on first load)
-      if (userPreferences && !preferencesLoaded) {
+      // Try localStorage first as it's faster, then fall back to database
+      let savedPreferences = null;
+      
+      // First, try localStorage cache
+      try {
+        const cached = localStorage.getItem('crm_table_preferences');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          // Use cached if less than 1 hour old
+          if (parsed.timestamp && Date.now() - parsed.timestamp < 3600000) {
+            savedPreferences = parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load from localStorage:', e);
+      }
+      
+      // If no fresh cache, use database preferences
+      // Only use database if it has actual preference data (not an empty object)
+      if (!savedPreferences && userPreferences && Object.keys(userPreferences).length > 0) {
+        savedPreferences = userPreferences;
+      }
+      
+      if (savedPreferences && !preferencesLoaded) {
         // Load saved preferences if available
-        if (userPreferences.visibleColumns) {
+        if (savedPreferences.visibleColumns) {
           // Merge saved preferences with new headers (in case new columns were added)
           headers.forEach((header: string) => {
-            currentVisible[header] = userPreferences.visibleColumns![header] ?? !shouldHideColumn(header);
+            currentVisible[header] = savedPreferences.visibleColumns![header] ?? !shouldHideColumn(header);
           });
         } else {
           headers.forEach((header: string) => {
@@ -1061,9 +1084,9 @@ export default function ClientDashboard() {
           });
         }
 
-        if (userPreferences.columnOrder && userPreferences.columnOrder.length > 0) {
+        if (savedPreferences.columnOrder && savedPreferences.columnOrder.length > 0) {
           // Use saved column order, adding any new columns at the end
-          const savedOrder = userPreferences.columnOrder.filter((col: string) => headers.includes(col));
+          const savedOrder = savedPreferences.columnOrder.filter((col: string) => headers.includes(col));
           const newColumns = headers.filter((h: string) => !savedOrder.includes(h));
           // Filter out Agent column for non-admin users
           const finalOrder = [...savedOrder, ...newColumns].filter((col: string) =>
@@ -1077,9 +1100,9 @@ export default function ClientDashboard() {
           setColumnOrder(finalOrder);
         }
 
-        if (userPreferences.columnWidths) {
+        if (savedPreferences.columnWidths) {
           headers.forEach((header: string) => {
-            currentWidths[header] = userPreferences.columnWidths![header] || 200;
+            currentWidths[header] = savedPreferences.columnWidths![header] || 200;
           });
         } else {
           headers.forEach((header: string) => {
@@ -1090,37 +1113,37 @@ export default function ClientDashboard() {
         setVisibleColumns(currentVisible);
         setColumnWidths(currentWidths);
 
-        // Load font size and row height preferences
-        if (userPreferences.fontSize) {
+        // Load font size and row height preferences (only from database userPreferences)
+        if (userPreferences?.fontSize) {
           setFontSize(userPreferences.fontSize);
         }
-        if (userPreferences.rowHeight) {
+        if (userPreferences?.rowHeight) {
           setRowHeight(userPreferences.rowHeight);
         }
 
         // Load theme-specific colors from hook (already loaded)
         // Colors are now managed by useCustomTheme hook
 
-        // Load alignment preferences
-        if (userPreferences.textAlign) {
+        // Load alignment preferences (only from database userPreferences)
+        if (userPreferences?.textAlign) {
           setTextAlign(userPreferences.textAlign);
         }
-        if (userPreferences.verticalAlign) {
+        if (userPreferences?.verticalAlign) {
           setVerticalAlign(userPreferences.verticalAlign);
         }
 
         // Status options are now managed by useCustomTheme hook
         // colorRowByStatus and colorPresets are now managed by useCustomTheme hook
-        if (userPreferences.freezeFirstColumn !== undefined) {
+        if (userPreferences?.freezeFirstColumn !== undefined) {
           setFreezeFirstColumn(userPreferences.freezeFirstColumn);
         }
-        if (userPreferences.showMyStoresOnly !== undefined) {
+        if (userPreferences?.showMyStoresOnly !== undefined) {
           setShowMyStoresOnly(userPreferences.showMyStoresOnly);
         }
-        if (userPreferences.showUnclaimedOnly !== undefined) {
+        if (userPreferences && 'showUnclaimedOnly' in userPreferences && userPreferences.showUnclaimedOnly !== undefined) {
           setShowUnclaimedOnly(userPreferences.showUnclaimedOnly);
         }
-        if (userPreferences.viewAsAgent !== undefined) {
+        if (userPreferences?.viewAsAgent !== undefined) {
           setViewAsAgent(userPreferences.viewAsAgent);
         }
 
@@ -1550,7 +1573,8 @@ export default function ClientDashboard() {
 
     const timeoutId = setTimeout(async () => {
       try {
-        await apiRequest('PUT', '/api/user/preferences', {
+        // Database preferences (no timestamp)
+        const dbPrefs = {
           visibleColumns,
           columnOrder,
           columnWidths,
@@ -1567,7 +1591,22 @@ export default function ClientDashboard() {
           showUnclaimedOnly, // Save Show Unclaimed Only preference
           colorRowByStatus: userPreferences?.colorRowByStatus, // Preserve colorRowByStatus state
           // Note: Colors are saved separately via useCustomTheme
-        });
+        };
+        
+        // Save to database (primary storage) - WITHOUT timestamp
+        await apiRequest('PUT', '/api/user/preferences', dbPrefs);
+        
+        // Also save to localStorage as backup/cache for faster loading - WITH timestamp
+        try {
+          localStorage.setItem('crm_table_preferences', JSON.stringify({
+            visibleColumns,
+            columnOrder,
+            columnWidths,
+            timestamp: Date.now(), // Only for localStorage cache validation
+          }));
+        } catch (e) {
+          console.warn('Failed to save to localStorage:', e);
+        }
       } catch (error) {
         console.error('Failed to save preferences:', error);
       }
@@ -1628,6 +1667,54 @@ export default function ClientDashboard() {
 
   const clearAllStates = () => {
     setSelectedStates(new Set());
+  };
+
+  // Auto-fit all columns to content
+  const autoFitColumns = () => {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const newWidths: Record<string, number> = {};
+    context.font = `${fontSize}px system-ui, -apple-system, sans-serif`;
+
+    visibleHeaders.forEach((header: string) => {
+      // Measure header text with extra padding for sort icons and column actions
+      const headerWidth = context.measureText(header).width + 100; // Increased for sort icon, resize handle, padding
+      
+      // Measure content of visible rows
+      const contentWidths = filteredData.slice(0, 100).map((row: any) => { // Sample first 100 rows for performance
+        const value = String(row[header] || '');
+        let baseWidth = context.measureText(value).width;
+        
+        // Add extra padding for different column types
+        const isEditableColumn = editableColumns.some((col: string) => col.toLowerCase() === header.toLowerCase());
+        const isLinkColumn = header.toLowerCase() === 'link';
+        const isStatusColumn = header.toLowerCase().includes('status');
+        
+        // Account for icons, badges, and action buttons
+        if (isLinkColumn) {
+          baseWidth += 60; // Extra space for link icon
+        } else if (isStatusColumn) {
+          baseWidth += 40; // Extra space for status badge padding
+        } else if (isEditableColumn) {
+          baseWidth += 30; // Extra space for edit indicator
+        }
+        
+        return baseWidth + 50; // Base padding for cell padding and borders
+      });
+
+      // Use the max of header width and content widths, with min 100px and max 600px
+      const maxContentWidth = Math.max(...contentWidths, 0);
+      const optimalWidth = Math.max(100, Math.min(600, Math.max(headerWidth, maxContentWidth)));
+      newWidths[header] = Math.ceil(optimalWidth);
+    });
+
+    setColumnWidths(newWidths);
+    toast({
+      title: "Columns Auto-fitted",
+      description: "Column widths adjusted to fit content",
+    });
   };
 
   const handleCellEdit = (row: any, column: string, value: string) => {
@@ -2678,27 +2765,38 @@ export default function ClientDashboard() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="font-medium">Manage Columns</h4>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const hiddenColumns = ['title', 'error'];
-                            const newVisibleColumns: Record<string, boolean> = {};
-                            headers.forEach((header: string) => {
-                              newVisibleColumns[header] = !hiddenColumns.includes(header.toLowerCase());
-                            });
-                            setVisibleColumns(newVisibleColumns);
-                            setColumnOrder(headers);
-                            toast({
-                              title: "Columns Reset",
-                              description: "All columns are now visible in their original order",
-                            });
-                          }}
-                          data-testid="button-reset-columns"
-                        >
-                          <RotateCcw className="mr-2 h-3 w-3" />
-                          Reset
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={autoFitColumns}
+                            data-testid="button-autofit-columns"
+                          >
+                            <Maximize2 className="mr-2 h-3 w-3" />
+                            Auto-fit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const hiddenColumns = ['title', 'error'];
+                              const newVisibleColumns: Record<string, boolean> = {};
+                              headers.forEach((header: string) => {
+                                newVisibleColumns[header] = !hiddenColumns.includes(header.toLowerCase());
+                              });
+                              setVisibleColumns(newVisibleColumns);
+                              setColumnOrder(headers);
+                              toast({
+                                title: "Columns Reset",
+                                description: "All columns are now visible in their original order",
+                              });
+                            }}
+                            data-testid="button-reset-columns"
+                          >
+                            <RotateCcw className="mr-2 h-3 w-3" />
+                            Reset
+                          </Button>
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground">Show/hide and reorder columns (doesn't affect Google Sheets)</p>
                       <ScrollArea className="h-72">
