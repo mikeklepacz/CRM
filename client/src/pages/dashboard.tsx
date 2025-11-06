@@ -572,11 +572,14 @@ export default function Dashboard() {
           onOpenChange={(open) => setStoreDetailsDialog(open ? storeDetailsDialog : null)}
           row={storeDetailsDialog.row}
           trackerSheetId={trackerSheet?.id}
-          storeDbSheetId={storeDbSheet?.id}
-          onUpdate={() => {
-            refetchClients();
-            setContextUpdateTrigger(prev => prev + 1);
-          }}
+          storeSheetId={storeDbSheet?.id}
+          refetch={refetchClients}
+          currentColors={currentColors}
+          statusOptions={statusOptions}
+          statusColors={statusColors}
+          contextUpdateTrigger={contextUpdateTrigger}
+          setContextUpdateTrigger={setContextUpdateTrigger}
+          loadDefaultScriptTrigger={loadDefaultScriptTrigger}
         />
       )}
     </div>
