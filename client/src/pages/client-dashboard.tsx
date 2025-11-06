@@ -3426,7 +3426,7 @@ export default function ClientDashboard() {
                                           )
                                         )
                                       ) : (
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2" style={{ justifyContent: textAlign === 'center' ? 'center' : textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
                                           {isPhoneColumn && cellValue ? (
                                             <a
                                               href={`tel:${cellValue}`}
@@ -3451,11 +3451,11 @@ export default function ClientDashboard() {
                                                   setLoadDefaultScriptTrigger(prev => prev + 1);
                                                 }
                                               }}
-                                              className="flex items-center gap-1 hover:underline"
+                                              className="flex items-center gap-1 hover:underline flex-shrink-0"
                                               style={{ color: customColors.primary }}
                                               data-testid={`link-phone-${rowKey}-${header}`}
                                             >
-                                              <Phone className="h-4 w-4" />
+                                              <Phone className="h-4 w-4 flex-shrink-0" />
                                               <span>{displayValue}</span>
                                             </a>
                                           ) : isEmailColumn && cellValue ? (
@@ -3468,11 +3468,11 @@ export default function ClientDashboard() {
                                                   allLocations: selectedFranchise.locations
                                                 } : undefined
                                               })}
-                                              className="flex items-center gap-1 hover:underline"
+                                              className="flex items-center gap-1 hover:underline flex-shrink-0"
                                               style={{ color: customColors.primary }}
                                               data-testid={`link-email-${rowKey}-${header}`}
                                             >
-                                              <Mail className="h-4 w-4" />
+                                              <Mail className="h-4 w-4 flex-shrink-0" />
                                               <span>{displayValue}</span>
                                             </button>
                                           ) : isSalesSummaryColumn && cellValue ? (
@@ -3505,11 +3505,11 @@ export default function ClientDashboard() {
                                               href={cellValue.startsWith('http') ? cellValue : `https://${cellValue}`}
                                               target="_blank"
                                               rel="noopener noreferrer"
-                                              className="flex items-center gap-1 hover:underline"
+                                              className="flex items-center gap-1 hover:underline flex-shrink-0"
                                               style={{ color: customColors.primary }}
                                               data-testid={`link-website-${rowKey}-${header}`}
                                             >
-                                              <ExternalLink className="h-4 w-4" />
+                                              <ExternalLink className="h-4 w-4 flex-shrink-0" />
                                               <span>{extractDomain(cellValue)}</span>
                                             </a>
                                           ) : isLinkColumn && cellValue ? (
