@@ -1556,11 +1556,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn('⚠️  No webhook secret configured - skipping signature validation');
       }
 
-      // Verify webhook type
-      if (payload.type !== 'post_call_transcription') {
-        console.log('Ignoring non-transcription webhook');
-        return res.status(200).json({ status: 'ignored', reason: 'Not a transcription webhook' });
+      // Handle different webhook types
+      // ElevenLabs sends 3 webhook types: call_initiation_failure, post_call_audio, post_call_transcription
+      const webhookType = payload.type;
+      
+      if (webhookType === 'call_initiation_failure') {
+        // Handle call initiation failure (e.g., invalid phone number, network error)
+        console.log('[Webhook] Call initiation failure detected');
+        const data = payload.data;
+        const conversationId = data.conversation_id;
+        const clientData = data.conversation_initiation_client_data || {};
+        
+        // Update session status to failed if it exists
+        const session = await storage.getCallSessionByConversationId(conversationId);
+        if (session) {
+          await storage.updateCallSessionByConversationId(conversationId, {
+            status: 'failed',
+            endedAt: new Date(),
+          });
+        }
+        
+        // Update campaign target if applicable
+        if (clientData.campaignTargetId) {
+          const target = await storage.getCallCampaignTarget(clientData.campaignTargetId);
+          if (target && target.targetStatus === 'in-progress') {
+            await storage.updateCallCampaignTarget(clientData.campaignTargetId, {
+              targetStatus: 'failed',
+            });
+            await storage.incrementCampaignCalls(target.campaignId, 'failed');
+            console.log(`[Webhook] Campaign target ${clientData.campaignTargetId} marked as failed due to initiation failure`);
+          }
+        }
+        
+        return res.status(200).json({ status: 'processed', type: 'call_initiation_failure' });
       }
+      
+      if (webhookType === 'post_call_audio') {
+        // Early notification that call ended (before transcription)
+        // We can update status but won't have transcript/analysis yet
+        console.log('[Webhook] Post-call audio received (early notification)');
+        const data = payload.data;
+        const conversationId = data.conversation_id;
+        const metadata = data.metadata || {};
+        
+        const session = await storage.getCallSessionByConversationId(conversationId);
+        if (session) {
+          const endedAt = (metadata.start_time_unix_secs && metadata.call_duration_secs)
+            ? new Date((metadata.start_time_unix_secs + metadata.call_duration_secs) * 1000)
+            : new Date();
+            
+          await storage.updateCallSessionByConversationId(conversationId, {
+            status: 'processing', // Intermediate status while waiting for transcription
+            callDurationSecs: metadata.call_duration_secs || null,
+            costCredits: metadata.cost || null,
+            endedAt,
+          });
+          console.log(`[Webhook] Call ${conversationId} marked as processing (waiting for transcription)`);
+        }
+        
+        return res.status(200).json({ status: 'processed', type: 'post_call_audio' });
+      }
+      
+      if (webhookType !== 'post_call_transcription') {
+        console.log(`[Webhook] Ignoring unknown webhook type: ${webhookType}`);
+        return res.status(200).json({ status: 'ignored', reason: `Unknown webhook type: ${webhookType}` });
+      }
+      
+      // Continue processing post_call_transcription webhook...
 
       const data = payload.data;
       const conversationId = data.conversation_id;
