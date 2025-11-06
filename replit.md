@@ -1,7 +1,7 @@
 # Hemp Wick CRM & Commission Tracker
 
 ## Overview
-This project is a Google Sheets-powered CRM and commission tracking system for hemp wick sales teams. It aims to streamline sales processes, manage client interactions, and accurately track agent commissions. Key capabilities include a dual-sheet system (Store Database and Commission Tracker), inline editing, role-based access control, and automated WooCommerce order syncing for commission calculations. The system provides a unified platform for sales operations, offering insights into team performance and facilitating accurate payout reporting.
+This project is a Google Sheets-powered CRM and commission tracking system designed to streamline sales processes, manage client interactions, and accurately track agent commissions for hemp wick sales teams. It features a dual-sheet system (Store Database and Commission Tracker), inline editing, role-based access control, and automated WooCommerce order syncing. The system provides a unified platform for sales operations, offering insights into team performance and facilitating accurate payout reporting.
 
 ## User Preferences
 - All preferences automatically save to the database and sync across devices.
@@ -22,126 +22,81 @@ The application is built around a client dashboard unifying data from "Store Dat
 **Technical Implementations:**
 - **Authentication**: Replit Auth with 'admin' and 'agent' roles.
 - **Google Sheets Integration**: System-wide Google Sheets OAuth for read/write access.
-- **Per-User Google Services**: Sales agents connect their own Google accounts (Gmail/Calendar) via OAuth for personalized features; tokens are stored securely.
+- **Per-User Google Services**: Sales agents connect their own Google accounts (Gmail/Calendar) for personalized features; tokens are stored securely.
 - **Inline Editing**: Direct modification of cell data in dashboard, syncing to Google Sheets. Agents have read-only access to commission-critical columns.
 - **Row-Level Security**: Agents only see unclaimed stores and their own claimed stores.
 - **WooCommerce Sync**: Fetches orders, matches to stores, calculates commissions, and updates the Commission Tracker, including backfilling historical records.
-- **Referral Commission System**: Single-level tracking (10% of referred agents' monthly commissions); uses ledger approach with separate commission records.
+- **Referral Commission System**: Single-level tracking (10% of referred agents' monthly commissions); uses ledger approach.
 - **Inline Commission Editing**: Admins can edit commission type and amount in WooCommerce sync table with auto-save.
 - **Sales Reports**: Generates PDF commission reports for accountants and agents.
 - **Smart Data Handling**: Auto-detection of emails/phone numbers, auto-population of POC fields, smart date pickers.
-- **Sales Assistant AI**: OpenAI-powered ChatGPT-like assistant with knowledge base integration for sales scripts, product info, and objection handling. Features include:
-    - Dedicated page and slide-out panel access.
-    - Conversation management with projects and shared/personal template libraries.
-    - Context-aware data reading from current store.
-    - Admin-only knowledge base file upload.
-    - Chat history persistence.
-    - Default script system for auto-loading into chat from dashboard actions (e.g., clicking phone numbers).
-    - Distinct styling for script references in chat.
-    - Smart template variables with intelligent fallbacks (e.g., `{{pocEmail}}` falls back to `{{email}}`).
-    - Email generation protocol with explicit priority for POC email, general email, or user confirmation.
-- **Document Browser**: Simplified Google Drive integration for browsing and downloading files:
-    - Admin pastes full Google Drive folder URLs to add folders
-    - System automatically extracts folder ID from any Drive URL format
-    - Real-time file listing directly from Drive API (no local caching)
-    - Folder list on left, file browser on right with thumbnails
-    - Direct downloads and viewing via Drive links
-    - Only stores folder name → Drive folder ID mapping in database
-- **ElevenLabs AI Voice Calling**: Automated outbound AI voice calling system integrated with Call Manager:
-    - Multi-agent support with distinct phone numbers per AI agent
-    - Three calling scenarios: Cold Calls, Follow-Ups, Recovery
-    - Queue management with immediate, scheduled, and auto-scheduling modes
-    - Real-time call status tracking and campaign management
-    - Webhook integration for call events and transcript capture
-    - **Automated Line Detection**: System auto-detects IVR systems and voicemail via DTMF tone analysis in call transcripts
-        * Store Database requires "Automated Line" column (Column S) with TRUE/FALSE values
-        * Campaign-level IVR behavior setting: "Flag & End Call" vs "Flag & Navigate Menu"
-        * Webhook detects 'play_keypad_touch_tone' tool usage → auto-flags store
-        * Queue filtering excludes flagged stores by default
-        * Manual override available in Store Details dialog with info tooltip
-        * Detection method tracked for audit trail (manual vs automated)
-        * **Agent Prompt Override System**: Per-call prompt customization via ElevenLabs conversation_config_override API
-            - Fetches agent's base prompt before each call to preserve sales capabilities
-            - Appends campaign-specific IVR handling instructions dynamically
-            - Flag & End Call: Instructs agent to hang up immediately when detecting IVR/voicemail
-            - Flag & Navigate Menu: Instructs agent to use play_keypad_touch_tone tool to navigate IVR menus
-            - Requires "System prompt" override enabled in agent's Security settings
-            - Reference: https://elevenlabs.io/docs/agents-platform/customization/personalization/overrides
-    - **AI Call Analytics**: Performance metrics dashboard with success rates, average durations, interest level tracking, and call history with full transcripts
-    - **AI Insights (Admin-Only)**: OpenAI-powered analysis of call performance data that identifies:
-        * Common objections raised by prospects with frequency tracking
-        * Success patterns from high-performing calls
-        * Sentiment analysis across all conversations (positive/neutral/negative distribution)
-        * Actionable coaching recommendations for improving AI agent performance
-        * Date range and agent filtering (7 days, 30 days, custom)
-        * PII redaction (phone numbers) before analysis
-        * Limited to 100 calls per analysis to control OpenAI costs
-        * **Unified Analysis Workflow**: Single "Analyze Calls" button chains WIC Coach analysis → Aligner KB analysis → KB proposals
-        * **Auto-Trigger System**: Optional automatic KB analysis when X unanalyzed calls per agent are reached (OFF by default)
-            - Configurable via toggle + threshold input in AI Insights tab
-            - Admin-only preference stored in user_preferences table
-            - Background job in webhook monitors unanalyzed calls and triggers full analysis chain
-            - Default threshold: 10 calls per agent
-- **Self-Evolving Knowledge Base System**: Complete KB management with version control and AI-powered improvements:
-    - **KB Library Tab**: Unified interface in Call Manager with sub-tabs for Files and Proposals
-    - **ElevenLabs Integration**: True bidirectional sync with timestamp-based conflict resolution ("newest wins")
-        * Compares localUpdatedAt vs ElevenLabs modified timestamps
-        * Pushes local changes to ElevenLabs when local version is newer
-        * Pulls remote changes when ElevenLabs version is newer
-        * Never auto-deletes files (logs warnings for manual review)
-        * All local edits (proposal approval, rollback, upload) stamp localUpdatedAt
-        * Three-phase pipeline: discover changes → compare timestamps → execute push/pull operations
-    - **Version Control**: Full audit trail with kb_file_versions table tracking all changes
-    - **Aligner Assistant**: Standalone OpenAI assistant that analyzes AI Insights and proposes KB improvements
-    - **WordPress-Style Diff Review**: Side-by-side comparison UI with custom diff algorithm (no external dependencies)
-    - **Human-in-the-Loop Approval**: Admins review, approve, or reject AI-proposed changes before applying
-    - **Optimistic Locking**: Prevents race conditions during concurrent edits via baseVersionId checks
-    - **Rollback Capability**: Restore any previous version with one click, creating new audit trail entry
-    - **Version Comparison**: Select any two versions to view side-by-side diff
-    - **Filename Immutability**: Database trigger prevents filename changes (ElevenLabs workflow dependency)
-    - **Scoped Security**: Aligner assistant completely isolated from Sales Assistant with defense-in-depth deletion controls
-    - **Google Drive Backup**: Automatic backup of every KB file version to Google Drive folder:
-        * Backup folder configured in drive_folders table ("KB Backups" → folder ID 1FWnNYjs6erCqcFapfhMyxXVIHIMIqwX9)
-        * File naming format: YYYYMMDD-FILENAME-vVERSION.txt (e.g., "20251102-02 Brand Ethos-v3.txt")
-        * Triggered after every version creation: proposal approval, ElevenLabs sync, rollback
-        * Graceful failure handling (non-blocking) - logs error but doesn't fail main operation
-        * Uses system Google OAuth credentials for upload
-    - **Agent-Isolated Analysis System**: Each AI agent (Holly, Michael) has separate KB files and analysis to prevent cross-contamination:
-        * **KB File Types**: Two categories maintained in kb_files table:
-            - General files (agent_id IS NULL): Shared knowledge like "02 Brand Ethos.txt", "03 Sales Playbook.txt" - apply to all agents
-            - Agent-specific files (agent_id = ElevenLabs agent ID): Personalized content like "Holly_Cold_Call_Script.txt" - only for that agent
-        * **Filter Logic**: When analyzing an agent's calls, system includes both general files (agent_id == null, catching both NULL and undefined) AND agent-specific files (agent_id === agentId)
-        * Call sessions track `last_analyzed_at` timestamp to prevent duplicate analysis
-        * Admin selects agent in Aligner UI → system filters for that agent's unanalyzed calls AND relevant KB files (general + agent-specific)
-        * Smart batching: Processes 100 calls per batch when dataset exceeds limits; tracks progress across batches
-        * Baby-steps workflow: Make 5-10 calls → analyze → adjust KB → repeat (never re-analyze same calls)
-        * Full transcript analysis: No character truncation (conversations average 3000-4000 chars); removed 20-call limit from WIC Coach
-        * UI displays friendly agent names via LEFT JOIN with elevenLabsAgents table; "All agents" shown for general files
+- **Sales Assistant AI**: OpenAI-powered ChatGPT-like assistant with knowledge base integration for sales scripts, product info, and objection handling. Features include conversation management, context-aware data reading, admin-only knowledge base file upload, chat history, default script system, and smart template variables.
+- **Document Browser**: Simplified Google Drive integration for browsing and downloading files, supporting any Drive URL format and real-time file listing.
+- **ElevenLabs AI Voice Calling**: Automated outbound AI voice calling with multi-agent support, three calling scenarios (Cold Calls, Follow-Ups, Recovery), queue management, real-time call status, webhook integration for events and transcript capture. Includes automated IVR/voicemail detection, agent prompt override system for IVR handling, and AI call analytics. Comprehensive data extraction from calls via 19 custom placeholders, saving to PostgreSQL and syncing POC data to Google Sheet.
+- **AI Insights (Admin-Only)**: OpenAI-powered analysis of call performance data identifying common objections, success patterns, sentiment, and coaching recommendations. Features PII redaction, limited call processing, and optional auto-trigger for analysis.
+- **Self-Evolving Knowledge Base System**: Complete KB management with version control and AI-powered improvements. Features bidirectional sync with ElevenLabs, full audit trail, Aligner Assistant for proposing KB improvements, WordPress-style diff review, human-in-the-loop approval, optimistic locking, rollback capability, and Google Drive backup of every KB file version. Supports agent-isolated analysis with shared general files and agent-specific files.
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management and preference storage.
 - **Backend**: Express.js and Node.js.
-- **Commission Logic**: 25% for first 6 months post-claim, then 10%. `commissionDate` tracks order date for accurate historical reporting.
+- **Commission Logic**: 25% for first 6 months post-claim, then 10%. `commissionDate` tracks order date.
 - **Unified Status Color System**: Status dropdown and table rows use a single source (`useCustomTheme` hook).
 - **Debug Logging**: Centralized utility (`lib/debug.ts`) for structured logging.
 - **Sales Assistant Architecture**: User's OpenAI API key stored securely. Knowledge base files uploaded to OpenAI, metadata in PostgreSQL. Uses Assistants API with file search.
-- **KB System Architecture**: 
-    - Three tables: kb_files (master), kb_file_versions (audit trail), kb_change_proposals (workflow)
-    - Custom diff algorithm in ProposalDiffViewer component (no external dependencies)
-    - Aligner assistant uses standalone management UI and API routes (/api/aligner/*), completely separate from Sales Assistant (/api/openai/*)
-    - File deletion requires both fileId and assistantId; enforced at storage layer with AND clause in WHERE condition
-    - Proposal workflow uses optimistic locking with baseVersionId checks
-    - Database trigger prevents filename changes (ON UPDATE for kb_files.filename)
-    - Version deletion prevented via ON DELETE RESTRICT foreign key constraint
-- **Database Migrations**: Manual SQL migrations (0001-0010); Drizzle metadata is absent to avoid conflicts.
-- **Google Sheets Write Operations**: All writes use header-based column mapping (read headers, find indices by name, build data dynamically) for robustness against column changes.
+- **KB System Architecture**: Three tables (kb_files, kb_file_versions, kb_change_proposals). Custom diff algorithm. Aligner assistant uses standalone management UI and API routes. Strict security and version control measures.
+- **Database Migrations**: Manual SQL migrations.
+- **Google Sheets Write Operations**: All writes use header-based column mapping for robustness.
 
 ## External Dependencies
 - **Google Sheets API**: For "Store Database" and "Commission Tracker" interaction.
 - **WooCommerce REST API**: For order synchronization and commission calculation.
 - **Replit Auth (OpenID Connect)**: User authentication and role management.
 - **PostgreSQL (Neon)**: Primary database for user data and preferences.
-- **OpenAI API**: For the AI-powered Sales Assistant.
-- **Gmail API**: For creating email drafts from AI-generated content (manual OAuth integration).
-- **Google Calendar API**: Per-user OAuth for creating calendar events from reminders. Handles timezones by storing local datetime + IANA timezone and sending timezone-aware strings to Google Calendar API.
-    - **Webhook Management**: Admin dashboard provides comprehensive interface for Google Calendar push notifications, including status viewing, re-registration (individual/bulk), and automatic renewal.
+- **OpenAI API**: For the AI-powered Sales Assistant and AI Insights.
+- **Gmail API**: For creating email drafts.
+- **Google Calendar API**: Per-user OAuth for creating calendar events and webhook management.
+- **ElevenLabs API**: For AI Voice Calling.
+
+## Recent Changes (November 2025)
+
+### ElevenLabs Data Extraction Implementation
+- **Database Schema**: Added 19 new columns to call_sessions table for comprehensive data extraction
+  - Interest & Outcome: interest_level, objections, follow_up_needed, follow_up_date
+  - POC Information: poc_name, poc_email, poc_phone, poc_title
+  - Shipping: shipping_name, shipping_address, shipping_city, shipping_state
+  - Business Intelligence: current_supplier, monthly_volume, decision_maker, business_type, pain_points, next_action, extracted_notes
+
+- **Webhook Enhancement**: Updated ElevenLabs webhook handler to:
+  - Process extracted_data from analysis.extracted_data in post_call_transcription webhooks
+  - Save all 19 extracted fields to call_sessions table in PostgreSQL
+  - Auto-sync POC data (name, email, phone, title) to Store Database Google Sheet when extracted
+  - Handle all 3 webhook types: call_initiation_failure, post_call_audio, post_call_transcription
+  - Update campaign target status based on webhook events
+
+- **Admin UI**: Added Data Collection Placeholders card in Admin Dashboard > Voice tab
+  - Displays all 19 placeholder definitions organized by category
+  - Copy-to-clipboard functionality for each placeholder description
+  - Instructions for configuring in ElevenLabs agent settings
+
+### Manual Setup Required
+- **Store Database Google Sheet**: Add "POC Title" column at Column U (after POC Phone column)
+  - This column will be automatically populated from call data extraction
+  - Header name must be exactly "POC Title" (case-insensitive matching)
+
+## Deferred Features (Future Phases)
+
+### Phase 2: Voice Hub Enhancements
+- **Agent History Tab**: Fourth tab in Call Manager showing complete call history across all campaigns
+  - Unified view of all call sessions for selected agent
+  - Filters by date range, status, campaign
+  - Export functionality for reporting
+
+### Phase 3: Advanced Call Management
+- **Dashboard Card Fixes**: Improve Completed/Failed call count accuracy in Voice Hub dashboard
+  - Real-time updates from webhook events
+  - Historical data reconciliation
+  
+- **Manual Rescheduling**: UI for manually rescheduling failed or incomplete calls
+  - Drag-and-drop calendar interface
+  - Bulk reschedule operations
+  - Custom scheduling rules per store
