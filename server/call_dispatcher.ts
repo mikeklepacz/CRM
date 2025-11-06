@@ -118,17 +118,29 @@ export class CallDispatcher {
       const state = (clientData?.State || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
       const userId = `${businessName}_${city}_${state}`;
 
+      // Prepare dynamic variables for ElevenLabs agent personalization
+      const dynamicVariables: Record<string, string> = {
+        name: clientData?.Name || clientData?.name || 'valued customer',
+        poc_name: clientData?.['Point of Contact'] || clientData?.poc_name || '',
+        shipping_address: clientData?.['Shipping Address'] || clientData?.shipping_address || '',
+        poc_email: clientData?.['POC EMAIL'] || clientData?.poc_email || '',
+      };
+
       const result = await this.initiateOutboundCall({
         apiKey,
         agentId: agent.agentId,
         phoneNumberId: agent.phoneNumberId,
         toNumber: phoneNumber,
         userId,
+        dynamicVariables,
         clientData: {
           campaignTargetId: target.id,
           businessName: clientData?.Name || clientData?.name,
           link: client.uniqueIdentifier,
           scenario: campaign.scenario,
+          clientId: target.clientId,
+          sheetId: client.sheetId,
+          rowIndex: client.rowIndex,
         },
         ivrBehavior: campaign.ivrBehavior,
         basePrompt: agentPrompt,
@@ -163,6 +175,7 @@ export class CallDispatcher {
     phoneNumberId: string;
     toNumber: string;
     userId?: string;
+    dynamicVariables?: Record<string, string>;
     clientData?: any;
     ivrBehavior?: string;
     basePrompt?: string;
@@ -188,6 +201,12 @@ export class CallDispatcher {
       user_id: params.userId, // Pass User ID to ElevenLabs for tracking
       conversation_initiation_client_data: params.clientData || {},
     };
+
+    // Add dynamic variables for agent personalization (used in prompts and first message)
+    if (params.dynamicVariables && Object.keys(params.dynamicVariables).length > 0) {
+      payload.dynamic_variables = params.dynamicVariables;
+      console.log(`[CallDispatcher] Dynamic variables:`, params.dynamicVariables);
+    }
 
     // Use ElevenLabs conversation_config_override to inject IVR handling instructions
     // We fetch the agent's base prompt and append IVR instructions to preserve existing behavior
