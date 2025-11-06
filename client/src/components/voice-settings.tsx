@@ -19,7 +19,7 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { Phone, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Star, RefreshCw, Link as LinkIcon } from "lucide-react";
+import { Phone, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Star, RefreshCw, Link as LinkIcon, Database, Copy } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
@@ -618,6 +618,178 @@ export function VoiceSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Data Collection Placeholders Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            <CardTitle>Data Collection Placeholders</CardTitle>
+          </div>
+          <CardDescription>
+            Configure these placeholders in your ElevenLabs Agent Dashboard → Analysis → Data Collection to extract structured data from calls
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Alert>
+            <AlertDescription className="text-sm">
+              Copy each placeholder field below and paste it into your ElevenLabs agent's Data Collection settings. The system will automatically extract and save this data from call conversations.
+            </AlertDescription>
+          </Alert>
+
+          {/* Interest & Outcome Section */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold">Interest & Outcome (4 fields)</h4>
+            <div className="space-y-2">
+              {[
+                {
+                  name: "interest_level",
+                  description: "Extract the prospect's interest level. Return one of: high, medium, low, none. High = ready to buy/send samples, Medium = wants more info, Low = not right time, None = not interested."
+                },
+                {
+                  name: "objections",
+                  description: "Extract any objections or concerns raised by the prospect. Include pricing concerns, timing issues, current supplier satisfaction, product doubts, or any hesitation. Return as comma-separated list or 'none'."
+                },
+                {
+                  name: "follow_up_needed",
+                  description: "Determine if follow-up is needed. Return 'yes' if prospect requested callback, more info, or showed interest. Return 'no' if they declined or asked not to call back."
+                },
+                {
+                  name: "follow_up_date",
+                  description: "Extract any specific date/time mentioned for follow-up. Return in format YYYY-MM-DD or 'not specified'."
+                }
+              ].map((field) => (
+                <PlaceholderField key={field.name} {...field} toast={toast} />
+              ))}
+            </div>
+          </div>
+
+          {/* Point of Contact Section */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold">Point of Contact (4 fields)</h4>
+            <div className="space-y-2">
+              {[
+                {
+                  name: "poc_name",
+                  description: "Extract the full name of the person you spoke with or the main contact person mentioned. Return full name or 'not provided'."
+                },
+                {
+                  name: "poc_email",
+                  description: "Extract email address of the contact person. Must be valid email format (user@domain.com) or 'not provided'."
+                },
+                {
+                  name: "poc_phone",
+                  description: "Extract direct phone number of the contact person. Include country code if mentioned. Return formatted number or 'not provided'."
+                },
+                {
+                  name: "poc_title",
+                  description: "Extract job title or role of the contact person (e.g., Owner, Manager, Buyer, Purchasing Director). Return title or 'not provided'."
+                }
+              ].map((field) => (
+                <PlaceholderField key={field.name} {...field} toast={toast} />
+              ))}
+            </div>
+          </div>
+
+          {/* Shipping Information Section */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold">Shipping Information (4 fields)</h4>
+            <div className="space-y-2">
+              {[
+                {
+                  name: "shipping_name",
+                  description: "Extract the name for shipping/sample delivery if different from main contact. Return name or 'same as contact'."
+                },
+                {
+                  name: "shipping_address",
+                  description: "Extract complete shipping address if prospect agreed to receive samples. Include street, suite/unit number. Return full address or 'not provided'."
+                },
+                {
+                  name: "shipping_city",
+                  description: "Extract city for shipping address. Return city name or 'not provided'."
+                },
+                {
+                  name: "shipping_state",
+                  description: "Extract state/province for shipping address. Return 2-letter code (e.g., CA, NY) or full name, or 'not provided'."
+                }
+              ].map((field) => (
+                <PlaceholderField key={field.name} {...field} toast={toast} />
+              ))}
+            </div>
+          </div>
+
+          {/* Business Intelligence Section */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold">Business Intelligence (7 fields)</h4>
+            <div className="space-y-2">
+              {[
+                {
+                  name: "current_supplier",
+                  description: "Extract name of their current hemp wick or similar product supplier if mentioned. Return supplier name or 'none mentioned'."
+                },
+                {
+                  name: "monthly_volume",
+                  description: "Extract approximate monthly purchase volume or quantity if discussed. Include units (cases, pieces, etc.) or 'not discussed'."
+                },
+                {
+                  name: "decision_maker",
+                  description: "Determine if the person you spoke with is the final decision maker. Return 'yes', 'no', or 'unclear'. If no, note who makes decisions."
+                },
+                {
+                  name: "business_type",
+                  description: "Extract or infer business type from conversation (e.g., dispensary, smoke shop, distributor, retailer, online store). Return type or 'not identified'."
+                },
+                {
+                  name: "pain_points",
+                  description: "Extract any specific problems or needs mentioned related to their current hemp wick products (quality issues, pricing, availability, etc.). Return comma-separated list or 'none mentioned'."
+                },
+                {
+                  name: "next_action",
+                  description: "Extract specific next action agreed upon (send samples, email info, schedule demo, call back on date, etc.). Return action or 'none agreed'."
+                },
+                {
+                  name: "notes",
+                  description: "Extract any other relevant information, special requests, or important details mentioned during the call that don't fit other categories. Return concise summary or 'none'."
+                }
+              ].map((field) => (
+                <PlaceholderField key={field.name} {...field} toast={toast} />
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Reusable component for displaying a single placeholder field
+function PlaceholderField({ name, description, toast }: { name: string; description: string; toast: any }) {
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(description);
+    toast({
+      title: "Copied",
+      description: `Placeholder "${name}" copied to clipboard`,
+    });
+  };
+
+  return (
+    <div className="flex items-start gap-2 p-3 rounded-md bg-muted/50 hover-elevate">
+      <div className="flex-1 space-y-1">
+        <div className="flex items-center gap-2">
+          <code className="text-xs font-mono bg-background px-2 py-1 rounded">{name}</code>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={copyToClipboard}
+        data-testid={`button-copy-${name}`}
+        className="shrink-0"
+      >
+        <Copy className="h-4 w-4" />
+      </Button>
     </div>
   );
 }
