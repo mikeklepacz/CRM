@@ -1,0 +1,59 @@
+I'll audit the codebase for hardcoded column name references to identify potential issues similar to the "DBA" column error.
+
+After analyzing the code, here are the main areas with hardcoded column names:
+
+1. Google Sheets Sync Functions (server/googleSheets.ts)
+// syncCommissionTrackerToPostgres function
+const linkIndex = headers.findIndex((h: string) => h === 'link');
+const agentNameIndex = headers.findIndex((h: string) => h === 'agent name');
+const amountIndex = headers.findIndex((h: string) => h === 'amount');
+const updatedIndex = 14; // Column P (0-indexed = 14)
+Issue: Hardcoded to "link", "agent name", "amount", and column index 14.
+
+2. Routes (server/routes.ts)
+Commission Tracker Operations:
+// Multiple locations reference these columns:
+- "Link"
+- "Agent Name" 
+- "Status"
+- "Follow-Up Date" / "Follow-up Date" / "follow_up_date"
+- "Notes"
+- "Point of Contact"
+- "POC EMAIL"
+- "POC Phone"
+- "POC Title"
+- "Amount"
+Store Database Operations:
+// Hardcoded references to:
+- "Name"
+- "Phone"
+- "Hours"
+- "State"
+- "Address"
+- "City"
+- "Link"
+- "Automated Line"
+- "DBA" ⚠️ (This is your error!)
+3. Store Details Dialog (client/src/components/store-details-dialog.tsx)
+client/src/components/store-details-dialog.tsx
++2
+-0
+Add defensive column name matching
+4. Critical Finding: The DBA Column Issue
+The error occurs in server/routes.ts around line 900-950 where data extraction writes to Google Sheets:
+
+// This code expects a "DBA" column but doesn't check if it exists
+storeDbUpdates.push({ columnName: 'Point of Contact', value: extractedData.poc_name });
+The problem is in the POC data update section that tries to write to columns without validating they exist first.
+
+5. Client Dashboard (client/src/pages/client-dashboard.tsx)
+Extensive hardcoded column checks:
+
+const isPhoneColumn = header.toLowerCase().includes('phone');
+const isEmailColumn = header.toLowerCase().includes('email');
+const isWebsiteColumn = header.toLowerCase().includes('website');
+const isLinkColumn = header.toLowerCase() === 'link';
+const isStateColumn = header.toLowerCase() === 'state';
+const isStatusColumn = header.toLowerCase().includes('status');
+const isHoursColumn = header.toLowerCase().includes('hour');
+Recommendations:
