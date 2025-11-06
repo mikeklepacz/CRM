@@ -1746,6 +1746,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // EXTRACT DATA COLLECTION: Save extracted data fields from ElevenLabs Analysis
+      if (data.status === 'done' && data.analysis && data.analysis.extracted_data) {
+        try {
+          const extractedData = data.analysis.extracted_data;
+          console.log('[Data Extraction] Processing extracted data:', extractedData);
+          
+          // Prepare update object with all extracted fields
+          const extractedUpdate: any = {};
+          
+          // Interest & Outcome fields
+          if (extractedData.interest_level) extractedUpdate.interestLevel = extractedData.interest_level;
+          if (extractedData.objections) extractedUpdate.objections = extractedData.objections;
+          if (extractedData.follow_up_needed !== undefined) {
+            extractedUpdate.followUpNeeded = extractedData.follow_up_needed === 'yes';
+          }
+          if (extractedData.follow_up_date && extractedData.follow_up_date !== 'not specified') {
+            extractedUpdate.followUpDate = new Date(extractedData.follow_up_date);
+          }
+          
+          // POC fields
+          if (extractedData.poc_name && extractedData.poc_name !== 'not provided') {
+            extractedUpdate.pocName = extractedData.poc_name;
+          }
+          if (extractedData.poc_email && extractedData.poc_email !== 'not provided') {
+            extractedUpdate.pocEmail = extractedData.poc_email;
+          }
+          if (extractedData.poc_phone && extractedData.poc_phone !== 'not provided') {
+            extractedUpdate.pocPhone = extractedData.poc_phone;
+          }
+          if (extractedData.poc_title && extractedData.poc_title !== 'not provided') {
+            extractedUpdate.pocTitle = extractedData.poc_title;
+          }
+          
+          // Shipping fields
+          if (extractedData.shipping_name && extractedData.shipping_name !== 'not provided') {
+            extractedUpdate.shippingName = extractedData.shipping_name;
+          }
+          if (extractedData.shipping_address && extractedData.shipping_address !== 'not provided') {
+            extractedUpdate.shippingAddress = extractedData.shipping_address;
+          }
+          if (extractedData.shipping_city && extractedData.shipping_city !== 'not provided') {
+            extractedUpdate.shippingCity = extractedData.shipping_city;
+          }
+          if (extractedData.shipping_state && extractedData.shipping_state !== 'not provided') {
+            extractedUpdate.shippingState = extractedData.shipping_state;
+          }
+          
+          // Business intelligence fields
+          if (extractedData.current_supplier && extractedData.current_supplier !== 'none mentioned') {
+            extractedUpdate.currentSupplier = extractedData.current_supplier;
+          }
+          if (extractedData.monthly_volume && extractedData.monthly_volume !== 'not discussed') {
+            extractedUpdate.monthlyVolume = extractedData.monthly_volume;
+          }
+          if (extractedData.decision_maker) {
+            extractedUpdate.decisionMaker = extractedData.decision_maker;
+          }
+          if (extractedData.business_type && extractedData.business_type !== 'not identified') {
+            extractedUpdate.businessType = extractedData.business_type;
+          }
+          if (extractedData.pain_points && extractedData.pain_points !== 'none mentioned') {
+            extractedUpdate.painPoints = extractedData.pain_points;
+          }
+          if (extractedData.next_action && extractedData.next_action !== 'none agreed') {
+            extractedUpdate.nextAction = extractedData.next_action;
+          }
+          if (extractedData.notes && extractedData.notes !== 'none') {
+            extractedUpdate.extractedNotes = extractedData.notes;
+          }
+          
+          // Update call_sessions with extracted data
+          if (Object.keys(extractedUpdate).length > 0) {
+            await storage.updateCallSessionByConversationId(conversationId, extractedUpdate);
+            console.log(`[Data Extraction] ✅ Saved ${Object.keys(extractedUpdate).length} extracted fields to call_sessions`);
+          }
+          
+          // UPDATE POC DATA TO GOOGLE SHEETS: If POC data was extracted, update Store Database
+          if (clientData.clientId && clientData.storeSnapshot) {
+            const pocUpdates: { columnName: string; value: string }[] = [];
+            
+            if (extractedData.poc_name && extractedData.poc_name !== 'not provided') {
+              pocUpdates.push({ columnName: 'Point of Contact', value: extractedData.poc_name });
+            }
+            if (extractedData.poc_email && extractedData.poc_email !== 'not provided') {
+              pocUpdates.push({ columnName: 'POC EMAIL', value: extractedData.poc_email });
+            }
+            if (extractedData.poc_phone && extractedData.poc_phone !== 'not provided') {
+              pocUpdates.push({ columnName: 'POC Phone', value: extractedData.poc_phone });
+            }
+            if (extractedData.poc_title && extractedData.poc_title !== 'not provided') {
+              pocUpdates.push({ columnName: 'POC Title', value: extractedData.poc_title });
+            }
+            
+            if (pocUpdates.length > 0 && clientData.storeSnapshot.sheetId && clientData.storeSnapshot.rowIndex) {
+              try {
+                const sheet = await storage.getGoogleSheetById(clientData.storeSnapshot.sheetId);
+                if (sheet) {
+                  const { spreadsheetId, sheetName } = sheet;
+                  
+                  // Read headers to find column indices
+                  const headerRange = `${sheetName}!1:1`;
+                  const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
+                  const headers = headerRows[0] || [];
+                  
+                  // Update each POC field
+                  for (const update of pocUpdates) {
+                    const columnIndex = headers.findIndex(h => h.toLowerCase() === update.columnName.toLowerCase());
+                    if (columnIndex !== -1) {
+                      const columnLetter = columnIndexToLetter(columnIndex);
+                      const cellRange = `${sheetName}!${columnLetter}${clientData.storeSnapshot.rowIndex}`;
+                      await googleSheets.writeSheetData(spreadsheetId, cellRange, [[update.value]]);
+                      console.log(`[Data Extraction] ✅ Updated ${update.columnName} in Google Sheets: ${update.value}`);
+                    } else {
+                      console.warn(`[Data Extraction] Column "${update.columnName}" not found in sheet headers`);
+                    }
+                  }
+                }
+              } catch (sheetsError: any) {
+                console.error(`[Data Extraction] Error updating POC data in Google Sheets:`, sheetsError.message);
+                // Don't fail webhook - this is non-critical
+              }
+            }
+          }
+        } catch (extractionError: any) {
+          console.error(`[Data Extraction] Error processing extracted data:`, extractionError.message);
+          // Don't fail the webhook - this is a non-critical feature
+        }
+      }
+
       // Trigger OpenAI reflection job asynchronously (don't block webhook response)
       if (data.status === 'done' && data.transcript && data.transcript.length > 0) {
         // Fire and forget - run async without blocking the webhook response
