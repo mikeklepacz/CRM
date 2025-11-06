@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { formatInTimeZone, getTimezoneOffset, fromZonedTime } from "date-fns-tz";
-import { Calendar as CalendarIcon, MapPin, User, Mail, Phone, Clock } from "lucide-react";
+import { Calendar as CalendarIcon, MapPin, User, Mail, Phone, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
@@ -590,6 +590,7 @@ export function QuickReminder({
         className="w-full"
         data-testid="button-save-reminder"
       >
+        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         {isSaving ? "Saving..." : isCheckingConflict ? "Checking..." : "Save Reminder"}
       </Button>
     </div>

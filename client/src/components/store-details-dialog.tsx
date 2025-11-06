@@ -203,6 +203,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
   // State for collapsible reminder section
   const [reminderSectionOpen, setReminderSectionOpen] = useState(false);
+  const [isSavingReminder, setIsSavingReminder] = useState(false);
 
   // Query all stores for multi-location picker - LAZY LOAD (only when search has 2+ chars)
   const { data: allStores, isLoading: isLoadingStores } = useQuery<any[]>({
@@ -1682,7 +1683,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                               </CollapsibleTrigger>
                               <CollapsibleContent className="pt-2">
                                 <QuickReminder
+                                  isSaving={isSavingReminder}
                                   onSave={async (reminderData) => {
+                                    setIsSavingReminder(true);
                                     try {
                                       const response = await apiRequest('POST', '/api/reminders', {
                                         title: `Follow up: ${formData.name}`,
@@ -1768,6 +1771,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         description: error.message || "Failed to create reminder",
                                         variant: "destructive",
                                       });
+                                    } finally {
+                                      setIsSavingReminder(false);
                                     }
                                   }}
                                   storeAddress={formData.address}
