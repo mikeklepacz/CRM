@@ -13617,6 +13617,7 @@ IMPORTANT:
 
       const sheets = await storage.getAllActiveGoogleSheets();
       const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      const storeDbSheet = sheets.find(s => s.sheetPurpose === 'Store Database');
 
       if (!trackerSheet) {
         return res.status(404).json({ message: 'Commission Tracker sheet not found' });
@@ -13633,6 +13634,26 @@ IMPORTANT:
         return res.json({ children: [] });
       }
 
+      // Load Store Database to get store names
+      let storeDbMap: Map<string, any> = new Map();
+      if (storeDbSheet) {
+        const storeDbRange = `${storeDbSheet.sheetName}!A:ZZ`;
+        const storeDbRows = await googleSheets.readSheetData(storeDbSheet.spreadsheetId, storeDbRange);
+        const storeDbHeaders = storeDbRows[0];
+        const storeDbLinkIndex = storeDbHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+        const storeDbNameIndex = storeDbHeaders.findIndex((h: string) => h.toLowerCase() === 'name' || h.toLowerCase() === 'store name');
+        
+        if (storeDbLinkIndex !== -1) {
+          for (let i = 1; i < storeDbRows.length; i++) {
+            const link = storeDbRows[i][storeDbLinkIndex];
+            if (link) {
+              const storeName = storeDbNameIndex !== -1 ? storeDbRows[i][storeDbNameIndex] : '';
+              storeDbMap.set(normalizeLink(link), storeName);
+            }
+          }
+        }
+      }
+
       const normalizedParentLink = normalizeLink(parentLink);
       const children: any[] = [];
 
@@ -13644,6 +13665,14 @@ IMPORTANT:
           trackerHeaders.forEach((header, idx) => {
             childData[header] = trackerRows[i][idx] || '';
           });
+          
+          // Add store name from Store Database if available
+          const childLink = trackerRows[i][linkIndex];
+          if (childLink && storeDbMap.has(normalizeLink(childLink))) {
+            childData['name'] = storeDbMap.get(normalizeLink(childLink));
+            childData['Name'] = storeDbMap.get(normalizeLink(childLink)); // Also add capitalized version for compatibility
+          }
+          
           children.push(childData);
         }
       }
