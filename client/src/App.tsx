@@ -13,8 +13,7 @@ import { TimezoneDetector } from "@/components/timezone-detector";
 import { useQuery } from "@tanstack/react-query";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import AdminDashboard from "@/pages/admin-dashboard";
-import AgentDashboard from "@/pages/agent-dashboard";
+import Dashboard from "@/pages/dashboard";
 import Settings from "@/pages/settings";
 import ClientDashboard from "@/pages/client-dashboard";
 import StoreDetails from "@/pages/store-details";
@@ -80,13 +79,7 @@ function Router() {
               {(user?.role === 'admin' || user?.hasVoiceAccess) ? <CallManager /> : <NotFound />}
             </Route>
             <Route path="/store/:storeId" component={StoreDetails} />
-            <Route path="/admin">
-              {user?.role === 'admin' ? <AdminDashboard /> : <NotFound />}
-            </Route>
-            <Route path="/agent" component={AgentDashboard} />
-            <Route path="/">
-              {user?.role === 'admin' ? <AdminDashboard /> : <AgentDashboard />}
-            </Route>
+            <Route path="/" component={Dashboard} />
             <Route component={NotFound} />
           </Switch>
         </main>

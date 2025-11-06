@@ -57,7 +57,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
             
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center gap-1">
-              <Link href={user.role === 'admin' ? '/admin' : '/agent'}>
+              <Link href="/">
                 <Button variant="ghost" size="sm" data-testid="nav-dashboard">
                   <Home className="mr-2 h-4 w-4" />
                   Dashboard
@@ -111,7 +111,7 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuItem onClick={() => { setLocation(user.role === 'admin' ? '/admin' : '/agent'); setMobileMenuOpen(false); }}>
+                <DropdownMenuItem onClick={() => { setLocation('/'); setMobileMenuOpen(false); }}>
                   <Home className="mr-2 h-4 w-4" />
                   Dashboard
                 </DropdownMenuItem>
