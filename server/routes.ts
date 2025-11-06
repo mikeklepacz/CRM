@@ -10628,7 +10628,9 @@ IMPORTANT:
       const columnIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
 
       if (columnIndex === -1) {
-        return res.status(400).json({ message: `Column "${column}" not found in sheet` });
+        // Column doesn't exist - skip gracefully instead of failing
+        console.log(`[CELL UPDATE] Column "${column}" not found in sheet ${sheetName}, skipping update`);
+        return res.json({ message: `Column "${column}" skipped (not found in sheet)`, skipped: true });
       }
 
       // Auto-claim store when editing any field (agents only)
