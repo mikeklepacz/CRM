@@ -7545,9 +7545,9 @@ IMPORTANT:
             
             if (storeLink) {
               const normalized = normalizeLink(storeLink);
-              // Prefer DBA over Name, fallback to 'Unknown' (never show UUID)
+              // Column A (name) is the primary store name, DBA (Column N) is secondary
               storeMap.set(normalized, {
-                name: dba || name || 'Unknown',
+                name: name || dba || 'Unknown',
                 category: storeCategory,
                 contact: pocName,
               });
