@@ -445,6 +445,7 @@ export default function Dashboard() {
         <div className="flex-1 overflow-auto px-4">
           <ClientsTable
             clients={filteredClients}
+            currentUser={user}
             isLoading={clientsLoading}
             onRefresh={refetchClients}
             statusColors={statusColors}
