@@ -2989,6 +2989,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get full store row by link from Google Sheets
+  app.get('/api/stores/by-link', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { link } = req.query;
+      
+      if (!link) {
+        return res.status(400).json({ error: 'Link parameter is required' });
+      }
+
+      // Get sheets configuration
+      const configuredSheets = await storage.getSheets();
+      const storeSheet = configuredSheets.find((s: any) => s.sheetPurpose === "Store Database");
+      
+      if (!storeSheet) {
+        return res.status(404).json({ error: 'Store Database sheet not configured' });
+      }
+
+      // Fetch all rows from Store Database
+      const sheetData = await googleSheets.readSheetData(storeSheet.id, 'A:ZZ');
+      
+      if (!sheetData || sheetData.length === 0) {
+        return res.status(404).json({ error: 'No data found in Store Database' });
+      }
+
+      const headers = sheetData[0];
+      const rows = sheetData.slice(1);
+
+      // Find link column (case-insensitive)
+      const linkColumnIndex = headers.findIndex((h: string) => 
+        h.toLowerCase().trim() === 'link'
+      );
+
+      if (linkColumnIndex === -1) {
+        return res.status(404).json({ error: 'Link column not found in Store Database' });
+      }
+
+      // Normalize the search link
+      const normalizedSearchLink = normalizeLink(link as string);
+
+      // Find matching row
+      const matchingRowIndex = rows.findIndex((row: any[]) => {
+        const rowLink = row[linkColumnIndex];
+        if (!rowLink) return false;
+        return normalizeLink(rowLink) === normalizedSearchLink;
+      });
+
+      if (matchingRowIndex === -1) {
+        return res.status(404).json({ error: 'Store not found' });
+      }
+
+      // Convert row array to object with headers as keys
+      const matchingRow = rows[matchingRowIndex];
+      const storeRow: any = {};
+      headers.forEach((header: string, index: number) => {
+        storeRow[header] = matchingRow[index] || '';
+      });
+
+      // Add metadata needed by StoreDetailsDialog for saving edits
+      // Row index is 2-based (header row + 1-indexed data rows)
+      const rowIndex = matchingRowIndex + 2;
+
+      res.json({ 
+        storeRow,
+        meta: {
+          rowIndex,
+          storeSheetId: storeSheet.id,
+        }
+      });
+    } catch (error: any) {
+      console.error('Error fetching store by link:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // Delete a call from both ElevenLabs and local database
   app.delete('/api/elevenlabs/calls/:id', isAuthenticatedCustom, async (req: any, res) => {
     try {

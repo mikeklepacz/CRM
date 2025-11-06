@@ -20,6 +20,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CallDetailDialog } from "@/components/call-detail-dialog";
+import { StoreDetailsDialog } from "@/components/store-details-dialog";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ProposalDiffViewer } from "@/components/proposal-diff-viewer";
@@ -1253,8 +1254,12 @@ export default function CallManager() {
   const [historyCampaignFilter, setHistoryCampaignFilter] = useState<string>("all");
   const [historyAgentFilter, setHistoryAgentFilter] = useState<string>("all");
   const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
-  const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false);
-  const [selectedStoreForDialog, setSelectedStoreForDialog] = useState<any>(null);
+  
+  // Store details dialog state (matching client-dashboard pattern)
+  const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
+    open: boolean;
+    row: any;
+  } | null>(null);
 
   // Clear selections when scenario changes
   useEffect(() => {
@@ -3687,15 +3692,49 @@ export default function CallManager() {
                                     </TableCell>
                                     <TableCell className="text-xs px-2 py-1.5">
                                       <button
-                                        onClick={() => {
-                                          setSelectedStoreForDialog({
-                                            link: row.link,
-                                            name: row.storeName,
-                                            shipping_address: row.shippingAddress,
-                                            poc_email: row.pocEmail,
-                                            status: row.status
-                                          });
-                                          setIsStoreDialogOpen(true);
+                                        onClick={async () => {
+                                          if (!row.link) {
+                                            toast({
+                                              title: "Error",
+                                              description: "Store link not found",
+                                              variant: "destructive",
+                                            });
+                                            return;
+                                          }
+                                          
+                                          try {
+                                            // Fetch full store row from Google Sheets
+                                            const response = await fetch(
+                                              `/api/stores/by-link?link=${encodeURIComponent(row.link)}`
+                                            );
+                                            
+                                            if (!response.ok) {
+                                              throw new Error('Failed to fetch store details');
+                                            }
+                                            
+                                            const { storeRow, meta } = await response.json();
+                                            
+                                            // Add metadata to row for StoreDetailsDialog
+                                            const rowWithMeta = {
+                                              ...storeRow,
+                                              meta: {
+                                                rowIndex: meta.rowIndex,
+                                                storeSheetId: meta.storeSheetId,
+                                              }
+                                            };
+                                            
+                                            // Open dialog with full store row and metadata
+                                            setStoreDetailsDialog({
+                                              open: true,
+                                              row: rowWithMeta,
+                                            });
+                                          } catch (error: any) {
+                                            toast({
+                                              title: "Error",
+                                              description: error.message || "Failed to load store details",
+                                              variant: "destructive",
+                                            });
+                                          }
                                         }}
                                         className="text-primary hover:underline text-left"
                                         data-testid={`store-link-${idx}`}
@@ -3838,61 +3877,26 @@ export default function CallManager() {
       </Dialog>
 
       {/* Store Details Dialog */}
-      <Dialog open={isStoreDialogOpen} onOpenChange={setIsStoreDialogOpen}>
-        <DialogContent data-testid="dialog-store-details">
-          <DialogHeader>
-            <DialogTitle>Store Details</DialogTitle>
-          </DialogHeader>
-          {selectedStoreForDialog && (
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Store Name</Label>
-                <p className="text-sm text-muted-foreground mt-1">{selectedStoreForDialog.name}</p>
-              </div>
-              {selectedStoreForDialog.link && (
-                <div>
-                  <Label className="text-sm font-medium">Leafly Link</Label>
-                  <a 
-                    href={selectedStoreForDialog.link} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline mt-1 block"
-                  >
-                    {selectedStoreForDialog.link}
-                  </a>
-                </div>
-              )}
-              {selectedStoreForDialog.shipping_address && (
-                <div>
-                  <Label className="text-sm font-medium">Address</Label>
-                  <p className="text-sm text-muted-foreground mt-1">{selectedStoreForDialog.shipping_address}</p>
-                </div>
-              )}
-              {selectedStoreForDialog.poc_email && (
-                <div>
-                  <Label className="text-sm font-medium">POC Email</Label>
-                  <p className="text-sm text-muted-foreground mt-1">{selectedStoreForDialog.poc_email}</p>
-                </div>
-              )}
-              {selectedStoreForDialog.status && (
-                <div>
-                  <Label className="text-sm font-medium">Status</Label>
-                  <p className="text-sm text-muted-foreground mt-1 capitalize">{selectedStoreForDialog.status}</p>
-                </div>
-              )}
-            </div>
-          )}
-          <div className="flex justify-end mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setIsStoreDialogOpen(false)}
-              data-testid="button-close-store-dialog"
-            >
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {storeDetailsDialog && (
+        <StoreDetailsDialog
+          open={storeDetailsDialog.open}
+          onOpenChange={(open) => {
+            if (!open) {
+              setStoreDetailsDialog(null);
+            }
+          }}
+          row={storeDetailsDialog.row}
+          trackerSheetId={trackerSheetId}
+          storeSheetId={storeSheetId}
+          refetch={refetchAnalytics}
+          currentColors={currentColors}
+          statusOptions={statusOptions}
+          statusColors={statusColors}
+          contextUpdateTrigger={contextUpdateTrigger}
+          setContextUpdateTrigger={setContextUpdateTrigger}
+          loadDefaultScriptTrigger={0}
+        />
+      )}
 
       {/* NUKE Analysis Data Confirmation Dialog */}
       <AlertDialog open={isNukeDialogOpen} onOpenChange={setIsNukeDialogOpen}>
