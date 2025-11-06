@@ -584,6 +584,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
             column: 'Agent Name',
             value: currentUser.agentName
           });
+          
+          // AUTOMATICALLY SET STATUS TO "CLAIMED" when DBA is created
+          // This ensures the store gets claimed in the Commission Tracker
+          trackerChanges['Status'] = 'Claimed';
         }
       }
 
