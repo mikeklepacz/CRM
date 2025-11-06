@@ -69,7 +69,12 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Webhook Enhancement**: Updated ElevenLabs webhook handler to:
   - Process extracted_data from analysis.extracted_data in post_call_transcription webhooks
   - Save all 19 extracted fields to call_sessions table in PostgreSQL
-  - Auto-sync POC data to Google Sheets: name/email/phone → Store Database, title → Commission Tracker Column T
+  - Auto-sync POC data to Google Sheets:
+    - POC name/email/phone → Store Database
+    - POC Title → Commission Tracker Column T
+    - Follow-up Date → Commission Tracker Column I
+    - Call Notes → Commission Tracker Column K (append mode with timestamp, interest, objections, summary)
+  - Include ElevenLabs automatic call summary in notes
   - Handle all 3 webhook types: call_initiation_failure, post_call_audio, post_call_transcription
   - Update campaign target status based on webhook events
 
@@ -79,10 +84,12 @@ The application is built around a client dashboard unifying data from "Store Dat
   - Instructions for configuring in ElevenLabs agent settings
 
 ### Manual Setup Required
-- **Commission Tracker Google Sheet**: Add "POC Title" column at Column T
-  - This column will be automatically populated from call data extraction
-  - Header name must be exactly "POC Title" (case-insensitive matching)
-  - System will match rows by Link and update POC Title when extracted from calls
+- **Commission Tracker Google Sheet**: Add the following columns for automatic call data updates
+  - **Column I - Follow-up Date**: Will be auto-populated with extracted follow-up dates from calls
+  - **Column K - Notes**: Will auto-append timestamped call notes (interest level, objections, summary)
+  - **Column T - POC Title**: Will be auto-populated with POC job titles from calls
+  - All column names are case-insensitive
+  - System matches rows by Link field for accurate updates
 
 ## Deferred Features (Future Phases)
 

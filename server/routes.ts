@@ -1925,54 +1925,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
               }
               
-              // Update POC Title in Commission Tracker (Column T)
-              if (extractedData.poc_title && extractedData.poc_title !== 'not provided') {
-                // Get Commission Tracker sheet
-                const sheets = await storage.getAllActiveGoogleSheets();
-                const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+              // Update Commission Tracker fields (POC Title, Follow-up Date, Notes)
+              const sheets = await storage.getAllActiveGoogleSheets();
+              const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+              
+              if (trackerSheet && clientData.clientId) {
+                const { spreadsheetId, sheetName } = trackerSheet;
                 
-                if (trackerSheet && clientData.clientId) {
-                  const { spreadsheetId, sheetName } = trackerSheet;
+                // Read headers to find column indices
+                const headerRange = `${sheetName}!1:1`;
+                const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
+                const headers = headerRows[0] || [];
+                
+                // Find column indices
+                const pocTitleIndex = headers.findIndex(h => h.toLowerCase() === 'poc title');
+                const followUpDateIndex = headers.findIndex(h => h.toLowerCase() === 'follow-up date' || h.toLowerCase() === 'follow up date');
+                const notesIndex = headers.findIndex(h => h.toLowerCase() === 'notes');
+                const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+                
+                if (linkIndex !== -1) {
+                  // Find the row by Link matching
+                  const trackerDataRange = `${sheetName}!A:T`;
+                  const trackerRows = await googleSheets.readSheetData(spreadsheetId, trackerDataRange);
                   
-                  // Read headers to find column index for POC Title
-                  const headerRange = `${sheetName}!1:1`;
-                  const headerRows = await googleSheets.readSheetData(spreadsheetId, headerRange);
-                  const headers = headerRows[0] || [];
+                  // Find matching row by comparing links
+                  const storeLink = clientData.storeSnapshot?.link || clientData.clientId;
+                  let trackerRowIndex = -1;
                   
-                  // Find POC Title column (should be Column T)
-                  const pocTitleIndex = headers.findIndex(h => h.toLowerCase() === 'poc title');
+                  for (let i = 1; i < trackerRows.length; i++) {
+                    const rowLink = trackerRows[i][linkIndex];
+                    if (rowLink && rowLink.toLowerCase().includes(storeLink.toLowerCase())) {
+                      trackerRowIndex = i + 1; // 1-indexed
+                      break;
+                    }
+                  }
                   
-                  if (pocTitleIndex !== -1) {
-                    // Find the row by Link matching
-                    const trackerDataRange = `${sheetName}!A:T`;
-                    const trackerRows = await googleSheets.readSheetData(spreadsheetId, trackerDataRange);
-                    const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+                  if (trackerRowIndex > 0) {
+                    // Update POC Title (Column T)
+                    if (pocTitleIndex !== -1 && extractedData.poc_title && extractedData.poc_title !== 'not provided') {
+                      const columnLetter = columnIndexToLetter(pocTitleIndex);
+                      const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
+                      await googleSheets.writeSheetData(spreadsheetId, cellRange, [[extractedData.poc_title]]);
+                      console.log(`[Data Extraction] ✅ Updated POC Title in Commission Tracker Column T: ${extractedData.poc_title}`);
+                    }
                     
-                    if (linkIndex !== -1) {
-                      // Find matching row by comparing links
-                      const storeLink = clientData.storeSnapshot?.link || clientData.clientId;
-                      let trackerRowIndex = -1;
+                    // Update Follow-up Date (Column I)
+                    if (followUpDateIndex !== -1 && extractedData.follow_up_date && extractedData.follow_up_date !== 'not specified') {
+                      const columnLetter = columnIndexToLetter(followUpDateIndex);
+                      const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
+                      await googleSheets.writeSheetData(spreadsheetId, cellRange, [[extractedData.follow_up_date]]);
+                      console.log(`[Data Extraction] ✅ Updated Follow-up Date in Commission Tracker Column I: ${extractedData.follow_up_date}`);
+                    }
+                    
+                    // Build and append call notes (Column K)
+                    if (notesIndex !== -1) {
+                      // Format call note entry
+                      const timestamp = new Date().toLocaleString('en-US', { 
+                        timeZone: 'America/Los_Angeles',
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
                       
-                      for (let i = 1; i < trackerRows.length; i++) {
-                        const rowLink = trackerRows[i][linkIndex];
-                        if (rowLink && rowLink.toLowerCase().includes(storeLink.toLowerCase())) {
-                          trackerRowIndex = i + 1; // 1-indexed
-                          break;
-                        }
+                      const noteParts = [`[${timestamp}]`];
+                      
+                      if (extractedData.interest_level) {
+                        noteParts.push(`Interest: ${extractedData.interest_level}`);
                       }
                       
-                      if (trackerRowIndex > 0) {
-                        const columnLetter = columnIndexToLetter(pocTitleIndex);
-                        const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
-                        await googleSheets.writeSheetData(spreadsheetId, cellRange, [[extractedData.poc_title]]);
-                        console.log(`[Data Extraction] ✅ Updated POC Title in Commission Tracker Column T: ${extractedData.poc_title}`);
-                      } else {
-                        console.warn(`[Data Extraction] Could not find matching row in Commission Tracker for link: ${storeLink}`);
+                      if (extractedData.objections && extractedData.objections !== 'none mentioned') {
+                        noteParts.push(`Objections: ${extractedData.objections}`);
                       }
+                      
+                      // Add ElevenLabs call summary if available
+                      if (data.analysis && data.analysis.summary) {
+                        noteParts.push(`Summary: ${data.analysis.summary}`);
+                      }
+                      
+                      if (extractedData.notes && extractedData.notes !== 'none') {
+                        noteParts.push(`Notes: ${extractedData.notes}`);
+                      }
+                      
+                      const newNote = noteParts.join(' | ');
+                      
+                      // Read existing notes and append
+                      const columnLetter = columnIndexToLetter(notesIndex);
+                      const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
+                      const existingNotesData = await googleSheets.readSheetData(spreadsheetId, cellRange);
+                      const existingNotes = existingNotesData[0]?.[0] || '';
+                      
+                      const updatedNotes = existingNotes 
+                        ? `${existingNotes}\n${newNote}`
+                        : newNote;
+                      
+                      await googleSheets.writeSheetData(spreadsheetId, cellRange, [[updatedNotes]]);
+                      console.log(`[Data Extraction] ✅ Appended call notes to Commission Tracker Column K`);
+                    } else {
+                      console.warn(`[Data Extraction] Notes column not found in Commission Tracker (should be Column K)`);
                     }
                   } else {
-                    console.warn(`[Data Extraction] POC Title column not found in Commission Tracker (should be Column T)`);
+                    console.warn(`[Data Extraction] Could not find matching row in Commission Tracker for link: ${storeLink}`);
                   }
+                } else {
+                  console.warn(`[Data Extraction] Link column not found in Commission Tracker headers`);
                 }
               }
             } catch (sheetsError: any) {
