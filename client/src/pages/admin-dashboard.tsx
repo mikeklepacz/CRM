@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WooCommerceSync } from "@/components/woocommerce-sync";
 import { GoogleSheetsSync } from "@/components/google-sheets-sync";
@@ -28,6 +29,7 @@ import {
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
 
   // Fetch user preferences to get viewAsAgent state
@@ -86,9 +88,13 @@ export default function AdminDashboard() {
                 toast({
                   title: checked ? "Switched to Agent View" : "Switched to Admin View",
                   description: checked 
-                    ? "You're now viewing the Client Dashboard as an agent would see it." 
+                    ? "Redirecting to My Dashboard..." 
                     : "You're back to the full admin view.",
                 });
+                
+                if (checked) {
+                  setTimeout(() => setLocation('/agent'), 300);
+                }
               } catch (error) {
                 console.error('Failed to save view mode:', error);
                 toast({

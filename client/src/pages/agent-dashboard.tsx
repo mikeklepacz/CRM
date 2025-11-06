@@ -6,6 +6,8 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { ClientsTable } from "@/components/clients-table";
 import { RemindersWidget } from "@/components/widgets/reminders";
 import { CallHistoryDialog } from "@/components/call-history-dialog";
@@ -37,6 +39,7 @@ export default function AgentDashboard() {
   const [timePeriod, setTimePeriod] = useState("all");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
+  const [viewAsAgent, setViewAsAgent] = useState(true);
 
   // Store details dialog state
   const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
@@ -240,9 +243,48 @@ export default function AgentDashboard() {
       {/* Left Column - Main Dashboard Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-shrink-0 px-4 py-6 space-y-6">
-          <div>
-            <h2 className="text-2xl font-semibold text-foreground">My Dashboard</h2>
-            <p className="text-muted-foreground">Track your claimed clients and commissions</p>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-foreground">My Dashboard</h2>
+              <p className="text-muted-foreground">Track your claimed clients and commissions</p>
+            </div>
+            {user?.role === 'admin' && (
+              <div className="flex items-center gap-2">
+                <Label htmlFor="agent-view-as-admin" className="text-sm font-medium cursor-pointer">
+                  View as Admin
+                </Label>
+                <Switch
+                  id="agent-view-as-admin"
+                  checked={!viewAsAgent}
+                  onCheckedChange={async (checked) => {
+                    setViewAsAgent(!checked);
+                    try {
+                      await apiRequest('PATCH', '/api/user/preferences', {
+                        viewAsAgent: !checked
+                      });
+                      toast({
+                        title: checked ? "Switched to Admin View" : "Switched to Agent View",
+                        description: checked 
+                          ? "Redirecting to Admin Dashboard..." 
+                          : "You're viewing as an agent.",
+                      });
+                      
+                      if (checked) {
+                        setTimeout(() => setLocation('/admin'), 300);
+                      }
+                    } catch (error) {
+                      console.error('Failed to save view mode:', error);
+                      toast({
+                        title: "Error",
+                        description: "Failed to save view preference",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                  data-testid="switch-view-as-admin"
+                />
+              </div>
+            )}
           </div>
 
           {/* Stat Cards */}
