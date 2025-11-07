@@ -130,7 +130,7 @@ export const orders = pgTable("orders", {
 // Commissions table - ledger for all commission records (primary agent and referral bonuses)
 export const commissions = pgTable("commissions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: varchar("order_id").notNull().references(() => orders.id),
+  orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: 'cascade' }),
   agentId: varchar("agent_id").notNull().references(() => users.id), // Agent receiving this commission
   commissionKind: varchar("commission_kind", { length: 20 }).notNull(), // 'primary' or 'referral'
   sourceAgentId: varchar("source_agent_id").references(() => users.id), // For referral commissions, which agent generated the sale

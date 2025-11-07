@@ -9622,6 +9622,59 @@ IMPORTANT:
         if (!wooOrderIds.has(localOrder.id)) {
           // This order exists locally but not in WooCommerce anymore
           console.log(`Deleting order ${localOrder.id} (no longer in WooCommerce)`);
+          
+          // Update client status to "Closed Lost" before deletion
+          if (localOrder.clientId) {
+            try {
+              const client = await storage.getClientById(localOrder.clientId);
+              if (client) {
+                await storage.updateClient(client.id, { status: 'Closed Lost' });
+                console.log(`Updated client ${client.id} status to "Closed Lost"`);
+                
+                // Update Commission Tracker sheet row status to "Closed Lost"
+                const sheets = await storage.getAllActiveGoogleSheets();
+                const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+                
+                if (trackerSheet && client.uniqueIdentifier) {
+                  try {
+                    const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+                    const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+                    
+                    if (trackerRows.length > 0) {
+                      const trackerHeaders = trackerRows[0];
+                      const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+                      const statusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
+                      
+                      if (linkIndex !== -1 && statusIndex !== -1) {
+                        // Find the row matching this client's link
+                        for (let i = 1; i < trackerRows.length; i++) {
+                          const rowLink = normalizeLink(trackerRows[i][linkIndex] || '');
+                          const clientLink = normalizeLink(client.uniqueIdentifier);
+                          
+                          if (rowLink === clientLink) {
+                            const trackerRowIndex = i + 1; // 1-indexed
+                            const columnLetter = columnIndexToLetter(statusIndex);
+                            const cellRange = `${trackerSheet.sheetName}!${columnLetter}${trackerRowIndex}`;
+                            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, cellRange, [['Closed Lost']]);
+                            console.log(`Updated Commission Tracker status to "Closed Lost" for ${client.uniqueIdentifier}`);
+                            break;
+                          }
+                        }
+                      }
+                    }
+                  } catch (sheetError: any) {
+                    console.error('Error updating tracker sheet:', sheetError);
+                    // Don't fail order deletion if sheet update fails
+                  }
+                }
+              }
+            } catch (clientError: any) {
+              console.error('Error updating client status:', clientError);
+              // Don't fail order deletion if client update fails
+            }
+          }
+          
+          // Delete the order (commissions will cascade delete automatically)
           await storage.deleteOrder(localOrder.id);
           deleted++;
         }
