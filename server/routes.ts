@@ -9623,13 +9623,29 @@ IMPORTANT:
           // This order exists locally but not in WooCommerce anymore
           console.log(`Deleting order ${localOrder.id} (no longer in WooCommerce)`);
           
-          // Update client status to "Closed Lost" before deletion
+          // Get commissions for this order BEFORE deleting (will be cascade deleted)
+          const orderCommissions = await storage.getCommissionsByOrder(localOrder.id);
+          const totalCommissionAmount = orderCommissions.reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0);
+          
+          // Update client: subtract order total and commissions, set status to "Closed Lost"
           if (localOrder.clientId) {
             try {
               const client = await storage.getClientById(localOrder.clientId);
               if (client) {
-                await storage.updateClient(client.id, { status: 'Closed Lost' });
-                console.log(`Updated client ${client.id} status to "Closed Lost"`);
+                const orderTotal = parseFloat(localOrder.total || '0');
+                const currentTotalSales = parseFloat(client.totalSales || '0');
+                const currentCommissionTotal = parseFloat(client.commissionTotal || '0');
+                
+                // Calculate new totals (prevent going negative)
+                const newTotalSales = Math.max(0, currentTotalSales - orderTotal);
+                const newCommissionTotal = Math.max(0, currentCommissionTotal - totalCommissionAmount);
+                
+                await storage.updateClient(client.id, { 
+                  status: 'Closed Lost',
+                  totalSales: newTotalSales.toString(),
+                  commissionTotal: newCommissionTotal.toString()
+                });
+                console.log(`Updated client ${client.id}: status="Closed Lost", totalSales=$${currentTotalSales.toFixed(2)}→$${newTotalSales.toFixed(2)}, commission=$${currentCommissionTotal.toFixed(2)}→$${newCommissionTotal.toFixed(2)}`);
                 
                 // Update Commission Tracker sheet row status to "Closed Lost"
                 const sheets = await storage.getAllActiveGoogleSheets();
