@@ -11009,7 +11009,15 @@ IMPORTANT:
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { link, updates } = req.body;
 
+      console.log('🔍 [TRACKER-UPSERT] Received request:', {
+        link,
+        linkLength: link?.length,
+        updates,
+        userId
+      });
+
       if (!link || !updates) {
+        console.error('[TRACKER-UPSERT] Missing required fields:', { hasLink: !!link, hasUpdates: !!updates });
         return res.status(400).json({ message: "Link and updates are required" });
       }
 
@@ -11035,7 +11043,11 @@ IMPORTANT:
 
       const { spreadsheetId, sheetName } = trackerSheet;
 
-      console.log('[TRACKER-UPSERT] Step 1: Check if row exists for link:', link);
+      const normalizedInputLink = normalizeLink(link.trim());
+      console.log('[TRACKER-UPSERT] Step 1: Check if row exists for link:', {
+        originalLink: link,
+        normalizedLink: normalizedInputLink
+      });
       
       // STEP 1: Check if row exists
       const rowExists = await verifyTrackerRowExists(spreadsheetId, sheetName, link);
@@ -11133,10 +11145,21 @@ IMPORTANT:
       // Update the specific fields
       for (const [column, value] of Object.entries(updates)) {
         const colIndex = headers.findIndex(h => h.toLowerCase() === column.toLowerCase());
+        console.log(`🔍 [TRACKER-UPSERT] Processing column "${column}":`, {
+          searchingFor: column,
+          foundAtIndex: colIndex,
+          value,
+          headerFound: colIndex !== -1 ? headers[colIndex] : 'NOT FOUND'
+        });
+        
         if (colIndex !== -1) {
           const columnLetter = String.fromCharCode(65 + colIndex);
           const cellRange = `${sheetName}!${columnLetter}${rowIndex}`;
+          console.log(`✍️ [TRACKER-UPSERT] Writing to cell ${cellRange}:`, value);
           await googleSheets.writeSheetData(spreadsheetId, cellRange, [[value]]);
+          console.log(`✅ [TRACKER-UPSERT] Successfully wrote to ${cellRange}`);
+        } else {
+          console.warn(`⚠️ [TRACKER-UPSERT] Column "${column}" not found in headers:`, headers);
         }
       }
       

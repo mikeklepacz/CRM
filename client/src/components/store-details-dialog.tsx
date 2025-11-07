@@ -609,6 +609,13 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       // Save tracker changes (create row if needed)
       if (Object.keys(trackerChanges).length > 0) {
         const link = formData.link || getLinkValue(row);
+        console.log('🔍 [TRACKER SAVE] Link extraction:', {
+          formDataLink: formData.link,
+          getLinkValueResult: getLinkValue(row),
+          finalLink: link,
+          trackerChanges
+        });
+        
         if (!link) {
           throw new Error("Cannot save tracker fields: Store link is missing");
         }
