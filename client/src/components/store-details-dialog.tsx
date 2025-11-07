@@ -585,9 +585,22 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
             value: currentUser.agentName
           });
           
-          // AUTOMATICALLY SET STATUS TO "CLAIMED" when DBA is created
-          // This ensures the store gets claimed in the Commission Tracker
-          trackerChanges['Status'] = 'Claimed';
+          // AUTOMATICALLY SET STATUS TO "CLAIMED" ONLY when DBA is FIRST CREATED
+          // Check if DBA was empty/null before and now has a value (first creation)
+          const wasEmpty = !initialData.dba || initialData.dba.trim() === '';
+          const nowHasValue = dbaName.trim() !== '';
+          
+          if (wasEmpty && nowHasValue) {
+            console.log('🎯 [AUTO-CLAIM] DBA created for first time, setting Status=Claimed');
+            trackerChanges['Status'] = 'Claimed';
+          } else {
+            console.log('ℹ️ [AUTO-CLAIM] DBA already exists, NOT overriding status', {
+              wasEmpty,
+              nowHasValue,
+              initialDba: initialData.dba,
+              newDba: dbaName
+            });
+          }
         }
       }
 

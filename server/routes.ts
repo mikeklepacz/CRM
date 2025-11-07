@@ -11085,7 +11085,6 @@ IMPORTANT:
       }
 
       // Find the row index - search from END since we just appended
-      const normalizedInputLink = normalizeLink(link.trim());
       let rowIndex = -1;
 
       // FIRST: Try to find in already-loaded data (search from end)
