@@ -844,9 +844,9 @@ export function VoiceSettings() {
             <div className="flex items-center gap-2">
               <Volume2 className="h-5 w-5" />
               <span className="font-semibold">Background Audio Settings</span>
-              {backgroundAudioSettings?.activeSessions > 0 && (
+              {(backgroundAudioSettings?.activeSessions ?? 0) > 0 && (
                 <Badge variant="default" className="ml-2">
-                  {backgroundAudioSettings.activeSessions} active
+                  {backgroundAudioSettings?.activeSessions ?? 0} active
                 </Badge>
               )}
             </div>

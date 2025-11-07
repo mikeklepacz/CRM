@@ -1160,6 +1160,30 @@ export const openaiAssistantFiles = pgTable("openai_assistant_files", {
   index("idx_assistant_files_assistant").on(table.assistantId),
 ]);
 
+// Background Audio Settings for Voice Proxy
+export const backgroundAudioSettings = pgTable("background_audio_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fileName: varchar("file_name", { length: 255 }),
+  filePath: varchar("file_path", { length: 512 }),
+  volumeDb: integer("volume_db").notNull().default(-25), // Volume in decibels (-40 to -10)
+  uploadedAt: timestamp("uploaded_at"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Voice Proxy Sessions - tracks active Twilio<->ElevenLabs connections
+export const voiceProxySessions = pgTable("voice_proxy_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  streamSid: varchar("stream_sid", { length: 255 }).notNull().unique(), // Twilio Media Stream SID
+  agentId: varchar("agent_id", { length: 255 }), // ElevenLabs agent ID from parameters
+  callSid: varchar("call_sid", { length: 255 }), // Twilio Call SID
+  status: varchar("status", { length: 50 }).default('active'), // active, completed, error
+  startedAt: timestamp("started_at").defaultNow(),
+  endedAt: timestamp("ended_at"),
+}, (table) => [
+  index("idx_proxy_sessions_stream_sid").on(table.streamSid),
+  index("idx_proxy_sessions_status").on(table.status),
+]);
+
 // Non-Duplicates tracking table
 export const nonDuplicates = pgTable("non_duplicates", {
   id: integer("id").primaryKey(),
@@ -1280,6 +1304,16 @@ export const insertAnalysisJobSchema = createInsertSchema(analysisJobs).omit({
   createdAt: true,
 });
 
+export const insertBackgroundAudioSettingsSchema = createInsertSchema(backgroundAudioSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertVoiceProxySessionSchema = createInsertSchema(voiceProxySessions).omit({
+  id: true,
+  startedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -1372,3 +1406,7 @@ export type AnalysisJob = typeof analysisJobs.$inferSelect;
 export type InsertAnalysisJob = z.infer<typeof insertAnalysisJobSchema>;
 export type NonDuplicate = typeof nonDuplicates.$inferSelect;
 export type InsertNonDuplicate = Omit<typeof nonDuplicates.$inferInsert, 'id' | 'markedAt'>;
+export type BackgroundAudioSettings = typeof backgroundAudioSettings.$inferSelect;
+export type InsertBackgroundAudioSettings = z.infer<typeof insertBackgroundAudioSettingsSchema>;
+export type VoiceProxySession = typeof voiceProxySessions.$inferSelect;
+export type InsertVoiceProxySession = z.infer<typeof insertVoiceProxySessionSchema>;
