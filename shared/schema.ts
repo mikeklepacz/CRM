@@ -863,6 +863,15 @@ export const elevenLabsConfig = pgTable("elevenlabs_config", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Twilio configuration (credentials stored as environment secrets)
+export const twilioConfig = pgTable("twilio_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  phoneNumber: varchar("phone_number", { length: 50 }), // Twilio phone number in E.164 format
+  isConfigured: boolean("is_configured").notNull().default(false), // Whether credentials are set
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ElevenLabs conversational AI agents
 // ElevenLabs Phone Numbers - stores available phone numbers from ElevenLabs
 export const elevenLabsPhoneNumbers = pgTable("elevenlabs_phone_numbers", {
@@ -1219,6 +1228,15 @@ export const insertElevenLabsConfigSchema = createInsertSchema(elevenLabsConfig)
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertTwilioConfigSchema = createInsertSchema(twilioConfig).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTwilioConfig = z.infer<typeof insertTwilioConfigSchema>;
+export type TwilioConfig = typeof twilioConfig.$inferSelect;
 
 export const insertElevenLabsPhoneNumberSchema = createInsertSchema(elevenLabsPhoneNumbers).omit({
   id: true,
