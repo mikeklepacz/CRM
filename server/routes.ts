@@ -11181,6 +11181,127 @@ IMPORTANT:
     }
   });
 
+  // Check if store has any commission records (prevents unclaim if commissions exist)
+  app.get('/api/stores/:encodedLink/commissions/count', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { encodedLink } = req.params;
+      const storeLink = decodeURIComponent(encodedLink);
+      
+      console.log('[Commission Count] Checking commissions for store:', storeLink);
+      
+      // Query commissions table joined with orders to filter by storeLink
+      const commissionRecords = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(commissions)
+        .innerJoin(orders, eq(commissions.orderId, orders.id))
+        .where(eq(orders.storeLink, storeLink));
+      
+      const count = Number(commissionRecords[0]?.count || 0);
+      console.log('[Commission Count] Found', count, 'commission records');
+      
+      res.json({ count });
+    } catch (error: any) {
+      console.error('[Commission Count] Error:', error);
+      res.status(500).json({ message: error.message || 'Failed to count commissions' });
+    }
+  });
+
+  // Delete Commission Tracker row (unclaim store)
+  app.delete('/api/sheets/tracker/row', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const { link } = req.body;
+      
+      if (!link) {
+        return res.status(400).json({ message: 'Link is required' });
+      }
+      
+      console.log('[Unclaim] Deleting tracker row for link:', link);
+      
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+      
+      if (!trackerSheet) {
+        return res.status(404).json({ message: 'Commission Tracker sheet not found' });
+      }
+      
+      const { spreadsheetId, sheetName } = trackerSheet;
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+      
+      if (rows.length === 0) {
+        return res.status(400).json({ message: 'Tracker sheet is empty' });
+      }
+      
+      const headers = rows[0];
+      const linkIndex = headers.findIndex(h => h.toLowerCase() === 'link');
+      
+      if (linkIndex === -1) {
+        return res.status(400).json({ message: 'Link column not found' });
+      }
+      
+      // Find row with matching link
+      const normalizedInputLink = normalizeLink(link.trim());
+      let rowIndex = -1;
+      
+      for (let i = 1; i < rows.length; i++) {
+        const rowLink = rows[i][linkIndex];
+        const normalizedRowLink = rowLink ? normalizeLink(rowLink.toString().trim()) : '';
+        
+        if (rowLink && normalizedRowLink === normalizedInputLink) {
+          rowIndex = i + 1; // +1 because sheets are 1-indexed
+          break;
+        }
+      }
+      
+      if (rowIndex === -1) {
+        return res.status(404).json({ message: 'Tracker row not found for this store' });
+      }
+      
+      console.log('[Unclaim] Found tracker row at index:', rowIndex);
+      
+      // Delete the row using Google Sheets API
+      // First get the sheetId (not the sheet name) for batchUpdate
+      const spreadsheetInfo = await googleSheets.getSpreadsheetInfo(spreadsheetId);
+      const targetSheet = spreadsheetInfo.sheets?.find(
+        s => s.properties?.title === sheetName
+      );
+      
+      if (!targetSheet || !targetSheet.properties?.sheetId) {
+        return res.status(404).json({ message: 'Sheet not found in spreadsheet' });
+      }
+      
+      const sheetId = targetSheet.properties.sheetId;
+      
+      // Use batchUpdate to delete the row
+      // rowIndex is 1-indexed from Google Sheets, but deleteDimension uses 0-indexed
+      // So we need to convert: rowIndex - 1 for startIndex
+      const sheetsClient = await googleSheets.getSystemGoogleSheetClient();
+      await sheetsClient.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndex - 1,  // Convert to 0-indexed
+                endIndex: rowIndex,         // endIndex is exclusive
+              }
+            }
+          }]
+        }
+      });
+      
+      console.log('[Unclaim] Successfully deleted tracker row');
+      
+      res.json({ message: 'Store unclaimed successfully', rowIndex });
+    } catch (error: any) {
+      console.error('[Unclaim] Error:', error);
+      res.status(500).json({ message: error.message || 'Failed to unclaim store' });
+    }
+  });
+
   // Auto-claim store by link (ONLY writes to Commission Tracker - Store DB syncs via formulas)
   app.post('/api/stores/auto-claim', isAuthenticatedCustom, async (req: any, res) => {
     try {

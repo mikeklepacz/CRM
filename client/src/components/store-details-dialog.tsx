@@ -886,6 +886,56 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
     }
   };
 
+  const handleUnclaim = async () => {
+    const link = formData.link || getLinkValue(row);
+    
+    if (!link) {
+      toast({
+        title: "Error",
+        description: "Cannot unclaim: Store link is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Step 1: Check commission count
+      console.log('[Unclaim] Checking commission count for:', link);
+      const encodedLink = encodeURIComponent(link);
+      const countResponse = await apiRequest('GET', `/api/stores/${encodedLink}/commissions/count`);
+      
+      if (countResponse.count > 0) {
+        toast({
+          title: "Cannot Unclaim",
+          description: `This store has ${countResponse.count} commission record${countResponse.count === 1 ? '' : 's'}. Cannot unclaim stores with existing commissions.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Step 2: Delete Commission Tracker row
+      console.log('[Unclaim] No commissions found, deleting tracker row');
+      await apiRequest('DELETE', '/api/sheets/tracker/row', { link });
+      
+      toast({
+        title: "Store Unclaimed",
+        description: "This store has been released back to the pool and is now available for others to claim.",
+      });
+
+      // Step 3: Refresh data and close dialog
+      await queryClient.invalidateQueries({ queryKey: ['merged-data'] });
+      await refetch();
+      onOpenChange(false);
+    } catch (error: any) {
+      console.error('[Unclaim] Error:', error);
+      toast({
+        title: "Unclaim Failed",
+        description: error.message || "Failed to unclaim store. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSave = () => {
     console.log('🔘 Save button clicked');
     console.log('📊 Current state:', { 
@@ -1078,6 +1128,34 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                 </div>
               </div>
               <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="claimed"
+                    checked={!!row._trackerRowIndex}
+                    onCheckedChange={async (checked) => {
+                      if (!checked) {
+                        // Unclaim: check commission count first
+                        await handleUnclaim();
+                      }
+                    }}
+                    data-testid="checkbox-claimed"
+                  />
+                  <Label
+                    htmlFor="claimed"
+                    className="text-sm font-medium cursor-pointer whitespace-nowrap flex items-center gap-1"
+                  >
+                    Claimed
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 opacity-50" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">Uncheck to release this store back to the pool.</p>
+                        <p className="text-xs">Cannot unclaim if commission records exist.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </Label>
+                </div>
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="listing-active"
