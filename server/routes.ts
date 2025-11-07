@@ -18990,12 +18990,12 @@ Use this store information to provide context-aware responses. When helping draf
       const clientsData = storeLinks.length > 0 
         ? await db
             .select({
-              link: clients.link,
+              link: clients.uniqueIdentifier,
               claimDate: clients.claimDate,
               createdAt: clients.createdAt,
             })
             .from(clients)
-            .where(inArray(clients.link, storeLinks))
+            .where(inArray(clients.uniqueIdentifier, storeLinks))
         : [];
 
       // Build map of Link -> claimDate
