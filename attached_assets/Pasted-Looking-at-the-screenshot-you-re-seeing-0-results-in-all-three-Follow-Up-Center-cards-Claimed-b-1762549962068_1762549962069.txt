@@ -1,0 +1,33 @@
+Looking at the screenshot, you're seeing "0" results in all three Follow-Up Center cards:
+
+Claimed but Never Contacted - 0 clients
+Interested Leads Going Cold - 0 clients
+First-Time Buyers - Reorder Alert - 0 clients
+Let me trace through the code to identify the issue.
+
+From rag://rag_source_10 (the console logs), I can see the Follow-Up Center API is executing successfully:
+
+[FOLLOW-UP] ✅ Results: { claimedUntouched: 17, interestedGoingCold: 0, closedWonReorder: 0 }
+This shows the backend is finding 17 clients in the "Claimed but Never Contacted" category, but the frontend is showing 0.
+
+The issue is likely in how the frontend is filtering the data. Looking at the Follow-Up Center widget code, I need to check if there's an agent filter being applied that's excluding these results.
+
+Let me check the agent filter context in rag://rag_source_10:
+
+[FOLLOW-UP] 👤 User: mikeklepacz@gmail.com Role: agent
+[FOLLOW-UP] 🔐 Agent mode - filtering by: Mike Klepacz
+The backend is correctly filtering to show only Mike Klepacz's clients (17 found), but the frontend might be applying an additional filter that's incorrectly excluding them.
+
+The most likely issue is that the Follow-Up Center widget is using the AgentFilterProvider context (like the Sales Dashboard widgets), which allows filtering by specific agents. If "All Agents" or a different agent is selected in that filter, it would show 0 results even though the backend returned 17.
+
+Let me propose a fix to ensure the Follow-Up Center respects the currently logged-in agent's data:
+
+client/src/pages/agent-dashboard.tsx
++0
+-0
+Ensure Follow-Up Center shows current agent's data
+Wait, I need to see the actual Follow-Up Center implementation first. The issue is that the widget isn't shown in the provided code. Let me check if it's using the admin agent filter incorrectly.
+
+The real issue is: The Follow-Up Center is likely wrapped in AgentFilterProvider and has a filter set to exclude the current agent's results.
+
+Since the backend logs show claimedUntouched: 17 but the frontend shows 0, the frontend filter is the culprit. The Follow-Up Center should not use the admin agent filter - it should always show the current user's data only.

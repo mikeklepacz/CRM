@@ -18985,6 +18985,28 @@ Use this store information to provide context-aware responses. When helping draf
 
       console.log('[FOLLOW-UP] 🏪 Processed', stores.length, 'stores');
 
+      // Get claim dates from PostgreSQL clients table
+      const storeLinks = Array.from(storesByLink.keys());
+      const clientsData = await db
+        .select({
+          link: clients.link,
+          claimDate: clients.claimDate,
+          createdAt: clients.createdAt,
+        })
+        .from(clients)
+        .where(sql`${clients.link} = ANY(${storeLinks})`);
+
+      // Build map of Link -> claimDate
+      const claimDateMap = new Map<string, Date>();
+      for (const client of clientsData) {
+        const dateToUse = client.claimDate || client.createdAt;
+        if (dateToUse) {
+          claimDateMap.set(client.link, dateToUse);
+        }
+      }
+
+      console.log('[FOLLOW-UP] 📅 Found claim dates for', claimDateMap.size, 'stores');
+
       // Apply bucket filters
       const now = new Date();
 
@@ -18995,10 +19017,17 @@ Use this store information to provide context-aware responses. When helping draf
           // Status = 'claimed' or 'contacted' with NO calls
           return (status === 'claimed' || status === 'contacted') && s._callCount === 0;
         })
-        .map(s => ({
-          ...s,
-          daysSinceContact: 0
-        }));
+        .map(s => {
+          const claimDate = claimDateMap.get(s.Link);
+          const daysSinceContact = claimDate 
+            ? Math.floor((now.getTime() - claimDate.getTime()) / (1000 * 60 * 60 * 24))
+            : 0;
+          
+          return {
+            ...s,
+            daysSinceContact
+          };
+        });
 
       // Bucket 2: Interested leads going cold
       const interestedGoingCold = stores
