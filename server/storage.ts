@@ -386,6 +386,7 @@ export interface IStorage {
   createCallSession(session: InsertCallSession): Promise<CallSession>;
   getCallSession(id: string): Promise<CallSession | undefined>;
   getCallSessionByConversationId(conversationId: string): Promise<CallSession | undefined>;
+  getCallSessionByCallSid(callSid: string): Promise<CallSession | undefined>;
   getCallSessions(filters?: { clientId?: string; initiatedByUserId?: string; status?: string }): Promise<CallSession[]>;
   updateCallSession(id: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
   updateCallSessionByConversationId(conversationId: string, updates: Partial<InsertCallSession>): Promise<CallSession>;
@@ -2142,6 +2143,11 @@ export class DatabaseStorage implements IStorage {
 
   async getCallSessionByConversationId(conversationId: string): Promise<CallSession | undefined> {
     const [session] = await db.select().from(callSessions).where(eq(callSessions.conversationId, conversationId));
+    return session;
+  }
+
+  async getCallSessionByCallSid(callSid: string): Promise<CallSession | undefined> {
+    const [session] = await db.select().from(callSessions).where(eq(callSessions.callSid, callSid));
     return session;
   }
 

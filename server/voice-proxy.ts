@@ -31,6 +31,8 @@ interface SessionState {
   streamSid: string;
   callSid: string;
   agentId: string;
+  phoneNumberId: string;
+  conversationId: string | null;
   twilioWs: WSClient;
   elevenLabsWs: WSClient | null;
   inputBuffer: Int16Array[];
@@ -39,6 +41,7 @@ interface SessionState {
   backgroundAudioPosition: number;
   volumeScalar: number;
   isActive: boolean;
+  clientData?: Record<string, any>;
 }
 
 class VoiceProxyServer {
@@ -97,9 +100,37 @@ class VoiceProxyServer {
     if (!message.start) return;
 
     const { streamSid, callSid, customParameters } = message.start;
-    const agentId = customParameters?.agent_id || '';
+    
+    // Extract all TwiML parameters
+    const agentId = customParameters?.agentId || '';
+    const phoneNumberId = customParameters?.phoneNumberId || '';
+    const ivrBehavior = customParameters?.ivrBehavior;
+    const basePrompt = customParameters?.basePrompt;
+    
+    let dynamicVariables: Record<string, string> | undefined;
+    let clientData: Record<string, any> | undefined;
+    
+    if (customParameters?.dynamicVariables) {
+      try {
+        dynamicVariables = JSON.parse(customParameters.dynamicVariables);
+      } catch (e) {
+        console.error('[VoiceProxy] Error parsing dynamicVariables:', e);
+      }
+    }
+    
+    if (customParameters?.clientData) {
+      try {
+        clientData = JSON.parse(customParameters.clientData);
+      } catch (e) {
+        console.error('[VoiceProxy] Error parsing clientData:', e);
+      }
+    }
 
-    console.log(`[VoiceProxy] Stream started: ${streamSid}, agent: ${agentId}`);
+    console.log(`[VoiceProxy] Stream started: ${streamSid}`);
+    console.log(`[VoiceProxy] Agent: ${agentId}`);
+    console.log(`[VoiceProxy] Phone Number ID: ${phoneNumberId}`);
+    console.log(`[VoiceProxy] IVR Behavior: ${ivrBehavior}`);
+    console.log(`[VoiceProxy] Client Data:`, clientData);
 
     // Create session in database
     await storage.createVoiceProxySession({
@@ -132,13 +163,21 @@ class VoiceProxyServer {
       }
     }
 
-    // Connect to ElevenLabs
-    const elevenLabsWs = await this.connectToElevenLabs(agentId);
+    // Connect to ElevenLabs with all parameters
+    const { ws: elevenLabsWs, conversationId } = await this.connectToElevenLabs({
+      agentId,
+      phoneNumberId,
+      dynamicVariables,
+      clientData,
+      basePrompt,
+    });
 
     const session: SessionState = {
       streamSid,
       callSid,
       agentId,
+      phoneNumberId,
+      conversationId,
       twilioWs: ws,
       elevenLabsWs,
       inputBuffer: [],
@@ -147,9 +186,30 @@ class VoiceProxyServer {
       backgroundAudioPosition: 0,
       volumeScalar,
       isActive: true,
+      clientData,
     };
 
     this.sessions.set(streamSid, session);
+
+    // Update call session with conversation ID from ElevenLabs
+    // This is critical for webhook correlation regardless of call type (campaign or manual)
+    if (conversationId) {
+      try {
+        const callSession = await storage.getCallSessionByCallSid(callSid);
+        if (callSession) {
+          await storage.updateCallSession(callSession.id, {
+            conversationId,
+          });
+          console.log(`[VoiceProxy] Updated call session ${callSession.id} with conversation ID: ${conversationId}`);
+        } else {
+          console.warn(`[VoiceProxy] No call session found for callSid: ${callSid}`);
+        }
+      } catch (error) {
+        console.error('[VoiceProxy] Error updating call session:', error);
+      }
+    } else {
+      console.warn('[VoiceProxy] No conversation ID received from ElevenLabs');
+    }
 
     // Set up ElevenLabs message handler
     if (elevenLabsWs) {
@@ -167,40 +227,105 @@ class VoiceProxyServer {
     this.startMixingLoop(session);
   }
 
-  private async connectToElevenLabs(agentId: string): Promise<WSClient | null> {
+  private async connectToElevenLabs(params: {
+    agentId: string;
+    phoneNumberId: string;
+    dynamicVariables?: Record<string, string>;
+    clientData?: Record<string, any>;
+    basePrompt?: string;
+  }): Promise<{ ws: WSClient | null; conversationId: string | null }> {
     try {
       if (!ELEVENLABS_API_KEY) {
         console.error('[VoiceProxy] ElevenLabs API key not configured');
-        return null;
+        return { ws: null, conversationId: null };
       }
 
-      // Get signed URL for private agent
+      // Build request payload with all parameters
+      const payload: any = {
+        agent_id: params.agentId,
+      };
+
+      // Add phone number ID if provided (required for outbound calls)
+      if (params.phoneNumberId) {
+        payload.agent_phone_number_id = params.phoneNumberId;
+      }
+
+      // Add dynamic variables for personalization
+      if (params.dynamicVariables && Object.keys(params.dynamicVariables).length > 0) {
+        payload.dynamic_variables = params.dynamicVariables;
+      }
+
+      // Add client data for tracking
+      if (params.clientData) {
+        payload.conversation_initiation_client_data = params.clientData;
+      }
+
+      // Add prompt override if provided (includes IVR instructions)
+      if (params.basePrompt) {
+        payload.conversation_config_override = {
+          agent: {
+            prompt: {
+              prompt: params.basePrompt
+            }
+          }
+        };
+      }
+
+      console.log(`[VoiceProxy] Connecting to ElevenLabs with payload:`, JSON.stringify(payload, null, 2));
+
+      // Get signed URL for private agent with parameters
       const response = await fetch(
-        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`,
+        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${params.agentId}`,
         {
+          method: 'POST',
           headers: {
             'xi-api-key': ELEVENLABS_API_KEY,
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify(payload),
         }
       );
 
-      const { signed_url } = await response.json();
+      // Check for HTTP errors
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[VoiceProxy] ElevenLabs API error (${response.status}):`, errorText);
+        return { ws: null, conversationId: null };
+      }
+
+      const data = await response.json();
+      const { signed_url, conversation_id } = data;
+      
+      // Validate that we got the required data
+      if (!signed_url) {
+        console.error('[VoiceProxy] No signed_url in ElevenLabs response:', data);
+        return { ws: null, conversationId: null };
+      }
+      
+      console.log(`[VoiceProxy] ElevenLabs conversation ID: ${conversation_id}`);
+
       const ws = new WSClient(signed_url);
 
       return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('WebSocket connection timeout'));
+        }, 10000); // 10 second timeout
+
         ws.on('open', () => {
-          console.log(`[VoiceProxy] Connected to ElevenLabs for agent ${agentId}`);
-          resolve(ws);
+          clearTimeout(timeout);
+          console.log(`[VoiceProxy] Connected to ElevenLabs for agent ${params.agentId}`);
+          resolve({ ws, conversationId: conversation_id });
         });
 
         ws.on('error', (error) => {
+          clearTimeout(timeout);
           console.error('[VoiceProxy] ElevenLabs connection error:', error);
           reject(error);
         });
       });
     } catch (error) {
       console.error('[VoiceProxy] Error connecting to ElevenLabs:', error);
-      return null;
+      return { ws: null, conversationId: null };
     }
   }
 
