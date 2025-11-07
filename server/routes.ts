@@ -10007,13 +10007,79 @@ IMPORTANT:
       
       console.log('Total column sync completed:', { totalsUpdated });
 
+      // RECALCULATE CLIENT TOTALS FROM SCRATCH: Rebuild totalSales and commissionTotal based on existing orders
+      console.log('Starting client totals recalculation...');
+      let clientsRecalculated = 0;
+      
+      try {
+        const allClients = await storage.getAllClients();
+        const allOrders = await storage.getAllOrders();
+        
+        // PERFORMANCE OPTIMIZATION: Load all commissions once and build lookup maps
+        const allCommissions = await db.select().from(commissions);
+        
+        // Build map: orderId -> total commission amount
+        const commissionsByOrder = new Map<string, number>();
+        for (const commission of allCommissions) {
+          const orderId = commission.orderId;
+          const amount = parseFloat(commission.amount || '0');
+          // Guard against NaN
+          if (!isNaN(amount)) {
+            commissionsByOrder.set(orderId, (commissionsByOrder.get(orderId) || 0) + amount);
+          }
+        }
+        
+        // Build map: clientId -> [orders]
+        const ordersByClient = new Map<string, typeof allOrders>();
+        for (const order of allOrders) {
+          if (order.clientId) {
+            if (!ordersByClient.has(order.clientId)) {
+              ordersByClient.set(order.clientId, []);
+            }
+            ordersByClient.get(order.clientId)!.push(order);
+          }
+        }
+        
+        for (const client of allClients) {
+          // Sum up all orders for this client
+          const clientOrders = ordersByClient.get(client.id) || [];
+          const newTotalSales = clientOrders.reduce((sum, o) => {
+            const orderTotal = parseFloat(o.total || '0');
+            return sum + (isNaN(orderTotal) ? 0 : orderTotal);
+          }, 0);
+          
+          // Sum up all commissions for this client using the pre-built map
+          const newCommissionTotal = clientOrders.reduce((sum, o) => 
+            sum + (commissionsByOrder.get(o.id) || 0), 0
+          );
+          
+          // Update client with recalculated totals (format as currency with 2 decimal places)
+          const oldTotalSales = parseFloat(client.totalSales || '0');
+          const oldCommissionTotal = parseFloat(client.commissionTotal || '0');
+          
+          if (Math.abs(oldTotalSales - newTotalSales) > 0.001 || Math.abs(oldCommissionTotal - newCommissionTotal) > 0.001) {
+            await storage.updateClient(client.id, {
+              totalSales: newTotalSales.toFixed(2),
+              commissionTotal: newCommissionTotal.toFixed(2)
+            });
+            console.log(`✓ Recalculated client ${client.id}: sales $${oldTotalSales.toFixed(2)}→$${newTotalSales.toFixed(2)}, commission $${oldCommissionTotal.toFixed(2)}→$${newCommissionTotal.toFixed(2)}`);
+            clientsRecalculated++;
+          }
+        }
+        
+        console.log('Client totals recalculation completed:', { clientsRecalculated });
+      } catch (recalcError: any) {
+        console.error('Error recalculating client totals:', recalcError);
+        // Don't fail the entire sync if recalculation fails
+      }
+
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
         wooLastSyncedAt: new Date()
       });
 
       res.json({
-        message: `WooCommerce sync completed. ${deleted > 0 ? `Removed ${deleted} deleted/cancelled orders. ` : ''}${autoMatched > 0 ? `Auto-matched ${autoMatched} orders. ` : ''}${commissionsCalculated > 0 ? `Calculated ${commissionsCalculated} commissions.` : ''}`,
+        message: `WooCommerce sync completed. ${deleted > 0 ? `Removed ${deleted} deleted/cancelled orders. ` : ''}${clientsRecalculated > 0 ? `Recalculated ${clientsRecalculated} client totals. ` : ''}${autoMatched > 0 ? `Auto-matched ${autoMatched} orders. ` : ''}${commissionsCalculated > 0 ? `Calculated ${commissionsCalculated} commissions.` : ''}`,
         synced,
         matched,
         autoMatched,
