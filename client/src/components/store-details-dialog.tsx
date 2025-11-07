@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, FileText, Check, ChevronsUpDown, Info } from "lucide-react";
+import { Loader2, Save, Phone, ExternalLink, Sparkles, Search, ChevronDown, Plus, FileText, Check, ChevronsUpDown, Info, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { debug } from "@/lib/debug";
@@ -26,6 +26,23 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // Helper function: Case-insensitive lookup for link value
 const getLinkValue = (row: any): string | undefined => {
@@ -73,6 +90,35 @@ const CANADIAN_PROVINCES = [
   'Saskatchewan',
   'Yukon'
 ];
+
+// Sortable Section Component for drag-and-drop reordering
+function SortableSection({ id, children }: { id: string; children: React.ReactNode }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      <div className="absolute left-0 top-0 flex items-center justify-center h-12 w-8 cursor-grab active:cursor-grabbing z-10" {...attributes} {...listeners}>
+        <GripVertical className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+      </div>
+      <div className="pl-6">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 // Store Details Dialog Component
 export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, storeSheetId, refetch, franchiseContext, currentColors, statusOptions, statusColors, contextUpdateTrigger, setContextUpdateTrigger, loadDefaultScriptTrigger }: {
@@ -204,6 +250,41 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   // State for collapsible reminder section
   const [reminderSectionOpen, setReminderSectionOpen] = useState(false);
   const [isSavingReminder, setIsSavingReminder] = useState(false);
+
+  // Section ordering state with localStorage persistence
+  const DEFAULT_SECTION_ORDER = ['basic-info', 'contact-info', 'sales-info'];
+  const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('storeDialog_sectionOrder');
+      return stored ? JSON.parse(stored) : DEFAULT_SECTION_ORDER;
+    } catch (error) {
+      console.warn('Failed to parse stored section order, using default:', error);
+      return DEFAULT_SECTION_ORDER;
+    }
+  });
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setSectionOrder((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        const newOrder = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem('storeDialog_sectionOrder', JSON.stringify(newOrder));
+        return newOrder;
+      });
+    }
+  };
 
   // Query all stores for multi-location picker - LAZY LOAD (only when search has 2+ chars)
   const { data: allStores, isLoading: isLoadingStores } = useQuery<any[]>({
@@ -1078,9 +1159,19 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
               ) : (
                 <>
                   <div className="flex-1 overflow-y-auto">
-                    <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
-                      {/* Sales Info - AT THE TOP - EXPANDED BY DEFAULT */}
-                      <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <Accordion type="multiple" defaultValue={["sales-info"]} className="w-full" data-testid="accordion-store-details">
+                        <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+                          {sectionOrder.map((sectionId) => {
+                            // Render draggable sections based on sectionOrder
+                            if (sectionId === 'sales-info') {
+                              return (
+                                <SortableSection key="sales-info" id="sales-info">
+                                  <AccordionItem value="sales-info" data-testid="accordion-item-sales-info">
                         <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-sales-info">
                           Sales Info
                         </AccordionTrigger>
@@ -1815,10 +1906,211 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                             </Collapsible>
                           </div>
                         </AccordionContent>
-                      </AccordionItem>
+                                  </AccordionItem>
+                                </SortableSection>
+                              );
+                            }
 
-                      {/* DBA Management - only show if this location has children or is a child */}
-                      {(childLocations && childLocations.children && childLocations.children.length > 0) || formData.parent_link ? (
+                            if (sectionId === 'basic-info') {
+                              return (
+                                <SortableSection key="basic-info" id="basic-info">
+                                  <AccordionItem value="basic-info" data-testid="accordion-item-basic-info">
+                                    <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-basic-info">
+                                      Basic Information
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                      <div className="space-y-4 pt-2">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          <div className="space-y-2">
+                                            <Label htmlFor="name">Store Name</Label>
+                                            <Input
+                                              id="name"
+                                              data-testid="input-store-name"
+                                              value={formData.name}
+                                              onChange={(e) => handleInputChange('name', e.target.value)}
+                                              placeholder="Enter store name"
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label htmlFor="type">Type</Label>
+                                            <Input
+                                              id="type"
+                                              data-testid="input-type"
+                                              value={formData.type}
+                                              onChange={(e) => handleInputChange('type', e.target.value)}
+                                              placeholder="e.g., Dispensary, Headshop"
+                                            />
+                                          </div>
+                                        </div>
+
+                                        {/* Profile Link - HIDDEN */}
+                                        <input
+                                          type="hidden"
+                                          id="link"
+                                          value={formData.link}
+                                          onChange={(e) => handleInputChange('link', e.target.value)}
+                                        />
+                                      </div>
+                                    </AccordionContent>
+                                  </AccordionItem>
+                                </SortableSection>
+                              );
+                            }
+
+                            if (sectionId === 'contact-info') {
+                              return (
+                                <SortableSection key="contact-info" id="contact-info">
+                                  <AccordionItem value="contact-info" data-testid="accordion-item-contact-info">
+                                    <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-contact-info">
+                                      Contact Information
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                      <div className="space-y-4 pt-2">
+                                        {/* Street Address, City, State */}
+                                        <div className="space-y-2">
+                                          <Label htmlFor="address">Street Address</Label>
+                                          <Input
+                                            id="address"
+                                            data-testid="input-address"
+                                            value={formData.address}
+                                            onChange={(e) => handleInputChange('address', e.target.value)}
+                                            placeholder="123 Main St"
+                                          />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          <div className="space-y-2">
+                                            <Label htmlFor="city">City</Label>
+                                            <Input
+                                              id="city"
+                                              data-testid="input-city"
+                                              value={formData.city}
+                                              onChange={(e) => handleInputChange('city', e.target.value)}
+                                              placeholder="City"
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label htmlFor="state">State</Label>
+                                            <Popover>
+                                              <PopoverTrigger asChild>
+                                                <Button
+                                                  id="state"
+                                                  variant="outline"
+                                                  role="combobox"
+                                                  className={cn(
+                                                    "w-full justify-between font-normal",
+                                                    !formData.state && "text-muted-foreground"
+                                                  )}
+                                                  data-testid="input-state"
+                                                >
+                                                  {formData.state || "State"}
+                                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-[300px] p-0" align="start">
+                                                <Command>
+                                                  <CommandInput placeholder="Search states..." />
+                                                  <CommandList>
+                                                    <CommandEmpty>No state found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                      {US_STATES.map((state) => (
+                                                        <CommandItem
+                                                          key={state}
+                                                          value={state}
+                                                          onSelect={() => handleInputChange('state', state)}
+                                                        >
+                                                          <Check
+                                                            className={cn(
+                                                              "mr-2 h-4 w-4",
+                                                              formData.state === state ? "opacity-100" : "opacity-0"
+                                                            )}
+                                                          />
+                                                          {state}
+                                                        </CommandItem>
+                                                      ))}
+                                                      {CANADIAN_PROVINCES.map((province) => (
+                                                        <CommandItem
+                                                          key={province}
+                                                          value={province}
+                                                          onSelect={() => handleInputChange('state', province)}
+                                                        >
+                                                          <Check
+                                                            className={cn(
+                                                              "mr-2 h-4 w-4",
+                                                              formData.state === province ? "opacity-100" : "opacity-0"
+                                                            )}
+                                                          />
+                                                          {province}
+                                                        </CommandItem>
+                                                      ))}
+                                                    </CommandGroup>
+                                                  </CommandList>
+                                                </Command>
+                                              </PopoverContent>
+                                            </Popover>
+                                          </div>
+                                        </div>
+
+                                        <Separator className="my-4" />
+
+                                        {/* Phone, Email, Website */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          <div className="space-y-2">
+                                            <Label htmlFor="phone">Phone</Label>
+                                            <Input
+                                              id="phone"
+                                              data-testid="input-phone"
+                                              type="tel"
+                                              value={formData.phone}
+                                              onChange={(e) => handleInputChange('phone', e.target.value)}
+                                              placeholder="(555) 123-4567"
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label htmlFor="email">Email</Label>
+                                            <Input
+                                              id="email"
+                                              data-testid="input-email"
+                                              type="email"
+                                              value={formData.email}
+                                              onChange={(e) => handleInputChange('email', e.target.value)}
+                                              placeholder="contact@store.com"
+                                            />
+                                          </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                          <Label htmlFor="website">Website</Label>
+                                          <div className="flex gap-2">
+                                            <Input
+                                              id="website"
+                                              data-testid="input-website"
+                                              value={formData.website}
+                                              onChange={(e) => handleInputChange('website', e.target.value)}
+                                              placeholder="https://www.store.com"
+                                              className="flex-1"
+                                            />
+                                            {formData.website && (
+                                              <Button variant="outline" size="icon" asChild data-testid="button-open-website">
+                                                <a href={formData.website.startsWith('http') ? formData.website : `https://${formData.website}`} target="_blank" rel="noopener noreferrer">
+                                                  <ExternalLink className="h-4 w-4" />
+                                                </a>
+                                              </Button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </AccordionContent>
+                                  </AccordionItem>
+                                </SortableSection>
+                              );
+                            }
+
+                            return null;
+                          })}
+                        </SortableContext>
+
+                        {/* DBA Management - only show if this location has children or is a child */}
+                        {(childLocations && childLocations.children && childLocations.children.length > 0) || formData.parent_link ? (
                         <AccordionItem value="dba-management" data-testid="accordion-item-dba-management">
                           <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-dba-management">
                             DBA Management
@@ -1947,191 +2239,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                           </AccordionContent>
                         </AccordionItem>
                       ) : null}
-
-                      {/* Basic Information */}
-                      <AccordionItem value="basic-info" data-testid="accordion-item-basic-info">
-                        <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-basic-info">
-                          Basic Information
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="space-y-4 pt-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="name">Store Name</Label>
-                                <Input
-                                  id="name"
-                                  data-testid="input-store-name"
-                                  value={formData.name}
-                                  onChange={(e) => handleInputChange('name', e.target.value)}
-                                  placeholder="Enter store name"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="type">Type</Label>
-                                <Input
-                                  id="type"
-                                  data-testid="input-type"
-                                  value={formData.type}
-                                  onChange={(e) => handleInputChange('type', e.target.value)}
-                                  placeholder="e.g., Dispensary, Headshop"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Profile Link - HIDDEN */}
-                            <input
-                              type="hidden"
-                              id="link"
-                              value={formData.link}
-                              onChange={(e) => handleInputChange('link', e.target.value)}
-                            />
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-
-                      {/* Contact Information - includes Street Address, City, State */}
-                      <AccordionItem value="contact-info" data-testid="accordion-item-contact-info">
-                        <AccordionTrigger className="text-lg font-semibold" data-testid="trigger-contact-info">
-                          Contact Information
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="space-y-4 pt-2">
-                            {/* Street Address, City, State */}
-                            <div className="space-y-2">
-                              <Label htmlFor="address">Street Address</Label>
-                              <Input
-                                id="address"
-                                data-testid="input-address"
-                                value={formData.address}
-                                onChange={(e) => handleInputChange('address', e.target.value)}
-                                placeholder="123 Main St"
-                              />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="city">City</Label>
-                                <Input
-                                  id="city"
-                                  data-testid="input-city"
-                                  value={formData.city}
-                                  onChange={(e) => handleInputChange('city', e.target.value)}
-                                  placeholder="City"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="state">State</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      id="state"
-                                      variant="outline"
-                                      role="combobox"
-                                      className={cn(
-                                        "w-full justify-between font-normal",
-                                        !formData.state && "text-muted-foreground"
-                                      )}
-                                      data-testid="input-state"
-                                    >
-                                      {formData.state || "State"}
-                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-[300px] p-0" align="start">
-                                    <Command>
-                                      <CommandInput placeholder="Search states..." />
-                                      <CommandList>
-                                        <CommandEmpty>No state found.</CommandEmpty>
-                                        <CommandGroup>
-                                          {US_STATES.map((state) => (
-                                            <CommandItem
-                                              key={state}
-                                              value={state}
-                                              onSelect={() => handleInputChange('state', state)}
-                                            >
-                                              <Check
-                                                className={cn(
-                                                  "mr-2 h-4 w-4",
-                                                  formData.state === state ? "opacity-100" : "opacity-0"
-                                                )}
-                                              />
-                                              {state}
-                                            </CommandItem>
-                                          ))}
-                                          {CANADIAN_PROVINCES.map((province) => (
-                                            <CommandItem
-                                              key={province}
-                                              value={province}
-                                              onSelect={() => handleInputChange('state', province)}
-                                            >
-                                              <Check
-                                                className={cn(
-                                                  "mr-2 h-4 w-4",
-                                                  formData.state === province ? "opacity-100" : "opacity-0"
-                                                )}
-                                              />
-                                              {province}
-                                            </CommandItem>
-                                          ))}
-                                        </CommandGroup>
-                                      </CommandList>
-                                    </Command>
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                            </div>
-
-                            <Separator className="my-4" />
-
-                            {/* Phone, Email, Website */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="phone">Phone</Label>
-                                <Input
-                                  id="phone"
-                                  data-testid="input-phone"
-                                  type="tel"
-                                  value={formData.phone}
-                                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                                  placeholder="(555) 123-4567"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="email">Email</Label>
-                                <Input
-                                  id="email"
-                                  data-testid="input-email"
-                                  type="email"
-                                  value={formData.email}
-                                  onChange={(e) => handleInputChange('email', e.target.value)}
-                                  placeholder="contact@store.com"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="website">Website</Label>
-                              <div className="flex gap-2">
-                                <Input
-                                  id="website"
-                                  data-testid="input-website"
-                                  value={formData.website}
-                                  onChange={(e) => handleInputChange('website', e.target.value)}
-                                  placeholder="https://www.store.com"
-                                  className="flex-1"
-                                />
-                                {formData.website && (
-                                  <Button variant="outline" size="icon" asChild data-testid="button-open-website">
-                                    <a href={formData.website.startsWith('http') ? formData.website : `https://${formData.website}`} target="_blank" rel="noopener noreferrer">
-                                      <ExternalLink className="h-4 w-4" />
-                                    </a>
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
+                      </Accordion>
+                    </DndContext>
                   </div>
 
                   {/* Sticky Save/Cancel Buttons - Only shown when AI Assistant is visible */}
