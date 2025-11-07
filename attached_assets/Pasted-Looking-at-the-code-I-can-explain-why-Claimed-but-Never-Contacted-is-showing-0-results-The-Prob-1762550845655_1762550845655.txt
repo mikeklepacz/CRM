@@ -1,0 +1,39 @@
+Looking at the code, I can explain why "Claimed but Never Contacted" is showing 0 results:
+
+The Problem
+The Follow-Up Center tries to find clients in two places:
+
+Google Sheets Commission Tracker - where claimed stores live
+PostgreSQL clients table - where claim dates are stored
+But there's a critical disconnect: The backend code ([rag://rag_source_5]) is querying the PostgreSQL database for claim dates, but your claim dates only exist in Google Sheets, not in the database.
+
+What's Happening Step-by-Step
+The backend reads all stores from the Commission Tracker (Google Sheets)
+It extracts the unique store links
+It queries the PostgreSQL clients table to get claim dates:
+const clientsData = await db
+  .select({
+    link: clients.link,
+    claimDate: clients.claimDate,
+    createdAt: clients.createdAt,
+  })
+  .from(clients)
+  .where(sql`${clients.link} = ANY(${storeLinks})`);
+It builds a map of Link -> claimDate from the database results
+But the database has no claim dates because they're only stored in Google Sheets
+So the claimDateMap is empty
+When filtering for "Claimed but Never Contacted", it tries to calculate daysSinceContact using the claim date, but gets nothing:
+const claimDate = claimDateMap.get(s.Link);
+const daysSinceContact = claimDate 
+  ? Math.floor((now.getTime() - claimDate.getTime()) / (1000 * 60 * 60 * 24))
+  : 0;
+Since daysSinceContact = 0 for everyone, no stores match your slider filter (1-365 days)
+The Root Cause
+The system expects claim dates to exist in the PostgreSQL clients.claimDate column, but that column is never being populated when stores are claimed. The claim only writes to Google Sheets' Commission Tracker.
+
+The Fix
+You need to either:
+
+Sync claim dates to PostgreSQL when a store is claimed (recommended)
+Read claim dates from Google Sheets instead of PostgreSQL in the Follow-Up Center endpoint
+The proper solution is #1 - update the claim/auto-claim endpoints to write the claim date to both Google Sheets AND the PostgreSQL clients table.
