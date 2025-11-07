@@ -86,9 +86,21 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
       const url = user?.role === 'admin' && selectedAgent !== 'all'
         ? `/api/call-history?agentId=${selectedAgent}`
         : '/api/call-history';
-      return await apiRequest('GET', url);
+      console.log('[CallHistory] Fetching from:', url);
+      const result = await apiRequest('GET', url);
+      console.log('[CallHistory] Received data:', result?.length, 'records');
+      console.log('[CallHistory] First 3 records:', result?.slice(0, 3));
+      return result;
     },
     enabled: mode === 'chronological',
+  });
+
+  console.log('[CallHistory] Component state:', {
+    mode,
+    isLoading,
+    callHistoryCount: callHistory?.length,
+    selectedAgent,
+    userRole: user?.role
   });
 
   // Fetch follow-up center data
