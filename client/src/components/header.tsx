@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical } from "lucide-react";
+import { LogOut, Settings, BarChart3, Home, ShieldCheck, TrendingUp, Bot, MapPin, Mail, FileText, Phone, Menu, MoreVertical, Target } from "lucide-react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { ColorCustomizer } from "./color-customizer";
@@ -69,6 +69,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   Clients
                 </Button>
               </Link>
+              <Link href="/follow-up-center">
+                <Button variant="ghost" size="sm" data-testid="nav-follow-up-center">
+                  <Target className="mr-2 h-4 w-4" />
+                  Follow-Up
+                </Button>
+              </Link>
               <Link href="/map-search">
                 <Button variant="ghost" size="sm" data-testid="nav-map-search">
                   <MapPin className="mr-2 h-4 w-4" />
@@ -118,6 +124,10 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                 <DropdownMenuItem onClick={() => { setLocation('/clients'); setMobileMenuOpen(false); }}>
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Clients
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setLocation('/follow-up-center'); setMobileMenuOpen(false); }}>
+                  <Target className="mr-2 h-4 w-4" />
+                  Follow-Up Center
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => { setLocation('/map-search'); setMobileMenuOpen(false); }}>
                   <MapPin className="mr-2 h-4 w-4" />

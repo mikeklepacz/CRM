@@ -24,6 +24,7 @@ import MapSearchSettings from "@/pages/map-search-settings";
 import Documents from "@/pages/documents";
 import Voice from "@/pages/voice";
 import CallManager from "@/pages/call-manager";
+import FollowUpCenter from "@/pages/follow-up-center";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -68,6 +69,7 @@ function Router() {
             <Route path="/settings" component={Settings} />
             <Route path="/clients" component={ClientDashboard} />
             <Route path="/documents" component={Documents} />
+            <Route path="/follow-up-center" component={FollowUpCenter} />
             <Route path="/map-search" component={MapSearch} />
             <Route path="/map-search-settings" component={MapSearchSettings} />
             <Route path="/sales" component={SalesDashboard} />
