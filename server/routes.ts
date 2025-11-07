@@ -19026,7 +19026,12 @@ Use this store information to provide context-aware responses. When helping draf
             : 0;
           
           return {
-            ...s,
+            id: s.Link,
+            data: s,
+            claimDate: claimDate?.toISOString() || null,
+            lastContactDate: null,
+            firstOrderDate: null,
+            lastOrderDate: null,
             daysSinceContact
           };
         });
@@ -19041,7 +19046,12 @@ Use this store information to provide context-aware responses. When helping draf
           return isWarmStatus && s._callCount > 0 && s._total === 0 && s._daysSinceCall > 7;
         })
         .map(s => ({
-          ...s,
+          id: s.Link,
+          data: s,
+          claimDate: claimDateMap.get(s.Link)?.toISOString() || null,
+          lastContactDate: s._callDate?.toISOString() || null,
+          firstOrderDate: null,
+          lastOrderDate: null,
           daysSinceContact: s._daysSinceCall
         }));
 
@@ -19055,7 +19065,12 @@ Use this store information to provide context-aware responses. When helping draf
           return daysSinceOrder > 30;
         })
         .map(s => ({
-          ...s,
+          id: s.Link,
+          data: s,
+          claimDate: claimDateMap.get(s.Link)?.toISOString() || null,
+          lastContactDate: s._callDate?.toISOString() || null,
+          firstOrderDate: s._orderDate?.toISOString() || null,
+          lastOrderDate: s._orderDate?.toISOString() || null,
           daysSinceOrder: s._orderDate ? Math.floor((now.getTime() - s._orderDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
         }));
 
