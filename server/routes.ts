@@ -18786,7 +18786,7 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Follow-up Center endpoint
+  // Follow-up Center endpoint - Reads from Google Sheets Commission Tracker
   app.get('/api/follow-up-center', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
@@ -18796,8 +18796,190 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'User not found' });
       }
 
-      const followUpData = await storage.getFollowUpClients(userId, user.role || 'agent');
-      res.json(followUpData);
+      console.log('[FOLLOW-UP] 👤 User:', user.email, 'Role:', user.role);
+
+      // SECURITY: Determine which agents' data to show
+      let allowedAgentNames: string[] = [];
+      const isAgent = user.role === 'agent';
+
+      if (isAgent) {
+        // SECURITY: Agents can ONLY see their own claimed clients
+        const currentAgentName = user.agentName || `${user.firstName} ${user.lastName}`.trim();
+        allowedAgentNames = [currentAgentName];
+        console.log('[FOLLOW-UP] 🔐 Agent mode - filtering by:', currentAgentName);
+      } else {
+        // Admins see all clients (no filtering)
+        console.log('[FOLLOW-UP] 🔐 Admin mode - no filtering');
+        allowedAgentNames = [];
+      }
+
+      // Get Commission Tracker sheet
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      if (!trackerSheet) {
+        console.log('[FOLLOW-UP] ❌ No Commission Tracker sheet found');
+        return res.json({ claimedUntouched: [], interestedGoingCold: [], closedWonReorder: [] });
+      }
+
+      // Read all Commission Tracker data
+      const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+      const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+
+      if (trackerRows.length <= 1) {
+        console.log('[FOLLOW-UP] ❌ Commission Tracker is empty');
+        return res.json({ claimedUntouched: [], interestedGoingCold: [], closedWonReorder: [] });
+      }
+
+      // Parse headers
+      const headers = trackerRows[0];
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'link');
+      const agentNameIndex = headers.findIndex((h: string) => h.toLowerCase() === 'agent name');
+      const statusIndex = headers.findIndex((h: string) => h.toLowerCase() === 'status');
+      const totalIndex = headers.findIndex((h: string) => h.toLowerCase() === 'total');
+      const dateIndex = headers.findIndex((h: string) => h.toLowerCase() === 'date');
+      const parentLinkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'parent link');
+
+      console.log('[FOLLOW-UP] 📋 Column indices:', { linkIndex, agentNameIndex, statusIndex, totalIndex, dateIndex });
+
+      // Get all call history for correlation
+      const allCallHistory = await storage.getAllCallHistory();
+      console.log('[FOLLOW-UP] 📞 Found', allCallHistory.length, 'total calls in history');
+
+      // Build a map of Link -> call metrics
+      const callMetrics: Map<string, { callCount: number; lastCallDate: Date | null; daysSinceCall: number }> = new Map();
+      
+      for (const call of allCallHistory) {
+        if (!call.storeLink) continue;
+        
+        const existing = callMetrics.get(call.storeLink);
+        const callDate = new Date(call.calledAt);
+        
+        // Always increment call count
+        const newCallCount = (existing?.callCount || 0) + 1;
+        
+        // Track the most recent call date
+        const mostRecentDate = !existing?.lastCallDate || callDate > existing.lastCallDate 
+          ? callDate 
+          : existing.lastCallDate;
+        
+        const daysSince = Math.floor((new Date().getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        callMetrics.set(call.storeLink, {
+          callCount: newCallCount,
+          lastCallDate: mostRecentDate,
+          daysSinceCall: daysSince
+        });
+      }
+
+      console.log('[FOLLOW-UP] 📊 Call metrics built for', callMetrics.size, 'unique stores');
+
+      // Process tracker rows and build store objects
+      const stores: any[] = [];
+      
+      for (let i = 1; i < trackerRows.length; i++) {
+        const row = trackerRows[i];
+        const link = row[linkIndex]?.toString().trim();
+        const rowAgent = row[agentNameIndex]?.toString().trim();
+        const status = row[statusIndex]?.toString().trim().toLowerCase() || '';
+        const totalStr = row[totalIndex]?.toString() || '0';
+        const dateStr = row[dateIndex]?.toString() || '';
+        const parentLink = parentLinkIndex >= 0 ? row[parentLinkIndex]?.toString().trim() : '';
+
+        if (!link) continue;
+        if (parentLink) continue; // Skip child locations
+
+        // SECURITY: Filter by allowed agent names
+        if (allowedAgentNames.length > 0) {
+          if (agentNameIndex === -1) continue;
+          const rowAgentNormalized = rowAgent ? rowAgent.toLowerCase().trim() : '';
+          const isAllowed = allowedAgentNames.some(name => 
+            name.toLowerCase().trim() === rowAgentNormalized
+          );
+          if (!isAllowed) continue;
+        }
+
+        // Parse total sales
+        const total = parseFloat(String(totalStr).replace(/[^0-9.-]/g, '')) || 0;
+
+        // Parse date
+        let orderDate: Date | null = null;
+        if (dateStr) {
+          const parsed = new Date(dateStr);
+          if (!isNaN(parsed.getTime())) {
+            orderDate = parsed;
+          }
+        }
+
+        // Get call metrics for this store
+        const metrics = callMetrics.get(link) || { callCount: 0, lastCallDate: null, daysSinceCall: 0 };
+
+        stores.push({
+          ...row,
+          link,
+          status,
+          total,
+          orderDate,
+          callCount: metrics.callCount,
+          lastCallDate: metrics.lastCallDate,
+          daysSinceCall: metrics.daysSinceCall
+        });
+      }
+
+      console.log('[FOLLOW-UP] 🏪 Processed', stores.length, 'stores');
+
+      // Apply bucket filters
+      const now = new Date();
+
+      // Bucket 1: Claimed but never contacted
+      const claimedUntouched = stores
+        .filter(s => {
+          const status = s.status.toLowerCase();
+          // Status = 'claimed' or 'contacted' with NO calls
+          return (status === 'claimed' || status === 'contacted') && s.callCount === 0;
+        })
+        .map(s => ({
+          ...s,
+          daysSinceContact: 0
+        }));
+
+      // Bucket 2: Interested leads going cold
+      const interestedGoingCold = stores
+        .filter(s => {
+          const status = s.status.toLowerCase();
+          // Status = interested/sample sent/follow up/warm
+          // Has calls, no orders, last call > 7 days
+          const isWarmStatus = ['interested', 'sample sent', 'follow up', 'warm'].includes(status);
+          return isWarmStatus && s.callCount > 0 && s.total === 0 && s.daysSinceCall > 7;
+        })
+        .map(s => ({
+          ...s,
+          daysSinceContact: s.daysSinceCall
+        }));
+
+      // Bucket 3: First-time buyers - reorder alert
+      // For now, just show stores with orders > 0 and last order > 30 days
+      const closedWonReorder = stores
+        .filter(s => {
+          if (s.total === 0) return false;
+          if (!s.orderDate) return false;
+          const daysSinceOrder = Math.floor((now.getTime() - s.orderDate.getTime()) / (1000 * 60 * 60 * 24));
+          return daysSinceOrder > 30;
+        })
+        .map(s => ({
+          ...s,
+          daysSinceOrder: s.orderDate ? Math.floor((now.getTime() - s.orderDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
+        }));
+
+      console.log('[FOLLOW-UP] ✅ Results:', {
+        claimedUntouched: claimedUntouched.length,
+        interestedGoingCold: interestedGoingCold.length,
+        closedWonReorder: closedWonReorder.length
+      });
+
+      res.json({
+        claimedUntouched,
+        interestedGoingCold,
+        closedWonReorder
+      });
     } catch (error: any) {
       console.error('Error fetching follow-up center data:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch follow-up data' });
