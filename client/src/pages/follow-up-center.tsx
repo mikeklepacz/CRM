@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ export default function FollowUpCenter() {
   const [claimedDays, setClaimedDays] = useState([7, 90]);
   const [interestedDays, setInterestedDays] = useState([14, 90]);
   const [reorderDays, setReorderDays] = useState([30, 180]);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
   // Collapsible states
   const [claimedOpen, setClaimedOpen] = useState(true);
@@ -40,6 +41,56 @@ export default function FollowUpCenter() {
   // Store Details Dialog state
   const [storeDialogOpen, setStoreDialogOpen] = useState(false);
   const [selectedStore, setSelectedStore] = useState<FollowUpClient | null>(null);
+
+  // Fetch user preferences
+  const { data: userPreferences } = useQuery<{
+    followUpFilters?: {
+      claimedDays: [number, number];
+      interestedDays: [number, number];
+      reorderDays: [number, number];
+    };
+  }>({
+    queryKey: ['/api/user/preferences'],
+  });
+
+  // Load saved filter preferences on mount
+  useEffect(() => {
+    if (userPreferences && !preferencesLoaded) {
+      if (userPreferences.followUpFilters) {
+        setClaimedDays(userPreferences.followUpFilters.claimedDays);
+        setInterestedDays(userPreferences.followUpFilters.interestedDays);
+        setReorderDays(userPreferences.followUpFilters.reorderDays);
+      }
+      setPreferencesLoaded(true);
+    }
+  }, [userPreferences, preferencesLoaded]);
+
+  // Save filter preferences mutation
+  const saveFiltersMutation = useMutation({
+    mutationFn: async (filters: { claimedDays: [number, number]; interestedDays: [number, number]; reorderDays: [number, number] }) => {
+      return await apiRequest('PUT', '/api/user/preferences', {
+        followUpFilters: filters,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+    },
+  });
+
+  // Save filters when they change (with debounce effect) - only after preferences are loaded
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+
+    const timer = setTimeout(() => {
+      saveFiltersMutation.mutate({
+        claimedDays: claimedDays as [number, number],
+        interestedDays: interestedDays as [number, number],
+        reorderDays: reorderDays as [number, number],
+      });
+    }, 500); // Debounce for 500ms
+
+    return () => clearTimeout(timer);
+  }, [claimedDays, interestedDays, reorderDays, preferencesLoaded]);
 
   // Fetch follow-up center data
   const { data: followUpData, isLoading } = useQuery<FollowUpData>({

@@ -263,6 +263,11 @@ export const userPreferences = pgTable("user_preferences", {
   autoLoadScript: boolean("auto_load_script").default(true), // Auto-load default script when clicking phone numbers
   viewAsAgent: boolean("view_as_agent").default(false), // For admins: toggle to view dashboard as an agent would see it
   splitScreenProposals: boolean("split_screen_proposals").default(false), // Split-screen mode for KB proposals (desktop only)
+  followUpFilters: jsonb("follow_up_filters").$type<{
+    claimedDays: [number, number];
+    interestedDays: [number, number];
+    reorderDays: [number, number];
+  }>().default(sql`'{"claimedDays":[7,90],"interestedDays":[14,90],"reorderDays":[30,180]}'::jsonb`), // Follow-Up Center filter ranges
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
