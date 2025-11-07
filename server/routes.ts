@@ -18872,14 +18872,14 @@ Use this store information to provide context-aware responses. When helping draf
 
       console.log('[FOLLOW-UP] 📊 Call metrics built for', callMetrics.size, 'unique stores');
 
-      // Process tracker rows and build store objects
-      const stores: any[] = [];
+      // Process tracker rows and build store objects with proper field mapping
+      const storesByLink: Map<string, any> = new Map();
       
       for (let i = 1; i < trackerRows.length; i++) {
         const row = trackerRows[i];
         const link = row[linkIndex]?.toString().trim();
         const rowAgent = row[agentNameIndex]?.toString().trim();
-        const status = row[statusIndex]?.toString().trim().toLowerCase() || '';
+        const status = row[statusIndex]?.toString().trim() || '';
         const totalStr = row[totalIndex]?.toString() || '0';
         const dateStr = row[dateIndex]?.toString() || '';
         const parentLink = parentLinkIndex >= 0 ? row[parentLinkIndex]?.toString().trim() : '';
@@ -18912,17 +18912,76 @@ Use this store information to provide context-aware responses. When helping draf
         // Get call metrics for this store
         const metrics = callMetrics.get(link) || { callCount: 0, lastCallDate: null, daysSinceCall: 0 };
 
-        stores.push({
-          ...row,
-          link,
-          status,
-          total,
-          orderDate,
-          callCount: metrics.callCount,
-          lastCallDate: metrics.lastCallDate,
-          daysSinceCall: metrics.daysSinceCall
+        // Build proper object with field names mapped from headers
+        const storeObj: any = {
+          Link: link,
+          'Agent Name': rowAgent,
+          Status: status,
+          _total: total,
+          _orderDate: orderDate,
+          _callCount: metrics.callCount,
+          _lastCallDate: metrics.lastCallDate,
+          _daysSinceCall: metrics.daysSinceCall,
+        };
+
+        // Map all other tracker columns to field names
+        headers.forEach((header: string, idx: number) => {
+          if (row[idx] !== undefined && row[idx] !== null && row[idx] !== '') {
+            storeObj[header] = row[idx];
+          }
         });
+
+        storesByLink.set(link, storeObj);
       }
+
+      console.log('[FOLLOW-UP] 🏪 Processed', storesByLink.size, 'unique stores from tracker');
+
+      // Enrich with Store Database data (Name, Phone, etc.)
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      if (storeSheet) {
+        const storeRange = `${storeSheet.sheetName}!A:ZZ`;
+        const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+        
+        if (storeRows.length > 1) {
+          const storeHeaders = storeRows[0];
+          const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+          
+          // Build lookup map: normalized link -> full store row data
+          const storeDataMap = new Map<string, any>();
+          for (let i = 1; i < storeRows.length; i++) {
+            const row = storeRows[i];
+            const storeLink = row[storeLinkIndex]?.toString().trim();
+            
+            if (storeLink) {
+              const normalized = normalizeLink(storeLink);
+              const storeData: any = {};
+              
+              // Map all Store Database columns to field names
+              storeHeaders.forEach((header: string, idx: number) => {
+                if (row[idx] !== undefined && row[idx] !== null && row[idx] !== '') {
+                  storeData[header] = row[idx];
+                }
+              });
+              
+              storeDataMap.set(normalized, storeData);
+            }
+          }
+          
+          // Enrich stores with Store Database data
+          for (const [link, store] of storesByLink.entries()) {
+            const normalizedLink = normalizeLink(link);
+            const storeData = storeDataMap.get(normalizedLink);
+            if (storeData) {
+              // Merge Store Database fields into store object
+              Object.assign(store, storeData);
+            }
+          }
+          
+          console.log('[FOLLOW-UP] ✨ Enriched stores with Store Database data');
+        }
+      }
+
+      const stores = Array.from(storesByLink.values());
 
       console.log('[FOLLOW-UP] 🏪 Processed', stores.length, 'stores');
 
@@ -18932,9 +18991,9 @@ Use this store information to provide context-aware responses. When helping draf
       // Bucket 1: Claimed but never contacted
       const claimedUntouched = stores
         .filter(s => {
-          const status = s.status.toLowerCase();
+          const status = (s.Status || '').toString().toLowerCase();
           // Status = 'claimed' or 'contacted' with NO calls
-          return (status === 'claimed' || status === 'contacted') && s.callCount === 0;
+          return (status === 'claimed' || status === 'contacted') && s._callCount === 0;
         })
         .map(s => ({
           ...s,
@@ -18944,29 +19003,29 @@ Use this store information to provide context-aware responses. When helping draf
       // Bucket 2: Interested leads going cold
       const interestedGoingCold = stores
         .filter(s => {
-          const status = s.status.toLowerCase();
+          const status = (s.Status || '').toString().toLowerCase();
           // Status = interested/sample sent/follow up/warm
           // Has calls, no orders, last call > 7 days
           const isWarmStatus = ['interested', 'sample sent', 'follow up', 'warm'].includes(status);
-          return isWarmStatus && s.callCount > 0 && s.total === 0 && s.daysSinceCall > 7;
+          return isWarmStatus && s._callCount > 0 && s._total === 0 && s._daysSinceCall > 7;
         })
         .map(s => ({
           ...s,
-          daysSinceContact: s.daysSinceCall
+          daysSinceContact: s._daysSinceCall
         }));
 
       // Bucket 3: First-time buyers - reorder alert
       // For now, just show stores with orders > 0 and last order > 30 days
       const closedWonReorder = stores
         .filter(s => {
-          if (s.total === 0) return false;
-          if (!s.orderDate) return false;
-          const daysSinceOrder = Math.floor((now.getTime() - s.orderDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (s._total === 0) return false;
+          if (!s._orderDate) return false;
+          const daysSinceOrder = Math.floor((now.getTime() - s._orderDate.getTime()) / (1000 * 60 * 60 * 24));
           return daysSinceOrder > 30;
         })
         .map(s => ({
           ...s,
-          daysSinceOrder: s.orderDate ? Math.floor((now.getTime() - s.orderDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
+          daysSinceOrder: s._orderDate ? Math.floor((now.getTime() - s._orderDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
         }));
 
       console.log('[FOLLOW-UP] ✅ Results:', {

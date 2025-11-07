@@ -12,6 +12,7 @@ import { Phone, Loader2, ExternalLink, ChevronDown, ChevronUp, Target } from "lu
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { StoreDetailsDialog } from "@/components/store-details-dialog";
 
 interface CallHistoryDialogProps {
   open: boolean;
@@ -69,6 +70,10 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
   const [claimedOpen, setClaimedOpen] = useState(true);
   const [interestedOpen, setInterestedOpen] = useState(true);
   const [reorderOpen, setReorderOpen] = useState(true);
+  
+  // Store Details Dialog state
+  const [storeDialogOpen, setStoreDialogOpen] = useState(false);
+  const [selectedStore, setSelectedStore] = useState<FollowUpClient | null>(null);
 
   // Fetch all users (for admin agent filter)
   const { data: usersData } = useQuery<any>({
@@ -108,6 +113,17 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
     queryKey: ['/api/follow-up-center'],
     enabled: mode === 'followup',
   });
+
+  // Fetch sheets data for Store Details Dialog
+  const { data: sheetsData } = useQuery<any>({
+    queryKey: ['/api/sheets'],
+  });
+
+  const sheets = sheetsData?.sheets || [];
+  const trackerSheet = sheets.find((s: any) => s.purpose === 'commissions');
+  const storeSheet = sheets.find((s: any) => s.purpose === 'Store Database');
+  const trackerSheetId = trackerSheet?.id;
+  const storeSheetId = storeSheet?.id;
 
   // Log call mutation
   const logCallMutation = useMutation({
@@ -190,6 +206,11 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
     } else {
       window.location.href = `tel:${phoneNumber}`;
     }
+  };
+
+  const handleOpenStoreDetails = (client: FollowUpClient) => {
+    setSelectedStore(client);
+    setStoreDialogOpen(true);
   };
 
   const getClientName = (client: FollowUpClient) => {
@@ -401,14 +422,29 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
                                     Claimed {client.daysSinceContact} days ago
                                   </p>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleFollowUpCall(client)}
-                                  data-testid={`button-followup-${idx}`}
-                                >
-                                  <Phone className="h-4 w-4 mr-1" />
-                                  Call
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenStoreDetails(client);
+                                    }}
+                                    data-testid={`button-notes-${idx}`}
+                                    className="h-auto py-2 flex flex-col items-center gap-0"
+                                  >
+                                    <span className="text-xs leading-tight">Notes</span>
+                                    <span className="text-xs leading-tight">Follow up</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleFollowUpCall(client)}
+                                    data-testid={`button-followup-${idx}`}
+                                  >
+                                    <Phone className="h-4 w-4 mr-1" />
+                                    Call
+                                  </Button>
+                                </div>
                               </div>
                             </Card>
                           ))}
@@ -470,14 +506,29 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
                                     Last contact {client.daysSinceContact} days ago
                                   </p>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleFollowUpCall(client)}
-                                  data-testid={`button-followup-interested-${idx}`}
-                                >
-                                  <Phone className="h-4 w-4 mr-1" />
-                                  Call
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenStoreDetails(client);
+                                    }}
+                                    data-testid={`button-notes-interested-${idx}`}
+                                    className="h-auto py-2 flex flex-col items-center gap-0"
+                                  >
+                                    <span className="text-xs leading-tight">Notes</span>
+                                    <span className="text-xs leading-tight">Follow up</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleFollowUpCall(client)}
+                                    data-testid={`button-followup-interested-${idx}`}
+                                  >
+                                    <Phone className="h-4 w-4 mr-1" />
+                                    Call
+                                  </Button>
+                                </div>
                               </div>
                             </Card>
                           ))}
@@ -539,14 +590,29 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
                                     First order {client.daysSinceOrder} days ago
                                   </p>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleFollowUpCall(client)}
-                                  data-testid={`button-followup-reorder-${idx}`}
-                                >
-                                  <Phone className="h-4 w-4 mr-1" />
-                                  Call
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenStoreDetails(client);
+                                    }}
+                                    data-testid={`button-notes-reorder-${idx}`}
+                                    className="h-auto py-2 flex flex-col items-center gap-0"
+                                  >
+                                    <span className="text-xs leading-tight">Notes</span>
+                                    <span className="text-xs leading-tight">Follow up</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleFollowUpCall(client)}
+                                    data-testid={`button-followup-reorder-${idx}`}
+                                  >
+                                    <Phone className="h-4 w-4 mr-1" />
+                                    Call
+                                  </Button>
+                                </div>
                               </div>
                             </Card>
                           ))}
@@ -560,6 +626,27 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
           </div>
         )}
       </DialogContent>
+
+      {/* Store Details Dialog */}
+      {selectedStore && trackerSheetId && storeSheetId && (
+        <StoreDetailsDialog
+          open={storeDialogOpen}
+          onOpenChange={setStoreDialogOpen}
+          row={selectedStore.data}
+          trackerSheetId={trackerSheetId}
+          storeSheetId={storeSheetId}
+          refetch={() => {
+            queryClient.invalidateQueries({ queryKey: ['/api/follow-up-center'] });
+          }}
+          franchiseContext={null}
+          currentColors={{}}
+          statusOptions={[]}
+          statusColors={{}}
+          contextUpdateTrigger={0}
+          setContextUpdateTrigger={() => {}}
+          loadDefaultScriptTrigger={false}
+        />
+      )}
     </Dialog>
   );
 }
