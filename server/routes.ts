@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
 import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
@@ -18987,14 +18987,16 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Get claim dates from PostgreSQL clients table
       const storeLinks = Array.from(storesByLink.keys());
-      const clientsData = await db
-        .select({
-          link: clients.link,
-          claimDate: clients.claimDate,
-          createdAt: clients.createdAt,
-        })
-        .from(clients)
-        .where(sql`${clients.link} = ANY(${storeLinks})`);
+      const clientsData = storeLinks.length > 0 
+        ? await db
+            .select({
+              link: clients.link,
+              claimDate: clients.claimDate,
+              createdAt: clients.createdAt,
+            })
+            .from(clients)
+            .where(inArray(clients.link, storeLinks))
+        : [];
 
       // Build map of Link -> claimDate
       const claimDateMap = new Map<string, Date>();
