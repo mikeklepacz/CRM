@@ -2456,6 +2456,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== VOICE PROXY BACKGROUND AUDIO ENDPOINTS =====
+  
+  // Multer config for background audio uploads
+  const audioUpload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  });
+
+  // Get background audio settings
+  app.get('/api/voice-proxy/background-audio', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const settings = await storage.getBackgroundAudioSettings();
+      res.json(settings || {
+        volumeDb: -25,
+        fileName: null,
+        filePath: null,
+      });
+    } catch (error: any) {
+      console.error('Error fetching background audio settings:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Update background audio volume
+  app.put('/api/voice-proxy/background-audio/volume', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { volumeDb } = req.body;
+      
+      if (typeof volumeDb !== 'number' || volumeDb < -40 || volumeDb > -10) {
+        return res.status(400).json({ error: 'Volume must be between -40dB and -10dB' });
+      }
+
+      const existing = await storage.getBackgroundAudioSettings();
+      const settings = await storage.updateBackgroundAudioSettings({
+        ...existing,
+        volumeDb,
+        updatedAt: new Date(),
+      });
+
+      res.json(settings);
+    } catch (error: any) {
+      console.error('Error updating background audio volume:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Upload background audio file
+  app.post('/api/voice-proxy/background-audio/upload', isAuthenticatedCustom, isAdmin, audioUpload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No audio file provided' });
+      }
+
+      const { audioConverter } = await import('./audio-converter.js');
+      
+      // Convert and save the audio file
+      const result = await audioConverter.convertAndSave(
+        req.file.buffer,
+        req.file.originalname
+      );
+
+      // Update settings with new file info
+      const settings = await storage.updateBackgroundAudioSettings({
+        fileName: result.fileName,
+        filePath: result.filePath,
+        volumeDb: -25, // Default volume
+        uploadedAt: new Date(),
+      });
+
+      res.json(settings);
+    } catch (error: any) {
+      console.error('Error uploading background audio:', error);
+      res.status(500).json({ error: error.message || 'Failed to upload audio file' });
+    }
+  });
+
+  // Get active voice proxy sessions
+  app.get('/api/voice-proxy/sessions/active', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const sessions = await storage.getActiveVoiceProxySessions();
+      res.json(sessions);
+    } catch (error: any) {
+      console.error('Error fetching active voice proxy sessions:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // ===== UNIFIED CALLING CENTER ENDPOINTS =====
   
   // Get eligible stores for calling based on scenario

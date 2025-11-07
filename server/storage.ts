@@ -140,6 +140,12 @@ import {
   type InsertAnalysisJob,
   type NonDuplicate,
   type InsertNonDuplicate,
+  backgroundAudioSettings,
+  voiceProxySessions,
+  type BackgroundAudioSettings,
+  type InsertBackgroundAudioSettings,
+  type VoiceProxySession,
+  type InsertVoiceProxySession,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, isNull } from "drizzle-orm";
@@ -462,6 +468,17 @@ export interface IStorage {
   isMarkedAsNotDuplicate(link1: string, link2: string): Promise<boolean>;
   getAllNonDuplicates(): Promise<NonDuplicate[]>;
   removeNonDuplicateMark(link1: string, link2: string): Promise<void>;
+
+  // Background Audio Settings operations
+  getBackgroundAudioSettings(): Promise<BackgroundAudioSettings | undefined>;
+  updateBackgroundAudioSettings(settings: InsertBackgroundAudioSettings): Promise<BackgroundAudioSettings>;
+  
+  // Voice Proxy Session operations
+  createVoiceProxySession(session: InsertVoiceProxySession): Promise<VoiceProxySession>;
+  getVoiceProxySession(streamSid: string): Promise<VoiceProxySession | undefined>;
+  getActiveVoiceProxySessions(): Promise<VoiceProxySession[]>;
+  updateVoiceProxySession(id: string, updates: Partial<InsertVoiceProxySession>): Promise<VoiceProxySession>;
+  endVoiceProxySession(streamSid: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2740,6 +2757,72 @@ export class DatabaseStorage implements IStorage {
           eq(nonDuplicates.link2, second)
         )
       );
+  }
+
+  // Background Audio Settings operations
+  async getBackgroundAudioSettings(): Promise<BackgroundAudioSettings | undefined> {
+    const [settings] = await db.select().from(backgroundAudioSettings).limit(1);
+    return settings;
+  }
+
+  async updateBackgroundAudioSettings(settings: InsertBackgroundAudioSettings): Promise<BackgroundAudioSettings> {
+    const existing = await this.getBackgroundAudioSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(backgroundAudioSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(backgroundAudioSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(backgroundAudioSettings)
+        .values(settings)
+        .returning();
+      return created;
+    }
+  }
+
+  // Voice Proxy Session operations
+  async createVoiceProxySession(session: InsertVoiceProxySession): Promise<VoiceProxySession> {
+    const [created] = await db
+      .insert(voiceProxySessions)
+      .values(session)
+      .returning();
+    return created;
+  }
+
+  async getVoiceProxySession(streamSid: string): Promise<VoiceProxySession | undefined> {
+    const [session] = await db
+      .select()
+      .from(voiceProxySessions)
+      .where(eq(voiceProxySessions.streamSid, streamSid))
+      .limit(1);
+    return session;
+  }
+
+  async getActiveVoiceProxySessions(): Promise<VoiceProxySession[]> {
+    return await db
+      .select()
+      .from(voiceProxySessions)
+      .where(eq(voiceProxySessions.status, 'active'));
+  }
+
+  async updateVoiceProxySession(id: string, updates: Partial<InsertVoiceProxySession>): Promise<VoiceProxySession> {
+    const [updated] = await db
+      .update(voiceProxySessions)
+      .set(updates)
+      .where(eq(voiceProxySessions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async endVoiceProxySession(streamSid: string): Promise<void> {
+    await db
+      .update(voiceProxySessions)
+      .set({ status: 'completed', endedAt: new Date() })
+      .where(eq(voiceProxySessions.streamSid, streamSid));
   }
 }
 
