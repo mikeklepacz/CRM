@@ -1,5 +1,6 @@
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
+import ffprobeStatic from 'ffprobe-static';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -8,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 ffmpeg.setFfmpegPath(ffmpegStatic!);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 const ASSETS_DIR = path.join(__dirname, 'assets', 'background');
 const MAX_DURATION_SECONDS = 300; // 5 minutes max
