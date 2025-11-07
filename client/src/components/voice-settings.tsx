@@ -859,19 +859,34 @@ export function VoiceSettings() {
 
               {/* Current File Info */}
               {backgroundAudioSettings?.fileName && (
-                <Alert>
-                  <CheckCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <div className="space-y-1">
-                      <p className="font-medium">Current file: {backgroundAudioSettings.fileName}</p>
-                      {backgroundAudioSettings.uploadedAt && (
-                        <p className="text-xs text-muted-foreground">
-                          Uploaded: {new Date(backgroundAudioSettings.uploadedAt).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                  </AlertDescription>
-                </Alert>
+                <div className="space-y-3">
+                  <Alert>
+                    <CheckCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <div className="space-y-1">
+                        <p className="font-medium">Current file: {backgroundAudioSettings.fileName}</p>
+                        {backgroundAudioSettings.uploadedAt && (
+                          <p className="text-xs text-muted-foreground">
+                            Uploaded: {new Date(backgroundAudioSettings.uploadedAt).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                  
+                  {/* Audio Player */}
+                  <div className="space-y-2">
+                    <Label>Preview Audio</Label>
+                    <audio 
+                      controls 
+                      className="w-full" 
+                      data-testid="audio-preview"
+                      src="/api/voice-proxy/background-audio/file"
+                    >
+                      Your browser does not support the audio element.
+                    </audio>
+                  </div>
+                </div>
               )}
 
               {!backgroundAudioSettings?.fileName && (
