@@ -92,7 +92,7 @@ export function VoiceSettings() {
     websocketUrl: string;
     activeSessions: number;
   }>({
-    queryKey: ['/api/voice/background-settings'],
+    queryKey: ['/api/voice-proxy/background-audio'],
   });
 
   // Config form (API key + Twilio number)
@@ -248,10 +248,10 @@ export function VoiceSettings() {
 
   const updateVolumeMutation = useMutation({
     mutationFn: async (volumeDb: number) => {
-      return await apiRequest("PATCH", "/api/voice/background-volume", { volumeDb });
+      return await apiRequest("PUT", "/api/voice-proxy/background-audio/volume", { volumeDb });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/voice/background-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/voice-proxy/background-audio'] });
       toast({
         title: "Success",
         description: "Background audio volume updated",
@@ -271,12 +271,12 @@ export function VoiceSettings() {
     if (!file) return;
 
     const formData = new FormData();
-    formData.append('audio', file);
+    formData.append('file', file);
 
     setUploadingAudio(true);
     try {
-      await apiRequest("POST", "/api/voice/upload-background", formData);
-      queryClient.invalidateQueries({ queryKey: ['/api/voice/background-settings'] });
+      await apiRequest("POST", "/api/voice-proxy/background-audio/upload", formData);
+      queryClient.invalidateQueries({ queryKey: ['/api/voice-proxy/background-audio'] });
       toast({
         title: "Success",
         description: "Background audio uploaded and converted successfully",
