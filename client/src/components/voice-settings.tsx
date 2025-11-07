@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +67,8 @@ export function VoiceSettings() {
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [isAddAgentOpen, setIsAddAgentOpen] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+  const [localVolumeDb, setLocalVolumeDb] = useState<number | null>(null);
+  const volumeDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch config (API key + Twilio number)
   const { data: configData } = useQuery<{ apiKey: string; twilioNumber?: string }>({
@@ -113,6 +115,22 @@ export function VoiceSettings() {
       });
     }
   }, [configData, configForm]);
+
+  // Sync local volume with server when data changes
+  useEffect(() => {
+    if (backgroundAudioSettings?.volumeDb !== undefined) {
+      setLocalVolumeDb(backgroundAudioSettings.volumeDb);
+    }
+  }, [backgroundAudioSettings?.volumeDb]);
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (volumeDebounceRef.current) {
+        clearTimeout(volumeDebounceRef.current);
+      }
+    };
+  }, []);
 
   // Agent form
   const agentForm = useForm<z.infer<typeof agentSchema>>({
@@ -291,6 +309,15 @@ export function VoiceSettings() {
       setUploadingAudio(false);
       event.target.value = '';
     }
+  };
+
+  const handleVolumeCommit = (value: number) => {
+    if (volumeDebounceRef.current) {
+      clearTimeout(volumeDebounceRef.current);
+    }
+    volumeDebounceRef.current = setTimeout(() => {
+      updateVolumeMutation.mutate(value);
+    }, 500);
   };
 
   return (
@@ -933,15 +960,16 @@ export function VoiceSettings() {
                 <div className="flex items-center justify-between">
                   <Label>Background Volume</Label>
                   <span className="text-sm text-muted-foreground">
-                    {backgroundAudioSettings?.volumeDb ?? -25} dB
+                    {localVolumeDb ?? backgroundAudioSettings?.volumeDb ?? -25} dB
                   </span>
                 </div>
                 <Slider
                   min={-40}
                   max={-10}
                   step={1}
-                  value={[backgroundAudioSettings?.volumeDb ?? -25]}
-                  onValueChange={(value) => updateVolumeMutation.mutate(value[0])}
+                  value={[localVolumeDb ?? backgroundAudioSettings?.volumeDb ?? -25]}
+                  onValueChange={(value) => setLocalVolumeDb(value[0])}
+                  onValueCommit={(value) => handleVolumeCommit(value[0])}
                   disabled={!backgroundAudioSettings?.fileName}
                   data-testid="slider-background-volume"
                   className="w-full"
