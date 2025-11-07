@@ -18,6 +18,8 @@ import * as commissionService from "./commission-service";
 import * as googleDrive from "./googleDrive";
 import { analyzeCallTranscript } from "./openai-reflection";
 import { validateElevenLabsSignature } from "./webhook-validation";
+import { handleTwilioCallStatus } from "./twilio-webhook";
+import { validateTwilioSignature } from "./twilio-signature-validation";
 import multer from "multer";
 import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
@@ -2112,6 +2114,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error processing ElevenLabs webhook:', error);
       res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
+  // Twilio call status webhook - receives call progress updates
+  app.post('/api/twilio/call-status', async (req, res) => {
+    try {
+      console.log('[Twilio] Received call status webhook:', req.body);
+      
+      // Validate Twilio signature for security
+      const signature = req.headers['x-twilio-signature'] as string | undefined;
+      const replitDomain = process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
+      const protocol = replitDomain.includes('localhost') ? 'http' : 'https';
+      const url = `${protocol}://${replitDomain}/api/twilio/call-status`;
+      
+      const isValid = validateTwilioSignature(signature, url, req.body);
+      if (!isValid) {
+        console.error('[Twilio] Invalid webhook signature - rejecting request');
+        return res.status(401).send('Unauthorized');
+      }
+      
+      await handleTwilioCallStatus(req.body);
+      res.status(200).send('OK');
+    } catch (error: any) {
+      console.error('[Twilio] Error processing call status webhook:', error);
+      res.status(500).send('Error');
     }
   });
 

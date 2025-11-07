@@ -163,13 +163,13 @@ class VoiceProxyServer {
       }
     }
 
-    // Connect to ElevenLabs with all parameters
+    // Connect to ElevenLabs with all parameters (including IVR behavior via basePrompt)
     const { ws: elevenLabsWs, conversationId } = await this.connectToElevenLabs({
       agentId,
       phoneNumberId,
       dynamicVariables,
       clientData,
-      basePrompt,
+      basePrompt, // This already includes IVR instructions appended by CallDispatcher
     });
 
     const session: SessionState = {
