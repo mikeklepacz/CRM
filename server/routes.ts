@@ -18741,7 +18741,8 @@ Use this store information to provide context-aware responses. When helping draf
         try {
           const client = await storage.getClientByUniqueIdentifier(storeLink);
           if (client) {
-            await storage.updateClient(client.id, { lastContactDate: new Date() });
+            await storage.updateLastContactDate(client.id);
+            console.log(`[Manual Call] Updated lastContactDate for client ${client.id} (${storeName})`);
           }
         } catch (error) {
           console.log('Could not update lastContactDate for client:', error);

@@ -193,6 +193,7 @@ export interface IStorage {
   claimClient(clientId: string, agentId: string): Promise<Client>;
   unclaimClient(clientId: string): Promise<Client>;
   findClientByUniqueKey(key: string, value: string): Promise<Client | undefined>;
+  updateLastContactDate(clientId: string, contactDate?: Date): Promise<Client | undefined>;
 
   // Notes operations
   getClientNotes(clientId: string): Promise<Note[]>;
@@ -904,6 +905,35 @@ export class DatabaseStorage implements IStorage {
       .where(sql`${clients.data}->>${key} = ${value}`)
       .limit(1);
     return result[0];
+  }
+
+  async updateLastContactDate(clientId: string, contactDate?: Date): Promise<Client | undefined> {
+    const newContactDate = contactDate || new Date();
+    
+    const [updated] = await db
+      .update(clients)
+      .set({
+        lastContactDate: newContactDate,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(clients.id, clientId),
+          or(
+            isNull(clients.lastContactDate),
+            sql`${clients.lastContactDate} < ${newContactDate}`
+          )
+        )
+      )
+      .returning();
+    
+    if (updated) {
+      console.log(`[updateLastContactDate] Updated client ${clientId} lastContactDate to ${newContactDate}`);
+    } else {
+      console.log(`[updateLastContactDate] Skipped client ${clientId} - existing date is newer or client not found`);
+    }
+    
+    return updated;
   }
 
   // Notes operations
@@ -1993,21 +2023,40 @@ export class DatabaseStorage implements IStorage {
     
     const allClients = await baseQuery;
     
-    // Filter 1: Claimed but no contact
+    // Filter 1: Claimed but never contacted OR contacted but ghosted (>7 days)
     const claimedUntouched = allClients
-      .filter(c => c.claimDate && !c.lastContactDate)
+      .filter(c => {
+        const status = (c.data?.Status || c.data?.status || '').toLowerCase();
+        
+        // Scenario 1: Status = 'claimed' and no contact yet
+        if (status === 'claimed' && !c.lastContactDate) {
+          return true;
+        }
+        
+        // Scenario 2: Status = 'contacted' but last contact > 7 days ago
+        if (status === 'contacted' && c.lastContactDate) {
+          const daysSinceContact = Math.floor((now.getTime() - new Date(c.lastContactDate).getTime()) / (1000 * 60 * 60 * 24));
+          return daysSinceContact > 7;
+        }
+        
+        return false;
+      })
       .map(c => ({
         ...c,
-        daysSinceContact: Math.floor((now.getTime() - new Date(c.claimDate!).getTime()) / (1000 * 60 * 60 * 24))
+        daysSinceContact: c.lastContactDate 
+          ? Math.floor((now.getTime() - new Date(c.lastContactDate).getTime()) / (1000 * 60 * 60 * 24))
+          : (c.claimDate 
+              ? Math.floor((now.getTime() - new Date(c.claimDate).getTime()) / (1000 * 60 * 60 * 24))
+              : 0)
       }));
     
-    // Filter 2: Interested/contacted but going cold
+    // Filter 2: Interested leads going cold (interested, sample sent, follow up, warm)
     const interestedGoingCold = allClients
       .filter(c => {
         const status = (c.data?.Status || c.data?.status || '').toLowerCase();
         return c.lastContactDate && 
                !c.firstOrderDate && 
-               (status === 'interested' || status === 'contacted');
+               (status === 'interested' || status === 'sample sent' || status === 'follow up' || status === 'warm');
       })
       .map(c => ({
         ...c,
