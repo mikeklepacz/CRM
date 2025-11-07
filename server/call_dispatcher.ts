@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { storage } from './storage';
+import { generateStreamTwiML, initiateOutboundCall as twilioInitiateCall, isTwilioConfigured } from './twilio-service';
 
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 const MAX_RETRY_ATTEMPTS = 3;
@@ -129,7 +130,7 @@ export class CallDispatcher {
       const result = await this.initiateOutboundCall({
         apiKey,
         agentId: agent.agentId,
-        phoneNumberId: agent.phoneNumberId,
+        phoneNumberId: agent.phoneNumberId || '',
         toNumber: phoneNumber,
         userId,
         dynamicVariables,
@@ -137,32 +138,29 @@ export class CallDispatcher {
           campaignTargetId: target.id,
           businessName: clientData?.Name || clientData?.name,
           link: client.uniqueIdentifier,
-          scenario: campaign.scenario,
+          scenario: campaign.scenario || 'custom',
           clientId: target.clientId,
-          sheetId: client.sheetId,
-          rowIndex: client.rowIndex,
         },
-        ivrBehavior: campaign.ivrBehavior,
+        ivrBehavior: campaign.ivrBehavior || 'flag_and_end',
         basePrompt: agentPrompt,
       });
 
       const callSession = await storage.createCallSession({
-        conversationId: result.conversation_id || `manual-${Date.now()}`,
+        callSid: result.callSid,
         agentId: agent.agentId,
         phoneNumber,
         clientId: target.clientId,
         status: 'initiated',
-        callType: 'outbound',
         scenario: campaign.scenario || 'custom',
       });
 
       await storage.updateCallCampaignTarget(target.id, {
-        externalConversationId: result.conversation_id || null,
+        externalConversationId: result.callSid || null,
         callSessionId: callSession.id,
         lastError: null,
       });
 
-      console.log(`[CallDispatcher] Successfully initiated call for target ${target.id}, conversation: ${result.conversation_id}`);
+      console.log(`[CallDispatcher] Successfully initiated call for target ${target.id}, Twilio SID: ${result.callSid}`);
     } catch (error: any) {
       console.error(`[CallDispatcher] Error processing call target ${target.id}:`, error);
       await this.handleCallFailure(target, error);
@@ -180,10 +178,18 @@ export class CallDispatcher {
     ivrBehavior?: string;
     basePrompt?: string;
   }): Promise<{ success: boolean; message: string; conversation_id: string | null; callSid: string | null }> {
-    const url = `${ELEVENLABS_API_BASE}/convai/twilio/outbound-call`;
+    // Check if Twilio is configured
+    if (!isTwilioConfigured()) {
+      throw new Error('Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN environment variables.');
+    }
+
+    // Get the Twilio phone number from ElevenLabs config
+    const config = await storage.getElevenLabsConfig();
+    if (!config?.twilioNumber) {
+      throw new Error('Twilio phone number not configured in Voice settings. Please configure a phone number.');
+    }
 
     // Build IVR handling instructions based on campaign setting
-    // Default to flag_and_end if not specified
     const ivrBehaviorSetting = params.ivrBehavior || 'flag_and_end';
     let ivrInstructions = '';
     
@@ -194,54 +200,44 @@ export class CallDispatcher {
       ivrInstructions = `\n\nIMPORTANT IVR HANDLING INSTRUCTIONS: If you encounter an automated phone system (IVR menu) or voicemail, you must politely end the call immediately. Do NOT attempt to navigate menus or leave messages. Simply say goodbye and hang up. The system will automatically flag this number for manual follow-up.`;
     }
 
-    const payload: any = {
-      agent_id: params.agentId,
-      agent_phone_number_id: params.phoneNumberId,
-      to_number: params.toNumber,
-      user_id: params.userId, // Pass User ID to ElevenLabs for tracking
-      conversation_initiation_client_data: params.clientData || {},
-    };
-
-    // Add dynamic variables for agent personalization (used in prompts and first message)
-    if (params.dynamicVariables && Object.keys(params.dynamicVariables).length > 0) {
-      payload.dynamic_variables = params.dynamicVariables;
-      console.log(`[CallDispatcher] Dynamic variables:`, params.dynamicVariables);
-    }
-
-    // Use ElevenLabs conversation_config_override to inject IVR handling instructions
-    // We fetch the agent's base prompt and append IVR instructions to preserve existing behavior
-    // Reference: https://elevenlabs.io/docs/agents-platform/customization/personalization/overrides
     const combinedPrompt = (params.basePrompt || '') + ivrInstructions;
-    
-    payload.conversation_config_override = {
-      agent: {
-        prompt: {
-          prompt: combinedPrompt
-        }
-      }
+
+    // Add IVR behavior and userId to client data for voice proxy
+    const clientDataWithMetadata = {
+      ...params.clientData,
+      ivrBehavior: ivrBehaviorSetting,
+      userId: params.userId,
     };
-    
-    // Add IVR behavior to client data for webhook logging
-    if (payload.conversation_initiation_client_data) {
-      payload.conversation_initiation_client_data.ivrBehavior = ivrBehaviorSetting;
-    }
 
     console.log(`[CallDispatcher] IVR Behavior: ${ivrBehaviorSetting}`);
     console.log(`[CallDispatcher] Base prompt length: ${(params.basePrompt || '').length} chars`);
     console.log(`[CallDispatcher] Combined prompt length: ${combinedPrompt.length} chars`);
-    console.log(`[CallDispatcher] Calling ElevenLabs API: ${url}`);
-    console.log(`[CallDispatcher] Payload:`, JSON.stringify(payload, null, 2));
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        'xi-api-key': params.apiKey,
-        'Content-Type': 'application/json',
-      },
-      timeout: 30000,
+    // Generate TwiML that routes to our WebSocket voice proxy
+    const twiml = generateStreamTwiML({
+      agentId: params.agentId,
+      phoneNumberId: params.phoneNumberId,
+      ivrBehavior: ivrBehaviorSetting,
+      dynamicVariables: params.dynamicVariables,
+      clientData: clientDataWithMetadata,
+      basePrompt: combinedPrompt,
     });
 
-    console.log(`[CallDispatcher] ElevenLabs response:`, response.data);
-    return response.data;
+    console.log(`[CallDispatcher] Generated TwiML:`, twiml);
+
+    // Initiate the call using Twilio SDK
+    const result = await twilioInitiateCall({
+      from: config.twilioNumber,
+      to: params.toNumber,
+      twiml: twiml,
+    });
+
+    return {
+      success: result.success,
+      message: result.message,
+      conversation_id: null, // Will be generated by voice proxy
+      callSid: result.callSid,
+    };
   }
 
   private async handleCallFailure(target: any, error: any): Promise<void> {
