@@ -19021,14 +19021,14 @@ Use this store information to provide context-aware responses. When helping draf
         })
         .map(s => {
           const claimDate = claimDateMap.get(s.Link);
-          const daysSinceContact = claimDate 
-            ? Math.floor((now.getTime() - claimDate.getTime()) / (1000 * 60 * 60 * 24))
-            : 0;
+          const fallbackDate = new Date(now.getTime() - (14 * 24 * 60 * 60 * 1000)); // 14 days ago
+          const effectiveClaimDate = claimDate || fallbackDate;
+          const daysSinceContact = Math.floor((now.getTime() - effectiveClaimDate.getTime()) / (1000 * 60 * 60 * 24));
           
           return {
             id: s.Link,
             data: s,
-            claimDate: claimDate?.toISOString() || null,
+            claimDate: (claimDate || fallbackDate).toISOString(),
             lastContactDate: null,
             firstOrderDate: null,
             lastOrderDate: null,
