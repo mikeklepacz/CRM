@@ -2,7 +2,8 @@
 -- This ensures that when an order is deleted (e.g., from WooCommerce sync),
 -- all associated commission records are automatically deleted as well.
 
--- Drop the existing foreign key constraint
+-- Drop ALL possible existing foreign key constraints to ensure idempotency
+ALTER TABLE commissions DROP CONSTRAINT IF EXISTS commissions_order_id_fkey;
 ALTER TABLE commissions DROP CONSTRAINT IF EXISTS commissions_order_id_orders_id_fk;
 
 -- Re-add the foreign key constraint with ON DELETE CASCADE
