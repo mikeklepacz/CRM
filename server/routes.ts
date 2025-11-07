@@ -10078,6 +10078,59 @@ IMPORTANT:
         // Don't fail the entire sync if recalculation fails
       }
 
+      // CLEANUP COMMISSION TRACKER: Remove orphaned rows that don't exist in WooCommerce
+      console.log('Starting Commission Tracker cleanup...');
+      let trackerRowsDeleted = 0;
+      
+      try {
+        const sheets = await storage.getAllActiveGoogleSheets();
+        const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+        
+        if (trackerSheet) {
+          const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+          const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+          
+          if (trackerRows.length > 0) {
+            const trackerHeaders = trackerRows[0];
+            const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+            
+            if (transactionIdIndex !== -1) {
+              // Build set of valid WooCommerce order IDs
+              const wooOrderIds = new Set(orders.map((o: any) => o.id.toString()));
+              console.log(`Valid WooCommerce order IDs: ${Array.from(wooOrderIds).join(', ')}`);
+              
+              // Find rows with Transaction IDs that don't exist in WooCommerce
+              const rowsToDelete: number[] = [];
+              
+              for (let i = 1; i < trackerRows.length; i++) {
+                const rowTransactionId = trackerRows[i][transactionIdIndex]?.toString().trim();
+                
+                // Skip empty transaction IDs
+                if (!rowTransactionId) continue;
+                
+                // If this transaction ID doesn't exist in WooCommerce, mark for deletion
+                if (!wooOrderIds.has(rowTransactionId)) {
+                  rowsToDelete.push(i + 1); // 1-indexed for Google Sheets
+                  console.log(`📋 Marking orphaned row ${i + 1} for deletion (Transaction ID: ${rowTransactionId})`);
+                }
+              }
+              
+              // Delete rows in reverse order to maintain row indices
+              for (const rowIndex of rowsToDelete.reverse()) {
+                await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, trackerSheet.sheetId!, rowIndex);
+                console.log(`🗑️  Deleted orphaned Commission Tracker row ${rowIndex}`);
+                trackerRowsDeleted++;
+              }
+            }
+          }
+        }
+        
+        console.log('Commission Tracker cleanup completed:', { trackerRowsDeleted });
+      } catch (cleanupError: any) {
+        console.error('Error cleaning up Commission Tracker:', cleanupError);
+        // Don't fail the entire sync if cleanup fails
+      }
+
       // Update last synced timestamp
       await storage.updateUserIntegration(userId, {
         wooLastSyncedAt: new Date()
