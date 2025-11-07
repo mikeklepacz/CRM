@@ -170,19 +170,21 @@ export default function FollowUpCenter() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Target className="h-6 w-6" />
-          <h1 className="text-2xl font-bold">Follow-Up Center</h1>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Smart filters to catch clients falling through the cracks
-        </p>
-      </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[50%] mx-auto">
+          {/* Header */}
+          <div className="border-b p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Target className="h-6 w-6" />
+              <h1 className="text-2xl font-bold">Follow-Up Center</h1>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Smart filters to catch clients falling through the cracks
+            </p>
+          </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Content */}
+          <div className="p-4 space-y-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -442,6 +444,8 @@ export default function FollowUpCenter() {
             </Collapsible>
           </>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Store Details Dialog */}
