@@ -212,6 +212,27 @@ export async function batchUpdateSheetData(spreadsheetId: string, data: Array<{ 
   return response.data;
 }
 
+// Delete a single row from a sheet (system-wide)
+export async function deleteSheetRow(spreadsheetId: string, sheetId: number, rowIndex: number) {
+  const sheets = await getSystemGoogleSheetClient();
+  const response = await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: sheetId,
+            dimension: 'ROWS',
+            startIndex: rowIndex - 1, // Convert to 0-indexed
+            endIndex: rowIndex // Exclusive, so this deletes only the specified row
+          }
+        }
+      }]
+    }
+  });
+  return response.data;
+}
+
 // Write timestamp to Column O (time) or Column P (updated) in Commission Tracker
 export async function writeCommissionTrackerTimestamp(
   spreadsheetId: string, 

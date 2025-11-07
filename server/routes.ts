@@ -9627,7 +9627,50 @@ IMPORTANT:
           const orderCommissions = await storage.getCommissionsByOrder(localOrder.id);
           const totalCommissionAmount = orderCommissions.reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0);
           
-          // Update client: subtract order total and commissions, set status to "Closed Lost"
+          // DELETE COMMISSION TRACKER ROW: Remove the row from Google Sheets for this deleted order
+          try {
+            const sheets = await storage.getAllActiveGoogleSheets();
+            const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+            
+            if (trackerSheet) {
+              const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+              const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+              
+              if (trackerRows.length > 0) {
+                const trackerHeaders = trackerRows[0];
+                const transactionIdIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'transaction id');
+                
+                if (transactionIdIndex !== -1) {
+                  // Find the row(s) with this transaction ID and delete them
+                  const rowsToDelete: number[] = [];
+                  
+                  for (let i = 1; i < trackerRows.length; i++) {
+                    const rowTransactionId = trackerRows[i][transactionIdIndex]?.toString().trim();
+                    const localOrderId = localOrder.id.toString().trim();
+                    
+                    if (rowTransactionId === localOrderId) {
+                      rowsToDelete.push(i + 1); // 1-indexed for Google Sheets
+                    }
+                  }
+                  
+                  if (rowsToDelete.length === 0) {
+                    console.log(`⚠️  No Commission Tracker rows found for deleted order ${localOrder.id} (Transaction ID not matched)`);
+                  }
+                  
+                  // Delete rows in reverse order to maintain row indices
+                  for (const rowIndex of rowsToDelete.reverse()) {
+                    await googleSheets.deleteSheetRow(trackerSheet.spreadsheetId, trackerSheet.sheetId!, rowIndex);
+                    console.log(`🗑️  Deleted Commission Tracker row ${rowIndex} for order ${localOrder.id}`);
+                  }
+                }
+              }
+            }
+          } catch (sheetError: any) {
+            console.error('Error deleting tracker sheet row:', sheetError);
+            // Don't fail order deletion if sheet deletion fails
+          }
+          
+          // Update client: subtract order total and commissions (no longer setting to "Closed Lost" since row is deleted)
           if (localOrder.clientId) {
             try {
               const client = await storage.getClientById(localOrder.clientId);
@@ -9641,51 +9684,13 @@ IMPORTANT:
                 const newCommissionTotal = Math.max(0, currentCommissionTotal - totalCommissionAmount);
                 
                 await storage.updateClient(client.id, { 
-                  status: 'Closed Lost',
                   totalSales: newTotalSales.toString(),
                   commissionTotal: newCommissionTotal.toString()
                 });
-                console.log(`Updated client ${client.id}: status="Closed Lost", totalSales=$${currentTotalSales.toFixed(2)}→$${newTotalSales.toFixed(2)}, commission=$${currentCommissionTotal.toFixed(2)}→$${newCommissionTotal.toFixed(2)}`);
-                
-                // Update Commission Tracker sheet row status to "Closed Lost"
-                const sheets = await storage.getAllActiveGoogleSheets();
-                const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
-                
-                if (trackerSheet && client.uniqueIdentifier) {
-                  try {
-                    const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
-                    const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
-                    
-                    if (trackerRows.length > 0) {
-                      const trackerHeaders = trackerRows[0];
-                      const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
-                      const statusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
-                      
-                      if (linkIndex !== -1 && statusIndex !== -1) {
-                        // Find the row matching this client's link
-                        for (let i = 1; i < trackerRows.length; i++) {
-                          const rowLink = normalizeLink(trackerRows[i][linkIndex] || '');
-                          const clientLink = normalizeLink(client.uniqueIdentifier);
-                          
-                          if (rowLink === clientLink) {
-                            const trackerRowIndex = i + 1; // 1-indexed
-                            const columnLetter = columnIndexToLetter(statusIndex);
-                            const cellRange = `${trackerSheet.sheetName}!${columnLetter}${trackerRowIndex}`;
-                            await googleSheets.writeSheetData(trackerSheet.spreadsheetId, cellRange, [['Closed Lost']]);
-                            console.log(`Updated Commission Tracker status to "Closed Lost" for ${client.uniqueIdentifier}`);
-                            break;
-                          }
-                        }
-                      }
-                    }
-                  } catch (sheetError: any) {
-                    console.error('Error updating tracker sheet:', sheetError);
-                    // Don't fail order deletion if sheet update fails
-                  }
-                }
+                console.log(`Updated client ${client.id}: totalSales=$${currentTotalSales.toFixed(2)}→$${newTotalSales.toFixed(2)}, commission=$${currentCommissionTotal.toFixed(2)}→$${newCommissionTotal.toFixed(2)}`);
               }
             } catch (clientError: any) {
-              console.error('Error updating client status:', clientError);
+              console.error('Error updating client totals:', clientError);
               // Don't fail order deletion if client update fails
             }
           }
