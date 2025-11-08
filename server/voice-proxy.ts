@@ -47,9 +47,10 @@ interface SessionState {
 class VoiceProxyServer {
   private sessions: Map<string, SessionState> = new Map();
   private wss: WebSocketServer | null = null;
+  private connectionAttempts: number = 0; // Added to track connection attempts
 
   initialize(httpServer: HTTPServer): void {
-    this.wss = new WebSocketServer({ 
+    this.wss = new WebSocketServer({
       server: httpServer,
       path: '/media-stream'
     });
@@ -61,9 +62,12 @@ class VoiceProxyServer {
     });
 
     this.wss.on('connection', (ws: WSClient, req) => {
+      this.connectionAttempts++;
       console.log('[VoiceProxy] ====== NEW TWILIO CONNECTION ======');
+      console.log('[VoiceProxy] Connection #' + this.connectionAttempts);
       console.log('[VoiceProxy] Connection from:', req.socket.remoteAddress);
       console.log('[VoiceProxy] Request URL:', req.url);
+      console.log('[VoiceProxy] Headers:', JSON.stringify(req.headers, null, 2));
 
       ws.on('message', async (data: Buffer) => {
         try {
@@ -111,11 +115,11 @@ class VoiceProxyServer {
     const agentId = customParameters?.agentId;
     const phoneNumberId = customParameters?.phoneNumberId;
     const ivrBehavior = customParameters?.ivrBehavior || 'flag_and_end';
-    const dynamicVariables = customParameters?.dynamicVariables 
-      ? JSON.parse(customParameters.dynamicVariables) 
+    const dynamicVariables = customParameters?.dynamicVariables
+      ? JSON.parse(customParameters.dynamicVariables)
       : {};
-    const clientData = customParameters?.clientData 
-      ? JSON.parse(customParameters.clientData) 
+    const clientData = customParameters?.clientData
+      ? JSON.parse(customParameters.clientData)
       : {};
 
     // Retrieve basePrompt from call session metadata (not from TwiML due to 4000 char limit)
