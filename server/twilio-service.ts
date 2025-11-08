@@ -40,7 +40,9 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
     track: 'both_tracks' // Send and receive audio
   });
   
-  // Pass all parameters to the voice proxy via TwiML parameters
+  // Pass parameters to the voice proxy via TwiML parameters
+  // Note: basePrompt is NOT passed here due to Twilio's 4000 char TwiML limit
+  // It will be retrieved by the voice proxy from the database instead
   stream.parameter({ name: 'agentId', value: params.agentId });
   stream.parameter({ name: 'phoneNumberId', value: params.phoneNumberId });
   
@@ -54,10 +56,6 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   
   if (params.clientData) {
     stream.parameter({ name: 'clientData', value: JSON.stringify(params.clientData) });
-  }
-  
-  if (params.basePrompt) {
-    stream.parameter({ name: 'basePrompt', value: params.basePrompt });
   }
   
   return response.toString();

@@ -100,31 +100,21 @@ class VoiceProxyServer {
     if (!message.start) return;
 
     const { streamSid, callSid, customParameters } = message.start;
-    
+
     // Extract all TwiML parameters
-    const agentId = customParameters?.agentId || '';
-    const phoneNumberId = customParameters?.phoneNumberId || '';
-    const ivrBehavior = customParameters?.ivrBehavior;
-    const basePrompt = customParameters?.basePrompt;
-    
-    let dynamicVariables: Record<string, string> | undefined;
-    let clientData: Record<string, any> | undefined;
-    
-    if (customParameters?.dynamicVariables) {
-      try {
-        dynamicVariables = JSON.parse(customParameters.dynamicVariables);
-      } catch (e) {
-        console.error('[VoiceProxy] Error parsing dynamicVariables:', e);
-      }
-    }
-    
-    if (customParameters?.clientData) {
-      try {
-        clientData = JSON.parse(customParameters.clientData);
-      } catch (e) {
-        console.error('[VoiceProxy] Error parsing clientData:', e);
-      }
-    }
+    const agentId = customParameters?.agentId;
+    const phoneNumberId = customParameters?.phoneNumberId;
+    const ivrBehavior = customParameters?.ivrBehavior || 'flag_and_end';
+    const dynamicVariables = customParameters?.dynamicVariables 
+      ? JSON.parse(customParameters.dynamicVariables) 
+      : {};
+    const clientData = customParameters?.clientData 
+      ? JSON.parse(customParameters.clientData) 
+      : {};
+
+    // Retrieve basePrompt from call session metadata (not from TwiML due to 4000 char limit)
+    const callSession = await storage.getCallSessionByCallSid(callSid);
+    const basePrompt = callSession?.metadata?.combinedPrompt || '';
 
     console.log(`[VoiceProxy] Stream started: ${streamSid}`);
     console.log(`[VoiceProxy] Agent: ${agentId}`);
@@ -149,14 +139,14 @@ class VoiceProxyServer {
       try {
         const audioData = await audioConverter.loadAudioFile(settings.filePath);
         const wav = new WaveFile(audioData);
-        
+
         // Convert to Int16Array
         const samples = wav.getSamples(false, Int16Array);
         backgroundBuffer = samples instanceof Int16Array ? samples : new Int16Array(samples);
-        
+
         // Calculate volume scalar from dB
         volumeScalar = Math.pow(10, settings.volumeDb / 20);
-        
+
         console.log(`[VoiceProxy] Loaded background audio: ${settings.fileName}, volume: ${settings.volumeDb}dB`);
       } catch (error) {
         console.error('[VoiceProxy] Error loading background audio:', error);
@@ -295,13 +285,13 @@ class VoiceProxyServer {
 
       const data = await response.json();
       const { signed_url, conversation_id } = data;
-      
+
       // Validate that we got the required data
       if (!signed_url) {
         console.error('[VoiceProxy] No signed_url in ElevenLabs response:', data);
         return { ws: null, conversationId: null };
       }
-      
+
       console.log(`[VoiceProxy] ElevenLabs conversation ID: ${conversation_id}`);
 
       const ws = new WSClient(signed_url);
@@ -367,7 +357,7 @@ class VoiceProxyServer {
               // Decode base64 audio from ElevenLabs
               const audioData = Buffer.from(output.audio.audio_base64, 'base64');
               const pcm16k = new Int16Array(audioData.buffer, audioData.byteOffset, audioData.byteLength / 2);
-              
+
               // Add to output buffer
               session.outputBuffer.push(pcm16k);
             }
@@ -382,7 +372,7 @@ class VoiceProxyServer {
           // Decode base64 audio from ElevenLabs
           const audioData = Buffer.from(delta.audio.audio_base64, 'base64');
           const pcm16k = new Int16Array(audioData.buffer, audioData.byteOffset, audioData.byteLength / 2);
-          
+
           // Add to output buffer
           session.outputBuffer.push(pcm16k);
         }
@@ -436,7 +426,7 @@ class VoiceProxyServer {
         for (let i = 0; i < mixed16k.length; i++) {
           const bgSample = session.backgroundAudioBuffer[session.backgroundAudioPosition];
           const bgScaled = Math.floor(bgSample * session.volumeScalar);
-          
+
           // Mix: foreground + background (with clipping protection)
           mixed16k[i] = Math.max(-32768, Math.min(32767, mixed16k[i] + bgScaled));
 

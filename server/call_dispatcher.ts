@@ -152,6 +152,11 @@ export class CallDispatcher {
         clientId: target.clientId,
         status: 'initiated',
         scenario: campaign.scenario || 'custom',
+        metadata: {
+          combinedPrompt: combinedPrompt,
+          ivrBehavior: ivrBehaviorSetting,
+          dynamicVariables: dynamicVariables,
+        },
       });
 
       await storage.updateCallCampaignTarget(target.id, {
