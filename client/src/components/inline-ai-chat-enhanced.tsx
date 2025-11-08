@@ -2762,7 +2762,19 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
                   {/* Separator */}
                   {Array.from(new Set(templates.flatMap((t) => t.tags || []))).length > 0 && (
-                    <div className="w-px h-6 bg-border mx-1" />
+                    <>
+                      <div className="w-px h-6 bg-border mx-1" />
+                      
+                      {/* Clear Tags Button */}
+                      <Badge
+                        variant={selectedTagFilter === null ? "default" : "outline"}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => setSelectedTagFilter(null)}
+                        data-testid="tag-filter-clear"
+                      >
+                        All Tags
+                      </Badge>
+                    </>
                   )}
 
                   {/* Tag Filters */}
