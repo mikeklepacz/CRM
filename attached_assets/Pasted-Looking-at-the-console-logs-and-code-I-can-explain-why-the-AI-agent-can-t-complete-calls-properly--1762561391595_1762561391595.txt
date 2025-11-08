@@ -1,0 +1,42 @@
+Looking at the console logs and code, I can explain why the AI agent can't complete calls properly:
+
+The Problem
+The call is ending immediately after the customer picks up (0 seconds duration). Here's what's happening:
+
+Call gets initiated → Twilio calls the customer ✅
+Customer answers → Call status goes to "in-progress" ✅
+Call ends instantly → Status jumps straight to "completed" with 0 seconds duration ❌
+Why This Happens
+The WebSocket connection to the voice proxy never gets established. Looking at the flow:
+
+Twilio initiates the call successfully (see the TwiML with the WebSocket URL)
+Twilio tries to connect to: wss://be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev/media-stream
+The voice proxy never receives the connection (no logs showing "Client connected to voice proxy")
+Since there's no audio stream, Twilio immediately ends the call
+Root Causes
+From the code analysis:
+
+1. Missing WebSocket Handler
+The voice proxy expects Twilio to connect with a connected event, but there's no log showing this happening. The WebSocket server at /media-stream might not be properly receiving connections.
+
+2. ElevenLabs Connection Issues
+Even if Twilio connects, the voice proxy needs to then connect to ElevenLabs. The code shows it's trying to retrieve the basePrompt from the database, but the logs show no attempt to connect to ElevenLabs API.
+
+3. Conversation ID Never Generated
+The code updates the call session with a conversationId from ElevenLabs, but since the ElevenLabs connection never happens, this ID is never created. This breaks the entire webhook correlation system.
+
+What Should Happen (But Isn't)
+Twilio connects to /media-stream WebSocket
+Voice proxy extracts parameters from Twilio's start message
+Voice proxy connects to ElevenLabs ConvAI WebSocket
+ElevenLabs returns a conversation_id
+Voice proxy stores this ID in the database
+Audio streams bidirectionally: Customer ↔ Twilio ↔ Voice Proxy ↔ ElevenLabs
+Call continues until customer or AI hangs up
+Immediate Next Steps
+The issue is likely that the WebSocket server isn't running or isn't accessible. Check:
+
+Is the voice proxy WebSocket server actually starting up? (No startup logs visible)
+Is the domain be26ffee-6be4-4b93-9238-d1cfb0579024-00-33nmd82r7fvef.kirk.replit.dev accessible?
+Is the WebSocket endpoint /media-stream properly registered in your Express app?
+The call dispatcher is working fine - it's creating campaigns, queuing calls, and Twilio is successfully dialing. The breakdown is at the voice proxy layer where the actual audio streaming should happen.
