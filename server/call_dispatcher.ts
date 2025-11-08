@@ -127,6 +127,19 @@ export class CallDispatcher {
         poc_email: clientData?.['POC EMAIL'] || clientData?.poc_email || '',
       };
 
+      // Build IVR handling instructions based on campaign setting
+      const ivrBehaviorSetting = campaign.ivrBehavior || 'flag_and_end';
+      let ivrInstructions = '';
+      
+      if (ivrBehaviorSetting === 'flag_and_navigate') {
+        ivrInstructions = `\n\nIMPORTANT IVR HANDLING INSTRUCTIONS: If you encounter an automated phone system (IVR menu), you should attempt to navigate it using the play_keypad_touch_tone tool to reach a live person. Listen carefully for menu options like "Press 1 for Sales" or "Press 0 for Operator" and use the appropriate key press. Once you reach a live person, proceed with your normal conversation flow.`;
+      } else {
+        // flag_and_end (default)
+        ivrInstructions = `\n\nIMPORTANT IVR HANDLING INSTRUCTIONS: If you encounter an automated phone system (IVR menu) or voicemail, you must politely end the call immediately. Do NOT attempt to navigate menus or leave messages. Simply say goodbye and hang up. The system will automatically flag this number for manual follow-up.`;
+      }
+
+      const combinedPrompt = agentPrompt + ivrInstructions;
+
       const result = await this.initiateOutboundCall({
         apiKey,
         agentId: agent.agentId,
@@ -141,8 +154,8 @@ export class CallDispatcher {
           scenario: campaign.scenario || 'custom',
           clientId: target.clientId,
         },
-        ivrBehavior: campaign.ivrBehavior || 'flag_and_end',
-        basePrompt: agentPrompt,
+        ivrBehavior: ivrBehaviorSetting,
+        basePrompt: combinedPrompt,
       });
 
       const callSession = await storage.createCallSession({
@@ -194,18 +207,7 @@ export class CallDispatcher {
       throw new Error('Twilio phone number not configured in Voice settings. Please configure a phone number.');
     }
 
-    // Build IVR handling instructions based on campaign setting
     const ivrBehaviorSetting = params.ivrBehavior || 'flag_and_end';
-    let ivrInstructions = '';
-    
-    if (ivrBehaviorSetting === 'flag_and_navigate') {
-      ivrInstructions = `\n\nIMPORTANT IVR HANDLING INSTRUCTIONS: If you encounter an automated phone system (IVR menu), you should attempt to navigate it using the play_keypad_touch_tone tool to reach a live person. Listen carefully for menu options like "Press 1 for Sales" or "Press 0 for Operator" and use the appropriate key press. Once you reach a live person, proceed with your normal conversation flow.`;
-    } else {
-      // flag_and_end (default)
-      ivrInstructions = `\n\nIMPORTANT IVR HANDLING INSTRUCTIONS: If you encounter an automated phone system (IVR menu) or voicemail, you must politely end the call immediately. Do NOT attempt to navigate menus or leave messages. Simply say goodbye and hang up. The system will automatically flag this number for manual follow-up.`;
-    }
-
-    const combinedPrompt = (params.basePrompt || '') + ivrInstructions;
 
     // Add IVR behavior and userId to client data for voice proxy
     const clientDataWithMetadata = {
@@ -216,7 +218,6 @@ export class CallDispatcher {
 
     console.log(`[CallDispatcher] IVR Behavior: ${ivrBehaviorSetting}`);
     console.log(`[CallDispatcher] Base prompt length: ${(params.basePrompt || '').length} chars`);
-    console.log(`[CallDispatcher] Combined prompt length: ${combinedPrompt.length} chars`);
 
     // Generate TwiML that routes to our WebSocket voice proxy
     const twiml = generateStreamTwiML({
@@ -225,7 +226,7 @@ export class CallDispatcher {
       ivrBehavior: ivrBehaviorSetting,
       dynamicVariables: params.dynamicVariables,
       clientData: clientDataWithMetadata,
-      basePrompt: combinedPrompt,
+      basePrompt: params.basePrompt || '',
     });
 
     console.log(`[CallDispatcher] Generated TwiML:`, twiml);
