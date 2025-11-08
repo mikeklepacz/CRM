@@ -56,8 +56,14 @@ class VoiceProxyServer {
 
     console.log('[VoiceProxy] WebSocket server initialized on /media-stream');
 
-    this.wss.on('connection', (ws: WSClient) => {
-      console.log('[VoiceProxy] New Twilio connection');
+    this.wss.on('error', (error) => {
+      console.error('[VoiceProxy] WebSocket server error:', error);
+    });
+
+    this.wss.on('connection', (ws: WSClient, req) => {
+      console.log('[VoiceProxy] ====== NEW TWILIO CONNECTION ======');
+      console.log('[VoiceProxy] Connection from:', req.socket.remoteAddress);
+      console.log('[VoiceProxy] Request URL:', req.url);
 
       ws.on('message', async (data: Buffer) => {
         try {

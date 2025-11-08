@@ -27,7 +27,14 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   const response = new VoiceResponse();
   
   // Get the WebSocket URL for our voice proxy
-  const replitDomain = process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
+  // Use REPLIT_DOMAINS for production, fall back to dev domain
+  let replitDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
+  
+  if (!replitDomain) {
+    // Fallback to dev domain if REPLIT_DOMAINS not set
+    replitDomain = process.env.REPLIT_DEV_DOMAIN || 'localhost:5000';
+  }
+  
   const wsProtocol = replitDomain.includes('localhost') ? 'ws' : 'wss';
   const wsUrl = `${wsProtocol}://${replitDomain}/media-stream`;
   

@@ -52,9 +52,9 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  // Initialize voice proxy WebSocket server
+  // Initialize voice proxy server
   voiceProxyServer.initialize(server);
-  log('[VoiceProxy] WebSocket server initialized');
+  console.log('[Startup] VoiceProxy WebSocket server initialized and ready for connections');
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -78,20 +78,20 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  
+
   server.listen({
     port,
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
-    
+
     setInterval(() => {
       callDispatcher.processQueuedCalls().catch(err => {
         console.error('[CallDispatcher] Error in background worker:', err);
       });
     }, 30000);
-    
+
     log('[CallDispatcher] Background worker started (runs every 30s)');
   });
 })();
