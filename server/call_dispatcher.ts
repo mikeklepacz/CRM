@@ -140,6 +140,22 @@ export class CallDispatcher {
 
       const combinedPrompt = agentPrompt + ivrInstructions;
 
+      // Create call session BEFORE initiating Twilio call
+      // This ensures voice proxy can find it immediately when stream starts
+      const callSession = await storage.createCallSession({
+        callSid: null, // Will be updated after Twilio call creation
+        agentId: agent.agentId,
+        phoneNumber,
+        clientId: target.clientId,
+        status: 'initiated',
+        scenario: campaign.scenario || 'custom',
+        metadata: {
+          combinedPrompt: combinedPrompt,
+          ivrBehavior: ivrBehaviorSetting,
+          dynamicVariables: dynamicVariables,
+        },
+      });
+
       const result = await this.initiateOutboundCall({
         apiKey,
         agentId: agent.agentId,
@@ -158,18 +174,9 @@ export class CallDispatcher {
         basePrompt: combinedPrompt,
       });
 
-      const callSession = await storage.createCallSession({
+      // Update call session with Twilio SID
+      await storage.updateCallSession(callSession.id, {
         callSid: result.callSid,
-        agentId: agent.agentId,
-        phoneNumber,
-        clientId: target.clientId,
-        status: 'initiated',
-        scenario: campaign.scenario || 'custom',
-        metadata: {
-          combinedPrompt: combinedPrompt,
-          ivrBehavior: ivrBehaviorSetting,
-          dynamicVariables: dynamicVariables,
-        },
       });
 
       await storage.updateCallCampaignTarget(target.id, {

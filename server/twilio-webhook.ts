@@ -1,6 +1,15 @@
 import { storage } from './storage';
+import { validateTwilioSignature } from './twilio-signature-validation';
 
-export async function handleTwilioCallStatus(payload: any): Promise<void> {
+export async function handleTwilioCallStatus(payload: any, signature?: string, url?: string): Promise<void> {
+  // Validate Twilio signature if provided (production only)
+  if (signature && url && process.env.TWILIO_AUTH_TOKEN) {
+    const isValid = validateTwilioSignature(url, payload, signature);
+    if (!isValid) {
+      console.error('[Twilio Webhook] Invalid signature - rejecting webhook');
+      throw new Error('Invalid Twilio signature');
+    }
+  }
   const callSid = payload.CallSid;
   const callStatus = payload.CallStatus; // 'initiated', 'ringing', 'in-progress', 'completed', 'busy', 'no-answer', 'failed', 'canceled'
   

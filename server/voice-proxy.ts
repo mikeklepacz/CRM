@@ -162,6 +162,19 @@ class VoiceProxyServer {
       basePrompt, // This already includes IVR instructions appended by CallDispatcher
     });
 
+    // If ElevenLabs connection failed, end the call
+    if (!elevenLabsWs) {
+      console.error(`[VoiceProxy] Failed to connect to ElevenLabs for ${streamSid}`);
+      await storage.createVoiceProxySession({
+        streamSid,
+        callSid,
+        agentId,
+        status: 'failed',
+      });
+      ws.close();
+      return;
+    }
+
     const session: SessionState = {
       streamSid,
       callSid,
