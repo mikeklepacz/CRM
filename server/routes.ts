@@ -1068,6 +1068,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     defaultCalendarReminders: z.array(z.object({ method: z.string(), minutes: z.number() })).optional(),
     autoKbAnalysis: z.boolean().optional(),
     kbAnalysisThreshold: z.number().optional(),
+    followUpFilters: z.object({
+      claimedDays: z.tuple([z.number(), z.number()]),
+      interestedDays: z.tuple([z.number(), z.number()]),
+      reorderDays: z.tuple([z.number(), z.number()])
+    }).optional(),
   });
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
@@ -18783,6 +18788,51 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error fetching call history:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch call history' });
+    }
+  });
+
+  // ==================================================================================
+  // EMAIL DRAFT TRACKING - Track when sales agents compose emails
+  // Supports both Gmail API drafts and mailto links for email activity analytics
+  // ==================================================================================
+  app.post('/api/email-drafts', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const { recipientEmail, subject, body, method, clientLink } = req.body;
+
+      if (!recipientEmail || !method) {
+        return res.status(400).json({ message: 'Recipient email and method are required' });
+      }
+
+      if (method !== 'gmail' && method !== 'mailto') {
+        return res.status(400).json({ message: 'Method must be either "gmail" or "mailto"' });
+      }
+
+      const draftData = {
+        userId,
+        recipientEmail,
+        subject: subject || null,
+        bodyPreview: body ? body.substring(0, 500) : null,
+        method,
+        clientLink: clientLink || null,
+      };
+
+      const newDraft = await storage.createEmailDraft(draftData);
+      res.json(newDraft);
+    } catch (error: any) {
+      console.error('Error creating email draft record:', error);
+      res.status(500).json({ message: error.message || 'Failed to log email draft' });
+    }
+  });
+
+  app.get('/api/email-drafts', isAuthenticatedCustom, async (req, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const drafts = await storage.getUserEmailDrafts(userId);
+      res.json(drafts);
+    } catch (error: any) {
+      console.error('Error fetching email drafts:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch email drafts' });
     }
   });
 

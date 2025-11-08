@@ -29,6 +29,7 @@ import {
   tickets,
   ticketReplies,
   callHistory,
+  emailDrafts,
   driveFolders,
   elevenLabsConfig,
   elevenLabsPhoneNumbers,
@@ -104,6 +105,8 @@ import {
   type InsertStatus,
   type CallHistory,
   type InsertCallHistory,
+  type EmailDraft,
+  type InsertEmailDraft,
   type DriveFolder,
   type InsertDriveFolder,
   type ElevenLabsConfig,
@@ -349,6 +352,10 @@ export interface IStorage {
   createCallHistory(callData: InsertCallHistory): Promise<CallHistory>;
   getUserCallHistory(userId: string): Promise<CallHistory[]>;
   getAllCallHistory(agentId?: string): Promise<CallHistory[]>;
+  
+  // Email Draft operations
+  createEmailDraft(draftData: InsertEmailDraft): Promise<EmailDraft>;
+  getUserEmailDrafts(userId: string): Promise<EmailDraft[]>;
   
   // Drive Folder operations
   getAllDriveFolders(): Promise<DriveFolder[]>;
@@ -1974,6 +1981,23 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(callHistory)
       .orderBy(desc(callHistory.calledAt));
+  }
+
+  // Email Draft operations
+  async createEmailDraft(draftData: InsertEmailDraft): Promise<EmailDraft> {
+    const [newDraft] = await db
+      .insert(emailDrafts)
+      .values(draftData)
+      .returning();
+    return newDraft;
+  }
+
+  async getUserEmailDrafts(userId: string): Promise<EmailDraft[]> {
+    return await db
+      .select()
+      .from(emailDrafts)
+      .where(eq(emailDrafts.userId, userId))
+      .orderBy(desc(emailDrafts.createdAt));
   }
 
   // Drive Folder operations

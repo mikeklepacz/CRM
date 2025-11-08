@@ -10,9 +10,10 @@ interface EmailPreviewProps {
   subject: string;
   to: string;
   body: string;
+  clientLink?: string | null;
 }
 
-export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
+export function EmailPreview({ subject, to, body, clientLink }: EmailPreviewProps) {
   const { toast } = useToast();
   const [isCreatingDraft, setIsCreatingDraft] = useState(false);
 
@@ -87,6 +88,19 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
         body,
       });
       
+      // Track email draft creation
+      try {
+        await apiRequest("POST", "/api/email-drafts", {
+          recipientEmail: to,
+          subject,
+          body,
+          method: 'gmail',
+          clientLink: clientLink || null,
+        });
+      } catch (error) {
+        console.error('Failed to track email draft:', error);
+      }
+      
       // Check if labels were applied successfully
       if (response.labelWarning) {
         toast({
@@ -114,6 +128,21 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
 
   // Generate mailto link
   const mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  // Track mailto link clicks
+  const handleMailtoClick = async () => {
+    try {
+      await apiRequest("POST", "/api/email-drafts", {
+        recipientEmail: to,
+        subject,
+        body,
+        method: 'mailto',
+        clientLink: clientLink || null,
+      });
+    } catch (error) {
+      console.error('Failed to track mailto link:', error);
+    }
+  };
 
   return (
     <Card className="mt-4 border-primary/20 bg-primary/5">
@@ -176,7 +205,7 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
                 className="flex-1"
                 data-testid="button-open-mailto"
               >
-                <a href={mailtoLink} target="_blank" rel="noopener noreferrer">
+                <a href={mailtoLink} onClick={handleMailtoClick} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open in Email Client
                 </a>
@@ -189,7 +218,7 @@ export function EmailPreview({ subject, to, body }: EmailPreviewProps) {
               className="flex-1"
               data-testid="button-open-mailto"
             >
-              <a href={mailtoLink} target="_blank" rel="noopener noreferrer">
+              <a href={mailtoLink} onClick={handleMailtoClick} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Open in Email Client
               </a>
