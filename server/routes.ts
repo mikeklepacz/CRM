@@ -15089,14 +15089,35 @@ IMPORTANT:
         return res.status(400).json({ message: 'Missing required fields: title, reminderDate, reminderTime' });
       }
 
+      // DEBUG: Log incoming values
+      console.log('🔍 [REMINDER DEBUG] Incoming values:');
+      console.log('  reminderDate:', reminderDate, 'type:', typeof reminderDate);
+      console.log('  reminderTime:', reminderTime);
+      console.log('  agentTimezone:', agentTimezone);
+      console.log('  useCustomerTimezone:', useCustomerTimezone);
+      console.log('  customerTimezone:', customerTimezone);
+
       // Determine effective timezone
       const effectiveTimezone = useCustomerTimezone && customerTimezone 
         ? customerTimezone 
         : agentTimezone || 'UTC';
 
-      // Extract date and time (simplified - no double conversion)
-      const scheduledDate = reminderDate.split('T')[0]; // YYYY-MM-DD
+      // Extract date - handle both plain strings and ISO strings
+      let scheduledDate: string;
+      if (typeof reminderDate === 'string') {
+        // If it contains 'T', it's an ISO string - split it
+        // Otherwise, it's already a plain date string
+        scheduledDate = reminderDate.includes('T') ? reminderDate.split('T')[0] : reminderDate;
+      } else {
+        // Shouldn't happen, but handle it
+        scheduledDate = String(reminderDate);
+      }
       const scheduledTime = reminderTime; // HH:MM in 24hr format
+
+      console.log('🔍 [REMINDER DEBUG] Processed values:');
+      console.log('  scheduledDate:', scheduledDate);
+      console.log('  scheduledTime:', scheduledTime);
+      console.log('  timezone:', effectiveTimezone);
 
       // Note: Past date validation removed - timezone complexity causes false positives
       // Users can manage their own reminder dates, and Google Calendar will handle any actual past dates
