@@ -19,7 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 interface QuickReminderProps {
   onSave: (data: {
     note: string;
-    date: Date;
+    date: string;
     time: string;
     useCustomerTimezone: boolean;
     customerTimezone: string | null;
@@ -130,7 +130,7 @@ export function QuickReminder({
     
     // Calculate the actual time to send based on timezone selection
     let finalTime = time;
-    let finalDate = date;
+    let finalDateStr: string;
     
     if (useCustomerTimezone && customerTimezone) {
       // User picked time in customer's timezone, convert to agent's timezone
@@ -145,20 +145,20 @@ export function QuickReminder({
       // Convert UTC to agent's timezone and extract time
       finalTime = formatInTimeZone(utcDate, agentTimezone, 'HH:mm');
       
-      // Get the date in agent's timezone and create local Date object
-      const agentDateStr = formatInTimeZone(utcDate, agentTimezone, 'yyyy-MM-dd');
-      const [year, month, day] = agentDateStr.split('-').map(Number);
-      finalDate = new Date(year, month - 1, day); // Create in local time
+      // Get the date in agent's timezone as a plain string (prevents UTC conversion)
+      finalDateStr = formatInTimeZone(utcDate, agentTimezone, 'yyyy-MM-dd');
     } else {
-      // Not using customer timezone - date picker already gave us the correct local date
-      // Just use it as-is, no conversion needed
-      finalDate = date;
+      // Not using customer timezone - extract local date components to prevent UTC drift
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      finalDateStr = `${year}-${month}-${day}`;
       finalTime = time;
     }
     
     onSave({ 
       note, 
-      date: finalDate,
+      date: finalDateStr,
       time: finalTime,
       useCustomerTimezone: false,
       customerTimezone,

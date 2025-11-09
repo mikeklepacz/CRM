@@ -15089,14 +15089,6 @@ IMPORTANT:
         return res.status(400).json({ message: 'Missing required fields: title, reminderDate, reminderTime' });
       }
 
-      // DEBUG: Log incoming values
-      console.log('🔍 [REMINDER DEBUG] Incoming values:');
-      console.log('  reminderDate:', reminderDate, 'type:', typeof reminderDate);
-      console.log('  reminderTime:', reminderTime);
-      console.log('  agentTimezone:', agentTimezone);
-      console.log('  useCustomerTimezone:', useCustomerTimezone);
-      console.log('  customerTimezone:', customerTimezone);
-
       // Determine effective timezone
       const effectiveTimezone = useCustomerTimezone && customerTimezone 
         ? customerTimezone 
@@ -15113,11 +15105,6 @@ IMPORTANT:
         scheduledDate = String(reminderDate);
       }
       const scheduledTime = reminderTime; // HH:MM in 24hr format
-
-      console.log('🔍 [REMINDER DEBUG] Processed values:');
-      console.log('  scheduledDate:', scheduledDate);
-      console.log('  scheduledTime:', scheduledTime);
-      console.log('  timezone:', effectiveTimezone);
 
       // Note: Past date validation removed - timezone complexity causes false positives
       // Users can manage their own reminder dates, and Google Calendar will handle any actual past dates
