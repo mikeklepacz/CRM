@@ -14,7 +14,7 @@ app.use(express.json({
   limit: '10mb',
   verify: (req: any, res, buf, encoding) => {
     // Store raw body for webhook signature validation
-    req.rawBody = buf.toString(encoding || 'utf8');
+    req.rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
   }
 }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));

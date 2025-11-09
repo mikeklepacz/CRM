@@ -568,6 +568,65 @@ export async function deleteStoreFromSheet(link: string) {
 }
 
 /**
+ * Parse Google Sheets row data into objects with unique identifiers
+ * @param rows - Raw rows from Google Sheets (first row is headers)
+ * @param uniqueIdentifierColumn - Column name to use as unique identifier
+ * @returns Array of parsed objects with uniqueId, rowIndex, and data
+ */
+export function parseSheetDataToObjects(rows: any[][], uniqueIdentifierColumn: string) {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const headers = rows[0].map((h: string) => h?.toString().trim() || '');
+  const uniqueIdIndex = headers.findIndex((h: string) => h === uniqueIdentifierColumn);
+
+  if (uniqueIdIndex === -1) {
+    throw new Error(`Unique identifier column "${uniqueIdentifierColumn}" not found in sheet headers`);
+  }
+
+  const parsed = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const uniqueId = row[uniqueIdIndex]?.toString().trim();
+
+    if (!uniqueId) {
+      continue; // Skip rows without a unique identifier
+    }
+
+    const data: Record<string, any> = {};
+    headers.forEach((header: string, index: number) => {
+      if (header) {
+        data[header] = row[index] !== undefined ? row[index] : '';
+      }
+    });
+
+    parsed.push({
+      uniqueId,
+      rowIndex: i + 1, // 1-indexed row number (accounting for header)
+      data
+    });
+  }
+
+  return parsed;
+}
+
+/**
+ * Convert objects back to Google Sheets row format
+ * @param headers - Array of column headers
+ * @param objects - Array of data objects to convert
+ * @returns Array of rows (each row is an array of values)
+ */
+export function convertObjectsToSheetRows(headers: string[], objects: Array<Record<string, any>>) {
+  return objects.map(obj => {
+    return headers.map(header => {
+      return obj[header] !== undefined ? obj[header] : '';
+    });
+  });
+}
+
+/**
  * Update all Commission Tracker rows that reference oldLink to use newLink instead
  */
 export async function updateCommissionTrackerLinks(oldLink: string, newLink: string) {
