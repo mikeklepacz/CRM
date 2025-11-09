@@ -1883,7 +1883,7 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       const response = await apiRequest('POST', '/api/reminders', {
                                         title: `Follow up: ${formData.name}`,
                                         description: reminderData.note,
-                                        reminderDate: reminderData.date.toISOString(),
+                                        reminderDate: reminderData.date,
                                         reminderTime: reminderData.time,
                                         storeMetadata: {
                                           sheetId: trackerSheetId,
@@ -1903,7 +1903,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                       });
 
                                       // Update the form data to reflect the changes
-                                      const followUpDate = format(reminderData.date, 'M/d/yyyy');
+                                      // Parse the yyyy-MM-dd string to Date for formatting (locale-safe)
+                                      const [year, month, day] = reminderData.date.split('-').map(Number);
+                                      const dateObj = new Date(year, month - 1, day);
+                                      const followUpDate = format(dateObj, 'M/d/yyyy');
                                       handleInputChange('follow_up_date', followUpDate);
                                       handleInputChange('next_action', reminderData.note);
 
