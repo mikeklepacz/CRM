@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ArrowLeft, Save, Loader2, ExternalLink, Phone, X } from "lucide-react";
 import { QuickReminder } from "@/components/quick-reminder";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function StoreDetails() {
@@ -135,10 +135,30 @@ export default function StoreDetails() {
   // Create reminder mutation
   const createReminderMutation = useMutation({
     mutationFn: async (reminderData: any) => {
+      // Transform field names to match API expectations
+      const { note, date, time, ...rest } = reminderData;
+      
+      // Format date as date-only string (yyyy-MM-dd) - backend will combine with time
+      const reminderDate = date instanceof Date 
+        ? format(date, 'yyyy-MM-dd')
+        : (typeof date === 'string' ? date : format(new Date(date), 'yyyy-MM-dd'));
+      
       return await apiRequest('POST', '/api/reminders', {
-        ...reminderData,
+        title: note,
+        reminderDate,
+        reminderTime: time,
+        ...rest,
         clientId: storeId,
         storeName: formData.name,
+        storeMetadata: {
+          link: formData.link,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          pointOfContact: storeData?.['Point of Contact'] || storeData?.['POC'],
+          pocEmail: storeData?.['POC Email'] || storeData?.['poc email'],
+          pocPhone: storeData?.['POC Phone'] || storeData?.['poc phone'],
+        },
       });
     },
     onSuccess: () => {

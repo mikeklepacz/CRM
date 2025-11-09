@@ -145,9 +145,10 @@ export function QuickReminder({
       // Convert UTC to agent's timezone and extract time
       finalTime = formatInTimeZone(utcDate, agentTimezone, 'HH:mm');
       
-      // Get the date in agent's timezone
+      // Get the date in agent's timezone and create local Date object
       const agentDateStr = formatInTimeZone(utcDate, agentTimezone, 'yyyy-MM-dd');
-      finalDate = new Date(agentDateStr);
+      const [year, month, day] = agentDateStr.split('-').map(Number);
+      finalDate = new Date(year, month - 1, day); // Create in local time
     }
     
     onSave({ 
