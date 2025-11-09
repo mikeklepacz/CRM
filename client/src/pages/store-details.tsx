@@ -138,10 +138,24 @@ export default function StoreDetails() {
       // Transform field names to match API expectations
       const { note, date, time, ...rest } = reminderData;
       
-      // Format date as date-only string (yyyy-MM-dd) - backend will combine with time
-      const reminderDate = date instanceof Date 
-        ? format(date, 'yyyy-MM-dd')
-        : (typeof date === 'string' ? date : format(new Date(date), 'yyyy-MM-dd'));
+      // Format date as date-only string (yyyy-MM-dd) - prevent timezone drift
+      let reminderDate: string;
+      if (date instanceof Date) {
+        // Extract local components to avoid UTC conversion
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        reminderDate = `${year}-${month}-${day}`;
+      } else if (typeof date === 'string') {
+        reminderDate = date;
+      } else {
+        // Fallback for other types
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        reminderDate = `${year}-${month}-${day}`;
+      }
       
       return await apiRequest('POST', '/api/reminders', {
         title: note,
