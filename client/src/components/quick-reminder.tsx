@@ -149,6 +149,11 @@ export function QuickReminder({
       const agentDateStr = formatInTimeZone(utcDate, agentTimezone, 'yyyy-MM-dd');
       const [year, month, day] = agentDateStr.split('-').map(Number);
       finalDate = new Date(year, month - 1, day); // Create in local time
+    } else {
+      // Not using customer timezone - date picker already gave us the correct local date
+      // Just use it as-is, no conversion needed
+      finalDate = date;
+      finalTime = time;
     }
     
     onSave({ 
