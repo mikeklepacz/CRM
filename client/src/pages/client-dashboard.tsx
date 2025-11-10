@@ -1810,23 +1810,96 @@ export default function ClientDashboard() {
       return filtered;
     }
 
-    // My Stores Only filter - bypass state/city filters when active
+    // My Stores Only filter - apply ALL same filters as regular mode
     if (showMyStoresOnly) {
-      // Filter to only claimed stores (_hasTrackerData === true)
-      let filtered = data.filter((row: any) => row._hasTrackerData === true);
+      // CRITICAL: If any filter has 0 selections, show NOTHING (not everything)
+      if (allStates.length > 0 && selectedStates.size === 0) {
+        return []; // Show 0 rows when nothing is selected
+      }
 
-      // Apply search filter (if any)
-      if (searchTerm.trim()) {
+      // First filter by search
+      let filtered = data.filter((row: any) => {
         const searchLower = searchTerm.toLowerCase();
+        return headers.some((header: string) => {
+          const value = row[header]?.toString().toLowerCase() || '';
+          return value.includes(searchLower);
+        });
+      });
+
+      // Filter to only claimed stores (_hasTrackerData === true)
+      filtered = filtered.filter((row: any) => row._hasTrackerData === true);
+
+      // Filter by name if nameFilter is set
+      if (nameFilter.trim()) {
+        const nameLower = nameFilter.toLowerCase();
         filtered = filtered.filter((row: any) => {
-          return headers.some((header: string) => {
-            const value = row[header]?.toString().toLowerCase() || '';
-            return value.includes(searchLower);
+          const nameValue = (row['name'] || row['Name'] || row['Company'] || row['company'] || '').toString().toLowerCase();
+          return nameValue.includes(nameLower);
+        });
+      }
+
+      // Filter by city if cityFilter is set
+      if (cityFilter.trim()) {
+        const cityLower = cityFilter.toLowerCase();
+        filtered = filtered.filter((row: any) => {
+          const cityValue = (row['city'] || row['City'] || '').toString().toLowerCase();
+          return cityValue.includes(cityLower);
+        });
+      }
+
+      // Then filter by states
+      if (selectedStates.size > 0 && selectedStates.size < allStates.length) {
+        const stateColumns = headers.filter((h: string) => {
+          const lower = h.toLowerCase();
+          return lower === 'state' || lower.includes(', state');
+        });
+        filtered = filtered.filter((row: any) => {
+          // Check if row's state is in selected states
+          return stateColumns.some((col: string) => {
+            const value = row[col];
+            if (value && String(value).trim()) {
+              const valueStr = String(value).trim();
+              let stateAbbrev = valueStr;
+
+              // If format is "City, ST", extract just the state abbreviation
+              if (valueStr.includes(',')) {
+                const parts = valueStr.split(',');
+                if (parts.length >= 2) {
+                  stateAbbrev = parts[parts.length - 1].trim();
+                }
+              }
+
+              const stateName = getStateName(stateAbbrev);
+              return stateName && selectedStates.has(stateName);
+            }
+            return false;
           });
         });
       }
 
-      // Apply status filter (if any)
+      // Filter by cities if we have cities available in selected states
+      // CRITICAL: If 0 cities are selected, show NOTHING. If some but not all are selected, filter.
+      if (selectedStates.size > 0 && citiesInSelectedStates.length > 0) {
+        if (selectedCities.size === 0) {
+          // NO cities selected = show NOTHING
+          return [];
+        } else if (selectedCities.size < citiesInSelectedStates.length) {
+          // Some cities selected but not all = filter to show only selected cities
+          const cityColumns = headers.filter((h: string) => h.toLowerCase() === 'city');
+          filtered = filtered.filter((row: any) => {
+            return cityColumns.some((col: string) => {
+              const value = row[col];
+              if (value && String(value).trim()) {
+                return selectedCities.has(String(value).trim());
+              }
+              return false;
+            });
+          });
+        }
+        // If all cities are selected, don't filter (show everything)
+      }
+
+      // Filter by status if any statuses are selected
       if (selectedStatuses.size > 0) {
         const statusColumns = headers.filter((h: string) => h.toLowerCase().includes('status'));
         filtered = filtered.filter((row: any) => {
