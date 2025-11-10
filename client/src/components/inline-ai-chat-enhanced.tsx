@@ -2792,7 +2792,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                 </div>
 
                 {/* Scrollable Templates List */}
-                <ScrollArea className="flex-1 min-h-0">
+                <ScrollArea className="flex-1 min-h-0 h-[calc(100vh-400px)]">
                   <div className="space-y-2 pr-4">
                     {templates
                       .filter(
