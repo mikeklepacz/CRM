@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Navigate } from "wouter";
+import { useLocation } from "wouter";
 
 // Admin components
 import { WooCommerceSync } from "@/components/woocommerce-sync";
@@ -20,13 +20,23 @@ import { VoiceSettings } from "@/components/voice-settings";
 export default function Admin() {
   const { user, isLoading: authLoading } = useAuth();
   const isMobile = useIsMobile();
+  const [, setLocation] = useLocation();
   const [activeAdminTab, setActiveAdminTab] = useState("users");
+
+  // Redirect non-admins to dashboard
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      setLocation('/');
+    }
+  }, [user, setLocation]);
 
   if (authLoading) return null;
 
-  // Redirect non-admins to dashboard
-  if (!user || user.role !== 'admin') {
-    return <Navigate to="/" />;
+  // Check if user has access
+  const hasAccess = user?.role === 'admin';
+
+  if (!hasAccess) {
+    return null; // Will redirect via useEffect
   }
 
   return (
