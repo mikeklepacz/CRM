@@ -40,6 +40,10 @@ export default function AgentDashboard() {
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
   const [viewAsAgent, setViewAsAgent] = useState(true);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Store details dialog state
   const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
@@ -238,6 +242,17 @@ export default function AgentDashboard() {
     setCustomDateRange(undefined);
   };
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, status, inactivityDays, timePeriod, customDateRange, itemsPerPage]);
+
+  // Calculate pagination
+  const totalPages = itemsPerPage === -1 ? 1 : Math.ceil(filteredClients.length / itemsPerPage);
+  const paginatedClients = itemsPerPage === -1 
+    ? filteredClients 
+    : filteredClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="h-[calc(100vh-4rem)] flex">
       {/* Left Column - Main Dashboard Content */}
@@ -287,8 +302,93 @@ export default function AgentDashboard() {
             )}
           </div>
 
-          {/* Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Period + Stats Cards Container */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
+              <div className="space-y-1">
+                <CardTitle>Performance Metrics</CardTitle>
+                <p className="text-sm text-muted-foreground">Track your stats for the selected period</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={timePeriod === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTimePeriod("all")}
+                  data-testid="button-period-all"
+                >
+                  All Time
+                </Button>
+                <Button
+                  variant={timePeriod === "today" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTimePeriod("today")}
+                  data-testid="button-period-today"
+                >
+                  Today
+                </Button>
+                <Button
+                  variant={timePeriod === "week" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTimePeriod("week")}
+                  data-testid="button-period-week"
+                >
+                  Week
+                </Button>
+                <Button
+                  variant={timePeriod === "month" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTimePeriod("month")}
+                  data-testid="button-period-month"
+                >
+                  Month
+                </Button>
+                <Button
+                  variant={timePeriod === "quarter" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTimePeriod("quarter")}
+                  data-testid="button-period-quarter"
+                >
+                  Quarter
+                </Button>
+                <Button
+                  variant={timePeriod === "year" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTimePeriod("year")}
+                  data-testid="button-period-year"
+                >
+                  Year
+                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={timePeriod === "custom" ? "default" : "outline"}
+                      size="sm"
+                      data-testid="button-period-custom"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {timePeriod === "custom" && customDateRange?.from
+                        ? `${format(customDateRange.from, "MMM d")}${customDateRange?.to ? ` - ${format(customDateRange.to, "MMM d")}` : ""}`
+                        : "Custom"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <CalendarComponent
+                      mode="range"
+                      selected={customDateRange}
+                      onSelect={(range: DateRange | undefined) => {
+                        setCustomDateRange(range);
+                        if (range?.from) {
+                          setTimePeriod("custom");
+                        }
+                      }}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">My Clients</CardTitle>
@@ -346,157 +446,9 @@ export default function AgentDashboard() {
                 </p>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Compact Filter Bar */}
-          <div className="flex flex-wrap items-center gap-3 p-4 border rounded-lg bg-card">
-            {/* Time Period Buttons */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Period:</span>
-              <Button
-                variant={timePeriod === "all" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTimePeriod("all")}
-                data-testid="button-period-all"
-              >
-                All Time
-              </Button>
-              <Button
-                variant={timePeriod === "today" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTimePeriod("today")}
-                data-testid="button-period-today"
-              >
-                Today
-              </Button>
-              <Button
-                variant={timePeriod === "week" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTimePeriod("week")}
-                data-testid="button-period-week"
-              >
-                Week
-              </Button>
-              <Button
-                variant={timePeriod === "month" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTimePeriod("month")}
-                data-testid="button-period-month"
-              >
-                Month
-              </Button>
-              <Button
-                variant={timePeriod === "quarter" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTimePeriod("quarter")}
-                data-testid="button-period-quarter"
-              >
-                Quarter
-              </Button>
-              <Button
-                variant={timePeriod === "year" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTimePeriod("year")}
-                data-testid="button-period-year"
-              >
-                Year
-              </Button>
-
-              {/* Custom Date Range Picker */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={timePeriod === "custom" ? "default" : "outline"}
-                    size="sm"
-                    data-testid="button-period-custom"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {timePeriod === "custom" && customDateRange?.from
-                      ? `${format(customDateRange.from, "MMM d")}${customDateRange?.to ? ` - ${format(customDateRange.to, "MMM d")}` : ""}`
-                      : "Custom"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="range"
-                    selected={customDateRange}
-                    onSelect={(range: DateRange | undefined) => {
-                      setCustomDateRange(range);
-                      if (range?.from) {
-                        setTimePeriod("custom");
-                      }
-                    }}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="h-6 w-px bg-border" />
-
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px] max-w-[300px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search clients..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-                data-testid="input-search"
-              />
-            </div>
-
-            {/* Status Dropdown */}
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-[180px]" data-testid="select-status">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {statuses.map((s) => (
-                  <SelectItem key={s.id} value={s.name}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Inactivity Filter */}
-            <Select value={inactivityDays} onValueChange={setInactivityDays}>
-              <SelectTrigger className="w-[200px]" data-testid="select-inactivity">
-                <SelectValue placeholder="Inactivity" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Clients</SelectItem>
-                <SelectItem value="90">Not ordered in 90 days</SelectItem>
-                <SelectItem value="180">Not ordered in 180 days</SelectItem>
-                <SelectItem value="365">Not ordered in 365 days</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Clear Filters */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              data-testid="button-clear-filters"
-            >
-              Clear All
-            </Button>
-
-            <div className="h-6 w-px bg-border" />
-
-            {/* Call History Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCallHistoryOpen(true)}
-              data-testid="button-call-history"
-            >
-              <PhoneIcon className="h-4 w-4 mr-2" />
-              Call History
-            </Button>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Client Table - fills remaining space */}
@@ -516,14 +468,103 @@ export default function AgentDashboard() {
             </Card>
           ) : (
             <>
+              {/* Filters Toolbar */}
+              <div className="flex flex-wrap items-center gap-3 p-4 border rounded-lg bg-card mb-4">
+                {/* Search */}
+                <div className="relative min-w-[200px] max-w-[300px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search clients..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-search"
+                  />
+                </div>
+
+                {/* Status Dropdown */}
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-status">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    {statuses.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Since Last Ordered Filter */}
+                <Select value={inactivityDays} onValueChange={setInactivityDays}>
+                  <SelectTrigger className="w-[200px]" data-testid="select-inactivity">
+                    <SelectValue placeholder="Since Last Ordered" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Clients</SelectItem>
+                    <SelectItem value="90">90+ days</SelectItem>
+                    <SelectItem value="180">180+ days</SelectItem>
+                    <SelectItem value="365">365+ days</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Clear Filters */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  data-testid="button-clear-filters"
+                >
+                  Clear All
+                </Button>
+
+                <div className="h-6 w-px bg-border" />
+
+                {/* Call History Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCallHistoryOpen(true)}
+                  data-testid="button-call-history"
+                >
+                  <PhoneIcon className="h-4 w-4 mr-2" />
+                  Call History
+                </Button>
+
+                {/* Items Per Page */}
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Show:</span>
+                  <Select 
+                    value={itemsPerPage === -1 ? "all" : itemsPerPage.toString()} 
+                    onValueChange={(value) => setItemsPerPage(value === "all" ? -1 : parseInt(value))}
+                  >
+                    <SelectTrigger className="w-[100px]" data-testid="select-items-per-page">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="all">ALL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">My Clients</h3>
                 <p className="text-sm text-muted-foreground">
-                  {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''}
+                  {itemsPerPage === -1 
+                    ? `Showing all ${filteredClients.length} client${filteredClients.length !== 1 ? 's' : ''}`
+                    : `Showing ${Math.min((currentPage - 1) * itemsPerPage + 1, filteredClients.length)}-${Math.min(currentPage * itemsPerPage, filteredClients.length)} of ${filteredClients.length} client${filteredClients.length !== 1 ? 's' : ''}`
+                  }
                 </p>
               </div>
               <ClientsTable
-              clients={filteredClients}
+              clients={paginatedClients}
               currentUser={user}
               isLoading={clientsLoading}
               onNotesClick={async (clientId) => {
@@ -619,6 +660,33 @@ export default function AgentDashboard() {
                 }
               }}
             />
+              
+              {/* Pagination Controls */}
+              {itemsPerPage !== -1 && filteredClients.length > 0 && (
+                <div className="flex items-center justify-between mt-4 px-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    data-testid="button-prev-page"
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    data-testid="button-next-page"
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </div>
