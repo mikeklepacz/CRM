@@ -13308,9 +13308,38 @@ IMPORTANT:
 
       console.log(`[Parse-and-Match] Results: ${matched.length} matched, ${unmatched.length} unmatched`);
 
+      // Detect brand name by consensus across matched CRM stores
+      let detectedBrand = '';
+      if (matched.length > 0) {
+        const dbaIndex = headers.findIndex((h: string) => h.toLowerCase() === 'dba');
+        if (dbaIndex !== -1) {
+          // Collect all DBA values from matched stores, filter out blanks
+          const brandCounts = new Map<string, number>();
+          matched.forEach(m => {
+            const dbaValue = m.match.originalRow[dbaIndex]?.trim();
+            if (dbaValue) {
+              brandCounts.set(dbaValue, (brandCounts.get(dbaValue) || 0) + 1);
+            }
+          });
+          
+          // Use most common brand (consensus)
+          if (brandCounts.size > 0) {
+            let maxCount = 0;
+            brandCounts.forEach((count, brand) => {
+              if (count > maxCount) {
+                maxCount = count;
+                detectedBrand = brand;
+              }
+            });
+            console.log(`[Parse-and-Match] Detected brand by consensus: "${detectedBrand}" (${maxCount}/${matched.length} matches)`);
+          }
+        }
+      }
+
       res.json({ 
         matched, 
         unmatched,
+        brandName: detectedBrand,
         summary: {
           total: parsedStores.length,
           matched: matched.length,
@@ -13518,44 +13547,33 @@ IMPORTANT:
   // Search Google Places API for a specific store location
   app.post('/api/stores/search-google', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      const { name, address, city, state, category } = req.body;
+      const { name, address, city, state, category, brandName } = req.body;
 
-      if (!name) {
-        return res.status(400).json({ message: 'Store name is required' });
+      if (!name && !brandName) {
+        return res.status(400).json({ message: 'Store name or brand name is required' });
       }
 
-      // Build search query - prioritize using the full address for better results
-      // Append category at the end to help Google identify the business type
-      let query = name;
-      let location = '';
+      // Build search query - use brand + location for better constraint
+      // Format: "{brandName} {category} {city} {state}"
+      let query = '';
+      if (brandName) {
+        // Prefer brand-based search for better accuracy
+        query = `${brandName} ${category || 'dispensary'} ${city || ''} ${state || ''}`.trim();
+      } else {
+        // Fallback to name-based search
+        query = name;
+      }
       
+      let location = '';
       if (address && city && state) {
-        // Best case: full address + category helps Google pinpoint the exact business
         location = `${address}, ${city}, ${state}`;
-        if (category) {
-          location = `${location} ${category}`;
-        }
-      } else if (address && city) {
-        location = `${address}, ${city}`;
-        if (category) {
-          location = `${location} ${category}`;
-        }
       } else if (city && state) {
         location = `${city}, ${state}`;
-        if (category) {
-          location = `${location} ${category}`;
-        }
-      } else if (city) {
-        location = city;
-        if (category) {
-          location = `${location} ${category}`;
-        }
       } else if (state) {
         location = state;
-        if (category) {
-          location = `${location} ${category}`;
-        }
       }
+
+      console.log(`[Google Search] Query: "${query}", Location: "${location}"`);
 
       // Search Google Places API
       const searchResults = await googleMaps.searchPlaces(query, location);
@@ -13595,7 +13613,44 @@ IMPORTANT:
       );
 
       // Filter out null results
-      const validResults = detailedResults.filter(r => r !== null);
+      let validResults = detailedResults.filter(r => r !== null);
+
+      // CRITICAL: Validate location match - filter results to same state as input
+      if (state && validResults.length > 0) {
+        const inputStateNormalized = state.toLowerCase().trim();
+        const stateFiltered = validResults.filter(result => {
+          if (!result || !result.state) return false;
+          const resultStateNormalized = result.state.toLowerCase().trim();
+          // Check if states match (handle both abbreviations and full names)
+          return resultStateNormalized === inputStateNormalized || 
+                 resultStateNormalized.startsWith(inputStateNormalized) ||
+                 inputStateNormalized.startsWith(resultStateNormalized);
+        });
+
+        if (stateFiltered.length > 0) {
+          validResults = stateFiltered;
+          console.log(`[Google Search] Filtered to ${validResults.length} results matching state: ${state}`);
+        } else {
+          console.log(`[Google Search] Warning: No results matched input state "${state}", returning all results`);
+        }
+      }
+
+      // Optional: Also validate city match if provided
+      if (city && validResults.length > 1) {
+        const inputCityNormalized = city.toLowerCase().trim();
+        const cityFiltered = validResults.filter(result => {
+          if (!result || !result.city) return false;
+          const resultCityNormalized = result.city.toLowerCase().trim();
+          return resultCityNormalized === inputCityNormalized ||
+                 resultCityNormalized.includes(inputCityNormalized) ||
+                 inputCityNormalized.includes(resultCityNormalized);
+        });
+
+        if (cityFiltered.length > 0) {
+          validResults = cityFiltered;
+          console.log(`[Google Search] Further filtered to ${validResults.length} results matching city: ${city}`);
+        }
+      }
 
       res.json({ results: validResults });
     } catch (error: any) {

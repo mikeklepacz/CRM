@@ -66,6 +66,7 @@ export function ParseLocationsDialog({
   category
 }: ParseLocationsDialogProps) {
   const [rawText, setRawText] = useState("");
+  const [brandName, setBrandName] = useState("");
   const [matchedStores, setMatchedStores] = useState<MatchedStore[]>([]);
   const [googleVerifiedStores, setGoogleVerifiedStores] = useState<GoogleVerifiedStore[]>([]);
   const [unmatchedStores, setUnmatchedStores] = useState<ParsedStore[]>([]);
@@ -99,6 +100,14 @@ export function ParseLocationsDialog({
       });
       setSelectedMatches(autoSelected);
 
+      // Extract brand from first matched store for Google searches
+      let detectedBrand = brandName; // Use user-provided brand if available
+      if (!detectedBrand && data.brandName) {
+        // Backend detected brand from matched stores
+        detectedBrand = data.brandName;
+        setBrandName(detectedBrand);
+      }
+
       // Auto-search Google for unmatched entries
       if (data.unmatched && data.unmatched.length > 0) {
         setIsSearchingGoogle(true);
@@ -115,6 +124,7 @@ export function ParseLocationsDialog({
                 city: unmatchedStore.city,
                 state: unmatchedStore.state,
                 category: category || '',
+                brandName: detectedBrand || '',
               });
 
               if (googleSearchResult.results && googleSearchResult.results.length > 0) {

@@ -250,6 +250,9 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   // State for collapsible reminder section
   const [reminderSectionOpen, setReminderSectionOpen] = useState(false);
   const [isSavingReminder, setIsSavingReminder] = useState(false);
+  
+  // State for Claim DBA loading
+  const [isClaiming, setIsClaiming] = useState(false);
 
   // Section ordering state with localStorage persistence
   const DEFAULT_SECTION_ORDER = ['basic-info', 'contact-info', 'sales-info'];
@@ -1629,25 +1632,25 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                     type="button"
                                     variant="default"
                                     onClick={async () => {
-                                      if (selectedStores.length === 0) {
-                                        toast({
-                                          title: "No stores selected",
-                                          description: "Please select at least one store to add to this DBA",
-                                          variant: "destructive",
-                                        });
-                                        return;
-                                      }
-
-                                      if (parentCreationType === 'existing' && !selectedParentLink) {
-                                        toast({
-                                          title: "Parent not selected",
-                                          description: "Please select which location should be the parent",
-                                          variant: "destructive",
-                                        });
-                                        return;
-                                      }
-
+                                      setIsClaiming(true);
                                       try {
+                                        if (selectedStores.length === 0) {
+                                          toast({
+                                            title: "No stores selected",
+                                            description: "Please select at least one store to add to this DBA",
+                                            variant: "destructive",
+                                          });
+                                          return;
+                                        }
+
+                                        if (parentCreationType === 'existing' && !selectedParentLink) {
+                                          toast({
+                                            title: "Parent not selected",
+                                            description: "Please select which location should be the parent",
+                                            variant: "destructive",
+                                          });
+                                          return;
+                                        }
                                         // Step 0: Import Google-sourced stores first
                                         const storesWithLinks = await Promise.all(
                                           selectedStores.map(async (store: any) => {
@@ -1688,7 +1691,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                           return;
                                         }
                                         
-                                        // Step 1: Claim all locations with DBA name (existing behavior)
+                                        // Step 1: Claim all locations with DBA name
+                                        toast({
+                                          title: "Claiming DBA",
+                                          description: `Step 1/4: Claiming ${selectedStores.length} location(s)...`,
+                                        });
                                         const claimResponse = await apiRequest('POST', '/api/stores/claim-multiple', {
                                           storeLinks,
                                           dbaName: dbaName.trim(),
@@ -1698,6 +1705,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         });
 
                                         // Step 2: Create parent DBA record
+                                        toast({
+                                          title: "Claiming DBA",
+                                          description: `Step 2/4: Creating parent DBA record...`,
+                                        });
                                         let parentLink: string;
                                         
                                         if (parentCreationType === 'new') {
@@ -1719,6 +1730,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             // Category will be copied from first child location
                                             childLinks: storeLinks
                                           });
+                                          
+                                          // Defensive check: Ensure parent was created
+                                          if (!parentResponse?.parentLink) {
+                                            throw new Error('Failed to create parent DBA record - no parent link returned. Please check that all required fields are filled.');
+                                          }
                                           parentLink = parentResponse.parentLink;
                                         } else {
                                           // Use existing location as parent
@@ -1726,10 +1742,19 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                             dbaName: dbaName.trim(),
                                             parentLink: selectedParentLink
                                           });
+                                          
+                                          // Defensive check
+                                          if (!parentResponse?.parentLink && !selectedParentLink) {
+                                            throw new Error('Failed to set existing location as parent - no parent link returned.');
+                                          }
                                           parentLink = selectedParentLink;
                                         }
 
                                         // Step 3: Link all child locations to parent
+                                        toast({
+                                          title: "Claiming DBA",
+                                          description: `Step 3/4: Linking ${selectedStores.length} child location(s) to parent...`,
+                                        });
                                         const childLinks = storeLinks.filter(link => link !== parentLink);
                                         if (childLinks.length > 0) {
                                           await apiRequest('POST', '/api/dba/link-children', {
@@ -1740,6 +1765,10 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
                                         // Step 4: Set head office if selected
                                         if (headOfficeLink && headOfficeLink !== 'none') {
+                                          toast({
+                                            title: "Claiming DBA",
+                                            description: `Step 4/4: Setting head office...`,
+                                          });
                                           await apiRequest('POST', '/api/dba/set-head-office', {
                                             headOfficeLink,
                                             parentLink,
@@ -1772,18 +1801,30 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         // Close the dialog
                                         onOpenChange(false);
                                       } catch (error: any) {
+                                        console.error('[Claim DBA Error]', error);
                                         toast({
-                                          title: "Error",
-                                          description: error.message || "Failed to claim locations",
+                                          title: "Error Claiming DBA",
+                                          description: error.message || "Failed to claim locations. Please try again.",
                                           variant: "destructive",
                                         });
+                                      } finally {
+                                        setIsClaiming(false);
                                       }
                                     }}
-                                    disabled={!dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
+                                    disabled={isClaiming || !dbaName || !dbaName.trim() || selectedStores.length === 0 || !storeSheetId || !trackerSheetId}
                                     data-testid="button-claim-multiple"
                                   >
-                                    <Sparkles className="h-4 w-4 mr-2" />
-                                    Claim DBA with Parent-Child Structure
+                                    {isClaiming ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Claiming DBA...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles className="h-4 w-4 mr-2" />
+                                        Claim DBA with Parent-Child Structure
+                                      </>
+                                    )}
                                   </Button>
                                 </div>
                               )}
