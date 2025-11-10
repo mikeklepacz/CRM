@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
+import Admin from "@/pages/admin";
 import Settings from "@/pages/settings";
 import ClientDashboard from "@/pages/client-dashboard";
 import StoreDetails from "@/pages/store-details";
@@ -66,6 +67,7 @@ function Router() {
         <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
         <main className="flex-1 overflow-auto">
           <Switch>
+            <Route path="/admin" component={Admin} />
             <Route path="/settings" component={Settings} />
             <Route path="/clients" component={ClientDashboard} />
             <Route path="/documents" component={Documents} />
