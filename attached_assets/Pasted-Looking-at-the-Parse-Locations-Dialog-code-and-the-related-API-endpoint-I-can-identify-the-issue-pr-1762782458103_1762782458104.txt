@@ -1,0 +1,34 @@
+Looking at the Parse Locations Dialog code and the related API endpoint, I can identify the issue preventing the parsing system from working.
+
+The problem is in the parseAndMatchMutation in client/src/components/parse-locations-dialog.tsx. After parsing completes, the code attempts to auto-search Google for unmatched entries, but there's a critical issue with the category parameter being passed.
+
+Here's the problem:
+
+The category prop is passed to ParseLocationsDialog from the parent component
+When calling the Google search API, it uses category: category || ''
+However, looking at the server-side Google Maps search endpoint, it expects a valid category to perform accurate searches
+The main issue is that the Google search is happening but may be failing silently, and the error handling doesn't properly surface these failures to the user.
+
+Let me fix the parsing system:
+
+client/src/components/parse-locations-dialog.tsx
++22
+-8
+Fix error handling and improve Google search reliability in parse locations dialog, Add better error handling for the initial parse and match request
+Now let me check the server-side parse-and-match endpoint to ensure it's properly handling the request:
+
+server/routes.ts
+Add better error handling and logging to parse-and-match endpoint Add better error handling and logging to parse-and-match endpoint Add detailed logging to parse-and-match processing Add better error handling and logging to parse-and-match endpoint Add detailed logging to parse-and-match processing Add summary logging to parse-and-match results
+The main issues preventing the parsing system from working were:
+
+Missing error surfacing: Errors during Google search were logged but not shown to users
+Poor validation: No check for minimum required data before attempting Google searches
+Default category: Using empty string instead of a sensible default like "store"
+Lack of logging: Server-side had minimal logging making debugging difficult
+The fixes add:
+
+Better error messages shown to users via toast notifications
+Validation to skip Google searches for entries with insufficient data
+A sensible default category ("store") when none is provided
+Comprehensive logging on both client and server sides
+Better error state management (resetting isSearchingGoogle on error)
