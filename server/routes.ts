@@ -12594,11 +12594,16 @@ IMPORTANT:
       let createdTrackerCount = 0;
       let skippedCount = 0;
 
+      // Helper to add delay between API calls (rate limiting)
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const WRITE_DELAY_MS = 200; // 200ms between writes = max 5 writes/second
+
       // Process each store link - write to Commission Tracker (source of truth)
-      for (const storeLink of storeLinks) {
+      for (let idx = 0; idx < storeLinks.length; idx++) {
+        const storeLink = storeLinks[idx];
         const normalizedLink = normalizeLink(storeLink);
 
-        console.log(`[CLAIM-MULTIPLE] Processing store: ${storeLink}`);
+        console.log(`[CLAIM-MULTIPLE] Processing store ${idx + 1}/${storeLinks.length}: ${storeLink}`);
 
         // Find existing tracker row with this link
         let trackerRowIndex = -1;
@@ -12620,6 +12625,7 @@ IMPORTANT:
             try {
               await googleSheets.writeSheetData(trackerSheet.spreadsheetId, agentCellRange, [[agentName]]);
               console.log(`[CLAIM-MULTIPLE] ✓ Agent write successful`);
+              await delay(WRITE_DELAY_MS); // Rate limiting
             } catch (error: any) {
               console.error(`[CLAIM-MULTIPLE] ✗ Agent write failed:`, error.message);
             }
@@ -12632,6 +12638,7 @@ IMPORTANT:
             try {
               await googleSheets.writeSheetData(trackerSheet.spreadsheetId, dbaCellRange, [[dbaName]]);
               console.log(`[CLAIM-MULTIPLE] ✓ DBA write successful`);
+              await delay(WRITE_DELAY_MS); // Rate limiting
             } catch (error: any) {
               console.error(`[CLAIM-MULTIPLE] ✗ DBA write failed:`, error.message);
             }
@@ -12662,6 +12669,7 @@ IMPORTANT:
           console.log(`[CLAIM-MULTIPLE] Appending tracker row to Commission Tracker`);
           await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newTrackerRow]);
           console.log(`[CLAIM-MULTIPLE] ✓ Commission Tracker append successful`);
+          await delay(WRITE_DELAY_MS); // Rate limiting
           createdTrackerCount++;
         }
       }
@@ -13145,11 +13153,107 @@ IMPORTANT:
         return match ? normalizePhone(match[0]) : null;
       };
 
-      // Parse the raw text into store entries
-      const lines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
-      const parsedStores: any[] = [];
+      // ===== TRY OPENAI PARSING FIRST =====
+      let parsedStores: any[] = [];
+      let usedOpenAI = false;
       
-      console.log(`[Parse-and-Match] Processing ${lines.length} lines of raw text`);
+      try {
+        // Get OpenAI settings
+        const openaiSettings = await storage.getOpenaiSettings();
+        
+        if (openaiSettings?.apiKey) {
+          console.log('[Parse-and-Match] Using OpenAI to clean and extract store locations...');
+          
+          const { default: OpenAI } = await import('openai');
+          const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+          
+          const prompt = `Extract store/dispensary locations from this messy text. Return ONLY a JSON object with this exact structure:
+
+{
+  "stores": [
+    {
+      "name": "Store Name",
+      "address": "123 Main St",
+      "city": "CityName",
+      "state": "IL",
+      "phone": "5551234567"
+    }
+  ]
+}
+
+Rules:
+1. Extract the actual store NAME (not noise like "SHOP NOW", "Outlet Store", "Store Info")
+2. Extract full street ADDRESS with building number
+3. Extract CITY name
+4. Extract STATE (use 2-letter abbreviation)
+5. Extract PHONE number (digits only, no formatting)
+6. Skip duplicate entries, noise lines, and marketing text
+7. Return ONLY the JSON object with a "stores" array, no markdown, no explanations
+
+INPUT TEXT:
+${rawText}`;
+
+          const completion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a data extraction expert. Extract structured location data from messy text with 100% accuracy. Return only valid JSON arrays.'
+              },
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            temperature: 0.1,
+            response_format: { type: "json_object" }
+          });
+
+          const responseText = completion.choices[0]?.message?.content || '{}';
+          console.log('[Parse-and-Match] OpenAI raw response:', responseText.substring(0, 200));
+          
+          // Parse OpenAI response
+          let openaiData = JSON.parse(responseText);
+          
+          // Handle both direct array and object with array property
+          let stores = Array.isArray(openaiData) ? openaiData : 
+                      (openaiData.stores || openaiData.locations || []);
+          
+          if (stores.length > 0) {
+            // Validate and transform OpenAI data into our format
+            parsedStores = stores.map((s: any) => {
+              const addressParts = parseAddressLine(s.address || '');
+              return {
+                rawText: `${s.name}\n${s.address}${s.phone ? `\n${s.phone}` : ''}`,
+                name: s.name || '',
+                buildingNumber: addressParts?.buildingNumber || null,
+                streetName: addressParts?.streetName || '',
+                city: s.city?.toLowerCase() || '',
+                state: s.state?.toLowerCase() || '',
+                stateNormalized: normalizeState(s.state || ''),
+                address: s.address?.toLowerCase() || '',
+                addressNormalized: normalizeAddressComponent(s.address || ''),
+                phone: s.phone?.replace(/\D/g, '') || '',
+              };
+            });
+            
+            usedOpenAI = true;
+            console.log(`[Parse-and-Match] ✓ OpenAI extracted ${parsedStores.length} clean stores`);
+          } else {
+            console.log('[Parse-and-Match] OpenAI returned empty array, falling back to regex');
+          }
+        } else {
+          console.log('[Parse-and-Match] No OpenAI API key configured, using regex parsing');
+        }
+      } catch (error: any) {
+        console.error('[Parse-and-Match] OpenAI parsing failed, falling back to regex:', error.message);
+      }
+      
+      // ===== FALLBACK TO REGEX PARSING IF OPENAI FAILED =====
+      if (parsedStores.length === 0) {
+        console.log('[Parse-and-Match] Using regex fallback parsing');
+        const lines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
+        console.log(`[Parse-and-Match] Processing ${lines.length} lines of raw text`);
       
       // Extended noise words list
       const noiseWords = [
@@ -13232,7 +13336,10 @@ IMPORTANT:
         }
       }
       
-      console.log(`[Parse-and-Match] Successfully parsed ${parsedStores.length} stores from input`);
+        console.log(`[Parse-and-Match] Successfully parsed ${parsedStores.length} stores from input (using regex fallback)`);
+      } // End regex fallback
+      
+      console.log(`[Parse-and-Match] Total parsed: ${parsedStores.length} stores (${usedOpenAI ? 'OpenAI' : 'regex'})`);
 
       // Match parsed stores against database with NEW scoring focused on building # + state
       const matched: any[] = [];
@@ -13553,27 +13660,31 @@ IMPORTANT:
         return res.status(400).json({ message: 'Store name or brand name is required' });
       }
 
-      // Build search query - use brand + location for better constraint
-      // Format: "{brandName} {category} {city} {state}"
+      // Build search query - prioritize DBA/brand + address for maximum accuracy
+      // Format: "{brandName/name} {address}" for pinpoint accuracy
       let query = '';
-      if (brandName) {
-        // Prefer brand-based search for better accuracy
-        query = `${brandName} ${category || 'dispensary'} ${city || ''} ${state || ''}`.trim();
-      } else {
-        // Fallback to name-based search
-        query = name;
-      }
-      
       let location = '';
-      if (address && city && state) {
-        location = `${address}, ${city}, ${state}`;
-      } else if (city && state) {
-        location = `${city}, ${state}`;
-      } else if (state) {
-        location = state;
+      
+      if (address) {
+        // PREFERRED: Use DBA/brand + full street address for best results
+        const storeName = brandName || name;
+        query = `${storeName} ${address}`.trim();
+        location = `${city || ''} ${state || ''}`.trim();
+        console.log(`[Google Search] Using DBA+Address search: "${query}" near "${location}"`);
+      } else if (brandName && city && state) {
+        // FALLBACK: Brand + location if no address available
+        query = `${brandName} ${category || 'dispensary'} ${city} ${state}`.trim();
+        console.log(`[Google Search] Using Brand+Location search: "${query}"`);
+      } else {
+        // LAST RESORT: Name only
+        query = name;
+        if (city && state) {
+          location = `${city}, ${state}`;
+        }
+        console.log(`[Google Search] Using Name-only search: "${query}" near "${location}"`);
       }
 
-      console.log(`[Google Search] Query: "${query}", Location: "${location}"`);
+      console.log(`[Google Search] Final Query: "${query}", Location: "${location}"`);
 
       // Search Google Places API
       const searchResults = await googleMaps.searchPlaces(query, location);
@@ -13649,6 +13760,54 @@ IMPORTANT:
         if (cityFiltered.length > 0) {
           validResults = cityFiltered;
           console.log(`[Google Search] Further filtered to ${validResults.length} results matching city: ${city}`);
+        }
+      }
+
+      // FUZZY MATCH VALIDATION: Filter results with <80% confidence
+      if (name || brandName || address) {
+        const stringSimilarity = await import('string-similarity');
+        const MIN_CONFIDENCE = 0.80; // 80% threshold
+        
+        const fuzzyFiltered = validResults.filter(result => {
+          if (!result) return false;
+          
+          let confidence = 0;
+          let matchCount = 0;
+          
+          // Compare store/brand name (if provided)
+          if (name || brandName) {
+            const inputName = (brandName || name).toLowerCase().trim();
+            const resultName = result.name.toLowerCase().trim();
+            const nameSimilarity = stringSimilarity.compareTwoStrings(inputName, resultName);
+            confidence += nameSimilarity;
+            matchCount++;
+            console.log(`[Fuzzy Match] Name: "${inputName}" vs "${resultName}" = ${(nameSimilarity * 100).toFixed(1)}%`);
+          }
+          
+          // Compare address (if provided)
+          if (address) {
+            const inputAddress = address.toLowerCase().trim();
+            const resultAddress = (result.fullAddress || result.address || '').toLowerCase().trim();
+            const addressSimilarity = stringSimilarity.compareTwoStrings(inputAddress, resultAddress);
+            confidence += addressSimilarity;
+            matchCount++;
+            console.log(`[Fuzzy Match] Address: "${inputAddress}" vs "${resultAddress}" = ${(addressSimilarity * 100).toFixed(1)}%`);
+          }
+          
+          // Calculate average confidence
+          const avgConfidence = matchCount > 0 ? confidence / matchCount : 0;
+          const passed = avgConfidence >= MIN_CONFIDENCE;
+          
+          console.log(`[Fuzzy Match] "${result.name}" overall confidence: ${(avgConfidence * 100).toFixed(1)}% - ${passed ? 'PASS' : 'REJECT'}`);
+          
+          return passed;
+        });
+        
+        if (fuzzyFiltered.length > 0) {
+          validResults = fuzzyFiltered;
+          console.log(`[Google Search] Fuzzy match filtered to ${validResults.length} high-confidence results (>=${MIN_CONFIDENCE * 100}%)`);
+        } else {
+          console.log(`[Google Search] Warning: All results failed fuzzy match threshold, returning original ${validResults.length} results`);
         }
       }
 
