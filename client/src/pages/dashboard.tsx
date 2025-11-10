@@ -51,6 +51,10 @@ export default function Dashboard() {
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [callHistoryOpen, setCallHistoryOpen] = useState(false);
   const [activeAdminTab, setActiveAdminTab] = useState("users");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Store details dialog state
   const [storeDetailsDialog, setStoreDetailsDialog] = useState<{
@@ -251,6 +255,17 @@ export default function Dashboard() {
     setCustomDateRange(undefined);
   };
 
+  // Reset to page 1 when filters or items per page change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, status, inactivityDays, timePeriod, customDateRange, itemsPerPage]);
+
+  // Pagination logic
+  const totalPages = itemsPerPage === -1 ? 1 : Math.max(1, Math.ceil(filteredClients.length / itemsPerPage));
+  const paginatedClients = itemsPerPage === -1 
+    ? filteredClients 
+    : filteredClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="h-[calc(100vh-4rem)] flex">
       {/* Left Column - Main Dashboard Content */}
@@ -261,191 +276,224 @@ export default function Dashboard() {
             <p className="text-muted-foreground">Track your claimed clients and commissions</p>
           </div>
 
-          {/* Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">My Clients</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold" data-testid="text-my-clients">{statsClients.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  Claimed by you
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold" data-testid="text-my-sales">
-                  ${totalSales.toFixed(2)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  From your clients
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Commission Earned</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold" data-testid="text-my-commission">
-                  ${totalCommission.toFixed(2)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Your earnings
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Needs Follow-up</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold" data-testid="text-needs-followup">{inactive90Days}</div>
-                <p className="text-xs text-muted-foreground">
-                  90+ days inactive
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Time Period Filter */}
+          {/* Period + Stats Cards Container */}
           <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">Period</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Select value={timePeriod} onValueChange={setTimePeriod}>
-                    <SelectTrigger className="w-[140px]" data-testid="select-time-period">
-                      <SelectValue placeholder="All Time" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="today">Today</SelectItem>
-                      <SelectItem value="week">Last 7 Days</SelectItem>
-                      <SelectItem value="month">Last 30 Days</SelectItem>
-                      <SelectItem value="quarter">Last 90 Days</SelectItem>
-                      <SelectItem value="year">Last Year</SelectItem>
-                      <SelectItem value="custom">Custom Range</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {timePeriod === "custom" && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" data-testid="button-custom-date">
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {customDateRange?.from ? (
-                            customDateRange.to ? (
-                              <>
-                                {format(customDateRange.from, "LLL dd, y")} -{" "}
-                                {format(customDateRange.to, "LLL dd, y")}
-                              </>
-                            ) : (
-                              format(customDateRange.from, "LLL dd, y")
-                            )
-                          ) : (
-                            <span>Pick a date range</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <CalendarComponent
-                          initialFocus
-                          mode="range"
-                          defaultMonth={customDateRange?.from}
-                          selected={customDateRange}
-                          onSelect={setCustomDateRange}
-                          numberOfMonths={2}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
+            <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
+              <div className="space-y-1">
+                <CardTitle>Performance Metrics</CardTitle>
+                <p className="text-sm text-muted-foreground">Track your stats for the selected period</p>
               </div>
-            </CardHeader>
-          </Card>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={timePeriod} onValueChange={setTimePeriod}>
+                  <SelectTrigger className="w-[140px]" data-testid="select-time-period">
+                    <SelectValue placeholder="All Time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="week">Last 7 Days</SelectItem>
+                    <SelectItem value="month">Last 30 Days</SelectItem>
+                    <SelectItem value="quarter">Last 90 Days</SelectItem>
+                    <SelectItem value="year">Last Year</SelectItem>
+                    <SelectItem value="custom">Custom Range</SelectItem>
+                  </SelectContent>
+                </Select>
 
-          {/* Filters */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <CardTitle className="text-sm font-medium">Filters</CardTitle>
-                {(search || status !== "all" || inactivityDays !== "all") && (
-                  <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters">
-                    Clear All
-                  </Button>
+                {timePeriod === "custom" && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" data-testid="button-custom-date">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {customDateRange?.from ? (
+                          customDateRange.to ? (
+                            <>
+                              {format(customDateRange.from, "LLL dd, y")} -{" "}
+                              {format(customDateRange.to, "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(customDateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date range</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        initialFocus
+                        mode="range"
+                        defaultMonth={customDateRange?.from}
+                        selected={customDateRange}
+                        onSelect={setCustomDateRange}
+                        numberOfMonths={2}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search clients..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8"
-                  data-testid="input-search-clients"
-                />
-              </div>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">My Clients</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-semibold" data-testid="text-my-clients">{statsClients.length}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Claimed by you
+                    </p>
+                  </CardContent>
+                </Card>
 
-              <div className="flex gap-2 flex-wrap">
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger className="w-[160px]" data-testid="select-status">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {statuses.map((s) => (
-                      <SelectItem key={s.id} value={s.name}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-semibold" data-testid="text-my-sales">
+                      ${totalSales.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      From your clients
+                    </p>
+                  </CardContent>
+                </Card>
 
-                <Select value={inactivityDays} onValueChange={setInactivityDays}>
-                  <SelectTrigger className="w-[160px]" data-testid="select-inactivity">
-                    <SelectValue placeholder="Inactive Days" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Activity</SelectItem>
-                    <SelectItem value="30">30+ Days</SelectItem>
-                    <SelectItem value="60">60+ Days</SelectItem>
-                    <SelectItem value="90">90+ Days</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Commission Earned</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-semibold" data-testid="text-my-commission">
+                      ${totalCommission.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Your earnings
+                    </p>
+                  </CardContent>
+                </Card>
 
-                {/* HUMAN CALL HISTORY SYSTEM - Opens dialog showing manual phone calls made by agents */}
-                <Button
-                  variant="outline"
-                  onClick={() => setCallHistoryOpen(true)}
-                  data-testid="button-call-history"
-                >
-                  <PhoneIcon className="mr-2 h-4 w-4" />
-                  Call History
-                </Button>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Needs Follow-up</CardTitle>
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-semibold" data-testid="text-needs-followup">{inactive90Days}</div>
+                    <p className="text-xs text-muted-foreground">
+                      90+ days inactive
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Clients Table - HUMAN CALL HISTORY SYSTEM (For Sales Agents) */}
-        <div className="flex-shrink-0 px-4 pb-6">
+        {/* Clients Table Section with Filters Toolbar */}
+        <div className="flex-1 flex flex-col px-4 pb-4 overflow-hidden">
+          {/* Filters Toolbar */}
+          <div className="flex flex-wrap items-center gap-3 p-4 border rounded-lg bg-card mb-4">
+            {/* Search */}
+            <div className="relative min-w-[200px] max-w-[300px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search clients..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-clients"
+              />
+            </div>
+
+            {/* Status Dropdown */}
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="w-[180px]" data-testid="select-status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {statuses.map((s) => (
+                  <SelectItem key={s.id} value={s.name}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Since Last Ordered Filter */}
+            <Select value={inactivityDays} onValueChange={setInactivityDays}>
+              <SelectTrigger className="w-[200px]" data-testid="select-inactivity">
+                <SelectValue placeholder="Since Last Ordered" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Clients</SelectItem>
+                <SelectItem value="90">90+ days</SelectItem>
+                <SelectItem value="180">180+ days</SelectItem>
+                <SelectItem value="365">365+ days</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Clear Filters */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              data-testid="button-clear-filters"
+            >
+              Clear All
+            </Button>
+
+            <div className="h-6 w-px bg-border" />
+
+            {/* HUMAN CALL HISTORY SYSTEM - Opens dialog showing manual phone calls made by agents */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCallHistoryOpen(true)}
+              data-testid="button-call-history"
+            >
+              <PhoneIcon className="h-4 w-4 mr-2" />
+              Call History
+            </Button>
+
+            {/* Items Per Page */}
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Show:</span>
+              <Select 
+                value={itemsPerPage === -1 ? "all" : itemsPerPage.toString()} 
+                onValueChange={(value) => setItemsPerPage(value === "all" ? -1 : parseInt(value))}
+              >
+                <SelectTrigger className="w-[100px]" data-testid="select-items-per-page">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="all">ALL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">My Clients</h3>
+            <p className="text-sm text-muted-foreground">
+              {itemsPerPage === -1 
+                ? `Showing all ${filteredClients.length} client${filteredClients.length !== 1 ? 's' : ''}`
+                : `Showing ${Math.min((currentPage - 1) * itemsPerPage + 1, filteredClients.length)}-${Math.min(currentPage * itemsPerPage, filteredClients.length)} of ${filteredClients.length} client${filteredClients.length !== 1 ? 's' : ''}`
+              }
+            </p>
+          </div>
+
           <ClientsTable
-            clients={filteredClients}
+            clients={paginatedClients}
             currentUser={user}
             isLoading={clientsLoading}
             onNotesClick={(clientId: string) => {
@@ -455,6 +503,33 @@ export default function Dashboard() {
               }
             }}
           />
+          
+          {/* Pagination Controls */}
+          {itemsPerPage !== -1 && filteredClients.length > 0 && (
+            <div className="flex items-center justify-between mt-4 px-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                data-testid="button-prev-page"
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                data-testid="button-next-page"
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Admin Section - Only for Admins */}
