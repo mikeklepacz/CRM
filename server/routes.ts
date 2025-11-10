@@ -13149,82 +13149,96 @@ IMPORTANT:
       const lines = rawText.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
       const parsedStores: any[] = [];
       
-      // Filter out noise words
+      console.log(`[Parse-and-Match] Processing ${lines.length} lines of raw text`);
+      
+      // Extended noise words list
       const noiseWords = [
         'SHOP NOW', 'MORE INFO', 'DELIVERY', 'CLICK HERE', 'VIEW DETAILS',
         'CHOOSE DISPENSARY', 'CLOSED TILL', 'OPEN NOW', 'CLOSED NOW',
         'OPENS AT', 'CLOSES AT', 'VIEW MENU', 'ORDER ONLINE', 'PICKUP',
-        'CURBSIDE', 'IN-STORE', 'DISPENSARY INFO'
+        'CURBSIDE', 'IN-STORE', 'DISPENSARY INFO', 'STORE INFO', 'SHOP',
+        'WE DELIVER', 'DELIVERY AVAILABLE', 'FREE DELIVERY', 'OUTLET STORE',
+        '￼' // Unicode replacement character
       ];
-      const cleanedLines = lines.filter((line: string) => 
-        !noiseWords.some(noise => line.toUpperCase().includes(noise))
-      );
-
-      // Group lines into store blocks (heuristic: phone number marks end of block)
-      let currentBlock: string[] = [];
-      for (const line of cleanedLines) {
-        currentBlock.push(line);
+      
+      const isNoiseLine = (line: string): boolean => {
+        const upper = line.toUpperCase().trim();
+        return noiseWords.some(noise => upper === noise || upper.includes(noise)) || 
+               line.trim() === '' ||
+               line.trim() === '￼';
+      };
+      
+      // NEW APPROACH: Detect stores by finding address patterns, then look back for name
+      let previousLine = '';
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         
-        // If line contains phone, it's likely the end of a store entry
-        if (extractPhone(line)) {
-          // Process this block
-          let parsedName = '';
-          let parsedBuildingNumber = null;
-          let parsedStreetName = '';
-          let parsedCity = '';
-          let parsedState = '';
-          let parsedAddress = '';
+        // Skip noise lines but don't update previousLine
+        if (isNoiseLine(line)) {
+          continue;
+        }
+        
+        // Try to parse this line as an address
+        const addressParts = parseAddressLine(line);
+        
+        if (addressParts && addressParts.state) {
+          // Found an address! Use previous non-noise line as store name
+          let storeName = previousLine || '';
+          
+          // If no previous line, use a default based on city
+          if (!storeName) {
+            storeName = `${addressParts.city || 'Unknown'} Location`.toUpperCase();
+          }
+          
+          // Look ahead for phone number in next few lines
           let parsedPhone = '';
-
-          for (let i = 0; i < currentBlock.length; i++) {
-            const blockLine = currentBlock[i];
-            
-            // Try to parse as full address line
-            const addressParts = parseAddressLine(blockLine);
-            if (addressParts) {
-              parsedBuildingNumber = addressParts.buildingNumber;
-              parsedStreetName = addressParts.streetName;
-              parsedCity = addressParts.city;
-              parsedState = addressParts.state;
-              parsedAddress = blockLine.trim();
-            }
-
-            // Try to extract phone
-            const phone = extractPhone(blockLine);
+          for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+            const nextLine = lines[j];
+            const phone = extractPhone(nextLine);
             if (phone) {
               parsedPhone = phone;
+              break;
             }
-
-            // First non-address line is likely the name
-            if (i === 0 || (i === 1 && !addressParts)) {
-              parsedName = blockLine;
+            // Stop looking if we hit another address
+            if (parseAddressLine(nextLine)) {
+              break;
             }
           }
-
-          if (parsedCity || parsedState || parsedPhone) {
-            const addressNormalized = normalizeAddressComponent(parsedAddress);
-            
-            parsedStores.push({
-              rawText: currentBlock.join('\n'),
-              name: parsedName,
-              buildingNumber: parsedBuildingNumber,
-              streetName: parsedStreetName,
-              city: parsedCity,
-              state: parsedState,
-              stateNormalized: normalizeState(parsedState),
-              address: parsedAddress,
-              addressNormalized,
-              phone: parsedPhone,
-            });
-          }
-
-          currentBlock = [];
+          
+          const addressNormalized = normalizeAddressComponent(line);
+          
+          const parsedStore = {
+            rawText: `${storeName}\n${line}${parsedPhone ? `\n${parsedPhone}` : ''}`,
+            name: storeName,
+            buildingNumber: addressParts.buildingNumber,
+            streetName: addressParts.streetName,
+            city: addressParts.city,
+            state: addressParts.state,
+            stateNormalized: normalizeState(addressParts.state),
+            address: line.trim(),
+            addressNormalized,
+            phone: parsedPhone,
+          };
+          
+          parsedStores.push(parsedStore);
+          console.log(`[Parse-and-Match] Parsed store: "${storeName}" at ${line.substring(0, 50)}...`);
+          
+          // Reset previousLine after processing this store
+          previousLine = '';
+        } else {
+          // This is not an address line, so it might be a store name - track it
+          previousLine = line;
         }
       }
+      
+      console.log(`[Parse-and-Match] Successfully parsed ${parsedStores.length} stores from input`);
 
       // Match parsed stores against database with NEW scoring focused on building # + state
       const matched: any[] = [];
       const unmatched: any[] = [];
+
+      console.log(`[Parse-and-Match] Matching ${parsedStores.length} parsed stores against ${dbStores.length} database entries`);
 
       for (const parsed of parsedStores) {
         let bestMatch: any = null;
@@ -13285,10 +13299,14 @@ IMPORTANT:
             match: bestMatch,
             confidence: bestConfidence,
           });
+          console.log(`[Parse-and-Match] ✓ MATCHED: "${parsed.name}" -> "${bestMatch.name}" (confidence: ${bestConfidence}%)`);
         } else {
           unmatched.push(parsed);
+          console.log(`[Parse-and-Match] ✗ UNMATCHED: "${parsed.name}" at ${parsed.address} (best score: ${bestConfidence}%)`);
         }
       }
+
+      console.log(`[Parse-and-Match] Results: ${matched.length} matched, ${unmatched.length} unmatched`);
 
       res.json({ 
         matched, 
