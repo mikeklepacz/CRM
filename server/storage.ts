@@ -536,7 +536,7 @@ export interface IStorage {
   getRecipientMessages(recipientId: string): Promise<SequenceRecipientMessage[]>;
   
   // E-Hub Strategy Chat operations
-  appendSequenceStrategyMessages(sequenceId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<Sequence>;
+  appendSequenceStrategyMessages(sequenceId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>, threadId?: string): Promise<Sequence>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3224,7 +3224,8 @@ export class DatabaseStorage implements IStorage {
   // E-Hub Strategy Chat operations
   async appendSequenceStrategyMessages(
     sequenceId: string,
-    messages: Array<{ role: 'user' | 'assistant'; content: string; createdBy?: string }>
+    messages: Array<{ role: 'user' | 'assistant'; content: string; createdBy?: string }>,
+    threadId?: string
   ): Promise<Sequence> {
     const timestamp = new Date().toISOString();
     
@@ -3238,6 +3239,7 @@ export class DatabaseStorage implements IStorage {
     }));
 
     // Update sequence with appended messages using raw SQL for JSONB manipulation
+    // Preserve or update threadId
     const result = await db.execute(sql`
       UPDATE sequences
       SET 
@@ -3247,7 +3249,12 @@ export class DatabaseStorage implements IStorage {
           'lastUpdatedAt',
           ${timestamp}::text,
           'summary',
-          COALESCE(strategy_transcript->'summary', 'null'::jsonb)
+          COALESCE(strategy_transcript->'summary', 'null'::jsonb),
+          'threadId',
+          CASE 
+            WHEN ${threadId} IS NOT NULL THEN to_jsonb(${threadId})
+            ELSE COALESCE(strategy_transcript->'threadId', 'null'::jsonb)
+          END
         ),
         updated_at = NOW()
       WHERE id = ${sequenceId}

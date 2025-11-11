@@ -19704,64 +19704,122 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(404).json({ message: 'Sequence not found' });
       }
 
+      // Get Aligner assistant
+      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      if (!alignerAssistant || !alignerAssistant.assistantId) {
+        return res.status(400).json({ message: 'Aligner assistant not configured' });
+      }
+
       // Get OpenAI settings
       const openaiSettings = await storage.getOpenaiSettings();
       if (!openaiSettings || !openaiSettings.apiKey) {
         return res.status(400).json({ message: 'OpenAI API key not configured' });
       }
 
+      // Get E-Hub settings for prompt injection and keyword bin
+      const ehubSettings = await storage.getEhubSettings();
+      const promptInjection = ehubSettings?.promptInjection || '';
+      const keywordBin = ehubSettings?.keywordBin || '';
+
       const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
-      // Build conversation history for OpenAI
+      // Get or create thread for this sequence
       const existingTranscript = sequence.strategyTranscript || { messages: [], lastUpdatedAt: new Date().toISOString() };
-      const conversationHistory = existingTranscript.messages.map((msg: any) => ({
-        role: msg.role === 'system' ? 'system' : msg.role,
-        content: msg.content,
-      }));
+      let threadId = (existingTranscript as any).threadId;
 
-      // Add system prompt if this is the first message
-      if (conversationHistory.length === 0) {
-        conversationHistory.unshift({
-          role: 'system',
-          content: `You are an expert email marketing strategist helping plan a cold outreach campaign. 
-          
-Your role is to:
-1. Understand the user's campaign goals, target audience, and desired tone
-2. Suggest an optimal multi-step email sequence structure
-3. Help craft messaging that builds trust and generates responses
-4. Consider timing, personalization opportunities, and follow-up strategies
-
-Ask clarifying questions to understand:
-- Campaign objectives (re-engagement, new customer acquisition, partnership, etc.)
-- Target audience characteristics
-- Key value propositions to highlight
-- Tone preference (professional, friendly, consultative, etc.)
-- Any specific constraints or requirements
-
-Based on the conversation, help the user design an effective email sequence that achieves their goals.`,
-        });
+      if (!threadId) {
+        // Create new thread for persistent conversation
+        const thread = await openai.beta.threads.create();
+        threadId = thread.id;
+        console.log('[E-Hub Strategy] New thread created:', threadId);
       }
 
-      // Add user message
-      conversationHistory.push({
+      // Build contextual instructions with E-Hub settings
+      const contextualInstructions = `## YOUR ROLE:
+You are The Bellwether Outreach Architect, an AI strategist that designs short, high-signal outreach emails for cannabis industry professionals and brands.
+
+Your job is to craft campaigns that grab attention, build credibility, and convert genuine curiosity into conversation — without ever sounding like advertising.
+
+## E-HUB CAMPAIGN CONTEXT:
+${promptInjection ? `**Campaign Tone & Structure:**\n${promptInjection}\n\n` : ''}${keywordBin ? `**Product/Business Keywords:**\n${keywordBin}\n\n` : ''}
+## YOUR WORKFLOW:
+
+When the user asks you to plan a campaign:
+
+1. **UNDERSTAND THE GOAL** - Ask clarifying questions:
+   - Campaign objectives (re-engagement, new customer acquisition, partnership, etc.)
+   - Target audience characteristics
+   - Key value propositions to highlight
+   - Tone preference (professional, friendly, consultative, etc.)
+   - Any specific constraints or requirements
+
+2. **SUGGEST SEQUENCE STRUCTURE** - Recommend optimal multi-step flow:
+   - Number of follow-up steps (typically 2-4)
+   - Timing between emails (days)
+   - Escalation strategy (soft → direct)
+
+3. **HELP CRAFT MESSAGING** - Guide the user on:
+   - Opening hooks that build trust
+   - Personalization opportunities
+   - Clear but soft calls-to-action
+   - Follow-up angles that add value
+
+Based on the conversation, help the user design an effective email sequence that achieves their goals.`;
+
+      // Add contextual instructions + user message to thread
+      const enrichedMessage = `${contextualInstructions}\n\nUser: ${message}`;
+      
+      await openai.beta.threads.messages.create(threadId, {
         role: 'user',
-        content: message,
+        content: enrichedMessage
       });
 
-      // Get AI response
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: conversationHistory as any,
-        temperature: 0.7,
+      // Run the Aligner assistant
+      const run = await openai.beta.threads.runs.create(threadId, {
+        assistant_id: alignerAssistant.assistantId,
       });
 
-      const aiResponse = completion.choices[0].message.content || 'Sorry, I could not generate a response.';
+      // Poll for completion
+      let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      let attempts = 0;
+      const maxAttempts = 60; // 60 seconds timeout
 
-      // Save both messages to transcript
-      const updatedSequence = await storage.appendSequenceStrategyMessages(id, [
-        { role: 'user', content: message, createdBy: userId },
-        { role: 'assistant', content: aiResponse },
-      ]);
+      while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        attempts++;
+        
+        if (attempts >= maxAttempts) {
+          throw new Error('Strategy chat timeout - response took too long');
+        }
+      }
+
+      if (runStatus.status !== 'completed') {
+        throw new Error(`Strategy chat failed: ${runStatus.status}`);
+      }
+
+      // Get assistant's response
+      const messages = await openai.beta.threads.messages.list(threadId, { limit: 1 });
+      const lastMessage = messages.data[0];
+      
+      if (!lastMessage || lastMessage.role !== 'assistant') {
+        throw new Error('No response from Aligner assistant');
+      }
+
+      const aiResponse = lastMessage.content
+        .filter((block: any) => block.type === 'text')
+        .map((block: any) => block.text.value)
+        .join('\n\n') || 'Sorry, I could not generate a response.';
+
+      // Save both messages to transcript and persist threadId
+      const updatedSequence = await storage.appendSequenceStrategyMessages(
+        id, 
+        [
+          { role: 'user', content: message, createdBy: userId },
+          { role: 'assistant', content: aiResponse },
+        ],
+        threadId
+      );
 
       res.json({
         transcript: updatedSequence.strategyTranscript,
