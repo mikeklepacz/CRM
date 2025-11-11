@@ -80,8 +80,6 @@ export default function EHub() {
 
   // Sequence form state
   const [name, setName] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
@@ -355,15 +353,11 @@ export default function EHub() {
 
   const resetSequenceForm = () => {
     setName("");
-    setSubject("");
-    setBody("");
   };
 
   const handleCreateSequence = () => {
     createMutation.mutate({
       name,
-      subject,
-      body,
     });
   };
 
@@ -588,9 +582,12 @@ export default function EHub() {
                   Create Sequence
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Create Email Sequence</DialogTitle>
+                  <DialogTitle>Create AI Email Sequence</DialogTitle>
+                  <p className="text-sm text-muted-foreground">
+                    AI will generate all email content based on your campaign strategy
+                  </p>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div>
@@ -601,27 +598,6 @@ export default function EHub() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g., Cold Outreach Q1 2025"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="subject">Email Subject</Label>
-                    <Input
-                      id="subject"
-                      data-testid="input-sequence-subject"
-                      value={subject}
-                      onChange={(e) => setSubject(e.target.value)}
-                      placeholder="e.g., Partnership Opportunity"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="body">Email Body</Label>
-                    <Textarea
-                      id="body"
-                      data-testid="input-sequence-body"
-                      value={body}
-                      onChange={(e) => setBody(e.target.value)}
-                      placeholder="Write your email template here..."
-                      rows={6}
                     />
                   </div>
                 </div>
@@ -635,7 +611,7 @@ export default function EHub() {
                   </Button>
                   <Button
                     onClick={handleCreateSequence}
-                    disabled={!name || !subject || !body || createMutation.isPending}
+                    disabled={!name || createMutation.isPending}
                     data-testid="button-submit-create"
                   >
                     {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -666,7 +642,7 @@ export default function EHub() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Subject</TableHead>
+                      <TableHead>Steps</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Recipients</TableHead>
                       <TableHead>Sent</TableHead>
@@ -686,7 +662,7 @@ export default function EHub() {
                         }}
                       >
                         <TableCell className="font-medium">{sequence.name}</TableCell>
-                        <TableCell className="max-w-xs truncate">{sequence.subject}</TableCell>
+                        <TableCell>{sequence.stepDelays?.length || 0} steps</TableCell>
                         <TableCell>
                           <Badge variant={getStatusColor(sequence.status)}>
                             {sequence.status}
@@ -855,41 +831,63 @@ export default function EHub() {
           {/* Sequence Selector */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Campaign Strategy</CardTitle>
-                  <CardDescription>
-                    Chat with AI to define your email campaign strategy, configure timing, and activate
-                  </CardDescription>
-                </div>
-                <Button
-                  onClick={() => {
-                    setActiveTab('sequences');
-                    setTimeout(() => setIsCreateDialogOpen(true), 100);
-                  }}
-                  data-testid="button-create-sequence-strategy"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Sequence
-                </Button>
-              </div>
+              <CardTitle>Campaign Strategy</CardTitle>
+              <CardDescription>
+                Create sequences, chat with AI to plan campaigns, and configure timing
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Label htmlFor="strategy-sequence-select">Select Sequence</Label>
-              <select
-                id="strategy-sequence-select"
-                data-testid="select-sequence-strategy"
-                className="w-full mt-2 rounded-md border border-input bg-background px-3 py-2"
-                value={selectedSequenceId || ''}
-                onChange={(e) => setSelectedSequenceId(e.target.value || null)}
-              >
-                <option value="">Select a sequence...</option>
-                {sequences?.map((seq) => (
-                  <option key={seq.id} value={seq.id}>
-                    {seq.name} ({seq.status})
-                  </option>
-                ))}
-              </select>
+            <CardContent className="space-y-4">
+              {/* Inline Create Form */}
+              <div className="p-4 border rounded-lg bg-muted/30">
+                <Label className="text-sm font-medium">Create New Sequence</Label>
+                <p className="text-xs text-muted-foreground mb-3">
+                  AI will generate all email content based on your strategy conversation
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g., Cold Outreach Q1 2025"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && name) {
+                        handleCreateSequence();
+                      }
+                    }}
+                    data-testid="input-sequence-name-inline"
+                  />
+                  <Button
+                    onClick={handleCreateSequence}
+                    disabled={!name || createMutation.isPending}
+                    data-testid="button-create-sequence-inline"
+                  >
+                    {createMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4 mr-2" />
+                    )}
+                    Create
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Existing Sequence Selector */}
+              <div>
+                <Label htmlFor="strategy-sequence-select">Or Select Existing Sequence</Label>
+                <select
+                  id="strategy-sequence-select"
+                  data-testid="select-sequence-strategy"
+                  className="w-full mt-2 rounded-md border border-input bg-background px-3 py-2"
+                  value={selectedSequenceId || ''}
+                  onChange={(e) => setSelectedSequenceId(e.target.value || null)}
+                >
+                  <option value="">Select a sequence...</option>
+                  {sequences?.map((seq) => (
+                    <option key={seq.id} value={seq.id}>
+                      {seq.name} ({seq.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </CardContent>
           </Card>
 
