@@ -25,6 +25,7 @@ import { z } from "zod";
 import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
+import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
 import {
   insertConversationSchema,
   insertProjectSchema,
@@ -132,227 +133,73 @@ function setCachedData(key: string, data: any): void {
 }
 
 // ============================================================================
-// Business Hours Detection Helpers
+// Business Hours Detection Helpers (Legacy - now uses shared service)
 // ============================================================================
 
-// Map states to timezones (supports both full names and 2-letter codes)
-const STATE_TIMEZONES: Record<string, string> = {
-  // Full state names
-  'Alabama': 'America/Chicago', 'Alaska': 'America/Anchorage', 'Arizona': 'America/Phoenix',
-  'Arkansas': 'America/Chicago', 'California': 'America/Los_Angeles', 'Colorado': 'America/Denver',
-  'Connecticut': 'America/New_York', 'Delaware': 'America/New_York', 'Florida': 'America/New_York',
-  'Georgia': 'America/New_York', 'Hawaii': 'Pacific/Honolulu', 'Idaho': 'America/Boise',
-  'Illinois': 'America/Chicago', 'Indiana': 'America/Indianapolis', 'Iowa': 'America/Chicago',
-  'Kansas': 'America/Chicago', 'Kentucky': 'America/New_York', 'Louisiana': 'America/Chicago',
-  'Maine': 'America/New_York', 'Maryland': 'America/New_York', 'Massachusetts': 'America/New_York',
-  'Michigan': 'America/Detroit', 'Minnesota': 'America/Chicago', 'Mississippi': 'America/Chicago',
-  'Missouri': 'America/Chicago', 'Montana': 'America/Denver', 'Nebraska': 'America/Chicago',
-  'Nevada': 'America/Los_Angeles', 'New Hampshire': 'America/New_York', 'New Jersey': 'America/New_York',
-  'New Mexico': 'America/Denver', 'New York': 'America/New_York', 'North Carolina': 'America/New_York',
-  'North Dakota': 'America/Chicago', 'Ohio': 'America/New_York', 'Oklahoma': 'America/Chicago',
-  'Oregon': 'America/Los_Angeles', 'Pennsylvania': 'America/New_York', 'Rhode Island': 'America/New_York',
-  'South Carolina': 'America/New_York', 'South Dakota': 'America/Chicago', 'Tennessee': 'America/Chicago',
-  'Texas': 'America/Chicago', 'Utah': 'America/Denver', 'Vermont': 'America/New_York',
-  'Virginia': 'America/New_York', 'Washington': 'America/Los_Angeles', 'West Virginia': 'America/New_York',
-  'Wisconsin': 'America/Chicago', 'Wyoming': 'America/Denver',
-  // 2-letter state codes
-  'AL': 'America/Chicago', 'AK': 'America/Anchorage', 'AZ': 'America/Phoenix',
-  'AR': 'America/Chicago', 'CA': 'America/Los_Angeles', 'CO': 'America/Denver',
-  'CT': 'America/New_York', 'DE': 'America/New_York', 'FL': 'America/New_York',
-  'GA': 'America/New_York', 'HI': 'Pacific/Honolulu', 'ID': 'America/Boise',
-  'IL': 'America/Chicago', 'IN': 'America/Indianapolis', 'IA': 'America/Chicago',
-  'KS': 'America/Chicago', 'KY': 'America/New_York', 'LA': 'America/Chicago',
-  'ME': 'America/New_York', 'MD': 'America/New_York', 'MA': 'America/New_York',
-  'MI': 'America/Detroit', 'MN': 'America/Chicago', 'MS': 'America/Chicago',
-  'MO': 'America/Chicago', 'MT': 'America/Denver', 'NE': 'America/Chicago',
-  'NV': 'America/Los_Angeles', 'NH': 'America/New_York', 'NJ': 'America/New_York',
-  'NM': 'America/Denver', 'NY': 'America/New_York', 'NC': 'America/New_York',
-  'ND': 'America/Chicago', 'OH': 'America/New_York', 'OK': 'America/Chicago',
-  'OR': 'America/Los_Angeles', 'PA': 'America/New_York', 'RI': 'America/New_York',
-  'SC': 'America/New_York', 'SD': 'America/Chicago', 'TN': 'America/Chicago',
-  'TX': 'America/Chicago', 'UT': 'America/Denver', 'VT': 'America/New_York',
-  'VA': 'America/New_York', 'WA': 'America/Los_Angeles', 'WV': 'America/New_York',
-  'WI': 'America/Chicago', 'WY': 'America/Denver',
-  // Canadian provinces (full names)
-  'Alberta': 'America/Edmonton', 'British Columbia': 'America/Vancouver', 'Manitoba': 'America/Winnipeg',
-  'New Brunswick': 'America/Moncton', 'Newfoundland and Labrador': 'America/St_Johns',
-  'Northwest Territories': 'America/Yellowknife', 'Nova Scotia': 'America/Halifax',
-  'Nunavut': 'America/Iqaluit', 'Ontario': 'America/Toronto', 'Prince Edward Island': 'America/Halifax',
-  'Quebec': 'America/Montreal', 'Saskatchewan': 'America/Regina', 'Yukon': 'America/Whitehorse',
-  // Canadian province codes
-  'AB': 'America/Edmonton', 'BC': 'America/Vancouver', 'MB': 'America/Winnipeg',
-  'NB': 'America/Moncton', 'NL': 'America/St_Johns', 'NT': 'America/Yellowknife',
-  'NS': 'America/Halifax', 'NU': 'America/Iqaluit', 'ON': 'America/Toronto',
-  'PE': 'America/Halifax', 'QC': 'America/Montreal', 'SK': 'America/Regina',
-  'YT': 'America/Whitehorse',
-};
-
-// Calculate next available call time during business hours (returns null if can't determine)
+// Legacy wrapper for Voice Hub - delegates to shared timezone service
 function calculateNextAvailableCallTime(hoursStr: string, state: string): Date | null {
-  try {
-    if (!hoursStr || !state) return new Date(); // Default to now if no data
-    
-    // Get timezone for state
-    const timezone = STATE_TIMEZONES[state] || STATE_TIMEZONES[state.toUpperCase()] || 'America/New_York';
-    
-    // Get current time in UTC and convert to store's timezone
-    const nowUtc = new Date();
-    const storeTime = toZonedTime(nowUtc, timezone);
-    
-    const hoursLower = hoursStr.toLowerCase();
-    
-    // Check for 24/7
-    if (hoursLower.includes('24/7') || hoursLower.includes('24 hours') || hoursLower === 'open 24 hours') {
-      return nowUtc; // Can call immediately
-    }
-    
-    // Day name mappings
-    const dayMap: Record<string, number> = {
-      'sun': 0, 'sunday': 0,
-      'mon': 1, 'monday': 1,
-      'tue': 2, 'tuesday': 2, 'tues': 2,
-      'wed': 3, 'wednesday': 3,
-      'thu': 4, 'thursday': 4, 'thurs': 4,
-      'fri': 5, 'friday': 5,
-      'sat': 6, 'saturday': 6
-    };
-    
-    // Helper to parse time string to minutes since midnight
-    const parseTime = (timeStr: string): number | null => {
-      const match = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
-      if (!match) return null;
-      
-      let hour = parseInt(match[1]);
-      const min = parseInt(match[2] || '0');
-      const period = match[3]?.toLowerCase();
-      
-      if (period === 'pm' && hour !== 12) hour += 12;
-      if (period === 'am' && hour === 12) hour = 0;
-      
-      return hour * 60 + min;
-    };
-    
-    // Parse hours string to find opening times for each day
-    const segments = hoursStr.split(/[,;]/);
-    const daySchedules: Record<number, Array<{ open: number; close: number }>> = {};
-    
-    let lastDayContext: number | null = null;
-    
-    for (const segment of segments) {
-      const segmentLower = segment.trim().toLowerCase();
-      let daysToApply: number[] = [];
-      let hasExplicitDay = false;
-      
-      // Check for day ranges
-      const rangeMatch = segmentLower.match(/(mon|tue|wed|thu|fri|sat|sun)[a-z]*\s*-\s*(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
-      if (rangeMatch) {
-        hasExplicitDay = true;
-        const startDay = dayMap[rangeMatch[1]];
-        const endDay = dayMap[rangeMatch[2]];
-        if (startDay !== undefined && endDay !== undefined) {
-          if (startDay <= endDay) {
-            for (let d = startDay; d <= endDay; d++) daysToApply.push(d);
-          } else {
-            for (let d = startDay; d <= 6; d++) daysToApply.push(d);
-            for (let d = 0; d <= endDay; d++) daysToApply.push(d);
-          }
-          lastDayContext = daysToApply[0];
-        }
-      }
-      
-      // Check for specific days
-      if (!hasExplicitDay) {
-        for (const [dayName, dayNum] of Object.entries(dayMap)) {
-          if (segmentLower.startsWith(dayName)) {
-            hasExplicitDay = true;
-            daysToApply = [dayNum];
-            lastDayContext = dayNum;
-            break;
-          }
-        }
-      }
-      
-      // Carry forward day context for continuation segments
-      if (!hasExplicitDay && lastDayContext !== null) {
-        daysToApply = [lastDayContext];
-      }
-      
-      // If no day and only segment, apply to all days
-      if (daysToApply.length === 0 && !hasExplicitDay && segments.length === 1) {
-        daysToApply = [0, 1, 2, 3, 4, 5, 6];
-      }
-      
-      // Extract time range
-      const timeMatch = segment.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
-      if (timeMatch) {
-        const openMinutes = parseTime(timeMatch[1]);
-        const closeMinutes = parseTime(timeMatch[2]);
-        
-        if (openMinutes !== null && closeMinutes !== null) {
-          for (const day of daysToApply) {
-            if (!daySchedules[day]) daySchedules[day] = [];
-            daySchedules[day].push({ open: openMinutes, close: closeMinutes });
-          }
-        }
-      }
-    }
-    
-    // Extract date components from store's local time using formatInTimeZone to avoid host-timezone contamination
-    const year = parseInt(formatInTimeZone(nowUtc, timezone, 'yyyy'));
-    const month = parseInt(formatInTimeZone(nowUtc, timezone, 'MM'));
-    const dateNum = parseInt(formatInTimeZone(nowUtc, timezone, 'dd'));
-    const currentDay = parseInt(formatInTimeZone(nowUtc, timezone, 'i')) % 7; // 'i' is ISO day (1-7), convert to JS (0-6)
-    const hour = parseInt(formatInTimeZone(nowUtc, timezone, 'HH'));
-    const minute = parseInt(formatInTimeZone(nowUtc, timezone, 'mm'));
-    const currentMinutes = hour * 60 + minute;
-    
-    // Helper to build ISO date string and convert to UTC
-    const buildScheduledTime = (y: number, m: number, d: number, minutes: number): Date => {
-      const hour = Math.floor(minutes / 60);
-      const min = minutes % 60;
-      // Build ISO string in local time format: YYYY-MM-DDTHH:mm:ss
-      const isoString = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
-      // Parse as local time in the store's timezone
-      return fromZonedTime(isoString, timezone);
-    };
-    
-    // Try today first
-    if (daySchedules[currentDay]) {
-      for (const range of daySchedules[currentDay]) {
-        if (currentMinutes < range.open) {
-          // Schedule for opening time today
-          return buildScheduledTime(year, month, dateNum, range.open);
-        }
-        if (currentMinutes >= range.open && currentMinutes < range.close) {
-          // Currently open, schedule immediately
-          return nowUtc;
-        }
-      }
-    }
-    
-    // Try next 7 days
-    for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
-      const nextDay = (currentDay + dayOffset) % 7;
-      if (daySchedules[nextDay] && daySchedules[nextDay].length > 0) {
-        const firstRange = daySchedules[nextDay][0];
-        // Calculate the date for this day offset
-        const targetDate = new Date(year, month - 1, dateNum + dayOffset); // month-1 because JS uses 0-indexed months
-        return buildScheduledTime(
-          targetDate.getFullYear(),
-          targetDate.getMonth() + 1,
-          targetDate.getDate(),
-          firstRange.open
-        );
-      }
-    }
-    
-    // Fallback: schedule for tomorrow 9am store time
-    const tomorrow = new Date(year, month - 1, dateNum + 1);
-    return buildScheduledTime(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate(), 540); // 540 minutes = 9am
-  } catch (error) {
-    console.error('Error calculating next call time:', error);
-    return new Date(); // Fallback to now
+  if (!hoursStr || !state) return new Date();
+  
+  const parsed = parseBusinessHours(hoursStr, state);
+  const timezone = parsed.timezone;
+  
+  // If 24/7, return now
+  if (parsed.is24_7) return new Date();
+  
+  // If closed or no schedule, return now (Voice Hub will handle)
+  if (parsed.isClosed || Object.keys(parsed.schedule).length === 0) {
+    return new Date();
   }
+  
+  // Get current time in timezone
+  const nowUtc = new Date();
+  const year = parseInt(formatInTimeZone(nowUtc, timezone, 'yyyy'));
+  const month = parseInt(formatInTimeZone(nowUtc, timezone, 'MM'));
+  const dateNum = parseInt(formatInTimeZone(nowUtc, timezone, 'dd'));
+  const isoDay = parseInt(formatInTimeZone(nowUtc, timezone, 'i'));
+  const currentDay = isoDay === 7 ? 0 : isoDay;
+  const hour = parseInt(formatInTimeZone(nowUtc, timezone, 'HH'));
+  const minute = parseInt(formatInTimeZone(nowUtc, timezone, 'mm'));
+  const currentMinutes = hour * 60 + minute;
+  
+  // Helper to build scheduled time
+  const buildScheduledTime = (y: number, m: number, d: number, minutes: number): Date => {
+    const h = Math.floor(minutes / 60);
+    const min = minutes % 60;
+    const isoString = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+    return fromZonedTime(isoString, timezone);
+  };
+  
+  // Try today first
+  if (parsed.schedule[currentDay]) {
+    for (const range of parsed.schedule[currentDay]) {
+      if (currentMinutes < range.open) {
+        return buildScheduledTime(year, month, dateNum, range.open);
+      }
+      if (currentMinutes >= range.open && currentMinutes < range.close) {
+        return nowUtc; // Open now
+      }
+    }
+  }
+  
+  // Try next 7 days
+  for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
+    const nextDay = (currentDay + dayOffset) % 7;
+    if (parsed.schedule[nextDay] && parsed.schedule[nextDay].length > 0) {
+      const firstRange = parsed.schedule[nextDay][0];
+      const targetDate = new Date(year, month - 1, dateNum + dayOffset);
+      return buildScheduledTime(
+        targetDate.getFullYear(),
+        targetDate.getMonth() + 1,
+        targetDate.getDate(),
+        firstRange.open
+      );
+    }
+  }
+  
+  // Fallback: tomorrow 9am
+  const tomorrow = new Date(year, month - 1, dateNum + 1);
+  return buildScheduledTime(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate(), 540);
 }
 
 // Parse hours string into compact segments with timezone-aware status
@@ -11151,6 +10998,120 @@ IMPORTANT:
     }
   }
 
+  // Helper: Ensure Commission Tracker row exists for E-Hub email campaign
+  // Creates row with Status='Contacted' if missing, appends to Notes if exists
+  async function ensureTrackerRowForEmail(
+    link: string,
+    name: string,
+    email: string,
+    agentName: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        return { success: false, message: 'Commission Tracker sheet not found' };
+      }
+
+      const { spreadsheetId, sheetName } = trackerSheet;
+      const normalizedInputLink = normalizeLink(link.trim());
+      
+      console.log('[E-Hub Tracker Sync] Processing link:', normalizedInputLink);
+
+      // Read tracker sheet
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+
+      if (rows.length === 0) {
+        return { success: false, message: 'Commission Tracker sheet has no headers' };
+      }
+
+      const headers = rows[0];
+      const linkIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'link');
+      const dateIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'date'); // Column C
+      const statusIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'status');
+      const notesIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'notes');
+      const agentNameIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'agent name');
+      const nameIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'name');
+
+      if (linkIndex === -1) {
+        return { success: false, message: 'Link column not found in Commission Tracker' };
+      }
+
+      // Check if row exists
+      let existingRowIndex = -1;
+      for (let i = 1; i < rows.length; i++) {
+        const rowLink = rows[i][linkIndex];
+        if (rowLink && normalizeLink(rowLink.toString().trim()) === normalizedInputLink) {
+          existingRowIndex = i + 1; // 1-indexed for Google Sheets
+          break;
+        }
+      }
+
+      const timestamp = new Date().toISOString();
+      const formattedDate = format(new Date(), 'M/d/yyyy'); // Format like 11/11/2025
+      const emailNote = `Auto Emailed ${timestamp}`;
+
+      if (existingRowIndex === -1) {
+        // Create new row
+        console.log('[E-Hub Tracker Sync] Creating new tracker row');
+        
+        const newRow = new Array(headers.length).fill('');
+        newRow[linkIndex] = link;
+        
+        if (nameIndex !== -1) newRow[nameIndex] = name;
+        if (dateIndex !== -1) newRow[dateIndex] = formattedDate; // Set Date column
+        if (agentNameIndex !== -1) newRow[agentNameIndex] = agentName;
+        if (statusIndex !== -1) newRow[statusIndex] = 'Contacted';
+        if (notesIndex !== -1) newRow[notesIndex] = emailNote;
+
+        await googleSheets.appendSheetData(spreadsheetId, `${sheetName}!A:ZZ`, [newRow]);
+        console.log('[E-Hub Tracker Sync] New row created with Status=Contacted');
+        
+        return { success: true };
+      } else {
+        // Update existing row
+        console.log('[E-Hub Tracker Sync] Updating existing row at index', existingRowIndex);
+
+        // Update Status only if empty or "Unclaimed" (preserves all other statuses)
+        // This ensures we don't overwrite "Claimed", "Interested", "Follow Up", etc.
+        if (statusIndex !== -1) {
+          const rawStatus = rows[existingRowIndex - 1][statusIndex]?.toString() || '';
+          const existingStatus = rawStatus.trim(); // Trim once before all checks
+          const shouldUpdate = !existingStatus || existingStatus === '' || existingStatus.toLowerCase() === 'unclaimed';
+          
+          if (shouldUpdate) {
+            const statusCol = String.fromCharCode(65 + statusIndex);
+            const statusCellRange = `${sheetName}!${statusCol}${existingRowIndex}`;
+            await googleSheets.writeSheetData(spreadsheetId, statusCellRange, [['Contacted']]);
+            console.log(`[E-Hub Tracker Sync] Status set to Contacted (was "${existingStatus || 'empty'}")`);
+          } else {
+            console.log(`[E-Hub Tracker Sync] Preserving existing status: "${existingStatus}"`);
+          }
+        }
+
+        // Append to Notes (single newline separator, trim to avoid spacing issues)
+        if (notesIndex !== -1) {
+          const existingNotes = rows[existingRowIndex - 1][notesIndex]?.toString().trim() || '';
+          const updatedNotes = existingNotes ? `${existingNotes}\n${emailNote}` : emailNote;
+          
+          const notesCol = String.fromCharCode(65 + notesIndex);
+          const notesCellRange = `${sheetName}!${notesCol}${existingRowIndex}`;
+          await googleSheets.writeSheetData(spreadsheetId, notesCellRange, [[updatedNotes]]);
+        }
+
+        console.log('[E-Hub Tracker Sync] Row updated and Notes appended');
+        
+        return { success: true };
+      }
+    } catch (error: any) {
+      console.error('[E-Hub Tracker Sync] Error:', error);
+      return { success: false, message: error.message || 'Failed to sync tracker row' };
+    }
+  }
+
   // Create or update row in Commission Tracker by Link
   app.post('/api/sheets/tracker/upsert', isAuthenticatedCustom, async (req: any, res) => {
     try {
@@ -19701,29 +19662,54 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: 'Google Sheets not connected' });
       }
 
-      // Fetch emails from Column K
+      // Fetch data from Store Database sheet (extended range to include all relevant columns)
       const rows = await googleSheets.getSheetData(
         userIntegration.googleAccessToken,
         sheetId,
-        'Store Database!A:P' // Columns A-P
+        'Store Database!A:Z' // Extended range to capture all columns
       );
 
       if (!rows || rows.length === 0) {
         return res.status(400).json({ message: 'No data found in sheet' });
       }
 
+      // Dynamic header lookup (case-insensitive)
+      const headers = rows[0].map((h: any) => h?.toString().toLowerCase().trim() || '');
+      const nameIndex = headers.findIndex((h: string) => h === 'name');
+      const emailIndex = headers.findIndex((h: string) => h === 'email');
+      const linkIndex = headers.findIndex((h: string) => h === 'link');
+      const hoursIndex = headers.findIndex((h: string) => h === 'hours');
+      const salesSummaryIndex = headers.findIndex((h: string) => h === 'sales summary');
+      const stateIndex = headers.findIndex((h: string) => h === 'state');
+
+      if (nameIndex === -1 || emailIndex === -1) {
+        return res.status(400).json({ message: 'Required columns (Name, Email) not found in sheet' });
+      }
+
+      console.log('[E-Hub Import] Header mapping:', {
+        name: nameIndex,
+        email: emailIndex,
+        link: linkIndex,
+        hours: hoursIndex,
+        salesSummary: salesSummaryIndex,
+        state: stateIndex,
+      });
+
       // Email regex for validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       
-      // Process rows and extract Column K (email)
+      // Process rows with dynamic column lookup
       const recipients = [];
       const seenEmails = new Set<string>();
       const skippedRows: string[] = [];
 
       for (const row of rows.slice(1)) { // Skip header row
-        const rawName = row[0]?.toString().trim(); // Column A
-        const rawEmail = row[10]?.toString().trim(); // Column K (0-indexed = 10)
-        const rawSalesSummary = row[15]?.toString().trim(); // Column P (0-indexed = 15)
+        const rawName = row[nameIndex]?.toString().trim();
+        const rawEmail = row[emailIndex]?.toString().trim();
+        const rawLink = linkIndex !== -1 ? row[linkIndex]?.toString().trim() : null;
+        const rawHours = hoursIndex !== -1 ? row[hoursIndex]?.toString().trim() : null;
+        const rawSalesSummary = salesSummaryIndex !== -1 ? row[salesSummaryIndex]?.toString().trim() : null;
+        const rawState = stateIndex !== -1 ? row[stateIndex]?.toString().trim() : null;
 
         // Skip blank or whitespace-only rows
         if (!rawName || !rawEmail || rawName === '' || rawEmail === '') {
@@ -19746,13 +19732,37 @@ Use this store information to provide context-aware responses. When helping draf
         const existing = await storage.findRecipientByEmail(id, email);
         if (existing) continue;
 
+        // Parse business hours and detect timezone
+        let timezone = 'America/New_York'; // Default fallback
+        let businessHours = rawHours || '';
+
+        if (rawState) {
+          // Normalize state string: handle various formats
+          // Examples: "CA – California", "CA (California)", "CA/USA", "CA" → "CA"
+          let normalizedState = rawState
+            .replace(/\([^)]*\)/g, '') // Remove parenthetical content: "CA (California)" → "CA"
+            .split(/[-–—\/]/) // Split on dashes and slashes
+            .map(s => s.trim()) // Trim whitespace
+            .filter(s => s && s.toLowerCase() !== 'usa') // Remove empty and "USA"
+            [0] // Take first segment
+            .toUpperCase(); // Uppercase for matching
+          
+          timezone = resolveTimezone(normalizedState);
+          console.log(`[E-Hub Import] Resolved timezone for ${email}: "${rawState}" → "${normalizedState}" → ${timezone}`);
+        } else {
+          console.warn(`[E-Hub Import] No state found for ${email}, using default timezone`);
+        }
+
         // Validate using Zod schema before adding to batch
         try {
           insertCampaignRecipientSchema.parse({
             campaignId: id,
             email,
             name,
+            link: rawLink || '',
             salesSummary: rawSalesSummary || '',
+            businessHours,
+            timezone,
             status: 'pending',
           });
 
@@ -19761,7 +19771,10 @@ Use this store information to provide context-aware responses. When helping draf
             campaignId: id,
             email,
             name,
+            link: rawLink || '',
             salesSummary: rawSalesSummary || '',
+            businessHours,
+            timezone,
             status: 'pending',
           });
         } catch (validationError) {

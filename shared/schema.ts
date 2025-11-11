@@ -1270,7 +1270,10 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   campaignId: varchar("campaign_id").notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
   email: varchar("email", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }),
+  link: varchar("link", { length: 500 }), // Store link from Google Sheets for Commission Tracker sync
   salesSummary: text("sales_summary"), // From Google Sheets Column P
+  businessHours: text("business_hours"), // From Google Sheets Hours column for timezone detection
+  timezone: varchar("timezone", { length: 100 }), // Detected timezone (e.g., 'America/New_York')
   clientId: varchar("client_id").references(() => clients.id), // Link to CRM client record
   status: varchar("status", { length: 50 }).notNull().default('pending'), // 'pending', 'sent', 'failed', 'replied', 'bounced'
   sequenceStep: integer("sequence_step").default(1), // Current step in follow-up sequence (1, 2, 3, etc.)
@@ -1288,6 +1291,7 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   index("idx_campaign_recipients_status").on(table.status),
   index("idx_campaign_recipients_next_send").on(table.nextSendAt),
   index("idx_campaign_recipients_email").on(table.email),
+  index("idx_campaign_recipients_link").on(table.link),
 ]);
 
 export const campaignSequences = pgTable("campaign_sequences", {
