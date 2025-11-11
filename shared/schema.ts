@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 import {
   index,
+  uniqueIndex,
   jsonb,
   pgTable,
   timestamp,
@@ -1275,10 +1276,10 @@ export const sequenceSteps = pgTable("sequence_steps", {
   delayDays: integer("delay_days").notNull(), // Days to wait after previous step (0 for step 1)
   aiGuidance: text("ai_guidance"), // Optional per-step AI instructions
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_sequence_steps_sequence").on(table.sequenceId, table.stepNumber),
-  index("idx_sequence_steps_unique").unique().on(table.sequenceId, table.stepNumber), // Prevent duplicate steps
-]);
+}, (table) => ({
+  stepSequenceIdx: index("idx_sequence_steps_sequence").on(table.sequenceId, table.stepNumber),
+  stepUniqueIdx: uniqueIndex("idx_sequence_steps_unique").on(table.sequenceId, table.stepNumber),
+}));
 
 // Sequence recipient messages - stores each sent email per step for AI context
 export const sequenceRecipientMessages = pgTable("sequence_recipient_messages", {
@@ -1291,10 +1292,10 @@ export const sequenceRecipientMessages = pgTable("sequence_recipient_messages", 
   threadId: varchar("thread_id"), // Gmail thread ID (same for all messages in sequence)
   messageId: varchar("message_id"), // Message-ID from email headers for this specific step
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_recipient_messages_recipient").on(table.recipientId, table.stepNumber),
-  index("idx_recipient_messages_unique").unique().on(table.recipientId, table.stepNumber), // One message per step per recipient
-]);
+}, (table) => ({
+  messageRecipientIdx: index("idx_recipient_messages_recipient").on(table.recipientId, table.stepNumber),
+  messageUniqueIdx: uniqueIndex("idx_recipient_messages_unique").on(table.recipientId, table.stepNumber),
+}));
 
 export const sequenceRecipients = pgTable("sequence_recipients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

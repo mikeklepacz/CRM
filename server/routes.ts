@@ -36,8 +36,9 @@ import {
   insertTicketSchema,
   insertTicketReplySchema,
   insertEhubSettingsSchema,
-  insertCampaignSchema,
-  insertCampaignRecipientSchema,
+  insertSequenceSchema,
+  insertSequenceRecipientSchema,
+  insertSequenceStepSchema,
 } from "@shared/schema";
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
@@ -19546,8 +19547,8 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Create a new email campaign (admin only)
-  app.post('/api/campaigns', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // Create a new email sequence (admin only)
+  app.post('/api/sequences', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -19555,93 +19556,93 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Validate request body using centralized schema
-      const campaignData = insertCampaignSchema.parse({
+      const sequenceData = insertSequenceSchema.parse({
         ...req.body,
         createdBy: userId,
         status: 'draft',
       });
 
-      const campaign = await storage.createCampaign(campaignData);
-      res.json(campaign);
+      const sequence = await storage.createSequence(sequenceData);
+      res.json(sequence);
     } catch (error: any) {
       if (error.name === 'ZodError') {
-        return res.status(400).json({ message: 'Invalid campaign data', errors: error.errors });
+        return res.status(400).json({ message: 'Invalid sequence data', errors: error.errors });
       }
-      console.error('Error creating campaign:', error);
-      res.status(500).json({ message: error.message || 'Failed to create campaign' });
+      console.error('Error creating sequence:', error);
+      res.status(500).json({ message: error.message || 'Failed to create sequence' });
     }
   });
 
-  // List all campaigns (admin only)
-  app.get('/api/campaigns', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // List all sequences (admin only)
+  app.get('/api/sequences', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { status } = req.query;
-      const campaigns = await storage.listCampaigns({ status });
-      res.json(campaigns);
+      const sequences = await storage.listSequences({ status });
+      res.json(sequences);
     } catch (error: any) {
-      console.error('Error listing campaigns:', error);
-      res.status(500).json({ message: error.message || 'Failed to list campaigns' });
+      console.error('Error listing sequences:', error);
+      res.status(500).json({ message: error.message || 'Failed to list sequences' });
     }
   });
 
-  // Get a specific campaign (admin only)
-  app.get('/api/campaigns/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // Get a specific sequence (admin only)
+  app.get('/api/sequences/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const campaign = await storage.getCampaign(req.params.id);
-      if (!campaign) {
-        return res.status(404).json({ message: 'Campaign not found' });
+      const sequence = await storage.getSequence(req.params.id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
       }
-      res.json(campaign);
+      res.json(sequence);
     } catch (error: any) {
-      console.error('Error getting campaign:', error);
-      res.status(500).json({ message: error.message || 'Failed to get campaign' });
+      console.error('Error getting sequence:', error);
+      res.status(500).json({ message: error.message || 'Failed to get sequence' });
     }
   });
 
-  // Update a campaign (admin only)
-  app.patch('/api/campaigns/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // Update a sequence (admin only)
+  app.patch('/api/sequences/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       
       // Validate update payload
-      const updates = insertCampaignSchema.partial().parse(req.body);
+      const updates = insertSequenceSchema.partial().parse(req.body);
 
-      const campaign = await storage.updateCampaign(id, updates);
+      const sequence = await storage.updateSequence(id, updates);
       
-      if (!campaign) {
-        return res.status(404).json({ message: 'Campaign not found' });
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
       }
       
-      res.json(campaign);
+      res.json(sequence);
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid update data', errors: error.errors });
       }
-      console.error('Error updating campaign:', error);
-      res.status(500).json({ message: error.message || 'Failed to update campaign' });
+      console.error('Error updating sequence:', error);
+      res.status(500).json({ message: error.message || 'Failed to update sequence' });
     }
   });
 
-  // Delete a campaign (admin only)
-  app.delete('/api/campaigns/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  // Delete a sequence (admin only)
+  app.delete('/api/sequences/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       
-      const deleted = await storage.deleteCampaign(id);
+      const deleted = await storage.deleteSequence(id);
       
       if (!deleted) {
-        return res.status(404).json({ message: 'Campaign not found' });
+        return res.status(404).json({ message: 'Sequence not found' });
       }
       
       res.json({ success: true });
     } catch (error: any) {
-      console.error('Error deleting campaign:', error);
-      res.status(500).json({ message: error.message || 'Failed to delete campaign' });
+      console.error('Error deleting sequence:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete sequence' });
     }
   });
 
   // Import recipients from Google Sheets (admin only)
-  app.post('/api/campaigns/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.post('/api/sequences/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       
@@ -19650,10 +19651,10 @@ Use this store information to provide context-aware responses. When helping draf
         sheetId: z.string().min(1, 'Google Sheet ID is required'),
       }).parse(req.body);
 
-      // Check campaign exists
-      const campaign = await storage.getCampaign(id);
-      if (!campaign) {
-        return res.status(404).json({ message: 'Campaign not found' });
+      // Check sequence exists
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
       }
 
       // Get Google Sheets data
@@ -19755,8 +19756,8 @@ Use this store information to provide context-aware responses. When helping draf
 
         // Validate using Zod schema before adding to batch
         try {
-          insertCampaignRecipientSchema.parse({
-            campaignId: id,
+          insertSequenceRecipientSchema.parse({
+            sequenceId: id,
             email,
             name,
             link: rawLink || '',
@@ -19768,7 +19769,7 @@ Use this store information to provide context-aware responses. When helping draf
 
           seenEmails.add(email);
           recipients.push({
-            campaignId: id,
+            sequenceId: id,
             email,
             name,
             link: rawLink || '',
@@ -19790,9 +19791,9 @@ Use this store information to provide context-aware responses. When helping draf
       // Bulk insert recipients
       const created = await storage.addRecipients(recipients);
 
-      // Update campaign total count
-      await storage.updateCampaignStats(id, {
-        sentCount: (campaign.totalRecipients || 0) + created.length,
+      // Update sequence total count
+      await storage.updateSequenceStats(id, {
+        sentCount: (sequence.totalRecipients || 0) + created.length,
       });
 
       res.json({ message: 'Recipients imported successfully', count: created.length });
@@ -19805,9 +19806,9 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Get recipients for a campaign (admin only)
+  // Get recipients for a sequence (admin only)
   // Enriches each recipient with contactedStatus from Commission Tracker
-  app.get('/api/campaigns/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.get('/api/sequences/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       const { contactedStatus, limit } = req.query; // Renamed from 'status' to 'contactedStatus'
@@ -19918,7 +19919,7 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Send test email (admin only)
-  app.post('/api/campaigns/:id/test-send', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+  app.post('/api/sequences/:id/test-send', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       const { testEmail } = req.body;
@@ -19927,9 +19928,9 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(400).json({ message: 'Test email address required' });
       }
 
-      const campaign = await storage.getCampaign(id);
-      if (!campaign) {
-        return res.status(404).json({ message: 'Campaign not found' });
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
       }
 
       // Get user's Gmail integration

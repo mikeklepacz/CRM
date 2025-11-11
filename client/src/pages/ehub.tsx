@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
-interface Campaign {
+interface Sequence {
   id: string;
   name: string;
   subject: string;
@@ -57,15 +57,15 @@ interface Recipient {
 export default function EHub() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [selectedSequenceId, setSelectedSequenceId] = useState<string | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [testEmail, setTestEmail] = useState("");
   const [sheetId, setSheetId] = useState("");
   const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
-  const [activeTab, setActiveTab] = useState("campaigns");
+  const [activeTab, setActiveTab] = useState("sequences");
 
-  // Campaign form state
+  // Sequence form state
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -82,9 +82,9 @@ export default function EHub() {
     skipWeekends: true,
   });
 
-  // Fetch campaigns
-  const { data: campaigns, isLoading } = useQuery<Campaign[]>({
-    queryKey: ['/api/campaigns'],
+  // Fetch sequences
+  const { data: sequences, isLoading } = useQuery<Sequence[]>({
+    queryKey: ['/api/sequences'],
   });
 
   // Fetch E-Hub settings
@@ -99,16 +99,16 @@ export default function EHub() {
     }
   }, [settings]);
 
-  // Fetch selected campaign recipients with filter
+  // Fetch selected sequence recipients with filter
   const { data: recipients, isLoading: isLoadingRecipients, error: recipientsError } = useQuery<Recipient[]>({
-    queryKey: ['/api/campaigns', selectedCampaignId, 'recipients', contactedFilter],
-    enabled: !!selectedCampaignId,
+    queryKey: ['/api/sequences', selectedSequenceId, 'recipients', contactedFilter],
+    enabled: !!selectedSequenceId,
     queryFn: () => {
       const params = new URLSearchParams();
       if (contactedFilter && contactedFilter !== 'all') {
         params.append('contactedStatus', contactedFilter);
       }
-      const url = `/api/campaigns/${selectedCampaignId}/recipients?${params.toString()}`;
+      const url = `/api/sequences/${selectedSequenceId}/recipients?${params.toString()}`;
       return fetch(url).then(res => {
         if (!res.ok) {
           if (res.status === 503) {
@@ -123,22 +123,22 @@ export default function EHub() {
     },
   });
 
-  // Create campaign mutation
+  // Create sequence mutation
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('POST', '/api/campaigns', data),
+    mutationFn: (data: any) => apiRequest('POST', '/api/sequences', data),
     onSuccess: () => {
       toast({
-        title: "Campaign Created",
-        description: "Your email campaign has been created successfully.",
+        title: "Sequence Created",
+        description: "Your email sequence has been created successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
       setIsCreateDialogOpen(false);
-      resetCampaignForm();
+      resetSequenceForm();
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create campaign",
+        description: error.message || "Failed to create sequence",
         variant: "destructive",
       });
     },
@@ -165,20 +165,20 @@ export default function EHub() {
 
   // Import recipients mutation
   const importMutation = useMutation({
-    mutationFn: ({ campaignId, sheetId }: { campaignId: string; sheetId: string }) =>
-      apiRequest('POST', `/api/campaigns/${campaignId}/recipients`, { sheetId }),
+    mutationFn: ({ sequenceId, sheetId }: { sequenceId: string; sheetId: string }) =>
+      apiRequest('POST', `/api/sequences/${sequenceId}/recipients`, { sheetId }),
     onSuccess: (data: any, variables) => {
       toast({
         title: "Import Complete",
         description: `${data.count} recipients imported successfully.`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
-      // Invalidate all recipients queries for the imported campaign (all filters)
-      // Use variables.campaignId to avoid race conditions if user switches campaigns
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      // Invalidate all recipients queries for the imported sequence (all filters)
+      // Use variables.sequenceId to avoid race conditions if user switches sequences
       queryClient.invalidateQueries({ 
         predicate: (query) => 
-          query.queryKey[0] === '/api/campaigns' && 
-          query.queryKey[1] === variables.campaignId &&
+          query.queryKey[0] === '/api/sequences' && 
+          query.queryKey[1] === variables.sequenceId &&
           query.queryKey[2] === 'recipients'
       });
       setIsImportDialogOpen(false);
@@ -195,8 +195,8 @@ export default function EHub() {
 
   // Test send mutation
   const testSendMutation = useMutation({
-    mutationFn: ({ campaignId, testEmail }: { campaignId: string; testEmail: string }) =>
-      apiRequest('POST', `/api/campaigns/${campaignId}/test-send`, { testEmail }),
+    mutationFn: ({ sequenceId, testEmail }: { sequenceId: string; testEmail: string }) =>
+      apiRequest('POST', `/api/sequences/${sequenceId}/test-send`, { testEmail }),
     onSuccess: (data: any) => {
       toast({
         title: "Test Email Sent",
@@ -214,13 +214,13 @@ export default function EHub() {
     },
   });
 
-  const resetCampaignForm = () => {
+  const resetSequenceForm = () => {
     setName("");
     setSubject("");
     setBody("");
   };
 
-  const handleCreateCampaign = () => {
+  const handleCreateSequence = () => {
     createMutation.mutate({
       name,
       subject,
@@ -233,13 +233,13 @@ export default function EHub() {
   };
 
   const handleImport = () => {
-    if (!selectedCampaignId) return;
-    importMutation.mutate({ campaignId: selectedCampaignId, sheetId });
+    if (!selectedSequenceId) return;
+    importMutation.mutate({ sequenceId: selectedSequenceId, sheetId });
   };
 
   const handleTestSend = () => {
-    if (!selectedCampaignId) return;
-    testSendMutation.mutate({ campaignId: selectedCampaignId, testEmail });
+    if (!selectedSequenceId) return;
+    testSendMutation.mutate({ sequenceId: selectedSequenceId, testEmail });
   };
 
   const getStatusColor = (status: string) => {
@@ -268,15 +268,15 @@ export default function EHub() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">E-Hub</h1>
-          <p className="text-muted-foreground">Email campaign automation system</p>
+          <p className="text-muted-foreground">Email sequence automation system</p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
-          <TabsTrigger value="campaigns" data-testid="tab-campaigns">
+          <TabsTrigger value="sequences" data-testid="tab-sequences">
             <Mail className="w-4 h-4 mr-2" />
-            Campaigns
+            Sequences
           </TabsTrigger>
           <TabsTrigger value="recipients" data-testid="tab-recipients">
             <Users className="w-4 h-4 mr-2" />
@@ -288,26 +288,26 @@ export default function EHub() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Campaigns Tab */}
-        <TabsContent value="campaigns" className="space-y-4">
+        {/* Sequences Tab */}
+        <TabsContent value="sequences" className="space-y-4">
           <div className="flex justify-end">
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button data-testid="button-create-campaign">
+                <Button data-testid="button-create-sequence">
                   <Plus className="w-4 h-4 mr-2" />
-                  Create Campaign
+                  Create Sequence
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle>Create Email Campaign</DialogTitle>
+                  <DialogTitle>Create Email Sequence</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div>
-                    <Label htmlFor="name">Campaign Name</Label>
+                    <Label htmlFor="name">Sequence Name</Label>
                     <Input
                       id="name"
-                      data-testid="input-campaign-name"
+                      data-testid="input-sequence-name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g., Cold Outreach Q1 2025"
@@ -317,7 +317,7 @@ export default function EHub() {
                     <Label htmlFor="subject">Email Subject</Label>
                     <Input
                       id="subject"
-                      data-testid="input-campaign-subject"
+                      data-testid="input-sequence-subject"
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder="e.g., Partnership Opportunity"
@@ -327,7 +327,7 @@ export default function EHub() {
                     <Label htmlFor="body">Email Body</Label>
                     <Textarea
                       id="body"
-                      data-testid="input-campaign-body"
+                      data-testid="input-sequence-body"
                       value={body}
                       onChange={(e) => setBody(e.target.value)}
                       placeholder="Write your email template here..."
@@ -344,32 +344,32 @@ export default function EHub() {
                     Cancel
                   </Button>
                   <Button
-                    onClick={handleCreateCampaign}
+                    onClick={handleCreateSequence}
                     disabled={!name || !subject || !body || createMutation.isPending}
                     data-testid="button-submit-create"
                   >
                     {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Create Campaign
+                    Create Sequence
                   </Button>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
 
-          {campaigns && campaigns.length === 0 ? (
+          {sequences && sequences.length === 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>No Campaigns Yet</CardTitle>
+                <CardTitle>No Sequences Yet</CardTitle>
                 <CardDescription>
-                  Create your first email campaign to get started with automated outreach.
+                  Create your first email sequence to get started with automated outreach.
                 </CardDescription>
               </CardHeader>
             </Card>
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle>Campaigns</CardTitle>
-                <CardDescription>Manage your email campaigns</CardDescription>
+                <CardTitle>Sequences</CardTitle>
+                <CardDescription>Manage your email sequences</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -385,36 +385,36 @@ export default function EHub() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {campaigns?.map((campaign) => (
+                    {sequences?.map((sequence) => (
                       <TableRow 
-                        key={campaign.id} 
-                        data-testid={`row-campaign-${campaign.id}`}
+                        key={sequence.id} 
+                        data-testid={`row-sequence-${sequence.id}`}
                         className="cursor-pointer hover-elevate"
                         onClick={() => {
-                          setSelectedCampaignId(campaign.id);
+                          setSelectedSequenceId(sequence.id);
                           setActiveTab("recipients");
                         }}
                       >
-                        <TableCell className="font-medium">{campaign.name}</TableCell>
-                        <TableCell className="max-w-xs truncate">{campaign.subject}</TableCell>
+                        <TableCell className="font-medium">{sequence.name}</TableCell>
+                        <TableCell className="max-w-xs truncate">{sequence.subject}</TableCell>
                         <TableCell>
-                          <Badge variant={getStatusColor(campaign.status)}>
-                            {campaign.status}
+                          <Badge variant={getStatusColor(sequence.status)}>
+                            {sequence.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>{campaign.totalRecipients || 0}</TableCell>
-                        <TableCell>{campaign.sentCount || 0}</TableCell>
-                        <TableCell>{campaign.repliedCount || 0}</TableCell>
+                        <TableCell>{sequence.totalRecipients || 0}</TableCell>
+                        <TableCell>{sequence.sentCount || 0}</TableCell>
+                        <TableCell>{sequence.repliedCount || 0}</TableCell>
                         <TableCell>
                           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setSelectedCampaignId(campaign.id);
+                                setSelectedSequenceId(sequence.id);
                                 setIsImportDialogOpen(true);
                               }}
-                              data-testid={`button-import-${campaign.id}`}
+                              data-testid={`button-import-${sequence.id}`}
                             >
                               <Upload className="w-4 h-4 mr-1" />
                               Import
@@ -423,10 +423,10 @@ export default function EHub() {
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setSelectedCampaignId(campaign.id);
+                                setSelectedSequenceId(sequence.id);
                                 setIsTestDialogOpen(true);
                               }}
-                              data-testid={`button-test-${campaign.id}`}
+                              data-testid={`button-test-${sequence.id}`}
                             >
                               <Send className="w-4 h-4 mr-1" />
                               Test
@@ -444,12 +444,12 @@ export default function EHub() {
 
         {/* Recipients Tab */}
         <TabsContent value="recipients" className="space-y-4">
-          {!selectedCampaignId ? (
+          {!selectedSequenceId ? (
             <Card>
               <CardHeader>
-                <CardTitle>No Campaign Selected</CardTitle>
+                <CardTitle>No Sequence Selected</CardTitle>
                 <CardDescription>
-                  Select a campaign from the Campaigns tab to view its recipients.
+                  Select a sequence from the Sequences tab to view its recipients.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -468,7 +468,7 @@ export default function EHub() {
                   <div>
                     <CardTitle>Recipients</CardTitle>
                     <CardDescription>
-                      Campaign recipients with Commission Tracker status
+                      Sequence recipients with Commission Tracker status
                     </CardDescription>
                   </div>
                   <ToggleGroup 
