@@ -19806,17 +19806,111 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // Get recipients for a campaign (admin only)
+  // Enriches each recipient with contactedStatus from Commission Tracker
   app.get('/api/campaigns/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const { status, limit } = req.query;
+      const { contactedStatus, limit } = req.query; // Renamed from 'status' to 'contactedStatus'
 
-      const recipients = await storage.getRecipients(id, {
-        status,
-        limit: limit ? parseInt(limit) : undefined,
+      // Fetch ALL recipients first (no DB filtering)
+      const recipients = await storage.getRecipients(id, {});
+
+      // Find Commission Tracker sheet
+      const sheets = await storage.getAllActiveGoogleSheets();
+      const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+
+      if (!trackerSheet) {
+        // Tracker sheet is required for E-Hub to function - return error
+        console.error('[E-Hub Recipients] No Commission Tracker found');
+        return res.status(503).json({ 
+          message: 'Commission Tracker sheet not configured. Please set up the tracker sheet before using E-Hub.' 
+        });
+      }
+
+      const { spreadsheetId, sheetName } = trackerSheet;
+
+      // Read Commission Tracker sheet
+      const range = `${sheetName}!A:ZZ`;
+      const rows = await googleSheets.readSheetData(spreadsheetId, range);
+
+      if (rows.length === 0) {
+        console.error('[E-Hub Recipients] Commission Tracker sheet is empty');
+        return res.status(503).json({ 
+          message: 'Commission Tracker sheet is empty. Please ensure headers are configured.' 
+        });
+      }
+
+      const headers = rows[0];
+      const linkIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'link');
+      const statusIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'status');
+
+      if (linkIndex === -1) {
+        console.error('[E-Hub Recipients] Link column not found in Commission Tracker');
+        return res.status(503).json({ 
+          message: 'Link column not found in Commission Tracker. Please ensure the sheet has a "Link" column.' 
+        });
+      }
+
+      // Build link → status map
+      const linkStatusMap = new Map<string, string>();
+      for (let i = 1; i < rows.length; i++) {
+        const rowLink = rows[i][linkIndex];
+        if (rowLink) {
+          const normalizedLink = normalizeLink(rowLink.toString().trim());
+          const status = statusIndex !== -1 ? (rows[i][statusIndex]?.toString().trim() || '') : '';
+          linkStatusMap.set(normalizedLink, status);
+        }
+      }
+
+      // Enrich recipients with contactedStatus and trackerStatus
+      const enrichedRecipients = recipients.map(recipient => {
+        if (!recipient.link) {
+          return { 
+            ...recipient, 
+            contactedStatus: 'unknown', // No link = can't check tracker
+            trackerStatus: null
+          };
+        }
+
+        const normalizedRecipientLink = normalizeLink(recipient.link.trim());
+        const trackerStatus = linkStatusMap.get(normalizedRecipientLink);
+
+        // Three-state logic based on tracker presence:
+        // - No tracker row (undefined) → 'unknown'
+        // - Tracker row exists with status='Contacted' → 'contacted'
+        // - Tracker row exists with other/empty status → 'not contacted'
+        let contactedStatus: 'contacted' | 'not contacted' | 'unknown';
+        
+        if (trackerStatus === undefined) {
+          contactedStatus = 'unknown'; // No tracker row for this link
+        } else if (trackerStatus.trim().toLowerCase() === 'contacted') {
+          contactedStatus = 'contacted'; // Tracker status is 'Contacted'
+        } else {
+          contactedStatus = 'not contacted'; // Tracker row exists but not 'Contacted'
+        }
+
+        return { 
+          ...recipient, 
+          contactedStatus,
+          trackerStatus: trackerStatus || null // Include raw tracker status for debugging/display
+        };
       });
 
-      res.json(recipients);
+      // Filter by contactedStatus if requested (after enrichment)
+      let filtered = enrichedRecipients;
+      if (contactedStatus) {
+        filtered = enrichedRecipients.filter(r => 
+          r.contactedStatus.toLowerCase() === contactedStatus.toString().toLowerCase()
+        );
+      }
+
+      // Apply limit if requested (after filtering)
+      if (limit) {
+        const limitNum = parseInt(limit.toString());
+        filtered = filtered.slice(0, limitNum);
+      }
+
+      res.json(filtered);
     } catch (error: any) {
       console.error('Error getting recipients:', error);
       res.status(500).json({ message: error.message || 'Failed to get recipients' });
