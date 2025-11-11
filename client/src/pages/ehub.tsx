@@ -9,7 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, Plus, Loader2, Upload, Send, Settings } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -39,6 +41,19 @@ interface EhubSettings {
   skipWeekends: boolean;
 }
 
+interface Recipient {
+  id: string;
+  email: string;
+  name: string;
+  link: string;
+  salesSummary: string;
+  businessHours: string;
+  timezone: string;
+  status: string;
+  contactedStatus: 'contacted' | 'not contacted' | 'unknown';
+  trackerStatus: string | null;
+}
+
 export default function EHub() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -47,6 +62,8 @@ export default function EHub() {
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [testEmail, setTestEmail] = useState("");
   const [sheetId, setSheetId] = useState("");
+  const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
+  const [activeTab, setActiveTab] = useState("campaigns");
 
   // Campaign form state
   const [name, setName] = useState("");
@@ -82,10 +99,28 @@ export default function EHub() {
     }
   }, [settings]);
 
-  // Fetch selected campaign recipients
-  const { data: recipients } = useQuery({
-    queryKey: ['/api/campaigns', selectedCampaignId, 'recipients'],
+  // Fetch selected campaign recipients with filter
+  const { data: recipients, isLoading: isLoadingRecipients, error: recipientsError } = useQuery<Recipient[]>({
+    queryKey: ['/api/campaigns', selectedCampaignId, 'recipients', contactedFilter],
     enabled: !!selectedCampaignId,
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (contactedFilter && contactedFilter !== 'all') {
+        params.append('contactedStatus', contactedFilter);
+      }
+      const url = `/api/campaigns/${selectedCampaignId}/recipients?${params.toString()}`;
+      return fetch(url).then(res => {
+        if (!res.ok) {
+          if (res.status === 503) {
+            return res.json().then(data => {
+              throw new Error(data.message || 'Service unavailable');
+            });
+          }
+          throw new Error('Failed to fetch recipients');
+        }
+        return res.json();
+      });
+    },
   });
 
   // Create campaign mutation
@@ -132,13 +167,20 @@ export default function EHub() {
   const importMutation = useMutation({
     mutationFn: ({ campaignId, sheetId }: { campaignId: string; sheetId: string }) =>
       apiRequest('POST', `/api/campaigns/${campaignId}/recipients`, { sheetId }),
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, variables) => {
       toast({
         title: "Import Complete",
         description: `${data.count} recipients imported successfully.`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', selectedCampaignId, 'recipients'] });
+      // Invalidate all recipients queries for the imported campaign (all filters)
+      // Use variables.campaignId to avoid race conditions if user switches campaigns
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === '/api/campaigns' && 
+          query.queryKey[1] === variables.campaignId &&
+          query.queryKey[2] === 'recipients'
+      });
       setIsImportDialogOpen(false);
       setSheetId("");
     },
@@ -230,11 +272,15 @@ export default function EHub() {
         </div>
       </div>
 
-      <Tabs defaultValue="campaigns" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="campaigns" data-testid="tab-campaigns">
             <Mail className="w-4 h-4 mr-2" />
             Campaigns
+          </TabsTrigger>
+          <TabsTrigger value="recipients" data-testid="tab-recipients">
+            <Users className="w-4 h-4 mr-2" />
+            Recipients
           </TabsTrigger>
           <TabsTrigger value="settings" data-testid="tab-settings">
             <Settings className="w-4 h-4 mr-2" />
@@ -340,7 +386,15 @@ export default function EHub() {
                   </TableHeader>
                   <TableBody>
                     {campaigns?.map((campaign) => (
-                      <TableRow key={campaign.id} data-testid={`row-campaign-${campaign.id}`}>
+                      <TableRow 
+                        key={campaign.id} 
+                        data-testid={`row-campaign-${campaign.id}`}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => {
+                          setSelectedCampaignId(campaign.id);
+                          setActiveTab("recipients");
+                        }}
+                      >
                         <TableCell className="font-medium">{campaign.name}</TableCell>
                         <TableCell className="max-w-xs truncate">{campaign.subject}</TableCell>
                         <TableCell>
@@ -352,7 +406,7 @@ export default function EHub() {
                         <TableCell>{campaign.sentCount || 0}</TableCell>
                         <TableCell>{campaign.repliedCount || 0}</TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                             <Button
                               size="sm"
                               variant="outline"
@@ -383,6 +437,124 @@ export default function EHub() {
                     ))}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Recipients Tab */}
+        <TabsContent value="recipients" className="space-y-4">
+          {!selectedCampaignId ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>No Campaign Selected</CardTitle>
+                <CardDescription>
+                  Select a campaign from the Campaigns tab to view its recipients.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : recipientsError ? (
+            <Alert variant="destructive" data-testid="alert-recipients-error">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Commission Tracker Error</AlertTitle>
+              <AlertDescription>
+                {(recipientsError as Error).message || 'Failed to load recipients. Please check your Commission Tracker configuration.'}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Recipients</CardTitle>
+                    <CardDescription>
+                      Campaign recipients with Commission Tracker status
+                    </CardDescription>
+                  </div>
+                  <ToggleGroup 
+                    type="single" 
+                    value={contactedFilter} 
+                    onValueChange={(value) => value && setContactedFilter(value)}
+                    data-testid="filter-contacted-status"
+                  >
+                    <ToggleGroupItem value="all" data-testid="filter-all">
+                      All {recipients && `(${recipients.length})`}
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="contacted" data-testid="filter-contacted">
+                      Contacted
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="not contacted" data-testid="filter-not-contacted">
+                      Not Contacted
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="unknown" data-testid="filter-unknown">
+                      Unknown
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingRecipients ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                  </div>
+                ) : !recipients || recipients.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No recipients found{contactedFilter !== 'all' ? ` with status "${contactedFilter}"` : ''}.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Link</TableHead>
+                        <TableHead>Tracker Status</TableHead>
+                        <TableHead>Contacted</TableHead>
+                        <TableHead>Sales Summary</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recipients.map((recipient) => (
+                        <TableRow key={recipient.id} data-testid={`row-recipient-${recipient.id}`}>
+                          <TableCell className="font-medium">{recipient.name}</TableCell>
+                          <TableCell>{recipient.email}</TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            <a 
+                              href={recipient.link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              {recipient.link}
+                            </a>
+                          </TableCell>
+                          <TableCell>
+                            {recipient.trackerStatus ? (
+                              <Badge variant="outline">{recipient.trackerStatus}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={
+                                recipient.contactedStatus === 'contacted' 
+                                  ? 'default' 
+                                  : recipient.contactedStatus === 'unknown'
+                                  ? 'secondary'
+                                  : 'outline'
+                              }
+                              data-testid={`badge-contacted-${recipient.contactedStatus}`}
+                            >
+                              {recipient.contactedStatus}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-md truncate">{recipient.salesSummary || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           )}
