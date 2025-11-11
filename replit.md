@@ -33,7 +33,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **ElevenLabs AI Voice Calling**: Automated outbound AI voice calling with multi-agent support, three calling scenarios (Cold Calls, Follow-Ups, Recovery), queue management, real-time call status, and webhook integration for events and transcript capture. Features automated IVR/voicemail detection, agent prompt override, and AI call analytics with dynamic variables and comprehensive data extraction to PostgreSQL and Google Sheets.
 - **AI Insights (Admin-Only)**: OpenAI-powered analysis of call performance data identifying common objections, success patterns, sentiment, and coaching recommendations with PII redaction.
 - **Self-Evolving Knowledge Base System**: Complete KB management with version control and AI-powered improvements. Features bidirectional sync with ElevenLabs, audit trail, Aligner Assistant for proposing KB improvements, WordPress-style diff review, human-in-the-loop approval, optimistic locking, rollback capability, and Google Drive backup.
-- **E-Hub: Email Campaign System (Admin-Only)**: Cold outreach automation platform for personalized AI-generated emails with automated follow-up sequences, reply detection, and CRM synchronization. Includes smart timing, AI personalization, a rate-limited send queue, reply detection, variant engine for A/B testing, and deliverability protection.
+- **E-Hub: Email Campaign System (Admin-Only)**: Cold outreach automation platform for personalized AI-generated emails with automated follow-up sequences, reply detection, and CRM synchronization. Includes smart timing, AI personalization, a rate-limited send queue, reply detection, variant engine for A/B testing, and deliverability protection. Features conversational AI workflow for campaign strategy planning with chat interface, step delays configuration (days between emails), and validation-gated activation ensuring campaigns are configured correctly before launch.
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management, preferences, and operational data.
@@ -49,6 +49,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Shared Timezone Service**: `server/services/timezoneHours.ts` for consistent timezone calculations across features.
 - **Dynamic Header Import**: Recipients import uses header-based column mapping for Google Sheets data.
 - **State Normalization**: Handles various state formats for robust timezone detection.
+- **Campaign Strategy Architecture**: E-Hub sequences store campaign planning data in PostgreSQL: `strategyTranscript` (jsonb) holds complete AI chat history, `stepDelays` (int[]) defines days between sequence steps. Client-side validation enforces non-negative, strictly ascending delays and requires 1+ strategy message before activation. System messages are ephemeral (sent to OpenAI for context but not persisted).
 
 ## External Dependencies
 - **Google Sheets API**: For "Store Database" and "Commission Tracker" interaction.
