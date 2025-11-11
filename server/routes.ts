@@ -19547,6 +19547,30 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Get all contacts from Store Database with enriched sequence status (admin only)
+  app.get('/api/ehub/all-contacts', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { getAllContacts } = await import('./services/ehubContactsService');
+      
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 50;
+      const search = (req.query.search as string) || '';
+      const statusFilter = (req.query.statusFilter as string) || 'all';
+
+      const result = await getAllContacts({
+        page,
+        pageSize,
+        search,
+        statusFilter: statusFilter as any,
+      });
+
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error fetching all contacts:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch contacts' });
+    }
+  });
+
   // Create a new email sequence (admin only)
   app.post('/api/sequences', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -19633,6 +19657,10 @@ Use this store information to provide context-aware responses. When helping draf
       if (!deleted) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
+      
+      // Invalidate All Contacts cache since recipients were deleted (CASCADE)
+      const { invalidateCache } = await import('./services/ehubContactsService');
+      invalidateCache();
       
       res.json({ success: true });
     } catch (error: any) {
@@ -19795,6 +19823,10 @@ Use this store information to provide context-aware responses. When helping draf
       await storage.updateSequenceStats(id, {
         sentCount: (sequence.totalRecipients || 0) + created.length,
       });
+
+      // Invalidate All Contacts cache to reflect new recipients
+      const { invalidateCache } = await import('./services/ehubContactsService');
+      invalidateCache();
 
       res.json({ message: 'Recipients imported successfully', count: created.length });
     } catch (error: any) {

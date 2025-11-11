@@ -11,10 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import type { AllContactsResponse, EhubContact } from "@shared/schema";
 
 interface Sequence {
   id: string;
@@ -63,7 +64,13 @@ export default function EHub() {
   const [testEmail, setTestEmail] = useState("");
   const [sheetId, setSheetId] = useState("");
   const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
-  const [activeTab, setActiveTab] = useState("sequences");
+  const [activeTab, setActiveTab] = useState("all-contacts");
+
+  // All Contacts tab state
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [contactStatusFilter, setContactStatusFilter] = useState<string>('all');
 
   // Sequence form state
   const [name, setName] = useState("");
@@ -92,12 +99,46 @@ export default function EHub() {
     queryKey: ['/api/ehub/settings'],
   });
 
+  // Fetch all contacts with pagination and filters
+  const { data: allContactsData, isLoading: isLoadingContacts } = useQuery<AllContactsResponse>({
+    queryKey: ['/api/ehub/all-contacts', page, debouncedSearch, contactStatusFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('pageSize', '50');
+      if (debouncedSearch) {
+        params.append('search', debouncedSearch);
+      }
+      if (contactStatusFilter && contactStatusFilter !== 'all') {
+        params.append('statusFilter', contactStatusFilter);
+      }
+      const response = await fetch(`/api/ehub/all-contacts?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch contacts');
+      }
+      return response.json();
+    },
+  });
+
   // Initialize settings form when data loads
   useEffect(() => {
     if (settings) {
       setSettingsForm(settings);
     }
   }, [settings]);
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Reset page to 1 when search or filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, contactStatusFilter]);
 
   // Fetch selected sequence recipients with filter
   const { data: recipients, isLoading: isLoadingRecipients, error: recipientsError } = useQuery<Recipient[]>({
@@ -274,6 +315,10 @@ export default function EHub() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
+          <TabsTrigger value="all-contacts" data-testid="tab-all-contacts">
+            <Database className="w-4 h-4 mr-2" />
+            All Contacts
+          </TabsTrigger>
           <TabsTrigger value="sequences" data-testid="tab-sequences">
             <Mail className="w-4 h-4 mr-2" />
             Sequences
@@ -287,6 +332,149 @@ export default function EHub() {
             Settings
           </TabsTrigger>
         </TabsList>
+
+        {/* All Contacts Tab */}
+        <TabsContent value="all-contacts" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>All Contacts</CardTitle>
+                  <CardDescription>Master contact list from Store Database</CardDescription>
+                </div>
+                <ToggleGroup
+                  type="single"
+                  value={contactStatusFilter}
+                  onValueChange={(value) => value && setContactStatusFilter(value)}
+                  data-testid="filter-contact-status"
+                >
+                  <ToggleGroupItem value="all" data-testid="filter-all">
+                    All ({allContactsData?.statusCounts.all || 0})
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="neverContacted" data-testid="filter-never-contacted">
+                    Never Contacted ({allContactsData?.statusCounts.neverContacted || 0})
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="inSequence" data-testid="filter-in-sequence">
+                    In Sequence ({allContactsData?.statusCounts.inSequence || 0})
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="replied" data-testid="filter-replied">
+                    Replied ({allContactsData?.statusCounts.replied || 0})
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="bounced" data-testid="filter-bounced">
+                    Bounced ({allContactsData?.statusCounts.bounced || 0})
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+              <div className="pt-4">
+                <Input
+                  placeholder="Search by name, email, state..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  data-testid="input-search-contacts"
+                  className="max-w-sm"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingContacts ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                </div>
+              ) : !allContactsData?.contacts || allContactsData.contacts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No contacts found
+                </div>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>State</TableHead>
+                        <TableHead>Hours</TableHead>
+                        <TableHead>Link</TableHead>
+                        <TableHead>Sales Summary</TableHead>
+                        <TableHead>Sequences</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allContactsData.contacts.map((contact) => (
+                        <TableRow key={contact.email} data-testid={`row-contact-${contact.email}`}>
+                          <TableCell className="font-medium">{contact.name}</TableCell>
+                          <TableCell>{contact.email}</TableCell>
+                          <TableCell>{contact.state || '—'}</TableCell>
+                          <TableCell>{contact.hours || '—'}</TableCell>
+                          <TableCell>
+                            {contact.link ? (
+                              <a
+                                href={contact.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline"
+                              >
+                                View
+                              </a>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className="max-w-md truncate">
+                            {contact.salesSummary || '—'}
+                          </TableCell>
+                          <TableCell>
+                            {contact.sequenceNames.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {contact.sequenceNames.map((seqName) => (
+                                  <Badge
+                                    key={seqName}
+                                    variant="outline"
+                                    data-testid={`badge-sequence-${seqName}`}
+                                  >
+                                    {seqName}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-between pt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Page {page} of {Math.ceil((allContactsData?.total || 0) / 50) || 1}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        data-testid="button-prev-page"
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => p + 1)}
+                        disabled={page >= Math.ceil((allContactsData?.total || 0) / 50)}
+                        data-testid="button-next-page"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Sequences Tab */}
         <TabsContent value="sequences" className="space-y-4">

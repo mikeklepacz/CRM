@@ -1616,3 +1616,34 @@ export type SequenceRecipient = typeof sequenceRecipients.$inferSelect;
 export type InsertSequenceRecipient = z.infer<typeof insertSequenceRecipientSchema>;
 export type SequenceRecipientMessage = typeof sequenceRecipientMessages.$inferSelect;
 export type InsertSequenceRecipientMessage = z.infer<typeof insertSequenceRecipientMessageSchema>;
+
+export const ehubContactSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  state: z.string().optional(),
+  timezone: z.string().optional(),
+  hours: z.string().optional(),
+  link: z.string().optional(),
+  salesSummary: z.string().optional(),
+  neverContacted: z.boolean(),
+  inSequence: z.boolean(),
+  replied: z.boolean(),
+  bounced: z.boolean(),
+  sequenceNames: z.array(z.string()).default([]),
+});
+
+export type EhubContact = z.infer<typeof ehubContactSchema>;
+
+export const allContactsResponseSchema = z.object({
+  contacts: z.array(ehubContactSchema),
+  total: z.number(),
+  statusCounts: z.object({
+    all: z.number(),
+    neverContacted: z.number(),
+    inSequence: z.number(),
+    replied: z.number(),
+    bounced: z.number(),
+  }),
+});
+
+export type AllContactsResponse = z.infer<typeof allContactsResponseSchema>;
