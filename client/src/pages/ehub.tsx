@@ -21,8 +21,7 @@ import type { AllContactsResponse, EhubContact } from "@shared/schema";
 interface Sequence {
   id: string;
   name: string;
-  subject: string;
-  body: string;
+  stepDelays: number[] | null;
   status: string;
   totalRecipients: number;
   sentCount: number;
