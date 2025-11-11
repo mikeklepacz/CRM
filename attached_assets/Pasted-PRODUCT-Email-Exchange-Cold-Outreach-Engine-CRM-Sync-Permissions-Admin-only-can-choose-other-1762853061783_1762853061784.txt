@@ -1,0 +1,73 @@
+PRODUCT: Email Exchange (Cold Outreach Engine + CRM Sync)  Permissions: Admin only, can choose other agents manually. 
+
+This tool is one purpose: send controlled cold outreach at scale, protect your domain, track replies, and handle follow-ups automatically. It plugs directly into your CRM and claims contacts as soon as the first message goes out.  We already have in the system OPEN AI and GMAIL API. We need to plug into that as is. 
+
+CORE FUNCTIONS
+
+Email Intake & Validation
+You will import only validated emails, this is from the Store Database Sheet - Column (K) - “Email”. They come from your external verification provider. The Email Exchange dashboard stores:   From Google Sheets - “Store Database” sheet Columns:   Name (A) Email (K) Hours (N) Sales-ready Summary (P)  We will use a smart approach. We will only email the companies one hour after they are open, and not after 2pm their local time. We do this so we know they are landing in the inbox. We also do not email on holidays or weekends. I am not sure how to handle the “not dates” for that.   In order to do this smartly we are going use OPEN AI to read the Name of the listing, the email and the Sales Ready Summary in order to create a unique email.   We need a “Follow Up” planning section Where I can manually program something like this.   Follow-up Plan:
+
+Day 1: Initial email.
+Day 3: Follow-up email to gauge interest.
+Day 7: Second follow-up email providing additional details about the benefits of hemp wick.
+Day 15: Third follow-up email with a personalized offer or discount.
+Day 31: Final follow-up email to assess interest and propose a collaboration.
+Monthly: Continued follow-ups providing industry updates, company news, and reminders of your product offerings.  You can preload that. I can adjust the days manually later if I choose.   I need a place where I can give the AI a prompt injection as well, example:  “1. Length: Keep the email concise, ideally within 70 words or 5 sentences.
+2. Value Proposition: The content of the email should be valuable to the recipient. The idea is to "bait" them with something they find useful or intriguing.
+3. Subject Line: This is the headline, the "worm." It needs to be engaging, sparking curiosity and urgency. Limit it to 3-5 words or less than 35 characters. Use title case.
+4. Tone: Make it appealing to the recipient, using positive words such as "better," "special," etc. Be positive, urgent, and personal.
+5. Reference: Connect the email to the recipient personally or their industry. Talk about how your product can complement their service.
+6. Attention-Grabbing Techniques: Use a pattern interrupt like a custom whiteboard with their name on it or an eye-catching image. Consider uploading a video of yourself on YouTube.
+7. Email Body: The body of the email should 'reel in' the recipient. Consider it as a cold call. Use hyperlinks if possible.
+8. Structuring Techniques: Use approaches such as Before/After Bridge, Problem Agitate Solve, Praise Picture Push, or Attention Interest Desire Action.
+9. Adding Value: Provide some relevant information or insights that the recipient might find useful.
+10. Uniqueness: Don't be generic. Stand out and avoid being boring. Use humor or personal pictures, write as you speak. Highlight your main USP (Unique Selling Proposition).
+11. Call to Action: This is crucial for driving the recipient towards your intended action. Use open-ended questions.
+12. Follow-up: Have a follow-up plan. Send chaser emails at intervals - Day 1, 3, 7, 15, 31, and then monthly.” _____   I need also the ability to log that system into an email other than what my browser or CRM account is logged in as. This will help me make new emails in case they get flagged as spam.   Keyword Bin - We can make a keyboard bin that we can also inject into the prompt with OPEN AI. 
+
+Send Queue
+A managed queue dispatches emails at safe pacing. One email every 1-3 minutes. Randomized. I can input the min/ max manually. No batch blasts. This is your deliverability backbone. Queue processes one message at a time per sender identity. Each message is unique because the system mixes subjects, bodies, and the client’s sales summary.
+
+Sequencer
+Each contact enters a sequence: Step 1 email → wait X days → Step 2 follow-up → Step 3 bump. If a reply hits IMAP, the system immediately halts the sequence for that contact. Sequencer needs: step_number, scheduled_at, message_id, reply_flag.  Bumping example.  Day 1: Initial email.
+Day 3: Follow-up email to gauge interest.
+Day 7: Second follow-up email providing additional details about the benefits of hemp wick.
+Day 15: Third follow-up email with a personalized offer or discount.
+Day 31: Final follow-up email to assess interest and propose a collaboration.
+Monthly: Continued follow-ups providing industry updates, company news, and reminders of your product offerings.
+
+Subject Bin + Body Bin (Variant Engine)
+Subject_bin holds your subject lines. Body_bin holds your email bodies with placeholders. Mixer chooses one subject and one body, then injects the client’s summary. Light variations keep deliverability clean. The result is a naturally unique message every time. Or as I said before we can have open AI generate the subject line. 
+
+Personalization Layer
+The unique sales summary is used by OPEN AI to align our company values and We literally want to say that we learned about them from leafly. Every message looks hand-written because the sales summary itself is unique text.
+
+Reply Detection
+An IMAP worker checks the sending inboxes every hour from 3PM Warsaw time until Midnight Warsaw Time. If a reply arrives, the sequence stops for that contact and CRM is updated. This is how Apollo does it. We must flag the reply in the system so that the Admin can reply to it. 
+
+Auto Follow-Up
+If no reply after X days (following the bump schedule), the sequencer sends the next email in the series. Follow-ups are sent in the same thread as the original message. Threading boosts deliverability and looks human. Threading is crucial.
+
+CRM Sync
+As soon as Step 1 is sent, the Google sheet Commission Tracker - Status (H) as “Contacted”, last_contacted = timestamp. If you or another agent emails someone manually, that record should sync back to Email Exchange. Prevents double-sends or mass duplicates.
+
+Agent Awareness
+The system must store who contacted each shop. If Mike contacted them, the system knows. If an agent contacted them, the system flags it. No duplicate outreach.
+
+A/B Testing (Reply-Rate Based)
+A/B testing is based solely on reply rate. No open tracking. The system logs variant used and whether a reply happened within the sequence window. After a few hundred sends, you know which subject/body combo works better.
+
+Deliverability Protection
+No tracking pixels.
+No large images.
+Random spacing between sends.
+Warm-up curve: start slow, ramp gradually.
+Multiple sending identities supported (mike@, mike1@, mike2@) with independent daily limits.
+Bounce detection via SMTP codes. Hard bounces are removed automatically.
+
+Dashboard
+Shows validated emails, contacted status, last email sent, next scheduled email, assigned variant, and reply status. Also shows total sends today, remaining sends (per-address and global), and domain health indicators (soft bounces, throttles).
+
+
+
+**** Now make a bullet summary. 

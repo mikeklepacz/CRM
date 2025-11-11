@@ -91,6 +91,110 @@ The application is built around a client dashboard unifying data from "Store Dat
   - All column names are case-insensitive
   - System matches rows by Link field for accurate updates
 
+## E-Hub: Email Campaign System (November 2025)
+
+### Purpose
+Admin-only cold outreach automation platform for controlled email campaigns at scale. Sends personalized AI-generated emails with automated follow-up sequences, reply detection, and CRM synchronization.
+
+### System Architecture
+
+**Data Source:**
+- Pulls from Google Sheets "Store Database"
+  - Column A: Name
+  - Column K: Email (externally verified - system assumes all emails are pre-validated)
+  - Column N: Hours (for smart timing)
+  - Column P: Sales Summary (for AI personalization)
+
+**Core Features:**
+1. **Smart Timing Engine**
+   - Only sends 1 hour after business opening time (uses existing timezone detection from Voice Hub)
+   - No emails after 2pm local time
+   - No weekends/holidays
+   - Reuses timezone logic from Reminders feature and AI Voice Calling
+
+2. **AI Personalization (OpenAI)**
+   - Generates unique email bodies using: Name, Email, Sales Summary
+   - Custom prompt injection field for tone/structure rules
+   - Keyword bin for additional context
+   - Target: <70 words per email
+   - Subject lines: AI-generated OR variant bin (3-5 words, <35 chars, title case)
+
+3. **Follow-Up Sequencer**
+   - Default schedule: Day 1 → 3 → 7 → 15 → 31 → Monthly
+   - Adjustable schedule per campaign
+   - Threaded replies (uses Gmail API threadId + In-Reply-To headers)
+   - Auto-stops sequence when reply detected
+
+4. **Send Queue**
+   - Rate-limited: 1 email every X-Y minutes (admin configurable, randomized)
+   - Target: ~200 emails/day total (initials + follow-ups)
+   - Respects Gmail limits (500/day free, 2000/day Workspace)
+   - No batch blasts - one at a time
+   - Randomized timing prevents spam filter patterns
+
+5. **Reply Detection**
+   - Gmail REST API threads.get checks for replies
+   - Polling: Every hour 3PM-Midnight Warsaw time
+   - On reply: halt sequence, flag in CRM, notify admin
+
+6. **Variant Engine**
+   - Subject bin + Body bin with placeholders
+   - Randomized selection OR AI-generated
+   - Light variations for deliverability
+   - A/B testing based on reply rate only (no open tracking)
+
+7. **CRM Sync**
+   - Step 1 send → Update Commission Tracker Column H to "Contacted"
+   - Timestamp logging
+   - Agent awareness: tracks who contacted each shop
+   - Prevents duplicate outreach across agents
+
+8. **Deliverability Protection**
+   - No tracking pixels
+   - No heavy images
+   - Randomized timing (1-3 minute delays)
+   - Warm-up curve (start slow, ramp up)
+   - Bounce detection via SMTP codes
+   - Auto-remove hard bounces
+
+**Database Schema:**
+- `campaigns` table: name, subject, body, status (draft/active/paused/completed), minDelay, maxDelay, promptInjection, keywordBin, createdBy
+- `campaign_recipients` table: campaignId, email, name, salesSummary, status (pending/sent/failed/replied), sentAt, threadId, messageId, errorLog, sequenceStep
+- `campaign_sequences` table: campaignId, step, daysDelay, subjectTemplate, bodyTemplate, isActive
+
+**Gmail API Integration:**
+- Uses existing Gmail OAuth integration (userIntegrations table)
+- Scope: https://mail.google.com/ (already configured)
+- **Threading Requirements**:
+  - Store Message-ID from response headers (NOT API response id)
+  - Follow-ups include: threadId + In-Reply-To header + References header
+  - Subject prefixed with "Re:" for threading
+- **Rate limits**: Enforced at queue level (500 or 2000/day depending on account type)
+- **Reply detection**: threads.get API call to check if thread has >1 message
+
+**Dashboard Features:**
+- Campaign creation UI (select template from Sales Assistant library OR custom)
+- Recipient import (from Google Sheets Column K with auto-deduplication)
+- Progress tracking: X sent / Y total
+- Real-time send log
+- Pause/Resume/Cancel controls
+- Global stats: sends per day, remaining quota, bounce metrics
+- Variant performance (reply rate by subject/body combo)
+
+**Phase 1 Deliverables (Current - November 2025):**
+- ✓ Database schema for campaigns, recipients, sequences
+- ✓ Import emails from Google Sheets with auto-deduplication
+- ✓ Basic campaign creation form
+- ✓ Rate-limited send queue with randomization
+- ✓ Test send functionality
+- ✓ Dashboard with campaign list and basic stats
+
+**Future Phases:**
+- Phase 2: AI personalization with OpenAI, smart timing engine, variant bins
+- Phase 3: IMAP reply detection (3PM-midnight Warsaw), auto-stop sequences, A/B testing analytics
+
+---
+
 ## Deferred Features (Future Phases)
 
 ### Phase 2: Voice Hub Enhancements

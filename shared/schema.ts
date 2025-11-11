@@ -1229,6 +1229,91 @@ export const nonDuplicates = pgTable("non_duplicates", {
   index("idx_non_duplicates_links_reverse").on(table.link2, table.link1),
 ]);
 
+// E-Hub Email Campaign System - Cold outreach automation
+export const campaigns = pgTable("campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  subject: varchar("subject", { length: 500 }),
+  body: text("body"),
+  status: varchar("status", { length: 50 }).notNull().default('draft'), // 'draft', 'active', 'paused', 'completed', 'cancelled'
+  minDelayMinutes: integer("min_delay_minutes").notNull().default(1), // Minimum minutes between sends
+  maxDelayMinutes: integer("max_delay_minutes").notNull().default(3), // Maximum minutes between sends
+  promptInjection: text("prompt_injection"), // Custom AI instructions for email generation
+  keywordBin: text("keyword_bin"), // Additional context keywords for AI
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  lastSentAt: timestamp("last_sent_at"), // Track last email send for rate limiting
+  totalRecipients: integer("total_recipients").default(0),
+  sentCount: integer("sent_count").default(0),
+  failedCount: integer("failed_count").default(0),
+  repliedCount: integer("replied_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_campaigns_created_by").on(table.createdBy),
+  index("idx_campaigns_status").on(table.status),
+  index("idx_campaigns_last_sent").on(table.lastSentAt),
+]);
+
+export const campaignRecipients = pgTable("campaign_recipients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  email: varchar("email", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }),
+  salesSummary: text("sales_summary"), // From Google Sheets Column P
+  clientId: varchar("client_id").references(() => clients.id), // Link to CRM client record
+  status: varchar("status", { length: 50 }).notNull().default('pending'), // 'pending', 'sent', 'failed', 'replied', 'bounced'
+  sequenceStep: integer("sequence_step").default(1), // Current step in follow-up sequence (1, 2, 3, etc.)
+  nextSendAt: timestamp("next_send_at"), // When to send next follow-up
+  sentAt: timestamp("sent_at"),
+  repliedAt: timestamp("replied_at"),
+  threadId: varchar("thread_id"), // Gmail thread ID for threading follow-ups
+  messageId: varchar("message_id"), // Original Message-ID from email headers (not API id)
+  errorLog: text("error_log"), // Error message if send failed
+  bounceType: varchar("bounce_type", { length: 50 }), // 'hard', 'soft', null
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_campaign_recipients_campaign").on(table.campaignId),
+  index("idx_campaign_recipients_status").on(table.status),
+  index("idx_campaign_recipients_next_send").on(table.nextSendAt),
+  index("idx_campaign_recipients_email").on(table.email),
+]);
+
+export const campaignSequences = pgTable("campaign_sequences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  step: integer("step").notNull(), // 1, 2, 3, etc.
+  daysDelay: integer("days_delay").notNull(), // Days after previous step (0 for initial email)
+  subjectTemplate: varchar("subject_template", { length: 500 }),
+  bodyTemplate: text("body_template"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_campaign_sequences_campaign").on(table.campaignId, table.step),
+]);
+
+export const insertCampaignSchema = createInsertSchema(campaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastSentAt: true,
+  totalRecipients: true,
+  sentCount: true,
+  failedCount: true,
+  repliedCount: true,
+});
+
+export const insertCampaignRecipientSchema = createInsertSchema(campaignRecipients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCampaignSequenceSchema = createInsertSchema(campaignSequences).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
@@ -1454,3 +1539,9 @@ export type BackgroundAudioSettings = typeof backgroundAudioSettings.$inferSelec
 export type InsertBackgroundAudioSettings = z.infer<typeof insertBackgroundAudioSettingsSchema>;
 export type VoiceProxySession = typeof voiceProxySessions.$inferSelect;
 export type InsertVoiceProxySession = z.infer<typeof insertVoiceProxySessionSchema>;
+export type Campaign = typeof campaigns.$inferSelect;
+export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
+export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
+export type InsertCampaignRecipient = z.infer<typeof insertCampaignRecipientSchema>;
+export type CampaignSequence = typeof campaignSequences.$inferSelect;
+export type InsertCampaignSequence = z.infer<typeof insertCampaignSequenceSchema>;

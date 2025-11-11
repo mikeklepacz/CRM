@@ -1,0 +1,69 @@
+Here’s the compact bullet summary, stripped to essentials but complete.
+
+PRODUCT: Email Exchange (Cold Outreach Engine + CRM Sync)
+Purpose: Controlled cold outreach at scale with automated follow-ups, reply detection, and CRM sync. Admin-only tool.
+
+Data Intake
+	•	Pulls from Google Sheets “Store Database” → Name (A), Email (K), Hours (N), Sales Summary (P).
+	•	Only uses externally validated emails.
+	•	Emails sent only 1 hour after local opening time, not after 2pm, no weekends/holidays.
+
+AI Personalization
+	•	OPENAI generates unique email bodies using: name, email, sales summary.
+	•	Prompt-injection field available to tune tone, structure, and rules.
+	•	Keyword bin can be added for extra context.
+
+Follow-Up Sequencer
+	•	Preloaded plan: Day 1, 3, 7, 15, 31, then monthly.
+	•	Adjustable schedule.
+	•	Threaded replies.
+	•	Stops sequence instantly when a reply arrives (IMAP check).
+
+Variant Engine
+	•	Subject_bin + Body_bin with placeholders.
+	•	Randomized selection or AI-generated subjects.
+	•	Light variations to keep messages unique.
+
+Send Queue
+	•	Sends 1 email every X–Y minutes (randomized).
+	•	Per-sender identity pacing.
+	•	No batch blasts.
+
+Personalization Layer
+	•	Each message injects the shop’s unique Sales Summary.
+	•	Mentions discovering them on Leafly.
+	•	Ensures hand-written feel.
+
+Reply Detection
+	•	IMAP worker checks inbox hourly (3pm–midnight Warsaw).
+	•	On reply: sequence halts, CRM updated, admin notified.
+
+Auto Follow-Up
+	•	If no reply, next step triggers based on schedule.
+	•	Uses same thread to boost deliverability.
+
+CRM Sync
+	•	Step 1 sets Commission Tracker “Status (H)” → “Contacted.”
+	•	Logs timestamp.
+	•	Manual outreach by humans also syncs back to prevent duplicates.
+
+Agent Awareness
+	•	System stores which agent contacted each shop.
+	•	No double outreach across agents.
+
+A/B Testing
+	•	Based only on reply rate (no opens).
+	•	Logs which subject/body variant triggered a response.
+
+Deliverability Protection
+	•	No tracking pixels, no heavy images.
+	•	Warm-up curve; randomized timing.
+	•	Multiple sending identities (mike@, mike1@, etc.).
+	•	Bounce detection; removes hard bounces.
+
+Email Identity
+	•	System can login using different sending accounts independent of browser/CRM session.
+
+Dashboard
+	•	Shows: validated emails, contacted status, last email sent, next scheduled send, assigned variant, reply state.
+	•	Global stats: sends per day, per-identity limits, bounce metrics, domain health.
