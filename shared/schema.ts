@@ -1307,7 +1307,10 @@ export const insertCampaignSchema = createInsertSchema(campaigns).omit({
   body: z.string().optional(),
   minDelayMinutes: z.number().min(1).max(60).default(1),
   maxDelayMinutes: z.number().min(1).max(120).default(3),
-});
+}).refine(
+  (data) => data.maxDelayMinutes >= data.minDelayMinutes,
+  { message: 'Max delay must be greater than or equal to min delay', path: ['maxDelayMinutes'] }
+);
 
 export const insertCampaignRecipientSchema = createInsertSchema(campaignRecipients).omit({
   id: true,
