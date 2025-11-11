@@ -176,6 +176,27 @@ export default function EHub() {
     },
   });
 
+  // Update sequence status mutation
+  const updateSequenceStatusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      return await apiRequest("PATCH", `/api/sequences/${selectedSequenceId}`, { status });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      toast({
+        title: "Success",
+        description: "Sequence status updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update sequence status",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Auto-scroll to bottom when transcript changes
   useEffect(() => {
     if (scrollRef.current) {
@@ -1065,8 +1086,96 @@ export default function EHub() {
                   <CardHeader>
                     <CardTitle>Campaign Status</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground text-center">Status controls coming next...</p>
+                  <CardContent className="space-y-4">
+                    {sequences && selectedSequenceId && (
+                      <>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium">Current Status:</span>
+                            <Badge
+                              variant={
+                                sequences.find((s) => s.id === selectedSequenceId)?.status === 'active'
+                                  ? 'default'
+                                  : 'secondary'
+                              }
+                              data-testid="badge-sequence-status"
+                            >
+                              {sequences.find((s) => s.id === selectedSequenceId)?.status || 'draft'}
+                            </Badge>
+                          </div>
+                          
+                          {strategyTranscript?.lastUpdatedAt && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-medium">Last Updated:</span>
+                              <span className="text-sm text-muted-foreground">
+                                {new Date(strategyTranscript.lastUpdatedAt).toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium">Step Delays:</span>
+                            <span className="text-sm text-muted-foreground">
+                              {stepDelays.length} step{stepDelays.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium">Strategy Messages:</span>
+                            <span className="text-sm text-muted-foreground">
+                              {strategyTranscript?.messages?.length || 0} message{strategyTranscript?.messages?.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2">
+                          {(() => {
+                            const currentStatus = sequences.find((s) => s.id === selectedSequenceId)?.status || 'draft';
+                            const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
+                            const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0);
+                            const canActivate = hasMessages && hasValidDelays;
+                            
+                            return currentStatus === 'active' ? (
+                              <Button
+                                variant="outline"
+                                onClick={() => updateSequenceStatusMutation.mutate('draft')}
+                                disabled={updateSequenceStatusMutation.isPending}
+                                data-testid="button-deactivate-sequence"
+                                className="w-full"
+                              >
+                                {updateSequenceStatusMutation.isPending ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : null}
+                                Deactivate Campaign
+                              </Button>
+                            ) : (
+                              <div className="space-y-2">
+                                <Button
+                                  onClick={() => updateSequenceStatusMutation.mutate('active')}
+                                  disabled={!canActivate || updateSequenceStatusMutation.isPending}
+                                  data-testid="button-activate-sequence"
+                                  className="w-full"
+                                >
+                                  {updateSequenceStatusMutation.isPending ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : null}
+                                  Activate Campaign
+                                </Button>
+                                {!canActivate && (
+                                  <Alert>
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertDescription className="text-xs">
+                                      {!hasMessages && "Add at least one strategy message. "}
+                                      {!hasValidDelays && "Configure step delays before activating."}
+                                    </AlertDescription>
+                                  </Alert>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </div>
