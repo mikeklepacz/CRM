@@ -149,6 +149,15 @@ import {
   type InsertBackgroundAudioSettings,
   type VoiceProxySession,
   type InsertVoiceProxySession,
+  campaigns,
+  campaignRecipients,
+  campaignSequences,
+  type Campaign,
+  type InsertCampaign,
+  type CampaignRecipient,
+  type InsertCampaignRecipient,
+  type CampaignSequence,
+  type InsertCampaignSequence,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, isNull } from "drizzle-orm";
@@ -488,6 +497,27 @@ export interface IStorage {
   getActiveVoiceProxySessions(): Promise<VoiceProxySession[]>;
   updateVoiceProxySession(id: string, updates: Partial<InsertVoiceProxySession>): Promise<VoiceProxySession>;
   endVoiceProxySession(streamSid: string): Promise<void>;
+
+  // E-Hub Campaign operations
+  createCampaign(campaign: InsertCampaign): Promise<Campaign>;
+  getCampaign(id: string): Promise<Campaign | undefined>;
+  listCampaigns(filters?: { createdBy?: string; status?: string }): Promise<Campaign[]>;
+  updateCampaign(id: string, updates: Partial<InsertCampaign>): Promise<Campaign | undefined>;
+  deleteCampaign(id: string): Promise<boolean>;
+  updateCampaignStats(id: string, stats: { sentCount?: number; failedCount?: number; repliedCount?: number; lastSentAt?: Date }): Promise<Campaign>;
+
+  // E-Hub Campaign Recipients operations
+  addRecipients(recipients: InsertCampaignRecipient[]): Promise<CampaignRecipient[]>;
+  getRecipients(campaignId: string, filters?: { status?: string; limit?: number }): Promise<CampaignRecipient[]>;
+  getRecipient(id: string): Promise<CampaignRecipient | undefined>;
+  getNextRecipientsToSend(limit: number): Promise<CampaignRecipient[]>;
+  updateRecipientStatus(id: string, updates: Partial<InsertCampaignRecipient>): Promise<CampaignRecipient>;
+  findRecipientByEmail(campaignId: string, email: string): Promise<CampaignRecipient | undefined>;
+
+  // E-Hub Campaign Sequences operations
+  createSequence(sequence: InsertCampaignSequence): Promise<CampaignSequence>;
+  getSequences(campaignId: string): Promise<CampaignSequence[]>;
+  updateSequence(id: string, updates: Partial<InsertCampaignSequence>): Promise<CampaignSequence>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2902,6 +2932,175 @@ export class DatabaseStorage implements IStorage {
       .update(voiceProxySessions)
       .set({ status: 'completed', endedAt: new Date() })
       .where(eq(voiceProxySessions.streamSid, streamSid));
+  }
+
+  // E-Hub Campaign operations
+  async createCampaign(campaign: InsertCampaign): Promise<Campaign> {
+    const [created] = await db
+      .insert(campaigns)
+      .values(campaign)
+      .returning();
+    return created;
+  }
+
+  async getCampaign(id: string): Promise<Campaign | undefined> {
+    const [campaign] = await db
+      .select()
+      .from(campaigns)
+      .where(eq(campaigns.id, id))
+      .limit(1);
+    return campaign;
+  }
+
+  async listCampaigns(filters?: { createdBy?: string; status?: string }): Promise<Campaign[]> {
+    let query = db.select().from(campaigns);
+    
+    const conditions = [];
+    if (filters?.createdBy) {
+      conditions.push(eq(campaigns.createdBy, filters.createdBy));
+    }
+    if (filters?.status) {
+      conditions.push(eq(campaigns.status, filters.status));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(campaigns.createdAt));
+  }
+
+  async updateCampaign(id: string, updates: Partial<InsertCampaign>): Promise<Campaign | undefined> {
+    const [updated] = await db
+      .update(campaigns)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(campaigns.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCampaign(id: string): Promise<boolean> {
+    const result = await db.delete(campaigns).where(eq(campaigns.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async updateCampaignStats(id: string, stats: { sentCount?: number; failedCount?: number; repliedCount?: number; lastSentAt?: Date }): Promise<Campaign> {
+    const [updated] = await db
+      .update(campaigns)
+      .set({ ...stats, updatedAt: new Date() })
+      .where(eq(campaigns.id, id))
+      .returning();
+    return updated;
+  }
+
+  // E-Hub Campaign Recipients operations
+  async addRecipients(recipients: InsertCampaignRecipient[]): Promise<CampaignRecipient[]> {
+    if (recipients.length === 0) return [];
+    
+    const created = await db
+      .insert(campaignRecipients)
+      .values(recipients)
+      .returning();
+    return created;
+  }
+
+  async getRecipients(campaignId: string, filters?: { status?: string; limit?: number }): Promise<CampaignRecipient[]> {
+    let query = db
+      .select()
+      .from(campaignRecipients)
+      .where(eq(campaignRecipients.campaignId, campaignId));
+    
+    if (filters?.status) {
+      query = query.where(
+        and(
+          eq(campaignRecipients.campaignId, campaignId),
+          eq(campaignRecipients.status, filters.status)
+        )
+      ) as any;
+    }
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+    
+    return await query.orderBy(desc(campaignRecipients.createdAt));
+  }
+
+  async getRecipient(id: string): Promise<CampaignRecipient | undefined> {
+    const [recipient] = await db
+      .select()
+      .from(campaignRecipients)
+      .where(eq(campaignRecipients.id, id))
+      .limit(1);
+    return recipient;
+  }
+
+  async getNextRecipientsToSend(limit: number): Promise<CampaignRecipient[]> {
+    const now = new Date();
+    
+    return await db
+      .select()
+      .from(campaignRecipients)
+      .where(
+        and(
+          eq(campaignRecipients.status, 'pending'),
+          or(
+            isNull(campaignRecipients.nextSendAt),
+            lte(campaignRecipients.nextSendAt, now)
+          )
+        )
+      )
+      .orderBy(campaignRecipients.nextSendAt)
+      .limit(limit);
+  }
+
+  async updateRecipientStatus(id: string, updates: Partial<InsertCampaignRecipient>): Promise<CampaignRecipient> {
+    const [updated] = await db
+      .update(campaignRecipients)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(campaignRecipients.id, id))
+      .returning();
+    return updated;
+  }
+
+  async findRecipientByEmail(campaignId: string, email: string): Promise<CampaignRecipient | undefined> {
+    const [recipient] = await db
+      .select()
+      .from(campaignRecipients)
+      .where(
+        and(
+          eq(campaignRecipients.campaignId, campaignId),
+          eq(campaignRecipients.email, email)
+        )
+      )
+      .limit(1);
+    return recipient;
+  }
+
+  // E-Hub Campaign Sequences operations
+  async createSequence(sequence: InsertCampaignSequence): Promise<CampaignSequence> {
+    const [created] = await db
+      .insert(campaignSequences)
+      .values(sequence)
+      .returning();
+    return created;
+  }
+
+  async getSequences(campaignId: string): Promise<CampaignSequence[]> {
+    return await db
+      .select()
+      .from(campaignSequences)
+      .where(eq(campaignSequences.campaignId, campaignId))
+      .orderBy(campaignSequences.step);
+  }
+
+  async updateSequence(id: string, updates: Partial<InsertCampaignSequence>): Promise<CampaignSequence> {
+    const [updated] = await db
+      .update(campaignSequences)
+      .set(updates)
+      .where(eq(campaignSequences.id, id))
+      .returning();
+    return updated;
   }
 }
 

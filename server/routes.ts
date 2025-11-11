@@ -34,6 +34,8 @@ import {
   insertStatusSchema,
   insertTicketSchema,
   insertTicketReplySchema,
+  insertCampaignSchema,
+  insertCampaignRecipientSchema,
 } from "@shared/schema";
 import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
@@ -19524,6 +19526,269 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error deleting file:', error);
       res.status(500).json({ message: error.message || 'Failed to delete file' });
+    }
+  });
+
+  // ============================================================================
+  // E-Hub Email Campaign Routes
+  // ============================================================================
+
+  // Create a new email campaign (admin only)
+  app.post('/api/campaigns', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      // Validate request body using centralized schema
+      const campaignData = insertCampaignSchema.parse({
+        ...req.body,
+        createdBy: userId,
+        status: 'draft',
+      });
+
+      const campaign = await storage.createCampaign(campaignData);
+      res.json(campaign);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid campaign data', errors: error.errors });
+      }
+      console.error('Error creating campaign:', error);
+      res.status(500).json({ message: error.message || 'Failed to create campaign' });
+    }
+  });
+
+  // List all campaigns (admin only)
+  app.get('/api/campaigns', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { status } = req.query;
+      const campaigns = await storage.listCampaigns({ status });
+      res.json(campaigns);
+    } catch (error: any) {
+      console.error('Error listing campaigns:', error);
+      res.status(500).json({ message: error.message || 'Failed to list campaigns' });
+    }
+  });
+
+  // Get a specific campaign (admin only)
+  app.get('/api/campaigns/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const campaign = await storage.getCampaign(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ message: 'Campaign not found' });
+      }
+      res.json(campaign);
+    } catch (error: any) {
+      console.error('Error getting campaign:', error);
+      res.status(500).json({ message: error.message || 'Failed to get campaign' });
+    }
+  });
+
+  // Update a campaign (admin only)
+  app.patch('/api/campaigns/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Validate update payload
+      const updates = insertCampaignSchema.partial().parse(req.body);
+
+      const campaign = await storage.updateCampaign(id, updates);
+      
+      if (!campaign) {
+        return res.status(404).json({ message: 'Campaign not found' });
+      }
+      
+      res.json(campaign);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid update data', errors: error.errors });
+      }
+      console.error('Error updating campaign:', error);
+      res.status(500).json({ message: error.message || 'Failed to update campaign' });
+    }
+  });
+
+  // Delete a campaign (admin only)
+  app.delete('/api/campaigns/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      const deleted = await storage.deleteCampaign(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: 'Campaign not found' });
+      }
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting campaign:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete campaign' });
+    }
+  });
+
+  // Import recipients from Google Sheets (admin only)
+  app.post('/api/campaigns/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Validate sheetId
+      const { sheetId } = z.object({
+        sheetId: z.string().min(1, 'Google Sheet ID is required'),
+      }).parse(req.body);
+
+      // Check campaign exists
+      const campaign = await storage.getCampaign(id);
+      if (!campaign) {
+        return res.status(404).json({ message: 'Campaign not found' });
+      }
+
+      // Get Google Sheets data
+      const userIntegration = await storage.getUserIntegration(req.user.id);
+      if (!userIntegration?.googleAccessToken) {
+        return res.status(400).json({ message: 'Google Sheets not connected' });
+      }
+
+      // Fetch emails from Column K
+      const rows = await googleSheets.getSheetData(
+        userIntegration.googleAccessToken,
+        sheetId,
+        'Store Database!A:P' // Columns A-P
+      );
+
+      if (!rows || rows.length === 0) {
+        return res.status(400).json({ message: 'No data found in sheet' });
+      }
+
+      // Email regex for validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      
+      // Process rows and extract Column K (email)
+      const recipients = [];
+      const seenEmails = new Set<string>();
+      const skippedRows: string[] = [];
+
+      for (const row of rows.slice(1)) { // Skip header row
+        const rawName = row[0]?.toString().trim(); // Column A
+        const rawEmail = row[10]?.toString().trim(); // Column K (0-indexed = 10)
+        const rawSalesSummary = row[15]?.toString().trim(); // Column P (0-indexed = 15)
+
+        // Skip blank or whitespace-only rows
+        if (!rawName || !rawEmail || rawName === '' || rawEmail === '') {
+          continue;
+        }
+
+        const email = rawEmail.toLowerCase();
+        const name = rawName;
+
+        // Validate email format with regex
+        if (!emailRegex.test(email)) {
+          skippedRows.push(`Invalid email: ${email}`);
+          continue;
+        }
+
+        // Skip duplicates in current batch
+        if (seenEmails.has(email)) continue;
+
+        // Check if recipient already exists in database
+        const existing = await storage.findRecipientByEmail(id, email);
+        if (existing) continue;
+
+        // Validate using Zod schema before adding to batch
+        try {
+          insertCampaignRecipientSchema.parse({
+            campaignId: id,
+            email,
+            name,
+            salesSummary: rawSalesSummary || '',
+            status: 'pending',
+          });
+
+          seenEmails.add(email);
+          recipients.push({
+            campaignId: id,
+            email,
+            name,
+            salesSummary: rawSalesSummary || '',
+            status: 'pending',
+          });
+        } catch (validationError) {
+          skippedRows.push(`Validation failed for ${email}: ${name}`);
+          continue;
+        }
+      }
+
+      if (recipients.length === 0) {
+        return res.json({ message: 'No new recipients to import', count: 0 });
+      }
+
+      // Bulk insert recipients
+      const created = await storage.addRecipients(recipients);
+
+      // Update campaign total count
+      await storage.updateCampaignStats(id, {
+        sentCount: (campaign.totalRecipients || 0) + created.length,
+      });
+
+      res.json({ message: 'Recipients imported successfully', count: created.length });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
+      }
+      console.error('Error importing recipients:', error);
+      res.status(500).json({ message: error.message || 'Failed to import recipients' });
+    }
+  });
+
+  // Get recipients for a campaign (admin only)
+  app.get('/api/campaigns/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { status, limit } = req.query;
+
+      const recipients = await storage.getRecipients(id, {
+        status,
+        limit: limit ? parseInt(limit) : undefined,
+      });
+
+      res.json(recipients);
+    } catch (error: any) {
+      console.error('Error getting recipients:', error);
+      res.status(500).json({ message: error.message || 'Failed to get recipients' });
+    }
+  });
+
+  // Send test email (admin only)
+  app.post('/api/campaigns/:id/test-send', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { testEmail } = req.body;
+
+      if (!testEmail) {
+        return res.status(400).json({ message: 'Test email address required' });
+      }
+
+      const campaign = await storage.getCampaign(id);
+      if (!campaign) {
+        return res.status(404).json({ message: 'Campaign not found' });
+      }
+
+      // Get user's Gmail integration
+      const userIntegration = await storage.getUserIntegration(req.user.id);
+      if (!userIntegration?.googleAccessToken) {
+        return res.status(400).json({ message: 'Gmail not connected' });
+      }
+
+      // TODO: Implement email sending in next task
+      // For now, return success to enable UI testing
+      res.json({
+        success: true,
+        message: 'Test send functionality will be implemented in the next task',
+        testEmail,
+      });
+    } catch (error: any) {
+      console.error('Error sending test email:', error);
+      res.status(500).json({ message: error.message || 'Failed to send test email' });
     }
   });
 

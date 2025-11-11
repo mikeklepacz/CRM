@@ -1301,12 +1301,23 @@ export const insertCampaignSchema = createInsertSchema(campaigns).omit({
   sentCount: true,
   failedCount: true,
   repliedCount: true,
+}).extend({
+  name: z.string().min(1, 'Campaign name is required'),
+  subject: z.string().optional(),
+  body: z.string().optional(),
+  minDelayMinutes: z.number().min(1).max(60).default(1),
+  maxDelayMinutes: z.number().min(1).max(120).default(3),
 });
 
 export const insertCampaignRecipientSchema = createInsertSchema(campaignRecipients).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  email: z.string().email('Invalid email address').min(1),
+  name: z.string().min(1, 'Name is required'),
+  campaignId: z.string().min(1),
+  status: z.enum(['pending', 'sent', 'failed', 'replied', 'bounced']).default('pending'),
 });
 
 export const insertCampaignSequenceSchema = createInsertSchema(campaignSequences).omit({

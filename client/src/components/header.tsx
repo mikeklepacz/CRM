@@ -115,6 +115,14 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   </Button>
                 </Link>
               )}
+              {user.role === 'admin' && (
+                <Link href="/ehub">
+                  <Button variant="ghost" size="sm" data-testid="nav-ehub">
+                    <Mail className="mr-2 h-4 w-4" />
+                    E-Hub
+                  </Button>
+                </Link>
+              )}
             </nav>
 
             {/* Mobile Menu Button */}
@@ -163,6 +171,12 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
                   <DropdownMenuItem onClick={() => { setLocation('/call-manager'); setMobileMenuOpen(false); }}>
                     <Phone className="mr-2 h-4 w-4" />
                     Call Manager
+                  </DropdownMenuItem>
+                )}
+                {user.role === 'admin' && (
+                  <DropdownMenuItem onClick={() => { setLocation('/ehub'); setMobileMenuOpen(false); }}>
+                    <Mail className="mr-2 h-4 w-4" />
+                    E-Hub
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

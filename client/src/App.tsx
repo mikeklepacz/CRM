@@ -26,6 +26,7 @@ import Documents from "@/pages/documents";
 import Voice from "@/pages/voice";
 import CallManager from "@/pages/call-manager";
 import FollowUpCenter from "@/pages/follow-up-center";
+import EHub from "@/pages/ehub";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -81,6 +82,9 @@ function Router() {
             </Route>
             <Route path="/call-manager">
               {(user?.role === 'admin' || user?.hasVoiceAccess) ? <CallManager /> : <NotFound />}
+            </Route>
+            <Route path="/ehub">
+              {user?.role === 'admin' ? <EHub /> : <NotFound />}
             </Route>
             <Route path="/store/:storeId" component={StoreDetails} />
             <Route path="/" component={Dashboard} />
