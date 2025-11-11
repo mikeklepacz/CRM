@@ -863,8 +863,11 @@ export default function EHub() {
                   </CardDescription>
                 </div>
                 <Button
-                  onClick={() => setIsCreateDialogOpen(true)}
-                  data-testid="button-create-sequence"
+                  onClick={() => {
+                    setActiveTab('sequences');
+                    setTimeout(() => setIsCreateDialogOpen(true), 100);
+                  }}
+                  data-testid="button-create-sequence-strategy"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   New Sequence
