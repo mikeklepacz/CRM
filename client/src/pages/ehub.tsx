@@ -70,6 +70,7 @@ export default function EHub() {
   // Strategy chat state
   const [strategyMessage, setStrategyMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [stepDelays, setStepDelays] = useState<number[]>([]);
 
   // All Contacts tab state
   const [page, setPage] = useState(1);
@@ -154,12 +155,47 @@ export default function EHub() {
     },
   });
 
+  // Save step delays mutation
+  const saveStepDelaysMutation = useMutation({
+    mutationFn: async (delays: number[]) => {
+      return await apiRequest("PUT", `/api/sequences/${selectedSequenceId}/step-delays`, { stepDelays: delays });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      toast({
+        title: "Success",
+        description: "Step delays saved successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save step delays",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Auto-scroll to bottom when transcript changes
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [strategyTranscript]);
+
+  // Load step delays when sequence changes
+  useEffect(() => {
+    if (selectedSequenceId && sequences) {
+      const selectedSeq = sequences.find((s) => s.id === selectedSequenceId);
+      if (selectedSeq && (selectedSeq as any).stepDelays) {
+        setStepDelays((selectedSeq as any).stepDelays);
+      } else {
+        setStepDelays([]);
+      }
+    } else {
+      setStepDelays([]);
+    }
+  }, [selectedSequenceId, sequences]);
 
   // Initialize settings form when data loads
   useEffect(() => {
@@ -953,8 +989,74 @@ export default function EHub() {
                       Configure the delay (in days) before each email step
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground text-center">Delays configuration coming next...</p>
+                  <CardContent className="space-y-4">
+                    {stepDelays.length > 0 ? (
+                      <div className="space-y-3">
+                        {stepDelays.map((delay, index) => (
+                          <div key={index} className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <Label htmlFor={`delay-${index}`} className="text-xs">
+                                Delay before Step {index + 1} (days)
+                              </Label>
+                              <Input
+                                id={`delay-${index}`}
+                                type="number"
+                                min={index === 0 ? 0 : stepDelays[index - 1] + 1}
+                                value={delay}
+                                onChange={(e) => {
+                                  const newDelays = [...stepDelays];
+                                  newDelays[index] = parseInt(e.target.value) || 0;
+                                  setStepDelays(newDelays);
+                                }}
+                                data-testid={`input-step-delay-${index}`}
+                                className="mt-1"
+                              />
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                const newDelays = stepDelays.filter((_, i) => i !== index);
+                                setStepDelays(newDelays);
+                              }}
+                              data-testid={`button-remove-delay-${index}`}
+                            >
+                              <AlertCircle className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No step delays configured yet
+                      </p>
+                    )}
+                    
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const lastDelay = stepDelays.length > 0 ? stepDelays[stepDelays.length - 1] : 0;
+                          setStepDelays([...stepDelays, lastDelay + 1]);
+                        }}
+                        data-testid="button-add-delay"
+                        className="flex-1"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Delay
+                      </Button>
+                      <Button
+                        onClick={() => saveStepDelaysMutation.mutate(stepDelays)}
+                        disabled={saveStepDelaysMutation.isPending || stepDelays.length === 0}
+                        data-testid="button-save-delays"
+                        className="flex-1"
+                      >
+                        {saveStepDelaysMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : null}
+                        Save Delays
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
 
