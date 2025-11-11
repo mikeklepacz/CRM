@@ -1,0 +1,25 @@
+Okay, right now I'm confused about what I'm supposed to be seeing and what I'm not supposed to be seeing.
+
+Currently, I see a "Campaigns" section. Here, I can manage my email campaigns, and the table has the following headings: Name, Subject, Status, Recipients, Sent, Replies, and Actions. There's also a blue "Create Campaign" button. When I click it, it asks for a campaign name, an email subject, and an email body.
+
+From what I understood, the email subject and email body were supposed to be taken care of by OpenAI. So, I'm confused about what that is for exactly.
+
+We also have "Recipients." It says, "No campaign selected. Select a campaign from the Campaigns tab to view its recipients."
+
+Okay, then we also have "Settings." So far, "Settings" seems to be what I want. But what I'm not seeing is a list populated by the Google Sheet of all the emails that could be sent, right? At the end of the day, I want to see a full list. Everyone, generally, is going to be getting the first pulled campaign. After that, we're going to design follow-up campaigns to go along with each.
+
+So, I think there's a little bit of a disconnect here. What we need to create is a system in which—let's say we send out 1,000 cold emails and 10 of them reply—the system stops sending more emails to those 10 because they replied. I will respond to them directly. The other 900+ emails will get phase 2. 
+
+At the end of the day, this system needs to allow me to design the campaigns. I need to have the ability to work with OpenAI so we can design the first campaigns. I don't know, this seems a little confusing. 
+
+We can brainstorm about this, because right now I want to be able to use the AI to generally plug in via the sales-ready summary—which is found, as you know, in the store database Google Sheet under column P. The heading is "sales-ready summary." So, I need to have some kind of way where I can have a conversation with the AI about how some of the emails could look, so I can maybe approve them. 
+
+The AI needs to know which signature of mine to use, which I think would be fine to handle in the AI prompt injection. The prompt injection could have my email. But what I would really love to be able to do is, right now, see a list of all of the emails that we could send to, which is generated live from the results of our Google Sheet in the "Email" column. 
+
+Right now, from what I can tell, I'm not sure of the difference between "Campaigns" and "Recipients" because "Recipients" is just blank. It says, "No campaign selected. Select a campaign from the Campaigns tab to view its recipients." But then in "Campaigns," I guess I can see the name of the campaign, the subject of the campaign, the status of the campaign, and the number of recipients, sent, replies, and actions.
+
+So, okay, I guess I'm starting to understand it now as I talk it out loud. Mind you, I'm doing voice-to-text on this, so that's why it's a little bit more brainstormed than normal.
+
+But, like I said, I think we're going to need a place that just says "Email Addresses" or something similar. At the end of the day, I want to email all of the emails that we have. So, I don't know what you suggest. 
+
+I don't think that we're ready to move on to the Gmail integration yet. I would like to see where we are as far as functionality goes before we start to integrate Gmail.

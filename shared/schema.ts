@@ -1245,29 +1245,60 @@ export const ehubSettings = pgTable("ehub_settings", {
 });
 
 // E-Hub Email Campaign System - Cold outreach automation
-export const campaigns = pgTable("campaigns", {
+export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
-  subject: varchar("subject", { length: 500 }),
-  body: text("body"),
-  status: varchar("status", { length: 50 }).notNull().default('draft'), // 'draft', 'active', 'paused', 'completed', 'cancelled'
+  promptInjection: text("prompt_injection"), // Global AI instructions for tone/style
+  keywords: text("keywords"), // Additional keywords for AI context
+  signature: text("signature"), // Email signature to append (overrides user default if set)
+  status: varchar("status", { length: 50 }).notNull().default('draft'), // 'draft', 'preview', 'active', 'paused', 'completed', 'cancelled'
   createdBy: varchar("created_by").notNull().references(() => users.id),
   lastSentAt: timestamp("last_sent_at"), // Track last email send for rate limiting
   totalRecipients: integer("total_recipients").default(0),
   sentCount: integer("sent_count").default(0),
   failedCount: integer("failed_count").default(0),
   repliedCount: integer("replied_count").default(0),
+  bouncedCount: integer("bounced_count").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  index("idx_campaigns_created_by").on(table.createdBy),
-  index("idx_campaigns_status").on(table.status),
-  index("idx_campaigns_last_sent").on(table.lastSentAt),
+  index("idx_sequences_created_by").on(table.createdBy),
+  index("idx_sequences_status").on(table.status),
+  index("idx_sequences_last_sent").on(table.lastSentAt),
 ]);
 
-export const campaignRecipients = pgTable("campaign_recipients", {
+// Sequence steps - defines the multi-step follow-up structure
+export const sequenceSteps = pgTable("sequence_steps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  campaignId: varchar("campaign_id").notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
+  stepNumber: integer("step_number").notNull(), // 1, 2, 3, etc.
+  delayDays: integer("delay_days").notNull(), // Days to wait after previous step (0 for step 1)
+  aiGuidance: text("ai_guidance"), // Optional per-step AI instructions
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_sequence_steps_sequence").on(table.sequenceId, table.stepNumber),
+  index("idx_sequence_steps_unique").unique().on(table.sequenceId, table.stepNumber), // Prevent duplicate steps
+]);
+
+// Sequence recipient messages - stores each sent email per step for AI context
+export const sequenceRecipientMessages = pgTable("sequence_recipient_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipientId: varchar("recipient_id").notNull().references(() => sequenceRecipients.id, { onDelete: 'cascade' }),
+  stepNumber: integer("step_number").notNull(), // Which step this email was for
+  subject: text("subject").notNull(), // Subject line that was sent
+  body: text("body").notNull(), // Body that was sent
+  sentAt: timestamp("sent_at").defaultNow(),
+  threadId: varchar("thread_id"), // Gmail thread ID (same for all messages in sequence)
+  messageId: varchar("message_id"), // Message-ID from email headers for this specific step
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_recipient_messages_recipient").on(table.recipientId, table.stepNumber),
+  index("idx_recipient_messages_unique").unique().on(table.recipientId, table.stepNumber), // One message per step per recipient
+]);
+
+export const sequenceRecipients = pgTable("sequence_recipients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
   email: varchar("email", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }),
   link: varchar("link", { length: 500 }), // Store link from Google Sheets for Commission Tracker sync
@@ -1275,39 +1306,27 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   businessHours: text("business_hours"), // From Google Sheets Hours column for timezone detection
   timezone: varchar("timezone", { length: 100 }), // Detected timezone (e.g., 'America/New_York')
   clientId: varchar("client_id").references(() => clients.id), // Link to CRM client record
-  status: varchar("status", { length: 50 }).notNull().default('pending'), // 'pending', 'sent', 'failed', 'replied', 'bounced'
-  sequenceStep: integer("sequence_step").default(1), // Current step in follow-up sequence (1, 2, 3, etc.)
+  status: varchar("status", { length: 50 }).notNull().default('pending'), // 'pending', 'in_sequence', 'replied', 'bounced', 'completed'
+  currentStep: integer("current_step").default(0), // 0=pending, 1=completed step 1, 2=completed step 2, etc.
+  lastStepSentAt: timestamp("last_step_sent_at"), // When the most recent step was sent
   nextSendAt: timestamp("next_send_at"), // When to send next follow-up
-  sentAt: timestamp("sent_at"),
+  sentAt: timestamp("sent_at"), // When first email was sent (step 1)
   repliedAt: timestamp("replied_at"),
-  threadId: varchar("thread_id"), // Gmail thread ID for threading follow-ups
-  messageId: varchar("message_id"), // Original Message-ID from email headers (not API id)
+  threadId: varchar("thread_id"), // Gmail thread ID for threading all follow-ups (stored here for convenience)
   errorLog: text("error_log"), // Error message if send failed
   bounceType: varchar("bounce_type", { length: 50 }), // 'hard', 'soft', null
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  index("idx_campaign_recipients_campaign").on(table.campaignId),
-  index("idx_campaign_recipients_status").on(table.status),
-  index("idx_campaign_recipients_next_send").on(table.nextSendAt),
-  index("idx_campaign_recipients_email").on(table.email),
-  index("idx_campaign_recipients_link").on(table.link),
+  index("idx_sequence_recipients_sequence").on(table.sequenceId),
+  index("idx_sequence_recipients_status").on(table.status),
+  index("idx_sequence_recipients_next_send").on(table.nextSendAt),
+  index("idx_sequence_recipients_link").on(table.link),
+  index("idx_sequence_recipients_email").on(table.email),
 ]);
 
-export const campaignSequences = pgTable("campaign_sequences", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  campaignId: varchar("campaign_id").notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
-  step: integer("step").notNull(), // 1, 2, 3, etc.
-  daysDelay: integer("days_delay").notNull(), // Days after previous step (0 for initial email)
-  subjectTemplate: varchar("subject_template", { length: 500 }),
-  bodyTemplate: text("body_template"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_campaign_sequences_campaign").on(table.campaignId, table.step),
-]);
 
-export const insertCampaignSchema = createInsertSchema(campaigns).omit({
+export const insertSequenceSchema = createInsertSchema(sequences).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1317,9 +1336,7 @@ export const insertCampaignSchema = createInsertSchema(campaigns).omit({
   failedCount: true,
   repliedCount: true,
 }).extend({
-  name: z.string().min(1, 'Campaign name is required'),
-  subject: z.string().optional(),
-  body: z.string().optional(),
+  name: z.string().min(1, 'Sequence name is required'),
   status: z.string().default('draft'),
 });
 
@@ -1341,20 +1358,26 @@ export const insertEhubSettingsSchema = createInsertSchema(ehubSettings).omit({
   { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
 );
 
-export const insertCampaignRecipientSchema = createInsertSchema(campaignRecipients).omit({
+export const insertSequenceRecipientSchema = createInsertSchema(sequenceRecipients).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
   email: z.string().email('Invalid email address').min(1),
   name: z.string().min(1, 'Name is required'),
-  campaignId: z.string().min(1),
-  status: z.enum(['pending', 'sent', 'failed', 'replied', 'bounced']).default('pending'),
+  sequenceId: z.string().min(1),
+  status: z.enum(['pending', 'in_sequence', 'replied', 'bounced', 'completed']).default('pending'),
 });
 
-export const insertCampaignSequenceSchema = createInsertSchema(campaignSequences).omit({
+export const insertSequenceStepSchema = createInsertSchema(sequenceSteps).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertSequenceRecipientMessageSchema = createInsertSchema(sequenceRecipientMessages).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
 });
 
 export const insertTicketSchema = createInsertSchema(tickets).omit({
@@ -1584,9 +1607,11 @@ export type VoiceProxySession = typeof voiceProxySessions.$inferSelect;
 export type InsertVoiceProxySession = z.infer<typeof insertVoiceProxySessionSchema>;
 export type EhubSettings = typeof ehubSettings.$inferSelect;
 export type InsertEhubSettings = z.infer<typeof insertEhubSettingsSchema>;
-export type Campaign = typeof campaigns.$inferSelect;
-export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
-export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
-export type InsertCampaignRecipient = z.infer<typeof insertCampaignRecipientSchema>;
-export type CampaignSequence = typeof campaignSequences.$inferSelect;
-export type InsertCampaignSequence = z.infer<typeof insertCampaignSequenceSchema>;
+export type Sequence = typeof sequences.$inferSelect;
+export type InsertSequence = z.infer<typeof insertSequenceSchema>;
+export type SequenceStep = typeof sequenceSteps.$inferSelect;
+export type InsertSequenceStep = z.infer<typeof insertSequenceStepSchema>;
+export type SequenceRecipient = typeof sequenceRecipients.$inferSelect;
+export type InsertSequenceRecipient = z.infer<typeof insertSequenceRecipientSchema>;
+export type SequenceRecipientMessage = typeof sequenceRecipientMessages.$inferSelect;
+export type InsertSequenceRecipientMessage = z.infer<typeof insertSequenceRecipientMessageSchema>;
