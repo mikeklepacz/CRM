@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
@@ -65,6 +66,10 @@ export default function EHub() {
   const [sheetId, setSheetId] = useState("");
   const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
   const [activeTab, setActiveTab] = useState("all-contacts");
+  
+  // Strategy chat state
+  const [strategyMessage, setStrategyMessage] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // All Contacts tab state
   const [page, setPage] = useState(1);
@@ -119,6 +124,42 @@ export default function EHub() {
       return response.json();
     },
   });
+
+  // Fetch strategy chat transcript for selected sequence
+  const { data: strategyTranscript } = useQuery({
+    queryKey: ['/api/sequences', selectedSequenceId, 'strategy-chat'],
+    enabled: !!selectedSequenceId,
+    queryFn: async () => {
+      const response = await fetch(`/api/sequences/${selectedSequenceId}/strategy-chat`);
+      if (!response.ok) throw new Error('Failed to fetch strategy chat');
+      return response.json();
+    },
+  });
+
+  // Send strategy chat message mutation
+  const sendStrategyChatMutation = useMutation({
+    mutationFn: async (message: string) => {
+      return await apiRequest("POST", `/api/sequences/${selectedSequenceId}/strategy-chat`, { message });
+    },
+    onSuccess: () => {
+      setStrategyMessage("");
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences', selectedSequenceId, 'strategy-chat'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send message",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Auto-scroll to bottom when transcript changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [strategyTranscript]);
 
   // Initialize settings form when data loads
   useEffect(() => {
@@ -805,9 +846,98 @@ export default function EHub() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Chat transcript will go here */}
-                    <div className="h-96 border rounded-md p-4 bg-muted/10">
-                      <p className="text-sm text-muted-foreground text-center">Chat interface coming next...</p>
+                    {/* Chat Transcript */}
+                    <ScrollArea className="h-96 border rounded-md p-4 bg-muted/10" ref={scrollRef as any}>
+                      {strategyTranscript && strategyTranscript.messages && strategyTranscript.messages.length > 0 ? (
+                        <div className="space-y-4">
+                          {strategyTranscript.messages.map((msg: any) => (
+                            <div
+                              key={msg.id}
+                              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                              data-testid={`message-${msg.role}`}
+                            >
+                              <div
+                                className={`flex gap-2 max-w-[80%] ${
+                                  msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+                                }`}
+                              >
+                                <div className="shrink-0">
+                                  {msg.role === 'user' ? (
+                                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                                      <UserIcon className="w-4 h-4 text-primary-foreground" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                                      <Bot className="w-4 h-4 text-secondary-foreground" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div
+                                  className={`rounded-lg p-3 ${
+                                    msg.role === 'user'
+                                      ? 'bg-primary text-primary-foreground'
+                                      : 'bg-card border'
+                                  }`}
+                                >
+                                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                  <p className="text-xs opacity-70 mt-1">
+                                    {new Date(msg.createdAt).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {sendStrategyChatMutation.isPending && (
+                            <div className="flex justify-start">
+                              <div className="flex gap-2 max-w-[80%]">
+                                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                                  <Bot className="w-4 h-4 text-secondary-foreground" />
+                                </div>
+                                <div className="rounded-lg p-3 bg-card border">
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <p className="text-sm text-muted-foreground text-center">
+                            Start a conversation with the AI to plan your campaign strategy
+                          </p>
+                        </div>
+                      )}
+                    </ScrollArea>
+
+                    {/* Message Input */}
+                    <div className="flex gap-2">
+                      <Input
+                        value={strategyMessage}
+                        onChange={(e) => setStrategyMessage(e.target.value)}
+                        placeholder="Ask the AI about your campaign strategy..."
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if (strategyMessage.trim() && !sendStrategyChatMutation.isPending) {
+                              sendStrategyChatMutation.mutate(strategyMessage);
+                            }
+                          }
+                        }}
+                        disabled={sendStrategyChatMutation.isPending}
+                        data-testid="input-strategy-message"
+                      />
+                      <Button
+                        onClick={() => sendStrategyChatMutation.mutate(strategyMessage)}
+                        disabled={!strategyMessage.trim() || sendStrategyChatMutation.isPending}
+                        size="icon"
+                        data-testid="button-send-strategy-message"
+                      >
+                        {sendStrategyChatMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
