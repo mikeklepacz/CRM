@@ -36,6 +36,7 @@ import {
   insertTicketSchema,
   insertTicketReplySchema,
   insertEhubSettingsSchema,
+  updateEhubSettingsSchema,
   insertSequenceSchema,
   insertSequenceRecipientSchema,
   insertSequenceStepSchema,
@@ -19530,8 +19531,8 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
-      // Validate using partial schema
-      const updates = insertEhubSettingsSchema.partial().parse({
+      // Validate using update schema (partial with safe refinements)
+      const updates = updateEhubSettingsSchema.parse({
         ...req.body,
         updatedBy: userId,
       });

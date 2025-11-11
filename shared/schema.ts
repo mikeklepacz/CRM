@@ -1369,7 +1369,7 @@ export const insertSequenceSchema = createInsertSchema(sequences).omit({
   stepDelays: z.array(z.number().int().min(0)).optional(),
 });
 
-export const insertEhubSettingsSchema = createInsertSchema(ehubSettings).omit({
+const ehubSettingsBaseSchema = createInsertSchema(ehubSettings).omit({
   id: true,
   updatedAt: true,
 }).extend({
@@ -1379,11 +1379,31 @@ export const insertEhubSettingsSchema = createInsertSchema(ehubSettings).omit({
   sendingHoursStart: z.number().min(0).max(23),
   sendingHoursEnd: z.number().min(0).max(23),
   skipWeekends: z.boolean(),
-}).refine(
+});
+
+export const insertEhubSettingsSchema = ehubSettingsBaseSchema.refine(
   (data) => data.maxDelayMinutes >= data.minDelayMinutes,
   { message: 'Max delay must be greater than or equal to min delay', path: ['maxDelayMinutes'] }
 ).refine(
   (data) => data.sendingHoursEnd > data.sendingHoursStart,
+  { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
+);
+
+export const updateEhubSettingsSchema = ehubSettingsBaseSchema.partial().refine(
+  (data) => {
+    if (data.maxDelayMinutes !== undefined && data.minDelayMinutes !== undefined) {
+      return data.maxDelayMinutes >= data.minDelayMinutes;
+    }
+    return true;
+  },
+  { message: 'Max delay must be greater than or equal to min delay', path: ['maxDelayMinutes'] }
+).refine(
+  (data) => {
+    if (data.sendingHoursEnd !== undefined && data.sendingHoursStart !== undefined) {
+      return data.sendingHoursEnd > data.sendingHoursStart;
+    }
+    return true;
+  },
   { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
 );
 
