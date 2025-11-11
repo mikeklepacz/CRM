@@ -1245,11 +1245,31 @@ export const ehubSettings = pgTable("ehub_settings", {
   updatedBy: varchar("updated_by").references(() => users.id),
 });
 
+// Strategy message type for campaign planning
+export type StrategyMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: string;
+  createdBy?: string;
+};
+
+// Strategy transcript envelope with messages and metadata
+export type StrategyTranscript = {
+  messages: StrategyMessage[];
+  summary?: {
+    goals?: string;
+    audience?: string;
+    tone?: string;
+  };
+  lastUpdatedAt: string;
+};
+
 // E-Hub Email Campaign System - Cold outreach automation
 export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
-  strategyTranscript: jsonb("strategy_transcript").$type<Array<{ role: 'user' | 'assistant'; content: string }>>(), // Full AI strategy conversation
+  strategyTranscript: jsonb("strategy_transcript").$type<StrategyTranscript>(), // Full AI strategy conversation with envelope
   stepDelays: integer("step_delays").array(), // Array of delay days [0, 3, 7, 15, 31]
   promptInjection: text("prompt_injection"), // DEPRECATED: Use strategyTranscript instead
   keywords: text("keywords"), // Additional keywords for AI context

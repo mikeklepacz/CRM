@@ -19669,6 +19669,147 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Get strategy chat transcript (admin only)
+  app.get('/api/sequences/:id/strategy-chat', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const sequence = await storage.getSequence(req.params.id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+      
+      // Return empty transcript if none exists
+      const transcript = sequence.strategyTranscript || { messages: [], lastUpdatedAt: new Date().toISOString() };
+      res.json(transcript);
+    } catch (error: any) {
+      console.error('Error getting strategy chat:', error);
+      res.status(500).json({ message: error.message || 'Failed to get strategy chat' });
+    }
+  });
+
+  // Append message to strategy chat and get AI response (admin only)
+  app.post('/api/sequences/:id/strategy-chat', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+      
+      // Validate message
+      const { message } = z.object({
+        message: z.string().min(1, 'Message is required'),
+      }).parse(req.body);
+
+      // Check sequence exists
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      // Get OpenAI settings
+      const openaiSettings = await storage.getOpenaiSettings();
+      if (!openaiSettings || !openaiSettings.apiKey) {
+        return res.status(400).json({ message: 'OpenAI API key not configured' });
+      }
+
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+
+      // Build conversation history for OpenAI
+      const existingTranscript = sequence.strategyTranscript || { messages: [], lastUpdatedAt: new Date().toISOString() };
+      const conversationHistory = existingTranscript.messages.map((msg: any) => ({
+        role: msg.role === 'system' ? 'system' : msg.role,
+        content: msg.content,
+      }));
+
+      // Add system prompt if this is the first message
+      if (conversationHistory.length === 0) {
+        conversationHistory.unshift({
+          role: 'system',
+          content: `You are an expert email marketing strategist helping plan a cold outreach campaign. 
+          
+Your role is to:
+1. Understand the user's campaign goals, target audience, and desired tone
+2. Suggest an optimal multi-step email sequence structure
+3. Help craft messaging that builds trust and generates responses
+4. Consider timing, personalization opportunities, and follow-up strategies
+
+Ask clarifying questions to understand:
+- Campaign objectives (re-engagement, new customer acquisition, partnership, etc.)
+- Target audience characteristics
+- Key value propositions to highlight
+- Tone preference (professional, friendly, consultative, etc.)
+- Any specific constraints or requirements
+
+Based on the conversation, help the user design an effective email sequence that achieves their goals.`,
+        });
+      }
+
+      // Add user message
+      conversationHistory.push({
+        role: 'user',
+        content: message,
+      });
+
+      // Get AI response
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: conversationHistory as any,
+        temperature: 0.7,
+      });
+
+      const aiResponse = completion.choices[0].message.content || 'Sorry, I could not generate a response.';
+
+      // Save both messages to transcript
+      const updatedSequence = await storage.appendSequenceStrategyMessages(id, [
+        { role: 'user', content: message, createdBy: userId },
+        { role: 'assistant', content: aiResponse },
+      ]);
+
+      res.json({
+        transcript: updatedSequence.strategyTranscript,
+        aiResponse,
+      });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid message data', errors: error.errors });
+      }
+      console.error('Error in strategy chat:', error);
+      res.status(500).json({ message: error.message || 'Failed to process strategy chat' });
+    }
+  });
+
+  // Update sequence step delays and auto-generate steps (admin only)
+  app.put('/api/sequences/:id/step-delays', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Validate step delays
+      const { stepDelays } = z.object({
+        stepDelays: z.array(z.number().int().min(0)),
+      }).parse(req.body);
+
+      // Check sequence exists
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      // Replace sequence steps
+      const createdSteps = await storage.replaceSequenceSteps(id, stepDelays);
+      
+      // Get updated sequence
+      const updatedSequence = await storage.getSequence(id);
+
+      res.json({
+        sequence: updatedSequence,
+        steps: createdSteps,
+      });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid step delays', errors: error.errors });
+      }
+      console.error('Error updating step delays:', error);
+      res.status(500).json({ message: error.message || 'Failed to update step delays' });
+    }
+  });
+
   // Import recipients from Google Sheets (admin only)
   app.post('/api/sequences/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

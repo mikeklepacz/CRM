@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -326,6 +326,10 @@ export default function EHub() {
           <TabsTrigger value="recipients" data-testid="tab-recipients">
             <Users className="w-4 h-4 mr-2" />
             Recipients
+          </TabsTrigger>
+          <TabsTrigger value="strategy" data-testid="tab-strategy">
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Campaign Strategy
           </TabsTrigger>
           <TabsTrigger value="settings" data-testid="tab-settings">
             <Settings className="w-4 h-4 mr-2" />
@@ -743,6 +747,104 @@ export default function EHub() {
                     </TableBody>
                   </Table>
                 )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Campaign Strategy Tab */}
+        <TabsContent value="strategy" className="space-y-4">
+          {/* Sequence Selector */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Campaign Strategy</CardTitle>
+                  <CardDescription>
+                    Chat with AI to define your email campaign strategy, configure timing, and activate
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => setIsCreateDialogOpen(true)}
+                  data-testid="button-create-sequence"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Sequence
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Label htmlFor="strategy-sequence-select">Select Sequence</Label>
+              <select
+                id="strategy-sequence-select"
+                data-testid="select-sequence-strategy"
+                className="w-full mt-2 rounded-md border border-input bg-background px-3 py-2"
+                value={selectedSequenceId || ''}
+                onChange={(e) => setSelectedSequenceId(e.target.value || null)}
+              >
+                <option value="">Select a sequence...</option>
+                {sequences?.map((seq) => (
+                  <option key={seq.id} value={seq.id}>
+                    {seq.name} ({seq.status})
+                  </option>
+                ))}
+              </select>
+            </CardContent>
+          </Card>
+
+          {/* Content: show only when sequence is selected */}
+          {selectedSequenceId ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Left Column: Chat Interface */}
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI Strategy Chat</CardTitle>
+                    <CardDescription>
+                      Discuss your campaign goals, target audience, and messaging with the AI
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Chat transcript will go here */}
+                    <div className="h-96 border rounded-md p-4 bg-muted/10">
+                      <p className="text-sm text-muted-foreground text-center">Chat interface coming next...</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Right Column: Configuration */}
+              <div className="space-y-4">
+                {/* Step Delays Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Step Delays</CardTitle>
+                    <CardDescription>
+                      Configure the delay (in days) before each email step
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground text-center">Delays configuration coming next...</p>
+                  </CardContent>
+                </Card>
+
+                {/* Status & Activate Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Campaign Status</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground text-center">Status controls coming next...</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="py-12">
+                <p className="text-center text-muted-foreground">
+                  Select a sequence to begin planning your campaign strategy
+                </p>
               </CardContent>
             </Card>
           )}

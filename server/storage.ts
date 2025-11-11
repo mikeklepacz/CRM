@@ -529,10 +529,14 @@ export interface IStorage {
   getSequenceSteps(sequenceId: string): Promise<SequenceStep[]>;
   updateSequenceStep(id: string, updates: Partial<InsertSequenceStep>): Promise<SequenceStep>;
   deleteSequenceStep(id: string): Promise<boolean>;
+  replaceSequenceSteps(sequenceId: string, stepDelays: number[]): Promise<SequenceStep[]>;
 
   // E-Hub Sequence Recipient Messages operations
   createRecipientMessage(message: InsertSequenceRecipientMessage): Promise<SequenceRecipientMessage>;
   getRecipientMessages(recipientId: string): Promise<SequenceRecipientMessage[]>;
+  
+  // E-Hub Strategy Chat operations
+  appendSequenceStrategyMessages(sequenceId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<Sequence>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3161,6 +3165,45 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
+  async replaceSequenceSteps(sequenceId: string, stepDelays: number[]): Promise<SequenceStep[]> {
+    // Validate stepDelays: non-negative and ascending
+    for (let i = 0; i < stepDelays.length; i++) {
+      if (stepDelays[i] < 0) {
+        throw new Error(`Invalid step delay at index ${i}: must be non-negative`);
+      }
+      if (i > 0 && stepDelays[i] <= stepDelays[i - 1]) {
+        throw new Error(`Invalid step delays: must be strictly ascending (got ${stepDelays[i - 1]} then ${stepDelays[i]})`);
+      }
+    }
+
+    // Use transaction to delete and recreate steps
+    return await db.transaction(async (tx) => {
+      // Delete existing steps
+      await tx.delete(sequenceSteps).where(eq(sequenceSteps.sequenceId, sequenceId));
+
+      // Create new steps from delays
+      if (stepDelays.length === 0) {
+        return [];
+      }
+
+      const newSteps = stepDelays.map((delayDays, index) => ({
+        sequenceId,
+        stepNumber: index + 1,
+        delayDays,
+      }));
+
+      const created = await tx.insert(sequenceSteps).values(newSteps).returning();
+
+      // Update sequence with new stepDelays array
+      await tx
+        .update(sequences)
+        .set({ stepDelays, updatedAt: new Date() })
+        .where(eq(sequences.id, sequenceId));
+
+      return created;
+    });
+  }
+
   // E-Hub Sequence Recipient Messages operations
   async createRecipientMessage(message: InsertSequenceRecipientMessage): Promise<SequenceRecipientMessage> {
     const [created] = await db
@@ -3176,6 +3219,46 @@ export class DatabaseStorage implements IStorage {
       .from(sequenceRecipientMessages)
       .where(eq(sequenceRecipientMessages.recipientId, recipientId))
       .orderBy(sequenceRecipientMessages.sentAt);
+  }
+
+  // E-Hub Strategy Chat operations
+  async appendSequenceStrategyMessages(
+    sequenceId: string,
+    messages: Array<{ role: 'user' | 'assistant'; content: string; createdBy?: string }>
+  ): Promise<Sequence> {
+    const timestamp = new Date().toISOString();
+    
+    // Generate message objects with IDs and timestamps
+    const newMessages = messages.map(msg => ({
+      id: crypto.randomUUID(),
+      role: msg.role,
+      content: msg.content,
+      createdAt: timestamp,
+      createdBy: msg.createdBy,
+    }));
+
+    // Update sequence with appended messages using raw SQL for JSONB manipulation
+    const result = await db.execute(sql`
+      UPDATE sequences
+      SET 
+        strategy_transcript = jsonb_build_object(
+          'messages', 
+          COALESCE(strategy_transcript->'messages', '[]'::jsonb) || ${JSON.stringify(newMessages)}::jsonb,
+          'lastUpdatedAt',
+          ${timestamp}::text,
+          'summary',
+          COALESCE(strategy_transcript->'summary', 'null'::jsonb)
+        ),
+        updated_at = NOW()
+      WHERE id = ${sequenceId}
+      RETURNING *
+    `);
+
+    if (!result || !result.rows || result.rows.length === 0) {
+      throw new Error(`Sequence ${sequenceId} not found`);
+    }
+
+    return result.rows[0] as Sequence;
   }
 }
 
