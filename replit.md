@@ -45,7 +45,8 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **KB System Architecture**: Three tables (`kb_files`, `kb_file_versions`, `kb_change_proposals`), custom diff algorithm, standalone management UI, and API routes.
 - **Database Migrations**: Manual SQL migrations.
 - **Google Sheets Write Operations**: All writes use header-based column mapping for robustness.
-- **E-Hub Data Source**: Pulls from Google Sheets "Store Database" (Name, Email, Hours, Sales Summary).
+- **E-Hub Data Source**: Unified contact feed merges Store Database (Email column) + Commission Tracker (POC EMAIL column), deduplicates by email, and enriches with sequence membership status.
+- **E-Hub Contact Selection**: Multi-select system with three modes: individual checkboxes, select all on page, or select all matching current filters (server-side re-query). Supports bulk-adding 1 contact for testing or hundreds at once.
 - **Shared Timezone Service**: `server/services/timezoneHours.ts` for consistent timezone calculations across features.
 - **Dynamic Header Import**: Recipients import uses header-based column mapping for Google Sheets data.
 - **State Normalization**: Handles various state formats for robust timezone detection.
