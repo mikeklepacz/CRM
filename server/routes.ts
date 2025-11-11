@@ -34,6 +34,7 @@ import {
   insertStatusSchema,
   insertTicketSchema,
   insertTicketReplySchema,
+  insertEhubSettingsSchema,
   insertCampaignSchema,
   insertCampaignRecipientSchema,
 } from "@shared/schema";
@@ -19532,6 +19533,57 @@ Use this store information to provide context-aware responses. When helping draf
   // ============================================================================
   // E-Hub Email Campaign Routes
   // ============================================================================
+
+  // Get E-Hub global settings (admin only)
+  app.get('/api/ehub/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const settings = await storage.getEhubSettings();
+      
+      // Return default settings if none exist
+      if (!settings) {
+        return res.json({
+          minDelayMinutes: 1,
+          maxDelayMinutes: 3,
+          dailyEmailLimit: 200,
+          sendingHoursStart: 9,
+          sendingHoursEnd: 14,
+          promptInjection: '',
+          keywordBin: '',
+          skipWeekends: true,
+        });
+      }
+      
+      res.json(settings);
+    } catch (error: any) {
+      console.error('Error fetching E-Hub settings:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch settings' });
+    }
+  });
+
+  // Update E-Hub global settings (admin only)
+  app.patch('/api/ehub/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      // Validate using partial schema
+      const updates = insertEhubSettingsSchema.partial().parse({
+        ...req.body,
+        updatedBy: userId,
+      });
+
+      const settings = await storage.updateEhubSettings(updates);
+      res.json(settings);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid settings data', errors: error.errors });
+      }
+      console.error('Error updating E-Hub settings:', error);
+      res.status(500).json({ message: error.message || 'Failed to update settings' });
+    }
+  });
 
   // Create a new email campaign (admin only)
   app.post('/api/campaigns', isAuthenticatedCustom, isAdmin, async (req: any, res) => {

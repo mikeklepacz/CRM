@@ -149,9 +149,12 @@ import {
   type InsertBackgroundAudioSettings,
   type VoiceProxySession,
   type InsertVoiceProxySession,
+  ehubSettings,
   campaigns,
   campaignRecipients,
   campaignSequences,
+  type EhubSettings,
+  type InsertEhubSettings,
   type Campaign,
   type InsertCampaign,
   type CampaignRecipient,
@@ -498,6 +501,10 @@ export interface IStorage {
   updateVoiceProxySession(id: string, updates: Partial<InsertVoiceProxySession>): Promise<VoiceProxySession>;
   endVoiceProxySession(streamSid: string): Promise<void>;
 
+  // E-Hub Settings operations
+  getEhubSettings(): Promise<EhubSettings | undefined>;
+  updateEhubSettings(updates: Partial<InsertEhubSettings>): Promise<EhubSettings>;
+  
   // E-Hub Campaign operations
   createCampaign(campaign: InsertCampaign): Promise<Campaign>;
   getCampaign(id: string): Promise<Campaign | undefined>;
@@ -2932,6 +2939,44 @@ export class DatabaseStorage implements IStorage {
       .update(voiceProxySessions)
       .set({ status: 'completed', endedAt: new Date() })
       .where(eq(voiceProxySessions.streamSid, streamSid));
+  }
+
+  // E-Hub Settings operations
+  async getEhubSettings(): Promise<EhubSettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(ehubSettings)
+      .limit(1);
+    return settings;
+  }
+
+  async updateEhubSettings(updates: Partial<InsertEhubSettings>): Promise<EhubSettings> {
+    // Get existing settings or create if none exist
+    const existing = await this.getEhubSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(ehubSettings)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(ehubSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create default settings with provided updates
+      const [created] = await db
+        .insert(ehubSettings)
+        .values({
+          minDelayMinutes: 1,
+          maxDelayMinutes: 3,
+          dailyEmailLimit: 200,
+          sendingHoursStart: 9,
+          sendingHoursEnd: 14,
+          skipWeekends: true,
+          ...updates,
+        })
+        .returning();
+      return created;
+    }
   }
 
   // E-Hub Campaign operations

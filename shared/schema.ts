@@ -1229,6 +1229,21 @@ export const nonDuplicates = pgTable("non_duplicates", {
   index("idx_non_duplicates_links_reverse").on(table.link2, table.link1),
 ]);
 
+// E-Hub Global Settings - System-wide configuration
+export const ehubSettings = pgTable("ehub_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  minDelayMinutes: integer("min_delay_minutes").notNull().default(1), // Minimum minutes between sends
+  maxDelayMinutes: integer("max_delay_minutes").notNull().default(3), // Maximum minutes between sends
+  dailyEmailLimit: integer("daily_email_limit").notNull().default(200), // Max emails per day
+  sendingHoursStart: integer("sending_hours_start").notNull().default(9), // Start hour (24h format, e.g., 9 = 9 AM)
+  sendingHoursEnd: integer("sending_hours_end").notNull().default(14), // End hour (24h format, e.g., 14 = 2 PM)
+  promptInjection: text("prompt_injection"), // Global AI instructions for email personalization
+  keywordBin: text("keyword_bin"), // Global context keywords for AI
+  skipWeekends: boolean("skip_weekends").notNull().default(true), // Skip sending on Saturday/Sunday
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+});
+
 // E-Hub Email Campaign System - Cold outreach automation
 export const campaigns = pgTable("campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1236,10 +1251,6 @@ export const campaigns = pgTable("campaigns", {
   subject: varchar("subject", { length: 500 }),
   body: text("body"),
   status: varchar("status", { length: 50 }).notNull().default('draft'), // 'draft', 'active', 'paused', 'completed', 'cancelled'
-  minDelayMinutes: integer("min_delay_minutes").notNull().default(1), // Minimum minutes between sends
-  maxDelayMinutes: integer("max_delay_minutes").notNull().default(3), // Maximum minutes between sends
-  promptInjection: text("prompt_injection"), // Custom AI instructions for email generation
-  keywordBin: text("keyword_bin"), // Additional context keywords for AI
   createdBy: varchar("created_by").notNull().references(() => users.id),
   lastSentAt: timestamp("last_sent_at"), // Track last email send for rate limiting
   totalRecipients: integer("total_recipients").default(0),
@@ -1305,11 +1316,25 @@ export const insertCampaignSchema = createInsertSchema(campaigns).omit({
   name: z.string().min(1, 'Campaign name is required'),
   subject: z.string().optional(),
   body: z.string().optional(),
-  minDelayMinutes: z.number().min(1).max(60).default(1),
-  maxDelayMinutes: z.number().min(1).max(120).default(3),
+  status: z.string().default('draft'),
+});
+
+export const insertEhubSettingsSchema = createInsertSchema(ehubSettings).omit({
+  id: true,
+  updatedAt: true,
+}).extend({
+  minDelayMinutes: z.number().min(1).max(60),
+  maxDelayMinutes: z.number().min(1).max(120),
+  dailyEmailLimit: z.number().min(1).max(2000),
+  sendingHoursStart: z.number().min(0).max(23),
+  sendingHoursEnd: z.number().min(0).max(23),
+  skipWeekends: z.boolean(),
 }).refine(
   (data) => data.maxDelayMinutes >= data.minDelayMinutes,
   { message: 'Max delay must be greater than or equal to min delay', path: ['maxDelayMinutes'] }
+).refine(
+  (data) => data.sendingHoursEnd > data.sendingHoursStart,
+  { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
 );
 
 export const insertCampaignRecipientSchema = createInsertSchema(campaignRecipients).omit({
@@ -1553,6 +1578,8 @@ export type BackgroundAudioSettings = typeof backgroundAudioSettings.$inferSelec
 export type InsertBackgroundAudioSettings = z.infer<typeof insertBackgroundAudioSettingsSchema>;
 export type VoiceProxySession = typeof voiceProxySessions.$inferSelect;
 export type InsertVoiceProxySession = z.infer<typeof insertVoiceProxySessionSchema>;
+export type EhubSettings = typeof ehubSettings.$inferSelect;
+export type InsertEhubSettings = z.infer<typeof insertEhubSettingsSchema>;
 export type Campaign = typeof campaigns.$inferSelect;
 export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
 export type CampaignRecipient = typeof campaignRecipients.$inferSelect;

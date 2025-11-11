@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Plus, Loader2, Upload, Send } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Mail, Plus, Loader2, Upload, Send, Settings } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -18,13 +20,23 @@ interface Campaign {
   subject: string;
   body: string;
   status: string;
-  minDelayMinutes: number;
-  maxDelayMinutes: number;
   totalRecipients: number;
   sentCount: number;
   failedCount: number;
   repliedCount: number;
   createdAt: string;
+}
+
+interface EhubSettings {
+  id?: string;
+  minDelayMinutes: number;
+  maxDelayMinutes: number;
+  dailyEmailLimit: number;
+  sendingHoursStart: number;
+  sendingHoursEnd: number;
+  promptInjection: string;
+  keywordBin: string;
+  skipWeekends: boolean;
 }
 
 export default function EHub() {
@@ -36,17 +48,39 @@ export default function EHub() {
   const [testEmail, setTestEmail] = useState("");
   const [sheetId, setSheetId] = useState("");
 
-  // Form state
+  // Campaign form state
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [minDelay, setMinDelay] = useState(1);
-  const [maxDelay, setMaxDelay] = useState(3);
+
+  // Settings form state
+  const [settingsForm, setSettingsForm] = useState<EhubSettings>({
+    minDelayMinutes: 1,
+    maxDelayMinutes: 3,
+    dailyEmailLimit: 200,
+    sendingHoursStart: 9,
+    sendingHoursEnd: 14,
+    promptInjection: "",
+    keywordBin: "",
+    skipWeekends: true,
+  });
 
   // Fetch campaigns
   const { data: campaigns, isLoading } = useQuery<Campaign[]>({
     queryKey: ['/api/campaigns'],
   });
+
+  // Fetch E-Hub settings
+  const { data: settings } = useQuery<EhubSettings>({
+    queryKey: ['/api/ehub/settings'],
+  });
+
+  // Initialize settings form when data loads
+  useEffect(() => {
+    if (settings) {
+      setSettingsForm(settings);
+    }
+  }, [settings]);
 
   // Fetch selected campaign recipients
   const { data: recipients } = useQuery({
@@ -64,12 +98,31 @@ export default function EHub() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
       setIsCreateDialogOpen(false);
-      resetForm();
+      resetCampaignForm();
     },
     onError: (error: any) => {
       toast({
         title: "Error",
         description: error.message || "Failed to create campaign",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update settings mutation
+  const updateSettingsMutation = useMutation({
+    mutationFn: (data: Partial<EhubSettings>) => apiRequest('PATCH', '/api/ehub/settings', data),
+    onSuccess: () => {
+      toast({
+        title: "Settings Updated",
+        description: "E-Hub settings have been saved successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/settings'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update settings",
         variant: "destructive",
       });
     },
@@ -119,22 +172,22 @@ export default function EHub() {
     },
   });
 
-  const resetForm = () => {
+  const resetCampaignForm = () => {
     setName("");
     setSubject("");
     setBody("");
-    setMinDelay(1);
-    setMaxDelay(3);
   };
 
-  const handleCreate = () => {
+  const handleCreateCampaign = () => {
     createMutation.mutate({
       name,
       subject,
       body,
-      minDelayMinutes: minDelay,
-      maxDelayMinutes: maxDelay,
     });
+  };
+
+  const handleSaveSettings = () => {
+    updateSettingsMutation.mutate(settingsForm);
   };
 
   const handleImport = () => {
@@ -175,173 +228,311 @@ export default function EHub() {
           <h1 className="text-3xl font-bold">E-Hub</h1>
           <p className="text-muted-foreground">Email campaign automation system</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-campaign">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Campaign
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create Email Campaign</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <Label htmlFor="name">Campaign Name</Label>
-                <Input
-                  id="name"
-                  data-testid="input-campaign-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., Cold Outreach Q1 2025"
-                />
-              </div>
-              <div>
-                <Label htmlFor="subject">Email Subject</Label>
-                <Input
-                  id="subject"
-                  data-testid="input-campaign-subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="e.g., Partnership Opportunity"
-                />
-              </div>
-              <div>
-                <Label htmlFor="body">Email Body</Label>
-                <Textarea
-                  id="body"
-                  data-testid="input-campaign-body"
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  placeholder="Write your email template here..."
-                  rows={6}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="minDelay">Min Delay (minutes)</Label>
-                  <Input
-                    id="minDelay"
-                    data-testid="input-min-delay"
-                    type="number"
-                    value={minDelay}
-                    onChange={(e) => setMinDelay(parseInt(e.target.value) || 1)}
-                    min={1}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="maxDelay">Max Delay (minutes)</Label>
-                  <Input
-                    id="maxDelay"
-                    data-testid="input-max-delay"
-                    type="number"
-                    value={maxDelay}
-                    onChange={(e) => setMaxDelay(parseInt(e.target.value) || 3)}
-                    min={1}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-                data-testid="button-cancel-create"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreate}
-                disabled={!name || !subject || !body || createMutation.isPending}
-                data-testid="button-submit-create"
-              >
-                {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Create Campaign
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
-      <div className="grid gap-4">
-        {campaigns && campaigns.length === 0 ? (
+      <Tabs defaultValue="campaigns" className="w-full">
+        <TabsList>
+          <TabsTrigger value="campaigns" data-testid="tab-campaigns">
+            <Mail className="w-4 h-4 mr-2" />
+            Campaigns
+          </TabsTrigger>
+          <TabsTrigger value="settings" data-testid="tab-settings">
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Campaigns Tab */}
+        <TabsContent value="campaigns" className="space-y-4">
+          <div className="flex justify-end">
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-create-campaign">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Campaign
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create Email Campaign</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div>
+                    <Label htmlFor="name">Campaign Name</Label>
+                    <Input
+                      id="name"
+                      data-testid="input-campaign-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g., Cold Outreach Q1 2025"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="subject">Email Subject</Label>
+                    <Input
+                      id="subject"
+                      data-testid="input-campaign-subject"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="e.g., Partnership Opportunity"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="body">Email Body</Label>
+                    <Textarea
+                      id="body"
+                      data-testid="input-campaign-body"
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      placeholder="Write your email template here..."
+                      rows={6}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsCreateDialogOpen(false)}
+                    data-testid="button-cancel-create"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreateCampaign}
+                    disabled={!name || !subject || !body || createMutation.isPending}
+                    data-testid="button-submit-create"
+                  >
+                    {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Create Campaign
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {campaigns && campaigns.length === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>No Campaigns Yet</CardTitle>
+                <CardDescription>
+                  Create your first email campaign to get started with automated outreach.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Campaigns</CardTitle>
+                <CardDescription>Manage your email campaigns</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Recipients</TableHead>
+                      <TableHead>Sent</TableHead>
+                      <TableHead>Replies</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {campaigns?.map((campaign) => (
+                      <TableRow key={campaign.id} data-testid={`row-campaign-${campaign.id}`}>
+                        <TableCell className="font-medium">{campaign.name}</TableCell>
+                        <TableCell className="max-w-xs truncate">{campaign.subject}</TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusColor(campaign.status)}>
+                            {campaign.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{campaign.totalRecipients || 0}</TableCell>
+                        <TableCell>{campaign.sentCount || 0}</TableCell>
+                        <TableCell>{campaign.repliedCount || 0}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedCampaignId(campaign.id);
+                                setIsImportDialogOpen(true);
+                              }}
+                              data-testid={`button-import-${campaign.id}`}
+                            >
+                              <Upload className="w-4 h-4 mr-1" />
+                              Import
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedCampaignId(campaign.id);
+                                setIsTestDialogOpen(true);
+                              }}
+                              data-testid={`button-test-${campaign.id}`}
+                            >
+                              <Send className="w-4 h-4 mr-1" />
+                              Test
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Settings Tab */}
+        <TabsContent value="settings" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>No Campaigns Yet</CardTitle>
+              <CardTitle>Global E-Hub Settings</CardTitle>
               <CardDescription>
-                Create your first email campaign to get started with automated outreach.
+                Configure system-wide settings for email sending, AI personalization, and automation
               </CardDescription>
             </CardHeader>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaigns</CardTitle>
-              <CardDescription>Manage your email campaigns</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Recipients</TableHead>
-                    <TableHead>Sent</TableHead>
-                    <TableHead>Replies</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {campaigns?.map((campaign) => (
-                    <TableRow key={campaign.id} data-testid={`row-campaign-${campaign.id}`}>
-                      <TableCell className="font-medium">{campaign.name}</TableCell>
-                      <TableCell className="max-w-xs truncate">{campaign.subject}</TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusColor(campaign.status)}>
-                          {campaign.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{campaign.totalRecipients || 0}</TableCell>
-                      <TableCell>{campaign.sentCount || 0}</TableCell>
-                      <TableCell>{campaign.repliedCount || 0}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedCampaignId(campaign.id);
-                              setIsImportDialogOpen(true);
-                            }}
-                            data-testid={`button-import-${campaign.id}`}
-                          >
-                            <Upload className="w-4 h-4 mr-1" />
-                            Import
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedCampaignId(campaign.id);
-                              setIsTestDialogOpen(true);
-                            }}
-                            data-testid={`button-test-${campaign.id}`}
-                          >
-                            <Send className="w-4 h-4 mr-1" />
-                            Test
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <h3 className="font-semibold">Sending Configuration</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="minDelay">Min Delay Between Sends (minutes)</Label>
+                    <Input
+                      id="minDelay"
+                      data-testid="input-settings-min-delay"
+                      type="number"
+                      value={settingsForm.minDelayMinutes}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, minDelayMinutes: parseInt(e.target.value) || 1 })}
+                      min={1}
+                      max={60}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="maxDelay">Max Delay Between Sends (minutes)</Label>
+                    <Input
+                      id="maxDelay"
+                      data-testid="input-settings-max-delay"
+                      type="number"
+                      value={settingsForm.maxDelayMinutes}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, maxDelayMinutes: parseInt(e.target.value) || 3 })}
+                      min={1}
+                      max={120}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="dailyLimit">Daily Email Limit</Label>
+                  <Input
+                    id="dailyLimit"
+                    data-testid="input-settings-daily-limit"
+                    type="number"
+                    value={settingsForm.dailyEmailLimit}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, dailyEmailLimit: parseInt(e.target.value) || 200 })}
+                    min={1}
+                    max={2000}
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Maximum emails sent per day (Gmail limit: 500-2000/day)
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="startHour">Sending Hours Start (24h format)</Label>
+                    <Input
+                      id="startHour"
+                      data-testid="input-settings-start-hour"
+                      type="number"
+                      value={settingsForm.sendingHoursStart}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, sendingHoursStart: parseInt(e.target.value) || 9 })}
+                      min={0}
+                      max={23}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="endHour">Sending Hours End (24h format)</Label>
+                    <Input
+                      id="endHour"
+                      data-testid="input-settings-end-hour"
+                      type="number"
+                      value={settingsForm.sendingHoursEnd}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, sendingHoursEnd: parseInt(e.target.value) || 14 })}
+                      min={0}
+                      max={23}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="skipWeekends">Skip Weekends</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Don't send emails on Saturday and Sunday
+                    </p>
+                  </div>
+                  <Switch
+                    id="skipWeekends"
+                    data-testid="switch-skip-weekends"
+                    checked={settingsForm.skipWeekends}
+                    onCheckedChange={(checked) => setSettingsForm({ ...settingsForm, skipWeekends: checked })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="font-semibold">AI Personalization</h3>
+                <div>
+                  <Label htmlFor="promptInjection">AI Prompt Injection</Label>
+                  <Textarea
+                    id="promptInjection"
+                    data-testid="input-settings-prompt"
+                    value={settingsForm.promptInjection}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, promptInjection: e.target.value })}
+                    placeholder="Custom AI instructions for email personalization..."
+                    rows={4}
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Global AI instructions used to personalize all outreach emails
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="keywordBin">Keyword Bin</Label>
+                  <Textarea
+                    id="keywordBin"
+                    data-testid="input-settings-keywords"
+                    value={settingsForm.keywordBin}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, keywordBin: e.target.value })}
+                    placeholder="Context keywords for AI (comma-separated)..."
+                    rows={3}
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Additional context keywords to help AI understand your business
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={updateSettingsMutation.isPending}
+                  data-testid="button-save-settings"
+                >
+                  {updateSettingsMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Save Settings
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Import Recipients Dialog */}
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
