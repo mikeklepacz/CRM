@@ -1249,7 +1249,9 @@ export const ehubSettings = pgTable("ehub_settings", {
 export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
-  promptInjection: text("prompt_injection"), // Global AI instructions for tone/style
+  strategyTranscript: jsonb("strategy_transcript").$type<Array<{ role: 'user' | 'assistant'; content: string }>>(), // Full AI strategy conversation
+  stepDelays: integer("step_delays").array(), // Array of delay days [0, 3, 7, 15, 31]
+  promptInjection: text("prompt_injection"), // DEPRECATED: Use strategyTranscript instead
   keywords: text("keywords"), // Additional keywords for AI context
   signature: text("signature"), // Email signature to append (overrides user default if set)
   status: varchar("status", { length: 50 }).notNull().default('draft'), // 'draft', 'preview', 'active', 'paused', 'completed', 'cancelled'
@@ -1336,9 +1338,15 @@ export const insertSequenceSchema = createInsertSchema(sequences).omit({
   sentCount: true,
   failedCount: true,
   repliedCount: true,
+  bouncedCount: true,
 }).extend({
   name: z.string().min(1, 'Sequence name is required'),
   status: z.string().default('draft'),
+  strategyTranscript: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+  })).optional(),
+  stepDelays: z.array(z.number().int().min(0)).optional(),
 });
 
 export const insertEhubSettingsSchema = createInsertSchema(ehubSettings).omit({
