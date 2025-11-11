@@ -109,7 +109,7 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
       const stateIndex = headers.indexOf('state');
       const hoursIndex = headers.indexOf('hours');
       const linkIndex = headers.indexOf('link');
-      const salesSummaryIndex = headers.indexOf('sales summary');
+      const salesSummaryIndex = headers.indexOf('sales-ready summary');
 
       if (emailIndex !== -1) {
         const storeContacts = rows
