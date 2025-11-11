@@ -19980,6 +19980,84 @@ Based on the conversation, help the user design an effective email sequence that
     }
   });
 
+  // Add contacts to sequence from All Contacts tab (admin only)
+  app.post('/api/sequences/:id/contacts', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { contacts, selectAll, search, statusFilter } = req.body;
+
+      // Check sequence exists
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      let contactsToAdd: any[] = [];
+
+      if (selectAll) {
+        // Fetch all contacts matching filter
+        const { getAllContacts } = await import('./services/ehubContactsService');
+        const { contacts: allContacts } = await getAllContacts({
+          page: 1,
+          pageSize: 99999, // Get all
+          search: search || '',
+          statusFilter: statusFilter || 'all',
+        });
+        contactsToAdd = allContacts;
+      } else {
+        // Use provided contacts array
+        contactsToAdd = contacts || [];
+      }
+
+      if (contactsToAdd.length === 0) {
+        return res.json({ message: 'No contacts to add', count: 0 });
+      }
+
+      // Prepare recipients for insertion
+      const recipients = [];
+      for (const contact of contactsToAdd) {
+        // Check if recipient already exists
+        const existing = await storage.findRecipientByEmail(id, contact.email.toLowerCase());
+        if (existing) continue;
+
+        // Use contact's timezone or default
+        const timezone = contact.timezone || 'America/New_York';
+
+        recipients.push({
+          sequenceId: id,
+          email: contact.email.toLowerCase(),
+          name: contact.name || 'Unknown',
+          link: contact.link || '',
+          salesSummary: contact.salesSummary || '',
+          businessHours: contact.hours || '',
+          timezone,
+          status: 'pending' as const,
+        });
+      }
+
+      if (recipients.length === 0) {
+        return res.json({ message: 'All contacts already in sequence', count: 0 });
+      }
+
+      // Bulk insert recipients
+      const created = await storage.addRecipients(recipients);
+
+      // Update sequence total count
+      await storage.updateSequenceStats(id, {
+        totalRecipients: (sequence.totalRecipients || 0) + created.length,
+      });
+
+      // Invalidate All Contacts cache
+      const { invalidateCache } = await import('./services/ehubContactsService');
+      invalidateCache();
+
+      res.json({ message: 'Contacts added successfully', count: created.length });
+    } catch (error: any) {
+      console.error('Error adding contacts to sequence:', error);
+      res.status(500).json({ message: error.message || 'Failed to add contacts' });
+    }
+  });
+
   // Get recipients for a sequence (admin only)
   // Enriches each recipient with contactedStatus from Commission Tracker
   app.get('/api/sequences/:id/recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {

@@ -11,7 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon, Check, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -76,6 +78,10 @@ export default function EHub() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [contactStatusFilter, setContactStatusFilter] = useState<string>('all');
+  const [selectedContacts, setSelectedContacts] = useState<EhubContact[]>([]);
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none');
+  const [isAddToSequenceDialogOpen, setIsAddToSequenceDialogOpen] = useState(false);
+  const [targetSequenceId, setTargetSequenceId] = useState<string>('');
 
   // Sequence form state
   const [name, setName] = useState("");
@@ -350,8 +356,94 @@ export default function EHub() {
     },
   });
 
+  // Add contacts to sequence mutation
+  const addContactsMutation = useMutation({
+    mutationFn: ({ sequenceId, contacts, selectAll, search, statusFilter }: {
+      sequenceId: string;
+      contacts?: EhubContact[];
+      selectAll?: boolean;
+      search?: string;
+      statusFilter?: string;
+    }) => apiRequest('POST', `/api/sequences/${sequenceId}/contacts`, {
+      contacts,
+      selectAll,
+      search,
+      statusFilter,
+    }),
+    onSuccess: (data: any) => {
+      toast({
+        title: "Contacts Added",
+        description: `${data.count} contacts added to sequence successfully.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/all-contacts'] });
+      setSelectedContacts([]);
+      setSelectAllMode('none');
+      setIsAddToSequenceDialogOpen(false);
+      setTargetSequenceId('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add contacts to sequence",
+        variant: "destructive",
+      });
+    },
+  });
+
   const resetSequenceForm = () => {
     setName("");
+  };
+
+  // Selection handlers
+  const handleToggleContact = (contact: EhubContact) => {
+    setSelectAllMode('none');
+    setSelectedContacts(prev => {
+      const isSelected = prev.some(c => c.email === contact.email);
+      if (isSelected) {
+        return prev.filter(c => c.email !== contact.email);
+      } else {
+        return [...prev, contact];
+      }
+    });
+  };
+
+  const handleSelectAllOnPage = () => {
+    if (selectAllMode === 'page') {
+      setSelectedContacts([]);
+      setSelectAllMode('none');
+    } else {
+      setSelectedContacts(allContactsData?.contacts || []);
+      setSelectAllMode('page');
+    }
+  };
+
+  const handleSelectAllMatching = () => {
+    setSelectAllMode('all');
+    setSelectedContacts([]);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedContacts([]);
+    setSelectAllMode('none');
+  };
+
+  const handleAddToSequence = () => {
+    if (!targetSequenceId) return;
+    
+    if (selectAllMode === 'all') {
+      addContactsMutation.mutate({
+        sequenceId: targetSequenceId,
+        selectAll: true,
+        search: debouncedSearch,
+        statusFilter: contactStatusFilter,
+      });
+    } else {
+      addContactsMutation.mutate({
+        sequenceId: targetSequenceId,
+        contacts: selectedContacts,
+      });
+    }
   };
 
   const handleCreateSequence = () => {
@@ -484,6 +576,13 @@ export default function EHub() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectAllMode === 'page' || selectAllMode === 'all'}
+                            onCheckedChange={handleSelectAllOnPage}
+                            data-testid="checkbox-select-all"
+                          />
+                        </TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>State</TableHead>
@@ -494,50 +593,77 @@ export default function EHub() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {allContactsData.contacts.map((contact) => (
-                        <TableRow key={contact.email} data-testid={`row-contact-${contact.email}`}>
-                          <TableCell className="font-medium">{contact.name}</TableCell>
-                          <TableCell>{contact.email}</TableCell>
-                          <TableCell>{contact.state || '—'}</TableCell>
-                          <TableCell>{contact.hours || '—'}</TableCell>
-                          <TableCell>
-                            {contact.link ? (
-                              <a
-                                href={contact.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline"
-                              >
-                                View
-                              </a>
-                            ) : (
-                              '—'
-                            )}
-                          </TableCell>
-                          <TableCell className="max-w-md truncate">
-                            {contact.salesSummary || '—'}
-                          </TableCell>
-                          <TableCell>
-                            {contact.sequenceNames.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {contact.sequenceNames.map((seqName) => (
-                                  <Badge
-                                    key={seqName}
-                                    variant="outline"
-                                    data-testid={`badge-sequence-${seqName}`}
-                                  >
-                                    {seqName}
-                                  </Badge>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {allContactsData.contacts.map((contact) => {
+                        const isSelected = selectedContacts.some(c => c.email === contact.email) || selectAllMode === 'all';
+                        return (
+                          <TableRow key={contact.email} data-testid={`row-contact-${contact.email}`}>
+                            <TableCell>
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => handleToggleContact(contact)}
+                                data-testid={`checkbox-contact-${contact.email}`}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">{contact.name}</TableCell>
+                            <TableCell>{contact.email}</TableCell>
+                            <TableCell>{contact.state || '—'}</TableCell>
+                            <TableCell>{contact.hours || '—'}</TableCell>
+                            <TableCell>
+                              {contact.link ? (
+                                <a
+                                  href={contact.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline"
+                                >
+                                  View
+                                </a>
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                            <TableCell className="max-w-md truncate">
+                              {contact.salesSummary || '—'}
+                            </TableCell>
+                            <TableCell>
+                              {contact.sequenceNames.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {contact.sequenceNames.map((seqName) => (
+                                    <Badge
+                                      key={seqName}
+                                      variant="outline"
+                                      data-testid={`badge-sequence-${seqName}`}
+                                    >
+                                      {seqName}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
+
+                  {/* Select All Matching Banner */}
+                  {selectAllMode === 'page' && allContactsData.total > allContactsData.contacts.length && (
+                    <div className="mt-4 p-3 bg-muted rounded-md flex items-center justify-between">
+                      <span className="text-sm">
+                        All {allContactsData.contacts.length} contacts on this page are selected.
+                      </span>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={handleSelectAllMatching}
+                        data-testid="button-select-all-matching"
+                      >
+                        Select all {allContactsData.total} matching contacts
+                      </Button>
+                    </div>
+                  )}
 
                   {/* Pagination */}
                   <div className="flex items-center justify-between pt-4">
@@ -569,6 +695,38 @@ export default function EHub() {
               )}
             </CardContent>
           </Card>
+
+          {/* Floating Action Bar */}
+          {(selectedContacts.length > 0 || selectAllMode === 'all') && (
+            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-primary text-primary-foreground shadow-lg rounded-lg px-6 py-4 flex items-center gap-4 z-50">
+              <div className="flex items-center gap-2">
+                <Check className="w-5 h-5" />
+                <span className="font-medium">
+                  {selectAllMode === 'all'
+                    ? `All ${allContactsData?.total || 0} matching contacts selected`
+                    : `${selectedContacts.length} contact${selectedContacts.length !== 1 ? 's' : ''} selected`}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsAddToSequenceDialogOpen(true)}
+                  data-testid="button-add-to-sequence"
+                >
+                  Add to Sequence
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearSelection}
+                  data-testid="button-clear-selection"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* Sequences Tab */}
@@ -1477,6 +1635,70 @@ export default function EHub() {
             >
               {testSendMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Send Test
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add to Sequence Dialog */}
+      <Dialog open={isAddToSequenceDialogOpen} onOpenChange={setIsAddToSequenceDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Contacts to Sequence</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {selectAllMode === 'all'
+                ? `Add all ${allContactsData?.total || 0} matching contacts to a sequence`
+                : `Add ${selectedContacts.length} selected contact${selectedContacts.length !== 1 ? 's' : ''} to a sequence`}
+            </p>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="targetSequence">Select Sequence</Label>
+              <Select value={targetSequenceId} onValueChange={setTargetSequenceId}>
+                <SelectTrigger id="targetSequence" data-testid="select-target-sequence">
+                  <SelectValue placeholder="Choose a sequence..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {sequences?.map((sequence) => (
+                    <SelectItem
+                      key={sequence.id}
+                      value={sequence.id}
+                      data-testid={`option-sequence-${sequence.id}`}
+                    >
+                      {sequence.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectAllMode === 'all' && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Bulk Add Confirmation</AlertTitle>
+                <AlertDescription>
+                  This will add all {allContactsData?.total || 0} contacts matching your current filters to the selected sequence. Duplicates will be automatically skipped.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddToSequenceDialogOpen(false);
+                setTargetSequenceId('');
+              }}
+              data-testid="button-cancel-add-to-sequence"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddToSequence}
+              disabled={!targetSequenceId || addContactsMutation.isPending}
+              data-testid="button-submit-add-to-sequence"
+            >
+              {addContactsMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Add to Sequence
             </Button>
           </div>
         </DialogContent>

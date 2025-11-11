@@ -83,52 +83,91 @@ export async function getAllContacts(options: {
 }
 
 async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
-  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
-  
-  if (!storeSheet) {
-    throw new Error('Store Database sheet not configured');
-  }
-
-  const sheetData = await googleSheets.readSheetData(
-    storeSheet.spreadsheetId,
-    `${storeSheet.sheetName}!A:ZZ`
-  );
-
-  if (!sheetData || sheetData.length === 0) {
-    return [];
-  }
-
-  const headers = sheetData[0].map((h: string) => h.toLowerCase().trim());
-  const rows = sheetData.slice(1);
-
-  const nameIndex = headers.indexOf('name');
-  const emailIndex = headers.indexOf('email');
-  const stateIndex = headers.indexOf('state');
-  const hoursIndex = headers.indexOf('hours');
-  const linkIndex = headers.indexOf('link');
-  const salesSummaryIndex = headers.indexOf('sales summary');
-
-  if (emailIndex === -1) {
-    throw new Error('Email column not found in Store Database');
-  }
-
-  const contactsFromSheet: Array<{
+  const allContacts: Array<{
     name: string;
     email: string;
     state?: string;
     hours?: string;
     link?: string;
     salesSummary?: string;
-  }> = rows
-    .filter((row: any[]) => row[emailIndex] && row[emailIndex].includes('@'))
-    .map((row: any[]) => ({
-      name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
-      email: row[emailIndex].trim().toLowerCase(),
-      state: stateIndex !== -1 ? row[stateIndex] : undefined,
-      hours: hoursIndex !== -1 ? row[hoursIndex] : undefined,
-      link: linkIndex !== -1 ? row[linkIndex] : undefined,
-      salesSummary: salesSummaryIndex !== -1 ? row[salesSummaryIndex] : undefined,
-    }));
+  }> = [];
+
+  const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+  
+  if (storeSheet) {
+    const storeData = await googleSheets.readSheetData(
+      storeSheet.spreadsheetId,
+      `${storeSheet.sheetName}!A:ZZ`
+    );
+
+    if (storeData && storeData.length > 0) {
+      const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
+      const rows = storeData.slice(1);
+
+      const nameIndex = headers.indexOf('name');
+      const emailIndex = headers.indexOf('email');
+      const stateIndex = headers.indexOf('state');
+      const hoursIndex = headers.indexOf('hours');
+      const linkIndex = headers.indexOf('link');
+      const salesSummaryIndex = headers.indexOf('sales summary');
+
+      if (emailIndex !== -1) {
+        const storeContacts = rows
+          .filter((row: any[]) => row[emailIndex] && row[emailIndex].includes('@'))
+          .map((row: any[]) => ({
+            name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
+            email: row[emailIndex].trim().toLowerCase(),
+            state: stateIndex !== -1 ? row[stateIndex] : undefined,
+            hours: hoursIndex !== -1 ? row[hoursIndex] : undefined,
+            link: linkIndex !== -1 ? row[linkIndex] : undefined,
+            salesSummary: salesSummaryIndex !== -1 ? row[salesSummaryIndex] : undefined,
+          }));
+        allContacts.push(...storeContacts);
+      }
+    }
+  }
+
+  const commissionSheet = await storage.getGoogleSheetByPurpose('commissions');
+  
+  if (commissionSheet) {
+    const commissionData = await googleSheets.readSheetData(
+      commissionSheet.spreadsheetId,
+      `${commissionSheet.sheetName}!A:ZZ`
+    );
+
+    if (commissionData && commissionData.length > 0) {
+      const headers = commissionData[0];
+      const rows = commissionData.slice(1);
+
+      const pocEmailIndex = headers.findIndex((h: string) => h.trim() === 'POC EMAIL');
+      const linkIndex = headers.findIndex((h: string) => h.toLowerCase().trim() === 'link');
+      const nameIndex = headers.findIndex((h: string) => h.toLowerCase().trim() === 'name');
+      const stateIndex = headers.findIndex((h: string) => h.toLowerCase().trim() === 'state');
+
+      if (pocEmailIndex !== -1) {
+        const commissionContacts = rows
+          .filter((row: any[]) => row[pocEmailIndex] && row[pocEmailIndex].includes('@'))
+          .map((row: any[]) => ({
+            name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
+            email: row[pocEmailIndex].trim().toLowerCase(),
+            state: stateIndex !== -1 ? row[stateIndex] : undefined,
+            hours: undefined,
+            link: linkIndex !== -1 ? row[linkIndex] : undefined,
+            salesSummary: undefined,
+          }));
+        allContacts.push(...commissionContacts);
+      }
+    }
+  }
+
+  const emailMap = new Map<string, typeof allContacts[0]>();
+  allContacts.forEach(contact => {
+    if (!emailMap.has(contact.email)) {
+      emailMap.set(contact.email, contact);
+    }
+  });
+
+  const contactsFromSheet = Array.from(emailMap.values());
 
   const uniqueEmails = [...new Set(contactsFromSheet.map(c => c.email))];
 
