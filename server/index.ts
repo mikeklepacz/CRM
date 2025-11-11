@@ -3,6 +3,9 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { callDispatcher } from "./call_dispatcher";
 import { voiceProxyServer } from "./voice-proxy.js";
+import { startJobProcessor } from "./analysis-job-processor";
+import { renewCalendarWatchOnStartup } from "./calendarSync";
+import { startEmailQueueProcessor } from "./services/emailQueue";
 
 const app = express();
 
@@ -10,7 +13,7 @@ const app = express();
 app.set('trust proxy', true);
 
 // Capture raw body for webhook signature validation
-app.use(express.json({ 
+app.use(express.json({
   limit: '10mb',
   verify: (req: any, res, buf, encoding) => {
     // Store raw body for webhook signature validation
@@ -84,7 +87,13 @@ app.use((req, res, next) => {
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    // Start background job processor for AI analysis
+    startJobProcessor();
+
+    // Start E-Hub email queue processor
+    startEmailQueueProcessor();
+
+    console.log(`${new Date().toLocaleTimeString()} [express] serving on port ${port}`);
 
     setInterval(() => {
       callDispatcher.processQueuedCalls().catch(err => {
