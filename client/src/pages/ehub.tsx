@@ -1053,6 +1053,26 @@ export default function EHub() {
                       </p>
                     )}
                     
+                    {/* Validation feedback */}
+                    {stepDelays.length > 0 && (() => {
+                      const hasNegative = stepDelays.some((d) => d < 0);
+                      const notAscending = stepDelays.some((d, i) => i > 0 && d <= stepDelays[i - 1]);
+                      const isInvalid = hasNegative || notAscending;
+                      
+                      if (isInvalid) {
+                        return (
+                          <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription className="text-xs">
+                              {hasNegative && "All delays must be non-negative. "}
+                              {notAscending && "Delays must be strictly ascending."}
+                            </AlertDescription>
+                          </Alert>
+                        );
+                      }
+                      return null;
+                    })()}
+                    
                     <div className="flex gap-2 pt-2">
                       <Button
                         variant="outline"
@@ -1067,8 +1087,28 @@ export default function EHub() {
                         Add Delay
                       </Button>
                       <Button
-                        onClick={() => saveStepDelaysMutation.mutate(stepDelays)}
-                        disabled={saveStepDelaysMutation.isPending || stepDelays.length === 0}
+                        onClick={() => {
+                          // Validate before saving
+                          const hasNegative = stepDelays.some((d) => d < 0);
+                          const notAscending = stepDelays.some((d, i) => i > 0 && d <= stepDelays[i - 1]);
+                          
+                          if (hasNegative || notAscending) {
+                            toast({
+                              title: "Invalid Delays",
+                              description: "All delays must be non-negative and strictly ascending",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          
+                          saveStepDelaysMutation.mutate(stepDelays);
+                        }}
+                        disabled={
+                          saveStepDelaysMutation.isPending || 
+                          stepDelays.length === 0 ||
+                          stepDelays.some((d) => d < 0) ||
+                          stepDelays.some((d, i) => i > 0 && d <= stepDelays[i - 1])
+                        }
                         data-testid="button-save-delays"
                         className="flex-1"
                       >
@@ -1151,7 +1191,32 @@ export default function EHub() {
                             ) : (
                               <div className="space-y-2">
                                 <Button
-                                  onClick={() => updateSequenceStatusMutation.mutate('active')}
+                                  onClick={() => {
+                                    // Double-check validation before activating
+                                    const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
+                                    const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0) && 
+                                      stepDelays.every((d, i) => i === 0 || d > stepDelays[i - 1]);
+                                    
+                                    if (!hasMessages) {
+                                      toast({
+                                        title: "Cannot Activate",
+                                        description: "Add at least one strategy message before activating",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+                                    
+                                    if (!hasValidDelays) {
+                                      toast({
+                                        title: "Cannot Activate",
+                                        description: "Configure valid step delays (non-negative, ascending) before activating",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+                                    
+                                    updateSequenceStatusMutation.mutate('active');
+                                  }}
                                   disabled={!canActivate || updateSequenceStatusMutation.isPending}
                                   data-testid="button-activate-sequence"
                                   className="w-full"
@@ -1166,7 +1231,7 @@ export default function EHub() {
                                     <AlertCircle className="h-4 w-4" />
                                     <AlertDescription className="text-xs">
                                       {!hasMessages && "Add at least one strategy message. "}
-                                      {!hasValidDelays && "Configure step delays before activating."}
+                                      {!hasValidDelays && "Configure valid step delays (non-negative, ascending)."}
                                     </AlertDescription>
                                   </Alert>
                                 )}
