@@ -102,14 +102,14 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
   const rows = sheetData.slice(1);
 
   const nameIndex = headers.indexOf('name');
-  const emailIndex = headers.indexOf('poc email');
+  const emailIndex = headers.indexOf('email');
   const stateIndex = headers.indexOf('state');
   const hoursIndex = headers.indexOf('hours');
   const linkIndex = headers.indexOf('link');
   const salesSummaryIndex = headers.indexOf('sales summary');
 
   if (emailIndex === -1) {
-    throw new Error('POC Email column not found in Store Database');
+    throw new Error('Email column not found in Store Database');
   }
 
   const contactsFromSheet: Array<{
