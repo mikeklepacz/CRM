@@ -43,6 +43,8 @@ interface EhubSettings {
   dailyEmailLimit: number;
   sendingHoursStart: number;
   sendingHoursEnd: number;
+  clientWindowStartOffset: number;
+  clientWindowEndHour: number;
   promptInjection: string;
   keywordBin: string;
   skipWeekends: boolean;
@@ -281,6 +283,8 @@ export default function EHub() {
     dailyEmailLimit: 200,
     sendingHoursStart: 9,
     sendingHoursEnd: 14,
+    clientWindowStartOffset: 1.0,
+    clientWindowEndHour: 14,
     promptInjection: "",
     keywordBin: "",
     skipWeekends: true,
@@ -1805,30 +1809,76 @@ export default function EHub() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="startHour">Sending Hours Start (24h format)</Label>
-                    <Input
-                      id="startHour"
-                      data-testid="input-settings-start-hour"
-                      type="number"
-                      value={settingsForm.sendingHoursStart}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, sendingHoursStart: parseInt(e.target.value) || 9 })}
-                      min={0}
-                      max={23}
-                    />
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Company Time Range</h3>
+                  <p className="text-sm text-muted-foreground -mt-2">
+                    Your sending window (when your team can send emails)
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="startHour">Start Hour (24h format)</Label>
+                      <Input
+                        id="startHour"
+                        data-testid="input-settings-start-hour"
+                        type="number"
+                        value={settingsForm.sendingHoursStart}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, sendingHoursStart: parseInt(e.target.value) || 9 })}
+                        min={0}
+                        max={23}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="endHour">End Hour (24h format)</Label>
+                      <Input
+                        id="endHour"
+                        data-testid="input-settings-end-hour"
+                        type="number"
+                        value={settingsForm.sendingHoursEnd}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, sendingHoursEnd: parseInt(e.target.value) || 14 })}
+                        min={0}
+                        max={23}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="endHour">Sending Hours End (24h format)</Label>
-                    <Input
-                      id="endHour"
-                      data-testid="input-settings-end-hour"
-                      type="number"
-                      value={settingsForm.sendingHoursEnd}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, sendingHoursEnd: parseInt(e.target.value) || 14 })}
-                      min={0}
-                      max={23}
-                    />
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Client Time Range</h3>
+                  <p className="text-sm text-muted-foreground -mt-2">
+                    Client's receiving window (when emails are delivered in their timezone)
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="clientStartOffset">Start Offset After Opening (hours)</Label>
+                      <Input
+                        id="clientStartOffset"
+                        data-testid="input-settings-client-start-offset"
+                        type="number"
+                        step="0.25"
+                        value={settingsForm.clientWindowStartOffset}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, clientWindowStartOffset: parseFloat(e.target.value) || 1.0 })}
+                        min={0}
+                        max={24}
+                      />
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Hours after business opens (e.g., 1.0 = 1 hour after)
+                      </p>
+                    </div>
+                    <div>
+                      <Label htmlFor="clientEndHour">Cutoff Hour (local time)</Label>
+                      <Input
+                        id="clientEndHour"
+                        data-testid="input-settings-client-end-hour"
+                        type="number"
+                        value={settingsForm.clientWindowEndHour}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, clientWindowEndHour: parseInt(e.target.value) || 14 })}
+                        min={0}
+                        max={23}
+                      />
+                      <p className="text-sm text-muted-foreground mt-1">
+                        24h format (e.g., 14 = 2 PM local time)
+                      </p>
+                    </div>
                   </div>
                 </div>
 
