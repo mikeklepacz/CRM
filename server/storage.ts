@@ -171,7 +171,7 @@ import {
 import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, gt, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from 'uuid';
-import { addDays } from 'date-fns';
+import { addDays, addMilliseconds } from 'date-fns';
 
 export interface IStorage {
   // User operations - Required for Replit Auth
@@ -3356,11 +3356,17 @@ export class DatabaseStorage implements IStorage {
           // Calculate next send time for subsequent steps
           if (step < totalSteps) {
             const delayDays = stepDelays[step]; // Index matches step number (stepDelays[1] = delay after step 1)
-            nextSendTime = addDays(nextSendTime, delayDays);
+            // Convert fractional days to milliseconds (e.g., 0.0035 days = 5 minutes)
+            // Guard against null/undefined/NaN and ensure non-negative
+            const safeDays = typeof delayDays === 'number' && Number.isFinite(delayDays) ? Math.max(delayDays, 0) : 0;
+            const delayMs = safeDays * 24 * 60 * 60 * 1000;
+            nextSendTime = addMilliseconds(nextSendTime, delayMs);
           } else if (recipient.repeatLastStep) {
             // If repeat last step is enabled, show one more occurrence
             const lastDelay = stepDelays[stepDelays.length - 1];
-            nextSendTime = addDays(nextSendTime, lastDelay);
+            const safeDays = typeof lastDelay === 'number' && Number.isFinite(lastDelay) ? Math.max(lastDelay, 0) : 0;
+            const delayMs = safeDays * 24 * 60 * 60 * 1000;
+            nextSendTime = addMilliseconds(nextSendTime, delayMs);
             
             individualSends.push({
               recipientId: recipient.id,
@@ -3441,6 +3447,79 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(sequenceRecipients.id, id))
       .returning();
+    return updated;
+  }
+
+  async sendRecipientNow(id: string): Promise<SequenceRecipient> {
+    // Get current recipient to validate
+    const [recipient] = await db
+      .select()
+      .from(sequenceRecipients)
+      .where(eq(sequenceRecipients.id, id))
+      .limit(1);
+    
+    if (!recipient) {
+      throw new Error(`Recipient ${id} not found`);
+    }
+    
+    // Only allow sending for pending/in_sequence recipients
+    if (recipient.status !== 'pending' && recipient.status !== 'in_sequence') {
+      throw new Error(`Cannot send: recipient status is ${recipient.status}`);
+    }
+    
+    // Force immediate send by setting nextSendAt to 1 second ago (triggers job runner)
+    const oneSecondAgo = new Date(Date.now() - 1000);
+    const [updated] = await db
+      .update(sequenceRecipients)
+      .set({ 
+        nextSendAt: oneSecondAgo,
+        updatedAt: new Date()
+      })
+      .where(eq(sequenceRecipients.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async delayRecipient(id: string, hours: number): Promise<SequenceRecipient> {
+    // Validate hours input
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 720) {
+      throw new Error('Hours must be a finite number between 0 and 720 (30 days)');
+    }
+    
+    // Get current recipient
+    const [recipient] = await db
+      .select()
+      .from(sequenceRecipients)
+      .where(eq(sequenceRecipients.id, id))
+      .limit(1);
+    
+    if (!recipient) {
+      throw new Error(`Recipient ${id} not found`);
+    }
+    
+    // Only allow delaying for pending/in_sequence recipients with a scheduled send
+    if (recipient.status !== 'pending' && recipient.status !== 'in_sequence') {
+      throw new Error(`Cannot delay: recipient status is ${recipient.status}`);
+    }
+    
+    if (!recipient.nextSendAt) {
+      throw new Error('Cannot delay: recipient has no scheduled send time');
+    }
+    
+    // Add hours to nextSendAt
+    const delayMs = hours * 60 * 60 * 1000;
+    const newSendTime = new Date(recipient.nextSendAt.getTime() + delayMs);
+    
+    const [updated] = await db
+      .update(sequenceRecipients)
+      .set({ 
+        nextSendAt: newSendTime,
+        updatedAt: new Date()
+      })
+      .where(eq(sequenceRecipients.id, id))
+      .returning();
+    
     return updated;
   }
 

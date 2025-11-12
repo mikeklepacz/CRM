@@ -19613,6 +19613,36 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Send Now - Force immediate send (admin only)
+  app.post('/api/ehub/recipients/:id/send-now', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const recipient = await storage.sendRecipientNow(id);
+      res.json(recipient);
+    } catch (error: any) {
+      console.error('Error sending email now:', error);
+      res.status(500).json({ message: error.message || 'Failed to send email now' });
+    }
+  });
+
+  // Delay - Push back send time by X hours (admin only)
+  app.patch('/api/ehub/recipients/:id/delay', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { hours } = req.body;
+      
+      if (typeof hours !== 'number' || hours <= 0) {
+        return res.status(400).json({ message: 'Invalid hours value' });
+      }
+      
+      const recipient = await storage.delayRecipient(id, hours);
+      res.json(recipient);
+    } catch (error: any) {
+      console.error('Error delaying recipient:', error);
+      res.status(500).json({ message: error.message || 'Failed to delay send' });
+    }
+  });
+
   // Remove recipient from sequence (admin only) - complete removal
   app.delete('/api/ehub/recipients/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -184,6 +184,55 @@ function QueueView() {
     onError: (error: any) => {
       toast({
         title: 'Failed to remove recipient',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Send Now mutation
+  const sendNowMutation = useMutation({
+    mutationFn: async (recipientId: string) => {
+      return await apiRequest(`/api/ehub/recipients/${recipientId}/send-now`, 'POST');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      toast({
+        title: 'Email sending now',
+        description: 'Overriding schedule and sending immediately',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to send email',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Delay mutation
+  const [delayDialog, setDelayDialog] = useState<{ open: boolean; recipientId: string | null; hours: number }>({
+    open: false,
+    recipientId: null,
+    hours: 1,
+  });
+
+  const delayMutation = useMutation({
+    mutationFn: async ({ recipientId, hours }: { recipientId: string; hours: number }) => {
+      return await apiRequest(`/api/ehub/recipients/${recipientId}/delay`, 'PATCH', { hours });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      toast({
+        title: 'Send delayed',
+        description: `Pushed back by ${variables.hours} hour${variables.hours !== 1 ? 's' : ''}`,
+      });
+      setDelayDialog({ open: false, recipientId: null, hours: 1 });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to delay send',
         description: error.message,
         variant: 'destructive',
       });
@@ -405,6 +454,21 @@ function QueueView() {
                                 Skip This Step
                               </DropdownMenuItem>
                               <DropdownMenuItem
+                                onClick={() => sendNowMutation.mutate(item.recipientId)}
+                                disabled={sendNowMutation.isPending}
+                                data-testid={`action-send-now-${item.recipientId}`}
+                              >
+                                <Send className="mr-2 h-4 w-4" />
+                                Send Now
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setDelayDialog({ open: true, recipientId: item.recipientId, hours: 1 })}
+                                data-testid={`action-delay-${item.recipientId}`}
+                              >
+                                <Clock className="mr-2 h-4 w-4" />
+                                Delay by X hours
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 onClick={() => removeMutation.mutate(item.recipientId)}
                                 disabled={removeMutation.isPending}
                                 className="text-destructive"
@@ -425,6 +489,59 @@ function QueueView() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delay Dialog */}
+      <Dialog open={delayDialog.open} onOpenChange={(open) => setDelayDialog({ ...delayDialog, open })}>
+        <DialogContent data-testid="dialog-delay">
+          <DialogHeader>
+            <DialogTitle>Delay Email Send</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="delay-hours">Delay by (hours)</Label>
+              <Input
+                id="delay-hours"
+                type="number"
+                min="0.1"
+                step="0.5"
+                value={delayDialog.hours}
+                onChange={(e) => setDelayDialog({ ...delayDialog, hours: parseFloat(e.target.value) || 1 })}
+                data-testid="input-delay-hours"
+              />
+              <p className="text-sm text-muted-foreground mt-1">
+                Pushes back the next send time for this recipient
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setDelayDialog({ open: false, recipientId: null, hours: 1 })}
+                data-testid="button-cancel-delay"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (delayDialog.recipientId) {
+                    delayMutation.mutate({ recipientId: delayDialog.recipientId, hours: delayDialog.hours });
+                  }
+                }}
+                disabled={delayMutation.isPending || !delayDialog.recipientId}
+                data-testid="button-confirm-delay"
+              >
+                {delayMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Delaying...
+                  </>
+                ) : (
+                  <>Delay Send</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
