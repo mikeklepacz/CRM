@@ -1,0 +1,146 @@
+Delivered-To: mikeklepacz@gmail.com
+Received: by 2002:a05:6a10:6890:b0:67c:8f86:d50d with SMTP id e16csp350140pxw;
+        Wed, 12 Nov 2025 09:01:20 -0800 (PST)
+X-Received: by 2002:a05:690c:6301:b0:788:bda:4895 with SMTP id 00721157ae682-788135e4579mr33317487b3.3.1762966880384;
+        Wed, 12 Nov 2025 09:01:20 -0800 (PST)
+ARC-Seal: i=1; a=rsa-sha256; t=1762966880; cv=none;
+        d=google.com; s=arc-20240605;
+        b=dIlFHT1CFkFZCG9WdoS1I6Q9tQTJJqO2QARGkCVmKW4VhA/3AwBz9bejrxvxc0DN/R
+         XJ/ROITTaP0q4+QzL7lIphwB8q//yo/Hf8gH9VMCvJZm/wTGbOX+q7DtO4QDFDlXegyP
+         UZQzSnPyMqn0DwhBFk6F865ZsHElkuf/ygOCwloXWacaszGHA//i75xCaMdTZhJrFDar
+         0IKD+mCDv2YknqSySnFHdKJD7Ns4H6qpaLPekKgnPu2rY5SDh5ssc3KPLDrQuSCromLx
+         7dKxL0BPVzRaJxSiowEB7lH8thhHUUHmRtABgKfIf+PSBZustNzPFP3N60F9hncZd8Hp
+         U45Q==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=to:subject:message-id:date:from:mime-version:dkim-signature;
+        bh=0X0IFu59IWzGxBwOwBDedYU6FUsaN2OXhMPkJARSn9U=;
+        fh=3T5a4Sm9sttBHP2NSaDFqJL6RXGpdkjG8QZnfmAh5CY=;
+        b=DavJBBHPZk4OOTBZskrhyjN1pQj+wMZOv37UR+JI6jvRRXUKtsQxqw54SU+WVj2mrj
+         NgRysrWWycTM4bzNVGBuz5OGlnnuxoQCnVem/JWJWzaM/GxCQdIF24AcUqo5y4zh4CxU
+         5DLMyotH+eSSmAG/qFDqnlahbBfNcnI1Xb+2/jPiXfTL7CubTbV0jx0xb1A4IzPVaKux
+         th1QArZiNr+otb1ZC29vdtfyO2jjTCJVcsOODU6nLKIND4ORvudhETrE4cPRIWcR4Wq5
+         wPvOyCCFA9Z8tBatMrHdIvrZFfrzIIsL+9vV47cQOXGPtfP8Yxk9jR2gEyZJkXxejgMk
+         a5Vg==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@naturalmaterials.eu header.s=google header.b=SRMU8aLg;
+       spf=pass (google.com: domain of michael@naturalmaterials.eu designates 209.85.220.41 as permitted sender) smtp.mailfrom=michael@naturalmaterials.eu;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=naturalmaterials.eu;
+       dara=pass header.i=@gmail.com
+Return-Path: <michael@naturalmaterials.eu>
+Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])
+        by mx.google.com with SMTPS id 00721157ae682-78812a60b40sor17155877b3.9.2025.11.12.09.01.19
+        for <mikeklepacz@gmail.com>
+        (Google Transport Security);
+        Wed, 12 Nov 2025 09:01:20 -0800 (PST)
+Received-SPF: pass (google.com: domain of michael@naturalmaterials.eu designates 209.85.220.41 as permitted sender) client-ip=209.85.220.41;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@naturalmaterials.eu header.s=google header.b=SRMU8aLg;
+       spf=pass (google.com: domain of michael@naturalmaterials.eu designates 209.85.220.41 as permitted sender) smtp.mailfrom=michael@naturalmaterials.eu;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=naturalmaterials.eu;
+       dara=pass header.i=@gmail.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=naturalmaterials.eu; s=google; t=1762966879; x=1763571679; dara=google.com;
+        h=to:subject:message-id:date:from:mime-version:from:to:cc:subject
+         :date:message-id:reply-to;
+        bh=0X0IFu59IWzGxBwOwBDedYU6FUsaN2OXhMPkJARSn9U=;
+        b=SRMU8aLgjLLvIVUhLezYnZIC6YNj0ztc+B/HvZqF0qybK9e2YU8j7xM1mbb3pJtXBZ
+         QlCQhiCxpSrE7QCLIH1JPn7lNapU+YP27zNYo9NzeW/fe6tkFjAkxE10ac8gxjEH9VrJ
+         mKBNWWtGaj+og8FPAfc7J8jmOK+b0cY3QH+3t0Z6zI87tqDi0LLDZhp8kM9sjELcGYyZ
+         w/yvExKfyELSdqvN2zPLl873vSmMtyx3v31cPbpqYcUV2zftSm2QbKhzaOKNa3Dw6Tes
+         zyCnhz5smXHeZU7QoHNNpmTkv95yYyDd5Jg7V4pKE2HOwwAnTvqtt2paAvo+FhyXq8/J
+         nfBg==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20230601; t=1762966879; x=1763571679;
+        h=to:subject:message-id:date:from:mime-version:x-gm-gg
+         :x-gm-message-state:from:to:cc:subject:date:message-id:reply-to;
+        bh=0X0IFu59IWzGxBwOwBDedYU6FUsaN2OXhMPkJARSn9U=;
+        b=YxbrPugVLpHVfMj+tkCBN+i/GDSLSngVpC1G/Tjt920b838lwrqGkcu1GLgwpuBePL
+         9Q1S4kyOMHmWq+ooUcSq89aJ4mZoM7zz5RpBcTUykNXI1m84FlY7S/tGljnA1YrC7RV+
+         wm9xTwTFECeh233cx4hgo9nGFAH9eBoiLS3V52LnCMuhe2tM1/zY8NyopXGjYLohbz5f
+         E+bIeNK71LUstvUQquEafhzIy8EE4jz7IlpdUxF1Ti/2UDcJXH6TLHJmRzJizPqBxNEK
+         746xznF5Al5zxW5861yqGf+hU+XjVksxDGdm090R0Mk71w8MtYTTi+PXXTulMU0bns9Y
+         rjjQ==
+X-Gm-Message-State: AOJu0YyYnEbZQERlE5OAMw0Ksr4jsL0UALqA904ro9g3NKKKv+kC5RfT FG96FJgO/8dBsvJZFmvDX3GASiMF9drQ+AVzhU+rMk029Q4X7qxmT5FjqI8gayW/ab6PDRbD9f2 nrIjXSuTNKMMvWSVceWy3kXh0zS+qOwaA1JUQgxiIOa2eJXiHpSSQ
+X-Gm-Gg: ASbGncu2zsxEogOPlXv4vgXRuXU1OIiLEkwFlKUCcP/g67uL2PlC59J/1ndlqVPfbM6 zBdw0qSp0Oph9b+pYe2v+lHSsHI8VUXZae6MiUssSYjdyuNRFYNgM3LvOjBxdG+3/HJ2idrWgNg WiulWOHfeLXJj7S+AIvYDwwU6pzJixvyCQ71165UOnPn2eALunztA/+T2eRF/yWVJQJdLemD3al jdHkLJy1LcoFZ37wD7QAP5dd0D7ldCUyt5RVapv9dizeUk7zdzOH0xddk5d
+X-Google-Smtp-Source: AGHT+IGMkosTHzlaofX+juDwrxXnnLPNo9nbBu2N6o7vKqDPTz4r9yAsVwcDMQgZ4mK1IYrhVylJPGhYQyVeavjvDBw=
+MIME-Version: 1.0
+X-Received: by 2002:a05:690e:1642:b0:63f:a3d8:1b15 with SMTP id 956f58d0204a3-64101a0e15dmr2492957d50.1.1762966879263; Wed, 12 Nov 2025 09:01:19 -0800 (PST)
+Received: from 278986325087 named unknown by gmailapi.google.com with HTTPREST; Wed, 12 Nov 2025 09:01:18 -0800
+Received: from 278986325087 named unknown by gmailapi.google.com with HTTPREST; Wed, 12 Nov 2025 09:01:18 -0800
+From: michael@naturalmaterials.eu
+Date: Wed, 12 Nov 2025 09:01:18 -0800
+X-Gm-Features: AWmQ_bnZUWPLDq-PHg0qCGLPcx0i6bWw9jYsKC3K54YKqOU1s7Q_XkZiKirQRdg
+Message-ID: <CAHh8mdbVb1jTPBed+nOVy2HS38vrqsDrkNmw+OqkywMcVJeOFw@mail.gmail.com>
+Subject: Elevating Your Store's Story</p>
+To: mikeklepacz@gmail.com
+Content-Type: multipart/alternative; boundary="00000000000096ea91064368b658"
+
+--00000000000096ea91064368b658
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+```html
+
+Subject: Elevating Your Store's Story
+
+Hi,
+I found your email on Leafly and wanted to reach out. Most days, I=E2=80=99=
+m
+working with raw European hemp and local beeswax, crafting products that
+embody a new standard for our industry.
+
+At Natural Materials Unlimited, we believe in honest materials and
+meaningful partnerships. We're excited about our collaboration with The
+Last Prisoner Project this season =E2=80=94 it=E2=80=99s about impact as mu=
+ch as it is
+about craft.
+
+If you're the right person to discuss wholesale accessories, that's
+great=E2=80=94if not, I'd appreciate being introduced to whoever handles pr=
+oduct
+sourcing. I'm curious about what you're building next and how we might
+elevate your shop's story together.
+
+--
+Best Regards,
+Michael Klepacz
+Let's Meet! Ask me about a video call and virtual tour!
+Founder - Natural Materials Unlimited
++48 662 331 212 (Whatsapp)
++1 (517) 312-3530 USA
+```
+
+--00000000000096ea91064368b658
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+```html
+<p>Subject: Elevating Your Store&#39;s Story</p>
+
+<p>Hi,<br>
+I found your email on Leafly and wanted to reach out. Most days, I=E2=80=99=
+m working with raw European hemp and local beeswax, crafting products that =
+embody a new standard for our industry.</p>
+
+<p>At Natural Materials Unlimited, we believe in honest materials and meani=
+ngful partnerships. We&#39;re excited about our collaboration with The Last=
+ Prisoner Project this season =E2=80=94 it=E2=80=99s about impact as much a=
+s it is about craft.</p>
+
+<p>If you&#39;re the right person to discuss wholesale accessories, that&#3=
+9;s great=E2=80=94if not, I&#39;d appreciate being introduced to whoever ha=
+ndles product sourcing. I&#39;m curious about what you&#39;re building next=
+ and how we might elevate your shop&#39;s story together.</p>
+
+<p>--<br>
+Best Regards,<br>
+Michael Klepacz<br>
+Let&#39;s Meet! Ask me about a video call and virtual tour!<br>
+Founder - Natural Materials Unlimited<br>
++48 662 331 212 (Whatsapp)<br>
++1 (517) 312-3530 USA
+</p>
+```
+
+--00000000000096ea91064368b658--

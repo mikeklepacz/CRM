@@ -225,7 +225,7 @@ Generate a professional cold email with subject and body. Output HTML formatted 
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: 'Generate a cold outreach email for this recipient based on the campaign strategy and context provided.' }
+        { role: 'user', content: 'Generate a cold outreach email for this recipient. Output format:\n\nSubject: [subject line here]\n\n[email body HTML only - do NOT repeat the subject line in the body]' }
       ],
       temperature: 0.8,
       max_tokens: 500,
@@ -234,7 +234,7 @@ Generate a professional cold email with subject and body. Output HTML formatted 
     const generatedContent = response.choices[0]?.message?.content || '';
     
     // Parse subject and body from response
-    // Expected format: Subject: ... \n\n Body: ...
+    // Expected format: Subject: ... \n\n [body]
     const subjectMatch = generatedContent.match(/Subject:\s*(.+?)(\n|$)/i);
     const bodyMatch = generatedContent.match(/Body:\s*([\s\S]+)/i) || 
                       generatedContent.match(/^(?:Subject:.*?\n\n)?([\s\S]+)/);
@@ -242,8 +242,9 @@ Generate a professional cold email with subject and body. Output HTML formatted 
     let subject = subjectMatch?.[1]?.trim() || 'Hemp Wick Partnership Opportunity';
     let body = bodyMatch?.[1]?.trim() || generatedContent;
 
-    // Clean up any markdown or extra formatting
+    // Clean up any markdown, extra formatting, and accidental subject duplicates
     body = body.replace(/^Body:\s*/i, '').trim();
+    body = body.replace(/^<p>\s*Subject:.*?<\/p>\s*/i, '').trim();
 
     // Add signature if provided
     if (settings.signature) {
