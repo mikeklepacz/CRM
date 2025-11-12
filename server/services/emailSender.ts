@@ -8,9 +8,20 @@ interface EmailOptions {
   subject: string;
   body: string;
   from?: string;
+  threadId?: string; // Gmail thread ID for threading
+  inReplyTo?: string; // Message-ID of email being replied to
+  references?: string; // Space-separated list of Message-IDs in conversation
 }
 
-export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+interface EmailResponse {
+  success: boolean;
+  messageId?: string; // Gmail message ID
+  threadId?: string; // Gmail thread ID
+  rfc822MessageId?: string; // Message-ID from headers for threading
+  error?: string;
+}
+
+export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
   try {
     // Get user's Gmail OAuth credentials
     const userIntegrations = await storage.getAllUserIntegrations();
@@ -37,14 +48,23 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    // Create email in RFC 2822 format
-    const email = [
+    // Build email headers
+    const headers: string[] = [
       `To: ${options.to}`,
       `Subject: ${options.subject}`,
       'Content-Type: text/html; charset=utf-8',
-      '',
-      options.body,
-    ].join('\n');
+    ];
+
+    // Add threading headers if this is a reply/follow-up
+    if (options.inReplyTo) {
+      headers.push(`In-Reply-To: ${options.inReplyTo}`);
+    }
+    if (options.references) {
+      headers.push(`References: ${options.references}`);
+    }
+
+    // Create email in RFC 2822 format
+    const email = [...headers, '', options.body].join('\r\n');
 
     // Base64 encode email
     const encodedEmail = Buffer.from(email)
@@ -53,17 +73,48 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    // Send email
+    // Send email with optional threadId
+    const requestBody: any = {
+      raw: encodedEmail,
+    };
+    if (options.threadId) {
+      requestBody.threadId = options.threadId;
+    }
+
     const response = await gmail.users.messages.send({
       userId: 'me',
-      requestBody: {
-        raw: encodedEmail,
-      },
+      requestBody,
     });
+
+    const gmailMessageId = response.data.id;
+    const gmailThreadId = response.data.threadId;
+
+    // Fetch the sent message to get the RFC 822 Message-ID header
+    let rfc822MessageId: string | undefined;
+    if (gmailMessageId) {
+      try {
+        const message = await gmail.users.messages.get({
+          userId: 'me',
+          id: gmailMessageId,
+          format: 'full',
+        });
+
+        // Extract Message-ID from headers
+        const headers = message.data.payload?.headers || [];
+        const messageIdHeader = headers.find(h => h.name?.toLowerCase() === 'message-id');
+        if (messageIdHeader?.value) {
+          rfc822MessageId = messageIdHeader.value;
+        }
+      } catch (error) {
+        console.warn('[EmailSender] Failed to fetch Message-ID header:', error);
+      }
+    }
 
     return {
       success: true,
-      messageId: response.data.id || undefined,
+      messageId: gmailMessageId,
+      threadId: gmailThreadId,
+      rfc822MessageId,
     };
   } catch (error: any) {
     console.error('[EmailSender] Error sending email:', error);

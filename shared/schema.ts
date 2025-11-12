@@ -1697,3 +1697,36 @@ export const allContactsResponseSchema = z.object({
 });
 
 export type AllContactsResponse = z.infer<typeof allContactsResponseSchema>;
+
+// Test Email Sends - for rapid testing of email threading and reply detection
+export const testEmailSends = pgTable("test_email_sends", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipientEmail: varchar("recipient_email", { length: 255 }).notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  gmailThreadId: varchar("gmail_thread_id"), // Gmail thread ID for reply detection
+  gmailMessageId: varchar("gmail_message_id"), // Gmail message ID
+  rfc822MessageId: varchar("rfc822_message_id"), // Message-ID header for threading
+  status: varchar("status", { length: 50 }).notNull().default('sent'), // 'sent', 'replied', 'error'
+  sentAt: timestamp("sent_at"), // When the test email was actually sent
+  lastCheckedAt: timestamp("last_checked_at"), // Last time reply detection ran
+  replyDetectedAt: timestamp("reply_detected_at"),
+  followUpCount: integer("follow_up_count").default(0), // How many follow-ups sent
+  lastFollowUpAt: timestamp("last_follow_up_at"),
+  errorMessage: text("error_message"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_test_email_sends_created_by").on(table.createdBy),
+  index("idx_test_email_sends_thread_id").on(table.gmailThreadId),
+  index("idx_test_email_sends_status").on(table.status),
+]);
+
+export const insertTestEmailSendSchema = createInsertSchema(testEmailSends).omit({
+  id: true,
+  createdAt: true,
+  followUpCount: true,
+});
+
+export type InsertTestEmailSend = z.infer<typeof insertTestEmailSendSchema>;
+export type TestEmailSend = typeof testEmailSends.$inferSelect;

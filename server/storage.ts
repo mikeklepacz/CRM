@@ -154,6 +154,7 @@ import {
   sequenceRecipients,
   sequenceSteps,
   sequenceRecipientMessages,
+  testEmailSends,
   type EhubSettings,
   type InsertEhubSettings,
   type Sequence,
@@ -164,6 +165,8 @@ import {
   type InsertSequenceStep,
   type SequenceRecipientMessage,
   type InsertSequenceRecipientMessage,
+  type InsertTestEmailSend,
+  type TestEmailSend,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, isNull } from "drizzle-orm";
@@ -537,6 +540,13 @@ export interface IStorage {
   
   // E-Hub Strategy Chat operations
   appendSequenceStrategyMessages(sequenceId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>, threadId?: string): Promise<Sequence>;
+
+  // Test Email Sends operations
+  createTestEmailSend(testSend: InsertTestEmailSend): Promise<TestEmailSend>;
+  updateTestEmailSendStatus(id: string, updates: Partial<InsertTestEmailSend>): Promise<TestEmailSend>;
+  getTestEmailSendByThreadId(threadId: string): Promise<TestEmailSend | undefined>;
+  getTestEmailSendById(id: string): Promise<TestEmailSend | undefined>;
+  listTestEmailSendsForUser(userId: string): Promise<TestEmailSend[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3263,6 +3273,48 @@ export class DatabaseStorage implements IStorage {
     }
 
     return result.rows[0] as Sequence;
+  }
+
+  // Test Email Sends operations
+  async createTestEmailSend(testSend: InsertTestEmailSend): Promise<TestEmailSend> {
+    const [created] = await db.insert(testEmailSends).values(testSend).returning();
+    return created;
+  }
+
+  async updateTestEmailSendStatus(id: string, updates: Partial<InsertTestEmailSend>): Promise<TestEmailSend> {
+    const [updated] = await db
+      .update(testEmailSends)
+      .set(updates)
+      .where(eq(testEmailSends.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getTestEmailSendByThreadId(threadId: string): Promise<TestEmailSend | undefined> {
+    const [testSend] = await db
+      .select()
+      .from(testEmailSends)
+      .where(eq(testEmailSends.gmailThreadId, threadId))
+      .limit(1);
+    return testSend;
+  }
+
+  async getTestEmailSendById(id: string): Promise<TestEmailSend | undefined> {
+    const [testSend] = await db
+      .select()
+      .from(testEmailSends)
+      .where(eq(testEmailSends.id, id))
+      .limit(1);
+    return testSend;
+  }
+
+  async listTestEmailSendsForUser(userId: string): Promise<TestEmailSend[]> {
+    return await db
+      .select()
+      .from(testEmailSends)
+      .where(eq(testEmailSends.createdBy, userId))
+      .orderBy(desc(testEmailSends.createdAt))
+      .limit(50); // Limit to most recent 50 test sends
   }
 }
 

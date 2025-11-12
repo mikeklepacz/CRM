@@ -20309,6 +20309,206 @@ Based on the conversation, help the user design an effective email sequence that
     }
   });
 
+  // ============================================================================
+  // Test Email Sending Routes (Admin Only)
+  // ============================================================================
+
+  // Send manual test email (bypasses queue, instant send)
+  app.post('/api/test-email/send', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const { recipientEmail, subject, body } = req.body;
+
+      if (!recipientEmail || !subject || !body) {
+        return res.status(400).json({ message: 'recipientEmail, subject, and body are required' });
+      }
+
+      // Check for Gmail integration
+      const userIntegration = await storage.getUserIntegration(userId);
+      if (!userIntegration?.gmailAccessToken) {
+        return res.status(400).json({ message: 'Gmail not connected. Please connect Gmail first.' });
+      }
+
+      // Rate limiting: 10 sends per hour per user
+      const recentSends = await storage.listTestEmailSendsForUser(userId);
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const recentCount = recentSends.filter(s => new Date(s.createdAt) > oneHourAgo).length;
+      
+      if (recentCount >= 10) {
+        return res.status(429).json({ 
+          message: 'Rate limit exceeded. Maximum 10 test emails per hour.' 
+        });
+      }
+
+      // Send email using Gmail API
+      const { sendGmailEmail } = await import('./services/emailSender');
+      const sendResult = await sendGmailEmail({
+        to: recipientEmail,
+        subject,
+        bodyHtml: body,
+        userIntegration,
+      });
+
+      // Create test email send record
+      const testSend = await storage.createTestEmailSend({
+        recipientEmail,
+        subject,
+        body,
+        gmailThreadId: sendResult.gmailThreadId,
+        gmailMessageId: sendResult.gmailMessageId,
+        rfc822MessageId: sendResult.rfc822MessageId,
+        status: 'sent',
+        createdBy: userId,
+        sentAt: new Date(),
+        lastCheckedAt: null,
+        replyDetectedAt: null,
+        followUpCount: 0,
+      });
+
+      res.json({
+        success: true,
+        testSend,
+        message: 'Test email sent successfully'
+      });
+    } catch (error: any) {
+      console.error('Error sending test email:', error);
+      res.status(500).json({ message: error.message || 'Failed to send test email' });
+    }
+  });
+
+  // Check for replies on a test email thread
+  app.get('/api/test-email/check-reply/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const testSend = await storage.getTestEmailSendById(id);
+
+      if (!testSend) {
+        return res.status(404).json({ message: 'Test email not found' });
+      }
+
+      if (testSend.createdBy !== req.user.id) {
+        return res.status(403).json({ message: 'Forbidden: Not your test email' });
+      }
+
+      if (!testSend.gmailThreadId) {
+        return res.status(400).json({ message: 'No thread ID available for this test email' });
+      }
+
+      // Check for replies
+      const { checkForReplies } = await import('./services/gmailReplyDetection');
+      const replyResult = await checkForReplies(testSend.gmailThreadId);
+
+      // Update status if reply detected
+      if (replyResult.hasReply && !testSend.replyDetectedAt) {
+        await storage.updateTestEmailSendStatus(id, {
+          status: 'replied',
+          replyDetectedAt: new Date(),
+          lastCheckedAt: new Date(),
+        });
+      } else {
+        await storage.updateTestEmailSendStatus(id, {
+          lastCheckedAt: new Date(),
+        });
+      }
+
+      res.json({
+        success: true,
+        hasReply: replyResult.hasReply,
+        replyCount: replyResult.replyCount,
+        replies: replyResult.replies,
+      });
+    } catch (error: any) {
+      console.error('Error checking for replies:', error);
+      res.status(500).json({ message: error.message || 'Failed to check for replies' });
+    }
+  });
+
+  // Send threaded follow-up to an existing test email
+  app.post('/api/test-email/send-followup/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { subject, body } = req.body;
+
+      if (!subject || !body) {
+        return res.status(400).json({ message: 'subject and body are required' });
+      }
+
+      const testSend = await storage.getTestEmailSendById(id);
+
+      if (!testSend) {
+        return res.status(404).json({ message: 'Test email not found' });
+      }
+
+      if (testSend.createdBy !== req.user.id) {
+        return res.status(403).json({ message: 'Forbidden: Not your test email' });
+      }
+
+      if (!testSend.gmailThreadId) {
+        return res.status(400).json({ message: 'No thread ID available for this test email' });
+      }
+
+      // Get threading data
+      const { getLatestMessageId, getAllMessageIds } = await import('./services/gmailReplyDetection');
+      const [latestMessageId, allMessageIds] = await Promise.all([
+        getLatestMessageId(testSend.gmailThreadId),
+        getAllMessageIds(testSend.gmailThreadId),
+      ]);
+
+      // Get user integration
+      const userIntegration = await storage.getUserIntegration(req.user.id);
+      if (!userIntegration?.gmailAccessToken) {
+        return res.status(400).json({ message: 'Gmail not connected' });
+      }
+
+      // Send threaded follow-up
+      const { sendGmailEmail } = await import('./services/emailSender');
+      const sendResult = await sendGmailEmail({
+        to: testSend.recipientEmail,
+        subject,
+        bodyHtml: body,
+        userIntegration,
+        threadId: testSend.gmailThreadId,
+        inReplyTo: latestMessageId || undefined,
+        references: allMessageIds.length > 0 ? allMessageIds.join(' ') : undefined,
+      });
+
+      // Update follow-up count
+      await storage.updateTestEmailSendStatus(id, {
+        followUpCount: (testSend.followUpCount || 0) + 1,
+        lastCheckedAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        message: 'Follow-up sent successfully',
+        threadId: sendResult.gmailThreadId,
+      });
+    } catch (error: any) {
+      console.error('Error sending follow-up:', error);
+      res.status(500).json({ message: error.message || 'Failed to send follow-up' });
+    }
+  });
+
+  // Get test email send history for current user
+  app.get('/api/test-email/history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const history = await storage.listTestEmailSendsForUser(userId);
+      res.json(history);
+    } catch (error: any) {
+      console.error('Error getting test email history:', error);
+      res.status(500).json({ message: error.message || 'Failed to get test email history' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

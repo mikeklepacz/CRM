@@ -18,8 +18,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
+import { TestTube2, RefreshCw, Reply } from "lucide-react";
 
 interface Sequence {
   id: string;
@@ -59,8 +61,22 @@ interface Recipient {
   trackerStatus: string | null;
 }
 
+interface TestEmailSend {
+  id: string;
+  recipientEmail: string;
+  subject: string;
+  body: string;
+  status: string;
+  gmailThreadId: string | null;
+  sentAt: string | null;
+  replyDetectedAt: string | null;
+  followUpCount: number;
+  createdAt: string;
+}
+
 export default function EHub() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedSequenceId, setSelectedSequenceId] = useState<string | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -89,6 +105,15 @@ export default function EHub() {
 
   // Sequence form state
   const [name, setName] = useState("");
+
+  // Test Email state
+  const [testRecipientEmail, setTestRecipientEmail] = useState("");
+  const [testSubject, setTestSubject] = useState("");
+  const [testBody, setTestBody] = useState("");
+  const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
+  const [selectedTestEmailId, setSelectedTestEmailId] = useState<string | null>(null);
+  const [followUpSubject, setFollowUpSubject] = useState("");
+  const [followUpBody, setFollowUpBody] = useState("");
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
@@ -142,6 +167,12 @@ export default function EHub() {
       if (!response.ok) throw new Error('Failed to fetch strategy chat');
       return response.json();
     },
+  });
+
+  // Fetch test email history
+  const { data: testEmailHistory, isLoading: isLoadingTestEmails } = useQuery<TestEmailSend[]>({
+    queryKey: ['/api/test-email/history'],
+    enabled: activeTab === 'test-emails' && user?.role === 'admin',
   });
 
   // Send strategy chat message mutation
@@ -390,6 +421,80 @@ export default function EHub() {
     },
   });
 
+  // Test Email Sending Mutations
+  const sendTestEmailMutation = useMutation({
+    mutationFn: (payload: { recipientEmail: string; subject: string; body: string }) => 
+      apiRequest('POST', '/api/test-email/send', payload),
+    onSuccess: () => {
+      toast({ 
+        title: "Test Email Sent",
+        description: "Your test email has been sent successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/test-email/history'] });
+      setTestRecipientEmail("");
+      setTestSubject("");
+      setTestBody("");
+    },
+    onError: (error: any) => {
+      if (error.status === 429) {
+        toast({ 
+          title: "Rate Limit Exceeded", 
+          description: "Maximum 10 test emails per hour. Please wait before sending another.",
+          variant: "destructive" 
+        });
+      } else {
+        toast({ 
+          title: "Send Failed", 
+          description: error.message || "Unable to send test email",
+          variant: "destructive" 
+        });
+      }
+    },
+  });
+
+  const checkReplyMutation = useMutation({
+    mutationFn: (id: string) => apiRequest('GET', `/api/test-email/check-reply/${id}`),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/test-email/history'] });
+      toast({
+        title: data.hasReply ? "Reply Detected" : "No Reply Yet",
+        description: data.hasReply 
+          ? `Found ${data.replyCount} ${data.replyCount === 1 ? 'reply' : 'replies'}`
+          : "This email has not received any replies.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Check Failed",
+        description: error.message || "Unable to check for replies",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const sendFollowUpMutation = useMutation({
+    mutationFn: ({ id, subject, body }: { id: string; subject: string; body: string }) =>
+      apiRequest('POST', `/api/test-email/send-followup/${id}`, { subject, body }),
+    onSuccess: () => {
+      toast({ 
+        title: "Follow-up Sent",
+        description: "Your threaded follow-up has been sent successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/test-email/history'] });
+      setFollowUpDialogOpen(false);
+      setSelectedTestEmailId(null);
+      setFollowUpSubject("");
+      setFollowUpBody("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Follow-up Failed",
+        description: error.message || "Unable to send follow-up",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Add contacts to sequence mutation
   const addContactsMutation = useMutation({
     mutationFn: ({ sequenceId, contacts, selectAll, search, statusFilter }: {
@@ -552,6 +657,12 @@ export default function EHub() {
             <Settings className="w-4 h-4 mr-2" />
             Settings
           </TabsTrigger>
+          {user?.role === 'admin' && (
+            <TabsTrigger value="test-emails" data-testid="tab-test-emails">
+              <TestTube2 className="w-4 h-4 mr-2" />
+              Test Emails
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* All Contacts Tab */}
@@ -1614,7 +1725,233 @@ export default function EHub() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Test Emails Tab */}
+        {user?.role === 'admin' && (
+          <TabsContent value="test-emails" className="space-y-4">
+            {/* Composer Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Manual Test Email Composer</CardTitle>
+                <CardDescription>
+                  Send instant test emails to verify threading and reply detection (bypasses queue)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="test-recipient-email">Recipient Email</Label>
+                    <Input
+                      id="test-recipient-email"
+                      type="email"
+                      value={testRecipientEmail}
+                      onChange={(e) => setTestRecipientEmail(e.target.value)}
+                      placeholder="recipient@example.com"
+                      data-testid="input-test-recipient"
+                    />
+                  </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="test-subject">Subject</Label>
+                    <Input
+                      id="test-subject"
+                      value={testSubject}
+                      onChange={(e) => setTestSubject(e.target.value)}
+                      placeholder="Email subject line"
+                      data-testid="input-test-subject"
+                    />
+                  </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="test-body">Email Body (HTML)</Label>
+                    <Textarea
+                      id="test-body"
+                      value={testBody}
+                      onChange={(e) => setTestBody(e.target.value)}
+                      placeholder="Email body content (HTML supported)"
+                      rows={6}
+                      data-testid="input-test-body"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">Rate limit: 10 sends per hour</p>
+                  <Button
+                    onClick={() => sendTestEmailMutation.mutate({ 
+                      recipientEmail: testRecipientEmail, 
+                      subject: testSubject, 
+                      body: testBody 
+                    })}
+                    disabled={!testRecipientEmail || !testSubject || !testBody || sendTestEmailMutation.isPending}
+                    data-testid="button-send-test"
+                  >
+                    {sendTestEmailMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    <Send className="w-4 h-4 mr-2" />
+                    Send Test Email
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Test Email History Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Test Email History</CardTitle>
+                <CardDescription>
+                  Recent test emails with reply status and follow-up actions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingTestEmails ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : !testEmailHistory || testEmailHistory.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No test emails sent yet. Use the composer above to send your first test email.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Recipient</TableHead>
+                        <TableHead>Subject</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Sent</TableHead>
+                        <TableHead>Reply</TableHead>
+                        <TableHead>Follow-ups</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {testEmailHistory.map((test) => (
+                        <TableRow key={test.id} data-testid={`row-test-email-${test.id}`}>
+                          <TableCell className="font-medium">{test.recipientEmail}</TableCell>
+                          <TableCell className="max-w-[200px] truncate">{test.subject}</TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={test.status === 'replied' ? 'default' : test.status === 'sent' ? 'secondary' : 'outline'}
+                              data-testid={`badge-status-${test.id}`}
+                            >
+                              {test.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {test.sentAt ? new Date(test.sentAt).toLocaleString() : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {test.replyDetectedAt ? (
+                              <span className="text-sm text-green-600 dark:text-green-400">
+                                {new Date(test.replyDetectedAt).toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">No reply</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">{test.followUpCount || 0}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => checkReplyMutation.mutate(test.id)}
+                                disabled={!test.gmailThreadId || checkReplyMutation.isPending}
+                                data-testid={`button-check-reply-${test.id}`}
+                              >
+                                <RefreshCw className="w-3 h-3 mr-1" />
+                                Check
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedTestEmailId(test.id);
+                                  setFollowUpSubject(`Re: ${test.subject}`);
+                                  setFollowUpBody('');
+                                  setFollowUpDialogOpen(true);
+                                }}
+                                disabled={!test.gmailThreadId}
+                                data-testid={`button-followup-${test.id}`}
+                              >
+                                <Reply className="w-3 h-3 mr-1" />
+                                Follow-up
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
+
+      {/* Follow-up Dialog */}
+      <Dialog open={followUpDialogOpen} onOpenChange={setFollowUpDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Send Threaded Follow-up</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              This email will be sent in the same Gmail thread
+            </p>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="followup-subject">Subject</Label>
+              <Input
+                id="followup-subject"
+                value={followUpSubject}
+                onChange={(e) => setFollowUpSubject(e.target.value)}
+                placeholder="Re: Original subject"
+                data-testid="input-followup-subject"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="followup-body">Email Body (HTML)</Label>
+              <Textarea
+                id="followup-body"
+                value={followUpBody}
+                onChange={(e) => setFollowUpBody(e.target.value)}
+                placeholder="Follow-up message content"
+                rows={8}
+                data-testid="input-followup-body"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFollowUpDialogOpen(false);
+                setSelectedTestEmailId(null);
+                setFollowUpSubject("");
+                setFollowUpBody("");
+              }}
+              data-testid="button-cancel-followup"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedTestEmailId) {
+                  sendFollowUpMutation.mutate({
+                    id: selectedTestEmailId,
+                    subject: followUpSubject,
+                    body: followUpBody,
+                  });
+                }
+              }}
+              disabled={!followUpSubject || !followUpBody || sendFollowUpMutation.isPending}
+              data-testid="button-submit-followup"
+            >
+              {sendFollowUpMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              <Send className="w-4 h-4 mr-2" />
+              Send Follow-up
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Recipients Dialog */}
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
