@@ -67,11 +67,16 @@ async function processEmailQueue() {
           continue;
         }
 
-        // Personalize email
+        // Personalize email using AI with strategy transcript
         const personalizedEmail = await personalizeEmailWithAI(
           recipient,
           { subject: sequence.subject, body: sequence.body },
-          { promptInjection: settings.promptInjection || undefined, keywordBin: settings.keywordBin || undefined }
+          sequence.strategyTranscript || null,
+          { 
+            promptInjection: settings.promptInjection || undefined, 
+            keywordBin: settings.keywordBin || undefined,
+            signature: sequence.signature || undefined
+          }
         );
 
         // Send email using sequence creator's Gmail credentials

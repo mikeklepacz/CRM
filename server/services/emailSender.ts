@@ -1,7 +1,8 @@
 
 import { google } from 'googleapis';
 import { storage } from '../storage';
-import type { SequenceRecipient } from '../../shared/schema';
+import type { SequenceRecipient, StrategyTranscript } from '../../shared/schema';
+import OpenAI from 'openai';
 
 interface EmailOptions {
   userId: string; // User ID for getting Gmail credentials
@@ -159,12 +160,112 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
 
 export async function personalizeEmailWithAI(
   recipient: SequenceRecipient,
-  template: { subject: string; body: string },
-  settings: { promptInjection?: string; keywordBin?: string }
+  template: { subject?: string; body?: string },
+  strategyTranscript: StrategyTranscript | null,
+  settings: { promptInjection?: string; keywordBin?: string; signature?: string }
 ): Promise<{ subject: string; body: string }> {
-  // TODO: Implement AI personalization using OpenAI
-  // For now, just do basic variable replacement
-  
+  try {
+    // Get OpenAI settings
+    const openaiSettings = await storage.getOpenaiSettings();
+    if (!openaiSettings?.apiKey) {
+      console.warn('[EmailAI] No OpenAI API key configured, falling back to template');
+      return fallbackToTemplate(recipient, template, settings);
+    }
+
+    const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+
+    // Build recipient context (for AI to understand business, but not directly quote)
+    const recipientContext = `
+RECIPIENT CONTEXT (for understanding, do not directly quote in email):
+- Company/Contact: ${recipient.name || 'Unknown'}
+- Email: ${recipient.email}
+- Business Hours: ${recipient.businessHours || 'Not specified'}
+- Sales Summary: ${recipient.salesSummary || 'Not available'}
+`.trim();
+
+    // Build strategy context from transcript
+    let strategyContext = '';
+    if (strategyTranscript?.messages && strategyTranscript.messages.length > 0) {
+      strategyContext = '\n\nCAMPAIGN STRATEGY CONTEXT:\n';
+      strategyTranscript.messages.forEach(msg => {
+        strategyContext += `${msg.role === 'user' ? 'YOU' : 'ASSISTANT'}: ${msg.content}\n`;
+      });
+    }
+
+    // System prompt with all instructions
+    const systemPrompt = `You are an expert B2B cold email writer for hemp wick wholesale outreach.
+
+CORE RULES:
+1. GREETING: Always use "Hi," (generic, never personalize with company name)
+2. OPENING: Reference "I found your email on Leafly..."
+3. HONEST APPROACH: Acknowledge you might not be talking to the right person
+   - Include: "If you're the right person to discuss wholesale accessories, that's great—if not, I'd appreciate being introduced to whoever handles product sourcing."
+4. HTML FORMATTING: Use <p></p> tags for paragraphs and <br> for line breaks
+5. TONE: Professional peer-to-peer, helpful (not salesy)
+6. LENGTH: 3-4 short paragraphs maximum (under 200 words total)
+7. NO PERSONALIZATION: Don't mention their business name, hours, or specific details from context
+8. SIGNATURE: End with ${settings.signature ? 'the provided signature' : 'a simple sign-off'}
+
+SPAM AVOIDANCE:
+- Never use: "free", "guarantee", "limited time", "act now", "click here", "100%", "risk-free"
+- No excessive punctuation (!!!, ???, ALL CAPS)
+- Keep conversational, not marketing copy
+- 1-2 links maximum
+- Focus on helping THEM, not selling
+
+${settings.promptInjection || ''}
+
+${strategyContext}
+
+${recipientContext}
+
+Generate a professional cold email with subject and body. Output HTML formatted body.`.trim();
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: 'Generate a cold outreach email for this recipient based on the campaign strategy and context provided.' }
+      ],
+      temperature: 0.8,
+      max_tokens: 500,
+    });
+
+    const generatedContent = response.choices[0]?.message?.content || '';
+    
+    // Parse subject and body from response
+    // Expected format: Subject: ... \n\n Body: ...
+    const subjectMatch = generatedContent.match(/Subject:\s*(.+?)(\n|$)/i);
+    const bodyMatch = generatedContent.match(/Body:\s*([\s\S]+)/i) || 
+                      generatedContent.match(/^(?:Subject:.*?\n\n)?([\s\S]+)/);
+
+    let subject = subjectMatch?.[1]?.trim() || 'Hemp Wick Partnership Opportunity';
+    let body = bodyMatch?.[1]?.trim() || generatedContent;
+
+    // Clean up any markdown or extra formatting
+    body = body.replace(/^Body:\s*/i, '').trim();
+
+    // Add signature if provided
+    if (settings.signature) {
+      body += `\n\n${settings.signature}`;
+    }
+
+    console.log('[EmailAI] ✅ Generated personalized email for', recipient.email);
+
+    return { subject, body };
+  } catch (error: any) {
+    console.error('[EmailAI] Error generating email:', error);
+    return fallbackToTemplate(recipient, template, settings);
+  }
+}
+
+function fallbackToTemplate(
+  recipient: SequenceRecipient,
+  template: { subject?: string; body?: string },
+  settings: { signature?: string }
+): { subject: string; body: string } {
+  // Fallback to sequence template if OpenAI fails
+  // Do basic variable replacement
   const variables: Record<string, string> = {
     '{{name}}': recipient.name || 'there',
     '{{email}}': recipient.email,
@@ -172,16 +273,28 @@ export async function personalizeEmailWithAI(
     '{{salesSummary}}': recipient.salesSummary || '',
   };
 
-  let personalizedSubject = template.subject;
-  let personalizedBody = template.body;
+  let subject = template.subject || 'Hemp Wick Partnership Opportunity';
+  let body = template.body || `<p>Hi,</p>
 
+<p>I found your email on Leafly and wanted to reach out about hemp wick for your dispensary. If you're the right person to discuss wholesale accessories, that's great—if not, I'd appreciate being introduced to whoever handles product sourcing.</p>
+
+<p>We're the world's largest white-label manufacturer of hemp wick, offering natural and eco-friendly lighting alternatives that preserve cannabis flavor. We can customize with your branding.</p>
+
+<p>Would you be open to a quick call to explore this?</p>`;
+
+  // Replace variables in template
   for (const [key, value] of Object.entries(variables)) {
-    personalizedSubject = personalizedSubject.replace(new RegExp(key, 'g'), value);
-    personalizedBody = personalizedBody.replace(new RegExp(key, 'g'), value);
+    subject = subject.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+    body = body.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
   }
 
-  return {
-    subject: personalizedSubject,
-    body: personalizedBody,
-  };
+  // Always append signature if provided (even when using custom template)
+  if (settings.signature) {
+    body += `\n\n${settings.signature}`;
+  } else if (!template.body) {
+    // Only add default sign-off if using generic template and no signature provided
+    body += '\n\n<p>Best regards</p>';
+  }
+
+  return { subject, body };
 }
