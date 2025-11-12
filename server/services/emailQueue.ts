@@ -5,8 +5,133 @@ import { computeNextSendSlot } from './smartTiming';
 import { resolveAdminWindow } from './emailSchedulingService';
 import { addDays } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
+import * as googleSheets from '../googleSheets';
+import { normalizeLink } from '../../shared/linkUtils';
 
 let isProcessing = false;
+
+/**
+ * Check Commission Tracker for existing agent and ensure row exists
+ * Returns { shouldSkip: boolean, reason?: string }
+ * - If store has claimed agent -> shouldSkip: true
+ * - If store unclaimed/new -> creates/updates row with Agent="Mike Klepacz", Status="Emailed", shouldSkip: false
+ */
+async function checkAndUpdateCommissionTracker(recipientLink: string, recipientEmail: string, recipientName: string): Promise<{ shouldSkip: boolean; reason?: string }> {
+  try {
+    // Find Commission Tracker sheet
+    const sheets = await storage.getAllActiveGoogleSheets();
+    const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+    
+    if (!trackerSheet) {
+      console.log('[CommissionTracker] No Commission Tracker configured - proceeding with email send');
+      return { shouldSkip: false };
+    }
+
+    // Read Commission Tracker data
+    const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+    const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+    
+    if (trackerRows.length === 0) {
+      console.log('[CommissionTracker] Empty tracker sheet - proceeding with email send');
+      return { shouldSkip: false };
+    }
+
+    const trackerHeaders = trackerRows[0];
+    const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+    const agentIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+    const statusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
+    const storeNameIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'store name');
+    const pocEmailIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'poc email');
+    const claimDateIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'claim date');
+
+    if (linkIndex === -1) {
+      console.log('[CommissionTracker] No Link column found - proceeding with email send');
+      return { shouldSkip: false };
+    }
+
+    // Look for existing row by normalized link
+    const normalizedInputLink = normalizeLink(recipientLink);
+    let existingRowIndex = -1;
+    let existingAgent = '';
+
+    for (let i = 1; i < trackerRows.length; i++) {
+      const rowLink = trackerRows[i][linkIndex];
+      if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
+        existingRowIndex = i + 1; // 1-indexed for Google Sheets
+        existingAgent = trackerRows[i][agentIndex] || '';
+        break;
+      }
+    }
+
+    // If row exists and has an agent, skip the email
+    if (existingRowIndex !== -1 && existingAgent.trim()) {
+      console.log(`[CommissionTracker] ⛔ Store already claimed by agent "${existingAgent}" - SKIPPING email to ${recipientEmail}`);
+      return { 
+        shouldSkip: true, 
+        reason: `Store already claimed by ${existingAgent}` 
+      };
+    }
+
+    // Row exists but no agent OR row doesn't exist - ensure row with "Mike Klepacz"
+    const EHUB_AGENT = 'Mike Klepacz';
+    const EHUB_STATUS = 'Emailed';
+    const claimDate = new Date().toISOString();
+
+    if (existingRowIndex !== -1) {
+      // Update existing row with Mike Klepacz as agent
+      console.log(`[CommissionTracker] ✅ Updating unclaimed row ${existingRowIndex} with Agent="${EHUB_AGENT}"`);
+      
+      const updates = [];
+      if (agentIndex !== -1) {
+        const agentCol = String.fromCharCode(65 + agentIndex);
+        updates.push(googleSheets.writeSheetData(
+          trackerSheet.spreadsheetId,
+          `${trackerSheet.sheetName}!${agentCol}${existingRowIndex}`,
+          [[EHUB_AGENT]]
+        ));
+      }
+      if (statusIndex !== -1) {
+        const statusCol = String.fromCharCode(65 + statusIndex);
+        updates.push(googleSheets.writeSheetData(
+          trackerSheet.spreadsheetId,
+          `${trackerSheet.sheetName}!${statusCol}${existingRowIndex}`,
+          [[EHUB_STATUS]]
+        ));
+      }
+      if (claimDateIndex !== -1) {
+        const claimDateCol = String.fromCharCode(65 + claimDateIndex);
+        updates.push(googleSheets.writeSheetData(
+          trackerSheet.spreadsheetId,
+          `${trackerSheet.sheetName}!${claimDateCol}${existingRowIndex}`,
+          [[claimDate]]
+        ));
+      }
+      
+      await Promise.all(updates);
+    } else {
+      // Create new row
+      console.log(`[CommissionTracker] ✅ Creating new row with Agent="${EHUB_AGENT}" for ${recipientEmail}`);
+      
+      const newRow = new Array(trackerHeaders.length).fill('');
+      if (linkIndex !== -1) newRow[linkIndex] = recipientLink;
+      if (agentIndex !== -1) newRow[agentIndex] = EHUB_AGENT;
+      if (statusIndex !== -1) newRow[statusIndex] = EHUB_STATUS;
+      if (storeNameIndex !== -1) newRow[storeNameIndex] = recipientName;
+      if (pocEmailIndex !== -1) newRow[pocEmailIndex] = recipientEmail;
+      if (claimDateIndex !== -1) newRow[claimDateIndex] = claimDate;
+      
+      const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
+    }
+
+    return { shouldSkip: false };
+  } catch (error: any) {
+    console.error(`[CommissionTracker] ❌ Error checking tracker: ${error.message}`);
+    console.error(`[CommissionTracker] ⚠️  Proceeding with email send despite error`);
+    // Don't block emails on tracker errors
+    return { shouldSkip: false };
+  }
+}
 
 export async function startEmailQueueProcessor() {
   console.log('[EmailQueue] Starting email queue processor...');
@@ -117,6 +242,23 @@ async function processEmailQueue() {
 
         // Determine current step (before increment)
         const currentStepNumber = (recipient.currentStep || 0) + 1; // 0 -> 1, 1 -> 2, etc.
+
+        // CHECK COMMISSION TRACKER: Skip if store is already claimed by another agent
+        const trackerCheck = await checkAndUpdateCommissionTracker(
+          recipient.link,
+          recipient.email,
+          recipient.name
+        );
+
+        if (trackerCheck.shouldSkip) {
+          console.log(`[EmailQueue] ⛔ SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
+          // Mark recipient as skipped
+          await storage.updateRecipient(recipient.id, { 
+            status: 'skipped',
+            nextSendAt: null // Clear next send time
+          });
+          continue; // Skip to next recipient
+        }
 
         // For follow-ups, fetch first email's subject for threading
         let firstEmailSubject: string | null = null;
