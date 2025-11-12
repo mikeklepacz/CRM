@@ -19510,6 +19510,8 @@ Use this store information to provide context-aware responses. When helping draf
           dailyEmailLimit: 200,
           sendingHoursStart: 9,
           sendingHoursEnd: 14,
+          clientWindowStartOffset: 1.00,
+          clientWindowEndHour: 14,
           promptInjection: '',
           keywordBin: '',
           skipWeekends: true,
