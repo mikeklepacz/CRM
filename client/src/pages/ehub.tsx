@@ -1220,8 +1220,8 @@ export default function EHub() {
                               <Input
                                 id={`delay-${index}`}
                                 type="number"
-                                step="0.01"
-                                min={index === 0 ? 0 : stepDelays[index - 1] + 0.01}
+                                step="0.0001"
+                                min={index === 0 ? 0 : stepDelays[index - 1] + 0.0001}
                                 value={delay}
                                 onChange={(e) => {
                                   const newDelays = [...stepDelays];
