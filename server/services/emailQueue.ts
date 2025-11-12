@@ -9,6 +9,22 @@ let isProcessing = false;
 export async function startEmailQueueProcessor() {
   console.log('[EmailQueue] Starting email queue processor...');
   
+  // Validate OpenAI API key at startup (REQUIRED - no fallback system)
+  try {
+    const openaiSettings = await storage.getOpenaiSettings();
+    if (!openaiSettings?.apiKey) {
+      console.error('[EmailQueue] ⛔ CRITICAL: No OpenAI API key configured!');
+      console.error('[EmailQueue] ⛔ Email queue cannot operate without AI email generation.');
+      console.error('[EmailQueue] ⛔ Configure OpenAI API key in Sales Assistant settings to enable email sending.');
+      // Don't start the queue processor if no API key
+      return;
+    }
+    console.log('[EmailQueue] ✅ OpenAI API key validated');
+  } catch (error) {
+    console.error('[EmailQueue] ⛔ Failed to validate OpenAI settings:', error);
+    return;
+  }
+  
   // Run every 60 seconds
   setInterval(async () => {
     if (isProcessing) {
@@ -67,17 +83,25 @@ async function processEmailQueue() {
           continue;
         }
 
-        // Personalize email using AI with strategy transcript
-        const personalizedEmail = await personalizeEmailWithAI(
-          recipient,
-          { subject: sequence.subject, body: sequence.body },
-          sequence.strategyTranscript || null,
-          { 
-            promptInjection: settings.promptInjection || undefined, 
-            keywordBin: settings.keywordBin || undefined,
-            signature: sequence.signature || undefined
-          }
-        );
+        // Personalize email using AI with strategy transcript (AI-only, no fallback)
+        let personalizedEmail;
+        try {
+          personalizedEmail = await personalizeEmailWithAI(
+            recipient,
+            { subject: sequence.subject, body: sequence.body },
+            sequence.strategyTranscript || null,
+            { 
+              promptInjection: settings.promptInjection || undefined, 
+              keywordBin: settings.keywordBin || undefined,
+              signature: sequence.signature || undefined
+            }
+          );
+        } catch (aiError: any) {
+          // Log AI error but DON'T update recipient status - keep them pending for retry
+          console.error(`[EmailQueue] 🔄 AI generation failed for ${recipient.email}: ${aiError.message}`);
+          console.error(`[EmailQueue] 🔄 Recipient will retry in next queue cycle`);
+          continue; // Skip this recipient, don't mark as failed
+        }
 
         // Send email using sequence creator's Gmail credentials
         const result = await sendEmail({

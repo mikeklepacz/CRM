@@ -19523,6 +19523,17 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Get E-Hub queue view (admin only)
+  app.get('/api/ehub/queue', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const queue = await storage.getQueueView();
+      res.json(queue);
+    } catch (error: any) {
+      console.error('Error fetching queue view:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch queue' });
+    }
+  });
+
   // Update E-Hub global settings (admin only)
   app.patch('/api/ehub/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

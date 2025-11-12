@@ -524,6 +524,7 @@ export interface IStorage {
   getRecipients(sequenceId: string, filters?: { status?: string; limit?: number }): Promise<SequenceRecipient[]>;
   getRecipient(id: string): Promise<SequenceRecipient | undefined>;
   getNextRecipientsToSend(limit: number): Promise<SequenceRecipient[]>;
+  getQueueView(): Promise<Array<SequenceRecipient & { sequenceName: string }>>;
   updateRecipientStatus(id: string, updates: Partial<InsertSequenceRecipient>): Promise<SequenceRecipient>;
   findRecipientByEmail(sequenceId: string, email: string): Promise<SequenceRecipient | undefined>;
 
@@ -3105,12 +3106,16 @@ export class DatabaseStorage implements IStorage {
   async getNextRecipientsToSend(limit: number): Promise<SequenceRecipient[]> {
     const now = new Date();
     
-    return await db
+    // Two-tier priority queue: follow-ups first, then fresh emails
+    
+    // Stage 1: Get all due follow-ups (currentStep > 0)
+    const followUps = await db
       .select()
       .from(sequenceRecipients)
       .where(
         and(
-          eq(sequenceRecipients.status, 'pending'),
+          eq(sequenceRecipients.status, 'in_sequence'),
+          gt(sequenceRecipients.currentStep, 0),
           or(
             isNull(sequenceRecipients.nextSendAt),
             lte(sequenceRecipients.nextSendAt, now)
@@ -3119,6 +3124,65 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(sequenceRecipients.nextSendAt)
       .limit(limit);
+    
+    // Stage 2: If we haven't filled the quota, get fresh emails (currentStep = 0)
+    const remaining = limit - followUps.length;
+    let freshEmails: SequenceRecipient[] = [];
+    
+    if (remaining > 0) {
+      freshEmails = await db
+        .select()
+        .from(sequenceRecipients)
+        .where(
+          and(
+            eq(sequenceRecipients.status, 'pending'),
+            eq(sequenceRecipients.currentStep, 0),
+            or(
+              isNull(sequenceRecipients.nextSendAt),
+              lte(sequenceRecipients.nextSendAt, now)
+            )
+          )
+        )
+        .orderBy(sequenceRecipients.nextSendAt)
+        .limit(remaining);
+    }
+    
+    // Merge: follow-ups first, then fresh emails
+    return [...followUps, ...freshEmails];
+  }
+
+  async getQueueView(): Promise<Array<SequenceRecipient & { sequenceName: string }>> {
+    // Get all pending/in_sequence recipients with sequence name, ordered by nextSendAt
+    const results = await db
+      .select({
+        id: sequenceRecipients.id,
+        sequenceId: sequenceRecipients.sequenceId,
+        sequenceName: sequences.name,
+        email: sequenceRecipients.email,
+        name: sequenceRecipients.name,
+        status: sequenceRecipients.status,
+        currentStep: sequenceRecipients.currentStep,
+        nextSendAt: sequenceRecipients.nextSendAt,
+        lastStepSentAt: sequenceRecipients.lastStepSentAt,
+        sentAt: sequenceRecipients.sentAt,
+        businessHours: sequenceRecipients.businessHours,
+        timezone: sequenceRecipients.timezone,
+        salesSummary: sequenceRecipients.salesSummary,
+        threadId: sequenceRecipients.threadId,
+        createdAt: sequenceRecipients.createdAt,
+        updatedAt: sequenceRecipients.updatedAt,
+      })
+      .from(sequenceRecipients)
+      .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
+      .where(
+        or(
+          eq(sequenceRecipients.status, 'pending'),
+          eq(sequenceRecipients.status, 'in_sequence')
+        )
+      )
+      .orderBy(sequenceRecipients.nextSendAt);
+    
+    return results as Array<SequenceRecipient & { sequenceName: string }>;
   }
 
   async updateRecipientStatus(id: string, updates: Partial<InsertSequenceRecipient>): Promise<SequenceRecipient> {

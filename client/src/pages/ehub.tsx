@@ -74,6 +74,165 @@ interface TestEmailSend {
   createdAt: string;
 }
 
+interface QueueItem {
+  id: string;
+  sequenceId: string;
+  sequenceName: string;
+  email: string;
+  name: string;
+  status: string;
+  currentStep: number;
+  nextSendAt: string | null;
+  lastStepSentAt: string | null;
+  sentAt: string | null;
+}
+
+function QueueView() {
+  const { toast } = useToast();
+  
+  // Fetch queue with 30s polling
+  const { data: queue, isLoading } = useQuery<QueueItem[]>({
+    queryKey: ['/api/ehub/queue'],
+    refetchInterval: 30000, // 30 seconds
+    staleTime: 15000,
+  });
+
+  // Filter out replied recipients and calculate stats
+  const activeQueue = queue?.filter(item => item.status !== 'replied') || [];
+  const followUps = activeQueue.filter(item => item.currentStep > 0);
+  const freshEmails = activeQueue.filter(item => item.currentStep === 0);
+  
+  // Get next send time
+  const nextSendAt = activeQueue.length > 0 && activeQueue[0].nextSendAt 
+    ? new Date(activeQueue[0].nextSendAt)
+    : null;
+
+  // Format date helper
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'Not scheduled';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = date.getTime() - now.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 0) return 'Overdue';
+    if (diffMins < 60) return `in ${diffMins}m`;
+    if (diffMins < 1440) return `in ${Math.floor(diffMins / 60)}h`;
+    return `in ${Math.floor(diffMins / 1440)}d`;
+  };
+
+  // Get row background color based on currentStep
+  const getRowBgColor = (currentStep: number) => {
+    if (currentStep === 0) {
+      return 'bg-blue-50 dark:bg-blue-900/20'; // Fresh emails
+    }
+    return 'bg-amber-50 dark:bg-amber-900/20'; // Follow-ups
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Stats Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Follow-ups Pending</CardDescription>
+            <CardTitle className="text-3xl" data-testid="text-followups-pending">
+              {followUps.length}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Fresh Emails Pending</CardDescription>
+            <CardTitle className="text-3xl" data-testid="text-fresh-pending">
+              {freshEmails.length}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Next Send</CardDescription>
+            <CardTitle className="text-xl" data-testid="text-next-send">
+              {nextSendAt ? formatDate(nextSendAt.toISOString()) : 'No emails queued'}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Queue Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Queue</CardTitle>
+          <CardDescription>
+            Chronological view of all pending emails • Blue = Fresh, Yellow = Follow-up
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {activeQueue.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No emails in queue
+            </div>
+          ) : (
+            <ScrollArea className="h-[600px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Recipient</TableHead>
+                    <TableHead>Sequence</TableHead>
+                    <TableHead>Step</TableHead>
+                    <TableHead>Scheduled</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeQueue.map((item) => (
+                    <TableRow
+                      key={item.id}
+                      className={getRowBgColor(item.currentStep)}
+                      data-testid={`row-queue-${item.id}`}
+                    >
+                      <TableCell data-testid={`text-recipient-name-${item.id}`}>
+                        <div>
+                          <div className="font-medium">{item.name || 'Unknown'}</div>
+                          <div className="text-sm text-muted-foreground">{item.email}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell data-testid={`text-queue-sequence-${item.id}`}>
+                        {item.sequenceName}
+                      </TableCell>
+                      <TableCell data-testid={`text-queue-step-${item.id}`}>
+                        <Badge variant={item.currentStep === 0 ? 'default' : 'secondary'}>
+                          {item.currentStep === 0 ? 'Fresh' : `Step ${item.currentStep}`}
+                        </Badge>
+                      </TableCell>
+                      <TableCell data-testid={`text-queue-scheduled-${item.id}`}>
+                        {formatDate(item.nextSendAt)}
+                      </TableCell>
+                      <TableCell data-testid={`text-queue-status-${item.id}`}>
+                        <Badge variant={item.status === 'pending' ? 'outline' : 'default'}>
+                          {item.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function EHub() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -652,6 +811,10 @@ export default function EHub() {
           <TabsTrigger value="strategy" data-testid="tab-strategy">
             <MessageSquare className="w-4 h-4 mr-2" />
             Campaign Strategy
+          </TabsTrigger>
+          <TabsTrigger value="queue" data-testid="tab-queue">
+            <Mail className="w-4 h-4 mr-2" />
+            Queue
           </TabsTrigger>
           <TabsTrigger value="settings" data-testid="tab-settings">
             <Settings className="w-4 h-4 mr-2" />
@@ -1579,6 +1742,11 @@ export default function EHub() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Queue Tab */}
+        <TabsContent value="queue" className="space-y-4">
+          <QueueView />
         </TabsContent>
 
         {/* Settings Tab */}

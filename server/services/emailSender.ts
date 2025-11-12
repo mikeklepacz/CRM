@@ -164,13 +164,13 @@ export async function personalizeEmailWithAI(
   strategyTranscript: StrategyTranscript | null,
   settings: { promptInjection?: string; keywordBin?: string; signature?: string }
 ): Promise<{ subject: string; body: string }> {
+  // Get OpenAI settings - REQUIRED (no fallback system)
+  const openaiSettings = await storage.getOpenaiSettings();
+  if (!openaiSettings?.apiKey) {
+    throw new Error('[EmailAI] CRITICAL: No OpenAI API key configured. Email queue cannot operate without AI generation.');
+  }
+
   try {
-    // Get OpenAI settings
-    const openaiSettings = await storage.getOpenaiSettings();
-    if (!openaiSettings?.apiKey) {
-      console.warn('[EmailAI] No OpenAI API key configured, falling back to template');
-      return fallbackToTemplate(recipient, template, settings);
-    }
 
     const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
@@ -254,47 +254,13 @@ Generate a professional cold email with subject and body. Output HTML formatted 
 
     return { subject, body };
   } catch (error: any) {
-    console.error('[EmailAI] Error generating email:', error);
-    return fallbackToTemplate(recipient, template, settings);
+    // Rethrow with context - no fallback system allowed
+    if (error.response?.status === 401) {
+      throw new Error('[EmailAI] CRITICAL: Invalid OpenAI API key. Check API key configuration.');
+    }
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      throw new Error('[EmailAI] ERROR: OpenAI service unreachable. Network issue or service down. Recipient will retry automatically.');
+    }
+    throw new Error(`[EmailAI] ERROR: OpenAI generation failed: ${error.message}. Recipient will retry automatically.`);
   }
-}
-
-function fallbackToTemplate(
-  recipient: SequenceRecipient,
-  template: { subject?: string; body?: string },
-  settings: { signature?: string }
-): { subject: string; body: string } {
-  // Fallback to sequence template if OpenAI fails
-  // Do basic variable replacement
-  const variables: Record<string, string> = {
-    '{{name}}': recipient.name || 'there',
-    '{{email}}': recipient.email,
-    '{{businessHours}}': recipient.businessHours || '',
-    '{{salesSummary}}': recipient.salesSummary || '',
-  };
-
-  let subject = template.subject || 'Hemp Wick Partnership Opportunity';
-  let body = template.body || `<p>Hi,</p>
-
-<p>I found your email on Leafly and wanted to reach out about hemp wick for your dispensary. If you're the right person to discuss wholesale accessories, that's great—if not, I'd appreciate being introduced to whoever handles product sourcing.</p>
-
-<p>We're the world's largest white-label manufacturer of hemp wick, offering natural and eco-friendly lighting alternatives that preserve cannabis flavor. We can customize with your branding.</p>
-
-<p>Would you be open to a quick call to explore this?</p>`;
-
-  // Replace variables in template
-  for (const [key, value] of Object.entries(variables)) {
-    subject = subject.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
-    body = body.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
-  }
-
-  // Always append signature if provided (even when using custom template)
-  if (settings.signature) {
-    body += `\n\n${settings.signature}`;
-  } else if (!template.body) {
-    // Only add default sign-off if using generic template and no signature provided
-    body += '\n\n<p>Best regards</p>';
-  }
-
-  return { subject, body };
 }
