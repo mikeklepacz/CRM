@@ -19850,9 +19850,9 @@ Based on the conversation, help the user design an effective email sequence that
     try {
       const { id } = req.params;
       
-      // Validate step delays
+      // Validate step delays - accept decimals for testing (0.0034 days = 5 minutes)
       const { stepDelays } = z.object({
-        stepDelays: z.array(z.number().int().min(0)),
+        stepDelays: z.array(z.number().nonnegative()),
       }).parse(req.body);
 
       // Check sequence exists
