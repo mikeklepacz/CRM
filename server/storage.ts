@@ -2965,12 +2965,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   // E-Hub Settings operations
+  
+  /**
+   * Normalize E-Hub settings by converting PostgreSQL decimal types to numbers
+   * PostgreSQL numeric/decimal columns return as strings, so we parse them here
+   */
+  private normalizeEhubSettings(settings: EhubSettings): EhubSettings {
+    return {
+      ...settings,
+      clientWindowStartOffset: typeof settings.clientWindowStartOffset === 'string'
+        ? parseFloat(settings.clientWindowStartOffset)
+        : settings.clientWindowStartOffset,
+    };
+  }
+
   async getEhubSettings(): Promise<EhubSettings | undefined> {
     const [settings] = await db
       .select()
       .from(ehubSettings)
       .limit(1);
-    return settings;
+    
+    return settings ? this.normalizeEhubSettings(settings) : undefined;
   }
 
   async updateEhubSettings(updates: Partial<InsertEhubSettings>): Promise<EhubSettings> {
@@ -2983,7 +2998,7 @@ export class DatabaseStorage implements IStorage {
         .set({ ...updates, updatedAt: new Date() })
         .where(eq(ehubSettings.id, existing.id))
         .returning();
-      return updated;
+      return this.normalizeEhubSettings(updated);
     } else {
       // Create default settings with provided updates
       const [created] = await db
@@ -2994,11 +3009,13 @@ export class DatabaseStorage implements IStorage {
           dailyEmailLimit: 200,
           sendingHoursStart: 9,
           sendingHoursEnd: 14,
+          clientWindowStartOffset: '1.00',
+          clientWindowEndHour: 14,
           skipWeekends: true,
           ...updates,
         })
         .returning();
-      return created;
+      return this.normalizeEhubSettings(created);
     }
   }
 

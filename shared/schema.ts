@@ -1382,7 +1382,11 @@ const ehubSettingsBaseSchema = createInsertSchema(ehubSettings).omit({
   dailyEmailLimit: z.number().min(1).max(2000),
   sendingHoursStart: z.number().min(0).max(23),
   sendingHoursEnd: z.number().min(0).max(23),
-  clientWindowStartOffset: z.number().min(0).max(24), // Hours after business opens (0-24)
+  // Coerce string/number to number for PostgreSQL decimal compatibility
+  clientWindowStartOffset: z.preprocess(
+    (val) => typeof val === 'string' ? parseFloat(val) : val,
+    z.number().min(0).max(24) // Hours after business opens (0-24)
+  ),
   clientWindowEndHour: z.number().min(0).max(23), // Cutoff hour in client local time (0-23)
   skipWeekends: z.boolean(),
 });
@@ -1393,9 +1397,6 @@ export const insertEhubSettingsSchema = ehubSettingsBaseSchema.refine(
 ).refine(
   (data) => data.sendingHoursEnd > data.sendingHoursStart,
   { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
-).refine(
-  (data) => data.clientWindowStartOffset < data.clientWindowEndHour,
-  { message: 'Client start offset must be before cutoff hour', path: ['clientWindowStartOffset'] }
 );
 
 export const updateEhubSettingsSchema = ehubSettingsBaseSchema.partial().refine(
@@ -1414,14 +1415,6 @@ export const updateEhubSettingsSchema = ehubSettingsBaseSchema.partial().refine(
     return true;
   },
   { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
-).refine(
-  (data) => {
-    if (data.clientWindowStartOffset !== undefined && data.clientWindowEndHour !== undefined) {
-      return data.clientWindowStartOffset < data.clientWindowEndHour;
-    }
-    return true;
-  },
-  { message: 'Client start offset must be before cutoff hour', path: ['clientWindowStartOffset'] }
 );
 
 export const insertSequenceRecipientSchema = createInsertSchema(sequenceRecipients).omit({
