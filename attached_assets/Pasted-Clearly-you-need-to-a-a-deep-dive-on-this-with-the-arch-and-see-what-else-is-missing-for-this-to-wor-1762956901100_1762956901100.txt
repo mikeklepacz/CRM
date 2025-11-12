@@ -1,0 +1,75 @@
+Clearly you need to a a deep dive on this with the arch and see what else is missing for this to work. This is regarding the E-Pub or whatever feature. I am trying to make the email sequence active.... what else is missing...
+
+MK
+
+mikeklepacz
+Assistant
+2 minutes ago
+Read 11 files
+Looking at the error "column 'client_id' does not exist" in the E-Hub (email sequence system), I can see the issue. The code is trying to query sequence_recipients table using a client_id column that doesn't exist in the current schema.
+
+Let me trace through the architecture:
+
+Schema Definition (rag://rag_source_12): The sequence_recipients table doesn't have a client_id column - it only has email, name, link, etc.
+
+Error Location (console): The error occurs in findRecipientByEmail method when trying to add contacts to a sequence.
+
+Root Cause: The storage.ts file has a query using client_id that doesn't match the actual database schema.
+
+Let me check the findRecipientByEmail method and fix it:
+
+server/storage.ts
+Remove client_id reference from findRecipientByEmail query
+Now let me check if there are any other references to client_id in the E-Hub code that shouldn't be there:
+
+server/routes.ts
+Fix addRecipients route to not use client_id
+The issue is that the sequence_recipients table schema doesn't include client_id - it uses email + link as the unique identifier for contacts. This is correct for E-Hub since contacts come from Google Sheets (Store Database + Commission Tracker) and don't have database client IDs.
+
+Ok and after that is fixed... what are other things missing or Not exsiting? ?
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 7 files
+Looking at the error in the console:
+
+Error adding contacts to sequence: error: column "client_id" does not exist
+The issue is in the sequence_recipients table schema. The migration renamed campaign_recipients to sequence_recipients, but the table is missing the client_id column that the code is trying to use.
+
+Let me check what other columns might be missing by examining the storage layer and the schema:
+
+migrations/0020_add_client_id_to_sequence_recipients.sql
++6
+-0
+Add missing client_id column to sequence_recipients table
+npm run db:push
+
+
+Run
+After fixing the client_id column, here are other things that appear to be missing or incomplete based on the codebase:
+
+Missing/Incomplete Features:
+E-Hub Gmail Reply Detection - The gmailReplyDetection.ts service exists but there's no cron job or background worker actively polling Gmail for replies. The email queue runs but reply detection isn't integrated.
+
+E-Hub Bounce Detection - No bounce handling is implemented. The schema has bounceType and bouncedAt fields, but there's no webhook or service to detect bounces from Gmail.
+
+E-Hub A/B Testing / Variant Engine - Mentioned in docs but not implemented. No variant generation or tracking.
+
+E-Hub Rate Limiting Enforcement - dailyEmailLimit exists in settings but isn't enforced in the email queue processor.
+
+Follow-Up Center Filters - The followUpFilters preferences exist in schema but the UI doesn't let users customize the day ranges (7-90 days, etc.).
+
+Voice AI IVR Detection - Code checks for play_keypad_touch_tone but the voicemail detection tool names are marked as TODO and not implemented.
+
+Webhook Renewal System - The calendar webhook renewal is failing (see console: "invalid_request"). The renewal logic exists but appears broken.
+
+Call Campaign Retry Logic - Schema has attemptCount and nextAttemptAt for failed calls, but no retry scheduler is running.
+
+Aligner Auto-Trigger - autoKbAnalysis preference exists but the threshold-based auto-triggering isn't implemented in the analysis job processor.
+
+Email Sequence Timezone Scheduling - Contacts have timezones detected, but the email queue doesn't use them to schedule sends at optimal local times (currently uses global sendingHoursStart/End).
+
+Which of these would you like me to implement first?
