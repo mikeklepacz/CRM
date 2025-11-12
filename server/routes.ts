@@ -20333,18 +20333,7 @@ Based on the conversation, help the user design an effective email sequence that
         return res.status(400).json({ message: 'Gmail not connected. Please connect Gmail first.' });
       }
 
-      // Rate limiting: 10 sends per hour per user
-      const recentSends = await storage.listTestEmailSendsForUser(userId);
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-      const recentCount = recentSends.filter(s => new Date(s.createdAt) > oneHourAgo).length;
-      
-      if (recentCount >= 10) {
-        return res.status(429).json({ 
-          message: 'Rate limit exceeded. Maximum 10 test emails per hour.' 
-        });
-      }
-
-      // Send email using Gmail API
+      // Send email using Gmail API (no rate limiting for testing)
       const { sendGmailEmail } = await import('./services/emailSender');
       const sendResult = await sendGmailEmail({
         to: recipientEmail,

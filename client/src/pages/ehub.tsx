@@ -1773,7 +1773,7 @@ export default function EHub() {
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground">Rate limit: 10 sends per hour</p>
+                  <p className="text-sm text-muted-foreground">No rate limit - unlimited testing</p>
                   <Button
                     onClick={() => sendTestEmailMutation.mutate({ 
                       recipientEmail: testRecipientEmail, 
