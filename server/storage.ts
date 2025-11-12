@@ -169,7 +169,7 @@ import {
   type TestEmailSend,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, inArray, sql, desc, lte, gte, isNull } from "drizzle-orm";
+import { eq, and, or, inArray, sql, desc, lte, gte, gt, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from 'uuid';
 
 export interface IStorage {
