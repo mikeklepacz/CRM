@@ -291,12 +291,19 @@ export default function EHub() {
   // Delete sequence mutation
   const deleteMutation = useMutation({
     mutationFn: (sequenceId: string) => apiRequest('DELETE', `/api/sequences/${sequenceId}`),
-    onSuccess: () => {
+    onSuccess: (_, sequenceId) => {
       toast({
         title: "Sequence Deleted",
         description: "The sequence and all its data have been permanently deleted.",
       });
+      // Invalidate sequences list
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      // Invalidate all queries for the deleted sequence (recipients, strategy chat)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === '/api/sequences' && 
+          query.queryKey[1] === sequenceId
+      });
       setDeleteSequenceId(null);
       if (selectedSequenceId === deleteSequenceId) {
         setSelectedSequenceId(null);
@@ -878,6 +885,14 @@ export default function EHub() {
                             >
                               <Send className="w-4 h-4 mr-1" />
                               Test
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => setDeleteSequenceId(sequence.id)}
+                              data-testid={`button-delete-${sequence.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -1728,6 +1743,38 @@ export default function EHub() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteSequenceId} onOpenChange={(open) => !open && setDeleteSequenceId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Sequence?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this sequence and all its data:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>All strategy chat conversation history</li>
+                <li>All recipients</li>
+                <li>All sent emails and tracking data</li>
+              </ul>
+              <p className="mt-2 font-medium">This action cannot be undone.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete" disabled={deleteMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteSequenceId && deleteMutation.mutate(deleteSequenceId)}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Delete Sequence
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
