@@ -1270,7 +1270,8 @@ export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
   strategyTranscript: jsonb("strategy_transcript").$type<StrategyTranscript>(), // Full AI strategy conversation with envelope
-  stepDelays: integer("step_delays").array(), // Array of delay days [0, 3, 7, 15, 31]
+  stepDelays: integer("step_delays").array(), // Array of gap delays [0, 3, 7, 15, 31] - each is days AFTER previous step
+  repeatLastStep: boolean("repeat_last_step").default(false), // If true, last step repeats indefinitely until reply
   promptInjection: text("prompt_injection"), // DEPRECATED: Use strategyTranscript instead
   keywords: text("keywords"), // Additional keywords for AI context
   signature: text("signature"), // Email signature to append (overrides user default if set)
