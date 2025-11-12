@@ -1270,7 +1270,7 @@ export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
   strategyTranscript: jsonb("strategy_transcript").$type<StrategyTranscript>(), // Full AI strategy conversation with envelope
-  stepDelays: integer("step_delays").array(), // Array of gap delays [0, 3, 7, 15, 31] - each is days AFTER previous step
+  stepDelays: decimal("step_delays", { precision: 10, scale: 4 }).array(), // Array of gap delays [0, 0.0035, 3, 14] - each is days AFTER previous step
   repeatLastStep: boolean("repeat_last_step").default(false), // If true, last step repeats indefinitely until reply
   promptInjection: text("prompt_injection"), // DEPRECATED: Use strategyTranscript instead
   keywords: text("keywords"), // Additional keywords for AI context
@@ -1367,7 +1367,8 @@ export const insertSequenceSchema = createInsertSchema(sequences).omit({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
   })).optional(),
-  stepDelays: z.array(z.number().int().min(0)).optional(),
+  stepDelays: z.array(z.number().min(0)).optional(), // Gap-based delays (decimals allowed for testing)
+  repeatLastStep: z.boolean().default(false).optional(),
 });
 
 const ehubSettingsBaseSchema = createInsertSchema(ehubSettings).omit({
