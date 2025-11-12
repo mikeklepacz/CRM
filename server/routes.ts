@@ -20329,26 +20329,30 @@ Based on the conversation, help the user design an effective email sequence that
 
       // Check for Gmail integration
       const userIntegration = await storage.getUserIntegration(userId);
-      if (!userIntegration?.gmailAccessToken) {
+      if (!userIntegration?.googleCalendarAccessToken) {
         return res.status(400).json({ message: 'Gmail not connected. Please connect Gmail first.' });
       }
 
       // Send email using Gmail API (no rate limiting for testing)
-      const { sendGmailEmail } = await import('./services/emailSender');
-      const sendResult = await sendGmailEmail({
+      const { sendEmail } = await import('./services/emailSender');
+      const sendResult = await sendEmail({
+        userId,
         to: recipientEmail,
         subject,
-        bodyHtml: body,
-        userIntegration,
+        body,
       });
+
+      if (!sendResult.success) {
+        return res.status(500).json({ message: sendResult.error || 'Failed to send email' });
+      }
 
       // Create test email send record
       const testSend = await storage.createTestEmailSend({
         recipientEmail,
         subject,
         body,
-        gmailThreadId: sendResult.gmailThreadId,
-        gmailMessageId: sendResult.gmailMessageId,
+        gmailThreadId: sendResult.threadId,
+        gmailMessageId: sendResult.messageId,
         rfc822MessageId: sendResult.rfc822MessageId,
         status: 'sent',
         createdBy: userId,
@@ -20389,7 +20393,7 @@ Based on the conversation, help the user design an effective email sequence that
 
       // Check for replies
       const { checkForReplies } = await import('./services/gmailReplyDetection');
-      const replyResult = await checkForReplies(testSend.gmailThreadId);
+      const replyResult = await checkForReplies(req.user.id, testSend.gmailThreadId);
 
       // Update status if reply detected
       if (replyResult.hasReply && !testSend.replyDetectedAt) {
@@ -20440,30 +20444,34 @@ Based on the conversation, help the user design an effective email sequence that
         return res.status(400).json({ message: 'No thread ID available for this test email' });
       }
 
-      // Get threading data
-      const { getLatestMessageId, getAllMessageIds } = await import('./services/gmailReplyDetection');
-      const [latestMessageId, allMessageIds] = await Promise.all([
-        getLatestMessageId(testSend.gmailThreadId),
-        getAllMessageIds(testSend.gmailThreadId),
-      ]);
-
-      // Get user integration
+      // Check for Gmail integration
       const userIntegration = await storage.getUserIntegration(req.user.id);
-      if (!userIntegration?.gmailAccessToken) {
+      if (!userIntegration?.googleCalendarAccessToken) {
         return res.status(400).json({ message: 'Gmail not connected' });
       }
 
+      // Get threading data
+      const { getLatestMessageId, getAllMessageIds } = await import('./services/gmailReplyDetection');
+      const [latestMessageId, allMessageIds] = await Promise.all([
+        getLatestMessageId(req.user.id, testSend.gmailThreadId),
+        getAllMessageIds(req.user.id, testSend.gmailThreadId),
+      ]);
+
       // Send threaded follow-up
-      const { sendGmailEmail } = await import('./services/emailSender');
-      const sendResult = await sendGmailEmail({
+      const { sendEmail } = await import('./services/emailSender');
+      const sendResult = await sendEmail({
+        userId: req.user.id,
         to: testSend.recipientEmail,
         subject,
-        bodyHtml: body,
-        userIntegration,
+        body,
         threadId: testSend.gmailThreadId,
         inReplyTo: latestMessageId || undefined,
         references: allMessageIds.length > 0 ? allMessageIds.join(' ') : undefined,
       });
+
+      if (!sendResult.success) {
+        return res.status(500).json({ message: sendResult.error || 'Failed to send follow-up' });
+      }
 
       // Update follow-up count
       await storage.updateTestEmailSendStatus(id, {
@@ -20474,7 +20482,7 @@ Based on the conversation, help the user design an effective email sequence that
       res.json({
         success: true,
         message: 'Follow-up sent successfully',
-        threadId: sendResult.gmailThreadId,
+        threadId: sendResult.threadId,
       });
     } catch (error: any) {
       console.error('Error sending follow-up:', error);

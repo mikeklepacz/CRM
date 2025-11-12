@@ -4,6 +4,7 @@ import { storage } from '../storage';
 import type { SequenceRecipient } from '../../shared/schema';
 
 interface EmailOptions {
+  userId: string; // User ID for getting Gmail credentials
   to: string;
   subject: string;
   body: string;
@@ -24,26 +25,57 @@ interface EmailResponse {
 export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
   try {
     // Get user's Gmail OAuth credentials
-    const userIntegrations = await storage.getAllUserIntegrations();
-    if (userIntegrations.length === 0) {
-      throw new Error('No Gmail integration configured');
+    const integration = await storage.getUserIntegration(options.userId);
+    if (!integration?.googleCalendarAccessToken) {
+      throw new Error('Gmail not connected. Please connect Gmail first.');
     }
 
-    const integration = userIntegrations[0]; // Use first available integration
-    if (!integration.gmailAccessToken || !integration.gmailRefreshToken) {
-      throw new Error('Gmail not connected for this user');
+    // Get system-wide OAuth credentials for token refresh
+    const systemIntegration = await storage.getSystemIntegration('google_sheets');
+    if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
+      throw new Error('System OAuth not configured');
+    }
+
+    // Check if token needs refresh
+    let accessToken = integration.googleCalendarAccessToken;
+    if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
+      if (!integration.googleCalendarRefreshToken) {
+        throw new Error('Gmail token expired. Please reconnect Gmail.');
+      }
+
+      const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: systemIntegration.googleClientId,
+          client_secret: systemIntegration.googleClientSecret,
+          refresh_token: integration.googleCalendarRefreshToken,
+          grant_type: 'refresh_token'
+        })
+      });
+
+      if (!refreshResponse.ok) {
+        throw new Error('Failed to refresh Gmail token');
+      }
+
+      const tokens = await refreshResponse.json();
+      accessToken = tokens.access_token;
+
+      await storage.updateUserIntegration(options.userId, {
+        googleCalendarAccessToken: accessToken,
+        googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000),
+      });
     }
 
     // Initialize Gmail API
     const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      systemIntegration.googleClientId,
+      systemIntegration.googleClientSecret
     );
 
     oauth2Client.setCredentials({
-      access_token: integration.gmailAccessToken,
-      refresh_token: integration.gmailRefreshToken,
+      access_token: accessToken,
+      refresh_token: integration.googleCalendarRefreshToken,
     });
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });

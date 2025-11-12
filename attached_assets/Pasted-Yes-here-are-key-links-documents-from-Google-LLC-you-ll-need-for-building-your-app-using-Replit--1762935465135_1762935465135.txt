@@ -1,0 +1,37 @@
+Yes — here are key links/documents from Google LLC you’ll need for building your app (using Replit + backend) that integrates with Gmail. Use them as your reference checklist.
+
+⸻
+
+✅ Links & documentation
+	•	Using OAuth 2.0 to access Google APIs — the general OAuth flow guide:
+https://developers.google.com/identity/protocols/oauth2  ￼
+	•	Gmail API Overview — what the Gmail API can do (send, read, threads, etc.)
+https://developers.google.com/workspace/gmail/api/guides  ￼
+	•	Choose Gmail API scopes — list of scopes, how they work, sensitivity levels
+https://developers.google.com/workspace/gmail/api/auth/scopes  ￼
+	•	Gmail API REST reference — endpoints like users.watch, users.messages, etc.
+https://developers.google.com/workspace/gmail/api/reference/rest  ￼
+	•	users.watch method (push notifications) — how to subscribe/mailbox watch for changes/replies
+https://developers.google.com/workspace/gmail/api/reference/rest/v1/users/watch  ￼
+	•	Submitting your app for OAuth verification — required if you use sensitive or restricted scopes
+https://support.google.com/cloud/answer/13461325?hl=en  ￼
+	•	OAuth App Verification Help Center — detailed policy for sensitive/restricted scopes
+https://support.google.com/cloud/answer/13463073?hl=en  ￼
+
+⸻
+
+🔍 How this applies in your Replit-based workflow
+
+Since you’ll be building your backend (in Replit) + frontend app that integrates Gmail:
+	•	You’ll create a project in Google Cloud Console → enable Gmail API.
+	•	You’ll set up the OAuth Consent Screen, choose “External” user type if users beyond your organization will use it.
+	•	You’ll create OAuth client credentials (client ID + secret) for your web/backend app which will manage tokens.
+	•	You’ll request only the minimal scopes you need (e.g., gmail.send, gmail.modify, gmail.readonly).
+	•	For reply-detection you’ll implement users.watch to receive notifications when messages arrive or change.
+	•	Because you’re accessing user Gmail data, you’ll likely deal with Google’s verification process, especially if you move from test to production.
+	•	Your backend must securely store tokens and manage refresh flows (access tokens expire; refresh tokens persist).
+	•	You must comply with user-data policies and Google’s terms for use of Gmail data.
+
+⸻
+
+If you like, I can pull up a sample minimal config + scope list specific for your Apollo-style app (send/schedule email + reply detection) so you can plug into Replit directly.

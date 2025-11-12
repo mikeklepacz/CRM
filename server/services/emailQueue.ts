@@ -74,8 +74,9 @@ async function processEmailQueue() {
           { promptInjection: settings.promptInjection || undefined, keywordBin: settings.keywordBin || undefined }
         );
 
-        // Send email
+        // Send email using sequence creator's Gmail credentials
         const result = await sendEmail({
+          userId: sequence.createdBy,
           to: recipient.email,
           subject: personalizedEmail.subject,
           body: personalizedEmail.body,

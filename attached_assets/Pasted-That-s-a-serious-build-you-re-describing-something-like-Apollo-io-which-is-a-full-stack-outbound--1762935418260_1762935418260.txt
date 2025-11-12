@@ -1,0 +1,103 @@
+That’s a serious build — you’re describing something like Apollo.io, which is a full-stack outbound-email and CRM platform.
+If you want to integrate directly with Gmail (to send, schedule, read, and detect replies), Google requires that you comply with their OAuth 2.0 + Gmail API verification process. It’s strict because Gmail access can expose user data.
+
+Here’s what Google expects, step by step:
+
+⸻
+
+1. Use OAuth 2.0 for authentication
+
+You can’t use stored passwords or “less secure app access.”
+You must create an OAuth client in the Google Cloud Console￼.
+	•	Go to APIs & Services → Credentials → Create Credentials → OAuth client ID.
+	•	Choose Web application and list your authorized redirect URIs (where Google sends users after login).
+	•	Users will click “Continue with Google,” grant permissions, and your app will get an access token and refresh token.
+
+These tokens are what you use to send and read mail on their behalf.
+
+⸻
+
+2. Enable the Gmail API
+
+Still in Google Cloud Console:
+APIs & Services → Library → Gmail API → Enable.
+
+This gives your app the ability to:
+	•	gmail.send – send mail
+	•	gmail.readonly – read headers or bodies
+	•	gmail.modify – mark as read/unread, label threads
+	•	gmail.compose – create drafts
+
+Only request what you need; Google penalizes “over-scoped” apps.
+
+⸻
+
+3. Handle verification and security
+
+If you access any real Gmail data (not just your own account in testing), Google requires app verification:
+	•	Upload a privacy policy and terms of service URL.
+	•	Describe your data-use clearly (who can see what, for how long).
+	•	Prove you own your domain.
+	•	Use HTTPS everywhere.
+	•	Pass a security assessment by a Google-approved auditor if you need sensitive scopes (about $15–75 K depending on firm).
+
+Sensitive scopes include:
+
+https://www.googleapis.com/auth/gmail.readonly
+https://www.googleapis.com/auth/gmail.send
+https://www.googleapis.com/auth/gmail.modify
+
+Without verification, your app will be “unverified” and limited to 100 test users.
+
+⸻
+
+4. Build your backend correctly
+
+Use a proper Gmail client library (Node.js, Python, Go, etc.) and store refresh tokens encrypted.
+Access tokens expire after 1 hour; refresh tokens can last indefinitely unless the user revokes them.
+
+Typical backend:
+	•	Node.js + Express server
+	•	Google API Node Client (googleapis package)
+	•	PostgreSQL for user + token storage
+	•	Job queue (BullMQ or similar) for scheduled sends and reply checking
+
+⸻
+
+5. Checking for replies
+
+You’ll periodically poll Gmail threads or use push notifications via Gmail API watch:
+	1.	Call users.watch to register a Pub/Sub topic.
+	2.	When new messages arrive, Google pings your endpoint.
+	3.	You match the thread ID to the sent message ID.
+
+That’s how Apollo-style “reply detection” works.
+
+⸻
+
+6. Sending and scheduling
+
+You can either:
+	•	Use the Gmail API’s messages.send endpoint (Base64-encoded RFC 2822 message).
+	•	Or create a draft (messages.create) and then send it later via a cron or queue system.
+
+⸻
+
+7. Compliance
+
+You must follow:
+	•	Google API Services User Data Policy￼
+	•	OAuth Brand Verification Guidelines￼
+	•	GDPR if you process EU emails.
+
+⸻
+
+If you’re serious about launching publicly, you’ll need:
+	1.	Verified Google Cloud project
+	2.	Domain with HTTPS privacy policy
+	3.	Backend that encrypts and refreshes tokens
+	4.	Auditor-passed security assessment before going live
+
+⸻
+
+Would you like me to outline the exact scopes and verification plan you’d need for an MVP (so you can start testing before the audit)?
