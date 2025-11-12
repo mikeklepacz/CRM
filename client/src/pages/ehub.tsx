@@ -1213,40 +1213,58 @@ export default function EHub() {
                   <CardContent className="space-y-4">
                     {stepDelays.length > 0 ? (
                       <div className="space-y-3">
-                        {stepDelays.map((delay, index) => (
-                          <div key={index} className="flex gap-2 items-end">
-                            <div className="flex-1">
-                              <Label htmlFor={`delay-${index}`} className="text-xs">
-                                Delay before Step {index + 1} (days)
-                              </Label>
-                              <Input
-                                id={`delay-${index}`}
-                                type="number"
-                                step="0.0001"
-                                min="0"
-                                value={delay}
-                                onChange={(e) => {
-                                  const newDelays = [...stepDelays];
-                                  newDelays[index] = parseFloat(e.target.value) || 0;
+                        {stepDelays.map((delay, index) => {
+                        const isLastStep = index === stepDelays.length - 1;
+                        return (
+                          <div key={index} className="space-y-2">
+                            <div className="flex gap-2 items-end">
+                              <div className="flex-1">
+                                <Label htmlFor={`delay-${index}`} className="text-xs">
+                                  Delay before Step {index + 1} (days)
+                                </Label>
+                                <Input
+                                  id={`delay-${index}`}
+                                  type="number"
+                                  step="0.0001"
+                                  min="0"
+                                  value={delay}
+                                  onChange={(e) => {
+                                    const newDelays = [...stepDelays];
+                                    newDelays[index] = parseFloat(e.target.value) || 0;
+                                    setStepDelays(newDelays);
+                                  }}
+                                  data-testid={`input-step-delay-${index}`}
+                                  className="mt-1"
+                                />
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  const newDelays = stepDelays.filter((_, i) => i !== index);
                                   setStepDelays(newDelays);
                                 }}
-                                data-testid={`input-step-delay-${index}`}
-                                className="mt-1"
-                              />
+                                data-testid={`button-remove-delay-${index}`}
+                              >
+                                <AlertCircle className="w-4 h-4" />
+                              </Button>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                const newDelays = stepDelays.filter((_, i) => i !== index);
-                                setStepDelays(newDelays);
-                              }}
-                              data-testid={`button-remove-delay-${index}`}
-                            >
-                              <AlertCircle className="w-4 h-4" />
-                            </Button>
+                            {isLastStep && stepDelays.length > 0 && (
+                              <div className="flex items-center gap-2 pl-1">
+                                <Checkbox
+                                  id="repeat-last-step"
+                                  checked={repeatLastStep}
+                                  onCheckedChange={(checked) => setRepeatLastStep(!!checked)}
+                                  data-testid="checkbox-repeat-last-step"
+                                />
+                                <Label htmlFor="repeat-last-step" className="text-xs text-muted-foreground cursor-pointer">
+                                  Repeat this step every {delay} days until reply
+                                </Label>
+                              </div>
+                            )}
                           </div>
-                        ))}
+                        );
+                      })}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground text-center py-4">
