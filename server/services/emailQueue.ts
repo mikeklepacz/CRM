@@ -1,8 +1,10 @@
 
 import { storage } from '../storage';
 import { sendEmail, personalizeEmailWithAI } from './emailSender';
-import { computeOptimalSendTime } from './smartTiming';
+import { computeNextSendSlot } from './smartTiming';
+import { resolveAdminWindow } from './emailSchedulingService';
 import { addDays } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 
 let isProcessing = false;
 
@@ -49,20 +51,7 @@ async function processEmailQueue() {
       return;
     }
 
-    // Check sending hours and weekends
     const now = new Date();
-    const currentHour = now.getHours();
-    const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
-
-    if (settings.skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
-      console.log('[EmailQueue] Skipping - weekend');
-      return;
-    }
-
-    if (currentHour < settings.sendingHoursStart || currentHour >= settings.sendingHoursEnd) {
-      console.log(`[EmailQueue] Outside sending hours (${settings.sendingHoursStart}-${settings.sendingHoursEnd})`);
-      return;
-    }
 
     // Get pending recipients ready to send
     const pendingRecipients = await storage.getNextRecipientsToSend(settings.dailyEmailLimit);
@@ -74,14 +63,57 @@ async function processEmailQueue() {
 
     console.log(`[EmailQueue] Found ${pendingRecipients.length} recipients to process`);
 
+    // Group recipients by sequence to batch admin window lookups
+    const recipientsBySequence = new Map<string, typeof pendingRecipients>();
     for (const recipient of pendingRecipients) {
+      if (!recipientsBySequence.has(recipient.sequenceId)) {
+        recipientsBySequence.set(recipient.sequenceId, []);
+      }
+      recipientsBySequence.get(recipient.sequenceId)!.push(recipient);
+    }
+
+    console.log(`[EmailQueue] Processing ${recipientsBySequence.size} sequences`);
+
+    // Process recipients grouped by sequence
+    for (const [sequenceId, sequenceRecipients] of recipientsBySequence) {
       try {
         // Get sequence details
-        const sequence = await storage.getSequence(recipient.sequenceId);
+        const sequence = await storage.getSequence(sequenceId);
         if (!sequence) {
-          console.error(`[EmailQueue] Sequence ${recipient.sequenceId} not found`);
+          console.error(`[EmailQueue] Sequence ${sequenceId} not found`);
           continue;
         }
+
+        // Resolve admin window ONCE per sequence
+        let adminWindow;
+        try {
+          adminWindow = await resolveAdminWindow(sequenceId, storage);
+        } catch (adminError: any) {
+          console.error(`[EmailQueue] ⚠️  Failed to resolve admin window for sequence ${sequenceId}: ${adminError.message}`);
+          console.error(`[EmailQueue] ⚠️  Skipping ${sequenceRecipients.length} recipients in this sequence`);
+          continue;
+        }
+
+        // Check if current time is within admin sending window
+        const currentHourInAdminTz = parseInt(formatInTimeZone(now, adminWindow.timezone, 'H'), 10);
+        const currentDayInAdminTz = parseInt(formatInTimeZone(now, adminWindow.timezone, 'i'), 10); // ISO day: 1=Mon, 7=Sun
+        const isWeekend = currentDayInAdminTz === 6 || currentDayInAdminTz === 7; // 6=Sat, 7=Sun
+
+        if (adminWindow.skipWeekends && isWeekend) {
+          console.log(`[EmailQueue] Skipping sequence ${sequenceId} - weekend in admin timezone (${adminWindow.timezone})`);
+          continue;
+        }
+
+        if (currentHourInAdminTz < adminWindow.startHour || currentHourInAdminTz >= adminWindow.endHour) {
+          console.log(`[EmailQueue] Skipping sequence ${sequenceId} - outside sending hours (${adminWindow.startHour}-${adminWindow.endHour} in ${adminWindow.timezone}, current: ${currentHourInAdminTz})`);
+          continue;
+        }
+
+        console.log(`[EmailQueue] ✅ Sequence ${sequenceId} within admin window, processing ${sequenceRecipients.length} recipients`);
+
+        // Process each recipient in this sequence
+        for (const recipient of sequenceRecipients) {
+          try {
 
         // Personalize email using AI with strategy transcript (AI-only, no fallback)
         let personalizedEmail;
@@ -127,27 +159,33 @@ async function processEmailQueue() {
           
           // Check if there are more steps remaining
           if (currentStep < stepDelays.length) {
-            // Schedule next step using stepDelays[currentStep] + smart timing
+            // Schedule next step using dual-window scheduler (admin + recipient windows)
             const gapDays = stepDelays[currentStep];
             const baselineTime = addDays(now, gapDays);
             
-            nextSendAt = computeOptimalSendTime({
-              businessHours: recipient.businessHours || '',
-              state: recipient.timezone || 'America/New_York',
-              skipWeekends: settings.skipWeekends,
+            nextSendAt = computeNextSendSlot({
               baselineTime,
+              adminTimezone: adminWindow.timezone,
+              adminStartHour: adminWindow.startHour,
+              adminEndHour: adminWindow.endHour,
+              recipientBusinessHours: recipient.businessHours || '',
+              recipientTimezone: recipient.timezone || 'America/New_York',
+              skipWeekends: adminWindow.skipWeekends,
             });
             recipientStatus = 'in_sequence';
           } else if (currentStep === stepDelays.length && sequence.repeatLastStep) {
-            // On last step with repeat enabled - schedule repeat using the last gap + smart timing
+            // On last step with repeat enabled - schedule repeat using dual-window scheduler
             const lastGapDays = stepDelays[stepDelays.length - 1];
             const baselineTime = addDays(now, lastGapDays);
             
-            nextSendAt = computeOptimalSendTime({
-              businessHours: recipient.businessHours || '',
-              state: recipient.timezone || 'America/New_York',
-              skipWeekends: settings.skipWeekends,
+            nextSendAt = computeNextSendSlot({
               baselineTime,
+              adminTimezone: adminWindow.timezone,
+              adminStartHour: adminWindow.startHour,
+              adminEndHour: adminWindow.endHour,
+              recipientBusinessHours: recipient.businessHours || '',
+              recipientTimezone: recipient.timezone || 'America/New_York',
+              skipWeekends: adminWindow.skipWeekends,
             });
             recipientStatus = 'in_sequence';
           } else {
@@ -193,7 +231,11 @@ async function processEmailQueue() {
       } catch (error: any) {
         console.error(`[EmailQueue] Error processing recipient ${recipient.id}:`, error);
       }
-    }
+    } // End of recipient loop
+  } catch (error: any) {
+    console.error(`[EmailQueue] Error processing sequence ${sequenceId}:`, error);
+  }
+} // End of sequence loop
   } catch (error: any) {
     console.error('[EmailQueue] Error in queue processor:', error);
   } finally {

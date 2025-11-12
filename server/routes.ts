@@ -20038,32 +20038,28 @@ Based on the conversation, help the user design an effective email sequence that
         return res.json({ message: 'No new recipients to import', count: 0 });
       }
 
-      // Calculate initial nextSendAt for all recipients using stepDelays[0] + smart timing
+      // Calculate initial nextSendAt for all recipients using dual-window scheduling
       const stepDelays = sequence.stepDelays || [];
       const initialDelayDays = stepDelays.length > 0 ? parseFloat(stepDelays[0].toString()) : 0;
-      const ehubSettings = await storage.getEhubSettings();
       
-      // Import smart timing helper
-      const { computeOptimalSendTime } = await import('./services/smartTiming');
-      const { addDays } = await import('date-fns');
+      // Import dual-window scheduler
+      const { computeNextSendTimeForRecipient } = await import('./services/emailSchedulingService');
 
-      // Add nextSendAt to all recipients using smart timing
-      const recipientsWithNextSend = recipients.map(r => {
-        // Apply delay first, then find next valid send window
-        const baselineTime = addDays(new Date(), initialDelayDays);
-        
-        const nextSendAt = computeOptimalSendTime({
-          businessHours: r.businessHours || '',
-          state: r.timezone || 'America/New_York',
-          skipWeekends: ehubSettings?.skipWeekends ?? false,
-          baselineTime,
-        });
+      // Add nextSendAt to all recipients using dual-window scheduling (admin + recipient windows)
+      const recipientsWithNextSend = await Promise.all(recipients.map(async r => {
+        const nextSendAt = await computeNextSendTimeForRecipient(
+          id, // sequenceId
+          r.businessHours || '',
+          r.timezone || 'America/New_York',
+          initialDelayDays,
+          storage
+        );
         
         return {
           ...r,
           nextSendAt,
         };
-      });
+      }));
 
       // Bulk insert recipients
       const created = await storage.addRecipients(recipientsWithNextSend);
@@ -20146,25 +20142,24 @@ Based on the conversation, help the user design an effective email sequence that
         return res.json({ message: 'All contacts already in sequence', count: 0 });
       }
 
-      // Calculate initial nextSendAt for all recipients using stepDelays[0] + smart timing
+      // Calculate initial nextSendAt for all recipients using dual-window scheduling
       const stepDelays = sequence.stepDelays || [];
       const initialDelayDays = stepDelays.length > 0 ? parseFloat(stepDelays[0].toString()) : 0;
-      const ehubSettings = await storage.getEhubSettings();
       
-      // Import smart timing helper
-      const { computeOptimalSendTime } = await import('./services/smartTiming');
-      const { addDays } = await import('date-fns');
+      // Import dual-window scheduler
+      const { computeNextSendTimeForRecipient } = await import('./services/emailSchedulingService');
 
-      // Add nextSendAt to all recipients using smart timing
-      const recipientsWithNextSend = recipients.map(r => ({
+      // Add nextSendAt to all recipients using dual-window scheduling (admin + recipient windows)
+      const recipientsWithNextSend = await Promise.all(recipients.map(async r => ({
         ...r,
-        nextSendAt: computeOptimalSendTime({
-          businessHours: r.businessHours || '',
-          state: r.timezone || 'America/New_York',
-          skipWeekends: ehubSettings?.skipWeekends ?? false,
-          baselineTime: addDays(new Date(), initialDelayDays),
-        }),
-      }));
+        nextSendAt: await computeNextSendTimeForRecipient(
+          id, // sequenceId
+          r.businessHours || '',
+          r.timezone || 'America/New_York',
+          initialDelayDays,
+          storage
+        ),
+      })));
 
       // Bulk insert recipients
       const created = await storage.addRecipients(recipientsWithNextSend);
