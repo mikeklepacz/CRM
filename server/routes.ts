@@ -19572,11 +19572,59 @@ Use this store information to provide context-aware responses. When helping draf
   // Get E-Hub queue view (admin only)
   app.get('/api/ehub/queue', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const queue = await storage.getQueueView();
+      const search = req.query.search as string | undefined;
+      const timeWindowDays = req.query.timeWindowDays ? parseInt(req.query.timeWindowDays as string, 10) : 3;
+      
+      const queue = await storage.getIndividualSendsQueue({ search, timeWindowDays });
       res.json(queue);
     } catch (error: any) {
       console.error('Error fetching queue view:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch queue' });
+    }
+  });
+
+  // Pause recipient (admin only) - stops all future sends
+  app.patch('/api/ehub/recipients/:id/pause', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const recipient = await storage.pauseRecipient(id);
+      
+      // TODO: Delete Gmail drafts for this recipient
+      
+      res.json(recipient);
+    } catch (error: any) {
+      console.error('Error pausing recipient:', error);
+      res.status(500).json({ message: error.message || 'Failed to pause recipient' });
+    }
+  });
+
+  // Skip recipient's current step (admin only) - advance without sending
+  app.patch('/api/ehub/recipients/:id/skip-step', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const recipient = await storage.skipRecipientStep(id);
+      
+      // TODO: Delete Gmail draft for the skipped step
+      
+      res.json(recipient);
+    } catch (error: any) {
+      console.error('Error skipping recipient step:', error);
+      res.status(500).json({ message: error.message || 'Failed to skip step' });
+    }
+  });
+
+  // Remove recipient from sequence (admin only) - complete removal
+  app.delete('/api/ehub/recipients/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const recipient = await storage.removeRecipient(id);
+      
+      // TODO: Delete all Gmail drafts for this recipient
+      
+      res.json(recipient);
+    } catch (error: any) {
+      console.error('Error removing recipient:', error);
+      res.status(500).json({ message: error.message || 'Failed to remove recipient' });
     }
   });
 

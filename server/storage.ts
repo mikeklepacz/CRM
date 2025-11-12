@@ -525,8 +525,25 @@ export interface IStorage {
   getRecipient(id: string): Promise<SequenceRecipient | undefined>;
   getNextRecipientsToSend(limit: number): Promise<SequenceRecipient[]>;
   getQueueView(): Promise<Array<SequenceRecipient & { sequenceName: string }>>;
+  getIndividualSendsQueue(options: { search?: string; timeWindowDays?: number }): Promise<Array<{
+    recipientId: string;
+    recipientEmail: string;
+    recipientName: string;
+    sequenceId: string;
+    sequenceName: string;
+    stepNumber: number;
+    scheduledAt: Date | null;
+    sentAt: Date | null;
+    status: 'sent' | 'scheduled' | 'overdue';
+    subject: string | null;
+    threadId: string | null;
+    messageId: string | null;
+  }>>;
   updateRecipientStatus(id: string, updates: Partial<InsertSequenceRecipient>): Promise<SequenceRecipient>;
   findRecipientByEmail(sequenceId: string, email: string): Promise<SequenceRecipient | undefined>;
+  pauseRecipient(id: string): Promise<SequenceRecipient>;
+  removeRecipient(id: string): Promise<SequenceRecipient>;
+  skipRecipientStep(id: string): Promise<SequenceRecipient>;
 
   // E-Hub Sequence Steps operations
   createSequenceStep(step: InsertSequenceStep): Promise<SequenceStep>;
@@ -3202,6 +3219,183 @@ export class DatabaseStorage implements IStorage {
     return results as Array<SequenceRecipient & { sequenceName: string }>;
   }
 
+  async getIndividualSendsQueue(options: { search?: string; timeWindowDays?: number }): Promise<Array<{
+    recipientId: string;
+    recipientEmail: string;
+    recipientName: string;
+    sequenceId: string;
+    sequenceName: string;
+    stepNumber: number;
+    scheduledAt: Date | null;
+    sentAt: Date | null;
+    status: 'sent' | 'scheduled' | 'overdue';
+    subject: string | null;
+    threadId: string | null;
+    messageId: string | null;
+  }>> {
+    const { search, timeWindowDays = 3 } = options;
+    
+    // Calculate time window
+    const now = new Date();
+    const maxDate = addDays(now, timeWindowDays);
+    
+    // Build where conditions
+    const whereConditions: any[] = [
+      or(
+        eq(sequenceRecipients.status, 'pending'),
+        eq(sequenceRecipients.status, 'in_sequence')
+      )
+    ];
+    
+    // Add search filter if provided
+    if (search && search.trim()) {
+      const searchLower = search.trim().toLowerCase();
+      whereConditions.push(
+        or(
+          sql`LOWER(${sequenceRecipients.email}) LIKE ${`%${searchLower}%`}`,
+          sql`LOWER(${sequenceRecipients.name}) LIKE ${`%${searchLower}%`}`
+        )
+      );
+    }
+    
+    // Get all active recipients with sequence info
+    const recipients = await db
+      .select({
+        id: sequenceRecipients.id,
+        sequenceId: sequenceRecipients.sequenceId,
+        sequenceName: sequences.name,
+        email: sequenceRecipients.email,
+        name: sequenceRecipients.name,
+        status: sequenceRecipients.status,
+        currentStep: sequenceRecipients.currentStep,
+        nextSendAt: sequenceRecipients.nextSendAt,
+        lastStepSentAt: sequenceRecipients.lastStepSentAt,
+        threadId: sequenceRecipients.threadId,
+        stepDelays: sequences.stepDelays,
+        repeatLastStep: sequences.repeatLastStep,
+      })
+      .from(sequenceRecipients)
+      .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
+      .where(and(...whereConditions));
+    
+    // Build individual send records
+    const individualSends: Array<{
+      recipientId: string;
+      recipientEmail: string;
+      recipientName: string;
+      sequenceId: string;
+      sequenceName: string;
+      stepNumber: number;
+      scheduledAt: Date | null;
+      sentAt: Date | null;
+      status: 'sent' | 'scheduled' | 'overdue';
+      subject: string | null;
+      threadId: string | null;
+      messageId: string | null;
+    }> = [];
+    
+    for (const recipient of recipients) {
+      // Get sent messages for this recipient
+      const sentMessages = await db
+        .select()
+        .from(sequenceRecipientMessages)
+        .where(eq(sequenceRecipientMessages.recipientId, recipient.id))
+        .orderBy(sequenceRecipientMessages.stepNumber);
+      
+      // Add ALL sent messages (no time window filter for audit history)
+      for (const message of sentMessages) {
+        individualSends.push({
+          recipientId: recipient.id,
+          recipientEmail: recipient.email,
+          recipientName: recipient.name || '',
+          sequenceId: recipient.sequenceId,
+          sequenceName: recipient.sequenceName || '',
+          stepNumber: message.stepNumber,
+          scheduledAt: null, // Sent messages don't have scheduled time
+          sentAt: message.sentAt,
+          status: 'sent',
+          subject: message.subject,
+          threadId: message.threadId,
+          messageId: message.messageId,
+        });
+      }
+      
+      // Calculate and add future sends within time window
+      if (recipient.stepDelays && recipient.stepDelays.length > 0) {
+        const stepDelays = recipient.stepDelays.map((d: string) => parseFloat(d));
+        const currentStep = recipient.currentStep || 0;
+        const totalSteps = stepDelays.length;
+        
+        // Calculate future sends
+        let nextSendTime = recipient.nextSendAt || now;
+        
+        for (let step = currentStep + 1; step <= totalSteps; step++) {
+          // Only include sends within time window
+          if (nextSendTime > maxDate) {
+            break;
+          }
+          
+          const status: 'scheduled' | 'overdue' = nextSendTime < now ? 'overdue' : 'scheduled';
+          
+          individualSends.push({
+            recipientId: recipient.id,
+            recipientEmail: recipient.email,
+            recipientName: recipient.name || '',
+            sequenceId: recipient.sequenceId,
+            sequenceName: recipient.sequenceName || '',
+            stepNumber: step,
+            scheduledAt: nextSendTime,
+            sentAt: null,
+            status,
+            subject: null, // Future sends don't have subject yet
+            threadId: recipient.threadId,
+            messageId: null,
+          });
+          
+          // Calculate next send time for subsequent steps
+          if (step < totalSteps) {
+            const delayDays = stepDelays[step]; // Index matches step number (stepDelays[1] = delay after step 1)
+            nextSendTime = addDays(nextSendTime, delayDays);
+          } else if (recipient.repeatLastStep) {
+            // If repeat last step is enabled, show one more occurrence
+            const lastDelay = stepDelays[stepDelays.length - 1];
+            nextSendTime = addDays(nextSendTime, lastDelay);
+            
+            individualSends.push({
+              recipientId: recipient.id,
+              recipientEmail: recipient.email,
+              recipientName: recipient.name || '',
+              sequenceId: recipient.sequenceId,
+              sequenceName: recipient.sequenceName || '',
+              stepNumber: step, // Same step number (repeating)
+              scheduledAt: nextSendTime,
+              sentAt: null,
+              status: nextSendTime < now ? 'overdue' : 'scheduled',
+              subject: null,
+              threadId: recipient.threadId,
+              messageId: null,
+            });
+            break; // Only show one repeat in the queue
+          }
+        }
+      }
+    }
+    
+    // Sort chronologically by scheduled/sent time
+    individualSends.sort((a, b) => {
+      const timeA = a.sentAt || a.scheduledAt;
+      const timeB = b.sentAt || b.scheduledAt;
+      
+      if (!timeA && !timeB) return 0;
+      if (!timeA) return 1;
+      if (!timeB) return -1;
+      
+      return timeA.getTime() - timeB.getTime();
+    });
+    
+    return individualSends;
+  }
+
   async updateRecipientStatus(id: string, updates: Partial<InsertSequenceRecipient>): Promise<SequenceRecipient> {
     const [updated] = await db
       .update(sequenceRecipients)
@@ -3223,6 +3417,134 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(1);
     return recipient;
+  }
+
+  async pauseRecipient(id: string): Promise<SequenceRecipient> {
+    const [updated] = await db
+      .update(sequenceRecipients)
+      .set({ 
+        status: 'paused',
+        updatedAt: new Date()
+      })
+      .where(eq(sequenceRecipients.id, id))
+      .returning();
+    return updated;
+  }
+
+  async removeRecipient(id: string): Promise<SequenceRecipient> {
+    const [updated] = await db
+      .update(sequenceRecipients)
+      .set({ 
+        status: 'removed',
+        updatedAt: new Date()
+      })
+      .where(eq(sequenceRecipients.id, id))
+      .returning();
+    return updated;
+  }
+
+  async skipRecipientStep(id: string): Promise<SequenceRecipient> {
+    // Get recipient with sequence and E-Hub settings
+    const [recipientData] = await db
+      .select({
+        recipient: sequenceRecipients,
+        stepDelays: sequences.stepDelays,
+        repeatLastStep: sequences.repeatLastStep,
+      })
+      .from(sequenceRecipients)
+      .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
+      .where(eq(sequenceRecipients.id, id))
+      .limit(1);
+
+    if (!recipientData) {
+      throw new Error(`Recipient ${id} not found`);
+    }
+
+    // Get E-Hub settings for smart timing
+    const settings = await this.getEhubSettings();
+    if (!settings) {
+      throw new Error('E-Hub settings not found');
+    }
+
+    // Find last ACTUALLY SENT step by querying message history
+    const [lastSentMessage] = await db
+      .select()
+      .from(sequenceRecipientMessages)
+      .where(eq(sequenceRecipientMessages.recipientId, id))
+      .orderBy(desc(sequenceRecipientMessages.stepNumber))
+      .limit(1);
+
+    const { recipient, stepDelays, repeatLastStep } = recipientData;
+    const oldCurrentStep = recipient.currentStep || 0;
+    const newStep = oldCurrentStep + 1;
+    const delays = stepDelays ? stepDelays.map((d: string) => parseFloat(d)) : [];
+    const now = new Date();
+    
+    // Get last ACTUALLY SENT step and timestamp
+    const lastSentStep = lastSentMessage ? lastSentMessage.stepNumber : 0;
+    const lastSent = recipient.lastStepSentAt || now;
+    
+    // Calculate next send time using CUMULATIVE gap-based delays + smart timing
+    let nextSendAt: Date | null = null;
+    let recipientStatus = 'in_sequence';
+    
+    if (newStep < delays.length) {
+      // Calculate cumulative gaps from last ACTUALLY SENT step through new position
+      // MUST include delays[newStep] since the skip handler advances currentStep without sending
+      // Example: lastSentStep=1, newStep=3 → sum delays[1] + delays[2] + delays[3]
+      let cumulativeGapDays = 0;
+      for (let i = lastSentStep; i <= newStep; i++) {
+        cumulativeGapDays += delays[i] ?? 0;
+      }
+      
+      const baselineTime = addDays(lastSent, cumulativeGapDays);
+      
+      const { computeNextSendSlot } = await import('./services/smartTiming');
+      nextSendAt = computeNextSendSlot({
+        baselineTime,
+        adminTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        adminStartHour: settings.sendingHoursStart,
+        adminEndHour: settings.sendingHoursEnd,
+        recipientBusinessHours: recipient.businessHours || '',
+        recipientTimezone: recipient.timezone || 'America/New_York',
+        clientWindowStartOffset: settings.clientWindowStartOffset,
+        clientWindowEndHour: settings.clientWindowEndHour,
+        skipWeekends: settings.skipWeekends,
+      });
+    } else if (newStep === delays.length && repeatLastStep) {
+      // On last step with repeat enabled - schedule repeat from last send
+      const lastGapDays = delays[delays.length - 1];
+      const baselineTime = addDays(lastSent, lastGapDays);
+      
+      const { computeNextSendSlot } = await import('./services/smartTiming');
+      nextSendAt = computeNextSendSlot({
+        baselineTime,
+        adminTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        adminStartHour: settings.sendingHoursStart,
+        adminEndHour: settings.sendingHoursEnd,
+        recipientBusinessHours: recipient.businessHours || '',
+        recipientTimezone: recipient.timezone || 'America/New_York',
+        clientWindowStartOffset: settings.clientWindowStartOffset,
+        clientWindowEndHour: settings.clientWindowEndHour,
+        skipWeekends: settings.skipWeekends,
+      });
+    } else {
+      // Sequence complete
+      recipientStatus = 'completed';
+    }
+
+    const [updated] = await db
+      .update(sequenceRecipients)
+      .set({ 
+        currentStep: newStep,
+        nextSendAt,
+        status: recipientStatus,
+        updatedAt: now
+      })
+      .where(eq(sequenceRecipients.id, id))
+      .returning();
+    
+    return updated;
   }
 
   // E-Hub Sequence Steps operations

@@ -12,11 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2 } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -76,37 +77,120 @@ interface TestEmailSend {
   createdAt: string;
 }
 
-interface QueueItem {
-  id: string;
+interface IndividualSend {
+  recipientId: string;
+  recipientEmail: string;
+  recipientName: string;
   sequenceId: string;
   sequenceName: string;
-  email: string;
-  name: string;
-  status: string;
-  currentStep: number;
-  nextSendAt: string | null;
-  lastStepSentAt: string | null;
+  stepNumber: number;
+  scheduledAt: string | null;
   sentAt: string | null;
+  status: 'sent' | 'scheduled' | 'overdue';
+  subject: string | null;
+  threadId: string | null;
+  messageId: string | null;
 }
 
 function QueueView() {
   const { toast } = useToast();
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [timeWindowDays, setTimeWindowDays] = useState<number>(3);
   
-  // Fetch queue with 30s polling
-  const { data: queue, isLoading } = useQuery<QueueItem[]>({
-    queryKey: ['/api/ehub/queue'],
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+  
+  // Fetch queue with search and time window params
+  const { data: queue, isLoading } = useQuery<IndividualSend[]>({
+    queryKey: ['/api/ehub/queue', { search: debouncedSearch, timeWindowDays }],
     refetchInterval: 30000, // 30 seconds
     staleTime: 15000,
   });
 
-  // Filter out replied recipients and calculate stats
-  const activeQueue = queue?.filter(item => item.status !== 'replied') || [];
-  const followUps = activeQueue.filter(item => item.currentStep > 0);
-  const freshEmails = activeQueue.filter(item => item.currentStep === 0);
+  // Pause recipient mutation
+  const pauseMutation = useMutation({
+    mutationFn: async (recipientId: string) => {
+      return await apiRequest(`/api/ehub/recipients/${recipientId}/pause`, 'PATCH');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      toast({
+        title: 'Recipient paused',
+        description: 'All future sends have been stopped',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to pause recipient',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Skip step mutation
+  const skipStepMutation = useMutation({
+    mutationFn: async (recipientId: string) => {
+      return await apiRequest(`/api/ehub/recipients/${recipientId}/skip-step`, 'PATCH');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      toast({
+        title: 'Step skipped',
+        description: 'Advanced to next step without sending',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to skip step',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Remove recipient mutation
+  const removeMutation = useMutation({
+    mutationFn: async (recipientId: string) => {
+      return await apiRequest(`/api/ehub/recipients/${recipientId}`, 'DELETE');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      toast({
+        title: 'Recipient removed',
+        description: 'Removed from sequence completely',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to remove recipient',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Calculate stats
+  const sentItems = queue?.filter(item => item.status === 'sent') || [];
+  const scheduledItems = queue?.filter(item => item.status === 'scheduled') || [];
+  const overdueItems = queue?.filter(item => item.status === 'overdue') || [];
   
-  // Get next send time
-  const nextSendAt = activeQueue.length > 0 && activeQueue[0].nextSendAt 
-    ? new Date(activeQueue[0].nextSendAt)
+  // Get unique recipients for follow-ups vs fresh calculation
+  const uniqueRecipients = new Set(queue?.map(item => item.recipientId) || []);
+  const followUpRecipients = new Set(
+    queue?.filter(item => item.stepNumber > 1).map(item => item.recipientId) || []
+  );
+  const freshRecipients = uniqueRecipients.size - followUpRecipients.size;
+  
+  // Get next send time from scheduled items
+  const nextScheduled = scheduledItems.length > 0 && scheduledItems[0].scheduledAt
+    ? new Date(scheduledItems[0].scheduledAt)
     : null;
 
   // Format date helper
@@ -123,12 +207,28 @@ function QueueView() {
     return `in ${Math.floor(diffMins / 1440)}d`;
   };
 
-  // Get row background color based on currentStep
-  const getRowBgColor = (currentStep: number) => {
-    if (currentStep === 0) {
-      return 'bg-blue-50 dark:bg-blue-900/20'; // Fresh emails
+  // Format full timestamp
+  const formatTimestamp = (dateStr: string | null) => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  // Get row background color based on status
+  const getRowBgColor = (status: 'sent' | 'scheduled' | 'overdue') => {
+    if (status === 'sent') {
+      return 'bg-green-50 dark:bg-green-900/20';
     }
-    return 'bg-amber-50 dark:bg-amber-900/20'; // Follow-ups
+    if (status === 'overdue') {
+      return 'bg-red-50 dark:bg-red-900/20';
+    }
+    return 'bg-blue-50 dark:bg-blue-900/20'; // scheduled
   };
 
   if (isLoading) {
@@ -147,7 +247,7 @@ function QueueView() {
           <CardHeader className="pb-3">
             <CardDescription>Follow-ups Pending</CardDescription>
             <CardTitle className="text-3xl" data-testid="text-followups-pending">
-              {followUps.length}
+              {followUpRecipients.size}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -155,7 +255,7 @@ function QueueView() {
           <CardHeader className="pb-3">
             <CardDescription>Fresh Emails Pending</CardDescription>
             <CardTitle className="text-3xl" data-testid="text-fresh-pending">
-              {freshEmails.length}
+              {freshRecipients}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -163,7 +263,7 @@ function QueueView() {
           <CardHeader className="pb-3">
             <CardDescription>Next Send</CardDescription>
             <CardTitle className="text-xl" data-testid="text-next-send">
-              {nextSendAt ? formatDate(nextSendAt.toISOString()) : 'No emails queued'}
+              {nextScheduled ? formatDate(nextScheduled.toISOString()) : 'No emails queued'}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -172,15 +272,43 @@ function QueueView() {
       {/* Queue Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Email Queue</CardTitle>
-          <CardDescription>
-            Chronological view of all pending emails • Blue = Fresh, Yellow = Follow-up
-          </CardDescription>
+          <div className="flex flex-col gap-4">
+            <div>
+              <CardTitle>Email Queue</CardTitle>
+              <CardDescription>
+                Chronological view of all individual email sends • Green = Sent, Blue = Scheduled, Red = Overdue
+              </CardDescription>
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              <Input
+                placeholder="Search by name or email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="max-w-xs"
+                data-testid="input-queue-search"
+              />
+              <Select
+                value={timeWindowDays.toString()}
+                onValueChange={(val) => setTimeWindowDays(parseInt(val, 10))}
+              >
+                <SelectTrigger className="w-[200px]" data-testid="select-time-window">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Next 24 hours</SelectItem>
+                  <SelectItem value="3">Next 3 days</SelectItem>
+                  <SelectItem value="7">Next 7 days</SelectItem>
+                  <SelectItem value="14">Next 14 days</SelectItem>
+                  <SelectItem value="30">Next 30 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          {activeQueue.length === 0 ? (
+          {!queue || queue.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              No emails in queue
+              {search ? 'No results found' : 'No emails in queue'}
             </div>
           ) : (
             <ScrollArea className="h-[600px]">
@@ -192,36 +320,88 @@ function QueueView() {
                     <TableHead>Step</TableHead>
                     <TableHead>Scheduled</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="w-[60px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeQueue.map((item) => (
+                  {queue.map((item, idx) => (
                     <TableRow
-                      key={item.id}
-                      className={getRowBgColor(item.currentStep)}
-                      data-testid={`row-queue-${item.id}`}
+                      key={`${item.recipientId}-${item.stepNumber}-${idx}`}
+                      className={getRowBgColor(item.status)}
+                      data-testid={`row-queue-${item.recipientId}-${item.stepNumber}`}
                     >
-                      <TableCell data-testid={`text-recipient-name-${item.id}`}>
+                      <TableCell data-testid={`text-recipient-name-${item.recipientId}-${item.stepNumber}`}>
                         <div>
-                          <div className="font-medium">{item.name || 'Unknown'}</div>
-                          <div className="text-sm text-muted-foreground">{item.email}</div>
+                          <div className="font-medium">{item.recipientName || 'Unknown'}</div>
+                          <div className="text-sm text-muted-foreground">{item.recipientEmail}</div>
                         </div>
                       </TableCell>
-                      <TableCell data-testid={`text-queue-sequence-${item.id}`}>
+                      <TableCell data-testid={`text-queue-sequence-${item.recipientId}-${item.stepNumber}`}>
                         {item.sequenceName}
                       </TableCell>
-                      <TableCell data-testid={`text-queue-step-${item.id}`}>
-                        <Badge variant={item.currentStep === 0 ? 'default' : 'secondary'}>
-                          {item.currentStep === 0 ? 'Fresh' : `Step ${item.currentStep}`}
+                      <TableCell data-testid={`text-queue-step-${item.recipientId}-${item.stepNumber}`}>
+                        <Badge variant={item.stepNumber === 1 ? 'default' : 'secondary'}>
+                          Step {item.stepNumber}
                         </Badge>
                       </TableCell>
-                      <TableCell data-testid={`text-queue-scheduled-${item.id}`}>
-                        {formatDate(item.nextSendAt)}
+                      <TableCell data-testid={`text-queue-scheduled-${item.recipientId}-${item.stepNumber}`}>
+                        {item.status === 'sent' 
+                          ? formatTimestamp(item.sentAt)
+                          : formatTimestamp(item.scheduledAt)
+                        }
                       </TableCell>
-                      <TableCell data-testid={`text-queue-status-${item.id}`}>
-                        <Badge variant={item.status === 'pending' ? 'outline' : 'default'}>
+                      <TableCell data-testid={`text-queue-status-${item.recipientId}-${item.stepNumber}`}>
+                        <Badge 
+                          variant={
+                            item.status === 'sent' ? 'default' : 
+                            item.status === 'overdue' ? 'destructive' : 
+                            'outline'
+                          }
+                        >
                           {item.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell data-testid={`actions-${item.recipientId}-${item.stepNumber}`}>
+                        {item.status !== 'sent' && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                data-testid={`button-actions-${item.recipientId}-${item.stepNumber}`}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => pauseMutation.mutate(item.recipientId)}
+                                disabled={pauseMutation.isPending}
+                                data-testid={`action-pause-${item.recipientId}`}
+                              >
+                                <Pause className="mr-2 h-4 w-4" />
+                                Pause Recipient
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => skipStepMutation.mutate(item.recipientId)}
+                                disabled={skipStepMutation.isPending}
+                                data-testid={`action-skip-${item.recipientId}`}
+                              >
+                                <SkipForward className="mr-2 h-4 w-4" />
+                                Skip This Step
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => removeMutation.mutate(item.recipientId)}
+                                disabled={removeMutation.isPending}
+                                className="text-destructive"
+                                data-testid={`action-remove-${item.recipientId}`}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Remove from Sequence
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
