@@ -3251,10 +3251,7 @@ export class DatabaseStorage implements IStorage {
           'summary',
           COALESCE(strategy_transcript->'summary', 'null'::jsonb),
           'threadId',
-          CASE 
-            WHEN ${threadId} IS NOT NULL THEN to_jsonb(${threadId})
-            ELSE COALESCE(strategy_transcript->'threadId', 'null'::jsonb)
-          END
+          ${threadId ? sql`to_jsonb(${threadId}::text)` : sql`COALESCE(strategy_transcript->'threadId', 'null'::jsonb)`}
         ),
         updated_at = NOW()
       WHERE id = ${sequenceId}
