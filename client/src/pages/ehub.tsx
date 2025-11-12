@@ -130,7 +130,7 @@ function QueueView() {
   // Pause recipient mutation
   const pauseMutation = useMutation({
     mutationFn: async (recipientId: string) => {
-      return await apiRequest(`/api/ehub/recipients/${recipientId}/pause`, 'PATCH');
+      return await apiRequest('PATCH', `/api/ehub/recipients/${recipientId}/pause`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
@@ -151,7 +151,7 @@ function QueueView() {
   // Skip step mutation
   const skipStepMutation = useMutation({
     mutationFn: async (recipientId: string) => {
-      return await apiRequest(`/api/ehub/recipients/${recipientId}/skip-step`, 'PATCH');
+      return await apiRequest('PATCH', `/api/ehub/recipients/${recipientId}/skip-step`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
@@ -172,7 +172,7 @@ function QueueView() {
   // Remove recipient mutation
   const removeMutation = useMutation({
     mutationFn: async (recipientId: string) => {
-      return await apiRequest(`/api/ehub/recipients/${recipientId}`, 'DELETE');
+      return await apiRequest('DELETE', `/api/ehub/recipients/${recipientId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
@@ -193,7 +193,7 @@ function QueueView() {
   // Send Now mutation
   const sendNowMutation = useMutation({
     mutationFn: async (recipientId: string) => {
-      return await apiRequest(`/api/ehub/recipients/${recipientId}/send-now`, 'POST');
+      return await apiRequest('POST', `/api/ehub/recipients/${recipientId}/send-now`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
@@ -220,7 +220,7 @@ function QueueView() {
 
   const delayMutation = useMutation({
     mutationFn: async ({ recipientId, hours }: { recipientId: string; hours: number }) => {
-      return await apiRequest(`/api/ehub/recipients/${recipientId}/delay`, 'PATCH', { hours });
+      return await apiRequest('PATCH', `/api/ehub/recipients/${recipientId}/delay`, { hours });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
