@@ -288,6 +288,29 @@ export default function EHub() {
     },
   });
 
+  // Delete sequence mutation
+  const deleteMutation = useMutation({
+    mutationFn: (sequenceId: string) => apiRequest('DELETE', `/api/sequences/${sequenceId}`),
+    onSuccess: () => {
+      toast({
+        title: "Sequence Deleted",
+        description: "The sequence and all its data have been permanently deleted.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      setDeleteSequenceId(null);
+      if (selectedSequenceId === deleteSequenceId) {
+        setSelectedSequenceId(null);
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete sequence",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: (data: Partial<EhubSettings>) => apiRequest('PATCH', '/api/ehub/settings', data),
