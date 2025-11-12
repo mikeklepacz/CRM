@@ -1296,7 +1296,7 @@ export const sequenceSteps = pgTable("sequence_steps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
   stepNumber: integer("step_number").notNull(), // 1, 2, 3, etc.
-  delayDays: integer("delay_days").notNull(), // Days to wait after previous step (0 for step 1)
+  delayDays: decimal("delay_days", { precision: 10, scale: 4 }).notNull(), // Days to wait after previous step (supports decimals like 0.0035 for testing)
   aiGuidance: text("ai_guidance"), // Optional per-step AI instructions
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
