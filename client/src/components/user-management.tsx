@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { UserPlus, Mail, User as UserIcon, Briefcase, Lock, Shield, DollarSign, TrendingUp, Loader2, UserX, UserCheck, Trash2 } from "lucide-react";
+import { UserPlus, Mail, User as UserIcon, Briefcase, Lock, Shield, DollarSign, TrendingUp, Loader2, UserX, UserCheck, Trash2, KeyRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -38,6 +38,9 @@ export function UserManagement() {
   const [activeTab, setActiveTab] = useState("active");
   const [deactivateDialog, setDeactivateDialog] = useState<{ open: boolean; userId: string; analysis: any } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; userId: string; userEmail: string } | null>(null);
+  const [resetPasswordDialog, setResetPasswordDialog] = useState<{ open: boolean; userId: string; userEmail: string; userName: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [newUser, setNewUser] = useState({
     email: "",
@@ -179,6 +182,30 @@ export function UserManagement() {
     },
   });
 
+  // Reset password mutation
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
+      return await apiRequest("PATCH", `/api/users/${userId}/reset-password`, { newPassword });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setResetPasswordDialog(null);
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({
+        title: "Success",
+        description: "Password reset successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reset password",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateUser = () => {
     if (!newUser.email || !newUser.agentName || !newUser.password) {
       toast({
@@ -232,6 +259,48 @@ export function UserManagement() {
     if (deleteDialog) {
       deleteUserMutation.mutate(deleteDialog.userId);
     }
+  };
+
+  const handleResetPasswordClick = (userId: string, userEmail: string, userName: string) => {
+    setResetPasswordDialog({ open: true, userId, userEmail, userName });
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  const handleResetPasswordConfirm = () => {
+    if (!resetPasswordDialog) return;
+
+    if (!newPassword) {
+      toast({
+        title: "Validation Error",
+        description: "Password is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Validation Error",
+        description: "Password must be at least 6 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Validation Error",
+        description: "Passwords do not match",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    resetPasswordMutation.mutate({
+      userId: resetPasswordDialog.userId,
+      newPassword,
+    });
   };
 
   if (isLoading) {
@@ -565,20 +634,35 @@ export function UserManagement() {
                           </TableCell>
                           <TableCell className="text-right">
                             {user.id !== currentUser?.id ? (
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleDeactivateClick(user.id)}
-                                disabled={loadingAnalysis || deactivateUserMutation.isPending}
-                                data-testid={`button-deactivate-${user.id}`}
-                              >
-                                {loadingAnalysis ? (
-                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                ) : (
-                                  <UserX className="h-3 w-3 mr-1" />
-                                )}
-                                Deactivate
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleResetPasswordClick(
+                                    user.id,
+                                    user.email || '',
+                                    user.agentName || `${user.firstName} ${user.lastName}`.trim() || user.email || 'User'
+                                  )}
+                                  data-testid={`button-reset-password-${user.id}`}
+                                >
+                                  <KeyRound className="h-3 w-3 mr-1" />
+                                  Reset Password
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleDeactivateClick(user.id)}
+                                  disabled={loadingAnalysis || deactivateUserMutation.isPending}
+                                  data-testid={`button-deactivate-${user.id}`}
+                                >
+                                  {loadingAnalysis ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <UserX className="h-3 w-3 mr-1" />
+                                  )}
+                                  Deactivate
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-sm text-muted-foreground">You</span>
                             )}
@@ -664,6 +748,19 @@ export function UserManagement() {
                           <TableCell className="text-right">
                             {user.id !== currentUser?.id ? (
                               <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleResetPasswordClick(
+                                    user.id,
+                                    user.email || '',
+                                    user.agentName || `${user.firstName} ${user.lastName}`.trim() || user.email || 'User'
+                                  )}
+                                  data-testid={`button-reset-password-${user.id}`}
+                                >
+                                  <KeyRound className="h-3 w-3 mr-1" />
+                                  Reset Password
+                                </Button>
                                 <Button
                                   variant="default"
                                   size="sm"
@@ -806,6 +903,73 @@ export function UserManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPasswordDialog?.open || false} onOpenChange={(open) => !open && setResetPasswordDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Reset password for: <span className="font-medium">{resetPasswordDialog?.userName}</span> ({resetPasswordDialog?.userEmail})
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="newPassword"
+                  type="password"
+                  placeholder="Enter new password (min 6 characters)"
+                  className="pl-10"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  data-testid="input-new-password"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm new password"
+                  className="pl-10"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  data-testid="input-confirm-password"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setResetPasswordDialog(null)}
+              disabled={resetPasswordMutation.isPending}
+              data-testid="button-cancel-reset-password"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleResetPasswordConfirm}
+              disabled={resetPasswordMutation.isPending}
+              data-testid="button-confirm-reset-password"
+            >
+              {resetPasswordMutation.isPending && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              Reset Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

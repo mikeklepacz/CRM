@@ -7839,6 +7839,50 @@ IMPORTANT:
     }
   });
 
+  // Reset user password (admin only)
+  app.patch('/api/users/:userId/reset-password', isAuthenticatedCustom, isAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { newPassword } = req.body;
+
+      if (!newPassword || typeof newPassword !== 'string') {
+        return res.status(400).json({ message: "New password is required" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      // Check if user exists
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Hash the new password
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      // Update user's password
+      const [updatedUser] = await db
+        .update(users)
+        .set({ passwordHash, updatedAt: new Date() })
+        .where(eq(users.id, userId))
+        .returning();
+
+      res.json({ 
+        message: "Password reset successfully",
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          agentName: updatedUser.agentName,
+        }
+      });
+    } catch (error: any) {
+      console.error("Error resetting password:", error);
+      res.status(500).json({ message: error.message || "Failed to reset password" });
+    }
+  });
+
   // Get sales report data (admin only)
   app.get('/api/reports/sales-data', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
