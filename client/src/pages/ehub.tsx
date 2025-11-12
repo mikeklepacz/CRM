@@ -1223,7 +1223,7 @@ export default function EHub() {
                                 id={`delay-${index}`}
                                 type="number"
                                 step="0.0001"
-                                min={index === 0 ? 0 : stepDelays[index - 1] + 0.0001}
+                                min="0"
                                 value={delay}
                                 onChange={(e) => {
                                   const newDelays = [...stepDelays];
@@ -1257,16 +1257,13 @@ export default function EHub() {
                     {/* Validation feedback */}
                     {stepDelays.length > 0 && (() => {
                       const hasNegative = stepDelays.some((d) => d < 0);
-                      const notAscending = stepDelays.some((d, i) => i > 0 && d <= stepDelays[i - 1]);
-                      const isInvalid = hasNegative || notAscending;
                       
-                      if (isInvalid) {
+                      if (hasNegative) {
                         return (
                           <Alert variant="destructive">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription className="text-xs">
-                              {hasNegative && "All delays must be non-negative. "}
-                              {notAscending && "Delays must be strictly ascending."}
+                              All delays must be non-negative (0 or greater).
                             </AlertDescription>
                           </Alert>
                         );
@@ -1291,24 +1288,22 @@ export default function EHub() {
                         onClick={() => {
                           // Validate before saving
                           const hasNegative = stepDelays.some((d) => d < 0);
-                          const notAscending = stepDelays.some((d, i) => i > 0 && d <= stepDelays[i - 1]);
                           
-                          if (hasNegative || notAscending) {
+                          if (hasNegative) {
                             toast({
                               title: "Invalid Delays",
-                              description: "All delays must be non-negative and strictly ascending",
+                              description: "All delays must be non-negative (0 or greater)",
                               variant: "destructive",
                             });
                             return;
                           }
                           
-                          saveStepDelaysMutation.mutate(stepDelays);
+                          saveStepDelaysMutation.mutate({ stepDelays, repeatLastStep });
                         }}
                         disabled={
                           saveStepDelaysMutation.isPending || 
                           stepDelays.length === 0 ||
-                          stepDelays.some((d) => d < 0) ||
-                          stepDelays.some((d, i) => i > 0 && d <= stepDelays[i - 1])
+                          stepDelays.some((d) => d < 0)
                         }
                         data-testid="button-save-delays"
                         className="flex-1"
