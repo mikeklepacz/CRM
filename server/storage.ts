@@ -172,6 +172,7 @@ import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, gt, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, addMilliseconds } from 'date-fns';
+import { computeNextSendSlot } from './services/smartTiming';
 
 export interface IStorage {
   // User operations - Required for Replit Auth
@@ -3220,7 +3221,7 @@ export class DatabaseStorage implements IStorage {
     return results as Array<SequenceRecipient & { sequenceName: string }>;
   }
 
-  async getIndividualSendsQueue(options: { search?: string; timeWindowDays?: number }): Promise<Array<{
+  async getIndividualSendsQueue(options: { search?: string; timeWindowDays?: number; statusFilter?: 'active' | 'paused' }): Promise<Array<{
     recipientId: string;
     recipientEmail: string;
     recipientName: string;
@@ -3234,18 +3235,20 @@ export class DatabaseStorage implements IStorage {
     threadId: string | null;
     messageId: string | null;
   }>> {
-    const { search, timeWindowDays = 3 } = options;
+    const { search, timeWindowDays = 3, statusFilter = 'active' } = options;
     
     // Calculate time window
     const now = new Date();
     const maxDate = addDays(now, timeWindowDays);
     
-    // Build where conditions
+    // Build where conditions based on statusFilter
     const whereConditions: any[] = [
-      or(
-        eq(sequenceRecipients.status, 'pending'),
-        eq(sequenceRecipients.status, 'in_sequence')
-      )
+      statusFilter === 'paused'
+        ? eq(sequenceRecipients.status, 'paused')
+        : or(
+            eq(sequenceRecipients.status, 'pending'),
+            eq(sequenceRecipients.status, 'in_sequence')
+          )
     ];
     
     // Add search filter if provided
@@ -3321,7 +3324,12 @@ export class DatabaseStorage implements IStorage {
         });
       }
       
-      // Calculate and add future sends within time window
+      // For paused recipients, only show sent message history (no future sends)
+      if (statusFilter === 'paused') {
+        continue; // Skip future send calculations for paused recipients
+      }
+      
+      // Calculate and add future sends within time window (active recipients only)
       if (recipient.stepDelays && recipient.stepDelays.length > 0) {
         const stepDelays = recipient.stepDelays.map((d: string) => parseFloat(d));
         const currentStep = recipient.currentStep || 0;
@@ -3436,6 +3444,100 @@ export class DatabaseStorage implements IStorage {
       .where(eq(sequenceRecipients.id, id))
       .returning();
     return updated;
+  }
+
+  async resumeRecipient(id: string): Promise<SequenceRecipient> {
+    // Get recipient with sequence info
+    const [result] = await db
+      .select({
+        recipient: sequenceRecipients,
+        sequence: sequences,
+      })
+      .from(sequenceRecipients)
+      .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
+      .where(eq(sequenceRecipients.id, id))
+      .limit(1);
+    
+    if (!result || !result.sequence) {
+      throw new Error(`Recipient ${id} or sequence not found`);
+    }
+    
+    const recipient = result.recipient;
+    const sequence = result.sequence;
+    const stepDelays = (sequence.stepDelays || []).map((d: string) => parseFloat(d));
+    const currentStep = recipient.currentStep || 0;
+    const now = new Date();
+    
+    // Check if sequence is complete (shouldn't resume if beyond sequence length)
+    if (currentStep >= stepDelays.length && !sequence.repeatLastStep) {
+      throw new Error(`Recipient ${id} has completed sequence and cannot be resumed`);
+    }
+    
+    // Calculate baseline time respecting configured delays
+    let baselineTime: Date;
+    
+    if (recipient.lastStepSentAt) {
+      // Calculate when the next email SHOULD have been sent (if not paused)
+      const delayDays = currentStep < stepDelays.length 
+        ? stepDelays[currentStep]
+        : stepDelays[stepDelays.length - 1]; // Use last delay for repeat
+      const delayMs = Math.max(delayDays || 0, 0) * 24 * 60 * 60 * 1000;
+      const shouldHaveBeenSentAt = addMilliseconds(recipient.lastStepSentAt, delayMs);
+      
+      // If that time has passed, use a minimal delay from now
+      // Otherwise, honor the remaining wait period
+      baselineTime = shouldHaveBeenSentAt > now 
+        ? shouldHaveBeenSentAt 
+        : addDays(now, 0.0035); // 5 minutes if delay already elapsed
+    } else if (currentStep === 0) {
+      // First email: use initial delay
+      const initialDelay = stepDelays[0] || 0;
+      baselineTime = addDays(now, initialDelay);
+    } else {
+      // Edge case: no lastStepSentAt but currentStep > 0 (imported/manually advanced)
+      // Treat as if previous step just completed, apply current step's delay
+      const delayDays = currentStep < stepDelays.length 
+        ? stepDelays[currentStep]
+        : stepDelays[stepDelays.length - 1];
+      baselineTime = addDays(now, delayDays || 0);
+    }
+    
+    // Get admin window for scheduling
+    const creatorPrefs = await this.getUserPreferences(sequence.createdBy);
+    const ehubSettings = await this.getEhubSettings();
+    
+    // Compute nextSendAt using smart timing
+    const nextSendAt = computeNextSendSlot({
+      baselineTime,
+      adminTimezone: creatorPrefs?.timezone || 'America/New_York',
+      adminStartHour: ehubSettings?.sendingHoursStart ?? 6,
+      adminEndHour: ehubSettings?.sendingHoursEnd ?? 23,
+      recipientBusinessHours: recipient.businessHours || '',
+      recipientTimezone: recipient.timezone || 'America/New_York',
+      clientWindowStartOffset: parseFloat(ehubSettings?.clientWindowStartOffset?.toString() ?? '1.0'),
+      clientWindowEndHour: ehubSettings?.clientWindowEndHour ?? 14,
+      skipWeekends: ehubSettings?.skipWeekends ?? false,
+    });
+    
+    const [updated] = await db
+      .update(sequenceRecipients)
+      .set({ 
+        status: 'in_sequence',
+        nextSendAt,
+        updatedAt: new Date()
+      })
+      .where(eq(sequenceRecipients.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getPausedRecipientsCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(sequenceRecipients)
+      .where(eq(sequenceRecipients.status, 'paused'));
+    
+    return Number(result[0]?.count || 0);
   }
 
   async removeRecipient(id: string): Promise<SequenceRecipient> {

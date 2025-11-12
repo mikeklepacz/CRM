@@ -19574,12 +19574,24 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const search = req.query.search as string | undefined;
       const timeWindowDays = req.query.timeWindowDays ? parseInt(req.query.timeWindowDays as string, 10) : 3;
+      const statusFilter = (req.query.statusFilter as 'active' | 'paused') || 'active';
       
-      const queue = await storage.getIndividualSendsQueue({ search, timeWindowDays });
+      const queue = await storage.getIndividualSendsQueue({ search, timeWindowDays, statusFilter });
       res.json(queue);
     } catch (error: any) {
       console.error('Error fetching queue view:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch queue' });
+    }
+  });
+
+  // Get paused recipients count (admin only)
+  app.get('/api/ehub/queue/paused-count', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const count = await storage.getPausedRecipientsCount();
+      res.json({ count });
+    } catch (error: any) {
+      console.error('Error fetching paused count:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch paused count' });
     }
   });
 
@@ -19595,6 +19607,18 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error pausing recipient:', error);
       res.status(500).json({ message: error.message || 'Failed to pause recipient' });
+    }
+  });
+
+  // Resume recipient (admin only) - restarts paused sends
+  app.patch('/api/ehub/recipients/:id/resume', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const recipient = await storage.resumeRecipient(id);
+      res.json(recipient);
+    } catch (error: any) {
+      console.error('Error resuming recipient:', error);
+      res.status(500).json({ message: error.message || 'Failed to resume recipient' });
     }
   });
 

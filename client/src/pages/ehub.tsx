@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -97,6 +97,7 @@ function QueueView() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [timeWindowDays, setTimeWindowDays] = useState<number>(3);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'paused'>('active');
   
   // Debounce search input
   useEffect(() => {
@@ -106,13 +107,14 @@ function QueueView() {
     return () => clearTimeout(timer);
   }, [search]);
   
-  // Fetch queue with search and time window params
+  // Fetch queue with search, time window, and status filter params
   const { data: queue, isLoading } = useQuery<IndividualSend[]>({
-    queryKey: ['/api/ehub/queue', debouncedSearch, timeWindowDays],
+    queryKey: ['/api/ehub/queue', debouncedSearch, timeWindowDays, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedSearch) params.append('search', debouncedSearch);
       params.append('timeWindowDays', timeWindowDays.toString());
+      params.append('statusFilter', statusFilter);
       
       const url = `/api/ehub/queue?${params.toString()}`;
       const res = await fetch(url, { credentials: 'include' });
@@ -142,6 +144,27 @@ function QueueView() {
     onError: (error: any) => {
       toast({
         title: 'Failed to pause recipient',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Resume recipient mutation
+  const resumeMutation = useMutation({
+    mutationFn: async (recipientId: string) => {
+      return await apiRequest('PATCH', `/api/ehub/recipients/${recipientId}/resume`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      toast({
+        title: 'Recipient resumed',
+        description: 'Emails will resume sending',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to resume recipient',
         description: error.message,
         variant: 'destructive',
       });
@@ -237,6 +260,19 @@ function QueueView() {
         variant: 'destructive',
       });
     },
+  });
+
+  // Fetch paused count separately
+  const { data: pausedCount = 0 } = useQuery<number>({
+    queryKey: ['/api/ehub/queue/paused-count'],
+    queryFn: async () => {
+      const res = await fetch('/api/ehub/queue/paused-count', { credentials: 'include' });
+      if (!res.ok) return 0;
+      const data = await res.json();
+      return data.count || 0;
+    },
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
 
   // Calculate stats
@@ -365,6 +401,14 @@ function QueueView() {
                   <SelectItem value="30">Next 30 days</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                variant={statusFilter === 'paused' ? 'default' : 'outline'}
+                onClick={() => setStatusFilter(statusFilter === 'active' ? 'paused' : 'active')}
+                data-testid="button-toggle-paused"
+              >
+                <Pause className="mr-2 h-4 w-4" />
+                {statusFilter === 'paused' ? 'Show Active' : `Show Paused${pausedCount > 0 ? ` (${pausedCount})` : ''}`}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -437,46 +481,59 @@ function QueueView() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => pauseMutation.mutate(item.recipientId)}
-                                disabled={pauseMutation.isPending}
-                                data-testid={`action-pause-${item.recipientId}`}
-                              >
-                                <Pause className="mr-2 h-4 w-4" />
-                                Pause Recipient
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => skipStepMutation.mutate(item.recipientId)}
-                                disabled={skipStepMutation.isPending}
-                                data-testid={`action-skip-${item.recipientId}`}
-                              >
-                                <SkipForward className="mr-2 h-4 w-4" />
-                                Skip This Step
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => sendNowMutation.mutate(item.recipientId)}
-                                disabled={sendNowMutation.isPending}
-                                data-testid={`action-send-now-${item.recipientId}`}
-                              >
-                                <Send className="mr-2 h-4 w-4" />
-                                Send Now
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => setDelayDialog({ open: true, recipientId: item.recipientId, hours: 1 })}
-                                data-testid={`action-delay-${item.recipientId}`}
-                              >
-                                <Clock className="mr-2 h-4 w-4" />
-                                Delay by X hours
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => removeMutation.mutate(item.recipientId)}
-                                disabled={removeMutation.isPending}
-                                className="text-destructive"
-                                data-testid={`action-remove-${item.recipientId}`}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Remove from Sequence
-                              </DropdownMenuItem>
+                              {statusFilter === 'paused' ? (
+                                <DropdownMenuItem
+                                  onClick={() => resumeMutation.mutate(item.recipientId)}
+                                  disabled={resumeMutation.isPending}
+                                  data-testid={`action-resume-${item.recipientId}`}
+                                >
+                                  <Play className="mr-2 h-4 w-4" />
+                                  Resume Recipient
+                                </DropdownMenuItem>
+                              ) : (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => pauseMutation.mutate(item.recipientId)}
+                                    disabled={pauseMutation.isPending}
+                                    data-testid={`action-pause-${item.recipientId}`}
+                                  >
+                                    <Pause className="mr-2 h-4 w-4" />
+                                    Pause Recipient
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => skipStepMutation.mutate(item.recipientId)}
+                                    disabled={skipStepMutation.isPending}
+                                    data-testid={`action-skip-${item.recipientId}`}
+                                  >
+                                    <SkipForward className="mr-2 h-4 w-4" />
+                                    Skip This Step
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => sendNowMutation.mutate(item.recipientId)}
+                                    disabled={sendNowMutation.isPending}
+                                    data-testid={`action-send-now-${item.recipientId}`}
+                                  >
+                                    <Send className="mr-2 h-4 w-4" />
+                                    Send Now
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => setDelayDialog({ open: true, recipientId: item.recipientId, hours: 1 })}
+                                    data-testid={`action-delay-${item.recipientId}`}
+                                  >
+                                    <Clock className="mr-2 h-4 w-4" />
+                                    Delay by X hours
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => removeMutation.mutate(item.recipientId)}
+                                    disabled={removeMutation.isPending}
+                                    className="text-destructive"
+                                    data-testid={`action-remove-${item.recipientId}`}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Remove from Sequence
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
