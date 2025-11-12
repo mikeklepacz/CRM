@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -82,6 +83,7 @@ export default function EHub() {
   const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none');
   const [isAddToSequenceDialogOpen, setIsAddToSequenceDialogOpen] = useState(false);
   const [targetSequenceId, setTargetSequenceId] = useState<string>('');
+  const [deleteSequenceId, setDeleteSequenceId] = useState<string | null>(null);
 
   // Sequence form state
   const [name, setName] = useState("");
