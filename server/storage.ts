@@ -171,6 +171,7 @@ import {
 import { db } from "./db";
 import { eq, and, or, inArray, sql, desc, lte, gte, gt, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from 'uuid';
+import { addDays } from 'date-fns';
 
 export interface IStorage {
   // User operations - Required for Replit Auth
