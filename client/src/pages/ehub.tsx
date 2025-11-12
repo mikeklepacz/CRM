@@ -1442,10 +1442,11 @@ export default function EHub() {
 
                     {/* Message Input */}
                     <div className="flex gap-2">
-                      <Input
+                      <Textarea
                         value={strategyMessage}
                         onChange={(e) => setStrategyMessage(e.target.value)}
                         placeholder="Ask the AI about your campaign strategy..."
+                        className="flex-1 min-h-[60px] max-h-[200px]"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
