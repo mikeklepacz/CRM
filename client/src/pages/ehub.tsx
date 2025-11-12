@@ -1220,7 +1220,7 @@ export default function EHub() {
                             <div className="flex gap-2 items-end">
                               <div className="flex-1">
                                 <Label htmlFor={`delay-${index}`} className="text-xs">
-                                  Delay before Step {index + 1} (days)
+                                  {index === 0 ? 'Delay before Email 1 (days)' : `Delay before Email ${index + 1} (days)`}
                                 </Label>
                                 <Input
                                   id={`delay-${index}`}

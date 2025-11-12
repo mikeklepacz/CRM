@@ -80,21 +80,53 @@ async function processEmailQueue() {
         });
 
         if (result.success) {
+          const now = new Date();
+          const currentStep = (recipient.currentStep || 0) + 1; // Increment step (0 -> 1, 1 -> 2, etc.)
+          
+          // Parse stepDelays (convert from string[] to number[])
+          const stepDelays = (sequence.stepDelays || []).map(d => parseFloat(d.toString()));
+          
+          // Calculate next send time using gap-based delays
+          // stepDelays[0] = initial delay before first send (used when recipient added)
+          // stepDelays[1] = gap after first send, before second send
+          // stepDelays[n] = gap after nth send, before (n+1)th send
+          let nextSendAt = null;
+          let recipientStatus: string = 'sent';
+          
+          // Check if there are more steps remaining
+          if (currentStep < stepDelays.length) {
+            // Schedule next step using stepDelays[currentStep]
+            const gapDays = stepDelays[currentStep];
+            nextSendAt = new Date(now.getTime() + gapDays * 24 * 60 * 60 * 1000);
+            recipientStatus = 'in_sequence';
+          } else if (currentStep === stepDelays.length && sequence.repeatLastStep) {
+            // On last step with repeat enabled - schedule repeat using the last gap
+            const lastGapDays = stepDelays[stepDelays.length - 1];
+            nextSendAt = new Date(now.getTime() + lastGapDays * 24 * 60 * 60 * 1000);
+            recipientStatus = 'in_sequence';
+          } else {
+            // Sequence complete
+            recipientStatus = 'completed';
+          }
+
           // Update recipient status
           await storage.updateRecipientStatus(recipient.id, {
-            status: 'sent',
-            sentAt: new Date(),
-            gmailMessageId: result.messageId,
+            status: recipientStatus,
+            currentStep,
+            lastStepSentAt: now,
+            nextSendAt,
+            sentAt: recipient.sentAt || now, // Set sentAt only on first send
+            threadId: result.threadId || recipient.threadId,
           });
 
           // Update sequence stats
           const currentStats = await storage.getSequence(sequence.id);
           await storage.updateSequenceStats(sequence.id, {
             sentCount: (currentStats?.sentCount || 0) + 1,
-            lastSentAt: new Date(),
+            lastSentAt: now,
           });
 
-          console.log(`[EmailQueue] ✅ Sent to ${recipient.email}`);
+          console.log(`[EmailQueue] ✅ Sent step ${currentStep} to ${recipient.email}, next: ${nextSendAt ? nextSendAt.toISOString() : 'none'}`);
 
           // Random delay between sends (respect rate limits)
           const delayMs = (settings.minDelayMinutes + Math.random() * (settings.maxDelayMinutes - settings.minDelayMinutes)) * 60 * 1000;
