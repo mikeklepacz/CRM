@@ -115,6 +115,19 @@ async function processEmailQueue() {
         for (const recipient of sequenceRecipients) {
           try {
 
+        // Determine current step (before increment)
+        const currentStepNumber = (recipient.currentStep || 0) + 1; // 0 -> 1, 1 -> 2, etc.
+
+        // For follow-ups, fetch first email's subject for threading
+        let firstEmailSubject: string | null = null;
+        if (currentStepNumber > 1) {
+          const previousMessages = await storage.getRecipientMessages(recipient.id);
+          const firstMessage = previousMessages.find(m => m.stepNumber === 1);
+          if (firstMessage) {
+            firstEmailSubject = firstMessage.subject;
+          }
+        }
+
         // Personalize email using AI with strategy transcript (AI-only, no fallback)
         let personalizedEmail;
         try {
@@ -126,8 +139,15 @@ async function processEmailQueue() {
               promptInjection: settings.promptInjection || undefined, 
               keywordBin: settings.keywordBin || undefined,
               signature: sequence.signature || undefined
-            }
+            },
+            currentStepNumber // Pass step number for context-aware generation
           );
+
+          // OVERRIDE subject for follow-ups to ensure threading
+          if (currentStepNumber > 1 && firstEmailSubject) {
+            personalizedEmail.subject = `Re: ${firstEmailSubject}`;
+            console.log(`[EmailQueue] 📧 Step ${currentStepNumber} - enforcing threaded subject: "${personalizedEmail.subject}"`);
+          }
         } catch (aiError: any) {
           // Log AI error but DON'T update recipient status - keep them pending for retry
           console.error(`[EmailQueue] 🔄 AI generation failed for ${recipient.email}: ${aiError.message}`);
@@ -136,16 +156,18 @@ async function processEmailQueue() {
         }
 
         // Send email using sequence creator's Gmail credentials
+        // For follow-ups (step 2+), thread with previous email
         const result = await sendEmail({
           userId: sequence.createdBy,
           to: recipient.email,
           subject: personalizedEmail.subject,
           body: personalizedEmail.body,
+          threadId: currentStepNumber > 1 ? recipient.threadId : undefined, // Thread for follow-ups
         });
 
         if (result.success) {
           const now = new Date();
-          const currentStep = (recipient.currentStep || 0) + 1; // Increment step (0 -> 1, 1 -> 2, etc.)
+          const currentStep = currentStepNumber; // Already calculated above
           
           // Parse stepDelays (convert from string[] to number[])
           const stepDelays = (sequence.stepDelays || []).map(d => parseFloat(d.toString()));
@@ -192,6 +214,16 @@ async function processEmailQueue() {
             // Sequence complete
             recipientStatus = 'completed';
           }
+
+          // Save sent email to sequenceRecipientMessages for AI context
+          await storage.createRecipientMessage({
+            recipientId: recipient.id,
+            stepNumber: currentStep,
+            subject: personalizedEmail.subject,
+            body: personalizedEmail.body,
+            threadId: result.threadId || recipient.threadId,
+            messageId: result.rfc822MessageId || null,
+          });
 
           // Update recipient status
           await storage.updateRecipientStatus(recipient.id, {

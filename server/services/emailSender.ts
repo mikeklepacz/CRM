@@ -162,7 +162,8 @@ export async function personalizeEmailWithAI(
   recipient: SequenceRecipient,
   template: { subject?: string; body?: string },
   strategyTranscript: StrategyTranscript | null,
-  settings: { promptInjection?: string; keywordBin?: string; signature?: string }
+  settings: { promptInjection?: string; keywordBin?: string; signature?: string },
+  stepNumber: number = 1
 ): Promise<{ subject: string; body: string }> {
   // Get OpenAI settings - REQUIRED (no fallback system)
   const openaiSettings = await storage.getOpenaiSettings();
@@ -171,8 +172,19 @@ export async function personalizeEmailWithAI(
   }
 
   try {
-
     const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+
+    // Fetch previous messages for context (if this is a follow-up)
+    let previousMessages: Array<{ stepNumber: number; subject: string; body: string; sentAt: Date }> = [];
+    if (stepNumber > 1) {
+      const messages = await storage.getRecipientMessages(recipient.id);
+      previousMessages = messages.map(m => ({
+        stepNumber: m.stepNumber,
+        subject: m.subject,
+        body: m.body,
+        sentAt: m.sentAt || new Date(),
+      }));
+    }
 
     // Build recipient context (for AI to understand business, but not directly quote)
     const recipientContext = `
@@ -192,8 +204,21 @@ RECIPIENT CONTEXT (for understanding, do not directly quote in email):
       });
     }
 
-    // System prompt with all instructions
-    const systemPrompt = `You are an expert B2B cold email writer for hemp wick wholesale outreach.
+    // Build previous email context for follow-ups
+    let previousEmailContext = '';
+    if (stepNumber > 1 && previousMessages.length > 0) {
+      previousEmailContext = '\n\nPREVIOUS EMAILS YOU SENT:\n';
+      previousMessages.forEach(msg => {
+        previousEmailContext += `\nEmail ${msg.stepNumber} (sent ${msg.sentAt.toLocaleDateString()}):\nSubject: ${msg.subject}\n${msg.body}\n`;
+      });
+    }
+
+    // Step-specific system prompt
+    let systemPrompt = '';
+    
+    if (stepNumber === 1) {
+      // First email: Full introduction
+      systemPrompt = `You are an expert B2B cold email writer for hemp wick wholesale outreach.
 
 CORE RULES:
 1. GREETING: Always use "Hi," (generic, never personalize with company name)
@@ -220,15 +245,45 @@ ${strategyContext}
 ${recipientContext}
 
 Generate a professional cold email with subject and body. Output HTML formatted body.`.trim();
+    } else {
+      // Follow-up email: Short bump or value-add
+      systemPrompt = `You are writing a follow-up email for a hemp wick wholesale outreach sequence.
+
+THIS IS FOLLOW-UP EMAIL #${stepNumber - 1} (Step ${stepNumber} of sequence).
+
+CRITICAL RULES FOR FOLLOW-UPS:
+1. SUBJECT: Use "Re: [original subject]" - this MUST match the first email's subject for threading
+2. LENGTH: Keep it SHORT - 2-3 sentences maximum (under 100 words)
+3. REFERENCE PREVIOUS: Acknowledge you sent a previous email
+4. ADD VALUE: Either:
+   - Bump: "Following up on my email from [timeframe]..."
+   - Value-add: Share something helpful (tip, resource, insight)
+   - Breakup: "I'll assume the timing isn't right..." (if this is step 3+)
+5. HTML FORMATTING: Use <p></p> tags for paragraphs
+6. TONE: Friendly, brief, not pushy
+7. NO REPEAT: Don't rehash the full intro from Email 1
+
+${previousEmailContext}
+
+${strategyContext}
+
+${recipientContext}
+
+Generate a SHORT follow-up email. Remember: Subject must be "Re: [original subject]" for threading.`.trim();
+    }
+
+    const userPrompt = stepNumber === 1 
+      ? 'Generate a cold outreach email for this recipient. Output format:\n\nSubject: [subject line here]\n\n[email body HTML only - do NOT repeat the subject line in the body]'
+      : `Generate a SHORT follow-up email (step ${stepNumber}). Output format:\n\nSubject: Re: [use EXACT subject from Email 1]\n\n[brief follow-up body - do NOT repeat the intro]`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: 'Generate a cold outreach email for this recipient. Output format:\n\nSubject: [subject line here]\n\n[email body HTML only - do NOT repeat the subject line in the body]' }
+        { role: 'user', content: userPrompt }
       ],
       temperature: 0.8,
-      max_tokens: 500,
+      max_tokens: stepNumber === 1 ? 500 : 300, // Shorter for follow-ups
     });
 
     const generatedContent = response.choices[0]?.message?.content || '';
