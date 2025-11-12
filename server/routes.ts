@@ -20016,12 +20016,39 @@ Based on the conversation, help the user design an effective email sequence that
         return res.json({ message: 'No new recipients to import', count: 0 });
       }
 
+      // Calculate initial nextSendAt for all recipients using stepDelays[0] + smart timing
+      const stepDelays = sequence.stepDelays || [];
+      const initialDelayDays = stepDelays.length > 0 ? parseFloat(stepDelays[0].toString()) : 0;
+      const ehubSettings = await storage.getEhubSettings();
+      
+      // Import smart timing helper
+      const { computeOptimalSendTime } = await import('./services/smartTiming');
+      const { addDays } = await import('date-fns');
+
+      // Add nextSendAt to all recipients using smart timing
+      const recipientsWithNextSend = recipients.map(r => {
+        // Apply delay first, then find next valid send window
+        const baselineTime = addDays(new Date(), initialDelayDays);
+        
+        const nextSendAt = computeOptimalSendTime({
+          businessHours: r.businessHours || '',
+          state: r.timezone || 'America/New_York',
+          skipWeekends: ehubSettings?.skipWeekends ?? false,
+          baselineTime,
+        });
+        
+        return {
+          ...r,
+          nextSendAt,
+        };
+      });
+
       // Bulk insert recipients
-      const created = await storage.addRecipients(recipients);
+      const created = await storage.addRecipients(recipientsWithNextSend);
 
       // Update sequence total count
       await storage.updateSequenceStats(id, {
-        sentCount: (sequence.totalRecipients || 0) + created.length,
+        totalRecipients: (sequence.totalRecipients || 0) + created.length,
       });
 
       // Invalidate All Contacts cache to reflect new recipients
@@ -20097,8 +20124,28 @@ Based on the conversation, help the user design an effective email sequence that
         return res.json({ message: 'All contacts already in sequence', count: 0 });
       }
 
+      // Calculate initial nextSendAt for all recipients using stepDelays[0] + smart timing
+      const stepDelays = sequence.stepDelays || [];
+      const initialDelayDays = stepDelays.length > 0 ? parseFloat(stepDelays[0].toString()) : 0;
+      const ehubSettings = await storage.getEhubSettings();
+      
+      // Import smart timing helper
+      const { computeOptimalSendTime } = await import('./services/smartTiming');
+      const { addDays } = await import('date-fns');
+
+      // Add nextSendAt to all recipients using smart timing
+      const recipientsWithNextSend = recipients.map(r => ({
+        ...r,
+        nextSendAt: computeOptimalSendTime({
+          businessHours: r.businessHours || '',
+          state: r.timezone || 'America/New_York',
+          skipWeekends: ehubSettings?.skipWeekends ?? false,
+          baselineTime: addDays(new Date(), initialDelayDays),
+        }),
+      }));
+
       // Bulk insert recipients
-      const created = await storage.addRecipients(recipients);
+      const created = await storage.addRecipients(recipientsWithNextSend);
 
       // Update sequence total count
       await storage.updateSequenceStats(id, {

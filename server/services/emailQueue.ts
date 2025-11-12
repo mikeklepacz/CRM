@@ -1,6 +1,8 @@
 
 import { storage } from '../storage';
 import { sendEmail, personalizeEmailWithAI } from './emailSender';
+import { computeOptimalSendTime } from './smartTiming';
+import { addDays } from 'date-fns';
 
 let isProcessing = false;
 
@@ -86,7 +88,7 @@ async function processEmailQueue() {
           // Parse stepDelays (convert from string[] to number[])
           const stepDelays = (sequence.stepDelays || []).map(d => parseFloat(d.toString()));
           
-          // Calculate next send time using gap-based delays
+          // Calculate next send time using gap-based delays + smart timing
           // stepDelays[0] = initial delay before first send (used when recipient added)
           // stepDelays[1] = gap after first send, before second send
           // stepDelays[n] = gap after nth send, before (n+1)th send
@@ -95,14 +97,28 @@ async function processEmailQueue() {
           
           // Check if there are more steps remaining
           if (currentStep < stepDelays.length) {
-            // Schedule next step using stepDelays[currentStep]
+            // Schedule next step using stepDelays[currentStep] + smart timing
             const gapDays = stepDelays[currentStep];
-            nextSendAt = new Date(now.getTime() + gapDays * 24 * 60 * 60 * 1000);
+            const baselineTime = addDays(now, gapDays);
+            
+            nextSendAt = computeOptimalSendTime({
+              businessHours: recipient.businessHours || '',
+              state: recipient.timezone || 'America/New_York',
+              skipWeekends: settings.skipWeekends,
+              baselineTime,
+            });
             recipientStatus = 'in_sequence';
           } else if (currentStep === stepDelays.length && sequence.repeatLastStep) {
-            // On last step with repeat enabled - schedule repeat using the last gap
+            // On last step with repeat enabled - schedule repeat using the last gap + smart timing
             const lastGapDays = stepDelays[stepDelays.length - 1];
-            nextSendAt = new Date(now.getTime() + lastGapDays * 24 * 60 * 60 * 1000);
+            const baselineTime = addDays(now, lastGapDays);
+            
+            nextSendAt = computeOptimalSendTime({
+              businessHours: recipient.businessHours || '',
+              state: recipient.timezone || 'America/New_York',
+              skipWeekends: settings.skipWeekends,
+              baselineTime,
+            });
             recipientStatus = 'in_sequence';
           } else {
             // Sequence complete

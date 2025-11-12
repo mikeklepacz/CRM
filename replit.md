@@ -50,7 +50,9 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Shared Timezone Service**: `server/services/timezoneHours.ts` for consistent timezone calculations across features.
 - **Dynamic Header Import**: Recipients import uses header-based column mapping for Google Sheets data.
 - **State Normalization**: Handles various state formats for robust timezone detection.
-- **Campaign Strategy Architecture**: E-Hub sequences store campaign planning data in PostgreSQL: `strategyTranscript` (jsonb) holds complete AI chat history, `stepDelays` (int[]) defines days between sequence steps. Client-side validation enforces non-negative, strictly ascending delays and requires 1+ strategy message before activation. System messages are ephemeral (sent to OpenAI for context but not persisted).
+- **Campaign Strategy Architecture**: E-Hub sequences store campaign planning data in PostgreSQL: `strategyTranscript` (jsonb) holds complete AI chat history, `stepDelays` (decimal(10,4)[]) defines gap-based delays between sequence steps. Client-side validation enforces non-negative delays and requires 1+ strategy message before activation. System messages are ephemeral (sent to OpenAI for context but not persisted).
+- **E-Hub Gap-Based Delays**: Step delays are linear gaps, not cumulative from activation. Each delay is the time gap AFTER the previous step. stepDelays[0] = delay before Email 1, stepDelays[1] = gap after Email 1 before Email 2, etc. Supports decimal values (e.g., 0.0035 days = 5 minutes) for testing. Recipients initialize with nextSendAt = now + stepDelays[0], then after each send, nextSendAt = lastStepSentAt + stepDelays[currentStep].
+- **E-Hub Repeat Last Step**: Optional feature allows the final step to repeat indefinitely until reply is detected. When enabled, after sending the last step, the system schedules another send using the last gap delay (stepDelays[length-1]) instead of marking the sequence as completed.
 
 ## External Dependencies
 - **Google Sheets API**: For "Store Database" and "Commission Tracker" interaction.

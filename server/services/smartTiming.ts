@@ -6,6 +6,7 @@ export interface SmartTimingOptions {
   businessHours: string;
   state: string; // Required for timezone resolution
   skipWeekends: boolean;
+  baselineTime?: Date; // Optional baseline time (defaults to now)
 }
 
 /**
@@ -16,16 +17,17 @@ export interface SmartTimingOptions {
  * - Fallback to noon for "Closed" days
  * - Skip weekends if requested
  * 
- * @returns UTC Date object for optimal send time
+ * @param options.baselineTime - Optional baseline time to start from (defaults to now)
+ * @returns UTC Date object for optimal send time (next valid send window after baseline)
  */
 export function computeOptimalSendTime(options: SmartTimingOptions): Date {
-  const { businessHours, state, skipWeekends } = options;
+  const { businessHours, state, skipWeekends, baselineTime } = options;
 
   // Parse business hours and get timezone
   const parsed = parseBusinessHours(businessHours, state);
   const { schedule, is24_7, isClosed, timezone } = parsed;
 
-  const nowUtc = new Date();
+  const nowUtc = baselineTime || new Date();
   
   // Helper to get day-of-week in recipient's timezone (0=Sunday, 6=Saturday)
   const getDayOfWeek = (utcDate: Date): number => {
