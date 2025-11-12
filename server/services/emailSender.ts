@@ -81,8 +81,15 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+    // Get user info for sender name
+    const user = await storage.getUser(options.userId);
+    const senderName = user?.firstName && user?.lastName 
+      ? `${user.firstName} ${user.lastName}`
+      : user?.email?.split('@')[0] || 'Hemp Wick Sales';
+    
     // Build email headers
     const headers: string[] = [
+      `From: ${senderName} <${user?.email || 'noreply@example.com'}>`,
       `To: ${options.to}`,
       `Subject: ${options.subject}`,
       'Content-Type: text/html; charset=utf-8',
