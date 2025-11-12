@@ -354,8 +354,8 @@ export default function EHub() {
 
   // Save step delays mutation
   const saveStepDelaysMutation = useMutation({
-    mutationFn: async (delays: number[]) => {
-      return await apiRequest("PUT", `/api/sequences/${selectedSequenceId}/step-delays`, { stepDelays: delays });
+    mutationFn: async (data: { stepDelays: number[], repeatLastStep: boolean }) => {
+      return await apiRequest("PUT", `/api/sequences/${selectedSequenceId}/step-delays`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });

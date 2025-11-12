@@ -19851,8 +19851,9 @@ Based on the conversation, help the user design an effective email sequence that
       const { id } = req.params;
       
       // Validate step delays - accept decimals for testing (0.0034 days = 5 minutes)
-      const { stepDelays } = z.object({
+      const { stepDelays, repeatLastStep } = z.object({
         stepDelays: z.array(z.number().nonnegative()),
+        repeatLastStep: z.boolean().optional().default(false),
       }).parse(req.body);
 
       // Check sequence exists
@@ -19860,6 +19861,9 @@ Based on the conversation, help the user design an effective email sequence that
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
       }
+
+      // Update sequence with repeatLastStep setting
+      await storage.updateSequence(id, { repeatLastStep });
 
       // Replace sequence steps
       const createdSteps = await storage.replaceSequenceSteps(id, stepDelays);
