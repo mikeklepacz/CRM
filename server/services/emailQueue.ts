@@ -45,7 +45,12 @@ async function checkAndUpdateCommissionTracker(recipientLink: string, recipientE
     const claimDateIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'claim date');
 
     if (linkIndex === -1) {
-      console.log('[CommissionTracker] No Link column found - proceeding with email send');
+      console.log('[CommissionTracker] ⚠️  No Link column found - proceeding with email send');
+      return { shouldSkip: false };
+    }
+
+    if (agentIndex === -1) {
+      console.warn('[CommissionTracker] ⚠️  No "Agent Name" column found - cannot check for existing claims or assign Mike Klepacz. Proceeding with email send.');
       return { shouldSkip: false };
     }
 
@@ -58,6 +63,7 @@ async function checkAndUpdateCommissionTracker(recipientLink: string, recipientE
       const rowLink = trackerRows[i][linkIndex];
       if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
         existingRowIndex = i + 1; // 1-indexed for Google Sheets
+        // Safe to access agentIndex now because we've verified it exists
         existingAgent = trackerRows[i][agentIndex] || '';
         break;
       }
