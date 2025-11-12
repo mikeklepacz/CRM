@@ -242,7 +242,14 @@ Generate a professional cold email with subject and body. Output HTML formatted 
     let subject = subjectMatch?.[1]?.trim() || 'Hemp Wick Partnership Opportunity';
     let body = bodyMatch?.[1]?.trim() || generatedContent;
 
-    // Clean up any markdown, extra formatting, and accidental subject duplicates
+    // Clean HTML tags from subject line (AI sometimes adds </p> or other tags)
+    subject = subject.replace(/<[^>]*>/g, '').trim();
+
+    // Clean up markdown code fences from body (AI sometimes wraps in ```html)
+    body = body.replace(/^```html\s*/i, '').trim();
+    body = body.replace(/\s*```$/i, '').trim();
+    
+    // Clean up any extra formatting and accidental subject duplicates
     body = body.replace(/^Body:\s*/i, '').trim();
     body = body.replace(/^<p>\s*Subject:.*?<\/p>\s*/i, '').trim();
 
