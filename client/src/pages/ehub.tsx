@@ -25,6 +25,7 @@ interface Sequence {
   id: string;
   name: string;
   stepDelays: number[] | null;
+  repeatLastStep: boolean;
   status: string;
   totalRecipients: number;
   sentCount: number;
@@ -73,6 +74,7 @@ export default function EHub() {
   const [strategyMessage, setStrategyMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stepDelays, setStepDelays] = useState<number[]>([]);
+  const [repeatLastStep, setRepeatLastStep] = useState<boolean>(false);
 
   // All Contacts tab state
   const [page, setPage] = useState(1);
