@@ -19856,6 +19856,13 @@ Based on the conversation, help the user design an effective email sequence that
         repeatLastStep: z.boolean().optional().default(false),
       }).parse(req.body);
 
+      // Validate repeatLastStep requires at least one step delay
+      if (repeatLastStep && stepDelays.length === 0) {
+        return res.status(400).json({ 
+          message: 'Cannot enable repeat last step without at least one step delay' 
+        });
+      }
+
       // Check sequence exists
       const sequence = await storage.getSequence(id);
       if (!sequence) {
