@@ -108,7 +108,21 @@ function QueueView() {
   
   // Fetch queue with search and time window params
   const { data: queue, isLoading } = useQuery<IndividualSend[]>({
-    queryKey: ['/api/ehub/queue', { search: debouncedSearch, timeWindowDays }],
+    queryKey: ['/api/ehub/queue', debouncedSearch, timeWindowDays],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      params.append('timeWindowDays', timeWindowDays.toString());
+      
+      const url = `/api/ehub/queue?${params.toString()}`;
+      const res = await fetch(url, { credentials: 'include' });
+      
+      if (!res.ok) {
+        throw new Error(`Failed to fetch queue: ${res.statusText}`);
+      }
+      
+      return await res.json();
+    },
     refetchInterval: 30000, // 30 seconds
     staleTime: 15000,
   });
