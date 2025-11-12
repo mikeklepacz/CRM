@@ -1236,8 +1236,10 @@ export const ehubSettings = pgTable("ehub_settings", {
   minDelayMinutes: integer("min_delay_minutes").notNull().default(1), // Minimum minutes between sends
   maxDelayMinutes: integer("max_delay_minutes").notNull().default(3), // Maximum minutes between sends
   dailyEmailLimit: integer("daily_email_limit").notNull().default(200), // Max emails per day
-  sendingHoursStart: integer("sending_hours_start").notNull().default(9), // Start hour (24h format, e.g., 9 = 9 AM)
-  sendingHoursEnd: integer("sending_hours_end").notNull().default(14), // End hour (24h format, e.g., 14 = 2 PM)
+  sendingHoursStart: integer("sending_hours_start").notNull().default(9), // Company time range start hour (24h format, e.g., 9 = 9 AM)
+  sendingHoursEnd: integer("sending_hours_end").notNull().default(14), // Company time range end hour (24h format, e.g., 14 = 2 PM)
+  clientWindowStartOffset: decimal("client_window_start_offset", { precision: 4, scale: 2 }).notNull().default('1.00'), // Hours after business opens to start sending (e.g., 1.00 = 1 hour after opening)
+  clientWindowEndHour: integer("client_window_end_hour").notNull().default(14), // Client local cutoff hour (24h format, e.g., 14 = 2 PM local time)
   promptInjection: text("prompt_injection"), // Global AI instructions for email personalization
   keywordBin: text("keyword_bin"), // Global context keywords for AI
   skipWeekends: boolean("skip_weekends").notNull().default(true), // Skip sending on Saturday/Sunday
@@ -1380,6 +1382,8 @@ const ehubSettingsBaseSchema = createInsertSchema(ehubSettings).omit({
   dailyEmailLimit: z.number().min(1).max(2000),
   sendingHoursStart: z.number().min(0).max(23),
   sendingHoursEnd: z.number().min(0).max(23),
+  clientWindowStartOffset: z.number().min(0).max(24), // Hours after business opens (0-24)
+  clientWindowEndHour: z.number().min(0).max(23), // Cutoff hour in client local time (0-23)
   skipWeekends: z.boolean(),
 });
 
@@ -1389,6 +1393,9 @@ export const insertEhubSettingsSchema = ehubSettingsBaseSchema.refine(
 ).refine(
   (data) => data.sendingHoursEnd > data.sendingHoursStart,
   { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
+).refine(
+  (data) => data.clientWindowStartOffset < data.clientWindowEndHour,
+  { message: 'Client start offset must be before cutoff hour', path: ['clientWindowStartOffset'] }
 );
 
 export const updateEhubSettingsSchema = ehubSettingsBaseSchema.partial().refine(
@@ -1407,6 +1414,14 @@ export const updateEhubSettingsSchema = ehubSettingsBaseSchema.partial().refine(
     return true;
   },
   { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
+).refine(
+  (data) => {
+    if (data.clientWindowStartOffset !== undefined && data.clientWindowEndHour !== undefined) {
+      return data.clientWindowStartOffset < data.clientWindowEndHour;
+    }
+    return true;
+  },
+  { message: 'Client start offset must be before cutoff hour', path: ['clientWindowStartOffset'] }
 );
 
 export const insertSequenceRecipientSchema = createInsertSchema(sequenceRecipients).omit({
