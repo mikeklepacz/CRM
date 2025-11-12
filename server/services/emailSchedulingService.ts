@@ -5,6 +5,8 @@ export interface AdminWindow {
   timezone: string;
   startHour: number;
   endHour: number;
+  clientWindowStartOffset: number;
+  clientWindowEndHour: number;
   skipWeekends: boolean;
 }
 
@@ -39,6 +41,8 @@ export async function resolveAdminWindow(sequenceId: string, storage: any): Prom
     timezone,
     startHour: ehubSettings?.sendingHoursStart ?? 6,
     endHour: ehubSettings?.sendingHoursEnd ?? 23,
+    clientWindowStartOffset: parseFloat(ehubSettings?.clientWindowStartOffset?.toString() ?? '1.0'),
+    clientWindowEndHour: ehubSettings?.clientWindowEndHour ?? 14,
     skipWeekends: ehubSettings?.skipWeekends ?? false,
   };
 }
@@ -75,6 +79,8 @@ export async function computeNextSendTimeForRecipient(
     adminEndHour: adminWindow.endHour,
     recipientBusinessHours,
     recipientTimezone: recipientTimezone || 'America/New_York', // Fallback if not set
+    clientWindowStartOffset: adminWindow.clientWindowStartOffset,
+    clientWindowEndHour: adminWindow.clientWindowEndHour,
     skipWeekends: adminWindow.skipWeekends,
   });
 

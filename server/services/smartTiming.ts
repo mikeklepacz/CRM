@@ -140,6 +140,8 @@ export interface DualWindowOptions {
   adminEndHour: number; // Admin's sending window end (e.g., 23 for 11pm)
   recipientBusinessHours: string; // Recipient's business hours string
   recipientTimezone: string; // Recipient's timezone (e.g., 'America/Detroit')
+  clientWindowStartOffset: number; // Hours after business opens to start sending (e.g., 1.0 = 1 hour after opening)
+  clientWindowEndHour: number; // Client local cutoff hour (e.g., 14 = 2 PM local time)
   skipWeekends: boolean; // Whether to skip weekends
 }
 
@@ -162,6 +164,8 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     adminEndHour,
     recipientBusinessHours,
     recipientTimezone,
+    clientWindowStartOffset,
+    clientWindowEndHour,
     skipWeekends 
   } = options;
 
@@ -196,13 +200,13 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     // Closed business
     if (isClosed) {
       const noon = createTimeInZone(baselineTime, daysOffset, 12, 0, timezone);
-      return { start: noon, end: createTimeInZone(baselineTime, daysOffset, 14, 0, timezone) };
+      return { start: noon, end: createTimeInZone(baselineTime, daysOffset, clientWindowEndHour, 0, timezone) };
     }
 
     // 24/7 business
     if (is24_7) {
       const start = createTimeInZone(baselineTime, daysOffset, 0, 0, timezone);
-      const end = createTimeInZone(baselineTime, daysOffset, 14, 0, timezone);
+      const end = createTimeInZone(baselineTime, daysOffset, clientWindowEndHour, 0, timezone);
       return { start, end };
     }
 
@@ -210,7 +214,7 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     const daySchedules = schedule[dayOfWeek];
     if (!daySchedules || daySchedules.length === 0) {
       const noon = createTimeInZone(baselineTime, daysOffset, 12, 0, timezone);
-      return { start: noon, end: createTimeInZone(baselineTime, daysOffset, 14, 0, timezone) };
+      return { start: noon, end: createTimeInZone(baselineTime, daysOffset, clientWindowEndHour, 0, timezone) };
     }
 
     const firstSchedule = daySchedules[0];
@@ -218,16 +222,26 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     const openHour = Math.floor(openMinutes / 60);
     const openMinute = openMinutes % 60;
 
-    let sendHour = openHour + 1;
-    let sendMinute = openMinute;
+    // Calculate send time based on configurable offset
+    const offsetHours = Math.floor(clientWindowStartOffset);
+    const offsetMinutes = Math.round((clientWindowStartOffset % 1) * 60);
+    let sendHour = openHour + offsetHours;
+    let sendMinute = openMinute + offsetMinutes;
 
-    if (sendHour >= 14) {
+    // Handle minute overflow
+    if (sendMinute >= 60) {
+      sendHour += Math.floor(sendMinute / 60);
+      sendMinute = sendMinute % 60;
+    }
+
+    // Clamp to cutoff hour if offset pushes past it
+    if (sendHour >= clientWindowEndHour) {
       sendHour = 12;
       sendMinute = 0;
     }
 
     const start = createTimeInZone(baselineTime, daysOffset, sendHour, sendMinute, timezone);
-    const end = createTimeInZone(baselineTime, daysOffset, 14, 0, timezone);
+    const end = createTimeInZone(baselineTime, daysOffset, clientWindowEndHour, 0, timezone);
     return { start, end };
   };
 

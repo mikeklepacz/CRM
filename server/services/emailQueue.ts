@@ -192,6 +192,8 @@ async function processEmailQueue() {
               adminEndHour: adminWindow.endHour,
               recipientBusinessHours: recipient.businessHours || '',
               recipientTimezone: recipient.timezone || 'America/New_York',
+              clientWindowStartOffset: adminWindow.clientWindowStartOffset,
+              clientWindowEndHour: adminWindow.clientWindowEndHour,
               skipWeekends: adminWindow.skipWeekends,
             });
             recipientStatus = 'in_sequence';
@@ -207,6 +209,8 @@ async function processEmailQueue() {
               adminEndHour: adminWindow.endHour,
               recipientBusinessHours: recipient.businessHours || '',
               recipientTimezone: recipient.timezone || 'America/New_York',
+              clientWindowStartOffset: adminWindow.clientWindowStartOffset,
+              clientWindowEndHour: adminWindow.clientWindowEndHour,
               skipWeekends: adminWindow.skipWeekends,
             });
             recipientStatus = 'in_sequence';
