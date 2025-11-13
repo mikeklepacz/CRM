@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -769,6 +769,16 @@ export default function EHub() {
   const [followUpSubject, setFollowUpSubject] = useState("");
   const [followUpBody, setFollowUpBody] = useState("");
 
+  // Nuke Test Data state
+  const [nukeDialogOpen, setNukeDialogOpen] = useState(false);
+  const [nukeEmailPattern, setNukeEmailPattern] = useState("");
+  const [nukeConfirmText, setNukeConfirmText] = useState("");
+  const [nukeCounts, setNukeCounts] = useState<{
+    recipientsCount: number;
+    messagesCount: number;
+    testEmailsCount: number;
+  } | null>(null);
+
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
     minDelayMinutes: 1,
@@ -1146,6 +1156,53 @@ export default function EHub() {
       toast({
         title: "Follow-up Failed",
         description: error.message || "Unable to send follow-up",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Nuke Test Data mutations
+  const [isLoadingCounts, setIsLoadingCounts] = useState(false);
+  const [countsError, setCountsError] = useState<string | null>(null);
+
+  const fetchNukeCounts = async () => {
+    setIsLoadingCounts(true);
+    setCountsError(null);
+    try {
+      const params = new URLSearchParams();
+      if (nukeEmailPattern) {
+        params.append('emailPattern', nukeEmailPattern);
+      }
+      const data = await apiRequest('GET', `/api/ehub/test-data/nuke/counts?${params.toString()}`);
+      setNukeCounts(data);
+    } catch (error: any) {
+      setCountsError(error.message || 'Failed to fetch counts');
+      setNukeCounts(null);
+    } finally {
+      setIsLoadingCounts(false);
+    }
+  };
+
+  const nukeTestDataMutation = useMutation({
+    mutationFn: (emailPattern?: string) =>
+      apiRequest('POST', '/api/ehub/test-data/nuke', { emailPattern }),
+    onSuccess: (data: any) => {
+      toast({
+        title: "Test Data Deleted",
+        description: `Deleted ${data.recipientsDeleted} recipients, ${data.messagesDeleted} messages, and ${data.testEmailsDeleted} test emails.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/test-email/history'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/all-contacts'] });
+      setNukeDialogOpen(false);
+      setNukeEmailPattern("");
+      setNukeConfirmText("");
+      setNukeCounts(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Unable to delete test data",
         variant: "destructive",
       });
     },
@@ -2441,6 +2498,35 @@ export default function EHub() {
         {/* Test Emails Tab */}
         {user?.role === 'admin' && (
           <TabsContent value="test-emails" className="space-y-4">
+            {/* Danger Zone - Nuke Test Data */}
+            <Card className="border-destructive/50 bg-destructive/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="w-5 h-5" />
+                  Danger Zone: Clear Test Data
+                </CardTitle>
+                <CardDescription>
+                  Delete test emails and sequence recipients to reset testing environment. Use with caution.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setNukeDialogOpen(true);
+                    setNukeCounts(null);
+                    setNukeEmailPattern("");
+                    setNukeConfirmText("");
+                    setCountsError(null);
+                  }}
+                  data-testid="button-open-nuke-dialog"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Nuke Test Data
+                </Button>
+              </CardContent>
+            </Card>
+
             {/* Composer Card */}
             <Card>
               <CardHeader>
@@ -2660,6 +2746,131 @@ export default function EHub() {
               {sendFollowUpMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               <Send className="w-4 h-4 mr-2" />
               Send Follow-up
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nuke Test Data Dialog */}
+      <Dialog open={nukeDialogOpen} onOpenChange={(open) => {
+        setNukeDialogOpen(open);
+        if (!open) {
+          setNukeEmailPattern("");
+          setNukeConfirmText("");
+          setNukeCounts(null);
+          setCountsError(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Nuke Test Data
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Permanently delete test emails and sequence recipients. This action cannot be undone.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Step 1: Pattern Input & Counts */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="nuke-email-pattern">Email Pattern (optional)</Label>
+                <Input
+                  id="nuke-email-pattern"
+                  value={nukeEmailPattern}
+                  onChange={(e) => {
+                    setNukeEmailPattern(e.target.value);
+                    setNukeCounts(null); // Clear stale counts
+                    setCountsError(null);
+                  }}
+                  placeholder="Leave blank to delete ALL, or enter pattern (e.g., @test.com)"
+                  data-testid="input-nuke-pattern"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Pattern auto-wraps with wildcards. Example: "test.com" matches "%test.com%"
+                </p>
+              </div>
+
+              <Button
+                variant="outline"
+                onClick={fetchNukeCounts}
+                disabled={isLoadingCounts}
+                data-testid="button-fetch-counts"
+              >
+                {isLoadingCounts && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Get Counts
+              </Button>
+
+              {countsError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{countsError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            {/* Step 2: Counts Display & Confirmation */}
+            {nukeCounts && (
+              <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-2">
+                  <p className="font-medium">Items to be deleted:</p>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li>{nukeCounts.recipientsCount} recipients</li>
+                    <li>{nukeCounts.messagesCount} messages</li>
+                    <li>{nukeCounts.testEmailsCount} test emails</li>
+                  </ul>
+                </div>
+
+                {!nukeEmailPattern && (
+                  <Alert className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                    <AlertTitle className="text-yellow-800 dark:text-yellow-200">Nuclear Option</AlertTitle>
+                    <AlertDescription className="text-yellow-700 dark:text-yellow-300">
+                      No pattern specified - this will delete ALL test data!
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {!nukeEmailPattern && (
+                  <div className="space-y-2">
+                    <Label htmlFor="nuke-confirm">Type "DELETE ALL" to confirm</Label>
+                    <Input
+                      id="nuke-confirm"
+                      value={nukeConfirmText}
+                      onChange={(e) => setNukeConfirmText(e.target.value)}
+                      placeholder="DELETE ALL"
+                      data-testid="input-nuke-confirm"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setNukeDialogOpen(false)}
+              data-testid="button-cancel-nuke"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => nukeTestDataMutation.mutate(nukeEmailPattern || undefined)}
+              disabled={
+                !nukeCounts ||
+                (nukeCounts.recipientsCount === 0 && nukeCounts.messagesCount === 0 && nukeCounts.testEmailsCount === 0) ||
+                (!nukeEmailPattern && nukeConfirmText !== "DELETE ALL") ||
+                nukeTestDataMutation.isPending
+              }
+              data-testid="button-confirm-nuke"
+            >
+              {nukeTestDataMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              <Trash2 className="w-4 h-4 mr-2" />
+              {nukeEmailPattern ? "Delete Matching Test Data" : "Delete ALL Test Data"}
             </Button>
           </div>
         </DialogContent>
