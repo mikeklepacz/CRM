@@ -48,47 +48,11 @@ export async function resolveAdminWindow(sequenceId: string, storage: any): Prom
 }
 
 /**
- * Compute next send time using dual-window scheduling
- * Finds overlap between admin sending window and recipient receiving window
+ * DEPRECATED: computeNextSendTimeForRecipient
  * 
- * @param sequenceId - The sequence ID
- * @param recipientBusinessHours - Recipient's business hours string
- * @param recipientTimezone - Recipient's timezone (e.g., 'America/Detroit')
- * @param delayDays - Number of days to delay from now (e.g., stepDelays[0])
- * @param storage - Storage instance for database access
- * @returns UTC timestamp for next send
+ * This function has been replaced by the Queue Coordinator system.
+ * New recipient enrollment now uses requestNextSlot() from queueCoordinator.ts
+ * which ensures FIFO ordering and rate limit compliance.
+ * 
+ * Kept for reference only - remove after verifying no external dependencies.
  */
-export async function computeNextSendTimeForRecipient(
-  sequenceId: string,
-  recipientBusinessHours: string,
-  recipientTimezone: string,
-  delayDays: number,
-  storage: any
-): Promise<Date> {
-  // Resolve admin window
-  const adminWindow = await resolveAdminWindow(sequenceId, storage);
-
-  // Calculate baseline time (now + delay)
-  const baselineTime = addDays(new Date(), delayDays);
-
-  // Use dual-window scheduler
-  const nextSendAt = computeNextSendSlot({
-    baselineTime,
-    adminTimezone: adminWindow.timezone,
-    adminStartHour: adminWindow.startHour,
-    adminEndHour: adminWindow.endHour,
-    recipientBusinessHours,
-    recipientTimezone: recipientTimezone || 'America/New_York', // Fallback if not set
-    clientWindowStartOffset: adminWindow.clientWindowStartOffset,
-    clientWindowEndHour: adminWindow.clientWindowEndHour,
-    skipWeekends: adminWindow.skipWeekends,
-  });
-
-  // Ensure nextSendAt is never in the past
-  if (nextSendAt < baselineTime) {
-    console.warn(`[EmailScheduling] nextSendAt (${nextSendAt.toISOString()}) is before baseline (${baselineTime.toISOString()}), using baseline`);
-    return baselineTime;
-  }
-
-  return nextSendAt;
-}
