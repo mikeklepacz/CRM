@@ -1738,3 +1738,25 @@ export const insertTestEmailSendSchema = createInsertSchema(testEmailSends).omit
 
 export type InsertTestEmailSend = z.infer<typeof insertTestEmailSendSchema>;
 export type TestEmailSend = typeof testEmailSends.$inferSelect;
+
+// Test Data Nuke Audit Log - tracks cleanup operations for debugging
+export const testDataNukeLog = pgTable("test_data_nuke_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  executedBy: varchar("executed_by").notNull().references(() => users.id),
+  emailPattern: varchar("email_pattern", { length: 255 }), // null = nuclear delete all
+  recipientsDeleted: integer("recipients_deleted").notNull().default(0),
+  messagesDeleted: integer("messages_deleted").notNull().default(0),
+  testEmailsDeleted: integer("test_emails_deleted").notNull().default(0),
+  executedAt: timestamp("executed_at").defaultNow(),
+}, (table) => [
+  index("idx_nuke_log_executed_by").on(table.executedBy),
+  index("idx_nuke_log_executed_at").on(table.executedAt),
+]);
+
+export const insertTestDataNukeLogSchema = createInsertSchema(testDataNukeLog).omit({
+  id: true,
+  executedAt: true,
+});
+
+export type InsertTestDataNukeLog = z.infer<typeof insertTestDataNukeLogSchema>;
+export type TestDataNukeLog = typeof testDataNukeLog.$inferSelect;
