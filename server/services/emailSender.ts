@@ -4,6 +4,53 @@ import { storage } from '../storage';
 import type { SequenceRecipient, StrategyTranscript } from '../../shared/schema';
 import OpenAI from 'openai';
 
+/**
+ * Convert time difference in milliseconds to casual timeframe reference
+ * e.g., "5 minutes ago", "a few hours ago", "last week", "a few months ago"
+ * 
+ * Note: Uses approximate month calculations (30 days) for casual phrasing
+ */
+function getCasualTimeframe(milliseconds: number): string {
+  const minutes = milliseconds / (1000 * 60);
+  const hours = minutes / 60;
+  const days = hours / 24;
+  const weeks = days / 7;
+  const months = days / 30; // Approximate
+  
+  if (minutes < 30) {
+    return "a few minutes ago";
+  } else if (minutes < 90) {
+    return "about an hour ago";
+  } else if (hours < 6) {
+    return "a few hours ago";
+  } else if (hours < 24) {
+    return "earlier today";
+  } else if (hours < 36) {
+    return "yesterday";
+  } else if (days < 3) {
+    return "a couple days ago";
+  } else if (days < 7) {
+    return "a few days ago";
+  } else if (weeks < 2) {
+    return "last week";
+  } else if (weeks < 4) {
+    return "a few weeks ago";
+  } else if (months < 1.5) {
+    return "about a month ago";
+  } else if (months < 6) {
+    return "a few months ago";
+  } else if (months < 12) {
+    return "several months ago";
+  } else if (months < 18) {
+    return "about a year ago";
+  } else if (months < 24) {
+    return "well over a year ago";
+  } else {
+    const years = Math.floor(months / 12);
+    return `over ${years} years ago`;
+  }
+}
+
 interface EmailOptions {
   userId: string; // User ID for getting Gmail credentials
   to: string;
@@ -207,10 +254,16 @@ RECIPIENT CONTEXT (for understanding, do not directly quote in email):
     // Build previous email context for follow-ups
     let previousEmailContext = '';
     if (stepNumber > 1 && previousMessages.length > 0) {
+      const now = new Date();
       previousEmailContext = '\n\nPREVIOUS EMAILS YOU SENT:\n';
       previousMessages.forEach(msg => {
-        previousEmailContext += `\nEmail ${msg.stepNumber} (sent ${msg.sentAt.toLocaleDateString()}):\nSubject: ${msg.subject}\n${msg.body}\n`;
+        const timeDiff = now.getTime() - msg.sentAt.getTime();
+        const casualTimeframe = getCasualTimeframe(timeDiff);
+        previousEmailContext += `\nEmail ${msg.stepNumber} (sent ${casualTimeframe} on ${msg.sentAt.toLocaleDateString()}):\nSubject: ${msg.subject}\n${msg.body}\n`;
       });
+      
+      // Add note about timeframe flexibility
+      previousEmailContext += `\n(Note: Timeframes above are suggestions - feel free to use your own natural phrasing when referencing previous emails)`;
     }
 
     // Step-specific system prompt
