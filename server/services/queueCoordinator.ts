@@ -22,6 +22,7 @@ export interface QueueSlotRequest {
   adminTimezone: string;
   adminStartHour: number;
   adminEndHour: number;
+  minDelayBetweenSendsMinutes: number; // Minimum spacing between emails (from E-Hub settings)
   
   // Recipient context
   recipientBusinessHours: string;
@@ -77,22 +78,27 @@ export function requestNextSlot(request: QueueSlotRequest): QueueSlotResult {
   
   if (request.queueTailTime) {
     // Queue exists - ensure we schedule AFTER the tail
-    const afterTail = addMinutes(request.queueTailTime, 1);
+    // Use max of 1 minute (safety floor) and configured minDelayBetweenSends
+    const spacing = Math.max(1, request.minDelayBetweenSendsMinutes);
+    const afterTail = addMinutes(request.queueTailTime, spacing);
     if (afterTail > minimumTime) {
       minimumTime = afterTail;
     }
   }
   
   // Step 3: Apply rate limiting spacing (if applicable)
-  // Spread sends evenly across admin window
+  // Spread sends evenly across admin window, enforcing minDelayBetweenSends floor
   if (request.dailyRateLimit > 0) {
     const adminWindowMinutes = (request.adminEndHour - request.adminStartHour) * 60;
     const minutesBetweenSends = adminWindowMinutes / request.dailyRateLimit;
     
+    // Enforce the greater of: rate limit spacing OR minDelayBetweenSends
+    const effectiveSpacing = Math.max(minutesBetweenSends, request.minDelayBetweenSendsMinutes);
+    
     // Only apply spacing if there are already sends scheduled
     if (request.currentDailyCount > 0) {
       // Add spacing to the minimumTime
-      const spacedTime = addMinutes(minimumTime, minutesBetweenSends);
+      const spacedTime = addMinutes(minimumTime, effectiveSpacing);
       minimumTime = spacedTime;
     }
   }
