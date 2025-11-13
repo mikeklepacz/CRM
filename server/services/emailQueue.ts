@@ -249,9 +249,9 @@ async function processEmailQueue() {
         // Determine current step (before increment)
         const currentStepNumber = (recipient.currentStep || 0) + 1; // 0 -> 1, 1 -> 2, etc.
 
-        // CHECK COMMISSION TRACKER: Only for fresh emails (Step 1), not follow-ups
+        // CHECK COMMISSION TRACKER: Only for fresh emails (currentStep 0 or null), not follow-ups
         // Follow-ups are to stores we already claimed!
-        if (currentStepNumber === 1) {
+        if ((recipient.currentStep || 0) === 0) {
           const trackerCheck = await checkAndUpdateCommissionTracker(
             recipient.link,
             recipient.email,
