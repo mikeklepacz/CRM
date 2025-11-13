@@ -4147,6 +4147,14 @@ export class DatabaseStorage implements IStorage {
         return sql`${emailColumn} ILIKE ${sanitizedPattern}`;
       };
 
+      // Step 0: Collect affected sequence IDs before deletion
+      const affectedRecipients = await tx
+        .select({ sequenceId: sequenceRecipients.sequenceId })
+        .from(sequenceRecipients)
+        .where(buildEmailFilter(sequenceRecipients.email));
+      
+      const affectedSequenceIds = [...new Set(affectedRecipients.map(r => r.sequenceId))];
+
       // Step 1: Delete messages first (child records)
       const deletedMessages = await tx
         .delete(sequenceRecipientMessages)
@@ -4175,7 +4183,23 @@ export class DatabaseStorage implements IStorage {
       
       const testEmailsDeleted = deletedTestEmails.length;
 
-      // Step 4: Log the nuke operation (in-transaction)
+      // Step 4: Reset denormalized stats on affected sequences
+      if (affectedSequenceIds.length > 0) {
+        await tx
+          .update(sequences)
+          .set({
+            totalRecipients: 0,
+            sentCount: 0,
+            failedCount: 0,
+            repliedCount: 0,
+            bouncedCount: 0,
+            lastSentAt: null,
+            updatedAt: new Date(),
+          })
+          .where(inArray(sequences.id, affectedSequenceIds));
+      }
+
+      // Step 5: Log the nuke operation (in-transaction)
       await tx.insert(testDataNukeLog).values({
         executedBy: userId,
         emailPattern: emailPattern || null,
