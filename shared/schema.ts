@@ -1338,6 +1338,7 @@ export const sequenceRecipients = pgTable("sequence_recipients", {
   nextSendAt: timestamp("next_send_at"), // When to send next follow-up
   sentAt: timestamp("sent_at"), // When first email was sent (step 1)
   repliedAt: timestamp("replied_at"),
+  replyCount: integer("reply_count").default(0), // Number of replies received
   threadId: varchar("thread_id"), // Gmail thread ID for threading all follow-ups (stored here for convenience)
   errorLog: text("error_log"), // Error message if send failed
   bounceType: varchar("bounce_type", { length: 50 }), // 'hard', 'soft', null

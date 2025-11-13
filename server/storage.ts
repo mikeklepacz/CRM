@@ -529,6 +529,7 @@ export interface IStorage {
   getRecipients(sequenceId: string, filters?: { status?: string; limit?: number }): Promise<SequenceRecipient[]>;
   getRecipient(id: string): Promise<SequenceRecipient | undefined>;
   getNextRecipientsToSend(limit: number): Promise<SequenceRecipient[]>;
+  getActiveRecipientsWithThreads(): Promise<SequenceRecipient[]>;
   getQueueView(): Promise<Array<SequenceRecipient & { sequenceName: string }>>;
   getIndividualSendsQueue(options: { search?: string; timeWindowDays?: number }): Promise<Array<{
     recipientId: string;
@@ -3161,6 +3162,7 @@ export class DatabaseStorage implements IStorage {
     // Two-tier priority queue: follow-ups first, then fresh emails
     
     // Stage 1: Get all due follow-ups (currentStep > 0)
+    // IMPORTANT: Exclude recipients who have replied
     const followUps = await db
       .select()
       .from(sequenceRecipients)
@@ -3168,6 +3170,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(sequenceRecipients.status, 'in_sequence'),
           gt(sequenceRecipients.currentStep, 0),
+          isNull(sequenceRecipients.repliedAt), // Don't send to recipients who have replied
           or(
             isNull(sequenceRecipients.nextSendAt),
             lte(sequenceRecipients.nextSendAt, now)
@@ -3179,6 +3182,7 @@ export class DatabaseStorage implements IStorage {
     
     // Stage 2: If we haven't filled the quota, get fresh emails (currentStep = 0)
     // Include both 'pending' AND 'in_sequence' status (resumed recipients before step 1)
+    // IMPORTANT: Exclude recipients who have replied (shouldn't happen for currentStep=0 but being safe)
     const remaining = limit - followUps.length;
     let freshEmails: SequenceRecipient[] = [];
     
@@ -3190,6 +3194,7 @@ export class DatabaseStorage implements IStorage {
           and(
             inArray(sequenceRecipients.status, ['pending', 'in_sequence']),
             eq(sequenceRecipients.currentStep, 0),
+            isNull(sequenceRecipients.repliedAt), // Don't send to recipients who have replied
             or(
               isNull(sequenceRecipients.nextSendAt),
               lte(sequenceRecipients.nextSendAt, now)
@@ -3239,6 +3244,23 @@ export class DatabaseStorage implements IStorage {
     
     // Merge: follow-ups first, then fresh emails
     return [...balancedFollowUps, ...balancedFreshEmails];
+  }
+
+  async getActiveRecipientsWithThreads(): Promise<SequenceRecipient[]> {
+    // Get all recipients with:
+    // - status 'in_sequence' (actively receiving emails)
+    // - threadId exists (has sent at least one email)
+    // - repliedAt is null (hasn't replied yet)
+    return await db
+      .select()
+      .from(sequenceRecipients)
+      .where(
+        and(
+          eq(sequenceRecipients.status, 'in_sequence'),
+          isNotNull(sequenceRecipients.threadId),
+          isNull(sequenceRecipients.repliedAt)
+        )
+      );
   }
 
   async getQueueView(): Promise<Array<SequenceRecipient & { sequenceName: string }>> {

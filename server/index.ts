@@ -6,6 +6,7 @@ import { voiceProxyServer } from "./voice-proxy.js";
 import { startJobProcessor } from "./analysis-job-processor";
 import { renewCalendarWatchOnStartup } from "./calendarSync";
 import { startEmailQueueProcessor } from "./services/emailQueue";
+import { startReplyDetectionWorker } from "./services/replyDetectionWorker";
 
 const app = express();
 
@@ -92,6 +93,9 @@ app.use((req, res, next) => {
 
     // Start E-Hub email queue processor
     startEmailQueueProcessor();
+
+    // Start E-Hub reply detection worker
+    startReplyDetectionWorker();
 
     console.log(`${new Date().toLocaleTimeString()} [express] serving on port ${port}`);
 
