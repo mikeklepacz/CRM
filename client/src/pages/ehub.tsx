@@ -24,6 +24,42 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
 import { TestTube2, RefreshCw, Reply } from "lucide-react";
 
+/**
+ * Calculate optimal min/max delay suggestions for human-like email spacing
+ * Based on overlap between company and client time windows
+ */
+function calculateOptimalDelays(
+  companyStartHour: number,
+  companyEndHour: number,
+  clientWindowStartOffset: number,
+  clientWindowEndHour: number,
+  dailyEmailLimit: number
+): { minDelayMinutes: number; maxDelayMinutes: number } {
+  // Calculate effective sending window (overlap between company and typical client hours)
+  const typicalClientStart = 9 + clientWindowStartOffset; // e.g., 9 + 1 = 10 AM
+  const typicalClientEnd = clientWindowEndHour; // e.g., 20 (8 PM)
+  
+  // Find overlap
+  const effectiveStart = Math.max(companyStartHour, typicalClientStart);
+  const effectiveEnd = Math.min(companyEndHour, typicalClientEnd);
+  const effectiveWindowHours = Math.max(1, effectiveEnd - effectiveStart);
+  
+  // Calculate average spacing needed for daily limit
+  const effectiveWindowMinutes = effectiveWindowHours * 60;
+  const averageSpacingMinutes = dailyEmailLimit > 0 
+    ? effectiveWindowMinutes / dailyEmailLimit 
+    : 5;
+  
+  // Suggest range with ±50% variance for natural randomness
+  const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * 0.5));
+  const maxDelay = Math.ceil(averageSpacingMinutes * 1.5);
+  
+  return {
+    minDelayMinutes: minDelay,
+    maxDelayMinutes: maxDelay
+  };
+}
+
 interface Sequence {
   id: string;
   name: string;
@@ -2540,7 +2576,22 @@ export default function EHub() {
                     data-testid="input-settings-daily-limit"
                     type="number"
                     value={settingsForm.dailyEmailLimit}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, dailyEmailLimit: parseInt(e.target.value) || 200 })}
+                    onChange={(e) => {
+                      const newLimit = parseInt(e.target.value) || 200;
+                      const optimal = calculateOptimalDelays(
+                        settingsForm.sendingHoursStart,
+                        settingsForm.sendingHoursEnd,
+                        settingsForm.clientWindowStartOffset,
+                        settingsForm.clientWindowEndHour,
+                        newLimit
+                      );
+                      setSettingsForm({ 
+                        ...settingsForm, 
+                        dailyEmailLimit: newLimit,
+                        minDelayMinutes: optimal.minDelayMinutes,
+                        maxDelayMinutes: optimal.maxDelayMinutes
+                      });
+                    }}
                     min={1}
                     max={2000}
                   />
