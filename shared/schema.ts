@@ -1335,7 +1335,7 @@ export const sequenceRecipients = pgTable("sequence_recipients", {
   status: varchar("status", { length: 50 }).notNull().default('pending'), // 'pending', 'in_sequence', 'replied', 'bounced', 'completed'
   currentStep: integer("current_step").default(0), // 0=pending, 1=completed step 1, 2=completed step 2, etc.
   lastStepSentAt: timestamp("last_step_sent_at"), // When the most recent step was sent
-  nextSendAt: timestamp("next_send_at"), // When to send next follow-up
+  nextSendAt: timestamp("next_send_at"), // When to send next follow-up (pointer to earliest scheduled send)
   sentAt: timestamp("sent_at"), // When first email was sent (step 1)
   repliedAt: timestamp("replied_at"),
   replyCount: integer("reply_count").default(0), // Number of replies received
@@ -1350,6 +1350,32 @@ export const sequenceRecipients = pgTable("sequence_recipients", {
   index("idx_sequence_recipients_next_send").on(table.nextSendAt),
   index("idx_sequence_recipients_link").on(table.link),
   index("idx_sequence_recipients_email").on(table.email),
+]);
+
+// Sequence scheduled sends - pre-scheduled individual emails for queue visibility
+export const sequenceScheduledSends = pgTable("sequence_scheduled_sends", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipientId: varchar("recipient_id").notNull().references(() => sequenceRecipients.id, { onDelete: 'cascade' }),
+  sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
+  stepNumber: integer("step_number").notNull(), // Which step this is (1, 2, 3, etc.)
+  repeatIndex: integer("repeat_index").notNull().default(0), // 0=first send, 1+=repeat iterations
+  scheduledAt: timestamp("scheduled_at").notNull(), // When to send this email
+  jitterMinutes: decimal("jitter_minutes", { precision: 10, scale: 4 }), // Random jitter applied (preserved for transparency)
+  status: varchar("status", { length: 50 }).notNull().default('pending'), // 'pending', 'processing', 'sent', 'cancelled', 'failed'
+  sentAt: timestamp("sent_at"), // When actually sent
+  threadId: varchar("thread_id"), // Gmail thread ID (if sent)
+  messageId: varchar("message_id"), // Message-ID from email headers (if sent)
+  subject: text("subject"), // Subject line (populated after send)
+  body: text("body"), // Body content (populated after send)
+  errorLog: text("error_log"), // Error message if send failed
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_scheduled_sends_recipient").on(table.recipientId),
+  index("idx_scheduled_sends_sequence").on(table.sequenceId),
+  index("idx_scheduled_sends_scheduled_at").on(table.scheduledAt),
+  index("idx_scheduled_sends_status").on(table.status),
+  index("idx_scheduled_sends_pending").on(table.status, table.scheduledAt), // Optimized for queue queries
+  uniqueIndex("idx_scheduled_sends_unique").on(table.recipientId, table.stepNumber, table.repeatIndex),
 ]);
 
 
@@ -1417,6 +1443,21 @@ export const updateEhubSettingsSchema = ehubSettingsBaseSchema.partial().refine(
   },
   { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
 );
+
+export const insertSequenceScheduledSendSchema = createInsertSchema(sequenceScheduledSends).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  recipientId: z.string().min(1),
+  sequenceId: z.string().min(1),
+  stepNumber: z.number().int().positive(),
+  repeatIndex: z.number().int().min(0).default(0),
+  scheduledAt: z.date(),
+  status: z.enum(['pending', 'processing', 'sent', 'cancelled', 'failed']).default('pending'),
+});
+
+export type InsertSequenceScheduledSend = z.infer<typeof insertSequenceScheduledSendSchema>;
+export type SequenceScheduledSend = typeof sequenceScheduledSends.$inferSelect;
 
 export const insertSequenceRecipientSchema = createInsertSchema(sequenceRecipients).omit({
   id: true,

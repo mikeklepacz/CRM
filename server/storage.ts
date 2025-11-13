@@ -154,6 +154,7 @@ import {
   sequenceRecipients,
   sequenceSteps,
   sequenceRecipientMessages,
+  sequenceScheduledSends,
   testEmailSends,
   testDataNukeLog,
   type EhubSettings,
@@ -166,6 +167,8 @@ import {
   type InsertSequenceStep,
   type SequenceRecipientMessage,
   type InsertSequenceRecipientMessage,
+  type SequenceScheduledSend,
+  type InsertSequenceScheduledSend,
   type InsertTestEmailSend,
   type TestEmailSend,
   type InsertTestDataNukeLog,
@@ -551,6 +554,15 @@ export interface IStorage {
   pauseRecipient(id: string): Promise<SequenceRecipient>;
   removeRecipient(id: string): Promise<SequenceRecipient>;
   skipRecipientStep(id: string): Promise<SequenceRecipient>;
+
+  // E-Hub Sequence Scheduled Sends operations
+  insertScheduledSends(sends: InsertSequenceScheduledSend[]): Promise<SequenceScheduledSend[]>;
+  getNextScheduledSends(limit: number): Promise<SequenceScheduledSend[]>;
+  getUpcomingScheduledSends(limit: number): Promise<SequenceScheduledSend[]>;
+  deleteRecipientScheduledSends(recipientId: string): Promise<number>;
+  deleteAllPendingScheduledSends(sequenceId?: string): Promise<number>;
+  updateScheduledSend(id: string, updates: Partial<InsertSequenceScheduledSend>): Promise<SequenceScheduledSend>;
+  getScheduledSendsByRecipient(recipientId: string): Promise<SequenceScheduledSend[]>;
 
   // E-Hub Sequence Steps operations
   createSequenceStep(step: InsertSequenceStep): Promise<SequenceStep>;
@@ -3903,6 +3915,82 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updated;
+  }
+
+  // E-Hub Sequence Scheduled Sends operations
+  async insertScheduledSends(sends: InsertSequenceScheduledSend[]): Promise<SequenceScheduledSend[]> {
+    if (sends.length === 0) return [];
+    
+    const created = await db
+      .insert(sequenceScheduledSends)
+      .values(sends)
+      .returning();
+    return created;
+  }
+
+  async getNextScheduledSends(limit: number): Promise<SequenceScheduledSend[]> {
+    const now = new Date();
+    
+    return await db
+      .select()
+      .from(sequenceScheduledSends)
+      .where(
+        and(
+          eq(sequenceScheduledSends.status, 'pending'),
+          lte(sequenceScheduledSends.scheduledAt, now)
+        )
+      )
+      .orderBy(sequenceScheduledSends.scheduledAt)
+      .limit(limit);
+  }
+
+  async getUpcomingScheduledSends(limit: number): Promise<SequenceScheduledSend[]> {
+    // Get upcoming pending sends for queue view - no time filter
+    return await db
+      .select()
+      .from(sequenceScheduledSends)
+      .where(eq(sequenceScheduledSends.status, 'pending'))
+      .orderBy(sequenceScheduledSends.scheduledAt)
+      .limit(limit);
+  }
+
+  async deleteRecipientScheduledSends(recipientId: string): Promise<number> {
+    const deleted = await db
+      .delete(sequenceScheduledSends)
+      .where(eq(sequenceScheduledSends.recipientId, recipientId))
+      .returning();
+    return deleted.length;
+  }
+
+  async deleteAllPendingScheduledSends(sequenceId?: string): Promise<number> {
+    const conditions = [eq(sequenceScheduledSends.status, 'pending')];
+    
+    if (sequenceId) {
+      conditions.push(eq(sequenceScheduledSends.sequenceId, sequenceId));
+    }
+    
+    const deleted = await db
+      .delete(sequenceScheduledSends)
+      .where(and(...conditions))
+      .returning();
+    return deleted.length;
+  }
+
+  async updateScheduledSend(id: string, updates: Partial<InsertSequenceScheduledSend>): Promise<SequenceScheduledSend> {
+    const [updated] = await db
+      .update(sequenceScheduledSends)
+      .set(updates)
+      .where(eq(sequenceScheduledSends.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getScheduledSendsByRecipient(recipientId: string): Promise<SequenceScheduledSend[]> {
+    return await db
+      .select()
+      .from(sequenceScheduledSends)
+      .where(eq(sequenceScheduledSends.recipientId, recipientId))
+      .orderBy(sequenceScheduledSends.scheduledAt);
   }
 
   // E-Hub Sequence Steps operations

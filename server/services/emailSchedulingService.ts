@@ -94,6 +94,151 @@ export function calculateOptimalDelays(
 }
 
 /**
+ * Pre-schedule all future sends for a recipient with random jitter
+ * 
+ * Generates scheduled send records for all steps (including repeats) up to either:
+ * - 50 total sends, OR
+ * - 30 days from now
+ * whichever comes first.
+ * 
+ * Each send time includes random jitter between minDelayMinutes and maxDelayMinutes,
+ * and is validated against business hours using smartTiming.
+ * 
+ * @param recipientId - The recipient ID
+ * @param sequenceId - The sequence ID
+ * @param recipientTimezone - Recipient's detected timezone
+ * @param recipientBusinessHours - Recipient's business hours string
+ * @param storage - Storage instance for database access
+ * @returns Array of scheduled send records ready for bulk insert
+ */
+export async function preScheduleRecipientSends(
+  recipientId: string,
+  sequenceId: string,
+  recipientTimezone: string,
+  recipientBusinessHours: string,
+  storage: any
+): Promise<Array<{
+  recipientId: string;
+  sequenceId: string;
+  stepNumber: number;
+  repeatIndex: number;
+  scheduledAt: Date;
+  jitterMinutes: number;
+  status: string;
+}>> {
+  // Get sequence configuration
+  const sequence = await storage.getSequence(sequenceId);
+  if (!sequence) {
+    throw new Error(`Sequence ${sequenceId} not found`);
+  }
+
+  // Get E-Hub settings for jitter range and admin window
+  const ehubSettings = await storage.getEhubSettings();
+  if (!ehubSettings) {
+    throw new Error('E-Hub settings not found');
+  }
+
+  // Resolve admin window
+  const adminWindow = await resolveAdminWindow(sequenceId, storage);
+
+  const stepDelays = (sequence.stepDelays || []).map((d: any) => parseFloat(d.toString()));
+  const repeatLastStep = sequence.repeatLastStep ?? false;
+  const minJitterMinutes = ehubSettings.minDelayMinutes;
+  const maxJitterMinutes = ehubSettings.maxDelayMinutes;
+
+  const scheduledSends: Array<{
+    recipientId: string;
+    sequenceId: string;
+    stepNumber: number;
+    repeatIndex: number;
+    scheduledAt: Date;
+    jitterMinutes: number;
+    status: string;
+  }> = [];
+
+  const now = new Date();
+  const thirtyDaysFromNow = addDays(now, 30);
+  let currentTime = now;
+  let stepNumber = 1;
+  let repeatIndex = 0;
+
+  // Generate up to 50 sends or 30 days ahead
+  while (scheduledSends.length < 50) {
+    // Determine delay for this step
+    let delayDays: number;
+    
+    if (stepNumber <= stepDelays.length) {
+      // Regular step delay
+      delayDays = stepDelays[stepNumber - 1] || 0;
+    } else if (repeatLastStep && stepDelays.length > 0) {
+      // Repeat step - use last step's delay
+      delayDays = stepDelays[stepDelays.length - 1];
+      repeatIndex++;
+    } else {
+      // Sequence complete
+      break;
+    }
+
+    // Apply base delay
+    currentTime = addDays(currentTime, delayDays);
+
+    // Stop if we've exceeded 30 days
+    if (currentTime > thirtyDaysFromNow) {
+      break;
+    }
+
+    // Generate random jitter
+    const jitterMinutes = Math.random() * (maxJitterMinutes - minJitterMinutes) + minJitterMinutes;
+    const jitterMs = jitterMinutes * 60 * 1000;
+    let baselineTime = new Date(currentTime.getTime() + jitterMs);
+
+    // Validate against business hours using smartTiming
+    const scheduledAt = computeNextSendSlot({
+      baselineTime,
+      adminTimezone: adminWindow.timezone,
+      adminStartHour: adminWindow.startHour,
+      adminEndHour: adminWindow.endHour,
+      recipientBusinessHours,
+      recipientTimezone,
+      clientWindowStartOffset: adminWindow.clientWindowStartOffset,
+      clientWindowEndHour: adminWindow.clientWindowEndHour,
+      skipWeekends: adminWindow.skipWeekends,
+    });
+
+    // CRITICAL: Update currentTime to the adjusted scheduledAt
+    // This ensures subsequent steps start from the smartTiming-adjusted time,
+    // preserving proper spacing even when weekends/business hours shift sends forward
+    currentTime = scheduledAt;
+
+    // Add to scheduled sends
+    scheduledSends.push({
+      recipientId,
+      sequenceId,
+      stepNumber,
+      repeatIndex,
+      scheduledAt,
+      jitterMinutes,
+      status: 'pending',
+    });
+
+    // Advance to next step
+    if (stepNumber < stepDelays.length) {
+      // Move to next regular step
+      stepNumber++;
+      repeatIndex = 0;
+    } else if (repeatLastStep) {
+      // Stay at last step, increment repeat index
+      repeatIndex++;
+    } else {
+      // Sequence complete (no more steps, repeats disabled)
+      break;
+    }
+  }
+
+  return scheduledSends;
+}
+
+/**
  * DEPRECATED: computeNextSendTimeForRecipient
  * 
  * This function has been replaced by the Queue Coordinator system.

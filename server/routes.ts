@@ -20385,6 +20385,30 @@ Based on the conversation, help the user design an effective email sequence that
       // Bulk insert recipients
       const created = await storage.addRecipients(recipientsWithNextSend);
 
+      // Pre-schedule all future sends for each recipient with random jitter
+      const { preScheduleRecipientSends } = await import('./services/emailSchedulingService');
+      const allScheduledSends = [];
+      
+      for (const recipient of created) {
+        try {
+          const sends = await preScheduleRecipientSends(
+            recipient.id,
+            recipient.sequenceId,
+            recipient.timezone || 'America/New_York',
+            recipient.businessHours || '',
+            storage
+          );
+          allScheduledSends.push(...sends);
+        } catch (error) {
+          console.error(`Error pre-scheduling sends for ${recipient.email}:`, error);
+        }
+      }
+
+      // Bulk insert all scheduled sends
+      if (allScheduledSends.length > 0) {
+        await storage.insertScheduledSends(allScheduledSends);
+      }
+
       // Update sequence total count
       await storage.updateSequenceStats(id, {
         totalRecipients: (sequence.totalRecipients || 0) + created.length,
@@ -20523,6 +20547,30 @@ Based on the conversation, help the user design an effective email sequence that
 
       // Bulk insert recipients
       const created = await storage.addRecipients(recipientsWithNextSend);
+
+      // Pre-schedule all future sends for each recipient with random jitter
+      const { preScheduleRecipientSends } = await import('./services/emailSchedulingService');
+      const allScheduledSends = [];
+      
+      for (const recipient of created) {
+        try {
+          const sends = await preScheduleRecipientSends(
+            recipient.id,
+            recipient.sequenceId,
+            recipient.timezone || 'America/New_York',
+            recipient.businessHours || '',
+            storage
+          );
+          allScheduledSends.push(...sends);
+        } catch (error) {
+          console.error(`Error pre-scheduling sends for ${recipient.email}:`, error);
+        }
+      }
+
+      // Bulk insert all scheduled sends
+      if (allScheduledSends.length > 0) {
+        await storage.insertScheduledSends(allScheduledSends);
+      }
 
       // Update sequence total count
       await storage.updateSequenceStats(id, {
