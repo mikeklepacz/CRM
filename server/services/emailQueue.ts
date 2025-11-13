@@ -325,7 +325,7 @@ async function processEmailQueue() {
     const now = new Date();
 
     // Get pending scheduled sends (already sorted chronologically)
-    const scheduledSends = await storage.getNextScheduledSends({ limit: 50 });
+    const scheduledSends = await storage.getNextScheduledSends(50);
     
     if (scheduledSends.length === 0) {
       console.log('[EmailQueue] No scheduled sends ready');
