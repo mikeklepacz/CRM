@@ -3411,6 +3411,85 @@ export class DatabaseStorage implements IStorage {
     return individualSends;
   }
 
+  async getPausedRecipients(): Promise<Array<{
+    recipientId: string;
+    recipientEmail: string;
+    recipientName: string;
+    sequenceId: string;
+    sequenceName: string;
+    currentStep: number;
+    totalSteps: number;
+    lastStepSentAt: Date | null;
+    pausedAt: Date | null;
+    messageHistory: Array<{
+      stepNumber: number;
+      subject: string | null;
+      sentAt: Date | null;
+      threadId: string | null;
+      messageId: string | null;
+    }>;
+  }>> {
+    // Fetch all paused recipients with sequence info
+    const pausedRecipients = await db
+      .select({
+        id: sequenceRecipients.id,
+        email: sequenceRecipients.email,
+        name: sequenceRecipients.name,
+        sequenceId: sequenceRecipients.sequenceId,
+        currentStep: sequenceRecipients.currentStep,
+        lastStepSentAt: sequenceRecipients.lastStepSentAt,
+        updatedAt: sequenceRecipients.updatedAt, // pausedAt
+        sequenceName: sequences.name,
+        stepDelays: sequences.stepDelays,
+      })
+      .from(sequenceRecipients)
+      .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
+      .where(eq(sequenceRecipients.status, 'paused'));
+
+    // Build result with message history
+    const result = [];
+    
+    for (const recipient of pausedRecipients) {
+      // Get message history for this recipient
+      const messages = await db
+        .select({
+          stepNumber: sequenceRecipientMessages.stepNumber,
+          subject: sequenceRecipientMessages.subject,
+          sentAt: sequenceRecipientMessages.sentAt,
+          threadId: sequenceRecipientMessages.threadId,
+          messageId: sequenceRecipientMessages.messageId,
+        })
+        .from(sequenceRecipientMessages)
+        .where(eq(sequenceRecipientMessages.recipientId, recipient.id))
+        .orderBy(sequenceRecipientMessages.stepNumber);
+
+      const totalSteps = recipient.stepDelays ? recipient.stepDelays.length : 0;
+
+      result.push({
+        recipientId: recipient.id,
+        recipientEmail: recipient.email,
+        recipientName: recipient.name || '',
+        sequenceId: recipient.sequenceId,
+        sequenceName: recipient.sequenceName || '',
+        currentStep: recipient.currentStep || 0,
+        totalSteps,
+        lastStepSentAt: recipient.lastStepSentAt,
+        pausedAt: recipient.updatedAt, // updatedAt tracks when paused
+        messageHistory: messages,
+      });
+    }
+
+    // Sort by most recently paused
+    result.sort((a, b) => {
+      if (!a.pausedAt && !b.pausedAt) return 0;
+      if (!a.pausedAt) return 1;
+      if (!b.pausedAt) return -1;
+      return b.pausedAt.getTime() - a.pausedAt.getTime();
+    });
+
+    return result;
+  }
+
   async updateRecipientStatus(id: string, updates: Partial<InsertSequenceRecipient>): Promise<SequenceRecipient> {
     const [updated] = await db
       .update(sequenceRecipients)
