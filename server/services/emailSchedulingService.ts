@@ -48,6 +48,52 @@ export async function resolveAdminWindow(sequenceId: string, storage: any): Prom
 }
 
 /**
+ * Calculate optimal min/max delay suggestions for human-like email spacing
+ * 
+ * Finds the overlap between company sending hours and typical client receiving hours,
+ * then calculates natural-looking delay ranges based on daily email limit.
+ * 
+ * @param companyStartHour - Company sending window start (24h format)
+ * @param companyEndHour - Company sending window end (24h format)
+ * @param clientWindowStartOffset - Hours after business opens (e.g., 1.0)
+ * @param clientWindowEndHour - Client cutoff hour local time (24h format)
+ * @param dailyEmailLimit - Max emails per day
+ * @returns Suggested min/max delays in minutes with ±50% variance around average
+ */
+export function calculateOptimalDelays(
+  companyStartHour: number,
+  companyEndHour: number,
+  clientWindowStartOffset: number,
+  clientWindowEndHour: number,
+  dailyEmailLimit: number
+): { minDelayMinutes: number; maxDelayMinutes: number } {
+  // Calculate effective sending window (overlap between company and typical client hours)
+  // Typical client business: 9 AM - client cutoff
+  const typicalClientStart = 9 + clientWindowStartOffset; // e.g., 9 + 1 = 10 AM
+  const typicalClientEnd = clientWindowEndHour; // e.g., 20 (8 PM)
+  
+  // Find overlap
+  const effectiveStart = Math.max(companyStartHour, typicalClientStart);
+  const effectiveEnd = Math.min(companyEndHour, typicalClientEnd);
+  const effectiveWindowHours = Math.max(1, effectiveEnd - effectiveStart);
+  
+  // Calculate average spacing needed for daily limit
+  const effectiveWindowMinutes = effectiveWindowHours * 60;
+  const averageSpacingMinutes = dailyEmailLimit > 0 
+    ? effectiveWindowMinutes / dailyEmailLimit 
+    : 5;
+  
+  // Suggest range with ±50% variance for natural randomness
+  const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * 0.5));
+  const maxDelay = Math.ceil(averageSpacingMinutes * 1.5);
+  
+  return {
+    minDelayMinutes: minDelay,
+    maxDelayMinutes: maxDelay
+  };
+}
+
+/**
  * DEPRECATED: computeNextSendTimeForRecipient
  * 
  * This function has been replaced by the Queue Coordinator system.
