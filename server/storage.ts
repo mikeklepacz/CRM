@@ -3627,6 +3627,7 @@ export class DatabaseStorage implements IStorage {
       adminStartHour: ehubSettings?.sendingHoursStart ?? 6,
       adminEndHour: ehubSettings?.sendingHoursEnd ?? 23,
       minDelayMinutes: ehubSettings?.minDelayMinutes ?? 6,
+      maxDelayMinutes: ehubSettings?.maxDelayMinutes ?? 10,
       recipientBusinessHours: recipient.businessHours || '',
       recipientTimezone: recipient.timezone || 'America/New_York',
       clientWindowStartOffset: parseFloat(ehubSettings?.clientWindowStartOffset?.toString() ?? '1.0'),

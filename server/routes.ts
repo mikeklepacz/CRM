@@ -20494,6 +20494,7 @@ Based on the conversation, help the user design an effective email sequence that
           adminStartHour: adminWindow.startHour,
           adminEndHour: adminWindow.endHour,
           minDelayMinutes: ehubSettings?.minDelayMinutes ?? 6,
+          maxDelayMinutes: ehubSettings?.maxDelayMinutes ?? 10,
           recipientBusinessHours: r.businessHours || '',
           recipientTimezone: r.timezone || 'America/New_York',
           clientWindowStartOffset: adminWindow.clientWindowStartOffset,

@@ -23,6 +23,7 @@ export interface QueueSlotRequest {
   adminStartHour: number;
   adminEndHour: number;
   minDelayMinutes: number; // Minimum spacing between emails (from E-Hub settings)
+  maxDelayMinutes: number; // Maximum spacing for random jitter (from E-Hub settings)
   
   // Recipient context
   recipientBusinessHours: string;
@@ -72,28 +73,38 @@ export function requestNextSlot(request: QueueSlotRequest): QueueSlotResult {
     baselineTime = addDays(now, request.stepDelay);
   }
   
-  // Step 2: Calculate desired spacing between sends
-  // Use the greater of: rate limit spacing OR minDelayMinutes
-  let desiredSpacing = Math.max(1, request.minDelayMinutes);
+  // Step 2: Helper function to generate random delay with rate limit respect
+  const generateRandomDelay = (): number => {
+    // Pick a random delay between min and max for natural variation
+    const randomJitter = request.minDelayMinutes + 
+      Math.random() * (request.maxDelayMinutes - request.minDelayMinutes);
+    
+    let spacing = Math.max(1, randomJitter);
+    
+    // Respect rate limit if it requires wider spacing
+    if (request.dailyRateLimit > 0) {
+      const adminWindowMinutes = (request.adminEndHour - request.adminStartHour) * 60;
+      const minutesBetweenSends = adminWindowMinutes / request.dailyRateLimit;
+      spacing = Math.max(spacing, minutesBetweenSends);
+    }
+    
+    return spacing;
+  };
   
-  if (request.dailyRateLimit > 0) {
-    const adminWindowMinutes = (request.adminEndHour - request.adminStartHour) * 60;
-    const minutesBetweenSends = adminWindowMinutes / request.dailyRateLimit;
-    desiredSpacing = Math.max(desiredSpacing, minutesBetweenSends);
-  }
+  // Step 3: Apply randomization to baseline time (ensures ALL emails get jitter)
+  let minimumTime = addMinutes(baselineTime, generateRandomDelay());
   
-  // Step 3: Enforce FIFO queue ordering with desired spacing
-  let minimumTime = baselineTime;
-  
+  // Step 4: Enforce FIFO queue ordering with FRESH random delay
   if (request.queueTailTime) {
-    // Queue exists - schedule AFTER the tail plus desired spacing
-    const afterTail = addMinutes(request.queueTailTime, desiredSpacing);
+    // Queue exists - ensure we're AFTER the tail plus a NEW random spacing
+    // This prevents deterministic spacing when queue is already populated
+    const afterTail = addMinutes(request.queueTailTime, generateRandomDelay());
     if (afterTail > minimumTime) {
       minimumTime = afterTail;
     }
   }
   
-  // Step 4: Apply admin/client time windows using smart timing
+  // Step 5: Apply admin/client time windows using smart timing
   const nextSendAt = computeNextSendSlot({
     baselineTime,
     adminTimezone: request.adminTimezone,
@@ -247,6 +258,7 @@ export async function recalculateAllPendingRecipients(settings: EhubSettings): P
         adminStartHour: settings.adminStartHour || 9,
         adminEndHour: settings.adminEndHour || 17,
         minDelayMinutes: settings.minDelayMinutes || 6,
+        maxDelayMinutes: settings.maxDelayMinutes || 10,
         recipientBusinessHours: recipient.businessHours || '9-17',
         recipientTimezone: recipient.timezone || 'America/New_York',
         clientWindowStartOffset: settings.clientWindowStartOffset || 1,
