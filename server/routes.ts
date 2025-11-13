@@ -20387,8 +20387,10 @@ Based on the conversation, help the user design an effective email sequence that
       const created = await storage.addRecipients(recipientsWithNextSend);
 
       // Pre-schedule all future sends for each recipient with random jitter
+      // Track queue tail to stagger bulk enrollments
       const { preScheduleRecipientSends } = await import('./services/emailSchedulingService');
       const allScheduledSends = [];
+      let runningQueueTail: Date | undefined = undefined; // Will use recipient.nextSendAt as initial time
       
       for (const recipient of created) {
         try {
@@ -20397,9 +20399,17 @@ Based on the conversation, help the user design an effective email sequence that
             recipient.sequenceId,
             recipient.timezone || 'America/New_York',
             recipient.businessHours || '',
-            storage
+            storage,
+            undefined, // ehubSettingsOverride
+            runningQueueTail || recipient.nextSendAt // Start this recipient's schedule after previous recipient's last send
           );
           allScheduledSends.push(...sends);
+          
+          // Update queue tail to the last send time for this recipient
+          if (sends.length > 0) {
+            const lastSend = sends[sends.length - 1];
+            runningQueueTail = lastSend.scheduledAt;
+          }
         } catch (error) {
           console.error(`Error pre-scheduling sends for ${recipient.email}:`, error);
         }
@@ -20550,8 +20560,10 @@ Based on the conversation, help the user design an effective email sequence that
       const created = await storage.addRecipients(recipientsWithNextSend);
 
       // Pre-schedule all future sends for each recipient with random jitter
+      // Track queue tail to stagger bulk enrollments
       const { preScheduleRecipientSends } = await import('./services/emailSchedulingService');
       const allScheduledSends = [];
+      let runningQueueTail = queueTailTime; // Start from last recipient's initial send time
       
       for (const recipient of created) {
         try {
@@ -20560,9 +20572,17 @@ Based on the conversation, help the user design an effective email sequence that
             recipient.sequenceId,
             recipient.timezone || 'America/New_York',
             recipient.businessHours || '',
-            storage
+            storage,
+            undefined, // ehubSettingsOverride
+            runningQueueTail // Start this recipient's schedule after previous recipient's last send
           );
           allScheduledSends.push(...sends);
+          
+          // Update queue tail to the last send time for this recipient
+          if (sends.length > 0) {
+            const lastSend = sends[sends.length - 1];
+            runningQueueTail = lastSend.scheduledAt;
+          }
         } catch (error) {
           console.error(`Error pre-scheduling sends for ${recipient.email}:`, error);
         }
