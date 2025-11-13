@@ -1,0 +1,54 @@
+Read 9 files
+Looking at your screenshots and the codebase, I can explain what's causing the emails to be scheduled for noon tomorrow instead of respecting the California business hours (2am-9pm = 2:00-21:00).
+
+The Issue
+The problem is in smartTiming.ts's computeNextSendSlot function. When a recipient has business hours like "Daily 2am–9pm", the system should be scheduling emails starting at 3am (2am opening + 1 hour offset), but instead it's defaulting to noon.
+
+Here's what's happening:
+
+Your Company Time Range is 6am-11pm (6-23)
+Your Client Time Range offset is 1 hour after opening, cutoff at 11pm (23)
+The recipient's business hours parse as "Daily 2am-9pm" which should give a window of 3am-9pm in their timezone
+However, when the business hours are "24/7" or poorly formatted, the code falls back to using noon as a safe default
+Looking at the business hours parsing in timezoneHours.ts, the string "Daily 2am–9pm" should parse correctly, but the issue might be that it's being treated as a 24/7 business or the parsing is failing.
+
+The Root Cause
+In smartTiming.ts at the getRecipientWindow function:
+
+// 24/7 business
+if (is24_7) {
+  const start = createTimeInZone(effectiveBaseline, daysOffset, 0, 0, timezone);
+  const end = createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone);
+  return { start, end };
+}
+And for closed businesses:
+
+// Closed business
+if (isClosed) {
+  const noon = createTimeInZone(effectiveBaseline, daysOffset, 12, 0, timezone);
+  return { start: noon, end: createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone) };
+}
+The noon fallback is being triggered. Let me check the exact parsing logic and fix it:
+
+server/services/timezoneHours.ts
+Reverted
+Fix business hours parsing for '2am-9pm' format, Improve time range extraction regex
+Now let's add some debug logging to see what's actually being parsed:
+
+server/services/smartTiming.ts
+Reverted
+Add debug logging for recipient window calculation Add debug logging for recipient window calculation
+The changes above will:
+
+Improve the time parsing regex to handle the en-dash character (–) used in "2am–9pm"
+Add debug logging so you can see exactly how the business hours string is being parsed
+After these changes are applied, when you add a recipient with "Daily 2am–9pm" business hours, check the console logs. You should see something like:
+
+[SmartTiming] Parsed business hours "Daily 2am–9pm": {
+  is24_7: false,
+  isClosed: false,
+  scheduleKeys: ['0', '1', '2', '3', '4', '5', '6'],
+  scheduleData: { 0: [{open: 120, close: 1260}], 1: [...], ... },
+  timezone: 'America/Los_Angeles'
+}
+If you see isClosed: true or empty scheduleKeys, that's the problem. The logs will tell us exactly what's going wrong with the parsing.
