@@ -1,0 +1,13 @@
+Well, I think that we really need to think about it in general because, if we are pausing something and we have an entire queue full of things that are meant to be sent, and if we're planning ahead—say, 24 hours—and we know that that 24 hours needs to have a balance of fresh emails planned and follow-up emails planned and pending, and we can see in the follow-ups pending, and we can see in the fresh emails pending, then we know that an email that's being resumed for that sequence is either fresh or requiring follow-up.
+
+Generally speaking, this is something that I don't plan on using often. I have no real reason to show something as paused or unpaused. This is really just something that is nice to have, but I would like to be able to see this work out because it's really good for the testing phase, and it's really good long-term.
+
+So, you know, in reality, if we already have 50 emails planned and I'm going to be resuming something, then this would be resuming into position 51, if you will. But, considering right now our queue is totally empty and we only have one recipient, then depending on which step has or has not been sent, it needs to say, "Okay, if step one had zero delay, then this email needs to be put in the queue as soon as possible," which, in theory, is in the back of the line, and as soon as it gets to that point in the line, then it is instantly eligible for sending.
+
+You know, another thing, too, that we need to make sure of is that somehow within our code, we are allowing for there to be a balance within our system. Because right now, I believe—and I could be wrong, so you might need to talk to the architect—but I believe if we are having a national campaign in the United States of America, which roughly has a three to four hour time window between different states, right now it seems like we might be only emailing at first everyone on the East Coast.
+
+But the thing is that we have a balance of emails to send to people all around the country, and I want the email queuing system to randomize it, especially because at first we're only going to be allowing, you know, 10 to 20 emails per day to be sent, because I don't want to get flagged as a spammer.
+
+So, we need to have really solid logic when it comes to creating the queue from the sequences and the campaign strategy settings that we've created, with the step delays as well as what we have for our company time range and our client time range windows.
+
+Thank you.

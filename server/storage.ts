@@ -169,7 +169,7 @@ import {
   type TestEmailSend,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, inArray, sql, desc, lte, gte, gt, isNull } from "drizzle-orm";
+import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, addMilliseconds } from 'date-fns';
 import { computeNextSendSlot } from './services/smartTiming';
@@ -3162,6 +3162,7 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
     
     // Stage 2: If we haven't filled the quota, get fresh emails (currentStep = 0)
+    // Include both 'pending' AND 'in_sequence' status (resumed recipients before step 1)
     const remaining = limit - followUps.length;
     let freshEmails: SequenceRecipient[] = [];
     
@@ -3171,7 +3172,7 @@ export class DatabaseStorage implements IStorage {
         .from(sequenceRecipients)
         .where(
           and(
-            eq(sequenceRecipients.status, 'pending'),
+            inArray(sequenceRecipients.status, ['pending', 'in_sequence']),
             eq(sequenceRecipients.currentStep, 0),
             or(
               isNull(sequenceRecipients.nextSendAt),
@@ -3518,6 +3519,7 @@ export class DatabaseStorage implements IStorage {
       .update(sequenceRecipients)
       .set({ 
         status: 'paused',
+        nextSendAt: null, // Clear scheduled send time so they don't appear in queue
         updatedAt: new Date()
       })
       .where(eq(sequenceRecipients.id, id))
@@ -3545,49 +3547,30 @@ export class DatabaseStorage implements IStorage {
     const sequence = result.sequence;
     const stepDelays = (sequence.stepDelays || []).map((d: string) => parseFloat(d));
     const currentStep = recipient.currentStep || 0;
-    const now = new Date();
     
     // Check if sequence is complete (shouldn't resume if beyond sequence length)
     if (currentStep >= stepDelays.length && !sequence.repeatLastStep) {
       throw new Error(`Recipient ${id} has completed sequence and cannot be resumed`);
     }
     
-    // Calculate baseline time respecting configured delays
-    let baselineTime: Date;
+    // Determine which step delay to use
+    const stepDelay = currentStep < stepDelays.length 
+      ? stepDelays[currentStep]
+      : stepDelays[stepDelays.length - 1]; // Use last delay for repeat
     
-    if (recipient.lastStepSentAt) {
-      // Calculate when the next email SHOULD have been sent (if not paused)
-      const delayDays = currentStep < stepDelays.length 
-        ? stepDelays[currentStep]
-        : stepDelays[stepDelays.length - 1]; // Use last delay for repeat
-      const delayMs = Math.max(delayDays || 0, 0) * 24 * 60 * 60 * 1000;
-      const shouldHaveBeenSentAt = addMilliseconds(recipient.lastStepSentAt, delayMs);
-      
-      // If that time has passed, use a minimal delay from now
-      // Otherwise, honor the remaining wait period
-      baselineTime = shouldHaveBeenSentAt > now 
-        ? shouldHaveBeenSentAt 
-        : addDays(now, 0.0035); // 5 minutes if delay already elapsed
-    } else if (currentStep === 0) {
-      // First email: use initial delay
-      const initialDelay = stepDelays[0] || 0;
-      baselineTime = addDays(now, initialDelay);
-    } else {
-      // Edge case: no lastStepSentAt but currentStep > 0 (imported/manually advanced)
-      // Treat as if previous step just completed, apply current step's delay
-      const delayDays = currentStep < stepDelays.length 
-        ? stepDelays[currentStep]
-        : stepDelays[stepDelays.length - 1];
-      baselineTime = addDays(now, delayDays || 0);
-    }
-    
-    // Get admin window for scheduling
+    // Get admin settings and preferences
     const creatorPrefs = await this.getUserPreferences(sequence.createdBy);
     const ehubSettings = await this.getEhubSettings();
     
-    // Compute nextSendAt using smart timing
-    const nextSendAt = computeNextSendSlot({
-      baselineTime,
+    // Get current queue state (exclude this recipient to avoid self-comparison)
+    const queueTailTime = await this.getQueueTail({ excludeRecipientId: id });
+    const currentDailyCount = await this.getDailyScheduledCount({ excludeRecipientId: id });
+    
+    // Use queue coordinator to assign next send slot
+    const { requestNextSlot } = await import('./services/queueCoordinator');
+    const slotResult = requestNextSlot({
+      stepDelay,
+      lastStepSentAt: recipient.lastStepSentAt,
       adminTimezone: creatorPrefs?.timezone || 'America/New_York',
       adminStartHour: ehubSettings?.sendingHoursStart ?? 6,
       adminEndHour: ehubSettings?.sendingHoursEnd ?? 23,
@@ -3596,13 +3579,18 @@ export class DatabaseStorage implements IStorage {
       clientWindowStartOffset: parseFloat(ehubSettings?.clientWindowStartOffset?.toString() ?? '1.0'),
       clientWindowEndHour: ehubSettings?.clientWindowEndHour ?? 14,
       skipWeekends: ehubSettings?.skipWeekends ?? false,
+      queueTailTime,
+      dailyRateLimit: ehubSettings?.dailyEmailLimit ?? 20,
+      currentDailyCount,
     });
+    
+    console.log(`[resumeRecipient] ${recipient.email} scheduled: ${slotResult.reason}`);
     
     const [updated] = await db
       .update(sequenceRecipients)
       .set({ 
         status: 'in_sequence',
-        nextSendAt,
+        nextSendAt: slotResult.nextSendAt,
         updatedAt: new Date()
       })
       .where(eq(sequenceRecipients.id, id))
@@ -3617,6 +3605,61 @@ export class DatabaseStorage implements IStorage {
       .where(eq(sequenceRecipients.status, 'paused'));
     
     return Number(result[0]?.count || 0);
+  }
+
+  async getQueueTail(options?: { excludeRecipientId?: string }): Promise<Date | null> {
+    // Get the latest scheduled send time from active recipients (across ALL dates)
+    // This represents the "tail" of the entire queue
+    const conditions = [
+      inArray(sequenceRecipients.status, ['pending', 'in_sequence']),
+      isNotNull(sequenceRecipients.nextSendAt),
+    ];
+    
+    if (options?.excludeRecipientId) {
+      conditions.push(ne(sequenceRecipients.id, options.excludeRecipientId));
+    }
+    
+    try {
+      const [result] = await db
+        .select({ maxSendAt: sql<Date>`MAX(${sequenceRecipients.nextSendAt})` })
+        .from(sequenceRecipients)
+        .where(and(...conditions));
+      
+      return result?.maxSendAt || null;
+    } catch (error) {
+      console.error('[getQueueTail] Error querying queue tail:', error);
+      return null;
+    }
+  }
+
+  async getDailyScheduledCount(options?: { date?: Date; excludeRecipientId?: string }): Promise<number> {
+    // Count recipients scheduled to send within the next 24 hours from now
+    // (or from a specific date if provided)
+    const now = options?.date || new Date();
+    const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    
+    const conditions = [
+      inArray(sequenceRecipients.status, ['pending', 'in_sequence']),
+      isNotNull(sequenceRecipients.nextSendAt),
+      gte(sequenceRecipients.nextSendAt, now),
+      lt(sequenceRecipients.nextSendAt, next24Hours),
+    ];
+    
+    if (options?.excludeRecipientId) {
+      conditions.push(ne(sequenceRecipients.id, options.excludeRecipientId));
+    }
+    
+    try {
+      const [result] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(sequenceRecipients)
+        .where(and(...conditions));
+      
+      return Number(result?.count || 0);
+    } catch (error) {
+      console.error('[getDailyScheduledCount] Error counting scheduled sends:', error);
+      return 0;
+    }
   }
 
   async removeRecipient(id: string): Promise<SequenceRecipient> {

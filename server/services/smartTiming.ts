@@ -143,6 +143,7 @@ export interface DualWindowOptions {
   clientWindowStartOffset: number; // Hours after business opens to start sending (e.g., 1.0 = 1 hour after opening)
   clientWindowEndHour: number; // Client local cutoff hour (e.g., 14 = 2 PM local time)
   skipWeekends: boolean; // Whether to skip weekends
+  minimumTime?: Date; // Optional minimum time - never schedule before this (for queue ordering)
 }
 
 /**
@@ -166,8 +167,12 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     recipientTimezone,
     clientWindowStartOffset,
     clientWindowEndHour,
-    skipWeekends 
+    skipWeekends,
+    minimumTime 
   } = options;
+
+  // Use minimumTime as effective baseline if provided and greater than baselineTime
+  const effectiveBaseline = minimumTime && minimumTime > baselineTime ? minimumTime : baselineTime;
 
   // Parse recipient business hours (pass empty string for state since we already have timezone)
   const parsed = parseBusinessHours(recipientBusinessHours, '');
@@ -194,27 +199,27 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
 
   // Helper: Get recipient window for a specific day [earliestSend, latestSend]
   const getRecipientWindow = (daysOffset: number): { start: Date; end: Date } | null => {
-    const candidateUtc = addDays(baselineTime, daysOffset);
+    const candidateUtc = addDays(effectiveBaseline, daysOffset);
     const dayOfWeek = getDayOfWeek(candidateUtc, timezone);
 
     // Closed business
     if (isClosed) {
-      const noon = createTimeInZone(baselineTime, daysOffset, 12, 0, timezone);
-      return { start: noon, end: createTimeInZone(baselineTime, daysOffset, clientWindowEndHour, 0, timezone) };
+      const noon = createTimeInZone(effectiveBaseline, daysOffset, 12, 0, timezone);
+      return { start: noon, end: createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone) };
     }
 
     // 24/7 business
     if (is24_7) {
-      const start = createTimeInZone(baselineTime, daysOffset, 0, 0, timezone);
-      const end = createTimeInZone(baselineTime, daysOffset, clientWindowEndHour, 0, timezone);
+      const start = createTimeInZone(effectiveBaseline, daysOffset, 0, 0, timezone);
+      const end = createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone);
       return { start, end };
     }
 
     // Scheduled hours
     const daySchedules = schedule[dayOfWeek];
     if (!daySchedules || daySchedules.length === 0) {
-      const noon = createTimeInZone(baselineTime, daysOffset, 12, 0, timezone);
-      return { start: noon, end: createTimeInZone(baselineTime, daysOffset, clientWindowEndHour, 0, timezone) };
+      const noon = createTimeInZone(effectiveBaseline, daysOffset, 12, 0, timezone);
+      return { start: noon, end: createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone) };
     }
 
     const firstSchedule = daySchedules[0];
@@ -240,8 +245,8 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
       sendMinute = 0;
     }
 
-    const start = createTimeInZone(baselineTime, daysOffset, sendHour, sendMinute, timezone);
-    const end = createTimeInZone(baselineTime, daysOffset, clientWindowEndHour, 0, timezone);
+    const start = createTimeInZone(effectiveBaseline, daysOffset, sendHour, sendMinute, timezone);
+    const end = createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone);
     return { start, end };
   };
 
@@ -250,7 +255,7 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
   const maxAttempts = 14;
 
   while (daysOffset < maxAttempts) {
-    const candidateUtc = addDays(baselineTime, daysOffset);
+    const candidateUtc = addDays(effectiveBaseline, daysOffset);
 
     // Check if we should skip weekends (in admin timezone)
     if (skipWeekends) {
@@ -262,8 +267,8 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     }
 
     // Get admin window for this day
-    const adminWindowStart = createTimeInZone(baselineTime, daysOffset, adminStartHour, 0, adminTimezone);
-    const adminWindowEnd = createTimeInZone(baselineTime, daysOffset, adminEndHour, 0, adminTimezone);
+    const adminWindowStart = createTimeInZone(effectiveBaseline, daysOffset, adminStartHour, 0, adminTimezone);
+    const adminWindowEnd = createTimeInZone(effectiveBaseline, daysOffset, adminEndHour, 0, adminTimezone);
 
     // Get recipient window for this day
     const recipientWindow = getRecipientWindow(daysOffset);
@@ -278,14 +283,14 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
 
     // Check if there's a valid overlap
     if (overlapStart < overlapEnd) {
-      // Overlap exists! Check if baseline is already inside it
-      if (baselineTime >= overlapStart && baselineTime < overlapEnd) {
+      // Overlap exists! Check if effectiveBaseline is already inside it
+      if (effectiveBaseline >= overlapStart && effectiveBaseline < overlapEnd) {
         // Immediate send - we're currently in the overlap window
-        return baselineTime;
+        return effectiveBaseline;
       }
 
       // Overlap is in the future
-      if (overlapStart > baselineTime) {
+      if (overlapStart > effectiveBaseline) {
         return overlapStart;
       }
     }
@@ -294,6 +299,6 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     daysOffset++;
   }
 
-  // Fallback: 1 hour from baseline
-  return addHours(baselineTime, 1);
+  // Fallback: 1 hour from effective baseline
+  return addHours(effectiveBaseline, 1);
 }

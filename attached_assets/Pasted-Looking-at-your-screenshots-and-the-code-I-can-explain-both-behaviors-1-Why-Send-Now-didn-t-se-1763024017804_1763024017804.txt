@@ -1,0 +1,45 @@
+Looking at your screenshots and the code, I can explain both behaviors:
+
+1. Why "Send Now" didn't send immediately
+The "Send Now" button calls /api/ehub/recipients/:id/send-now, which does this:
+
+// From server/routes.ts
+app.post('/api/ehub/recipients/:id/send-now', async (req: any, res) => {
+  const { id } = req.params;
+  await storage.updateRecipient(id, { 
+    nextSendAt: new Date() // Sets to NOW
+  });
+  res.json({ success: true });
+});
+It sets nextSendAt to the current time, but it doesn't actually send the email. The email queue processor (emailQueue.ts) runs every 60 seconds and checks for recipients where nextSendAt <= now. So there's up to a 60-second delay before the queue picks it up.
+
+2. Why "Resume" scheduled Step 2 instead of sending instantly
+Looking at the resumeRecipient function in server/storage.ts (lines 1270-1325 from rag_source_12), here's what happens:
+
+It gets the recipient's currentStep (which is 0 after Step 1 was sent)
+It calculates baselineTime based on when Step 1 was last sent + the cumulative gap delays
+For Step 2, that means it adds stepDelays[1] (0.0035 days = 5 minutes) to lastStepSentAt
+The issue is that Resume doesn't consider that Step 1 might have already been sent. It just recalculates the next send time as if the pause never happened, using the original schedule.
+
+Here's the problematic logic:
+
+// From storage.ts resumeRecipient()
+if (recipient.lastStepSentAt) {
+  // Calculate when the next email SHOULD have been sent (if not paused)
+  const delayDays = currentStep < stepDelays.length 
+    ? stepDelays[currentStep]  // This uses stepDelays[1] = 0.0035 days
+    : stepDelays[stepDelays.length - 1];
+  const delayMs = Math.max(delayDays || 0, 0) * 24 * 60 * 60 * 1000;
+  
+  // Add delay to last sent time
+  baselineTime = new Date(recipient.lastStepSentAt.getTime() + delayMs);
+  
+  // If that time is in the past, send now
+  if (baselineTime <= now) {
+    baselineTime = now;
+  }
+}
+Since Step 1 was sent recently (less than 5 minutes ago), baselineTime is still in the future, so it schedules Step 2 for 5 minutes from when Step 1 was sent.
+
+The Fix
+If you want "Resume" to send the next step immediately (ignoring the configured delay), you should modify the resumeRecipient function
