@@ -22,7 +22,7 @@ export interface QueueSlotRequest {
   adminTimezone: string;
   adminStartHour: number;
   adminEndHour: number;
-  minDelayBetweenSendsMinutes: number; // Minimum spacing between emails (from E-Hub settings)
+  minDelayMinutes: number; // Minimum spacing between emails (from E-Hub settings)
   
   // Recipient context
   recipientBusinessHours: string;
@@ -73,8 +73,8 @@ export function requestNextSlot(request: QueueSlotRequest): QueueSlotResult {
   }
   
   // Step 2: Calculate desired spacing between sends
-  // Use the greater of: rate limit spacing OR minDelayBetweenSends
-  let desiredSpacing = Math.max(1, request.minDelayBetweenSendsMinutes);
+  // Use the greater of: rate limit spacing OR minDelayMinutes
+  let desiredSpacing = Math.max(1, request.minDelayMinutes);
   
   if (request.dailyRateLimit > 0) {
     const adminWindowMinutes = (request.adminEndHour - request.adminStartHour) * 60;
@@ -246,7 +246,7 @@ export async function recalculateAllPendingRecipients(settings: EhubSettings): P
         adminTimezone: settings.adminTimezone || 'America/New_York',
         adminStartHour: settings.adminStartHour || 9,
         adminEndHour: settings.adminEndHour || 17,
-        minDelayBetweenSendsMinutes: settings.minDelayBetweenSendsMinutes || 6,
+        minDelayMinutes: settings.minDelayMinutes || 6,
         recipientBusinessHours: recipient.businessHours || '9-17',
         recipientTimezone: recipient.timezone || 'America/New_York',
         clientWindowStartOffset: settings.clientWindowStartOffset || 1,

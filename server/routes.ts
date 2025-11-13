@@ -20493,7 +20493,7 @@ Based on the conversation, help the user design an effective email sequence that
           adminTimezone: adminWindow.timezone,
           adminStartHour: adminWindow.startHour,
           adminEndHour: adminWindow.endHour,
-          minDelayBetweenSendsMinutes: ehubSettings?.minDelayBetweenSendsMinutes ?? 6,
+          minDelayMinutes: ehubSettings?.minDelayMinutes ?? 6,
           recipientBusinessHours: r.businessHours || '',
           recipientTimezone: r.timezone || 'America/New_York',
           clientWindowStartOffset: adminWindow.clientWindowStartOffset,
