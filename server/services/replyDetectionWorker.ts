@@ -1,5 +1,7 @@
 import { storage } from '../storage';
 import { checkForReplies } from './gmailReplyDetection';
+import * as googleSheets from '../googleSheets';
+import { normalizeLink } from '../../shared/linkUtils';
 
 /**
  * Background worker that checks all active email threads for replies
@@ -8,6 +10,71 @@ import { checkForReplies } from './gmailReplyDetection';
 
 let isRunning = false;
 let checkInterval: NodeJS.Timeout | null = null;
+
+/**
+ * Update Commission Tracker Status to "Replied" when reply is detected
+ */
+async function updateCommissionTrackerOnReply(recipientLink: string, recipientEmail: string): Promise<void> {
+  try {
+    // Find Commission Tracker sheet
+    const sheets = await storage.getAllActiveGoogleSheets();
+    const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+    
+    if (!trackerSheet) {
+      console.log('[ReplyWorker] No Commission Tracker configured - skipping tracker update');
+      return;
+    }
+
+    // Read Commission Tracker data
+    const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+    const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+    
+    if (trackerRows.length === 0) {
+      console.log('[ReplyWorker] Empty tracker sheet - skipping tracker update');
+      return;
+    }
+
+    const trackerHeaders = trackerRows[0];
+    const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+    const statusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
+
+    if (linkIndex === -1 || statusIndex === -1) {
+      console.log('[ReplyWorker] Missing Link or Status column - skipping tracker update');
+      return;
+    }
+
+    // Find the row by normalized link
+    const normalizedInputLink = normalizeLink(recipientLink);
+    let rowIndex = -1;
+
+    for (let i = 1; i < trackerRows.length; i++) {
+      const rowLink = trackerRows[i][linkIndex];
+      if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
+        rowIndex = i + 1; // 1-indexed for Google Sheets
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      console.log(`[ReplyWorker] Store not found in Commission Tracker for ${recipientEmail}`);
+      return;
+    }
+
+    // Update Status to "Replied"
+    const statusCol = String.fromCharCode(65 + statusIndex);
+    await googleSheets.writeSheetData(
+      trackerSheet.spreadsheetId,
+      `${trackerSheet.sheetName}!${statusCol}${rowIndex}`,
+      [['Replied']]
+    );
+
+    console.log(`[ReplyWorker] ✅ Updated Commission Tracker Status to "Replied" for ${recipientEmail}`);
+
+  } catch (error: any) {
+    console.error(`[ReplyWorker] ❌ Error updating Commission Tracker: ${error.message}`);
+    // Don't fail reply detection if tracker update fails
+  }
+}
 
 /**
  * Check all active threads for replies and update database
@@ -58,6 +125,9 @@ async function checkActiveThreadsForReplies() {
             replyCount: replyResult.replyCount,
             nextSendAt: null, // Stop future sends
           });
+
+          // Update Commission Tracker Status to "Replied"
+          await updateCommissionTrackerOnReply(recipient.link, recipient.email);
 
           // Update sequence stats
           const currentStats = await storage.getSequence(recipient.sequenceId);

@@ -10,11 +10,34 @@ import { normalizeLink } from '../../shared/linkUtils';
 
 let isProcessing = false;
 
+// Terminal statuses that block all emails (Step 1 and Step 2+)
+const TERMINAL_STATUSES = [
+  'Interested',
+  'Sample Sent',
+  'Closed Won',
+  'Closed Lost',
+  'Replied'
+];
+
+// Non-terminal statuses that allow Step 1 emails (claiming the store)
+const STEP1_ALLOWED_STATUSES = [
+  '', // blank
+  'Claimed',
+  'Emailed'
+];
+
 /**
- * Check Commission Tracker for existing agent and ensure row exists
+ * STEP 1 VALIDATION: Check Commission Tracker for Step 1 (fresh/cold) emails
  * Returns { shouldSkip: boolean, reason?: string }
- * - If store has claimed agent -> shouldSkip: true
- * - If store unclaimed/new -> creates/updates row with Agent="Mike Klepacz", Status="Emailed", shouldSkip: false
+ * 
+ * GREEN LIGHT (send Step 1):
+ * - Store doesn't exist in tracker -> CREATE new row
+ * - Status is blank/Claimed/Emailed -> UPDATE Agent="Mike Klepacz", Status="Emailed"
+ * 
+ * RED LIGHT (skip Step 1):
+ * - Status is terminal (Interested/Sample Sent/Closed Won/Closed Lost/Replied)
+ * - Status is Contacted/Follow-Up/Warm (manual sales work in progress)
+ * - Agent is someone else (not blank, not Mike Klepacz)
  */
 async function checkAndUpdateCommissionTracker(recipientLink: string, recipientEmail: string, recipientName: string): Promise<{ shouldSkip: boolean; reason?: string }> {
   try {
@@ -58,36 +81,66 @@ async function checkAndUpdateCommissionTracker(recipientLink: string, recipientE
     const normalizedInputLink = normalizeLink(recipientLink);
     let existingRowIndex = -1;
     let existingAgent = '';
+    let existingStatus = '';
 
     for (let i = 1; i < trackerRows.length; i++) {
       const rowLink = trackerRows[i][linkIndex];
       if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
         existingRowIndex = i + 1; // 1-indexed for Google Sheets
-        // Safe to access agentIndex now because we've verified it exists
-        existingAgent = trackerRows[i][agentIndex] || '';
+        existingAgent = (trackerRows[i][agentIndex] || '').trim();
+        existingStatus = statusIndex !== -1 ? (trackerRows[i][statusIndex] || '').trim() : '';
         break;
       }
     }
 
-    // If row exists and has an agent, skip the email
-    if (existingRowIndex !== -1 && existingAgent.trim()) {
-      console.log(`[CommissionTracker] ⛔ Store already claimed by agent "${existingAgent}" - SKIPPING email to ${recipientEmail}`);
-      return { 
-        shouldSkip: true, 
-        reason: `Store already claimed by ${existingAgent}` 
-      };
-    }
-
-    // Row exists but no agent OR row doesn't exist - ensure row with "Mike Klepacz"
     const EHUB_AGENT = 'Mike Klepacz';
     const EHUB_STATUS = 'Emailed';
-    const claimDate = new Date().toISOString();
 
+    // If row exists in Commission Tracker, validate based on Status and Agent
     if (existingRowIndex !== -1) {
-      // Update existing row with Mike Klepacz as agent
-      console.log(`[CommissionTracker] ✅ Updating unclaimed row ${existingRowIndex} with Agent="${EHUB_AGENT}"`);
+      // Check if status is terminal (already a customer, not interested, etc.)
+      if (TERMINAL_STATUSES.includes(existingStatus)) {
+        console.log(`[CommissionTracker] ⛔ STEP 1 BLOCKED: Store has terminal status "${existingStatus}" - SKIPPING ${recipientEmail}`);
+        return { 
+          shouldSkip: true, 
+          reason: `Store has terminal status: ${existingStatus}` 
+        };
+      }
+
+      // Check for manual sales work statuses (Contacted, Follow-Up, Warm)
+      const manualWorkStatuses = ['Contacted', 'Follow-Up', 'Warm'];
+      if (manualWorkStatuses.includes(existingStatus)) {
+        console.log(`[CommissionTracker] ⛔ STEP 1 BLOCKED: Store has manual status "${existingStatus}" - SKIPPING ${recipientEmail}`);
+        return { 
+          shouldSkip: true, 
+          reason: `Manual sales work in progress: ${existingStatus}` 
+        };
+      }
+
+      // ENFORCE ALLOWED STATUS WHITELIST: Only allow blank/Claimed/Emailed
+      if (existingStatus && !STEP1_ALLOWED_STATUSES.includes(existingStatus)) {
+        console.log(`[CommissionTracker] ⛔ STEP 1 BLOCKED: Store has disallowed status "${existingStatus}" - SKIPPING ${recipientEmail}`);
+        return { 
+          shouldSkip: true, 
+          reason: `Disallowed status: ${existingStatus}` 
+        };
+      }
+
+      // Check if another agent owns this store
+      if (existingAgent && existingAgent !== EHUB_AGENT) {
+        console.log(`[CommissionTracker] ⛔ STEP 1 BLOCKED: Store claimed by "${existingAgent}" - SKIPPING ${recipientEmail}`);
+        return { 
+          shouldSkip: true, 
+          reason: `Store claimed by ${existingAgent}` 
+        };
+      }
+
+      // GREEN LIGHT: Status is blank/Claimed/Emailed, update to Agent="Mike Klepacz", Status="Emailed"
+      console.log(`[CommissionTracker] ✅ STEP 1 APPROVED: Updating row ${existingRowIndex} to Agent="${EHUB_AGENT}", Status="${EHUB_STATUS}"`);
       
       const updates = [];
+      const claimDate = new Date().toISOString();
+      
       if (agentIndex !== -1) {
         const agentCol = String.fromCharCode(65 + agentIndex);
         updates.push(googleSheets.writeSheetData(
@@ -114,26 +167,113 @@ async function checkAndUpdateCommissionTracker(recipientLink: string, recipientE
       }
       
       await Promise.all(updates);
-    } else {
-      // Create new row
-      console.log(`[CommissionTracker] ✅ Creating new row with Agent="${EHUB_AGENT}" for ${recipientEmail}`);
-      
-      const newRow = new Array(trackerHeaders.length).fill('');
-      if (linkIndex !== -1) newRow[linkIndex] = recipientLink;
-      if (agentIndex !== -1) newRow[agentIndex] = EHUB_AGENT;
-      if (statusIndex !== -1) newRow[statusIndex] = EHUB_STATUS;
-      if (storeNameIndex !== -1) newRow[storeNameIndex] = recipientName;
-      if (pocEmailIndex !== -1) newRow[pocEmailIndex] = recipientEmail;
-      if (claimDateIndex !== -1) newRow[claimDateIndex] = claimDate;
-      
-      const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
-      await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
+      return { shouldSkip: false };
     }
+
+    // Store doesn't exist - CREATE new row
+    console.log(`[CommissionTracker] ✅ STEP 1 APPROVED: Creating new row with Agent="${EHUB_AGENT}" for ${recipientEmail}`);
+    
+    const newRow = new Array(trackerHeaders.length).fill('');
+    const claimDate = new Date().toISOString();
+    
+    if (linkIndex !== -1) newRow[linkIndex] = recipientLink;
+    if (agentIndex !== -1) newRow[agentIndex] = EHUB_AGENT;
+    if (statusIndex !== -1) newRow[statusIndex] = EHUB_STATUS;
+    if (storeNameIndex !== -1) newRow[storeNameIndex] = recipientName;
+    if (pocEmailIndex !== -1) newRow[pocEmailIndex] = recipientEmail;
+    if (claimDateIndex !== -1) newRow[claimDateIndex] = claimDate;
+    
+    const appendRange = `${trackerSheet.sheetName}!A:ZZ`;
+    await googleSheets.appendSheetData(trackerSheet.spreadsheetId, appendRange, [newRow]);
 
     return { shouldSkip: false };
   } catch (error: any) {
     console.error(`[CommissionTracker] ❌ Error checking tracker: ${error.message}`);
     console.error(`[CommissionTracker] ⚠️  Proceeding with email send despite error`);
+    // Don't block emails on tracker errors
+    return { shouldSkip: false };
+  }
+}
+
+/**
+ * STEP 2+ VALIDATION: Check Commission Tracker for follow-up emails
+ * Returns { shouldSkip: boolean, reason?: string }
+ * 
+ * GREEN LIGHT (send follow-up):
+ * - Agent="Mike Klepacz" AND Status="Emailed"
+ * 
+ * RED LIGHT (skip follow-up):
+ * - Everything else (agent mismatch, terminal status, etc.)
+ */
+async function validateFollowUpEmail(recipientLink: string, recipientEmail: string): Promise<{ shouldSkip: boolean; reason?: string }> {
+  try {
+    // Find Commission Tracker sheet
+    const sheets = await storage.getAllActiveGoogleSheets();
+    const trackerSheet = sheets.find(s => s.sheetPurpose === 'commissions');
+    
+    if (!trackerSheet) {
+      console.log('[CommissionTracker] No Commission Tracker configured - proceeding with follow-up send');
+      return { shouldSkip: false };
+    }
+
+    // Read Commission Tracker data
+    const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
+    const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+    
+    if (trackerRows.length === 0) {
+      console.log('[CommissionTracker] Empty tracker sheet - proceeding with follow-up send');
+      return { shouldSkip: false };
+    }
+
+    const trackerHeaders = trackerRows[0];
+    const linkIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'link');
+    const agentIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'agent name');
+    const statusIndex = trackerHeaders.findIndex(h => h.toLowerCase() === 'status');
+
+    if (linkIndex === -1 || agentIndex === -1 || statusIndex === -1) {
+      console.log('[CommissionTracker] ⚠️  Missing required columns - proceeding with follow-up send');
+      return { shouldSkip: false };
+    }
+
+    // Look for existing row by normalized link
+    const normalizedInputLink = normalizeLink(recipientLink);
+    let existingAgent = '';
+    let existingStatus = '';
+
+    for (let i = 1; i < trackerRows.length; i++) {
+      const rowLink = trackerRows[i][linkIndex];
+      if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
+        existingAgent = (trackerRows[i][agentIndex] || '').trim();
+        existingStatus = (trackerRows[i][statusIndex] || '').trim();
+        break;
+      }
+    }
+
+    const EHUB_AGENT = 'Mike Klepacz';
+
+    // Follow-ups only allowed if Agent="Mike Klepacz" AND Status="Emailed"
+    if (existingAgent !== EHUB_AGENT) {
+      console.log(`[CommissionTracker] ⛔ FOLLOW-UP BLOCKED: Agent is "${existingAgent}", not "${EHUB_AGENT}" - SKIPPING ${recipientEmail}`);
+      return { 
+        shouldSkip: true, 
+        reason: `Not your lead (Agent: ${existingAgent || 'none'})` 
+      };
+    }
+
+    if (existingStatus !== 'Emailed') {
+      console.log(`[CommissionTracker] ⛔ FOLLOW-UP BLOCKED: Status is "${existingStatus}", not "Emailed" - SKIPPING ${recipientEmail}`);
+      return { 
+        shouldSkip: true, 
+        reason: `Status changed to: ${existingStatus || 'blank'}` 
+      };
+    }
+
+    console.log(`[CommissionTracker] ✅ FOLLOW-UP APPROVED: Agent="${EHUB_AGENT}", Status="Emailed" - SENDING to ${recipientEmail}`);
+    return { shouldSkip: false };
+
+  } catch (error: any) {
+    console.error(`[CommissionTracker] ❌ Error validating follow-up: ${error.message}`);
+    console.error(`[CommissionTracker] ⚠️  Proceeding with follow-up send despite error`);
     // Don't block emails on tracker errors
     return { shouldSkip: false };
   }
@@ -249,9 +389,9 @@ async function processEmailQueue() {
         // Determine current step (before increment)
         const currentStepNumber = (recipient.currentStep || 0) + 1; // 0 -> 1, 1 -> 2, etc.
 
-        // CHECK COMMISSION TRACKER: Only for fresh emails (currentStep 0 or null), not follow-ups
-        // Follow-ups are to stores we already claimed!
+        // CHECK COMMISSION TRACKER VALIDATION
         if ((recipient.currentStep || 0) === 0) {
+          // STEP 1: Fresh/cold email - validate and create/update tracker row
           const trackerCheck = await checkAndUpdateCommissionTracker(
             recipient.link,
             recipient.email,
@@ -259,8 +399,24 @@ async function processEmailQueue() {
           );
 
           if (trackerCheck.shouldSkip) {
-            console.log(`[EmailQueue] ⛔ SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
+            console.log(`[EmailQueue] ⛔ STEP 1 SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
             // Mark recipient as skipped
+            await storage.updateRecipientStatus(recipient.id, { 
+              status: 'skipped',
+              nextSendAt: null // Clear next send time
+            });
+            continue; // Skip to next recipient
+          }
+        } else {
+          // STEP 2+: Follow-up email - validate agent ownership and active status
+          const followUpCheck = await validateFollowUpEmail(
+            recipient.link,
+            recipient.email
+          );
+
+          if (followUpCheck.shouldSkip) {
+            console.log(`[EmailQueue] ⛔ STEP ${currentStepNumber} FOLLOW-UP SKIPPED ${recipient.email}: ${followUpCheck.reason}`);
+            // Mark recipient as skipped (they replied or status changed)
             await storage.updateRecipientStatus(recipient.id, { 
               status: 'skipped',
               nextSendAt: null // Clear next send time
