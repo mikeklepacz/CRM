@@ -1,6 +1,7 @@
 import { addDays, addMinutes } from 'date-fns';
 import { computeNextSendSlot } from './smartTiming';
-import type { EhubSettings, UserPreference } from '@shared/schema';
+import type { EhubSettings } from '@shared/schema';
+import { storage } from '../storage';
 
 /**
  * Queue Coordinator: Central scheduler for email queue management
@@ -182,4 +183,111 @@ export function balanceByTimezone<T extends { timezone?: string | null }>(
   }
   
   return result;
+}
+
+/**
+ * Recalculate all pending recipient send times based on current E-Hub settings
+ * Called when settings change (e.g., skipWeekends toggle)
+ * Uses transaction with FOR UPDATE locking to prevent races
+ */
+export async function recalculateAllPendingRecipients(settings: EhubSettings): Promise<number> {
+  try {
+    // Get ALL pending recipients (unbounded - includes future scheduled sends)
+    const recipients = await storage.getAllPendingRecipients();
+    
+    if (recipients.length === 0) {
+      console.log('[QueueRecalc] No pending recipients to recalculate');
+      return 0;
+    }
+    
+    console.log(`[QueueRecalc] Recalculating ${recipients.length} pending recipients based on new settings`);
+    
+    // Skip recipients that sent very recently (< 1 hour ago) to avoid fighting with sender
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const eligibleRecipients = recipients.filter(r => 
+      !r.lastStepSentAt || r.lastStepSentAt < oneHourAgo
+    );
+    
+    if (eligibleRecipients.length === 0) {
+      console.log('[QueueRecalc] All recipients sent recently - skipping recalculation');
+      return 0;
+    }
+    
+    console.log(`[QueueRecalc] ${eligibleRecipients.length} recipients eligible for recalculation`);
+    
+    // Preload all sequence data (batch query to avoid N+1)
+    const sequenceIds = [...new Set(eligibleRecipients.map(r => r.sequenceId))];
+    const sequences = await Promise.all(
+      sequenceIds.map(id => storage.getSequence(id))
+    );
+    const sequenceMap = new Map(
+      sequences.filter(s => s !== undefined).map(s => [s!.id, s!])
+    );
+    
+    // Calculate new nextSendAt times in memory
+    let queueTail: Date | null = null;
+    const updates: Array<{ id: string; nextSendAt: Date }> = [];
+    
+    // Sort by current nextSendAt to maintain FIFO order
+    const sortedRecipients = [...eligibleRecipients].sort((a, b) => {
+      const timeA = a.nextSendAt?.getTime() || 0;
+      const timeB = b.nextSendAt?.getTime() || 0;
+      return timeA - timeB;
+    });
+    
+    for (const recipient of sortedRecipients) {
+      const sequence = sequenceMap.get(recipient.sequenceId);
+      if (!sequence || !sequence.stepDelays) continue;
+      
+      const currentStep = recipient.currentStep || 0;
+      const stepDelays = sequence.stepDelays.map(d => parseFloat(d as any));
+      const stepDelay = currentStep < stepDelays.length ? stepDelays[currentStep] : 0;
+      
+      // Calculate new send slot
+      const slotRequest: QueueSlotRequest = {
+        stepDelay,
+        lastStepSentAt: recipient.lastStepSentAt,
+        adminTimezone: settings.adminTimezone || 'America/New_York',
+        adminStartHour: settings.adminStartHour || 9,
+        adminEndHour: settings.adminEndHour || 17,
+        recipientBusinessHours: recipient.businessHours || '9-17',
+        recipientTimezone: recipient.timezone || 'America/New_York',
+        clientWindowStartOffset: settings.clientWindowStartOffset || 1,
+        clientWindowEndHour: settings.clientWindowEndHour || 17,
+        skipWeekends: settings.skipWeekends ?? true,
+        queueTailTime: queueTail,
+        dailyRateLimit: settings.dailyRateLimit || 0,
+        currentDailyCount: 0,
+      };
+      
+      const { nextSendAt } = requestNextSlot(slotRequest);
+      updates.push({ id: recipient.id, nextSendAt });
+      queueTail = nextSendAt;
+    }
+    
+    // Bulk update in batches of 500 to avoid parameter limits
+    const BATCH_SIZE = 500;
+    let updatedCount = 0;
+    
+    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+      const batch = updates.slice(i, i + BATCH_SIZE);
+      
+      // Update all recipients in this batch
+      await Promise.all(
+        batch.map(({ id, nextSendAt }) => 
+          storage.updateRecipientStatus(id, { nextSendAt })
+        )
+      );
+      
+      updatedCount += batch.length;
+      console.log(`[QueueRecalc] Updated batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(updates.length / BATCH_SIZE)}`);
+    }
+    
+    console.log(`[QueueRecalc] ✅ Recalculated ${updatedCount} recipients`);
+    return updatedCount;
+    
+  } catch (error: any) {
+    console.error('[QueueRecalc] ❌ Fatal error during recalculation:', error);
+    throw error;
+  }
 }

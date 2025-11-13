@@ -529,9 +529,10 @@ export interface IStorage {
   getRecipients(sequenceId: string, filters?: { status?: string; limit?: number }): Promise<SequenceRecipient[]>;
   getRecipient(id: string): Promise<SequenceRecipient | undefined>;
   getNextRecipientsToSend(limit: number): Promise<SequenceRecipient[]>;
+  getAllPendingRecipients(): Promise<SequenceRecipient[]>;
   getActiveRecipientsWithThreads(): Promise<SequenceRecipient[]>;
   getQueueView(): Promise<Array<SequenceRecipient & { sequenceName: string }>>;
-  getIndividualSendsQueue(options: { search?: string; timeWindowDays?: number }): Promise<Array<{
+  getIndividualSendsQueue(options: { search?: string; statusFilter?: 'active' | 'paused' }): Promise<Array<{
     recipientId: string;
     recipientEmail: string;
     recipientName: string;
@@ -3246,6 +3247,18 @@ export class DatabaseStorage implements IStorage {
     return [...balancedFollowUps, ...balancedFreshEmails];
   }
 
+  async getAllPendingRecipients(): Promise<SequenceRecipient[]> {
+    // Get ALL in_sequence and pending recipients (no time filter)
+    // Used for queue recalculation to ensure all recipients get updated
+    return await db
+      .select()
+      .from(sequenceRecipients)
+      .where(
+        inArray(sequenceRecipients.status, ['in_sequence', 'pending'])
+      )
+      .orderBy(sequenceRecipients.nextSendAt);
+  }
+
   async getActiveRecipientsWithThreads(): Promise<SequenceRecipient[]> {
     // Get all recipients with:
     // - status 'in_sequence' (actively receiving emails)
@@ -3297,7 +3310,7 @@ export class DatabaseStorage implements IStorage {
     return results as Array<SequenceRecipient & { sequenceName: string }>;
   }
 
-  async getIndividualSendsQueue(options: { search?: string; timeWindowDays?: number; statusFilter?: 'active' | 'paused' }): Promise<Array<{
+  async getIndividualSendsQueue(options: { search?: string; statusFilter?: 'active' | 'paused' }): Promise<Array<{
     recipientId: string;
     recipientEmail: string;
     recipientName: string;
@@ -3311,11 +3324,9 @@ export class DatabaseStorage implements IStorage {
     threadId: string | null;
     messageId: string | null;
   }>> {
-    const { search, timeWindowDays = 3, statusFilter = 'active' } = options;
+    const { search, statusFilter = 'active' } = options;
     
-    // Calculate time window
     const now = new Date();
-    const maxDate = addDays(now, timeWindowDays);
     
     // Build where conditions based on statusFilter
     const whereConditions: any[] = [
@@ -3338,12 +3349,17 @@ export class DatabaseStorage implements IStorage {
       );
     }
     
+    // For active recipients, also require nextSendAt to be set
+    if (statusFilter === 'active') {
+      whereConditions.push(isNotNull(sequenceRecipients.nextSendAt));
+    }
+    
     // Get all active recipients with sequence info
     const recipients = await db
       .select({
         id: sequenceRecipients.id,
         sequenceId: sequenceRecipients.sequenceId,
-        sequenceName: sequences.name,
+        sequenceName: sql<string>`COALESCE(${sequences.name}, '[Unnamed Sequence]')`.as('sequence_name'),
         email: sequenceRecipients.email,
         name: sequenceRecipients.name,
         status: sequenceRecipients.status,
@@ -3405,86 +3421,47 @@ export class DatabaseStorage implements IStorage {
         continue; // Skip future send calculations for paused recipients
       }
       
-      // Calculate and add future sends within time window (active recipients only)
-      if (recipient.stepDelays && recipient.stepDelays.length > 0) {
-        const stepDelays = recipient.stepDelays.map((d: string) => parseFloat(d));
+      // Add the immediate next send for this recipient (active recipients only)
+      if (recipient.nextSendAt) {
         const currentStep = recipient.currentStep || 0;
-        const totalSteps = stepDelays.length;
+        const nextStep = currentStep + 1;
+        const status: 'scheduled' | 'overdue' = recipient.nextSendAt < now ? 'overdue' : 'scheduled';
         
-        // Calculate future sends
-        let nextSendTime = recipient.nextSendAt || now;
-        
-        for (let step = currentStep + 1; step <= totalSteps; step++) {
-          // Only include sends within time window
-          if (nextSendTime > maxDate) {
-            break;
-          }
-          
-          const status: 'scheduled' | 'overdue' = nextSendTime < now ? 'overdue' : 'scheduled';
-          
-          individualSends.push({
-            recipientId: recipient.id,
-            recipientEmail: recipient.email,
-            recipientName: recipient.name || '',
-            sequenceId: recipient.sequenceId,
-            sequenceName: recipient.sequenceName || '',
-            stepNumber: step,
-            scheduledAt: nextSendTime,
-            sentAt: null,
-            status,
-            subject: null, // Future sends don't have subject yet
-            threadId: recipient.threadId,
-            messageId: null,
-          });
-          
-          // Calculate next send time for subsequent steps
-          if (step < totalSteps) {
-            const delayDays = stepDelays[step]; // Index matches step number (stepDelays[1] = delay after step 1)
-            // Convert fractional days to milliseconds (e.g., 0.0035 days = 5 minutes)
-            // Guard against null/undefined/NaN and ensure non-negative
-            const safeDays = typeof delayDays === 'number' && Number.isFinite(delayDays) ? Math.max(delayDays, 0) : 0;
-            const delayMs = safeDays * 24 * 60 * 60 * 1000;
-            nextSendTime = addMilliseconds(nextSendTime, delayMs);
-          } else if (recipient.repeatLastStep) {
-            // If repeat last step is enabled, show one more occurrence
-            const lastDelay = stepDelays[stepDelays.length - 1];
-            const safeDays = typeof lastDelay === 'number' && Number.isFinite(lastDelay) ? Math.max(lastDelay, 0) : 0;
-            const delayMs = safeDays * 24 * 60 * 60 * 1000;
-            nextSendTime = addMilliseconds(nextSendTime, delayMs);
-            
-            individualSends.push({
-              recipientId: recipient.id,
-              recipientEmail: recipient.email,
-              recipientName: recipient.name || '',
-              sequenceId: recipient.sequenceId,
-              sequenceName: recipient.sequenceName || '',
-              stepNumber: step, // Same step number (repeating)
-              scheduledAt: nextSendTime,
-              sentAt: null,
-              status: nextSendTime < now ? 'overdue' : 'scheduled',
-              subject: null,
-              threadId: recipient.threadId,
-              messageId: null,
-            });
-            break; // Only show one repeat in the queue
-          }
-        }
+        individualSends.push({
+          recipientId: recipient.id,
+          recipientEmail: recipient.email,
+          recipientName: recipient.name || '',
+          sequenceId: recipient.sequenceId,
+          sequenceName: recipient.sequenceName || '',
+          stepNumber: nextStep,
+          scheduledAt: recipient.nextSendAt,
+          sentAt: null,
+          status,
+          subject: null, // Future sends don't have subject yet
+          threadId: recipient.threadId,
+          messageId: null,
+        });
       }
     }
     
-    // Sort chronologically by scheduled/sent time
+    // Sort chronologically by scheduled/sent time (deterministic ordering)
     individualSends.sort((a, b) => {
       const timeA = a.sentAt || a.scheduledAt;
       const timeB = b.sentAt || b.scheduledAt;
       
-      if (!timeA && !timeB) return 0;
+      if (!timeA && !timeB) return a.recipientId.localeCompare(b.recipientId); // Tie-breaker
       if (!timeA) return 1;
       if (!timeB) return -1;
       
-      return timeA.getTime() - timeB.getTime();
+      const timeDiff = timeA.getTime() - timeB.getTime();
+      if (timeDiff !== 0) return timeDiff;
+      
+      // Tie-breaker for same time: use recipient ID for stability
+      return a.recipientId.localeCompare(b.recipientId);
     });
     
-    return individualSends;
+    // Return next 50 sends chronologically
+    return individualSends.slice(0, 50);
   }
 
   async getPausedRecipients(): Promise<Array<{

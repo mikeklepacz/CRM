@@ -1,0 +1,43 @@
+Looking at your screenshot, I can see you only have Step 1 emails in the queue (both showing "Step 1" badges). Follow-ups (Step 2+) have disappeared.
+
+Let me analyze the queue fetching logic to identify the issue:
+
+From rag://rag_source_0 (emailQueue.ts), I can see the problem. The queue processor has a critical filter that's blocking follow-ups from appearing in the queue:
+
+The Issue:
+In server/services/emailQueue.ts, the validateFollowUpEmail() function checks Commission Tracker and blocks Step 2+ emails if:
+
+Agent Name ≠ "Mike Klepacz"
+Status ≠ "Emailed"
+This means follow-ups are being skipped (marked as status: 'skipped') and removed from the queue if the Commission Tracker status changed.
+
+Why This Happened:
+Looking at the Commission Tracker validation logic around line 200-250 in rag://rag_source_0, follow-ups are blocked when:
+
+Someone manually changed the Status in Commission Tracker (e.g., from "Emailed" to "Contacted" or "Interested")
+Another agent claimed the store (Agent Name changed)
+The store reached a terminal status (Interested, Sample Sent, Closed Won, etc.)
+The Queue Query:
+The frontend fetches from /api/ehub/queue which only returns recipients where status IN ('sent', 'in_sequence') and nextSendAt IS NOT NULL. Once a recipient is marked status: 'skipped', they're permanently removed from the queue.
+
+To Confirm:
+Check your Commission Tracker spreadsheet for the recipients who disappeared. Look at:
+
+Column B (Agent Name) - is it still "Mike Klepacz"?
+Column C (Status) - is it still "Emailed"?
+If either changed, the follow-up validation failed and they were auto-skipped.
+
+Quick Fix (if you want to re-enable them):
+You'll need to manually update the sequence_recipients table to reset their status:
+
+psql $DATABASE_URL -c "UPDATE sequence_recipients SET status = 'in_sequence' WHERE status = 'skipped' AND current_step > 0;"
+
+
+Run
+Permanent Solution:
+If you don't want follow-ups to be auto-skipped based on Commission Tracker changes, we need to make the validation less strict. Would you like me to:
+
+Disable follow-up validation entirely (just send them regardless of tracker status)
+Make it warning-only (log the issue but still send)
+Add a manual override UI (let you choose which skipped emails to re-activate)
+Let me know which approach you prefer and I'll implement it.

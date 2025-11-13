@@ -26,6 +26,7 @@ import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
+import { recalculateAllPendingRecipients } from "./services/queueCoordinator";
 import {
   insertConversationSchema,
   insertProjectSchema,
@@ -19569,14 +19570,13 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Get E-Hub queue view (admin only)
+  // Get E-Hub queue view (admin only) - shows next 50 sends chronologically
   app.get('/api/ehub/queue', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const search = req.query.search as string | undefined;
-      const timeWindowDays = req.query.timeWindowDays ? parseInt(req.query.timeWindowDays as string, 10) : 3;
       const statusFilter = (req.query.statusFilter as 'active' | 'paused') || 'active';
       
-      const queue = await storage.getIndividualSendsQueue({ search, timeWindowDays, statusFilter });
+      const queue = await storage.getIndividualSendsQueue({ search, statusFilter });
       res.json(queue);
     } catch (error: any) {
       console.error('Error fetching queue view:', error);
@@ -19708,6 +19708,17 @@ Use this store information to provide context-aware responses. When helping draf
       });
 
       const settings = await storage.updateEhubSettings(updates);
+      
+      // Recalculate all pending recipient send times based on new settings
+      console.log('[EHub Settings] Settings updated - triggering queue recalculation');
+      try {
+        const recalcCount = await recalculateAllPendingRecipients(settings);
+        console.log(`[EHub Settings] ✅ Queue recalculated: ${recalcCount} recipients updated`);
+      } catch (recalcError: any) {
+        console.error('[EHub Settings] ⚠️ Queue recalculation failed:', recalcError.message);
+        // Don't fail the settings update if recalculation fails
+      }
+      
       res.json(settings);
     } catch (error: any) {
       if (error.name === 'ZodError') {
