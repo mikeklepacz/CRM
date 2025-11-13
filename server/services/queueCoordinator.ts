@@ -194,33 +194,41 @@ export function balanceByTimezone<T extends { timezone?: string | null }>(
 
 /**
  * Recalculate all pending recipient send times based on current E-Hub settings
- * Called when settings change (e.g., skipWeekends toggle)
- * Uses transaction with FOR UPDATE locking to prevent races
+ * Called when settings change (min/max delays, time windows, daily limits)
+ * Deletes all pending scheduled sends and regenerates them with new jitter
  */
 export async function recalculateAllPendingRecipients(settings: EhubSettings): Promise<number> {
   try {
-    // Get ALL pending recipients (unbounded - includes future scheduled sends)
+    // Import pre-scheduling service
+    const { preScheduleRecipientSends } = await import('./emailSchedulingService');
+    
+    // Get ALL active recipients (pending or in_sequence status)
     const recipients = await storage.getAllPendingRecipients();
     
     if (recipients.length === 0) {
-      console.log('[QueueRecalc] No pending recipients to recalculate');
+      console.log('[QueueRecalc] No active recipients to recalculate');
       return 0;
     }
     
-    console.log(`[QueueRecalc] Recalculating ${recipients.length} pending recipients based on new settings`);
+    console.log(`[QueueRecalc] Recalculating ${recipients.length} active recipients based on new settings`);
     
-    // Skip recipients that sent very recently (< 1 hour ago) to avoid fighting with sender
+    // Delete all pending scheduled sends globally - they'll be regenerated with new settings
+    console.log('[QueueRecalc] Deleting all pending scheduled sends...');
+    const deletedCount = await storage.deleteAllPendingScheduledSends();
+    console.log(`[QueueRecalc] Deleted ${deletedCount} pending scheduled sends`);
+    
+    // Skip recipients that sent very recently (< 1 hour ago) to avoid recalculating active sends
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const eligibleRecipients = recipients.filter(r => 
       !r.lastStepSentAt || r.lastStepSentAt < oneHourAgo
     );
     
     if (eligibleRecipients.length === 0) {
-      console.log('[QueueRecalc] All recipients sent recently - skipping recalculation');
+      console.log('[QueueRecalc] All recipients sent recently - skipping regeneration');
       return 0;
     }
     
-    console.log(`[QueueRecalc] ${eligibleRecipients.length} recipients eligible for recalculation`);
+    console.log(`[QueueRecalc] ${eligibleRecipients.length} recipients eligible for regeneration`);
     
     // Preload all sequence data (batch query to avoid N+1)
     const sequenceIds = [...new Set(eligibleRecipients.map(r => r.sequenceId))];
@@ -231,69 +239,44 @@ export async function recalculateAllPendingRecipients(settings: EhubSettings): P
       sequences.filter(s => s !== undefined).map(s => [s!.id, s!])
     );
     
-    // Calculate new nextSendAt times in memory
-    let queueTail: Date | null = null;
-    const updates: Array<{ id: string; nextSendAt: Date }> = [];
+    // Pre-schedule and insert all future sends for each eligible recipient
+    let regeneratedCount = 0;
+    let totalScheduledSends = 0;
     
-    // Sort by current nextSendAt to maintain FIFO order
-    const sortedRecipients = [...eligibleRecipients].sort((a, b) => {
-      const timeA = a.nextSendAt?.getTime() || 0;
-      const timeB = b.nextSendAt?.getTime() || 0;
-      return timeA - timeB;
-    });
-    
-    for (const recipient of sortedRecipients) {
-      const sequence = sequenceMap.get(recipient.sequenceId);
-      if (!sequence || !sequence.stepDelays) continue;
-      
-      const currentStep = recipient.currentStep || 0;
-      const stepDelays = sequence.stepDelays.map(d => parseFloat(d as any));
-      const stepDelay = currentStep < stepDelays.length ? stepDelays[currentStep] : 0;
-      
-      // Calculate new send slot
-      const slotRequest: QueueSlotRequest = {
-        stepDelay,
-        lastStepSentAt: recipient.lastStepSentAt,
-        adminTimezone: settings.adminTimezone || 'America/New_York',
-        adminStartHour: settings.adminStartHour || 9,
-        adminEndHour: settings.adminEndHour || 17,
-        minDelayMinutes: settings.minDelayMinutes || 6,
-        maxDelayMinutes: settings.maxDelayMinutes || 10,
-        recipientBusinessHours: recipient.businessHours || '9-17',
-        recipientTimezone: recipient.timezone || 'America/New_York',
-        clientWindowStartOffset: settings.clientWindowStartOffset || 1,
-        clientWindowEndHour: settings.clientWindowEndHour || 17,
-        skipWeekends: settings.skipWeekends ?? true,
-        queueTailTime: queueTail,
-        dailyRateLimit: settings.dailyRateLimit || 0,
-        currentDailyCount: 0,
-      };
-      
-      const { nextSendAt } = requestNextSlot(slotRequest);
-      updates.push({ id: recipient.id, nextSendAt });
-      queueTail = nextSendAt;
+    for (const recipient of eligibleRecipients) {
+      try {
+        const sequence = sequenceMap.get(recipient.sequenceId);
+        if (!sequence || !sequence.stepDelays) {
+          console.warn(`[QueueRecalc] Skipping recipient ${recipient.id} - invalid sequence`);
+          continue;
+        }
+        
+        // Generate scheduled sends with new settings (pass settings override)
+        const scheduledSends = await preScheduleRecipientSends(
+          recipient.id,
+          recipient.sequenceId,
+          recipient.timezone || 'America/New_York',
+          recipient.businessHours || '9-17',
+          storage,
+          settings  // Pass the new settings to ensure they're used immediately
+        );
+        
+        // Insert the generated scheduled sends into the database
+        if (scheduledSends.length > 0) {
+          await storage.insertScheduledSends(scheduledSends);
+          totalScheduledSends += scheduledSends.length;
+        }
+        
+        regeneratedCount++;
+        
+      } catch (error: any) {
+        console.error(`[QueueRecalc] Error regenerating sends for ${recipient.id}:`, error.message);
+        // Continue with other recipients
+      }
     }
     
-    // Bulk update in batches of 500 to avoid parameter limits
-    const BATCH_SIZE = 500;
-    let updatedCount = 0;
-    
-    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-      const batch = updates.slice(i, i + BATCH_SIZE);
-      
-      // Update all recipients in this batch
-      await Promise.all(
-        batch.map(({ id, nextSendAt }) => 
-          storage.updateRecipientStatus(id, { nextSendAt })
-        )
-      );
-      
-      updatedCount += batch.length;
-      console.log(`[QueueRecalc] Updated batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(updates.length / BATCH_SIZE)}`);
-    }
-    
-    console.log(`[QueueRecalc] ✅ Recalculated ${updatedCount} recipients`);
-    return updatedCount;
+    console.log(`[QueueRecalc] ✅ Regenerated ${totalScheduledSends} scheduled sends for ${regeneratedCount} recipients`);
+    return regeneratedCount;
     
   } catch (error: any) {
     console.error('[QueueRecalc] ❌ Fatal error during recalculation:', error);

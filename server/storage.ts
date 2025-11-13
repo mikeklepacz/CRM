@@ -3970,9 +3970,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteRecipientScheduledSends(recipientId: string): Promise<number> {
+    // Only delete pending sends - preserve sent records for audit trail
     const deleted = await db
       .delete(sequenceScheduledSends)
-      .where(eq(sequenceScheduledSends.recipientId, recipientId))
+      .where(and(
+        eq(sequenceScheduledSends.recipientId, recipientId),
+        eq(sequenceScheduledSends.status, 'pending')
+      ))
       .returning();
     return deleted.length;
   }

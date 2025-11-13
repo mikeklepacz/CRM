@@ -126,6 +126,10 @@ async function checkActiveThreadsForReplies() {
             nextSendAt: null, // Stop future sends
           });
 
+          // Delete all future scheduled sends for this recipient (queue backfills naturally)
+          const deletedCount = await storage.deleteRecipientScheduledSends(recipient.id);
+          console.log(`[ReplyWorker] 🗑️ Deleted ${deletedCount} future sends for ${recipient.email}`);
+
           // Update Commission Tracker Status to "Replied"
           await updateCommissionTrackerOnReply(recipient.link, recipient.email);
 

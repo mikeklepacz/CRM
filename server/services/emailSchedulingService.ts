@@ -18,7 +18,11 @@ export interface AdminWindow {
  * @param storage - Storage instance for database access
  * @returns Admin window configuration with timezone and hours
  */
-export async function resolveAdminWindow(sequenceId: string, storage: any): Promise<AdminWindow> {
+export async function resolveAdminWindow(
+  sequenceId: string, 
+  storage: any,
+  ehubSettingsOverride?: any
+): Promise<AdminWindow> {
   // Fetch sequence to get creator
   const sequence = await storage.getSequence(sequenceId);
   if (!sequence) {
@@ -28,8 +32,8 @@ export async function resolveAdminWindow(sequenceId: string, storage: any): Prom
   // Fetch creator's preferences
   const creatorPrefs = await storage.getUserPreferences(sequence.createdBy);
   
-  // Fetch E-Hub settings for sending hours
-  const ehubSettings = await storage.getEhubSettings();
+  // Use override if provided, otherwise fetch E-Hub settings
+  const ehubSettings = ehubSettingsOverride || await storage.getEhubSettings();
 
   // Resolve timezone with fallback
   let timezone = creatorPrefs?.timezone || 'America/New_York';
@@ -109,6 +113,7 @@ export function calculateOptimalDelays(
  * @param recipientTimezone - Recipient's detected timezone
  * @param recipientBusinessHours - Recipient's business hours string
  * @param storage - Storage instance for database access
+ * @param ehubSettingsOverride - Optional settings override (used during recalculation)
  * @returns Array of scheduled send records ready for bulk insert
  */
 export async function preScheduleRecipientSends(
@@ -116,7 +121,8 @@ export async function preScheduleRecipientSends(
   sequenceId: string,
   recipientTimezone: string,
   recipientBusinessHours: string,
-  storage: any
+  storage: any,
+  ehubSettingsOverride?: any
 ): Promise<Array<{
   recipientId: string;
   sequenceId: string;
@@ -132,14 +138,14 @@ export async function preScheduleRecipientSends(
     throw new Error(`Sequence ${sequenceId} not found`);
   }
 
-  // Get E-Hub settings for jitter range and admin window
-  const ehubSettings = await storage.getEhubSettings();
+  // Get E-Hub settings (use override if provided, otherwise fetch from storage)
+  const ehubSettings = ehubSettingsOverride || await storage.getEhubSettings();
   if (!ehubSettings) {
     throw new Error('E-Hub settings not found');
   }
 
-  // Resolve admin window
-  const adminWindow = await resolveAdminWindow(sequenceId, storage);
+  // Resolve admin window (pass settings override to ensure consistency)
+  const adminWindow = await resolveAdminWindow(sequenceId, storage, ehubSettings);
 
   const stepDelays = (sequence.stepDelays || []).map((d: any) => parseFloat(d.toString()));
   const repeatLastStep = sequence.repeatLastStep ?? false;
