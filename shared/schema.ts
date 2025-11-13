@@ -1707,6 +1707,33 @@ export const allContactsResponseSchema = z.object({
 
 export type AllContactsResponse = z.infer<typeof allContactsResponseSchema>;
 
+// Sent History - for viewing all sent emails across sequences
+export const sentHistoryItemSchema = z.object({
+  messageId: z.string(),
+  recipientId: z.string(),
+  recipientEmail: z.string(),
+  recipientName: z.string().nullable(),
+  sequenceId: z.string(),
+  sequenceName: z.string(),
+  stepNumber: z.number(),
+  subject: z.string(),
+  sentAt: z.string(), // ISO timestamp
+  threadId: z.string().nullable(),
+  status: z.enum(['sent', 'replied', 'bounced', 'pending']),
+  repliedAt: z.string().nullable(), // ISO timestamp
+  replyCount: z.number().nullable(),
+});
+
+export const sentHistoryResponseSchema = z.object({
+  messages: z.array(sentHistoryItemSchema),
+  total: z.number(),
+  limit: z.number(),
+  hasMore: z.boolean(),
+});
+
+export type SentHistoryItem = z.infer<typeof sentHistoryItemSchema>;
+export type SentHistoryResponse = z.infer<typeof sentHistoryResponseSchema>;
+
 // Test Email Sends - for rapid testing of email threading and reply detection
 export const testEmailSends = pgTable("test_email_sends", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

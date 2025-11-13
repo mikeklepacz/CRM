@@ -19742,6 +19742,144 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Get sent history - all sent emails across all sequences (admin only)
+  app.get('/api/ehub/sent-history', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const sequenceId = req.query.sequenceId as string | undefined;
+      const statusFilter = req.query.status as string | undefined;
+
+      // Build WHERE conditions array for filtering
+      const conditions = [];
+      
+      // Sequence filter
+      if (sequenceId) {
+        conditions.push(eq(sequences.id, sequenceId));
+      }
+
+      // Status filter using SQL CASE logic
+      if (statusFilter && statusFilter !== 'all') {
+        switch (statusFilter) {
+          case 'replied':
+            conditions.push(sql`${sequenceRecipients.repliedAt} IS NOT NULL`);
+            break;
+          case 'bounced':
+            conditions.push(sql`${sequenceRecipients.bouncedAt} IS NOT NULL`);
+            break;
+          case 'pending':
+            conditions.push(sql`${sequenceRecipients.status} = 'pending'`);
+            break;
+          case 'sent':
+            conditions.push(sql`${sequenceRecipients.repliedAt} IS NULL AND ${sequenceRecipients.bouncedAt} IS NULL AND ${sequenceRecipients.status} != 'pending'`);
+            break;
+        }
+      }
+
+      // Join sequence_recipient_messages -> sequence_recipients -> sequences
+      let messagesQuery = db
+        .select({
+          messageId: sequenceRecipientMessages.id,
+          recipientId: sequenceRecipients.id,
+          recipientEmail: sequenceRecipients.email,
+          recipientName: sequenceRecipients.name,
+          sequenceId: sequences.id,
+          sequenceName: sequences.name,
+          stepNumber: sequenceRecipientMessages.stepNumber,
+          subject: sequenceRecipientMessages.subject,
+          sentAt: sequenceRecipientMessages.sentAt,
+          threadId: sequenceRecipientMessages.threadId,
+          // Keep raw fields for status derivation
+          recipientStatus: sequenceRecipients.status,
+          repliedAt: sequenceRecipients.repliedAt,
+          replyCount: sequenceRecipients.replyCount,
+          bouncedAt: sequenceRecipients.bouncedAt,
+        })
+        .from(sequenceRecipientMessages)
+        .innerJoin(
+          sequenceRecipients,
+          eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id)
+        )
+        .innerJoin(
+          sequences,
+          eq(sequenceRecipients.sequenceId, sequences.id)
+        );
+
+      // Apply all WHERE conditions
+      if (conditions.length > 0) {
+        messagesQuery = messagesQuery.where(and(...conditions));
+      }
+
+      // Complete the query
+      const rows = await messagesQuery
+        .orderBy(desc(sequenceRecipientMessages.sentAt))
+        .limit(limit + 1) // Fetch one extra to check hasMore
+        .offset(offset);
+
+      // Determine hasMore
+      const hasMore = rows.length > limit;
+      const messages = rows.slice(0, limit);
+
+      // Map to response format with derived status
+      const items = messages.map((row) => {
+        let status: 'sent' | 'replied' | 'bounced' | 'pending' = 'sent';
+        if (row.repliedAt) {
+          status = 'replied';
+        } else if (row.bouncedAt) {
+          status = 'bounced';
+        } else if (row.recipientStatus === 'pending' || row.recipientStatus === 'in_sequence') {
+          status = row.recipientStatus === 'pending' ? 'pending' : 'sent';
+        }
+
+        return {
+          messageId: row.messageId,
+          recipientId: row.recipientId,
+          recipientEmail: row.recipientEmail,
+          recipientName: row.recipientName,
+          sequenceId: row.sequenceId,
+          sequenceName: row.sequenceName,
+          stepNumber: row.stepNumber,
+          subject: row.subject,
+          sentAt: row.sentAt?.toISOString() || new Date().toISOString(),
+          threadId: row.threadId,
+          status,
+          repliedAt: row.repliedAt?.toISOString() || null,
+          replyCount: row.replyCount,
+        };
+      });
+
+      // Get total count with same filters (expensive - only when needed)
+      let countQuery = db
+        .select({ count: sql<number>`count(*)` })
+        .from(sequenceRecipientMessages)
+        .innerJoin(
+          sequenceRecipients,
+          eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id)
+        )
+        .innerJoin(
+          sequences,
+          eq(sequenceRecipients.sequenceId, sequences.id)
+        );
+
+      // Apply same WHERE conditions as main query
+      if (conditions.length > 0) {
+        countQuery = countQuery.where(and(...conditions));
+      }
+
+      const [{ count }] = await countQuery;
+
+      res.json({
+        messages: items,
+        total: Number(count),
+        limit,
+        hasMore,
+      });
+    } catch (error: any) {
+      console.error('Error fetching sent history:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch sent history' });
+    }
+  });
+
   // Create a new email sequence (admin only)
   app.post('/api/sequences', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
