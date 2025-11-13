@@ -137,21 +137,16 @@ export function parseBusinessHours(hoursStr: string, state: string): ParsedBusin
 
   // Helper to parse time string to minutes since midnight
   const parseTime = (timeStr: string): number | null => {
-    // Match formats like "2am", "2:00am", "14:00", "2 am", etc.
-    const match = timeStr.trim().match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+    const match = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
     if (!match) return null;
 
     let hour = parseInt(match[1]);
     const min = parseInt(match[2] || '0');
     const period = match[3]?.toLowerCase();
 
-    // Handle 12-hour format
     if (period === 'pm' && hour !== 12) hour += 12;
     if (period === 'am' && hour === 12) hour = 0;
-    
-    // Handle 24-hour format (no am/pm specified)
-    // If hour is 0-23 and no period, assume it's already 24-hour format
-    
+
     return hour * 60 + min;
   };
 
@@ -212,8 +207,8 @@ export function parseBusinessHours(hoursStr: string, state: string): ParsedBusin
       daysToApply = [0, 1, 2, 3, 4, 5, 6];
     }
 
-    // Extract time range (handle various dash/hyphen characters and spacing)
-    const timeMatch = segment.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–—]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
+    // Extract time range
+    const timeMatch = segment.match(/(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:?\d{0,2}\s*(?:am|pm)?)/i);
     if (timeMatch) {
       const openMinutes = parseTime(timeMatch[1]);
       const closeMinutes = parseTime(timeMatch[2]);
