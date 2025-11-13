@@ -20186,6 +20186,19 @@ Based on the conversation, help the user design an effective email sequence that
       // Get updated sequence
       const updatedSequence = await storage.getSequence(id);
 
+      // Trigger queue recalculation since delays changed
+      try {
+        const settings = await storage.getEhubSettings();
+        if (settings) {
+          const { recalculateAllPendingRecipients } = await import('./services/queueCoordinator');
+          const recalcCount = await recalculateAllPendingRecipients(settings);
+          console.log(`[StepDelays] Queue recalculated: ${recalcCount} recipients updated`);
+        }
+      } catch (recalcError: any) {
+        console.error('[StepDelays] Failed to recalculate queue:', recalcError.message);
+        // Don't fail the request if recalc fails - step delays were still saved
+      }
+
       res.json({
         sequence: updatedSequence,
         steps: createdSteps,
