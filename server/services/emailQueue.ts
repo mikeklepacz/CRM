@@ -249,21 +249,24 @@ async function processEmailQueue() {
         // Determine current step (before increment)
         const currentStepNumber = (recipient.currentStep || 0) + 1; // 0 -> 1, 1 -> 2, etc.
 
-        // CHECK COMMISSION TRACKER: Skip if store is already claimed by another agent
-        const trackerCheck = await checkAndUpdateCommissionTracker(
-          recipient.link,
-          recipient.email,
-          recipient.name
-        );
+        // CHECK COMMISSION TRACKER: Only for fresh emails (Step 1), not follow-ups
+        // Follow-ups are to stores we already claimed!
+        if (currentStepNumber === 1) {
+          const trackerCheck = await checkAndUpdateCommissionTracker(
+            recipient.link,
+            recipient.email,
+            recipient.name
+          );
 
-        if (trackerCheck.shouldSkip) {
-          console.log(`[EmailQueue] ⛔ SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
-          // Mark recipient as skipped
-          await storage.updateRecipientStatus(recipient.id, { 
-            status: 'skipped',
-            nextSendAt: null // Clear next send time
-          });
-          continue; // Skip to next recipient
+          if (trackerCheck.shouldSkip) {
+            console.log(`[EmailQueue] ⛔ SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
+            // Mark recipient as skipped
+            await storage.updateRecipientStatus(recipient.id, { 
+              status: 'skipped',
+              nextSendAt: null // Clear next send time
+            });
+            continue; // Skip to next recipient
+          }
         }
 
         // For follow-ups, fetch first email's subject for threading

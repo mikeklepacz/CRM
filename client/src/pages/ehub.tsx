@@ -917,17 +917,20 @@ export default function EHub() {
     }
   }, [strategyTranscript]);
 
-  // Load step delays when sequence changes
+  // Load step delays and repeat checkbox when sequence changes
   useEffect(() => {
     if (selectedSequenceId && sequences) {
       const selectedSeq = sequences.find((s) => s.id === selectedSequenceId);
       if (selectedSeq && (selectedSeq as any).stepDelays) {
         setStepDelays((selectedSeq as any).stepDelays);
+        setRepeatLastStep((selectedSeq as any).repeatLastStep || false);
       } else {
         setStepDelays([]);
+        setRepeatLastStep(false);
       }
     } else {
       setStepDelays([]);
+      setRepeatLastStep(false);
     }
   }, [selectedSequenceId, sequences]);
 
