@@ -92,6 +92,25 @@ interface IndividualSend {
   messageId: string | null;
 }
 
+interface PausedRecipient {
+  recipientId: string;
+  recipientEmail: string;
+  recipientName: string;
+  sequenceId: string;
+  sequenceName: string;
+  currentStep: number;
+  totalSteps: number;
+  lastStepSentAt: string | null;
+  pausedAt: string | null;
+  messageHistory: Array<{
+    stepNumber: number;
+    subject: string | null;
+    sentAt: string | null;
+    threadId: string | null;
+    messageId: string | null;
+  }>;
+}
+
 function QueueView() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -107,14 +126,14 @@ function QueueView() {
     return () => clearTimeout(timer);
   }, [search]);
   
-  // Fetch queue with search, time window, and status filter params
-  const { data: queue, isLoading } = useQuery<IndividualSend[]>({
-    queryKey: ['/api/ehub/queue', debouncedSearch, timeWindowDays, statusFilter],
+  // Fetch active queue
+  const { data: activeQueue, isLoading: isLoadingActive } = useQuery<IndividualSend[]>({
+    queryKey: ['/api/ehub/queue', debouncedSearch, timeWindowDays],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedSearch) params.append('search', debouncedSearch);
       params.append('timeWindowDays', timeWindowDays.toString());
-      params.append('statusFilter', statusFilter);
+      params.append('statusFilter', 'active');
       
       const url = `/api/ehub/queue?${params.toString()}`;
       const res = await fetch(url, { credentials: 'include' });
@@ -125,9 +144,29 @@ function QueueView() {
       
       return await res.json();
     },
-    refetchInterval: 30000, // 30 seconds
+    refetchInterval: 30000,
     staleTime: 15000,
+    enabled: statusFilter === 'active',
   });
+
+  // Fetch paused recipients
+  const { data: pausedRecipients, isLoading: isLoadingPaused } = useQuery<PausedRecipient[]>({
+    queryKey: ['/api/ehub/paused-recipients'],
+    queryFn: async () => {
+      const res = await fetch('/api/ehub/paused-recipients', { credentials: 'include' });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch paused recipients: ${res.statusText}`);
+      }
+      return await res.json();
+    },
+    refetchInterval: 30000,
+    staleTime: 15000,
+    enabled: statusFilter === 'paused',
+  });
+
+  // Determine which data/loading state to use
+  const queue = statusFilter === 'paused' ? pausedRecipients : activeQueue;
+  const isLoading = statusFilter === 'paused' ? isLoadingPaused : isLoadingActive;
 
   // Pause recipient mutation
   const pauseMutation = useMutation({
@@ -136,6 +175,8 @@ function QueueView() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/paused-recipients'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue/paused-count'] });
       toast({
         title: 'Recipient paused',
         description: 'All future sends have been stopped',
@@ -157,6 +198,8 @@ function QueueView() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/paused-recipients'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue/paused-count'] });
       toast({
         title: 'Recipient resumed',
         description: 'Emails will resume sending',
@@ -178,6 +221,7 @@ function QueueView() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/paused-recipients'] });
       toast({
         title: 'Step skipped',
         description: 'Advanced to next step without sending',
@@ -199,6 +243,8 @@ function QueueView() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/paused-recipients'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue/paused-count'] });
       toast({
         title: 'Recipient removed',
         description: 'Removed from sequence completely',
@@ -220,6 +266,7 @@ function QueueView() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/paused-recipients'] });
       toast({
         title: 'Email sending now',
         description: 'Overriding schedule and sending immediately',
@@ -247,6 +294,7 @@ function QueueView() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/paused-recipients'] });
       toast({
         title: 'Send delayed',
         description: `Pushed back by ${variables.hours} hour${variables.hours !== 1 ? 's' : ''}`,
