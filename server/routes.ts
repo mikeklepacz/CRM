@@ -19584,6 +19584,17 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Get paused recipients with history (admin only)
+  app.get('/api/ehub/paused-recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const pausedRecipients = await storage.getPausedRecipients();
+      res.json(pausedRecipients);
+    } catch (error: any) {
+      console.error('Error fetching paused recipients:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch paused recipients' });
+    }
+  });
+
   // Get paused recipients count (admin only)
   app.get('/api/ehub/queue/paused-count', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
