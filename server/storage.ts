@@ -4183,36 +4183,38 @@ export class DatabaseStorage implements IStorage {
       
       const testEmailsDeleted = deletedTestEmails.length;
 
-      // Step 4: Check which sequences are now empty (had ONLY test recipients)
-      const sequencesToDelete: string[] = [];
-      const sequencesToUpdate: string[] = [];
+      // Step 4: Recalculate stats for affected sequences AND fix any orphaned sequences
+      // Find all sequences with non-zero counts
+      const sequencesWithCounts = await tx
+        .select({ id: sequences.id })
+        .from(sequences)
+        .where(
+          or(
+            gt(sequences.totalRecipients, 0),
+            gt(sequences.sentCount, 0),
+            gt(sequences.repliedCount, 0),
+            gt(sequences.failedCount, 0),
+            gt(sequences.bouncedCount, 0)
+          )
+        );
       
-      if (affectedSequenceIds.length > 0) {
-        for (const sequenceId of affectedSequenceIds) {
-          const remainingRecipients = await tx
-            .select()
-            .from(sequenceRecipients)
-            .where(eq(sequenceRecipients.sequenceId, sequenceId))
-            .limit(1);
-          
-          if (remainingRecipients.length === 0) {
-            // No recipients left - delete this sequence
-            sequencesToDelete.push(sequenceId);
-          } else {
-            // Still has real recipients - just reset stats
-            sequencesToUpdate.push(sequenceId);
-          }
-        }
+      // Combine affected sequences with sequences that have stale counts
+      const allSequenceIdsToFix = [...new Set([
+        ...affectedSequenceIds,
+        ...sequencesWithCounts.map(s => s.id)
+      ])];
+      
+      for (const sequenceId of allSequenceIdsToFix) {
+        // Count remaining recipients for this sequence
+        const [recipientCount] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(sequenceRecipients)
+          .where(eq(sequenceRecipients.sequenceId, sequenceId));
         
-        // Delete empty sequences
-        if (sequencesToDelete.length > 0) {
-          await tx
-            .delete(sequences)
-            .where(inArray(sequences.id, sequencesToDelete));
-        }
+        const remainingRecipients = recipientCount?.count || 0;
         
-        // Reset stats on sequences that still have recipients
-        if (sequencesToUpdate.length > 0) {
+        if (remainingRecipients === 0) {
+          // No recipients left - reset all stats to 0
           await tx
             .update(sequences)
             .set({
@@ -4224,7 +4226,33 @@ export class DatabaseStorage implements IStorage {
               lastSentAt: null,
               updatedAt: new Date(),
             })
-            .where(inArray(sequences.id, sequencesToUpdate));
+            .where(eq(sequences.id, sequenceId));
+        } else {
+          // Has remaining recipients - recalculate stats from actual data
+          const [stats] = await tx
+            .select({
+              sent: sql<number>`count(*) filter (where ${sequenceRecipientMessages.sentAt} is not null)::int`,
+              replied: sql<number>`count(distinct ${sequenceRecipients.id}) filter (where ${sequenceRecipients.repliedAt} is not null)::int`,
+              failed: sql<number>`count(distinct ${sequenceRecipients.id}) filter (where ${sequenceRecipients.status} = 'failed')::int`,
+              bounced: sql<number>`count(distinct ${sequenceRecipients.id}) filter (where ${sequenceRecipients.bounceType} is not null)::int`,
+              lastSent: sql<Date>`max(${sequenceRecipientMessages.sentAt})`,
+            })
+            .from(sequenceRecipients)
+            .leftJoin(sequenceRecipientMessages, eq(sequenceRecipients.id, sequenceRecipientMessages.recipientId))
+            .where(eq(sequenceRecipients.sequenceId, sequenceId));
+          
+          await tx
+            .update(sequences)
+            .set({
+              totalRecipients: remainingRecipients,
+              sentCount: stats?.sent || 0,
+              repliedCount: stats?.replied || 0,
+              failedCount: stats?.failed || 0,
+              bouncedCount: stats?.bounced || 0,
+              lastSentAt: stats?.lastSent || null,
+              updatedAt: new Date(),
+            })
+            .where(eq(sequences.id, sequenceId));
         }
       }
 
@@ -4241,7 +4269,6 @@ export class DatabaseStorage implements IStorage {
         recipientsDeleted,
         messagesDeleted,
         testEmailsDeleted,
-        sequencesDeleted: sequencesToDelete.length,
       };
     });
   }
