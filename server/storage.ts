@@ -3184,8 +3184,45 @@ export class DatabaseStorage implements IStorage {
         .limit(remaining);
     }
     
+    // Apply timezone balancing to diversify sends across geographic regions
+    // IMPORTANT: Only balance within cohorts of recipients due at the same time
+    // to preserve FIFO ordering across different due times
+    const { balanceByTimezone } = await import('./services/queueCoordinator');
+    
+    const balanceWithinCohorts = <T extends { nextSendAt?: Date | null; timezone?: string | null }>(items: T[]): T[] => {
+      // Group by minute (rounded nextSendAt)
+      const cohorts = new Map<string, T[]>();
+      
+      for (const item of items) {
+        const roundedTime = item.nextSendAt 
+          ? new Date(Math.floor(item.nextSendAt.getTime() / 60000) * 60000).toISOString()
+          : 'null';
+        
+        if (!cohorts.has(roundedTime)) {
+          cohorts.set(roundedTime, []);
+        }
+        cohorts.get(roundedTime)!.push(item);
+      }
+      
+      // Sort cohort keys chronologically
+      const sortedKeys = Array.from(cohorts.keys()).sort();
+      
+      // Balance each cohort by timezone, then concatenate in chronological order
+      const result: T[] = [];
+      for (const key of sortedKeys) {
+        const cohort = cohorts.get(key)!;
+        const balanced = balanceByTimezone(cohort, (r) => r.timezone || 'America/New_York');
+        result.push(...balanced);
+      }
+      
+      return result;
+    };
+    
+    const balancedFollowUps = balanceWithinCohorts(followUps);
+    const balancedFreshEmails = balanceWithinCohorts(freshEmails);
+    
     // Merge: follow-ups first, then fresh emails
-    return [...followUps, ...freshEmails];
+    return [...balancedFollowUps, ...balancedFreshEmails];
   }
 
   async getQueueView(): Promise<Array<SequenceRecipient & { sequenceName: string }>> {
