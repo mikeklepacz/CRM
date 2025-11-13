@@ -155,6 +155,7 @@ import {
   sequenceSteps,
   sequenceRecipientMessages,
   testEmailSends,
+  testDataNukeLog,
   type EhubSettings,
   type InsertEhubSettings,
   type Sequence,
@@ -167,6 +168,8 @@ import {
   type InsertSequenceRecipientMessage,
   type InsertTestEmailSend,
   type TestEmailSend,
+  type InsertTestDataNukeLog,
+  type TestDataNukeLog,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
@@ -567,6 +570,19 @@ export interface IStorage {
   getTestEmailSendByThreadId(threadId: string): Promise<TestEmailSend | undefined>;
   getTestEmailSendById(id: string): Promise<TestEmailSend | undefined>;
   listTestEmailSendsForUser(userId: string): Promise<TestEmailSend[]>;
+
+  // Test Data Nuke operations
+  getTestDataNukeCounts(emailPattern?: string): Promise<{
+    recipientsCount: number;
+    messagesCount: number;
+    testEmailsCount: number;
+  }>;
+  nukeTestData(userId: string, emailPattern?: string): Promise<{
+    recipientsDeleted: number;
+    messagesDeleted: number;
+    testEmailsDeleted: number;
+  }>;
+  logTestDataNuke(log: InsertTestDataNukeLog): Promise<TestDataNukeLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4059,6 +4075,126 @@ export class DatabaseStorage implements IStorage {
       .where(eq(testEmailSends.createdBy, userId))
       .orderBy(desc(testEmailSends.createdAt))
       .limit(50); // Limit to most recent 50 test sends
+  }
+
+  // Test Data Nuke operations
+  async getTestDataNukeCounts(emailPattern?: string): Promise<{
+    recipientsCount: number;
+    messagesCount: number;
+    testEmailsCount: number;
+  }> {
+    // Build email filter - if pattern provided, match it; otherwise match all (%)
+    const buildEmailFilter = (emailColumn: any) => {
+      if (!emailPattern) {
+        return sql`1=1`; // Match all
+      }
+      // Sanitize pattern: if it doesn't contain wildcards, add them for domain matching
+      const sanitizedPattern = emailPattern.includes('%') || emailPattern.includes('_')
+        ? emailPattern
+        : `%${emailPattern}%`;
+      return sql`${emailColumn} ILIKE ${sanitizedPattern}`;
+    };
+
+    // Count recipients
+    const [recipientsResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(sequenceRecipients)
+      .where(buildEmailFilter(sequenceRecipients.email));
+    
+    const recipientsCount = recipientsResult?.count || 0;
+
+    // Count messages for matching recipients
+    const [messagesResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(sequenceRecipientMessages)
+      .where(sql`${sequenceRecipientMessages.recipientId} IN (
+        SELECT ${sequenceRecipients.id} 
+        FROM ${sequenceRecipients} 
+        WHERE ${buildEmailFilter(sequenceRecipients.email)}
+      )`);
+    
+    const messagesCount = messagesResult?.count || 0;
+
+    // Count test emails
+    const [testEmailsResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(testEmailSends)
+      .where(buildEmailFilter(testEmailSends.recipientEmail));
+    
+    const testEmailsCount = testEmailsResult?.count || 0;
+
+    return {
+      recipientsCount,
+      messagesCount,
+      testEmailsCount,
+    };
+  }
+
+  async nukeTestData(userId: string, emailPattern?: string): Promise<{
+    recipientsDeleted: number;
+    messagesDeleted: number;
+    testEmailsDeleted: number;
+  }> {
+    return await db.transaction(async (tx) => {
+      // Build email filter - reuse same logic as counts
+      const buildEmailFilter = (emailColumn: any) => {
+        if (!emailPattern) {
+          return sql`1=1`; // Match all
+        }
+        const sanitizedPattern = emailPattern.includes('%') || emailPattern.includes('_')
+          ? emailPattern
+          : `%${emailPattern}%`;
+        return sql`${emailColumn} ILIKE ${sanitizedPattern}`;
+      };
+
+      // Step 1: Delete messages first (child records)
+      const deletedMessages = await tx
+        .delete(sequenceRecipientMessages)
+        .where(sql`${sequenceRecipientMessages.recipientId} IN (
+          SELECT ${sequenceRecipients.id} 
+          FROM ${sequenceRecipients} 
+          WHERE ${buildEmailFilter(sequenceRecipients.email)}
+        )`)
+        .returning({ id: sequenceRecipientMessages.id });
+      
+      const messagesDeleted = deletedMessages.length;
+
+      // Step 2: Delete recipients
+      const deletedRecipients = await tx
+        .delete(sequenceRecipients)
+        .where(buildEmailFilter(sequenceRecipients.email))
+        .returning({ id: sequenceRecipients.id });
+      
+      const recipientsDeleted = deletedRecipients.length;
+
+      // Step 3: Delete test emails
+      const deletedTestEmails = await tx
+        .delete(testEmailSends)
+        .where(buildEmailFilter(testEmailSends.recipientEmail))
+        .returning({ id: testEmailSends.id });
+      
+      const testEmailsDeleted = deletedTestEmails.length;
+
+      // Step 4: Log the nuke operation (in-transaction)
+      await tx.insert(testDataNukeLog).values({
+        executedBy: userId,
+        emailPattern: emailPattern || null,
+        recipientsDeleted,
+        messagesDeleted,
+        testEmailsDeleted,
+      });
+
+      return {
+        recipientsDeleted,
+        messagesDeleted,
+        testEmailsDeleted,
+      };
+    });
+  }
+
+  async logTestDataNuke(log: InsertTestDataNukeLog): Promise<TestDataNukeLog> {
+    const [created] = await db.insert(testDataNukeLog).values(log).returning();
+    return created;
   }
 }
 
