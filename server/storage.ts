@@ -564,6 +564,20 @@ export interface IStorage {
   updateScheduledSend(id: string, updates: Partial<InsertSequenceScheduledSend>): Promise<SequenceScheduledSend>;
   claimScheduledSend(id: string): Promise<boolean>;
   getScheduledSendsByRecipient(recipientId: string): Promise<SequenceScheduledSend[]>;
+  getScheduledSendsQueue(options: { search?: string; statusFilter?: 'active' | 'paused'; limit: number }): Promise<Array<{
+    recipientId: string;
+    recipientEmail: string;
+    recipientName: string;
+    sequenceId: string;
+    sequenceName: string;
+    stepNumber: number;
+    scheduledAt: Date | null;
+    sentAt: Date | null;
+    status: 'sent' | 'scheduled' | 'overdue';
+    subject: string | null;
+    threadId: string | null;
+    messageId: string | null;
+  }>>;
 
   // E-Hub Sequence Steps operations
   createSequenceStep(step: InsertSequenceStep): Promise<SequenceStep>;
@@ -4006,6 +4020,97 @@ export class DatabaseStorage implements IStorage {
       .from(sequenceScheduledSends)
       .where(eq(sequenceScheduledSends.recipientId, recipientId))
       .orderBy(sequenceScheduledSends.scheduledAt);
+  }
+
+  async getScheduledSendsQueue(options: { search?: string; statusFilter?: 'active' | 'paused'; limit: number }): Promise<Array<{
+    recipientId: string;
+    recipientEmail: string;
+    recipientName: string;
+    sequenceId: string;
+    sequenceName: string;
+    stepNumber: number;
+    scheduledAt: Date | null;
+    sentAt: Date | null;
+    status: 'sent' | 'scheduled' | 'overdue';
+    subject: string | null;
+    threadId: string | null;
+    messageId: string | null;
+  }>> {
+    const { search, statusFilter = 'active', limit } = options;
+    const now = new Date();
+
+    // Build base query joining scheduled sends with recipients and sequences
+    const whereConditions: any[] = [];
+
+    // Filter by recipient status (active or paused)
+    if (statusFilter === 'paused') {
+      whereConditions.push(eq(sequenceRecipients.status, 'paused'));
+    } else {
+      // Active: pending or in_sequence recipients
+      whereConditions.push(
+        or(
+          eq(sequenceRecipients.status, 'pending'),
+          eq(sequenceRecipients.status, 'in_sequence')
+        )
+      );
+    }
+
+    // Filter by scheduled send status - ONLY pending for both active and paused
+    // Exclude sent/cancelled to ensure limit covers future work
+    whereConditions.push(eq(sequenceScheduledSends.status, 'pending'));
+
+    // Add search filter if provided
+    if (search && search.trim()) {
+      const searchLower = search.trim().toLowerCase();
+      whereConditions.push(
+        or(
+          sql`LOWER(${sequenceRecipients.email}) LIKE ${`%${searchLower}%`}`,
+          sql`LOWER(${sequenceRecipients.name}) LIKE ${`%${searchLower}%`}`
+        )
+      );
+    }
+
+    // Query scheduled sends with recipient and sequence info
+    const results = await db
+      .select({
+        id: sequenceScheduledSends.id,
+        recipientId: sequenceScheduledSends.recipientId,
+        recipientEmail: sequenceRecipients.email,
+        recipientName: sequenceRecipients.name,
+        sequenceId: sequenceScheduledSends.sequenceId,
+        sequenceName: sql<string>`COALESCE(${sequences.name}, '[Unnamed Sequence]')`.as('sequence_name'),
+        stepNumber: sequenceScheduledSends.stepNumber,
+        scheduledAt: sequenceScheduledSends.scheduledAt,
+        sentAt: sequenceScheduledSends.sentAt,
+        sendStatus: sequenceScheduledSends.status,
+        subject: sequenceScheduledSends.subject,
+        threadId: sequenceScheduledSends.threadId,
+        messageId: sequenceScheduledSends.messageId,
+      })
+      .from(sequenceScheduledSends)
+      .innerJoin(sequenceRecipients, eq(sequenceScheduledSends.recipientId, sequenceRecipients.id))
+      .leftJoin(sequences, eq(sequenceScheduledSends.sequenceId, sequences.id))
+      .where(and(...whereConditions))
+      .orderBy(sequenceScheduledSends.scheduledAt)
+      .limit(limit);
+
+    // Transform to expected format with status calculation
+    return results.map(row => ({
+      recipientId: row.recipientId,
+      recipientEmail: row.recipientEmail,
+      recipientName: row.recipientName,
+      sequenceId: row.sequenceId,
+      sequenceName: row.sequenceName,
+      stepNumber: row.stepNumber,
+      scheduledAt: row.scheduledAt,
+      sentAt: row.sentAt,
+      status: row.sendStatus === 'sent' 
+        ? 'sent' 
+        : (row.scheduledAt && row.scheduledAt < now ? 'overdue' : 'scheduled'),
+      subject: row.subject,
+      threadId: row.threadId,
+      messageId: row.messageId,
+    }));
   }
 
   // E-Hub Sequence Steps operations

@@ -19570,13 +19570,14 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
-  // Get E-Hub queue view (admin only) - shows next 50 sends chronologically
+  // Get E-Hub queue view (admin only) - shows next 50 scheduled sends chronologically
   app.get('/api/ehub/queue', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
       const search = req.query.search as string | undefined;
       const statusFilter = (req.query.statusFilter as 'active' | 'paused') || 'active';
       
-      const queue = await storage.getIndividualSendsQueue({ search, statusFilter });
+      // Fetch pre-scheduled sends from the queue (naturally shows remaining after deletions)
+      const queue = await storage.getScheduledSendsQueue({ search, statusFilter, limit: 50 });
       res.json(queue);
     } catch (error: any) {
       console.error('Error fetching queue view:', error);
