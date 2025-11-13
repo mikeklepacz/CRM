@@ -115,6 +115,7 @@ export function calculateOptimalDelays(
  * @param recipientBusinessHours - Recipient's business hours string
  * @param storage - Storage instance for database access
  * @param ehubSettingsOverride - Optional settings override (used during recalculation)
+ * @param startTime - Optional start time (used for bulk enrollment spacing)
  * @returns Array of scheduled send records ready for bulk insert
  */
 export async function preScheduleRecipientSends(
@@ -123,7 +124,8 @@ export async function preScheduleRecipientSends(
   recipientTimezone: string,
   recipientBusinessHours: string,
   storage: any,
-  ehubSettingsOverride?: any
+  ehubSettingsOverride?: any,
+  startTime?: Date
 ): Promise<Array<{
   recipientId: string;
   sequenceId: string;
@@ -165,7 +167,8 @@ export async function preScheduleRecipientSends(
 
   const now = new Date();
   const thirtyDaysFromNow = addDays(now, 30);
-  let currentTime = now;
+  // Use provided startTime for bulk enrollment spacing, otherwise use now
+  let currentTime = startTime || now;
   let stepNumber = 1;
   let repeatIndex = 0;
 

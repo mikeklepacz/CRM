@@ -1,0 +1,35 @@
+Pasted-Looking-at-your-screenshot-I-can-see-both-emails-are-scheduled-for-Nov-14-11-01-AM-the-exact-sam-1763073336953_1763073336954.txt
+Looking at your screenshot, I can see both emails are scheduled for Nov 14, 11:01 AM - the exact same time. This is happening because the "Min Delay Between Sends" setting is being ignored during recipient enrollment.
+
+Let me trace through the code to find the issue:
+
+The Problem
+In routes.ts, when adding contacts to a sequence, the code calculates nextSendAt for all recipients but doesn't apply the min/max delay jitter between them. Here's the relevant section:
+
+// Calculate initial nextSendAt for all recipients using queue coordinator
+const stepDelays = sequence.stepDelays || [];
+const initialDelayDays = stepDelays.length > 0 ? parseFloat(stepDelays[0].toString()) : 0;
+// Get admin window and settings
+const { resolveAdminWindow } = await import('./services/emailSchedulingService');
+const adminWindow = await resolveAdminWindow(id, storage);
+const settings = await storage.getEhubSettings();
+// ... calculates baselineTime and nextSendAt for EACH recipient
+// BUT doesn't increment the queue tail between recipients!
+The issue is that during bulk enrollment, each recipient gets the same queueTailTime (the current queue tail), so they all get scheduled at nearly the same time.
+
+The Fix
+We need to accumulate spacing as we process each recipient during bulk add, so each subsequent recipient is pushed further back in the queue:
+
+server/routes.ts
+Add progressive queue spacing during bulk recipient enrollment
+What This Changes
+Before: All recipients in a bulk add used the same queueTailTime, so they all got scheduled at nearly the same time (11:01 AM in your case).
+
+After: Each recipient updates the runningQueueTail to their assigned slot, so the next recipient must be scheduled after them. This ensures proper spacing based on your Min/Max Delay settings.
+
+Expected Result
+After this fix, when you add 2 recipients with Min Delay = 1 minute and Max Delay = 3 minutes:
+
+Recipient 1: Nov 14, 11:01 AM
+Recipient 2: Nov 14, 11:02-11:04 AM (random delay applied)
+The queue will respect your spacing settings during bulk enrollment.
