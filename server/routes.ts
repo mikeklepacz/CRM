@@ -20244,6 +20244,10 @@ Based on the conversation, help the user design an effective email sequence that
 
   // Add contacts to sequence from All Contacts tab (admin only)
   app.post('/api/sequences/:id/contacts', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    // Acquire mutex lock to prevent concurrent bulk-adds from reading identical queue state
+    const { bulkEnrollmentMutex } = await import('./services/bulkEnrollmentLock');
+    const release = await bulkEnrollmentMutex.acquire();
+    
     try {
       const { id } = req.params;
       const { contacts, selectAll, search, statusFilter } = req.body;
@@ -20301,24 +20305,57 @@ Based on the conversation, help the user design an effective email sequence that
         return res.json({ message: 'All contacts already in sequence', count: 0 });
       }
 
-      // Calculate initial nextSendAt for all recipients using dual-window scheduling
+      // Calculate initial nextSendAt for all recipients using queue coordinator
+      // to ensure FIFO ordering and rate limit compliance
       const stepDelays = sequence.stepDelays || [];
       const initialDelayDays = stepDelays.length > 0 ? parseFloat(stepDelays[0].toString()) : 0;
       
-      // Import dual-window scheduler
-      const { computeNextSendTimeForRecipient } = await import('./services/emailSchedulingService');
-
-      // Add nextSendAt to all recipients using dual-window scheduling (admin + recipient windows)
-      const recipientsWithNextSend = await Promise.all(recipients.map(async r => ({
-        ...r,
-        nextSendAt: await computeNextSendTimeForRecipient(
-          id, // sequenceId
-          r.businessHours || '',
-          r.timezone || 'America/New_York',
-          initialDelayDays,
-          storage
-        ),
-      })));
+      // Get admin window and settings
+      const { resolveAdminWindow } = await import('./services/emailSchedulingService');
+      const adminWindow = await resolveAdminWindow(id, storage);
+      const ehubSettings = await storage.getEhubSettings();
+      
+      // Get initial queue state ONCE before processing all recipients
+      let queueTailTime = await storage.getQueueTail();
+      let currentDailyCount = await storage.getDailyScheduledCount();
+      
+      // Import queue coordinator
+      const { requestNextSlot } = await import('./services/queueCoordinator');
+      
+      // Allocate slots sequentially with local cursor to avoid race conditions
+      const recipientsWithNextSend = [];
+      for (const r of recipients) {
+        const slotResult = requestNextSlot({
+          stepDelay: initialDelayDays,
+          lastStepSentAt: null, // New recipient, no previous send
+          adminTimezone: adminWindow.timezone,
+          adminStartHour: adminWindow.startHour,
+          adminEndHour: adminWindow.endHour,
+          recipientBusinessHours: r.businessHours || '',
+          recipientTimezone: r.timezone || 'America/New_York',
+          clientWindowStartOffset: adminWindow.clientWindowStartOffset,
+          clientWindowEndHour: adminWindow.clientWindowEndHour,
+          skipWeekends: adminWindow.skipWeekends,
+          queueTailTime,
+          dailyRateLimit: ehubSettings?.dailyEmailLimit ?? 20,
+          currentDailyCount,
+        });
+        
+        recipientsWithNextSend.push({
+          ...r,
+          nextSendAt: slotResult.nextSendAt,
+        });
+        
+        // Advance cursor for next recipient
+        queueTailTime = slotResult.nextSendAt;
+        // Only increment daily count if slot is within next 24 hours
+        const next24Hours = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
+        if (slotResult.nextSendAt < next24Hours) {
+          currentDailyCount++;
+        }
+      }
+      
+      console.log(`[AddRecipients] Scheduled ${recipientsWithNextSend.length} recipients using queue coordinator`);
 
       // Bulk insert recipients
       const created = await storage.addRecipients(recipientsWithNextSend);
@@ -20336,6 +20373,9 @@ Based on the conversation, help the user design an effective email sequence that
     } catch (error: any) {
       console.error('Error adding contacts to sequence:', error);
       res.status(500).json({ message: error.message || 'Failed to add contacts' });
+    } finally {
+      // Always release mutex lock
+      release();
     }
   });
 
