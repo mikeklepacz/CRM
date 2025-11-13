@@ -111,6 +111,22 @@ interface PausedRecipient {
   }>;
 }
 
+function SentHistoryView() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sent History</CardTitle>
+        <CardDescription>View all sent emails and their delivery status</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="text-center py-12 text-muted-foreground">
+          Coming soon - Sent history will show all delivered emails with delivery and reply status
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function QueueView() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -2267,9 +2283,26 @@ export default function EHub() {
           )}
         </TabsContent>
 
-        {/* Queue Tab */}
+        {/* Queue Tab with sub-tabs */}
         <TabsContent value="queue" className="space-y-4">
-          <QueueView />
+          <Tabs defaultValue="active-queue" className="w-full">
+            <TabsList data-testid="tabs-queue-view">
+              <TabsTrigger value="active-queue" data-testid="tab-active-queue">
+                Queue
+              </TabsTrigger>
+              <TabsTrigger value="sent-history" data-testid="tab-sent-history">
+                Sent History
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="active-queue" className="mt-4">
+              <QueueView />
+            </TabsContent>
+            
+            <TabsContent value="sent-history" className="mt-4">
+              <SentHistoryView />
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         {/* Settings Tab */}

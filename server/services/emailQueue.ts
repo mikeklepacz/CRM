@@ -259,7 +259,7 @@ async function processEmailQueue() {
         if (trackerCheck.shouldSkip) {
           console.log(`[EmailQueue] ⛔ SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
           // Mark recipient as skipped
-          await storage.updateRecipient(recipient.id, { 
+          await storage.updateRecipientStatus(recipient.id, { 
             status: 'skipped',
             nextSendAt: null // Clear next send time
           });
@@ -320,7 +320,7 @@ async function processEmailQueue() {
           // Parse stepDelays (convert from string[] to number[])
           const stepDelays = (sequence.stepDelays || []).map(d => parseFloat(d.toString()));
           
-          // Calculate next send time using gap-based delays + smart timing
+          // Calculate next send time using Queue Coordinator for FIFO ordering and rate limiting
           // stepDelays[0] = initial delay before first send (used when recipient added)
           // stepDelays[1] = gap after first send, before second send
           // stepDelays[n] = gap after nth send, before (n+1)th send
@@ -329,12 +329,18 @@ async function processEmailQueue() {
           
           // Check if there are more steps remaining
           if (currentStep < stepDelays.length) {
-            // Schedule next step using dual-window scheduler (admin + recipient windows)
-            const gapDays = stepDelays[currentStep];
-            const baselineTime = addDays(now, gapDays);
+            // Schedule next step using Queue Coordinator (ensures FIFO + rate limiting)
+            const stepDelay = stepDelays[currentStep];
             
-            nextSendAt = computeNextSendSlot({
-              baselineTime,
+            // Get current queue state (exclude this recipient to avoid self-comparison)
+            const queueTailTime = await storage.getQueueTail({ excludeRecipientId: recipient.id });
+            const currentDailyCount = await storage.getDailyScheduledCount({ excludeRecipientId: recipient.id });
+            
+            // Use Queue Coordinator to assign next send slot
+            const { requestNextSlot } = await import('./queueCoordinator');
+            const slotResult = requestNextSlot({
+              stepDelay,
+              lastStepSentAt: now, // Just sent this step
               adminTimezone: adminWindow.timezone,
               adminStartHour: adminWindow.startHour,
               adminEndHour: adminWindow.endHour,
@@ -343,15 +349,28 @@ async function processEmailQueue() {
               clientWindowStartOffset: adminWindow.clientWindowStartOffset,
               clientWindowEndHour: adminWindow.clientWindowEndHour,
               skipWeekends: adminWindow.skipWeekends,
+              queueTailTime,
+              dailyRateLimit: settings.dailyEmailLimit,
+              currentDailyCount,
             });
+            
+            nextSendAt = slotResult.nextSendAt;
             recipientStatus = 'in_sequence';
+            
+            console.log(`[EmailQueue] 📅 Next step scheduled: ${slotResult.reason}`);
           } else if (currentStep === stepDelays.length && sequence.repeatLastStep) {
-            // On last step with repeat enabled - schedule repeat using dual-window scheduler
-            const lastGapDays = stepDelays[stepDelays.length - 1];
-            const baselineTime = addDays(now, lastGapDays);
+            // On last step with repeat enabled - schedule repeat using Queue Coordinator
+            const stepDelay = stepDelays[stepDelays.length - 1];
             
-            nextSendAt = computeNextSendSlot({
-              baselineTime,
+            // Get current queue state (exclude this recipient to avoid self-comparison)
+            const queueTailTime = await storage.getQueueTail({ excludeRecipientId: recipient.id });
+            const currentDailyCount = await storage.getDailyScheduledCount({ excludeRecipientId: recipient.id });
+            
+            // Use Queue Coordinator to assign next send slot
+            const { requestNextSlot } = await import('./queueCoordinator');
+            const slotResult = requestNextSlot({
+              stepDelay,
+              lastStepSentAt: now, // Just sent this step
               adminTimezone: adminWindow.timezone,
               adminStartHour: adminWindow.startHour,
               adminEndHour: adminWindow.endHour,
@@ -360,8 +379,15 @@ async function processEmailQueue() {
               clientWindowStartOffset: adminWindow.clientWindowStartOffset,
               clientWindowEndHour: adminWindow.clientWindowEndHour,
               skipWeekends: adminWindow.skipWeekends,
+              queueTailTime,
+              dailyRateLimit: settings.dailyEmailLimit,
+              currentDailyCount,
             });
+            
+            nextSendAt = slotResult.nextSendAt;
             recipientStatus = 'in_sequence';
+            
+            console.log(`[EmailQueue] 📅 Repeat step scheduled: ${slotResult.reason}`);
           } else {
             // Sequence complete
             recipientStatus = 'completed';
