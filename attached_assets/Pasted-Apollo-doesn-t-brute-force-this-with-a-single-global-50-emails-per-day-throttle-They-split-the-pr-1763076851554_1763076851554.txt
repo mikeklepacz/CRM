@@ -1,0 +1,56 @@
+Apollo doesn’t brute-force this with a single global “50 emails per day” throttle. They split the problem into three separate layers of control so the system never chokes:
+	1.	Global daily send limit.
+Example: 2,000 emails/day.
+	2.	Per-sequence daily “new lead cap.”
+Example: Only 50 new people/day can enter Sequence A.
+	3.	Follow-ups bypass the sequence cap, but still count against the global limit.
+This is the trick: follow-ups don’t slow down the intake rate because they don’t compete with the “new leads per day” window. The system treats them as “scheduled sends” that must run today. Apollo always prioritizes scheduled follow-ups before new-first emails.
+
+Your backlog only grows if the sum of all follow-ups + new leads > global limit.
+Apollo avoids this by:
+	•	Setting a global cap high enough that follow-ups never block new outreach, or
+	•	Throttling follow-ups across multiple hours so the hourly rate doesn’t trip Gmail’s safety limits, or
+	•	Spreading sequences across multiple sender accounts (the real scaling weapon).
+
+So the pipeline looks like this:
+	1.	At 00:00 UTC:
+Apollo asks: “How many follow-ups must be sent today based on day-3, day-8, day-10 logic?”
+	2.	It pre-allocates sending capacity to those follow-ups.
+	3.	Whatever is left in the daily budget gets used for new leads (your capped 50/day).
+	4.	If follow-ups exceed your global limit, Apollo pushes the earliest follow-ups to the next day, but still preserves the new-lead cap.
+
+This is why Apollo feels like it’s pushing new prospects every day even with hundreds of follow-ups in flight.
+
+Your system on Replit is struggling because you’re trying to merge all logic into one queue. You need to split it.
+
+Here’s what you tell Replit — the architecture you need:
+
+Step 1. Create two queues.
+	•	queue_followups (high priority)
+	•	queue_new (low priority)
+
+Step 2. Daily scheduler (runs every hour):
+	•	Pull due followups first.
+	•	Count how many have been sent today.
+	•	If remaining quota > 0, send new leads (max 50/day or whatever your cap is).
+
+Step 3. When a new prospect enters your system:
+	•	Add them to queue_new.
+	•	Set three timestamped future entries in queue_followups for day 3, day 8, day 10.
+
+Step 4. Add a safety layer:
+Track sends per hour and per 24 hours. Never exceed the SMTP/Gmail limit.
+
+Step 5. Make the queues persistent:
+Use PostgreSQL or SQLite with two tables: sends and schedule.
+
+The problem Replit is having right now is probably because you’re trying to do this in one cron-like loop without separating concerns. Once you split the queues, the logic becomes predictable, deterministic, and painless.
+
+If you want next steps, I can draft:
+	•	The exact DB schema for both queues
+	•	The daily/hourly send algorithm
+	•	The priority logic
+	•	The “send window per timezone” logic you described
+	•	And the spec you hand to Replit to build the whole engine
+
+Tell me if you want the architecture written as a formal spec, or as code-level instructions for your developer.

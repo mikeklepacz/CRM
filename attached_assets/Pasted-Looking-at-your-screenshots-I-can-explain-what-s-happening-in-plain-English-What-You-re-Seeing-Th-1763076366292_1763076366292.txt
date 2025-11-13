@@ -1,0 +1,48 @@
+Looking at your screenshots, I can explain what's happening in plain English:
+
+What You're Seeing
+The Good News: The system is working as designed for the most part.
+
+What's Actually Happening:
+
+"1 Mill" (paul@1millbelfast.com) gets 4 emails - Nov 17, Nov 21, Dec 1, Dec 11
+Other stores get 1 email each - All on Dec 11
+Why This Happens
+The Step Delays Configuration
+You configured:
+
+Email 1: Send immediately (0 days delay)
+Email 2: Send 3 days AFTER Email 1
+Email 3: Send 8 days AFTER Email 2
+Email 4: Send 10 days AFTER Email 3
+This is per-person, not across all people. Each recipient gets their own timeline.
+
+The Random Spacing (7-24 minutes)
+The system adds random delays between 7-24 minutes to make emails look more human and less automated. This is intentional - it prevents Gmail from flagging you as a spammer.
+
+Why "1 Mill" Goes First
+The system pre-schedules ALL future emails for each person when you add them. So when you added "1 Mill" first:
+
+Email 1: Nov 17 (today + 0 days + random minutes)
+Email 2: Nov 21 (Nov 17 + 3 days + random minutes)
+Email 3: Dec 1 (Nov 21 + 8 days + random minutes)
+Email 4: Dec 11 (Dec 1 + 10 days + random minutes)
+Then you added the other 49 stores. They ALL get their Email 1 scheduled for roughly the same time (Dec 11), spaced out by 7-24 minutes each to avoid rate limits.
+
+The Problem You're Identifying
+You expected FIFO across ALL emails (Email 1 to person A, Email 1 to person B, Email 1 to person C, then Email 2 to person A, etc.)
+
+But the system does FIFO per step (All Email 1's first, then all Email 2's, etc.) within each recipient's personal timeline.
+
+Is This a Defect?
+Partially yes. The queue is showing you individual scheduled sends, but it's confusing because:
+
+"1 Mill" appears 4 times because they have 4 steps pre-scheduled
+Other stores appear 1 time because only their first email is visible in the "Next 3 days" filter
+If you change the filter to show further out, you'll see ALL stores have multiple steps scheduled.
+
+The real issue is: Why are all 49 other stores scheduled for Dec 11 instead of spreading from Nov 17-21?
+
+That suggests the bulk enrollment spaced them too far out. The system should have given each new person their Email 1 starting from "now + small random delay", not waiting until Dec 11.
+
+Would you like me to investigate why the bulk enrollment pushed everyone to Dec 11 instead of starting them closer to today?
