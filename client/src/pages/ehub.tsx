@@ -1160,7 +1160,7 @@ export default function EHub() {
     onSuccess: (data: any) => {
       toast({
         title: "Test Data Deleted",
-        description: `Deleted ${data.recipientsDeleted} recipients, ${data.messagesDeleted} messages, and ${data.testEmailsDeleted} test emails.`,
+        description: `Deleted ${data.recipientsDeleted} recipients, ${data.messagesDeleted} messages, ${data.testEmailsDeleted} test emails, and ${data.sequencesDeleted || 0} empty sequences.`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/test-email/history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });

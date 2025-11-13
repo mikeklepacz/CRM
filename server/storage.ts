@@ -4183,20 +4183,49 @@ export class DatabaseStorage implements IStorage {
       
       const testEmailsDeleted = deletedTestEmails.length;
 
-      // Step 4: Reset denormalized stats on affected sequences
+      // Step 4: Check which sequences are now empty (had ONLY test recipients)
+      const sequencesToDelete: string[] = [];
+      const sequencesToUpdate: string[] = [];
+      
       if (affectedSequenceIds.length > 0) {
-        await tx
-          .update(sequences)
-          .set({
-            totalRecipients: 0,
-            sentCount: 0,
-            failedCount: 0,
-            repliedCount: 0,
-            bouncedCount: 0,
-            lastSentAt: null,
-            updatedAt: new Date(),
-          })
-          .where(inArray(sequences.id, affectedSequenceIds));
+        for (const sequenceId of affectedSequenceIds) {
+          const remainingRecipients = await tx
+            .select()
+            .from(sequenceRecipients)
+            .where(eq(sequenceRecipients.sequenceId, sequenceId))
+            .limit(1);
+          
+          if (remainingRecipients.length === 0) {
+            // No recipients left - delete this sequence
+            sequencesToDelete.push(sequenceId);
+          } else {
+            // Still has real recipients - just reset stats
+            sequencesToUpdate.push(sequenceId);
+          }
+        }
+        
+        // Delete empty sequences
+        if (sequencesToDelete.length > 0) {
+          await tx
+            .delete(sequences)
+            .where(inArray(sequences.id, sequencesToDelete));
+        }
+        
+        // Reset stats on sequences that still have recipients
+        if (sequencesToUpdate.length > 0) {
+          await tx
+            .update(sequences)
+            .set({
+              totalRecipients: 0,
+              sentCount: 0,
+              failedCount: 0,
+              repliedCount: 0,
+              bouncedCount: 0,
+              lastSentAt: null,
+              updatedAt: new Date(),
+            })
+            .where(inArray(sequences.id, sequencesToUpdate));
+        }
       }
 
       // Step 5: Log the nuke operation (in-transaction)
@@ -4212,6 +4241,7 @@ export class DatabaseStorage implements IStorage {
         recipientsDeleted,
         messagesDeleted,
         testEmailsDeleted,
+        sequencesDeleted: sequencesToDelete.length,
       };
     });
   }
