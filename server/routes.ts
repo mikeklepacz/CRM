@@ -20387,10 +20387,10 @@ Based on the conversation, help the user design an effective email sequence that
       const created = await storage.addRecipients(recipientsWithNextSend);
 
       // Pre-schedule all future sends for each recipient with random jitter
-      // Track queue tail to stagger bulk enrollments
+      // Maintain FIFO queue: each recipient's schedule starts after previous recipient's last send
       const { preScheduleRecipientSends } = await import('./services/emailSchedulingService');
       const allScheduledSends = [];
-      let runningQueueTail: Date | undefined = undefined; // Will use recipient.nextSendAt as initial time
+      let runningQueueTail: Date | undefined = undefined; // Will start from recipient.nextSendAt for first recipient
       
       for (const recipient of created) {
         try {
@@ -20401,11 +20401,11 @@ Based on the conversation, help the user design an effective email sequence that
             recipient.businessHours || '',
             storage,
             undefined, // ehubSettingsOverride
-            runningQueueTail || recipient.nextSendAt // Start this recipient's schedule after previous recipient's last send
+            runningQueueTail || recipient.nextSendAt // First recipient uses their nextSendAt, others use queue tail
           );
           allScheduledSends.push(...sends);
           
-          // Update queue tail to the last send time for this recipient
+          // Update queue tail to last send of this recipient to maintain FIFO ordering
           if (sends.length > 0) {
             const lastSend = sends[sends.length - 1];
             runningQueueTail = lastSend.scheduledAt;
@@ -20560,10 +20560,10 @@ Based on the conversation, help the user design an effective email sequence that
       const created = await storage.addRecipients(recipientsWithNextSend);
 
       // Pre-schedule all future sends for each recipient with random jitter
-      // Track queue tail to stagger bulk enrollments
+      // Maintain FIFO queue: each recipient's schedule starts after previous recipient's last send
       const { preScheduleRecipientSends } = await import('./services/emailSchedulingService');
       const allScheduledSends = [];
-      let runningQueueTail = queueTailTime; // Start from last recipient's initial send time
+      let runningQueueTail: Date | undefined = queueTailTime; // Start from existing queue tail
       
       for (const recipient of created) {
         try {
@@ -20574,11 +20574,11 @@ Based on the conversation, help the user design an effective email sequence that
             recipient.businessHours || '',
             storage,
             undefined, // ehubSettingsOverride
-            runningQueueTail // Start this recipient's schedule after previous recipient's last send
+            runningQueueTail || recipient.nextSendAt // First recipient uses nextSendAt, others use queue tail
           );
           allScheduledSends.push(...sends);
           
-          // Update queue tail to the last send time for this recipient
+          // Update queue tail to last send of this recipient to maintain FIFO ordering
           if (sends.length > 0) {
             const lastSend = sends[sends.length - 1];
             runningQueueTail = lastSend.scheduledAt;
