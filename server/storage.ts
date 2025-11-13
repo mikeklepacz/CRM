@@ -562,6 +562,7 @@ export interface IStorage {
   deleteRecipientScheduledSends(recipientId: string): Promise<number>;
   deleteAllPendingScheduledSends(sequenceId?: string): Promise<number>;
   updateScheduledSend(id: string, updates: Partial<InsertSequenceScheduledSend>): Promise<SequenceScheduledSend>;
+  claimScheduledSend(id: string): Promise<boolean>;
   getScheduledSendsByRecipient(recipientId: string): Promise<SequenceScheduledSend[]>;
 
   // E-Hub Sequence Steps operations
@@ -3983,6 +3984,20 @@ export class DatabaseStorage implements IStorage {
       .where(eq(sequenceScheduledSends.id, id))
       .returning();
     return updated;
+  }
+
+  async claimScheduledSend(id: string): Promise<boolean> {
+    // Atomically claim a scheduled send by setting status='processing'
+    // Only updates if status is currently 'pending' (prevents double-processing)
+    const [updated] = await db
+      .update(sequenceScheduledSends)
+      .set({ status: 'processing' })
+      .where(and(
+        eq(sequenceScheduledSends.id, id),
+        eq(sequenceScheduledSends.status, 'pending')
+      ))
+      .returning();
+    return !!updated;
   }
 
   async getScheduledSendsByRecipient(recipientId: string): Promise<SequenceScheduledSend[]> {
