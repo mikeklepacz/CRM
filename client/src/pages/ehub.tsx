@@ -2246,8 +2246,9 @@ export default function EHub() {
                                   setStepDelays(newDelays);
                                 }}
                                 data-testid={`button-remove-delay-${index}`}
+                                title="Remove this step delay"
                               >
-                                <AlertCircle className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
                             {isLastStep && stepDelays.length > 0 && (
