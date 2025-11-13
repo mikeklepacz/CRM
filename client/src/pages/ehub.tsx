@@ -323,19 +323,19 @@ function QueueView() {
     staleTime: 15000,
   });
 
-  // Calculate stats
-  const sentItems = queue?.filter(item => item.status === 'sent') || [];
-  const scheduledItems = queue?.filter(item => item.status === 'scheduled') || [];
-  const overdueItems = queue?.filter(item => item.status === 'overdue') || [];
+  // Calculate stats for ACTIVE queue only (don't calculate for paused view)
+  const sentItems = activeQueue?.filter(item => item.status === 'sent') || [];
+  const scheduledItems = activeQueue?.filter(item => item.status === 'scheduled') || [];
+  const overdueItems = activeQueue?.filter(item => item.status === 'overdue') || [];
   
-  // Get unique recipients for follow-ups vs fresh calculation
-  const uniqueRecipients = new Set(queue?.map(item => item.recipientId) || []);
+  // Get unique recipients for follow-ups vs fresh calculation (active only)
+  const uniqueRecipients = new Set(activeQueue?.map(item => item.recipientId) || []);
   const followUpRecipients = new Set(
-    queue?.filter(item => item.stepNumber > 1).map(item => item.recipientId) || []
+    activeQueue?.filter(item => item.stepNumber > 1).map(item => item.recipientId) || []
   );
   const freshRecipients = uniqueRecipients.size - followUpRecipients.size;
   
-  // Get next send time from scheduled items
+  // Get next send time from scheduled items (active only)
   const nextScheduled = scheduledItems.length > 0 && scheduledItems[0].scheduledAt
     ? new Date(scheduledItems[0].scheduledAt)
     : null;
@@ -388,67 +388,76 @@ function QueueView() {
 
   return (
     <div className="space-y-4">
-      {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>Follow-ups Pending</CardDescription>
-            <CardTitle className="text-3xl" data-testid="text-followups-pending">
-              {followUpRecipients.size}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>Fresh Emails Pending</CardDescription>
-            <CardTitle className="text-3xl" data-testid="text-fresh-pending">
-              {freshRecipients}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>Next Send</CardDescription>
-            <CardTitle className="text-xl" data-testid="text-next-send">
-              {nextScheduled ? formatDate(nextScheduled.toISOString()) : 'No emails queued'}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      {/* Stats Summary - Only for Active View */}
+      {statusFilter === 'active' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>Follow-ups Pending</CardDescription>
+              <CardTitle className="text-3xl" data-testid="text-followups-pending">
+                {followUpRecipients.size}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>Fresh Emails Pending</CardDescription>
+              <CardTitle className="text-3xl" data-testid="text-fresh-pending">
+                {freshRecipients}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>Next Send</CardDescription>
+              <CardTitle className="text-xl" data-testid="text-next-send">
+                {nextScheduled ? formatDate(nextScheduled.toISOString()) : 'No emails queued'}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+      )}
 
-      {/* Queue Table */}
+      {/* Queue/Paused Recipients Table */}
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4">
             <div>
-              <CardTitle>Email Queue</CardTitle>
+              <CardTitle>{statusFilter === 'paused' ? 'Paused Recipients' : 'Email Queue'}</CardTitle>
               <CardDescription>
-                Chronological view of all individual email sends • Green = Sent, Blue = Scheduled, Red = Overdue
+                {statusFilter === 'paused' 
+                  ? 'Recipients whose email sequences have been paused'
+                  : 'Chronological view of all individual email sends • Green = Sent, Blue = Scheduled, Red = Overdue'
+                }
               </CardDescription>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <Input
-                placeholder="Search by name or email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="max-w-xs"
-                data-testid="input-queue-search"
-              />
-              <Select
-                value={timeWindowDays.toString()}
-                onValueChange={(val) => setTimeWindowDays(parseInt(val, 10))}
-              >
-                <SelectTrigger className="w-[200px]" data-testid="select-time-window">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Next 24 hours</SelectItem>
-                  <SelectItem value="3">Next 3 days</SelectItem>
-                  <SelectItem value="7">Next 7 days</SelectItem>
-                  <SelectItem value="14">Next 14 days</SelectItem>
-                  <SelectItem value="30">Next 30 days</SelectItem>
-                </SelectContent>
-              </Select>
+              {statusFilter === 'active' && (
+                <>
+                  <Input
+                    placeholder="Search by name or email..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="max-w-xs"
+                    data-testid="input-queue-search"
+                  />
+                  <Select
+                    value={timeWindowDays.toString()}
+                    onValueChange={(val) => setTimeWindowDays(parseInt(val, 10))}
+                  >
+                    <SelectTrigger className="w-[200px]" data-testid="select-time-window">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Next 24 hours</SelectItem>
+                      <SelectItem value="3">Next 3 days</SelectItem>
+                      <SelectItem value="7">Next 7 days</SelectItem>
+                      <SelectItem value="14">Next 14 days</SelectItem>
+                      <SelectItem value="30">Next 30 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
               <Button
                 variant={statusFilter === 'paused' ? 'default' : 'outline'}
                 onClick={() => setStatusFilter(statusFilter === 'active' ? 'paused' : 'active')}
@@ -461,30 +470,32 @@ function QueueView() {
           </div>
         </CardHeader>
         <CardContent>
-          {!queue || queue.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              {search ? 'No results found' : 'No emails in queue'}
-            </div>
-          ) : (
-            <ScrollArea className="h-[600px]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Recipient</TableHead>
-                    <TableHead>Sequence</TableHead>
-                    <TableHead>Step</TableHead>
-                    <TableHead>Scheduled</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[60px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {queue.map((item, idx) => (
-                    <TableRow
-                      key={`${item.recipientId}-${item.stepNumber}-${idx}`}
-                      className={getRowBgColor(item.status)}
-                      data-testid={`row-queue-${item.recipientId}-${item.stepNumber}`}
-                    >
+          {statusFilter === 'active' ? (
+            // ACTIVE QUEUE VIEW
+            !activeQueue || activeQueue.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                {search ? 'No results found' : 'No emails in queue'}
+              </div>
+            ) : (
+              <ScrollArea className="h-[600px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Recipient</TableHead>
+                      <TableHead>Sequence</TableHead>
+                      <TableHead>Step</TableHead>
+                      <TableHead>Scheduled</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[60px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activeQueue.map((item, idx) => (
+                      <TableRow
+                        key={`${item.recipientId}-${item.stepNumber}-${idx}`}
+                        className={getRowBgColor(item.status)}
+                        data-testid={`row-queue-${item.recipientId}-${item.stepNumber}`}
+                      >
                       <TableCell data-testid={`text-recipient-name-${item.recipientId}-${item.stepNumber}`}>
                         <div>
                           <div className="font-medium">{item.recipientName || 'Unknown'}</div>
@@ -591,6 +602,72 @@ function QueueView() {
                 </TableBody>
               </Table>
             </ScrollArea>
+            )
+          ) : (
+            // PAUSED RECIPIENTS VIEW
+            !pausedRecipients || pausedRecipients.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                No paused recipients
+              </div>
+            ) : (
+              <ScrollArea className="h-[600px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Recipient</TableHead>
+                      <TableHead>Sequence</TableHead>
+                      <TableHead>Progress</TableHead>
+                      <TableHead>Last Sent</TableHead>
+                      <TableHead>Messages</TableHead>
+                      <TableHead className="w-[60px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pausedRecipients.map((item) => (
+                      <TableRow
+                        key={item.recipientId}
+                        data-testid={`row-paused-${item.recipientId}`}
+                      >
+                        <TableCell data-testid={`text-paused-name-${item.recipientId}`}>
+                          <div>
+                            <div className="font-medium">{item.recipientName || 'Unknown'}</div>
+                            <div className="text-sm text-muted-foreground">{item.recipientEmail}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell data-testid={`text-paused-sequence-${item.recipientId}`}>
+                          {item.sequenceName}
+                        </TableCell>
+                        <TableCell data-testid={`text-paused-progress-${item.recipientId}`}>
+                          <Badge variant="secondary">
+                            Step {item.currentStep} of {item.totalSteps}
+                          </Badge>
+                        </TableCell>
+                        <TableCell data-testid={`text-paused-last-sent-${item.recipientId}`}>
+                          {formatTimestamp(item.lastStepSentAt)}
+                        </TableCell>
+                        <TableCell data-testid={`text-paused-messages-${item.recipientId}`}>
+                          <Badge variant="outline">
+                            {item.messageHistory.length} sent
+                          </Badge>
+                        </TableCell>
+                        <TableCell data-testid={`actions-paused-${item.recipientId}`}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => resumeMutation.mutate(item.recipientId)}
+                            disabled={resumeMutation.isPending}
+                            data-testid={`button-resume-${item.recipientId}`}
+                          >
+                            <Play className="mr-2 h-4 w-4" />
+                            Resume
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )
           )}
         </CardContent>
       </Card>
