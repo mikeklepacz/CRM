@@ -361,8 +361,8 @@ async function processEmailQueue() {
             recipientStatus = 'in_sequence';
             
             console.log(`[EmailQueue] 📅 Next step scheduled: ${slotResult.reason}`);
-          } else if (currentStep === stepDelays.length && sequence.repeatLastStep) {
-            // On last step with repeat enabled - schedule repeat using Queue Coordinator
+          } else if (currentStep >= stepDelays.length && sequence.repeatLastStep) {
+            // On last step (or beyond) with repeat enabled - schedule repeat using Queue Coordinator
             const stepDelay = stepDelays[stepDelays.length - 1];
             
             // Get current queue state (exclude this recipient to avoid self-comparison)
