@@ -20722,6 +20722,43 @@ Based on the conversation, help the user design an effective email sequence that
     }
   });
 
+  // Get pre-flight counts for test data nuke
+  app.get('/api/ehub/test-data/nuke/counts', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const emailPattern = req.query.emailPattern as string | undefined;
+      
+      const counts = await storage.getTestDataNukeCounts(emailPattern);
+      res.json(counts);
+    } catch (error: any) {
+      console.error('Error getting nuke counts:', error);
+      res.status(500).json({ message: error.message || 'Failed to get nuke counts' });
+    }
+  });
+
+  // Nuke test data (nuclear option for clearing test emails/recipients)
+  app.post('/api/ehub/test-data/nuke', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const { emailPattern } = req.body;
+
+      // Execute transactional deletion
+      const result = await storage.nukeTestData(userId, emailPattern);
+
+      res.json({
+        success: true,
+        message: 'Test data deleted successfully',
+        ...result,
+      });
+    } catch (error: any) {
+      console.error('Error nuking test data:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete test data' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
