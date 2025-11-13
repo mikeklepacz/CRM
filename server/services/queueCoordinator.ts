@@ -72,34 +72,24 @@ export function requestNextSlot(request: QueueSlotRequest): QueueSlotResult {
     baselineTime = addDays(now, request.stepDelay);
   }
   
-  // Step 2: Enforce FIFO queue ordering
-  // The minimumTime is the larger of: baseline OR queue tail + buffer
-  let minimumTime = baselineTime;
+  // Step 2: Calculate desired spacing between sends
+  // Use the greater of: rate limit spacing OR minDelayBetweenSends
+  let desiredSpacing = Math.max(1, request.minDelayBetweenSendsMinutes);
   
-  if (request.queueTailTime) {
-    // Queue exists - ensure we schedule AFTER the tail
-    // Use max of 1 minute (safety floor) and configured minDelayBetweenSends
-    const spacing = Math.max(1, request.minDelayBetweenSendsMinutes);
-    const afterTail = addMinutes(request.queueTailTime, spacing);
-    if (afterTail > minimumTime) {
-      minimumTime = afterTail;
-    }
-  }
-  
-  // Step 3: Apply rate limiting spacing (if applicable)
-  // Spread sends evenly across admin window, enforcing minDelayBetweenSends floor
   if (request.dailyRateLimit > 0) {
     const adminWindowMinutes = (request.adminEndHour - request.adminStartHour) * 60;
     const minutesBetweenSends = adminWindowMinutes / request.dailyRateLimit;
-    
-    // Enforce the greater of: rate limit spacing OR minDelayBetweenSends
-    const effectiveSpacing = Math.max(minutesBetweenSends, request.minDelayBetweenSendsMinutes);
-    
-    // Only apply spacing if there are already sends scheduled
-    if (request.currentDailyCount > 0) {
-      // Add spacing to the minimumTime
-      const spacedTime = addMinutes(minimumTime, effectiveSpacing);
-      minimumTime = spacedTime;
+    desiredSpacing = Math.max(desiredSpacing, minutesBetweenSends);
+  }
+  
+  // Step 3: Enforce FIFO queue ordering with desired spacing
+  let minimumTime = baselineTime;
+  
+  if (request.queueTailTime) {
+    // Queue exists - schedule AFTER the tail plus desired spacing
+    const afterTail = addMinutes(request.queueTailTime, desiredSpacing);
+    if (afterTail > minimumTime) {
+      minimumTime = afterTail;
     }
   }
   
@@ -256,6 +246,7 @@ export async function recalculateAllPendingRecipients(settings: EhubSettings): P
         adminTimezone: settings.adminTimezone || 'America/New_York',
         adminStartHour: settings.adminStartHour || 9,
         adminEndHour: settings.adminEndHour || 17,
+        minDelayBetweenSendsMinutes: settings.minDelayBetweenSendsMinutes || 6,
         recipientBusinessHours: recipient.businessHours || '9-17',
         recipientTimezone: recipient.timezone || 'America/New_York',
         clientWindowStartOffset: settings.clientWindowStartOffset || 1,
