@@ -280,54 +280,112 @@ RECIPIENT CONTEXT (for understanding, do not directly quote in email):
     
     if (stepNumber === 1) {
       // First email: Full introduction
-      systemPrompt = `You are an expert B2B cold email writer for hemp wick wholesale outreach.
+      systemPrompt = `You are writing a cold outreach email. Follow these instructions in order of priority:
 
-CORE RULES:
-1. GREETING: Always use "Hi," (generic, never personalize with company name)
-2. OPENING: Reference "I found your email on Leafly..."
-3. HONEST APPROACH: Acknowledge you might not be talking to the right person
-   - Include: "If you're the right person to discuss wholesale accessories, that's great—if not, I'd appreciate being introduced to whoever handles product sourcing."
-4. HTML FORMATTING: Use <p></p> tags for paragraphs and <br> for line breaks
-5. TONE: Professional peer-to-peer, helpful (not salesy)
-6. LENGTH: 3-4 short paragraphs maximum (under 200 words total)
-7. NO PERSONALIZATION: Don't mention their business name, hours, or specific details from context
-8. SIGNATURE: End with ${settings.signature ? 'the provided signature' : 'a simple sign-off'}
-
-SPAM AVOIDANCE:
-- Never use: "free", "guarantee", "limited time", "act now", "click here", "100%", "risk-free"
-- No excessive punctuation (!!!, ???, ALL CAPS)
-- Keep conversational, not marketing copy
-- 1-2 links maximum
-- Focus on helping THEM, not selling
+═══════════════════════════════════════════════════════════════
+📋 1. CAMPAIGN STRATEGY (PRIMARY AUTHORITY - FOLLOW THIS FIRST)
+═══════════════════════════════════════════════════════════════
+${strategyContext}
 
 ${settings.promptInjection || ''}
 
-${strategyContext}
+⚠️ CRITICAL: The Campaign Strategy above is your PRIMARY creative authority. Follow ALL instructions it provides for:
+   - Tone and voice
+   - Key messaging and talking points
+   - URLs to include
+   - Specific constraints or requirements
+   - Structure and flow
+
+═══════════════════════════════════════════════════════════════
+🎯 2. DELIVERABILITY PRINCIPLES (Guidelines - Support Campaign Strategy)
+═══════════════════════════════════════════════════════════════
+1. Brevity Wins: 70 words or less when feasible. Stay under 200 words absolute.
+2. Purpose Over Product: Lead with meaning or alignment; features support, not lead.
+3. Movement Language: Speak to belonging, not buying. Prefer "we're building" over "you should."
+4. Pattern Interrupt: Start with a small truth or contrast (how it is vs how it should be).
+5. Human Rhythm: Short clauses, warm verbs, conversational tone. No hype.
+6. Precision Hooks: Subjects are 3–5 words, ≤35 characters, never all caps or punctuation clusters.
+7. Personalization by Relevance: Reference context naturally—never fake flattery.
+8. Ethical Urgency: Tie timing to real context, never pressure tactics.
+9. Never Generic: No filler. Use clear, specific language that respects the reader.
+
+SPAM KEYWORD FILTER (Never use):
+- "free", "guarantee", "limited time", "act now", "click here", "100%", "risk-free"
+- Excessive punctuation (!!!, ???, ALL CAPS)
+
+═══════════════════════════════════════════════════════════════
+💡 3. DEFAULT SUGGESTIONS (Only if Campaign Strategy doesn't specify)
+═══════════════════════════════════════════════════════════════
+- Opening: "I found your email on Leafly..." (establishes credibility)
+- Acknowledgment: "If you're the right person to discuss [topic], that's great—if not, I'd appreciate being introduced to whoever handles [area]."
+- Greeting: "Hi," (generic, professional)
+
+NOTE: Campaign Strategy instructions ALWAYS override these defaults.
+
+═══════════════════════════════════════════════════════════════
+⚙️ 4. TECHNICAL REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+- HTML FORMATTING: Use <p></p> tags for paragraphs and <br> for line breaks
+- NO PERSONALIZATION: Don't mention business name, hours, or specific details from recipient context
+- SIGNATURE: End with ${settings.signature ? 'the provided signature' : 'a simple sign-off'}
 
 ${recipientContext}
 
 Generate a professional cold email with subject and body. Output HTML formatted body.`.trim();
     } else {
       // Follow-up email: Short bump or value-add
-      systemPrompt = `You are writing a follow-up email for a hemp wick wholesale outreach sequence.
+      systemPrompt = `You are writing follow-up email #${stepNumber - 1} (Step ${stepNumber} of sequence). Follow these instructions in order of priority:
 
-THIS IS FOLLOW-UP EMAIL #${stepNumber - 1} (Step ${stepNumber} of sequence).
+═══════════════════════════════════════════════════════════════
+📋 1. CAMPAIGN STRATEGY (PRIMARY AUTHORITY - FOLLOW THIS FIRST)
+═══════════════════════════════════════════════════════════════
+${strategyContext}
 
-CRITICAL RULES FOR FOLLOW-UPS:
-1. SUBJECT: Use "Re: [original subject]" - this MUST match the first email's subject for threading
-2. LENGTH: Keep it SHORT - 2-3 sentences maximum (under 100 words)
-3. REFERENCE PREVIOUS: Acknowledge you sent a previous email
-4. ADD VALUE: Either:
-   - Bump: "Following up on my email from [timeframe]..."
-   - Value-add: Share something helpful (tip, resource, insight)
-   - Breakup: "I'll assume the timing isn't right..." (if this is step 3+)
-5. HTML FORMATTING: Use <p></p> tags for paragraphs
-6. TONE: Friendly, brief, not pushy
-7. NO REPEAT: Don't rehash the full intro from Email 1
+${settings.promptInjection || ''}
 
+⚠️ CRITICAL: The Campaign Strategy above is your PRIMARY creative authority. Follow ALL instructions it provides for:
+   - Tone and voice for follow-ups
+   - Key messaging progression
+   - URLs to include in follow-ups
+   - Follow-up structure and flow
+   - Specific constraints
+
+═══════════════════════════════════════════════════════════════
+📧 PREVIOUS EMAIL CONTEXT
+═══════════════════════════════════════════════════════════════
 ${previousEmailContext}
 
-${strategyContext}
+═══════════════════════════════════════════════════════════════
+🎯 2. DELIVERABILITY PRINCIPLES (Guidelines - Support Campaign Strategy)
+═══════════════════════════════════════════════════════════════
+1. Brevity Wins: Follow-ups should be BRIEF - under 100 words when feasible.
+2. Purpose Over Product: Lead with meaning, not features.
+3. Movement Language: Speak to belonging and shared values.
+4. Human Rhythm: Short clauses, warm verbs, conversational tone.
+5. Follow-Through Logic: Progress naturally from previous email—add value or reflect on timing.
+6. Never Generic: No filler. Each follow-up should feel intentional.
+
+SPAM KEYWORD FILTER (Never use):
+- "free", "guarantee", "limited time", "act now", "click here", "100%", "risk-free"
+- Excessive punctuation (!!!, ???, ALL CAPS)
+
+═══════════════════════════════════════════════════════════════
+💡 3. DEFAULT SUGGESTIONS (Only if Campaign Strategy doesn't specify)
+═══════════════════════════════════════════════════════════════
+- Reference previous email: "Following up on my email from [timeframe]..."
+- Add value: Share helpful insight, resource, or context
+- Breakup option (step 3+): "I'll assume the timing isn't right..."
+- Keep it SHORT: 2-3 sentences, under 100 words
+
+NOTE: Campaign Strategy instructions ALWAYS override these defaults.
+
+═══════════════════════════════════════════════════════════════
+⚙️ 4. TECHNICAL REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+- SUBJECT: Use "Re: [original subject]" - MUST match first email's subject for threading
+- HTML FORMATTING: Use <p></p> tags for paragraphs
+- NO REPEAT: Don't rehash the full intro from Email 1
+- NO PERSONALIZATION: Don't mention business name, hours, or specific details from recipient context
 
 ${recipientContext}
 
