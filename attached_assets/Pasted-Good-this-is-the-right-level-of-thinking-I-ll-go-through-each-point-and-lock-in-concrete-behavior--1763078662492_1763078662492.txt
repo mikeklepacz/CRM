@@ -1,0 +1,198 @@
+Good, this is the right level of thinking. I’ll go through each point and lock in concrete behavior.
+
+⸻
+
+1. Queue coordinator cadence and batching
+
+You have:
+	•	Hard cap: 50 emails/day
+	•	Active window: 15:00–23:00 (8 hours)
+	•	Target: “single human sender” feel
+
+50 / 8 ≈ 6.25 emails per hour ≈ one every 9–10 minutes.
+
+You want trickle, not “send 50 at 15:00”.
+
+Recommended:
+	•	Run the coordinator every 5 minutes.
+	•	Each run:
+	•	Recalculate how many have been sent today.
+	•	Compute remaining capacity.
+	•	Take a small batch per run (e.g. 1–3 emails), not all remaining.
+
+Example:
+	•	Coordinator cron: every 5 minutes between 15:00–23:00 local.
+	•	Per run:
+
+const DAILY_LIMIT = 50;
+const MAX_PER_RUN = 3; // gives you up to ~36/hour, but capped by DAILY_LIMIT anyway
+
+const sentToday = await countSentSince(startOfToday());
+const remainingToday = DAILY_LIMIT - sentToday;
+if (remainingToday <= 0) return;
+
+const toSchedule = Math.min(remainingToday, MAX_PER_RUN);
+
+const candidates = await db.query(/* SQL: eligible_at <= now, scheduled_at IS NULL, order by eligible_at, id limit toSchedule */);
+
+
+
+This keeps the pattern “human-like”:
+	•	steady drip during the window
+	•	never bursts 50 at once
+	•	still respects the daily cap exactly
+
+You do not need to assign all 50 slots at the start of the day; just let the cron slowly tap the backlog.
+
+⸻
+
+2. Where to apply jitter
+
+Your two options:
+	•	A: Coordinator sets scheduled_at with jitter.
+	•	B: Worker ignores scheduled_at and adds jitter at send time.
+
+For a clean system:
+	•	scheduled_at should reflect the actual target send time.
+	•	Worker should just do “send anything with scheduled_at <= now()”.
+
+So use Option A:
+	•	Coordinator run at 15:00 selects some emails and sets:
+
+const jitterMinutes = randomInt(7, 24);  // inclusive range
+const scheduledAt = new Date(Date.now() + jitterMinutes * 60_000);
+
+
+	•	Worker:
+
+SELECT * FROM sequence_scheduled_sends
+WHERE scheduled_at <= now()
+  AND sent_at IS NULL
+ORDER BY scheduled_at, id
+LIMIT X;
+
+
+
+No hidden timing logic in the worker. Timing lives in one place: the coordinator.
+
+To avoid stacking everything in the first hour, you can:
+	•	Keep the coordinator every 5 minutes.
+	•	Use jitter 7–24 minutes as you proposed.
+	•	That alone will naturally smear sends across the whole window.
+
+⸻
+
+3. Follow-up priority
+
+Your example:
+	•	30 follow-ups with eligible_at = yesterday (overdue)
+	•	100 fresh with eligible_at = today
+	•	Query: WHERE eligible_at <= now() ORDER BY eligible_at LIMIT 50
+
+Result:
+	•	The 30 overdue follow-ups come first (yesterday < today).
+	•	Then 20 of today’s fresh steps.
+	•	So yes, follow-ups get priority automatically.
+
+Two extra implementation details:
+	1.	Use a secondary sort key:
+
+ORDER BY eligible_at ASC, recipient_id ASC, step_number ASC, id ASC
+
+That gives stable order and avoids jitter when timestamps tie.
+
+	2.	Overdue behavior:
+If the system was down or the window was closed, a backlog will accumulate. The algorithm above will clear the oldest first, which is exactly what you want.
+
+So: logic you wrote is correct and enough. No special “priority” flag needed.
+
+⸻
+
+4. Weekend skipping
+
+Two clean patterns; pick one and keep it consistent.
+
+You want “no sends on weekends” for a human sender.
+
+Best option for simplicity: implement weekend logic in the coordinator, not in eligible_at.
+
+Reason: eligibility is “from this day onward it’s okay to send,” not “must send exactly on this date.”
+
+Implementation:
+	•	eligible_at is computed naïvely: enrolled_at + delay.
+	•	Coordinator adds this guard:
+
+function isWeekend(date: Date) {
+  const d = date.getDay(); // 0=Sunday, 6=Saturday
+  return d === 0 || d === 6;
+}
+
+const now = new Date();
+if (isWeekend(now)) return;            // Skip sending on weekends entirely
+
+// optionally also guard window:
+if (now < todayAt(15, 0) || now > todayAt(23, 0)) return;
+
+
+
+This way:
+	•	Steps can become eligible on Saturday, but they’ll sit in the queue until Monday 15:00.
+	•	You don’t have to mutate eligible_at for weekend logic.
+	•	Changing your “working days” later is trivial.
+
+Alternate approach (less flexible but acceptable):
+	•	Adjust eligible_at at creation to skip weekends:
+	•	If computed day is Sat → bump to Monday.
+	•	If Sun → bump to Monday.
+	•	Coordinator is dumb: “if eligible_at <= now, we can send.”
+
+I’d still go with: weekend handling in coordinator, eligible_at purely about delays.
+
+⸻
+
+5. Migration strategy
+
+Your migration SQL:
+
+UPDATE sequence_scheduled_sends
+SET eligible_at = scheduled_at,
+    scheduled_at = NULL
+WHERE sent_at IS NULL;
+
+This is fine as a one-time migration, under these assumptions:
+	•	Old system:
+	•	scheduled_at was the intended send time.
+	•	eligible_at is currently NULL or unused.
+	•	You now want:
+	•	eligible_at = earliest time it was “okay” to send.
+	•	Let coordinator re-assign new scheduled_at values over time.
+
+I’d tighten it slightly:
+	1.	Only touch rows for sequences you’re migrating (optional but safer):
+
+UPDATE sequence_scheduled_sends
+SET eligible_at = scheduled_at,
+    scheduled_at = NULL
+WHERE sent_at IS NULL
+  AND sequence_id IN (...); -- if you need scoping
+
+
+	2.	If some rows already have eligible_at set correctly, don’t overwrite them. Then use:
+
+UPDATE sequence_scheduled_sends
+SET eligible_at = COALESCE(eligible_at, scheduled_at),
+    scheduled_at = NULL
+WHERE sent_at IS NULL;
+
+
+
+After this:
+	•	Coordinator will start from those eligible_at values and drip sends out under the new rules.
+	•	Previously “scheduled but not sent” emails won’t fire all at once; they will re-enter the pool.
+
+⸻
+
+If you want the next piece, the logical next step is to define:
+	•	The exact SQL query the coordinator should run each cycle.
+	•	The daily-counter logic (sentToday).
+	•	The worker loop that actually sends and sets sent_at.

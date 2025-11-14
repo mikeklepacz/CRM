@@ -1,0 +1,163 @@
+Here’s the clean, grounded answer to your three clarifications, plus guidance from the screenshots. I’ll keep it tight and practical so your engineer can implement without ambiguity.
+
+⸻
+
+1. Timezone Handling
+
+Short answer: Coordinator must enforce BOTH:
+	•	Your sending window (15:00–23:00, your timezone)
+	•	Client receiving window (their local business hours + offset + cutoff)
+
+Worker should NOT check hours.
+Worker only sends where scheduled_at <= now().
+
+Why
+
+The coordinator is the one responsible for deciding when to send human-like emails.
+The worker is a dumb pipe.
+
+Implementation
+
+When deciding whether to assign scheduled_at:
+
+if (!inCompanyWindow(now)) return;  
+if (!clientWindowAllows(recipientLocalTime)) return;
+
+Client Window Rules (from screenshot):
+	•	Start offset: 1 hour after opening
+	•	Cutoff: local time 16:00 (client's time)
+	•	Skip weekends: YES
+
+You already have each recipient’s timezone from your database, so during coordinator selection, you enrich the query with:
+	1.	recipient.timezone
+	2.	recipient.client_opening_hour (you already scrape this)
+	3.	Compute clientLocalNow
+	4.	Check client rules:
+
+if (clientIsWeekend(clientLocalNow)) skip;
+if (clientLocalNow < openingHour + offset) skip;
+if (clientLocalNow > cutoffHour) skip;
+
+Only assign scheduled_at when both windows align.
+
+Result
+
+Emails look like this:
+	•	You “start work” at 15:00 Warsaw.
+	•	The client has been open 1–5 hours.
+	•	The email arrives at a natural moment in the business day.
+	•	You never violate either side’s work hours.
+
+This is exactly the human pattern that avoids spam traps.
+
+⸻
+
+2. Repeat Logic (“Send step 4 every 10 days until reply”)
+
+Correct approach:
+
+Do NOT precreate infinite future rows.
+Only create the next repeat after the previous one is actually sent.
+
+Why
+	•	Avoids infinite DB growth
+	•	Avoids massive scheduling windows
+	•	Keeps human timing
+	•	Fits the eligibility model perfectly
+
+Implementation
+
+In the worker, after sending a repeatable step:
+
+if (isRepeatStep(row.step_number)) {
+  const nextEligible = addDays(now, repeatIntervalDays); // e.g. 10 days
+  await db.insert(`
+    INSERT INTO sequence_scheduled_sends (
+      sequence_id,
+      recipient_id,
+      step_number,
+      eligible_at,
+      scheduled_at,
+      sent_at
+    ) VALUES ($1, $2, $3, $4, NULL, NULL)
+  `, [sequenceId, recipientId, row.step_number, nextEligible]);
+}
+
+Important
+
+Only generate next repeat row when:
+	•	The previous repeat was actually SENT
+	•	The recipient has still not replied
+	•	The sequence is still active
+
+This mirrors a real human
+
+Someone would check “Did they respond?” and if not, would follow up again 10 days later… indefinitely.
+
+⸻
+
+3. Error Handling in Worker
+
+Best practice (simple and reliable):
+
+If sending fails:
+	1.	Do NOT mark sent_at
+	2.	Revert scheduled_at to NULL
+	3.	Increment a retry counter
+	4.	Give it a retry window (soft backoff)
+
+Why
+	•	Coordinator will pick it up again in next cycles
+	•	Avoids dead emails
+	•	Avoids infinite loops
+	•	Keeps all logic in the same pipeline
+
+Example
+
+try {
+  await mailer.sendEmail(...)
+  mark sent_at = NOW()
+} catch (err) {
+  const attempts = row.retry_attempts + 1;
+
+  if (attempts >= 3) {
+    await markAsFailed(row.id, err.message); 
+  } else {
+    await db.query(`
+      UPDATE sequence_scheduled_sends
+      SET scheduled_at = NULL,
+          retry_attempts = $1
+      WHERE id = $2
+    `, [attempts, row.id]);
+  }
+}
+
+	•	3 attempts is the safe universal rule
+	•	After 3 failures, notify admin
+	•	Most transient problems fix themselves on retry
+
+Coordinator handles retries naturally
+
+Because scheduled_at goes back to NULL, it enters the FIFO pool again.
+
+⸻
+
+Final Notes from Screenshots
+
+Your settings are ideal for “human sender” mimicry:
+	•	Min = 7 min
+	•	Max = 24 min
+	•	15:00–23:00 sender window
+	•	Client window = 1h after open → 16:00 (client timezone)
+	•	Skip weekends
+
+This creates the exact pattern Gmail loves:
+	•	Regular but not robotic
+	•	Business-hours alignment
+	•	Safe volume flow
+	•	No velocity spikes
+	•	Perfect separation of logic (coordinator schedules, worker sends)
+
+⸻
+
+If you want, I’ll now assemble the complete coordinator file, complete worker file, and schema as final production code your engineer can clone into Replit.

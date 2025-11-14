@@ -1,4 +1,5 @@
 import { addDays, addMinutes } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { computeNextSendSlot } from './smartTiming';
 import type { EhubSettings } from '@shared/schema';
 import { storage } from '../storage';
@@ -12,6 +13,89 @@ import { storage } from '../storage';
  * - Balances sends across timezones
  * - Coordinates with admin/client time windows
  */
+
+// ============================================================================
+// Coordinator Utilities
+// ============================================================================
+
+/**
+ * Check if a date falls on a weekend (Saturday or Sunday)
+ */
+export function isWeekend(date: Date): boolean {
+  const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+  return day === 0 || day === 6;
+}
+
+/**
+ * Check if current time is within admin's active sending window
+ */
+export function inActiveWindow(now: Date, settings: EhubSettings): boolean {
+  const hour = now.getHours();
+  return hour >= settings.adminStartHour && hour < settings.adminEndHour;
+}
+
+/**
+ * Calculate how many coordinator runs are left in today's admin window
+ * Assumes coordinator runs every 5 minutes
+ */
+export function runsLeftInWindow(now: Date, settings: EhubSettings): number {
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const endMinutes = settings.adminEndHour * 60;
+  
+  if (currentMinutes >= endMinutes) return 1;
+  
+  const remainingMinutes = endMinutes - currentMinutes;
+  return Math.ceil(remainingMinutes / 5); // 5-minute coordinator cadence
+}
+
+/**
+ * Check if email can be sent in client's local business hours
+ * Validates:
+ * - Not a weekend (if skipWeekends enabled)
+ * - After opening hour + offset
+ * - Before cutoff hour
+ */
+export function clientWindowAllows(
+  clientLocalTime: Date,
+  recipientBusinessHours: string,
+  recipientTimezone: string,
+  settings: EhubSettings
+): boolean {
+  // Check weekend
+  if (settings.skipWeekends && isWeekend(clientLocalTime)) {
+    return false;
+  }
+  
+  // Parse opening hour from business hours (e.g., "9-17" -> 9)
+  const openHour = parseInt(recipientBusinessHours.split('-')[0]) || 9;
+  
+  // Calculate start and cutoff hours
+  const startHour = openHour + settings.clientWindowStartOffset;
+  const cutoffHour = settings.clientWindowEndHour;
+  
+  const hour = clientLocalTime.getHours();
+  
+  if (hour < startHour) return false;
+  if (hour >= cutoffHour) return false;
+  
+  return true;
+}
+
+/**
+ * Generate random jitter between min and max delay
+ */
+export function randomJitter(minMinutes: number, maxMinutes: number): number {
+  return Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) + minMinutes;
+}
+
+/**
+ * Get start of today (midnight) for daily quota tracking
+ */
+export function getStartOfToday(now: Date): Date {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 export interface QueueSlotRequest {
   // Sequence timing

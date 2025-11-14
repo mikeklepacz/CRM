@@ -1,0 +1,501 @@
+Got it, Mike. Here’s a minimal but complete implementation broken into files you can drop into your Replit project and adapt.
+
+I’ll assume:
+	•	Node.js + pg (node-postgres)
+	•	Optional: luxon for timezone handling
+	•	Tables already exist or will be created from schema.sql below
+
+⸻
+
+File: schema.sql  (baseline, adjust to match what you already have)
+
+-- Global settings (single row for now)
+CREATE TABLE IF NOT EXISTS e_hub_settings (
+  id SERIAL PRIMARY KEY,
+  daily_email_limit INT NOT NULL DEFAULT 50,
+  min_delay_minutes INT NOT NULL DEFAULT 7,
+  max_delay_minutes INT NOT NULL DEFAULT 24,
+  company_start_hour INT NOT NULL DEFAULT 15, -- 24h, server timezone
+  company_end_hour INT NOT NULL DEFAULT 23,
+  client_start_offset_hours INT NOT NULL DEFAULT 1, -- after open
+  client_cutoff_hour INT NOT NULL DEFAULT 16,       -- local client time
+  skip_weekends BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Per sequence delays
+CREATE TABLE IF NOT EXISTS sequence_steps (
+  id SERIAL PRIMARY KEY,
+  sequence_id INT NOT NULL,
+  step_number INT NOT NULL,
+  delay_days INT NOT NULL
+);
+
+-- Recipients
+CREATE TABLE IF NOT EXISTS sequence_recipients (
+  id SERIAL PRIMARY KEY,
+  sequence_id INT NOT NULL,
+  sender_id INT NOT NULL, -- mailbox/user
+  email TEXT NOT NULL,
+  name TEXT,
+  timezone TEXT NOT NULL,            -- IANA zone
+  business_open_hour INT DEFAULT 9,  -- local client time
+  enrolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_step_sent INT DEFAULT 0,
+  last_sent_at TIMESTAMPTZ
+);
+
+-- Scheduled sends
+CREATE TABLE IF NOT EXISTS sequence_scheduled_sends (
+  id SERIAL PRIMARY KEY,
+  sequence_id INT NOT NULL,
+  sender_id INT NOT NULL,     -- mailbox/user
+  recipient_id INT NOT NULL REFERENCES sequence_recipients(id),
+  step_number INT NOT NULL,
+  eligible_at TIMESTAMPTZ NOT NULL,
+  scheduled_at TIMESTAMPTZ,
+  sent_at TIMESTAMPTZ,
+  retry_attempts INT NOT NULL DEFAULT 0,
+  failed BOOLEAN NOT NULL DEFAULT FALSE,
+  fail_reason TEXT
+);
+
+Use your existing IDs/relationships if they differ; the logic won’t change.
+
+⸻
+
+File: config.js
+
+const { Pool } = require('pg');
+const { DateTime } = require('luxon');
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
+
+async function getSettings() {
+  const res = await pool.query('SELECT * FROM e_hub_settings LIMIT 1');
+  if (!res.rows.length) {
+    throw new Error('e_hub_settings row not found');
+  }
+  return res.rows[0];
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function isWeekend(date) {
+  const d = date.getDay(); // 0 Sun, 6 Sat
+  return d === 0 || d === 6;
+}
+
+function inCompanyWindow(now, settings) {
+  const hour = now.getHours();
+  return hour >= settings.company_start_hour && hour < settings.company_end_hour;
+}
+
+function runsLeftInWindow(now, settings) {
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const endMinutes = settings.company_end_hour * 60;
+  if (currentMinutes >= endMinutes) return 1;
+  const remainingMinutes = endMinutes - currentMinutes;
+  return Math.ceil(remainingMinutes / 5); // 5-minute coordinator
+}
+
+function getStartOfToday(now) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// clientLocal: luxon DateTime in client timezone
+function clientWindowAllows(clientLocal, recipient, settings) {
+  if (settings.skip_weekends && (clientLocal.weekday === 6 || clientLocal.weekday === 7)) {
+    return false;
+  }
+
+  const openHour = recipient.business_open_hour ?? 9;
+  const startHour = openHour + settings.client_start_offset_hours;
+  const cutoffHour = settings.client_cutoff_hour;
+
+  const hour = clientLocal.hour;
+  if (hour < startHour) return false;
+  if (hour >= cutoffHour) return false;
+  return true;
+}
+
+module.exports = {
+  pool,
+  getSettings,
+  randomInt,
+  isWeekend,
+  inCompanyWindow,
+  runsLeftInWindow,
+  getStartOfToday,
+  clientWindowAllows,
+  DateTime
+};
+
+
+⸻
+
+File: coordinator.js
+
+const {
+  pool,
+  getSettings,
+  randomInt,
+  isWeekend,
+  inCompanyWindow,
+  runsLeftInWindow,
+  getStartOfToday,
+  clientWindowAllows,
+  DateTime
+} = require('./config');
+
+// senderId = mailbox / human user
+async function coordinatorTick(senderId) {
+  const now = new Date();
+  const settings = await getSettings();
+
+  if (settings.skip_weekends && isWeekend(now)) return;
+  if (!inCompanyWindow(now, settings)) return;
+
+  const startOfToday = getStartOfToday(now);
+
+  // Count emails sent today by this sender
+  const sentRes = await pool.query(
+    `SELECT COUNT(*) AS c
+     FROM sequence_scheduled_sends
+     WHERE sent_at >= $1 AND sender_id = $2`,
+    [startOfToday, senderId]
+  );
+  const sentToday = Number(sentRes.rows[0].c);
+  const remainingCapacity = settings.daily_email_limit - sentToday;
+  if (remainingCapacity <= 0) return;
+
+  const remainingRuns = runsLeftInWindow(now, settings);
+  const batchSize = Math.max(
+    1,
+    Math.min(3, Math.ceil(remainingCapacity / remainingRuns))
+  );
+
+  // Start transaction
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Pull more than batchSize so we can filter for client window.
+    const candidatesLimit = batchSize * 5;
+
+    const candRes = await client.query(
+      `
+      SELECT s.id, s.recipient_id, s.step_number,
+             r.timezone, r.business_open_hour
+      FROM sequence_scheduled_sends s
+      JOIN sequence_recipients r ON r.id = s.recipient_id
+      WHERE s.sender_id = $1
+        AND s.eligible_at <= NOW()
+        AND s.scheduled_at IS NULL
+        AND s.sent_at IS NULL
+        AND s.failed = FALSE
+      ORDER BY s.eligible_at, s.recipient_id, s.step_number, s.id
+      LIMIT $2
+      FOR UPDATE SKIP LOCKED
+      `,
+      [senderId, candidatesLimit]
+    );
+
+    if (!candRes.rows.length) {
+      await client.query('COMMIT');
+      client.release();
+      return;
+    }
+
+    let scheduledCount = 0;
+
+    for (const row of candRes.rows) {
+      if (scheduledCount >= batchSize) break;
+
+      const tz = row.timezone || 'UTC';
+      const clientLocal = DateTime.fromJSDate(now, { zone: tz });
+
+      if (!clientWindowAllows(clientLocal, row, settings)) {
+        // skip this candidate this tick; will be retried on next run
+        continue;
+      }
+
+      const jitterMinutes = randomInt(
+        settings.min_delay_minutes,
+        settings.max_delay_minutes
+      );
+      const scheduledAt = new Date(Date.now() + jitterMinutes * 60_000);
+
+      await client.query(
+        `UPDATE sequence_scheduled_sends
+         SET scheduled_at = $1
+         WHERE id = $2`,
+        [scheduledAt, row.id]
+      );
+
+      scheduledCount += 1;
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    console.error('coordinatorTick error', err);
+    await client.query('ROLLBACK');
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { coordinatorTick };
+
+You’ll call coordinatorTick(senderId) from a 5-minute cron or a Replit scheduled job.
+
+⸻
+
+File: worker.js
+
+const { pool, getSettings } = require('./config');
+
+// mailer must expose: sendEmail({ to, name, stepNumber, sequenceId, recipientId })
+async function workerTick(senderId, mailer) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const dueRes = await client.query(
+      `
+      SELECT s.id, s.sequence_id, s.recipient_id, s.step_number,
+             s.retry_attempts,
+             r.email, r.name
+      FROM sequence_scheduled_sends s
+      JOIN sequence_recipients r ON r.id = s.recipient_id
+      WHERE s.sender_id = $1
+        AND s.scheduled_at IS NOT NULL
+        AND s.sent_at IS NULL
+        AND s.failed = FALSE
+        AND s.scheduled_at <= NOW()
+      ORDER BY s.scheduled_at, s.id
+      LIMIT 5
+      FOR UPDATE SKIP LOCKED
+      `,
+      [senderId]
+    );
+
+    if (!dueRes.rows.length) {
+      await client.query('COMMIT');
+      return;
+    }
+
+    const settings = await getSettings(); // in case you ever want worker-side checks
+
+    for (const row of dueRes.rows) {
+      try {
+        await mailer.sendEmail({
+          to: row.email,
+          name: row.name,
+          stepNumber: row.step_number,
+          sequenceId: row.sequence_id,
+          recipientId: row.recipient_id
+        });
+
+        // Mark sent
+        await client.query(
+          `
+          UPDATE sequence_scheduled_sends
+          SET sent_at = NOW()
+          WHERE id = $1
+          `,
+          [row.id]
+        );
+
+        await client.query(
+          `
+          UPDATE sequence_recipients
+          SET last_step_sent = $1,
+              last_sent_at = NOW()
+          WHERE id = $2
+          `,
+          [row.step_number, row.recipient_id]
+        );
+
+        // Repeat logic: if this step is repeatable, schedule next repeat.
+        // Example: step 4 repeats every 10 days until reply.
+        if (row.step_number === 4) {
+          const repeatIntervalDays = 10; // from UI / DB in real app
+
+          await client.query(
+            `
+            INSERT INTO sequence_scheduled_sends (
+              sequence_id,
+              sender_id,
+              recipient_id,
+              step_number,
+              eligible_at,
+              scheduled_at,
+              sent_at
+            )
+            VALUES ($1, $2, $3, $4, NOW() + ($5 || ' days')::interval, NULL, NULL)
+            `,
+            [
+              row.sequence_id,
+              senderId,
+              row.recipient_id,
+              row.step_number,
+              repeatIntervalDays
+            ]
+          );
+        }
+      } catch (err) {
+        console.error('workerTick send error', err);
+
+        const attempts = row.retry_attempts + 1;
+        if (attempts >= 3) {
+          await client.query(
+            `
+            UPDATE sequence_scheduled_sends
+            SET failed = TRUE,
+                fail_reason = $1,
+                retry_attempts = $2
+            WHERE id = $3
+            `,
+            [err.message.slice(0, 500), attempts, row.id]
+          );
+        } else {
+          // reset scheduled_at so coordinator can re-schedule later
+          await client.query(
+            `
+            UPDATE sequence_scheduled_sends
+            SET scheduled_at = NULL,
+                retry_attempts = $1
+            WHERE id = $2
+            `,
+            [attempts, row.id]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    console.error('workerTick fatal error', err);
+    await client.query('ROLLBACK');
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { workerTick };
+
+You’d run workerTick(senderId, mailer) every minute (or even every 30 seconds). Mailer can be Nodemailer, Gmail API, whatever.
+
+⸻
+
+File: enrollment.js
+
+const { pool } = require('./config');
+
+function addDays(d, days) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  return x;
+}
+
+// recipients = [{ email, name, timezone, business_open_hour }]
+async function enrollRecipients(sequenceId, senderId, recipients) {
+  const stepsRes = await pool.query(
+    `
+    SELECT step_number, delay_days
+    FROM sequence_steps
+    WHERE sequence_id = $1
+    ORDER BY step_number
+    `,
+    [sequenceId]
+  );
+  const steps = stepsRes.rows;
+
+  for (const r of recipients) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const recRes = await client.query(
+        `
+        INSERT INTO sequence_recipients (
+          sequence_id, sender_id, email, name, timezone, business_open_hour, enrolled_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        RETURNING id, enrolled_at
+        `,
+        [
+          sequenceId,
+          senderId,
+          r.email,
+          r.name || null,
+          r.timezone || 'UTC',
+          r.business_open_hour ?? 9
+        ]
+      );
+
+      const recipientId = recRes.rows[0].id;
+      const enrolledAt = new Date(recRes.rows[0].enrolled_at);
+
+      for (const step of steps) {
+        const eligibleAt = addDays(enrolledAt, step.delay_days);
+
+        await client.query(
+          `
+          INSERT INTO sequence_scheduled_sends (
+            sequence_id,
+            sender_id,
+            recipient_id,
+            step_number,
+            eligible_at,
+            scheduled_at,
+            sent_at
+          )
+          VALUES ($1, $2, $3, $4, $5, NULL, NULL)
+          `,
+          [
+            sequenceId,
+            senderId,
+            recipientId,
+            step.step_number,
+            eligibleAt
+          ]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      console.error('enrollRecipients error', err);
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+  }
+}
+
+module.exports = { enrollRecipients };
+
+
+⸻
+
+This gives you:
+	•	FIFO eligibility-based queue
+	•	50/day cap per sender
+	•	Company window + client window + weekend skipping
+	•	Jitter at scheduled_at
+	•	Repeat-step scheduling
+	•	Safe retries with failure tracking
+
+Next natural refinement, once this is running, is observability: a simple email_queue_dashboard view or endpoint that shows:
+	•	pending eligible (unscheduled)
+	•	scheduled but unsent
+	•	sent today / this week
+	•	failed with reasons
+
+That’s where your “feels like Apollo, behaves like a human” layer becomes obvious to anyone using the tool.

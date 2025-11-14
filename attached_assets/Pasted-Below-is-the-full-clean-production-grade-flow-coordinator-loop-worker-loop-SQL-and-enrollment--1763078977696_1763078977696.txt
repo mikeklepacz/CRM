@@ -1,0 +1,310 @@
+Below is the full, clean, production-grade flow: coordinator loop, worker loop, SQL, and enrollment logic. Everything matches your approved architecture, jitter, cadence, FIFO, and weekend rules.
+
+This is the exact design your Replit engineer should implement.
+
+No fluff. Pure logic.
+
+⸻
+
+1. Coordinator Loop (runs every 5 minutes)
+
+Summary
+	•	Runs only inside the active window (15:00–23:00).
+	•	Skips weekends entirely.
+	•	Computes daily remaining sends.
+	•	Computes dynamic batch size.
+	•	Claims eligible rows using FOR UPDATE SKIP LOCKED.
+	•	Applies jitter (7–24 min) to scheduled_at.
+
+Pseudocode
+
+async function coordinatorTick(db, senderId) {
+  const now = new Date();
+
+  // 1. Skip weekends
+  if (isWeekend(now)) return;
+
+  // 2. Check window (15:00–23:00)
+  if (!inActiveWindow(now)) return;
+
+  // 3. Count how many have been sent today
+  const startOfToday = getStartOfToday(now);
+  const sentToday = await db.query(`
+    SELECT COUNT(*) AS c
+    FROM sequence_scheduled_sends
+    WHERE sent_at >= $1 AND sender_id = $2
+  `, [startOfToday, senderId]);
+
+  const remainingCapacity = 50 - Number(sentToday.rows[0].c);
+  if (remainingCapacity <= 0) return;
+
+  // 4. Compute how many runs left today
+  const remainingRuns = runsLeftInWindow(now); // e.g. (23:00 - now) * 12 runs/hour
+
+  // 5. Dynamic batch size
+  const batchSize = Math.max(
+    1,
+    Math.min(
+      3,
+      Math.ceil(remainingCapacity / remainingRuns)
+    )
+  );
+
+  // 6. Select eligible items in a SKIP LOCKED transaction
+  await db.query('BEGIN');
+  const eligible = await db.query(`
+    SELECT id
+    FROM sequence_scheduled_sends
+    WHERE eligible_at <= NOW()
+      AND scheduled_at IS NULL
+      AND sent_at IS NULL
+      AND sender_id = $1
+    ORDER BY eligible_at, recipient_id, step_number, id
+    LIMIT $2
+    FOR UPDATE SKIP LOCKED
+  `, [senderId, batchSize]);
+
+  if (eligible.rows.length === 0) {
+    await db.query('COMMIT');
+    return;
+  }
+
+  // 7. Assign scheduled_at with jitter
+  for (const row of eligible.rows) {
+    const jitterMinutes = randomInt(7, 24);
+    const scheduledAt = new Date(Date.now() + jitterMinutes * 60_000);
+
+    await db.query(`
+      UPDATE sequence_scheduled_sends
+      SET scheduled_at = $1
+      WHERE id = $2
+    `, [scheduledAt, row.id]);
+  }
+
+  await db.query('COMMIT');
+}
+
+You now have a steady, human-like drip.
+
+⸻
+
+2. SQL for Daily Sent Count
+
+SELECT COUNT(*) AS c
+FROM sequence_scheduled_sends
+WHERE sent_at >= $1
+  AND sender_id = $2;
+
+Parameter $1 is startOfToday.
+Parameter $2 is which mailbox/sender is being rate-limited.
+
+This guarantees Gmail-safe 50/day enforcement.
+
+⸻
+
+3. Worker Loop (runs every minute)
+
+Summary
+	•	Finds rows where scheduled_at <= now() and not yet sent.
+	•	Sends them (your email send function).
+	•	Sets sent_at.
+	•	Updates recipient status.
+
+Pseudocode
+
+async function workerTick(db, mailer) {
+  const now = new Date();
+
+  // 1. Load due sends (small batch: e.g., limit 5)
+  const due = await db.query(`
+    SELECT id, recipient_id, step_number
+    FROM sequence_scheduled_sends
+    WHERE scheduled_at IS NOT NULL
+      AND sent_at IS NULL
+      AND scheduled_at <= NOW()
+    ORDER BY scheduled_at, id
+    LIMIT 5
+    FOR UPDATE SKIP LOCKED
+  `);
+
+  if (due.rows.length === 0) return;
+
+  for (const row of due.rows) {
+    await db.query('BEGIN');
+
+    try {
+      // 2. Load recipient metadata
+      const recipient = await db.query(`
+        SELECT email, name
+        FROM sequence_recipients
+        WHERE id = $1
+      `, [row.recipient_id]);
+
+      // 3. Actually send email
+      await mailer.sendEmail({
+        to: recipient.rows[0].email,
+        stepNumber: row.step_number,
+      });
+
+      // 4. Mark send completed
+      await db.query(`
+        UPDATE sequence_scheduled_sends
+        SET sent_at = NOW()
+        WHERE id = $1
+      `, [row.id]);
+
+      // 5. Update recipient status
+      await db.query(`
+        UPDATE sequence_recipients
+        SET last_step_sent = $1,
+            last_sent_at = NOW()
+        WHERE id = $2
+      `, [row.step_number, row.recipient_id]);
+
+      await db.query('COMMIT');
+    } catch (err) {
+      console.error("Send worker error:", err);
+      await db.query('ROLLBACK');
+    }
+  }
+}
+
+Worker is intentionally dumb.
+Zero scheduling logic.
+Just “send if due”.
+
+⸻
+
+4. Enrollment Flow (creating recipients + eligible_at)
+
+Summary
+	•	Insert into sequence_recipients.
+	•	For each step, compute eligible_at = enrolled_at + delayDays.
+	•	Insert row with scheduled_at = NULL.
+
+Pseudocode
+
+async function enrollRecipients(db, sequenceId, recipients) {
+  // Get step delays
+  const steps = await db.query(`
+    SELECT step_number, delay_days
+    FROM sequence_steps
+    WHERE sequence_id = $1
+    ORDER BY step_number
+  `, [sequenceId]);
+
+  for (const r of recipients) {
+    await db.query('BEGIN');
+
+    // 1. Insert recipient
+    const inserted = await db.query(`
+      INSERT INTO sequence_recipients (sequence_id, email, name, enrolled_at)
+      VALUES ($1, $2, $3, NOW())
+      RETURNING id, enrolled_at
+    `, [sequenceId, r.email, r.name]);
+
+    const recipientId = inserted.rows[0].id;
+    const enrolledAt = new Date(inserted.rows[0].enrolled_at);
+
+    // 2. Insert steps
+    for (const step of steps.rows) {
+      const eligibleAt = addDays(enrolledAt, step.delay_days);
+
+      await db.query(`
+        INSERT INTO sequence_scheduled_sends (
+          sequence_id,
+          recipient_id,
+          step_number,
+          eligible_at,
+          scheduled_at,
+          sent_at
+        )
+        VALUES ($1, $2, $3, $4, NULL, NULL)
+      `, [
+        sequenceId,
+        recipientId,
+        step.step_number,
+        eligibleAt
+      ]);
+    }
+
+    await db.query('COMMIT');
+  }
+}
+
+Notes
+	•	No scheduled_at at enrollment.
+	•	No weekend skipping at enrollment.
+	•	Eligibility only.
+
+Coordinator handles all timing.
+
+⸻
+
+5. Utility Functions Required
+
+isWeekend
+
+function isWeekend(date) {
+  const d = date.getDay(); // 0 Sun, 6 Sat
+  return d === 0 || d === 6;
+}
+
+inActiveWindow
+
+function inActiveWindow(now) {
+  const hour = now.getHours();
+  return hour >= 15 && hour < 23;
+}
+
+runsLeftInWindow
+
+function runsLeftInWindow(now) {
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const endMinutes = 23 * 60; // 23:00
+  if (currentMinutes >= endMinutes) return 1;
+
+  const remainingMinutes = endMinutes - currentMinutes;
+  return Math.ceil(remainingMinutes / 5); // 5-minute ticks
+}
+
+addDays
+
+function addDays(d, days) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  return x;
+}
+
+
+⸻
+
+6. Migration Strategy
+
+Your final approved SQL:
+
+UPDATE sequence_scheduled_sends
+SET eligible_at = COALESCE(eligible_at, scheduled_at),
+    scheduled_at = NULL
+WHERE sent_at IS NULL;
+
+Critical:
+	•	Pause coordinator + worker.
+	•	Run migration.
+	•	Resume.
+
+All future timings now governed by coordinator.
+
+⸻
+
+If you want next step:
+
+I can produce a complete file-level architecture:
+	•	coordinator.js
+	•	worker.js
+	•	enrollment.js
+	•	db/schema.sql
+	•	unit tests for jitter & FIFO
+	•	race-condition tests using SKIP LOCKED
+
+Just say so.

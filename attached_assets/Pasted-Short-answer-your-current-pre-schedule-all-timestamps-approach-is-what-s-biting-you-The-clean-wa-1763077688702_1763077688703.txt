@@ -1,0 +1,223 @@
+Short answer: your current “pre-schedule all timestamps” approach is what’s biting you. The clean way is:
+	•	Store when each step becomes eligible (enrolledAt + delay).
+	•	Let the queue coordinator assign the actual send slots day-by-day under the 50/day cap.
+	•	Stop computing far-future scheduledAt timestamps at enrollment.
+
+That kills the 30-day bug, the recalculation nightmare, and most concurrency headaches.
+
+I’ll answer your concrete questions, but I’m going to recommend that structural change as the main fix.
+
+⸻
+
+0. Recommended architecture change (before the micro-questions)
+
+Right now you do this:
+	•	At enrollment: compute exact scheduledAt for all 4 steps and insert into sequence_scheduled_sends.
+
+Instead, do this:
+
+Tables:
+	•	sequence_recipients
+	•	id
+	•	sequence_id
+	•	enrolled_at
+	•	last_step_sent (0–4)
+	•	last_sent_at (nullable)
+	•	sequence_steps
+	•	sequence_id
+	•	step_number
+	•	delay_days (0, 3, 8, 10)
+	•	sequence_scheduled_sends
+	•	id
+	•	recipient_id
+	•	step_number
+	•	eligible_at  ← earliest time this step may be sent
+	•	scheduled_at ← NULL until the coordinator assigns a real slot
+	•	sent_at      ← NULL until actually sent
+
+At enrollment:
+
+For each recipient:
+	•	Insert 4 rows in sequence_scheduled_sends with:
+	•	eligible_at = enrolled_at + stepDelay
+	•	scheduled_at = NULL
+	•	sent_at = NULL
+
+Queue coordinator job (runs hourly or whatever):
+	1.	Compute how many emails this sender has already sent in last 24 hours (sent_at count).
+	2.	Remaining capacity = 50 - used.
+	3.	Select from sequence_scheduled_sends:
+
+SELECT *
+FROM sequence_scheduled_sends
+WHERE eligible_at <= now()
+  AND sent_at IS NULL
+  AND scheduled_at IS NULL
+ORDER BY eligible_at, id
+LIMIT remaining_capacity;
+
+
+	4.	For each selected row:
+	•	Set scheduled_at = now() and send (or enqueue to worker).
+	•	On success: set sent_at = now() and bump last_step_sent/last_sent_at on recipient.
+
+This way:
+	•	No global “queue tail” to juggle at enrollment.
+	•	No 30-day cutoff issue.
+	•	Changing delays is simple: recalc eligible_at for unsent rows and clear scheduled_at.
+
+You’re turning the system from “eager scheduler” into “eligibility + daily allocator”. Much saner.
+
+Now let’s hit your specific questions using that as the north star.
+
+⸻
+
+1. Performance: 700 recipients × 4 steps = 2,800 inserts
+
+2,800 inserts is nothing for Postgres.
+
+Still, do it batched and in a transaction for cleanliness:
+	•	Use one transaction per bulk enrollment.
+	•	Use a multi-row INSERT ... VALUES (...) , (...) , ... or a parameterized bulk insert from Node.
+
+Sequential per-row await insert() will work at your scale, but:
+	•	It’s slower.
+	•	It’s more fragile if something fails in the middle.
+	•	It complicates recovering from partial bulk operations.
+
+So:
+	•	Technically: sequential is fine.
+	•	Practically: batch insert in one transaction is better and easy enough.
+
+⸻
+
+2. Queue tail tracking: where should globalQueueTail live?
+
+If you adopt the eligibility + coordinator model above, you don’t need a global tail at enrollment at all.
+
+The coordinator uses:
+	•	eligible_at
+	•	sent_at
+	•	and the 50/day cap
+
+to decide what to send next.
+
+If you insist on pre-assigning scheduledAt at enrollment, then:
+	•	Never trust a single in-memory globalQueueTail if you have:
+	•	multiple Node instances, or
+	•	other jobs touching the queue.
+
+Safer pattern:
+	•	Have a sender_state table:
+
+sender_state
+-----------
+sender_id
+queue_tail_at
+updated_at
+
+
+	•	When bulk enrolling:
+	•	Start a transaction.
+	•	SELECT queue_tail_at FROM sender_state FOR UPDATE.
+	•	Use that as your initial queueTailTime.
+	•	Generate all scheduledAt values deterministically.
+	•	UPDATE sender_state SET queue_tail_at = <newTail> at the end.
+	•	Commit.
+
+That gives you atomicity. But again: you avoid all of this if you don’t bake scheduledAt up front.
+
+⸻
+
+3. 30-day pre-scheduling window: keep, change, or remove?
+
+The whole “30 days from now” horizon is the source of the cascade bug.
+
+Pros of keeping it:
+	•	Limits how far into the future you commit to a schedule.
+	•	Might be useful if you had insane volume and were worried about endlessly long queues.
+
+Cons:
+	•	Creates edge cases like you saw: R1 fills the horizon and everyone else gets truncated.
+	•	Makes UX weird: “Why does this sequence stop at 30 days even though the steps say 90?”
+
+For your use case (700 recipients, 4 steps, 50/day):
+	•	Remove it and rely on:
+	•	50/day cap
+	•	eligible_at logic
+	•	the coordinator to drip things out.
+
+If you really want a “safety horizon”, make it a soft warning, not a hard cutoff:
+	•	“You’re scheduling sends 90 days into the future. Are you sure?”
+	•	Internally, you still let it schedule.
+
+⸻
+
+4. Bulk-enrolling 700 people with a 50/day limit
+
+What should happen:
+	•	Schedule everything and let the queue naturally build.
+
+You’re modeling a human who says:
+	•	“I can only send 50/day.
+Here is a backlog of people.
+Work through them in order, respecting their delays.”
+
+The correct behavior:
+	•	The queue gets long.
+	•	People see an estimated completion date.
+	•	No one is silently dropped.
+
+Implementation advice:
+	•	Schedule all eligibility rows (eligible_at) for all 700 × 4 = 2,800.
+	•	The coordinator sends whatever is eligible now, up to 50/day.
+	•	Others wait until eligible_at arrives + capacity exists.
+
+UX niceties you can add:
+	•	Show a small banner: “At 50/day, this sequence will complete in ≈ X days.”
+	•	Maybe warn if backlog > N days.
+
+But don’t cut off scheduling just because volume is large. That defeats the purpose of automation.
+
+⸻
+
+5. Recalculation when delays change [0,3,8,10] → [0,2,5,7]
+
+With your current “hard pre-scheduled scheduledAt” approach, this is a nightmare:
+	•	You must:
+	•	Delete all future scheduled sends (unsent).
+	•	Recompute new scheduledAts in FIFO order.
+	•	Make sure you don’t trample on things already sent.
+
+With the eligibility model:
+	•	scheduled_at is just “when the coordinator actually sent it”.
+	•	Only eligible_at depends on the delay.
+
+When delays change:
+	1.	Update sequence_steps with new delay values.
+	2.	For each unsent step row:
+
+UPDATE sequence_scheduled_sends s
+SET eligible_at = r.enrolled_at + INTERVAL '1 day' * new_delay
+FROM sequence_recipients r
+JOIN sequence_steps step
+  ON step.sequence_id = r.sequence_id
+ AND step.step_number = s.step_number
+WHERE s.sent_at IS NULL
+  AND s.sequence_id = :sequenceId;
+
+
+	3.	Clear any scheduled_at for unsent rows if you were pre-setting it.
+	4.	The coordinator now uses the updated eligible_at values.
+
+No re-looping over recipients in Node. One SQL UPDATE does it.
+
+If you insist on the old “timestamp scheduling at enrollment” design, your current sequential approach is fine for your scale; it’s just unnecessary complexity you don’t need.
+
+⸻
+
+What I’d tell the Replit dev, in one paragraph
+
+We’re switching from pre-scheduling exact send times to an eligibility-based model. For each recipient and step, we store eligible_at (enrolled_at + delay) and let the queue coordinator assign actual send times day-by-day under a hard cap of 50 emails per 24 hours from this mailbox. All emails—new and follow-up—share this single pool. The coordinator selects unsent rows where eligible_at <= now() and scheduled_at IS NULL, in FIFO order, up to the remaining capacity. Changing step delays just recalculates eligible_at for unsent rows; we never have to rebuild a giant timestamp schedule.
+
+If you want, next step I can lay out the exact Postgres schema and the coordinator’s SQL queries and pseudocode.
