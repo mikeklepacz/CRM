@@ -45,8 +45,8 @@ export async function resolveAdminWindow(
     timezone,
     startHour: ehubSettings?.sendingHoursStart ?? 6,
     endHour: ehubSettings?.sendingHoursEnd ?? 23,
-    // Already stored as hours in database (e.g., 1.00 = 1 hour after opening)
-    clientWindowStartOffset: parseFloat(ehubSettings?.clientWindowStartOffset?.toString() ?? '1.00'),
+    // Convert minutes to hours (stored as 60 minutes = 1 hour)
+    clientWindowStartOffset: parseFloat(ehubSettings?.clientWindowStartOffset?.toString() ?? '60') / 60,
     clientWindowEndHour: ehubSettings?.clientWindowEndHour ?? 14,
     skipWeekends: ehubSettings?.skipWeekends ?? false,
   };
