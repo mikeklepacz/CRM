@@ -33,39 +33,78 @@ export async function analyzeCallTranscript(conversationId: string): Promise<voi
       .map(t => `${t.role === 'agent' ? 'AI Agent' : 'Customer'}: ${t.message}`)
       .join('\n');
 
-    // Call OpenAI to analyze the transcript
-    const prompt = `Analyze this sales call transcript for context.
+    // Get Aligner assistant for call analysis
+    const alignerAssistant = await storage.getAssistantBySlug('aligner');
+    if (!alignerAssistant || !alignerAssistant.assistantId) {
+      console.error('Aligner assistant not configured - skipping AI reflection');
+      return;
+    }
+
+    // Build analysis prompt for Aligner
+    const analysisPrompt = `Analyze this sales call transcript for context.
 
 TRANSCRIPT:
 ${transcriptText}
 
-Provide a structured analysis in JSON format with the following fields:
-- summary: A concise summary of the call (2-3 sentences)
-- sentiment: Overall sentiment (positive, neutral, or negative)
-- customerMood: Customer's mood (interested, skeptical, hostile, friendly, indifferent)
-- mainObjection: The primary objection raised by the customer (if any, otherwise null)
-- keyMoment: The critical moment or phrase that influenced the conversation direction
-- agentStrengths: What the AI agent did well in this call
-- lessonLearned: One actionable improvement for future calls
+⚠️ CRITICAL OUTPUT FORMAT:
+You MUST respond with valid JSON containing exactly these fields:
+{
+  "summary": "A concise summary of the call (2-3 sentences)",
+  "sentiment": "positive, neutral, or negative",
+  "customerMood": "interested, skeptical, hostile, friendly, or indifferent",
+  "mainObjection": "The primary objection raised (or null if none)",
+  "keyMoment": "The critical moment or phrase that influenced the conversation",
+  "agentStrengths": "What the AI agent did well in this call",
+  "lessonLearned": "One actionable improvement for future calls"
+}
 
-Return ONLY valid JSON, no markdown formatting.`;
+Return ONLY the JSON object - no markdown code fences, no explanations.`;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert sales call analyst. Analyze transcripts to help improve future sales performance.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.3,
+    console.log(`[AI Reflection] 🤖 Using Aligner assistant for call analysis`);
+
+    // Create thread and run with Aligner
+    const thread = await openai.beta.threads.create({
+      messages: [{ role: 'user', content: analysisPrompt }],
     });
 
-    const responseText = completion.choices[0]?.message?.content || '{}';
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: alignerAssistant.assistantId,
+      response_format: { type: 'json_object' },
+    });
+
+    // Poll for completion (2.5s interval, max 2 minutes)
+    let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    let pollCount = 0;
+    const maxPolls = 48; // 2 minutes max (48 * 2.5s)
+    const POLL_INTERVAL = 2500;
+
+    while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+      pollCount++;
+      
+      if (pollCount >= maxPolls) {
+        throw new Error('[AI Reflection] Timeout: Aligner did not respond within 2 minutes');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    }
+
+    if (runStatus.status !== 'completed') {
+      throw new Error(`[AI Reflection] Aligner run failed with status: ${runStatus.status}`);
+    }
+
+    // Get assistant's response
+    const messages = await openai.beta.threads.messages.list(thread.id);
+    const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
+    
+    if (!assistantMessage) {
+      throw new Error('[AI Reflection] No response from Aligner assistant');
+    }
+
+    const responseText = assistantMessage.content
+      .filter((c: any) => c.type === 'text')
+      .map((c: any) => c.text.value)
+      .join('');
     
     // Parse the AI analysis
     let analysis;

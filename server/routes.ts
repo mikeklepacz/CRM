@@ -16996,60 +16996,11 @@ Use this store information to provide context-aware responses. When helping draf
           console.log('💬 [CHAT] Assistant retained for future use (performance optimization)');
         } catch (error: any) {
           console.error('💬 [CHAT] ⚠️ Assistants API error:', error.message);
-          console.log('💬 [CHAT] Falling back to regular chat completion...');
-          // Fallback to regular chat completion
-          const response = await openai.chat.completions.create({
-            model: 'gpt-4o',
-            messages: [
-              {
-                role: 'system',
-                content: systemInstructions
-              },
-              {
-                role: 'user',
-                content: message
-              }
-            ]
-          });
-
-          assistantMessage = response.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
-          responseId = response.id;
-          model = response.model;
-          tokensUsed = response.usage?.total_tokens || 0;
-          console.log('💬 [CHAT] Fallback response received:', {
-            responseId,
-            model,
-            tokensUsed,
-            responseLength: assistantMessage.length
-          });
+          throw new Error(`Sales Assistant failed: ${error.message}. Please check your knowledge base configuration.`);
         }
       } else {
-        console.log('💬 [CHAT] No vector store - using regular chat completion...');
-        // No vector store - use regular chat completion
-        const response = await openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content: systemInstructions
-            },
-            {
-              role: 'user',
-              content: message
-            }
-          ]
-        });
-
-        assistantMessage = response.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
-        responseId = response.id;
-        model = response.model;
-        tokensUsed = response.usage?.total_tokens || 0;
-        console.log('💬 [CHAT] Chat completion response received:', {
-          responseId,
-          model,
-          tokensUsed,
-          responseLength: assistantMessage.length
-        });
+        console.error('💬 [CHAT] ⚠️ No vector store configured');
+        throw new Error('Knowledge base required. Please upload files to the knowledge base before using the Sales Assistant.');
       }
 
       // Save assistant message
