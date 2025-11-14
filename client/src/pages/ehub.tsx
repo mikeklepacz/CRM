@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import DOMPurify from 'dompurify';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -1020,6 +1021,9 @@ export default function EHub() {
   // Finalize Strategy state - track if textarea has been edited
   const [finalizedStrategyEdit, setFinalizedStrategyEdit] = useState("");
 
+  // Synthetic Email Series Test state
+  const [syntheticPreview, setSyntheticPreview] = useState<Array<{stepNumber: number; subject: string; body: string}> | null>(null);
+
   // Fetch sequences
   const { data: sequences, isLoading } = useQuery<Sequence[]>({
     queryKey: ['/api/sequences'],
@@ -1220,6 +1224,11 @@ export default function EHub() {
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, contactStatusFilter]);
+
+  // Reset synthetic preview when sequence changes
+  useEffect(() => {
+    setSyntheticPreview(null);
+  }, [selectedSequenceId]);
 
   // Fetch selected sequence recipients with filter
   const { data: recipients, isLoading: isLoadingRecipients, error: recipientsError } = useQuery<Recipient[]>({
@@ -1435,6 +1444,25 @@ export default function EHub() {
       toast({
         title: "Follow-up Failed",
         description: error.message || "Unable to send follow-up",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Synthetic Email Series Test mutation
+  const syntheticTestMutation = useMutation({
+    mutationFn: () => apiRequest('POST', `/api/ehub/sequences/${selectedSequenceId}/synthetic-test`),
+    onSuccess: (data: { emails: Array<{stepNumber: number; subject: string; body: string}> }) => {
+      setSyntheticPreview(data.emails);
+      toast({
+        title: "Test Sequence Generated",
+        description: `Generated ${data.emails.length} email previews`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Test Generation Failed",
+        description: error.message || "Unable to generate synthetic emails",
         variant: "destructive",
       });
     },
@@ -2927,6 +2955,58 @@ export default function EHub() {
                   <Trash2 className="w-4 h-4 mr-2" />
                   Nuke Test Data
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* Synthetic Email Series Test */}
+            <Card className="border-destructive/50 bg-destructive/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive">
+                  <TestTube2 className="w-5 h-5" />
+                  Synthetic Email Series Test
+                </CardTitle>
+                <CardDescription>
+                  Preview your entire email sequence with AI-generated content without sending real emails
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button
+                  variant="destructive"
+                  onClick={() => syntheticTestMutation.mutate()}
+                  disabled={!selectedSequenceId || syntheticTestMutation.isPending}
+                  data-testid="button-run-synthetic-test"
+                >
+                  {syntheticTestMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {!syntheticTestMutation.isPending && <TestTube2 className="w-4 h-4 mr-2" />}
+                  {syntheticTestMutation.isPending ? 'Generating...' : 'Run Test Sequence'}
+                </Button>
+
+                {/* Preview results */}
+                {syntheticPreview && syntheticPreview.length > 0 && (
+                  <div className="space-y-4 mt-6">
+                    {syntheticPreview.map((email) => (
+                      <Card key={email.stepNumber} className="border-muted">
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Mail className="w-4 h-4" />
+                            Email Step {email.stepNumber} {email.stepNumber === 1 ? '(Cold Outreach)' : '(Follow-up)'}
+                          </CardTitle>
+                          <div className="text-sm font-medium mt-2">
+                            Subject: <span className="font-normal">{email.subject}</span>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-64 w-full rounded-md border p-4 bg-background">
+                            <div 
+                              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body) }}
+                              data-testid={`preview-email-step-${email.stepNumber}`}
+                            />
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

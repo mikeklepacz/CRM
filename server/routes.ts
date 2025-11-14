@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -20269,6 +20269,126 @@ Output format example:
       }
       console.error('Error saving finalized strategy:', error);
       res.status(500).json({ message: error.message || 'Failed to save finalized strategy' });
+    }
+  });
+
+  // Synthetic Email Series Test - Generate full sequence preview without sending (admin only)
+  app.post('/api/ehub/sequences/:id/synthetic-test', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      
+      // Get sequence with strategy
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+      
+      // Check if sequence has step delays configured
+      if (!sequence.stepDelays || sequence.stepDelays.length === 0) {
+        return res.status(400).json({ message: 'Sequence has no steps configured. Set up step delays first.' });
+      }
+      
+      // Get E-Hub settings for prompt injection, signature, etc.
+      const ehubSettings = await storage.getEhubSettings();
+      if (!ehubSettings) {
+        return res.status(500).json({ message: 'E-Hub settings not configured' });
+      }
+      
+      // Create a temporary test recipient
+      // CRITICAL: Use "SYNTHETIC_TEST_" prefix in ID so queue processors can skip it
+      const testRecipientId = `SYNTHETIC_TEST_${Date.now()}`;
+      const testRecipient = {
+        id: testRecipientId,
+        sequenceId: id,
+        email: 'synthetic-test@synthetic.local',
+        name: 'Synthetic Test Business',
+        link: 'https://example.com',
+        salesSummary: 'Synthetic test data - not real',
+        businessHours: '9:00 AM - 5:00 PM',
+        timezone: 'America/New_York',
+        status: 'paused', // CRITICAL: Prevents scheduler from processing this test recipient
+        currentStep: 0,
+        eligibleAt: new Date('2099-12-31'), // Far future date as additional safeguard
+        scheduledAt: null,
+        nextSendAt: null,
+        threadId: null,
+        messageId: null,
+        repliedAt: null,
+        replyCount: 0,
+        contactedStatus: 'not contacted',
+        trackerStatus: null,
+        createdAt: new Date(),
+      };
+      
+      // Insert test recipient temporarily
+      await storage.createRecipient(testRecipient);
+      
+      try {
+        // Import email generation function
+        const { personalizeEmailWithAI } = await import('./services/emailSender');
+        
+        const generatedEmails: Array<{ stepNumber: number; subject: string; body: string }> = [];
+        
+        // Generate emails for each step sequentially
+        const stepCount = sequence.stepDelays.length;
+        for (let stepIndex = 0; stepIndex < stepCount; stepIndex++) {
+          const stepNumber = stepIndex + 1;
+          
+          // Generate email using the existing AI logic
+          const { subject, body } = await personalizeEmailWithAI(
+            testRecipient as any,
+            { subject: undefined, body: undefined },
+            sequence.strategyTranscript || null,
+            {
+              promptInjection: ehubSettings.promptInjection || '',
+              keywordBin: ehubSettings.keywordBin || '',
+              signature: '', // Use default signature
+            },
+            stepNumber,
+            (sequence as any).finalizedStrategy || null
+          );
+          
+          // Store this email so next step can reference it
+          await storage.createRecipientMessage({
+            recipientId: testRecipientId,
+            sequenceId: id,
+            stepNumber,
+            subject,
+            body,
+            sentAt: new Date(),
+            threadId: null,
+            messageId: null,
+          });
+          
+          // Add to results
+          generatedEmails.push({ stepNumber, subject, body });
+        }
+        
+        // Clean up test data: delete messages first, then recipient
+        const messages = await storage.getRecipientMessages(testRecipientId);
+        for (const message of messages) {
+          await db.delete(sequenceRecipientMessages).where(eq(sequenceRecipientMessages.id, message.id));
+        }
+        await storage.deleteRecipient(testRecipientId);
+        
+        res.json({ emails: generatedEmails });
+      } catch (generationError: any) {
+        // Clean up test recipient and messages on error
+        try {
+          const messages = await storage.getRecipientMessages(testRecipientId);
+          for (const message of messages) {
+            await db.delete(sequenceRecipientMessages).where(eq(sequenceRecipientMessages.id, message.id));
+          }
+          await storage.deleteRecipient(testRecipientId);
+        } catch (cleanupError) {
+          console.error('[SyntheticTest] Failed to clean up test data:', cleanupError);
+        }
+        throw generationError;
+      }
+    } catch (error: any) {
+      console.error('[SyntheticTest] Error generating synthetic emails:', error);
+      res.status(500).json({ message: error.message || 'Failed to generate synthetic email preview' });
     }
   });
 
