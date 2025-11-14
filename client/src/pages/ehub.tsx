@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -23,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
 import { TestTube2, RefreshCw, Reply } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
@@ -968,8 +970,8 @@ export default function EHub() {
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [testEmail, setTestEmail] = useState("");
   const [sheetId, setSheetId] = useState("");
-  const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
-  const [activeTab, setActiveTab] = useState("all-contacts");
+  const [contactedFilter, setContactedFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState("sequences");
   
   // Strategy chat state
   const [strategyMessage, setStrategyMessage] = useState("");
@@ -1027,9 +1029,16 @@ export default function EHub() {
   });
 
   // Fetch sequences
-  const { data: sequences, isLoading } = useQuery<Sequence[]>({
+  const { data: sequences, isLoading, error: sequencesError } = useQuery<Sequence[]>({
     queryKey: ['/api/sequences'],
   });
+
+  // Log errors for debugging
+  useEffect(() => {
+    if (sequencesError) {
+      console.error('[E-Hub] Error loading sequences:', sequencesError);
+    }
+  }, [sequencesError]);
 
   // Fetch E-Hub settings
   const { data: settings, error: settingsError, isError: isSettingsError } = useQuery<EhubSettings>({
@@ -1607,6 +1616,20 @@ export default function EHub() {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (sequencesError) {
+    return (
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Loading E-Hub</AlertTitle>
+          <AlertDescription>
+            {(sequencesError as Error).message || 'Failed to load email sequences'}
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
