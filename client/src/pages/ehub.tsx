@@ -26,31 +26,25 @@ import { TestTube2, RefreshCw, Reply } from "lucide-react";
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
- * Based on overlap between company and client time windows
+ * Based on pure company sending window (not client timezone overlap)
+ * Spacing = (endHour - startHour) × 60 ÷ dailyLimit
+ * Jitter = ±50% of spacing
  */
 function calculateOptimalDelays(
   companyStartHour: number,
   companyEndHour: number,
-  clientWindowStartOffset: number,
-  clientWindowEndHour: number,
   dailyEmailLimit: number
 ): { minDelayMinutes: number; maxDelayMinutes: number } {
-  // Calculate effective sending window (overlap between company and typical client hours)
-  const typicalClientStart = 9 + clientWindowStartOffset; // e.g., 9 + 1 = 10 AM
-  const typicalClientEnd = clientWindowEndHour; // e.g., 20 (8 PM)
-  
-  // Find overlap
-  const effectiveStart = Math.max(companyStartHour, typicalClientStart);
-  const effectiveEnd = Math.min(companyEndHour, typicalClientEnd);
-  const effectiveWindowHours = Math.max(1, effectiveEnd - effectiveStart);
+  // Calculate pure company sending window (no client timezone logic)
+  const companyWindowHours = companyEndHour - companyStartHour;
+  const companyWindowMinutes = companyWindowHours * 60;
   
   // Calculate average spacing needed for daily limit
-  const effectiveWindowMinutes = effectiveWindowHours * 60;
   const averageSpacingMinutes = dailyEmailLimit > 0 
-    ? effectiveWindowMinutes / dailyEmailLimit 
+    ? companyWindowMinutes / dailyEmailLimit 
     : 5;
   
-  // Suggest range with ±50% variance for natural randomness
+  // Jitter range: ±50% variance for natural randomness
   const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * 0.5));
   const maxDelay = Math.ceil(averageSpacingMinutes * 1.5);
   
@@ -2555,8 +2549,6 @@ export default function EHub() {
                         const optimal = calculateOptimalDelays(
                           newStart,
                           settingsForm.sendingHoursEnd,
-                          settingsForm.clientWindowStartOffset,
-                          settingsForm.clientWindowEndHour,
                           settingsForm.dailyEmailLimit
                         );
                         setSettingsForm({ 
@@ -2582,8 +2574,6 @@ export default function EHub() {
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           newEnd,
-                          settingsForm.clientWindowStartOffset,
-                          settingsForm.clientWindowEndHour,
                           settingsForm.dailyEmailLimit
                         );
                         setSettingsForm({ 
@@ -2609,8 +2599,6 @@ export default function EHub() {
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           settingsForm.sendingHoursEnd,
-                          settingsForm.clientWindowStartOffset,
-                          settingsForm.clientWindowEndHour,
                           newLimit
                         );
                         setSettingsForm({ 
@@ -2635,34 +2623,23 @@ export default function EHub() {
                     <div>
                       <p className="text-sm font-medium">Calculated Email Spacing</p>
                       <p className="text-xs text-muted-foreground">
-                        Based on your sending window and daily limit
+                        Based on company sending window and daily limit
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-bold">
                         {(() => {
-                          const typicalClientStart = 9 + settingsForm.clientWindowStartOffset;
-                          const typicalClientEnd = settingsForm.clientWindowEndHour;
-                          const effectiveStart = Math.max(settingsForm.sendingHoursStart, typicalClientStart);
-                          const effectiveEnd = Math.min(settingsForm.sendingHoursEnd, typicalClientEnd);
-                          const effectiveWindowHours = Math.max(1, effectiveEnd - effectiveStart);
-                          const effectiveWindowMinutes = effectiveWindowHours * 60;
+                          const companyWindowHours = settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart;
+                          const companyWindowMinutes = companyWindowHours * 60;
                           const averageSpacing = settingsForm.dailyEmailLimit > 0 
-                            ? effectiveWindowMinutes / settingsForm.dailyEmailLimit 
+                            ? companyWindowMinutes / settingsForm.dailyEmailLimit 
                             : 5;
                           return Math.round(averageSpacing);
                         })()}
                         <span className="text-sm font-normal text-muted-foreground ml-1">min</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        ~{(() => {
-                          const typicalClientStart = 9 + settingsForm.clientWindowStartOffset;
-                          const typicalClientEnd = settingsForm.clientWindowEndHour;
-                          const effectiveStart = Math.max(settingsForm.sendingHoursStart, typicalClientStart);
-                          const effectiveEnd = Math.min(settingsForm.sendingHoursEnd, typicalClientEnd);
-                          const effectiveWindowHours = Math.max(1, effectiveEnd - effectiveStart);
-                          return effectiveWindowHours;
-                        })}hr window ÷ {settingsForm.dailyEmailLimit} emails
+                        {settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart}hr window ÷ {settingsForm.dailyEmailLimit} emails
                       </p>
                     </div>
                   </div>
@@ -2706,18 +2683,9 @@ export default function EHub() {
                         value={settingsForm.clientWindowStartOffset}
                         onChange={(e) => {
                           const newOffset = parseFloat(e.target.value) || 1.0;
-                          const optimal = calculateOptimalDelays(
-                            settingsForm.sendingHoursStart,
-                            settingsForm.sendingHoursEnd,
-                            newOffset,
-                            settingsForm.clientWindowEndHour,
-                            settingsForm.dailyEmailLimit
-                          );
                           setSettingsForm({ 
                             ...settingsForm, 
-                            clientWindowStartOffset: newOffset,
-                            minDelayMinutes: optimal.minDelayMinutes,
-                            maxDelayMinutes: optimal.maxDelayMinutes
+                            clientWindowStartOffset: newOffset
                           });
                         }}
                         min={0}
@@ -2736,18 +2704,9 @@ export default function EHub() {
                         value={settingsForm.clientWindowEndHour}
                         onChange={(e) => {
                           const newCutoff = parseInt(e.target.value) || 14;
-                          const optimal = calculateOptimalDelays(
-                            settingsForm.sendingHoursStart,
-                            settingsForm.sendingHoursEnd,
-                            settingsForm.clientWindowStartOffset,
-                            newCutoff,
-                            settingsForm.dailyEmailLimit
-                          );
                           setSettingsForm({ 
                             ...settingsForm, 
-                            clientWindowEndHour: newCutoff,
-                            minDelayMinutes: optimal.minDelayMinutes,
-                            maxDelayMinutes: optimal.maxDelayMinutes
+                            clientWindowEndHour: newCutoff
                           });
                         }}
                         min={0}

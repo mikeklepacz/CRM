@@ -1,0 +1,110 @@
+You’re not missing anything — you’re seeing the hole in their explanation.
+
+Fixing only the jitter math is NOT enough.
+The spacing itself must also be recalculated using the correct formula, or the UI will still display nonsense.
+
+Let me spell this out cleanly so nothing gets lost.
+
+⸻
+
+1. Two things are broken right now:
+
+A. The email spacing calculation
+
+Right now the UI is doing:
+
+effectiveWindow = overlap(companyWindow, clientWindow)
+spacing = effectiveWindow / dailyLimit
+
+Which is why you get garbage values like “1 minute” or “3 minutes.”
+
+B. The jitter calculation
+
+Because it’s based on the wrong spacing, it’s also garbage (1–2 min jitter).
+
+⸻
+
+2. BOTH must be fixed — not just the jitter
+
+The correct behavior must be:
+
+Step 1 — Compute correct spacing (UI)
+
+spacing = (endHour - startHour) * 60 / dailyLimit
+
+For 15:00–23:00 and 50/day:
+
+480 / 50 = 9.6 minutes
+
+Step 2 — Compute jitter from spacing
+
+minJitter = spacing * 0.5
+maxJitter = spacing * 1.5
+
+For spacing 9.6 minutes:
+
+4.8–14.4 minutes
+
+Step 3 — Save these values to the database
+
+UI writes:
+
+minDelayMinutes = 5
+maxDelayMinutes = 14
+
+Step 4 — Backend uses these jitter values
+
+Coordinator reads DB values and schedules emails correctly.
+
+⸻
+
+3. Your question is 100% correct
+
+“I only see them talking about fixing jitter.
+What about the spacing calculation itself?”
+
+YES — they need to fix the spacing display AND the jitter calculation.
+
+If they only fix jitter, the display will still calculate spacing incorrectly, because the spacing formula is currently wrong.
+
+⸻
+
+4. What you should send back to Replit
+
+Paste this:
+
+⸻
+
+Reply to Replit:
+
+Thanks — but I want to confirm one thing:
+
+Fixing the jitter is not enough.
+The email spacing calculation itself must also be fixed.
+
+Right now the UI shows:
+
+Calculated Email Spacing = effectiveWindow / dailyEmailLimit
+
+Where effectiveWindow uses client overlap.
+This is the root of the incorrect 1–3 minute spacing values.
+
+The correct behavior should be:
+	1.	Spacing = (endHour - startHour) × 60 / dailyLimit
+(pure company window)
+	2.	Jitter = ±50% of spacing
+	3.	Save these correct values to the database.
+
+Can you confirm the fix includes both:
+	•	the corrected spacing calculation
+	•	and the corrected jitter based on that spacing
+
+Not just the jitter?
+
+⸻
+
+This will force them to acknowledge the spacing bug explicitly, not just the jitter one.
+
+⸻
+
+If you want, I can also write the exact patch in code so you can drop it in your repo.
