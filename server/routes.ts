@@ -27,6 +27,7 @@ import OpenAI from "openai";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
 import { recalculateAllPendingRecipients } from "./services/queueCoordinator";
+import { rescheduleAllPendingSends } from "./services/rescheduleCoordinator";
 import {
   insertConversationSchema,
   insertProjectSchema,
@@ -19710,15 +19711,22 @@ Use this store information to provide context-aware responses. When helping draf
 
       const settings = await storage.updateEhubSettings(updates);
       
-      // Recalculate all pending recipient send times based on new settings
-      console.log('[EHub Settings] Settings updated - triggering queue recalculation');
-      try {
-        const recalcCount = await recalculateAllPendingRecipients(settings);
-        console.log(`[EHub Settings] ✅ Queue recalculated: ${recalcCount} recipients updated`);
-      } catch (recalcError: any) {
-        console.error('[EHub Settings] ⚠️ Queue recalculation failed:', recalcError.message);
-        // Don't fail the settings update if recalculation fails
-      }
+      // Trigger async reschedule job to clear scheduled_at (preserves eligible_at)
+      // Coordinator will naturally reschedule using new settings on next tick
+      console.log('[EHub Settings] Settings updated - triggering queue reschedule');
+      
+      // Fire and forget - don't wait for reschedule to complete
+      rescheduleAllPendingSends(settings)
+        .then((result) => {
+          if (result.success) {
+            console.log(`[EHub Settings] ✅ Queue rescheduled: ${result.totalProcessed} sends cleared`);
+          } else {
+            console.error(`[EHub Settings] ⚠️ Queue reschedule failed: ${result.errorLog}`);
+          }
+        })
+        .catch((error) => {
+          console.error('[EHub Settings] ⚠️ Queue reschedule error:', error.message);
+        });
       
       res.json(settings);
     } catch (error: any) {

@@ -1381,6 +1381,19 @@ export const sequenceScheduledSends = pgTable("sequence_scheduled_sends", {
   uniqueIndex("idx_scheduled_sends_unique").on(table.recipientId, table.stepNumber, table.repeatIndex),
 ]);
 
+// Reschedule jobs - track background reschedule operations when global settings change
+export const rescheduleJobs = pgTable("reschedule_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  status: varchar("status", { length: 50 }).notNull().default('running'), // 'running', 'completed', 'failed'
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  totalProcessed: integer("total_processed").default(0), // Number of sends rescheduled
+  errorLog: text("error_log"), // Error message if job failed
+  settingsSnapshot: jsonb("settings_snapshot"), // Snapshot of settings used for reschedule
+}, (table) => [
+  index("idx_reschedule_jobs_status").on(table.status),
+  index("idx_reschedule_jobs_started_at").on(table.startedAt),
+]);
 
 export const insertSequenceSchema = createInsertSchema(sequences).omit({
   id: true,

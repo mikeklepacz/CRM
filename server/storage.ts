@@ -3969,6 +3969,39 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  async clearScheduledAtForPendingSends(imminentThreshold: Date): Promise<number> {
+    // Clear scheduled_at for all pending sends (except imminent ones)
+    // This allows coordinator to reschedule them with new settings
+    // Preserves eligible_at (sequence logic intact)
+    
+    // Step 1: Clear scheduled sends
+    const updated = await db
+      .update(sequenceScheduledSends)
+      .set({ 
+        scheduledAt: null,
+        jitterMinutes: null
+      })
+      .where(and(
+        eq(sequenceScheduledSends.status, 'pending'),
+        or(
+          isNull(sequenceScheduledSends.scheduledAt),
+          gte(sequenceScheduledSends.scheduledAt, imminentThreshold)
+        )
+      ))
+      .returning({ recipientId: sequenceScheduledSends.recipientId });
+    
+    // Step 2: Clear nextSendAt for affected recipients (critical for coordinator to reschedule)
+    if (updated.length > 0) {
+      const recipientIds = [...new Set(updated.map(r => r.recipientId))];
+      await db
+        .update(sequenceRecipients)
+        .set({ nextSendAt: null })
+        .where(inArray(sequenceRecipients.id, recipientIds));
+    }
+    
+    return updated.length;
+  }
+
   async deleteRecipientScheduledSends(recipientId: string): Promise<number> {
     // Only delete pending sends - preserve sent records for audit trail
     const deleted = await db
