@@ -219,6 +219,12 @@ export async function personalizeEmailWithAI(
     throw new Error('[EmailAI] CRITICAL: No OpenAI API key configured. Email queue cannot operate without AI generation.');
   }
 
+  // Get Aligner assistant for E-Hub email generation
+  const alignerAssistant = await storage.getAssistantBySlug('aligner');
+  if (!alignerAssistant || !alignerAssistant.assistantId) {
+    throw new Error('[EmailAI] CRITICAL: Aligner assistant not configured. E-Hub requires Aligner for email generation.');
+  }
+
   try {
     const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
 
@@ -396,41 +402,92 @@ ${recipientContext}
 Generate a SHORT follow-up email. Remember: Subject must be "Re: [original subject]" for threading.`.trim();
     }
 
-    const userPrompt = stepNumber === 1 
-      ? 'Generate a cold outreach email for this recipient. Output format:\n\nSubject: [subject line here]\n\n[email body HTML only - do NOT repeat the subject line in the body]'
-      : `Generate a SHORT follow-up email (step ${stepNumber}). Output format:\n\nSubject: Re: [use EXACT subject from Email 1]\n\n[brief follow-up body - do NOT repeat the intro]`;
+    // Combine system prompt + user prompt into single message for Assistants API
+    const combinedPrompt = `${systemPrompt}
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.8,
-      max_tokens: stepNumber === 1 ? 500 : 300, // Shorter for follow-ups
+${stepNumber === 1 
+  ? 'Generate a cold outreach email for this recipient.' 
+  : `Generate a SHORT follow-up email (step ${stepNumber}).`
+}
+
+⚠️ CRITICAL OUTPUT FORMAT:
+You MUST respond with valid JSON containing exactly these fields:
+{
+  "subject": "email subject line here",
+  "body": "email body in HTML format"
+}
+
+${stepNumber === 1 
+  ? '- subject: Should be 3-5 words, ≤35 characters, never all caps or excessive punctuation'
+  : '- subject: MUST be "Re: [original subject]" to maintain email threading'
+}
+- body: HTML formatted content using <p></p> tags and <a> tags for links
+- Do NOT include the subject in the body
+- Do NOT wrap response in markdown code fences
+- Return ONLY the JSON object`;
+
+    // Create thread and run with Aligner assistant
+    console.log('[EmailAI] 🤖 Using Aligner assistant for email generation - Step', stepNumber);
+    
+    const thread = await openai.beta.threads.create({
+      messages: [{ role: 'user', content: combinedPrompt }],
     });
 
-    const generatedContent = response.choices[0]?.message?.content || '';
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: alignerAssistant.assistantId,
+      response_format: { type: 'json_object' },
+    });
+
+    // Poll for completion with 2.5s interval (max 5 minutes)
+    let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    let pollCount = 0;
+    const maxPolls = 120; // 5 minutes max (120 * 2.5s)
+    const POLL_INTERVAL = 2500; // 2.5 seconds
+
+    while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+      pollCount++;
+      
+      if (pollCount >= maxPolls) {
+        throw new Error('[EmailAI] Timeout: Aligner assistant did not respond within 5 minutes');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    }
+
+    if (runStatus.status !== 'completed') {
+      throw new Error(`[EmailAI] Aligner assistant run failed with status: ${runStatus.status}`);
+    }
+
+    // Get the assistant's response
+    const messages = await openai.beta.threads.messages.list(thread.id);
+    const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
     
-    // Parse subject and body from response
-    // Expected format: Subject: ... \n\n [body]
-    const subjectMatch = generatedContent.match(/Subject:\s*(.+?)(\n|$)/i);
-    const bodyMatch = generatedContent.match(/Body:\s*([\s\S]+)/i) || 
-                      generatedContent.match(/^(?:Subject:.*?\n\n)?([\s\S]+)/);
+    if (!assistantMessage) {
+      throw new Error('[EmailAI] No response from Aligner assistant');
+    }
 
-    let subject = subjectMatch?.[1]?.trim() || 'Hemp Wick Partnership Opportunity';
-    let body = bodyMatch?.[1]?.trim() || generatedContent;
+    const responseText = assistantMessage.content
+      .filter((c: any) => c.type === 'text')
+      .map((c: any) => c.text.value)
+      .join('');
 
-    // Clean HTML tags from subject line (AI sometimes adds </p> or other tags)
-    subject = subject.replace(/<[^>]*>/g, '').trim();
+    // Parse JSON response
+    let emailData: { subject?: string; body?: string };
+    try {
+      emailData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('[EmailAI] Failed to parse JSON response:', responseText);
+      throw new Error('[EmailAI] Aligner assistant returned invalid JSON format');
+    }
 
-    // Clean up markdown code fences from body (AI sometimes wraps in ```html)
-    body = body.replace(/^```html\s*/i, '').trim();
-    body = body.replace(/\s*```$/i, '').trim();
-    
-    // Clean up any extra formatting and accidental subject duplicates
-    body = body.replace(/^Body:\s*/i, '').trim();
-    body = body.replace(/^<p>\s*Subject:.*?<\/p>\s*/i, '').trim();
+    // Validate required fields
+    if (!emailData.subject || !emailData.body) {
+      throw new Error('[EmailAI] Aligner assistant response missing subject or body');
+    }
+
+    let subject = emailData.subject.trim();
+    let body = emailData.body.trim();
 
     // Add signature if provided
     if (settings.signature) {

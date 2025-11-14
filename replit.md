@@ -41,7 +41,10 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Commission Logic**: 25% for first 6 months post-claim, then 10%, based on order date (`commissionDate`).
 - **Unified Status Color System**: Status dropdown and table rows use a single source (`useCustomTheme` hook).
 - **Debug Logging**: Centralized utility (`lib/debug.ts`) for structured logging.
-- **⚠️ CRITICAL AI ARCHITECTURE RULE**: NEVER USE VANILLA CHATGPT (`openai.chat.completions.create()`). Always use OpenAI Assistants API with specialized knowledge bases. Generic ChatGPT responses are unacceptable - all AI operations MUST leverage assistant knowledge bases (e.g., `asst_H3RlcWO2lTuGnFvHI47elI8d`) for quality, consistency, and access to curated documentation. No fallbacks to vanilla chat allowed.
+- **⚠️ CRITICAL AI ARCHITECTURE RULE**: NEVER USE VANILLA CHATGPT (`openai.chat.completions.create()`). Always use OpenAI Assistants API with specialized knowledge bases. Generic ChatGPT responses are unacceptable - all AI operations MUST leverage assistant knowledge bases for quality, consistency, and access to curated documentation. No fallbacks to vanilla chat allowed. ONLY EXCEPTION: Store data parsing for DBA operations (automated data extraction from raw text).
+- **OpenAI Assistant Architecture**: System uses two specialized assistants with distinct purposes:
+  - **Aligner** (`asst_H3RlcWO2lTuGnFvHI47elI8d`): Primary AI for E-Hub (email generation, strategy chat, campaign brief synthesis), call transcript analysis (considers Wick Coach's opinion + its own), and knowledge base management (proposals, edits, version control).
+  - **Wick Coach / Sales Assistant** (`asst_E90xejxvuX9yjbzJH03jevm4`): Embedded sales assist module in store details card, provides first-pass call analysis opinions to Aligner for comprehensive evaluation.
 - **Sales Assistant Architecture**: User's OpenAI API key stored securely, knowledge base files uploaded to OpenAI with metadata in PostgreSQL, utilizing the Assistants API with file search.
 - **KB System Architecture**: Three tables (`kb_files`, `kb_file_versions`, `kb_change_proposals`), custom diff algorithm, standalone management UI, and API routes.
 - **Database Migrations**: Manual SQL migrations.

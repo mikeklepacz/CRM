@@ -20192,6 +20192,12 @@ Based on the conversation, help the user design an effective email sequence that
         return res.status(400).json({ message: 'No strategy messages to finalize. Start a conversation first.' });
       }
       
+      // Get Aligner assistant for strategy synthesis
+      const alignerAssistant = await storage.getAssistantBySlug('aligner');
+      if (!alignerAssistant || !alignerAssistant.assistantId) {
+        return res.status(400).json({ message: 'Aligner assistant not configured' });
+      }
+
       // Get OpenAI settings
       const openaiSettings = await storage.getOpenaiSettings();
       if (!openaiSettings || !openaiSettings.apiKey) {
@@ -20207,8 +20213,8 @@ Based on the conversation, help the user design an effective email sequence that
         conversationContext += `${role}: ${msg.content}\n\n`;
       });
       
-      // Call OpenAI to distill the conversation into a brief
-      const systemPrompt = `You are a campaign strategy distillation expert. Your job is to read an entire strategy conversation and distill it into a concise, actionable campaign brief.
+      // Build synthesis prompt for Aligner
+      const synthesisPrompt = `You are a campaign strategy distillation expert. Your job is to read an entire strategy conversation and distill it into a concise, actionable campaign brief.
 
 REQUIREMENTS:
 - 200-300 words maximum
@@ -20232,23 +20238,60 @@ Output format example:
 [Core points to emphasize]
 
 ## Constraints
-[What to avoid or requirements]`;
+[What to avoid or requirements]
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: conversationContext },
-        ],
-        temperature: 0.3, // Lower temperature for consistency
-        max_tokens: 500,
+${conversationContext}`;
+
+      console.log('[E-Hub Finalize] 🤖 Using Aligner assistant to synthesize Campaign Brief');
+
+      // Create thread and run with Aligner
+      const thread = await openai.beta.threads.create({
+        messages: [{ role: 'user', content: synthesisPrompt }],
       });
+
+      const run = await openai.beta.threads.runs.create(thread.id, {
+        assistant_id: alignerAssistant.assistantId,
+      });
+
+      // Poll for completion (2.5s interval, max 2 minutes)
+      let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      let pollCount = 0;
+      const maxPolls = 48; // 2 minutes max (48 * 2.5s)
+      const POLL_INTERVAL = 2500;
+
+      while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+        pollCount++;
+        
+        if (pollCount >= maxPolls) {
+          throw new Error('Finalize strategy timeout - Aligner did not respond within 2 minutes');
+        }
+
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+        runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      }
+
+      if (runStatus.status !== 'completed') {
+        throw new Error(`Aligner assistant run failed with status: ${runStatus.status}`);
+      }
+
+      // Get assistant's response
+      const messages = await openai.beta.threads.messages.list(thread.id);
+      const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
       
-      const finalizedBrief = completion.choices[0]?.message?.content?.trim() || '';
+      if (!assistantMessage) {
+        throw new Error('No response from Aligner assistant');
+      }
+
+      const finalizedBrief = assistantMessage.content
+        .filter((c: any) => c.type === 'text')
+        .map((c: any) => c.text.value)
+        .join('').trim();
       
       if (!finalizedBrief) {
         throw new Error('Failed to generate finalized strategy');
       }
+
+      console.log('[E-Hub Finalize] ✅ Campaign Brief synthesized:', finalizedBrief.substring(0, 100) + '...');
       
       // Return the brief without saving (let user edit first)
       res.json({ finalizedStrategy: finalizedBrief });
