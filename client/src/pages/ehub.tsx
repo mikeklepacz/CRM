@@ -1017,9 +1017,8 @@ export default function EHub() {
     skipWeekends: true,
   });
 
-  // Finalize Strategy state
-  const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
-  const [finalizedStrategyDraft, setFinalizedStrategyDraft] = useState("");
+  // Finalize Strategy state - track if textarea has been edited
+  const [finalizedStrategyEdit, setFinalizedStrategyEdit] = useState("");
 
   // Fetch sequences
   const { data: sequences, isLoading } = useQuery<Sequence[]>({
@@ -1078,8 +1077,8 @@ export default function EHub() {
       return await apiRequest("POST", `/api/sequences/${selectedSequenceId}/finalize-strategy`);
     },
     onSuccess: (data: any) => {
-      setFinalizedStrategyDraft(data.finalizedStrategy);
-      setFinalizeDialogOpen(true);
+      setFinalizedStrategyEdit(data.finalizedStrategy);
+      saveFinalizedStrategyMutation.mutate(data.finalizedStrategy);
     },
     onError: (error: any) => {
       toast({
@@ -1098,16 +1097,15 @@ export default function EHub() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
-      setFinalizeDialogOpen(false);
       toast({
         title: "Success",
-        description: "Campaign strategy finalized successfully",
+        description: "Campaign strategy saved successfully",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to save finalized strategy",
+        description: error.message || "Failed to save strategy",
         variant: "destructive",
       });
     },
@@ -1180,11 +1178,11 @@ export default function EHub() {
     }
   }, [strategyTranscript]);
 
-  // Reset finalized strategy draft when sequence changes
+  // Sync edit state when sequence changes or data loads
   useEffect(() => {
-    setFinalizedStrategyDraft("");
-    setFinalizeDialogOpen(false);
-  }, [selectedSequenceId]);
+    const current = sequences?.find(s => s.id === selectedSequenceId);
+    setFinalizedStrategyEdit((current as any)?.finalizedStrategy || "");
+  }, [selectedSequenceId, sequences]);
 
   // Load step delays and repeat checkbox when sequence changes
   useEffect(() => {
@@ -2183,44 +2181,24 @@ export default function EHub() {
                   <CardHeader>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <CardTitle>AI Strategy Chat</CardTitle>
-                          <Badge variant={(currentSequence as any)?.finalizedStrategy ? 'default' : 'outline'} data-testid="badge-strategy-status">
-                            {(currentSequence as any)?.finalizedStrategy ? 'Finalized' : 'Draft'}
-                          </Badge>
-                        </div>
+                        <CardTitle>AI Strategy Chat</CardTitle>
                         <CardDescription>
                           Discuss your campaign goals, target audience, and messaging with the AI
                         </CardDescription>
                       </div>
-                      {(currentSequence as any)?.finalizedStrategy ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setFinalizedStrategyDraft((currentSequence as any).finalizedStrategy);
-                            setFinalizeDialogOpen(true);
-                          }}
-                          data-testid="button-edit-finalized-strategy"
-                        >
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit Strategy
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => generateFinalizedStrategyMutation.mutate()}
-                          disabled={!strategyTranscript?.messages?.length || generateFinalizedStrategyMutation.isPending}
-                          data-testid="button-finalize-strategy"
-                        >
-                          {generateFinalizedStrategyMutation.isPending ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Sparkles className="w-4 h-4 mr-2" />
-                          )}
-                          Finalize Strategy
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        onClick={() => generateFinalizedStrategyMutation.mutate()}
+                        disabled={!strategyTranscript?.messages?.length || generateFinalizedStrategyMutation.isPending}
+                        data-testid="button-finalize-strategy"
+                      >
+                        {generateFinalizedStrategyMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4 mr-2" />
+                        )}
+                        Finalize Strategy
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -2455,6 +2433,56 @@ export default function EHub() {
                         Save Delays
                       </Button>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Campaign Brief Card */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <CardTitle>Campaign Brief</CardTitle>
+                      <Badge variant={(currentSequence as any)?.finalizedStrategy ? 'default' : 'outline'} data-testid="badge-brief-status">
+                        {(currentSequence as any)?.finalizedStrategy ? 'Finalized' : 'Draft'}
+                      </Badge>
+                    </div>
+                    <CardDescription>
+                      AI-generated campaign strategy used for email personalization (saves 90% in token costs)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {!finalizedStrategyEdit ? (
+                      <div className="text-center py-8 text-sm text-muted-foreground">
+                        <p>Click "Finalize Strategy" above to generate your campaign brief from the AI conversation</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <Textarea
+                          value={finalizedStrategyEdit}
+                          onChange={(e) => setFinalizedStrategyEdit(e.target.value)}
+                          placeholder="Your campaign brief will appear here..."
+                          className="min-h-[300px] font-mono text-sm"
+                          data-testid="textarea-campaign-brief"
+                        />
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {finalizedStrategyEdit.split(/\s+/).filter(w => w).length} words
+                          </p>
+                          {finalizedStrategyEdit !== ((currentSequence as any)?.finalizedStrategy || "") && (
+                            <Button
+                              size="sm"
+                              onClick={() => saveFinalizedStrategyMutation.mutate(finalizedStrategyEdit)}
+                              disabled={!finalizedStrategyEdit.trim() || saveFinalizedStrategyMutation.isPending}
+                              data-testid="button-save-brief"
+                            >
+                              {saveFinalizedStrategyMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : null}
+                              Save Changes
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -3296,55 +3324,6 @@ export default function EHub() {
             >
               {addContactsMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Add to Sequence
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Finalize Strategy Dialog */}
-      <Dialog open={finalizeDialogOpen} onOpenChange={setFinalizeDialogOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Finalize Campaign Strategy</DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              Review and edit the AI-generated campaign brief. This concise strategy will be used for all email generation, saving 90% in token costs.
-            </p>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="finalized-strategy">Campaign Brief (200-300 words recommended)</Label>
-              <Textarea
-                id="finalized-strategy"
-                value={finalizedStrategyDraft}
-                onChange={(e) => setFinalizedStrategyDraft(e.target.value)}
-                placeholder="AI will generate a concise campaign brief based on your strategy conversation..."
-                className="min-h-[300px] font-mono text-sm"
-                data-testid="textarea-finalized-strategy"
-              />
-              <p className="text-xs text-muted-foreground">
-                Current length: {finalizedStrategyDraft.split(/\s+/).filter(w => w).length} words
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setFinalizeDialogOpen(false);
-                setFinalizedStrategyDraft("");
-              }}
-              disabled={saveFinalizedStrategyMutation.isPending}
-              data-testid="button-cancel-finalize"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => saveFinalizedStrategyMutation.mutate(finalizedStrategyDraft)}
-              disabled={!finalizedStrategyDraft.trim() || saveFinalizedStrategyMutation.isPending}
-              data-testid="button-save-finalized-strategy"
-            >
-              {saveFinalizedStrategyMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Save Strategy
             </Button>
           </div>
         </DialogContent>
