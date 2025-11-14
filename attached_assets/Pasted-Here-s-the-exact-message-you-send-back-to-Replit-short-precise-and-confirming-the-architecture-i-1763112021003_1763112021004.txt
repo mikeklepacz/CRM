@@ -1,0 +1,49 @@
+Here’s the exact message you send back to Replit — short, precise, and confirming the architecture in a way that keeps everything aligned and avoids misunderstandings.
+
+This message directly addresses their proposed refactor and tells them yes, this is the correct direction, but with the key guardrails preserved.
+
+Copy/paste this to them:
+
+⸻
+
+Response to Replit (architect-level confirmation):
+
+Yes — this is the correct direction for the coordinator.
+The early-return behavior must be removed. The coordinator should always run and always pre-fill the next available window.
+
+Here is the confirmed architecture from my side:
+	1.	Coordinator always runs (every 5 minutes), regardless of time or window.
+	2.	findNextAdminWindowBounds() — correct.
+Next usable window =
+	•	today’s window if not yet started
+	•	tomorrow’s window if today’s window has ended
+	•	skip weekends as configured
+	3.	Batch capacity depends on where we are in the day:
+	•	Inside the window → remaining runs for today
+	•	Outside the window → full window capacity for next day
+	4.	Scheduling anchor is always:
+
+anchor = max(eligible_at, nextAdminWindowStart)
+
+
+	5.	computeNextSendSlot() should be used for:
+	•	applying jitter
+	•	applying client business-hour rules
+	•	enforcing FIFO
+	•	enforcing spacing
+	•	respecting daily limit
+	•	advancing queue tail
+	6.	Only scheduled_at is recalculated. eligible_at must never be altered.
+Eligibility belongs exclusively to step-delays and repeats.
+	7.	Coordinator should pre-fill the entire next window, not only schedule when inside the window.
+This guarantees that the next day starts with a fully prepared send plan.
+	8.	Store jitter values from DB, not calculated client-side.
+UI → DB → coordinator = single source of truth.
+
+This architecture keeps the queue consistent, human-like, predictable, and safe for deliverability while fixing the broken “only schedule when inside the window” behavior.
+
+Let me know when the helper functions are stubbed out — I can validate the logic before you wire them into the coordinator loop.
+
+⸻
+
+If you want, I can generate the exact pseudocode for their implementation so they don’t misinterpret any edge cases.
