@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -1023,6 +1023,13 @@ export default function EHub() {
 
   // Synthetic Email Series Test state
   const [syntheticPreview, setSyntheticPreview] = useState<Array<{stepNumber: number; subject: string; body: string}> | null>(null);
+  const [syntheticStoreContext, setSyntheticStoreContext] = useState<{
+    name: string;
+    link: string | null;
+    salesSummary: string | null;
+    state: string | null;
+    timezone: string;
+  } | null>(null);
 
   // Fetch sequences
   const { data: sequences, isLoading } = useQuery<Sequence[]>({
@@ -1452,11 +1459,21 @@ export default function EHub() {
   // Synthetic Email Series Test mutation
   const syntheticTestMutation = useMutation({
     mutationFn: () => apiRequest('POST', `/api/ehub/sequences/${selectedSequenceId}/synthetic-test`),
-    onSuccess: (data: { emails: Array<{stepNumber: number; subject: string; body: string}> }) => {
+    onSuccess: (data: { 
+      emails: Array<{stepNumber: number; subject: string; body: string}>;
+      storeContext: {
+        name: string;
+        link: string | null;
+        salesSummary: string | null;
+        state: string | null;
+        timezone: string;
+      };
+    }) => {
       setSyntheticPreview(data.emails);
+      setSyntheticStoreContext(data.storeContext);
       toast({
         title: "Test Sequence Generated",
-        description: `Generated ${data.emails.length} email previews`,
+        description: `Generated ${data.emails.length} email previews using: ${data.storeContext.name}`,
       });
     },
     onError: (error: any) => {
@@ -2991,6 +3008,28 @@ export default function EHub() {
                   
                   return (
                     <>
+                      {/* Display store context at the top */}
+                      {syntheticStoreContext && (
+                        <Alert className="bg-muted/50">
+                          <Store className="h-4 w-4" />
+                          <AlertDescription>
+                            <div className="font-medium mb-1">Testing with: {syntheticStoreContext.name}</div>
+                            {syntheticStoreContext.salesSummary && (
+                              <div className="text-xs text-muted-foreground mt-2 whitespace-pre-wrap">
+                                <span className="font-semibold">Sales Summary:</span>
+                                <div className="mt-1 p-2 bg-background rounded border text-foreground">
+                                  {syntheticStoreContext.salesSummary}
+                                </div>
+                              </div>
+                            )}
+                            <div className="text-xs text-muted-foreground mt-2">
+                              {syntheticStoreContext.state && `${syntheticStoreContext.state} • `}
+                              {syntheticStoreContext.timezone}
+                            </div>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      
                       <Button
                         variant="destructive"
                         onClick={() => syntheticTestMutation.mutate()}

@@ -20320,18 +20320,84 @@ ${conversationContext}`;
         return res.status(500).json({ message: 'E-Hub settings not configured' });
       }
       
-      // Create a temporary test recipient
+      // Fetch ONE random real store from Store Database
+      console.log('[SyntheticTest] Fetching random real store from Store Database...');
+      
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      if (!storeSheet) {
+        return res.status(500).json({ message: 'Store Database not configured' });
+      }
+      
+      const storeData = await googleSheets.readSheetData(
+        storeSheet.spreadsheetId,
+        `${storeSheet.sheetName}!A:ZZ`
+      );
+      
+      if (!storeData || storeData.length < 2) {
+        return res.status(500).json({ message: 'No stores found in Store Database' });
+      }
+      
+      // Parse headers and rows
+      const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
+      const rows = storeData.slice(1).filter((row: any[]) => {
+        // Only include rows with valid email addresses
+        const emailIndex = headers.indexOf('email');
+        return emailIndex !== -1 && row[emailIndex] && row[emailIndex].includes('@');
+      });
+      
+      if (rows.length === 0) {
+        return res.status(500).json({ message: 'No valid stores with emails found' });
+      }
+      
+      // Pick ONE random row
+      const randomRow = rows[Math.floor(Math.random() * rows.length)];
+      
+      // Extract data from random store
+      const nameIndex = headers.indexOf('name');
+      const emailIndex = headers.indexOf('email');
+      const stateIndex = headers.indexOf('state');
+      const hoursIndex = headers.indexOf('hours');
+      const linkIndex = headers.indexOf('link');
+      const salesSummaryIndex = headers.indexOf('sales-ready summary');
+      
+      const realName = nameIndex !== -1 ? (randomRow[nameIndex] || 'Unknown Store') : 'Unknown Store';
+      const realLink = linkIndex !== -1 ? (randomRow[linkIndex] || null) : null;
+      const realSalesSummary = salesSummaryIndex !== -1 ? (randomRow[salesSummaryIndex] || null) : null;
+      const realHours = hoursIndex !== -1 ? (randomRow[hoursIndex] || '9:00 AM - 5:00 PM') : '9:00 AM - 5:00 PM';
+      const realState = stateIndex !== -1 ? (randomRow[stateIndex] || null) : null;
+      
+      // Detect timezone from state
+      let timezone = 'America/New_York'; // Default
+      if (realState) {
+        const { detectTimezone } = await import('./services/timezoneHours');
+        const detected = detectTimezone(realState);
+        if (detected) {
+          timezone = detected;
+        }
+      }
+      
+      console.log('[SyntheticTest] Using random real store:', {
+        name: realName,
+        link: realLink,
+        salesSummary: realSalesSummary ? realSalesSummary.substring(0, 100) + '...' : 'none',
+        state: realState,
+        timezone,
+      });
+      
+      // Create a temporary test recipient with REAL store data but FAKE email
       // CRITICAL: Use "SYNTHETIC_TEST_" prefix in ID so queue processors can skip it
       const testRecipientId = `SYNTHETIC_TEST_${Date.now()}`;
+      const testEmail = `synthetic-test-${Date.now()}@test.local`; // Unique fake email
+      
       const testRecipient = {
         id: testRecipientId,
         sequenceId: id,
-        email: 'synthetic-test@synthetic.local',
-        name: 'Synthetic Test Business',
-        link: 'https://example.com',
-        salesSummary: 'Synthetic test data - not real',
-        businessHours: '9:00 AM - 5:00 PM',
-        timezone: 'America/New_York',
+        email: testEmail, // FAKE email - safe from accidental sends
+        name: realName, // REAL name
+        link: realLink, // REAL link
+        salesSummary: realSalesSummary, // REAL sales summary
+        businessHours: realHours, // REAL hours
+        timezone: timezone, // DETECTED timezone
         status: 'paused', // CRITICAL: Prevents scheduler from processing this test recipient
         currentStep: 0,
         eligibleAt: new Date('2099-12-31'), // Far future date as additional safeguard
@@ -20401,7 +20467,17 @@ ${conversationContext}`;
         await storage.deleteRecipientMessages(testRecipientId);
         await storage.removeRecipient(testRecipientId);
         
-        res.json({ emails: generatedEmails });
+        // Return generated emails WITH store context for frontend display
+        res.json({ 
+          emails: generatedEmails,
+          storeContext: {
+            name: realName,
+            link: realLink,
+            salesSummary: realSalesSummary,
+            state: realState,
+            timezone: timezone,
+          }
+        });
       } catch (generationError: any) {
         // Clean up test recipient and messages on error
         try {
