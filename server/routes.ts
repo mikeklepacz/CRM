@@ -20162,6 +20162,112 @@ Based on the conversation, help the user design an effective email sequence that
     }
   });
 
+  // Finalize strategy - distill strategyTranscript into concise brief (admin only)
+  app.post('/api/sequences/:id/finalize-strategy', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check sequence exists
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      // Verify there are strategy messages to distill
+      if (!sequence.strategyTranscript?.messages || sequence.strategyTranscript.messages.length === 0) {
+        return res.status(400).json({ message: 'No strategy messages to finalize' });
+      }
+
+      // Get OpenAI settings
+      const openaiSettings = await storage.getOpenaiSettings();
+      if (!openaiSettings || !openaiSettings.apiKey) {
+        return res.status(400).json({ message: 'OpenAI API key not configured' });
+      }
+
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+
+      // Build prompt to distill the conversation
+      const conversationHistory = sequence.strategyTranscript.messages
+        .map(msg => `${msg.role === 'user' ? 'YOU' : 'ASSISTANT'}: ${msg.content}`)
+        .join('\n\n');
+
+      const systemPrompt = `You are an expert at distilling marketing strategy conversations into concise, actionable campaign briefs.
+
+Your task: Read the entire strategy conversation below and create a single, unified campaign brief (200-300 words maximum).
+
+The brief should be a clear set of instructions for an AI that will generate personalized cold outreach emails. Include:
+- Target audience and their characteristics
+- Campaign goals and objectives
+- Tone and voice guidelines
+- Key value propositions to highlight
+- Any specific constraints or requirements
+- Personalization approach
+
+Write the brief as direct instructions to the AI email generator. Be concise and specific. Remove any contradictions or abandoned ideas from the conversation - only include the FINAL agreed-upon strategy.`;
+
+      const userPrompt = `Here is the full strategy conversation:
+
+${conversationHistory}
+
+Now create a concise campaign brief (200-300 words) that captures the finalized strategy.`;
+
+      // Call OpenAI to generate the finalized strategy
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.3, // Lower temperature for consistency
+        max_tokens: 500,
+      });
+
+      const finalizedStrategy = completion.choices[0]?.message?.content?.trim() || '';
+
+      if (!finalizedStrategy) {
+        throw new Error('Failed to generate finalized strategy');
+      }
+
+      // Return the generated brief for user review/editing (don't save yet)
+      res.json({ finalizedStrategy });
+    } catch (error: any) {
+      console.error('Error finalizing strategy:', error);
+      res.status(500).json({ message: error.message || 'Failed to finalize strategy' });
+    }
+  });
+
+  // Save edited finalized strategy (admin only)
+  app.patch('/api/sequences/:id/finalized-strategy', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Validate finalized strategy
+      const { finalizedStrategy } = z.object({
+        finalizedStrategy: z.string().min(1, 'Finalized strategy cannot be empty'),
+      }).parse(req.body);
+
+      // Check sequence exists
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      // Update sequence with finalized strategy
+      await storage.updateSequence(id, { finalizedStrategy });
+
+      // Get updated sequence
+      const updatedSequence = await storage.getSequence(id);
+
+      res.json({ sequence: updatedSequence });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid data', errors: error.errors });
+      }
+      console.error('Error saving finalized strategy:', error);
+      res.status(500).json({ message: error.message || 'Failed to save finalized strategy' });
+    }
+  });
+
   // Update sequence step delays and auto-generate steps (admin only)
   app.put('/api/sequences/:id/step-delays', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
@@ -20706,6 +20812,118 @@ Based on the conversation, help the user design an effective email sequence that
     } catch (error: any) {
       console.error('Error sending test email:', error);
       res.status(500).json({ message: error.message || 'Failed to send test email' });
+    }
+  });
+
+  // Generate preview of 4-step email sequence WITHOUT sending (admin only)
+  app.post('/api/sequences/:id/preview-emails', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check sequence exists
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+
+      // Verify sequence has either finalized strategy or strategy transcript
+      if (!sequence.finalizedStrategy && (!sequence.strategyTranscript?.messages || sequence.strategyTranscript.messages.length === 0)) {
+        return res.status(400).json({ 
+          message: 'No campaign strategy defined. Please create a strategy or finalize your existing conversation first.' 
+        });
+      }
+
+      // Get E-Hub settings for prompt injection, keyword bin, etc.
+      const settings = await storage.getEhubSettings();
+      if (!settings) {
+        return res.status(500).json({ message: 'E-Hub settings not configured' });
+      }
+
+      // Get a random real contact from the database
+      const { getAllContacts } = await import('./services/ehubContactsService');
+      const contactsResponse = await getAllContacts({ page: 1, pageSize: 1000 });
+      
+      if (!contactsResponse.contacts || contactsResponse.contacts.length === 0) {
+        return res.status(400).json({ message: 'No contacts available for preview. Please add contacts first.' });
+      }
+
+      // Pick a random contact
+      const randomContact = contactsResponse.contacts[Math.floor(Math.random() * contactsResponse.contacts.length)];
+      
+      // Create a temporary recipient object for email generation
+      const mockRecipient = {
+        id: 'preview-recipient',
+        name: randomContact.name,
+        email: randomContact.email,
+        link: randomContact.link || '',
+        businessHours: randomContact.businessHours || 'Not specified',
+        salesSummary: randomContact.salesSummary || 'Not available',
+      };
+
+      // Generate 4 emails sequentially
+      const { personalizeEmailWithAI } = await import('./services/emailSender');
+      const previewEmails: Array<{step: number; subject: string; body: string}> = [];
+      const mockMessages: Array<{stepNumber: number; subject: string; body: string; sentAt: Date}> = [];
+
+      // Loop 4 times (steps 1-4)
+      for (let step = 1; step <= 4; step++) {
+        console.log(`[PreviewEmails] Generating email ${step}/4...`);
+        
+        // Generate email using existing AI logic
+        const generatedEmail = await personalizeEmailWithAI(
+          mockRecipient as any,
+          { subject: sequence.subject, body: sequence.body },
+          sequence.strategyTranscript || null,
+          {
+            promptInjection: settings.promptInjection || undefined,
+            keywordBin: settings.keywordBin || undefined,
+            signature: sequence.signature || undefined,
+            finalizedStrategy: sequence.finalizedStrategy || null
+          },
+          step
+        );
+
+        // For follow-ups, ensure threading with Re: prefix
+        if (step > 1 && previewEmails[0]) {
+          generatedEmail.subject = `Re: ${previewEmails[0].subject}`;
+        }
+
+        // Store for return
+        previewEmails.push({
+          step,
+          subject: generatedEmail.subject,
+          body: generatedEmail.body
+        });
+
+        // Add to mock messages for next iteration context
+        mockMessages.push({
+          stepNumber: step,
+          subject: generatedEmail.subject,
+          body: generatedEmail.body,
+          sentAt: new Date()
+        });
+
+        // Temporarily override storage.getRecipientMessages for the next iteration
+        // This allows each step to see the previous emails as context
+        const originalGetRecipientMessages = storage.getRecipientMessages;
+        storage.getRecipientMessages = async (recipientId: string) => {
+          if (recipientId === 'preview-recipient') {
+            return mockMessages;
+          }
+          return originalGetRecipientMessages(recipientId);
+        };
+      }
+
+      res.json({
+        previewEmails,
+        contact: {
+          name: randomContact.name,
+          email: randomContact.email,
+        }
+      });
+    } catch (error: any) {
+      console.error('Error generating preview emails:', error);
+      res.status(500).json({ message: error.message || 'Failed to generate preview emails' });
     }
   });
 

@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Sparkles } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -1003,6 +1003,15 @@ export default function EHub() {
   // Nuke Test Data state
   const [nukeDialogOpen, setNukeDialogOpen] = useState(false);
 
+  // Finalize Strategy state
+  const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+  const [finalizedStrategyDraft, setFinalizedStrategyDraft] = useState("");
+
+  // Email Preview state  
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewEmails, setPreviewEmails] = useState<Array<{step: number; subject: string; body: string}>>([]);
+  const [previewContact, setPreviewContact] = useState<{name: string; email: string} | null>(null);
+
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
     minDelayMinutes: 1,
@@ -1120,6 +1129,67 @@ export default function EHub() {
       toast({
         title: "Error",
         description: error.message || "Failed to update sequence status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Finalize strategy mutation - calls AI to distill transcript
+  const finalizeStrategyMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/sequences/${selectedSequenceId}/finalize-strategy`, {});
+      return response;
+    },
+    onSuccess: (data: any) => {
+      setFinalizedStrategyDraft(data.finalizedStrategy);
+      setFinalizeDialogOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to finalize strategy",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Save finalized strategy mutation
+  const saveFinalizedStrategyMutation = useMutation({
+    mutationFn: async (finalizedStrategy: string) => {
+      return await apiRequest("PATCH", `/api/sequences/${selectedSequenceId}/finalized-strategy`, { finalizedStrategy });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      setFinalizeDialogOpen(false);
+      toast({
+        title: "Strategy Finalized",
+        description: "Your campaign strategy has been saved. Email generation will now use this brief.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save finalized strategy",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Generate preview emails mutation
+  const generatePreviewEmailsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/sequences/${selectedSequenceId}/preview-emails`, {});
+      return response;
+    },
+    onSuccess: (data: any) => {
+      setPreviewEmails(data.previewEmails);
+      setPreviewContact(data.contact);
+      setPreviewDialogOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate preview emails",
         variant: "destructive",
       });
     },
@@ -2227,6 +2297,37 @@ export default function EHub() {
                         )}
                       </Button>
                     </div>
+
+                    {/* Finalize Strategy Button */}
+                    {strategyTranscript && strategyTranscript.messages && strategyTranscript.messages.length > 0 && (
+                      <div className="flex justify-end gap-2 pt-2">
+                        {sequences?.find(s => s.id === selectedSequenceId)?.finalizedStrategy && (
+                          <Badge variant="secondary" className="gap-1">
+                            <Check className="w-3 h-3" />
+                            Strategy Finalized
+                          </Badge>
+                        )}
+                        <Button
+                          variant="outline"
+                          onClick={() => finalizeStrategyMutation.mutate()}
+                          disabled={finalizeStrategyMutation.isPending}
+                          data-testid="button-finalize-strategy"
+                          className="gap-2"
+                        >
+                          {finalizeStrategyMutation.isPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Generating Brief...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              {sequences?.find(s => s.id === selectedSequenceId)?.finalizedStrategy ? 'Re-finalize' : 'Finalize'} Strategy
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -2364,6 +2465,37 @@ export default function EHub() {
                         Save Delays
                       </Button>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Email Preview Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Email Preview</CardTitle>
+                    <CardDescription>
+                      Generate a test preview of all 4 steps in your sequence using a random real contact. No emails will be sent.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      variant="outline"
+                      onClick={() => generatePreviewEmailsMutation.mutate()}
+                      disabled={generatePreviewEmailsMutation.isPending}
+                      data-testid="button-generate-preview"
+                      className="w-full gap-2"
+                    >
+                      {generatePreviewEmailsMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Generating Preview...
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="w-4 h-4" />
+                          Generate Email Preview
+                        </>
+                      )}
+                    </Button>
                   </CardContent>
                 </Card>
 
@@ -3241,6 +3373,89 @@ export default function EHub() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Finalize Strategy Dialog */}
+      <Dialog open={finalizeDialogOpen} onOpenChange={setFinalizeDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Finalize Campaign Strategy</DialogTitle>
+            <DialogDescription>
+              Review and edit the AI-generated campaign brief. This concise brief will be used for all email generation (instead of the full conversation history), improving performance and consistency.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="finalized-strategy">Campaign Brief (200-300 words)</Label>
+              <Textarea
+                id="finalized-strategy"
+                value={finalizedStrategyDraft}
+                onChange={(e) => setFinalizedStrategyDraft(e.target.value)}
+                className="min-h-[300px] font-mono text-sm"
+                placeholder="AI-generated campaign brief will appear here..."
+                data-testid="textarea-finalized-strategy"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                {finalizedStrategyDraft.split(' ').length} words
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setFinalizeDialogOpen(false)}
+              data-testid="button-cancel-finalize"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => saveFinalizedStrategyMutation.mutate(finalizedStrategyDraft)}
+              disabled={!finalizedStrategyDraft.trim() || saveFinalizedStrategyMutation.isPending}
+              data-testid="button-save-finalized-strategy"
+            >
+              {saveFinalizedStrategyMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Save Strategy
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Preview Dialog */}
+      <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Email Sequence Preview</DialogTitle>
+            <DialogDescription>
+              Preview of the 4-step email sequence generated for {previewContact?.name} ({previewContact?.email}). These emails were NOT sent.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {previewEmails.map((email) => (
+              <Card key={email.step}>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Badge variant="outline">Step {email.step}</Badge>
+                    {email.subject}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div 
+                    className="prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: email.body }}
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              onClick={() => setPreviewDialogOpen(false)}
+              data-testid="button-close-preview"
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
