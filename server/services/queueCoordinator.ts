@@ -105,6 +105,61 @@ export function getStartOfToday(now: Date, timezone: string): Date {
   return zonedTimeToUtc(midnightString, timezone);
 }
 
+/**
+ * Find the next valid admin sending window
+ * Returns { windowStart, windowEnd, dayStart } for the next available sending period
+ * 
+ * Logic:
+ * - If current time is before today's window start → use today
+ * - If current time is after today's window end → use tomorrow
+ * - Skip weekends if configured
+ * 
+ * @param now - Current time
+ * @param timezone - Admin's timezone
+ * @param settings - E-Hub settings
+ * @returns Object with windowStart (when window opens), windowEnd (when it closes), dayStart (midnight)
+ */
+export function findNextAdminWindowBounds(
+  now: Date,
+  timezone: string,
+  settings: EhubSettings
+): { windowStart: Date; windowEnd: Date; dayStart: Date } {
+  const nowLocal = toZonedTime(now, timezone);
+  const currentHour = nowLocal.getHours();
+  
+  let candidateDate = new Date(nowLocal);
+  
+  // If we're past today's window end, start checking from tomorrow
+  if (currentHour >= settings.sendingHoursEnd) {
+    candidateDate = addDays(candidateDate, 1);
+  }
+  
+  // Skip weekends
+  while (settings.skipWeekends && isWeekend(candidateDate)) {
+    candidateDate = addDays(candidateDate, 1);
+  }
+  
+  // Get midnight of the candidate day
+  const dateString = formatInTimeZone(candidateDate, timezone, 'yyyy-MM-dd');
+  const dayStart = zonedTimeToUtc(`${dateString} 00:00:00`, timezone);
+  
+  // Calculate window start and end
+  const windowStartLocal = zonedTimeToUtc(
+    `${dateString} ${settings.sendingHoursStart.toString().padStart(2, '0')}:00:00`,
+    timezone
+  );
+  const windowEndLocal = zonedTimeToUtc(
+    `${dateString} ${settings.sendingHoursEnd.toString().padStart(2, '0')}:00:00`,
+    timezone
+  );
+  
+  return {
+    windowStart: windowStartLocal,
+    windowEnd: windowEndLocal,
+    dayStart,
+  };
+}
+
 // ============================================================================
 // Coordinator Tick - Eligibility-Based Scheduling
 // ============================================================================
@@ -112,19 +167,20 @@ export function getStartOfToday(now: Date, timezone: string): Date {
 /**
  * Coordinator tick function - runs every 5 minutes to assign send slots
  * 
- * Architecture:
- * - Stateless: No memory of tails or offsets
- * - Transactional: Uses FOR UPDATE SKIP LOCKED for concurrency safety
- * - Dual-window: Validates both admin window AND client business hours
- * - Dynamic batching: Adjusts batch size based on remaining capacity and runs
+ * NEW ARCHITECTURE (Fixed):
+ * - ALWAYS runs - no early returns for time/weekends
+ * - Pre-fills queue for next available window
+ * - Uses scheduling anchor = max(eligible_at, nextWindowStart)
+ * - Preserves eligible_at (sequence logic), only modifies scheduled_at
+ * - Stores jitter in DB for transparency
  * 
  * Flow:
- * 1. Check weekend/active window - exit early if not allowed
- * 2. Count today's sent emails
- * 3. Calculate remaining capacity
+ * 1. Find next admin window (today if not started, tomorrow if past, skip weekends)
+ * 2. Count sent emails for quota day
+ * 3. Calculate batch capacity (inside vs outside window logic)
  * 4. Query eligible emails (eligible_at <= now, scheduled_at IS NULL)
- * 5. Filter by client business hours
- * 6. Assign scheduled_at with random jitter
+ * 5. For each: anchor = max(eligible_at, queueTail), call computeNextSendSlot
+ * 6. Store scheduled_at + jitterMinutes in database
  * 7. Commit transaction
  */
 export async function coordinatorTick(): Promise<void> {
@@ -138,38 +194,30 @@ export async function coordinatorTick(): Promise<void> {
   }
   
   // Get admin timezone (use server timezone for now)
-  // TODO: Add adminTimezone to ehubSettings schema or get from admin user preferences
   const adminTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   
-  // Convert now to admin's timezone for window checking
-  const adminLocalTime = toZonedTime(now, adminTimezone);
+  // Find next valid admin sending window (handles weekends, past windows, etc.)
+  const { windowStart, windowEnd, dayStart } = findNextAdminWindowBounds(
+    now,
+    adminTimezone,
+    settings
+  );
   
-  // Check weekend in admin's timezone
-  if (settings.skipWeekends && isWeekend(adminLocalTime)) {
-    console.log('[Coordinator] Skipping - weekend in admin timezone');
-    return;
-  }
+  const inWindow = now >= windowStart && now < windowEnd;
   
-  // Check active window in admin's timezone
-  if (!inActiveWindow(adminLocalTime, settings)) {
-    console.log('[Coordinator] Skipping - outside admin window');
-    return;
-  }
+  console.log(`[Coordinator] Window: ${windowStart.toISOString()} - ${windowEnd.toISOString()}, inWindow: ${inWindow}`);
   
-  // Get midnight in admin's timezone for quota tracking
-  const startOfToday = getStartOfToday(now, adminTimezone);
-  
-  // Count emails sent today
+  // Count emails sent in the quota day (starting from dayStart)
   const { db } = await import('../db');
   const { sequenceScheduledSends, sequenceRecipients } = await import('@shared/schema');
-  const { eq, and, gte, lte, isNull, isNotNull, sql } = await import('drizzle-orm');
+  const { eq, and, gte, lte, isNull, isNotNull, sql, desc } = await import('drizzle-orm');
   
   const [sentCountResult] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(sequenceScheduledSends)
     .where(
       and(
-        gte(sequenceScheduledSends.sentAt, startOfToday),
+        gte(sequenceScheduledSends.sentAt, dayStart),
         isNotNull(sequenceScheduledSends.sentAt)
       )
     );
@@ -177,20 +225,49 @@ export async function coordinatorTick(): Promise<void> {
   const sentToday = sentCountResult?.count || 0;
   const remainingCapacity = settings.dailyEmailLimit - sentToday;
   
+  console.log(`[Coordinator] Sent today: ${sentToday}/${settings.dailyEmailLimit}, remaining: ${remainingCapacity}`);
+  
   if (remainingCapacity <= 0) {
-    console.log('[Coordinator] Daily limit reached');
-    return;
+    console.log('[Coordinator] Daily limit reached - but still checking for eligible emails');
+    // Don't return - we still want to see what's eligible
   }
   
-  // Calculate dynamic batch size using admin's local time
-  const remainingRuns = runsLeftInWindow(adminLocalTime, settings);
-  const batchSize = Math.max(1, Math.min(3, Math.ceil(remainingCapacity / remainingRuns)));
+  // Calculate batch capacity based on whether we're inside or outside window
+  let batchSize: number;
+  if (inWindow) {
+    // Inside window: distribute remaining capacity across remaining runs today
+    const adminLocalTime = toZonedTime(now, adminTimezone);
+    const remainingRuns = runsLeftInWindow(adminLocalTime, settings);
+    batchSize = Math.max(1, Math.min(5, Math.ceil(remainingCapacity / remainingRuns)));
+  } else {
+    // Outside window: pre-fill entire next window
+    const windowDurationHours = settings.sendingHoursEnd - settings.sendingHoursStart;
+    const windowCapacity = Math.floor((windowDurationHours * 60) / 5); // 5-minute coordinator cadence
+    batchSize = Math.min(windowCapacity, remainingCapacity, 50); // Cap at 50 to avoid huge batches
+  }
   
-  // Query more candidates than batch size to allow client window filtering
-  const candidatesLimit = batchSize * 5;
+  console.log(`[Coordinator] Batch size: ${batchSize} (${inWindow ? 'inside window' : 'pre-fill next window'})`);
+  
+  // Fetch eligible candidates (increased limit for client window filtering)
+  const candidatesLimit = batchSize * 3;
   
   // Start transaction
   const result = await db.transaction(async (tx) => {
+    // Find current queue tail (latest scheduled_at across all pending sends)
+    const [tailResult] = await tx
+      .select({ latestScheduled: sql<Date | null>`max(scheduled_at)` })
+      .from(sequenceScheduledSends)
+      .where(isNotNull(sequenceScheduledSends.scheduledAt));
+    
+    let queueTail = tailResult?.latestScheduled ? new Date(tailResult.latestScheduled) : null;
+    
+    // If no queue tail, use windowStart as the starting point
+    if (!queueTail || queueTail < windowStart) {
+      queueTail = windowStart;
+    }
+    
+    console.log(`[Coordinator] Queue tail: ${queueTail.toISOString()}`);
+    
     // Query eligible emails with FOR UPDATE SKIP LOCKED
     const candidates = await tx
       .select({
@@ -217,8 +294,7 @@ export async function coordinatorTick(): Promise<void> {
       .orderBy(
         sequenceScheduledSends.eligibleAt,
         sequenceScheduledSends.recipientId,
-        sequenceScheduledSends.stepNumber,
-        sequenceScheduledSends.id
+        sequenceScheduledSends.stepNumber
       )
       .limit(candidatesLimit)
       .for('update', { skipLocked: true });
@@ -228,6 +304,8 @@ export async function coordinatorTick(): Promise<void> {
       return 0;
     }
     
+    console.log(`[Coordinator] Found ${candidates.length} eligible candidates`);
+    
     let scheduledCount = 0;
     
     for (const candidate of candidates) {
@@ -235,48 +313,57 @@ export async function coordinatorTick(): Promise<void> {
         break;
       }
       
-      // Convert to client's local time
-      const tz = candidate.timezone || 'UTC';
-      const clientLocalTime = toZonedTime(now, tz);
+      // Scheduling anchor = max(eligible_at, queueTail)
+      const eligibleAt = new Date(candidate.eligibleAt);
+      const anchorTime = eligibleAt > queueTail! ? eligibleAt : queueTail!;
       
-      // Check client business hours window
-      if (!clientWindowAllows(
-        clientLocalTime,
-        candidate.businessHours || '9-17',
-        tz,
-        settings
-      )) {
-        // Skip this candidate - will be retried on next coordinator run
+      // Call computeNextSendSlot to find next valid slot (respects admin + client windows)
+      const sendSlot = computeNextSendSlot({
+        baselineTime: anchorTime,
+        adminTimezone,
+        adminStartHour: settings.sendingHoursStart,
+        adminEndHour: settings.sendingHoursEnd,
+        recipientBusinessHours: candidate.businessHours || '9-17',
+        recipientTimezone: candidate.timezone || 'UTC',
+        clientWindowStartOffset: settings.clientWindowStartOffset,
+        clientWindowEndHour: settings.clientWindowEndHour,
+        skipWeekends: settings.skipWeekends,
+        minimumTime: anchorTime,
+      });
+      
+      if (!sendSlot) {
+        console.log(`[Coordinator] ⚠️ No valid slot found for candidate ${candidate.id}`);
         continue;
       }
       
-      // Calculate base time - must be at least eligibleAt to respect sequence delays
-      const eligibleAt = new Date(candidate.eligibleAt);
-      const baseTime = now > eligibleAt ? now : eligibleAt;
+      // Calculate jitter (in minutes) for transparency
+      const jitterMs = sendSlot.getTime() - anchorTime.getTime();
+      const jitterMinutes = Math.round(jitterMs / 60000);
       
-      // Assign scheduled_at with random jitter anchored to baseTime
-      const jitterMinutes = randomJitter(
-        settings.minDelayMinutes,
-        settings.maxDelayMinutes
-      );
-      const scheduledAt = new Date(baseTime.getTime() + jitterMinutes * 60 * 1000);
-      
-      // Update the row
+      // Update scheduled_at and jitterMinutes
       await tx
         .update(sequenceScheduledSends)
         .set({ 
-          scheduledAt,
+          scheduledAt: sendSlot,
           jitterMinutes: jitterMinutes.toString()
         })
         .where(eq(sequenceScheduledSends.id, candidate.id));
       
+      // Update recipient's nextSendAt for queue visibility
+      await tx
+        .update(sequenceRecipients)
+        .set({ nextSendAt: sendSlot })
+        .where(eq(sequenceRecipients.id, candidate.recipientId));
+      
+      // Advance queue tail to maintain FIFO ordering
+      queueTail = sendSlot;
       scheduledCount++;
     }
     
     return scheduledCount;
   });
   
-  console.log(`[Coordinator] Scheduled ${result} emails (${sentToday}/${settings.dailyEmailLimit} sent today)`);
+  console.log(`[Coordinator] ✅ Scheduled ${result} emails (${sentToday}/${settings.dailyEmailLimit} sent today)`);
 }
 
 export interface QueueSlotRequest {
