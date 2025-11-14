@@ -20415,6 +20415,15 @@ Based on the conversation, help the user design an effective email sequence that
       const { invalidateCache } = await import('./services/ehubContactsService');
       invalidateCache();
 
+      // Immediately run coordinator to schedule sends (prevents "N/A" in UI)
+      // If coordinator fails, enrollment still succeeds - defers to 5-minute cron
+      try {
+        const { coordinatorTick } = await import('./services/queueCoordinator');
+        await coordinatorTick();
+      } catch (coordError: any) {
+        console.error('[Enrollment] Coordinator tick failed, deferring to cron:', coordError.message);
+      }
+
       res.json({ message: 'Recipients imported successfully', count: created.length });
     } catch (error: any) {
       if (error.name === 'ZodError') {
@@ -20534,6 +20543,15 @@ Based on the conversation, help the user design an effective email sequence that
       // Invalidate All Contacts cache
       const { invalidateCache } = await import('./services/ehubContactsService');
       invalidateCache();
+
+      // Immediately run coordinator to schedule sends (prevents "N/A" in UI)
+      // If coordinator fails, enrollment still succeeds - defers to 5-minute cron
+      try {
+        const { coordinatorTick } = await import('./services/queueCoordinator');
+        await coordinatorTick();
+      } catch (coordError: any) {
+        console.error('[Enrollment] Coordinator tick failed, deferring to cron:', coordError.message);
+      }
 
       res.json({ message: 'Contacts added successfully', count: created.length });
     } catch (error: any) {
