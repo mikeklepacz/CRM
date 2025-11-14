@@ -24,7 +24,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
 import { TestTube2, RefreshCw, Reply } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
@@ -1125,6 +1124,9 @@ export default function EHub() {
   // Update sequence status mutation
   const updateSequenceStatusMutation = useMutation({
     mutationFn: async (status: string) => {
+      if (!selectedSequenceId) {
+        throw new Error('Please select a sequence first');
+      }
       return await apiRequest("PATCH", `/api/sequences/${selectedSequenceId}`, { status });
     },
     onSuccess: () => {
@@ -1137,7 +1139,7 @@ export default function EHub() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update sequence status",
+        description: error?.message || String(error) || "Failed to update sequence status",
         variant: "destructive",
       });
     },
@@ -1146,6 +1148,9 @@ export default function EHub() {
   // Finalize strategy mutation - calls AI to distill transcript
   const finalizeStrategyMutation = useMutation({
     mutationFn: async () => {
+      if (!selectedSequenceId) {
+        throw new Error('Please select a sequence first');
+      }
       const response = await apiRequest("POST", `/api/sequences/${selectedSequenceId}/finalize-strategy`, {});
       return response;
     },
@@ -1156,7 +1161,7 @@ export default function EHub() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to finalize strategy",
+        description: error?.message || String(error) || "Failed to finalize strategy",
         variant: "destructive",
       });
     },
@@ -1165,6 +1170,9 @@ export default function EHub() {
   // Save finalized strategy mutation
   const saveFinalizedStrategyMutation = useMutation({
     mutationFn: async (finalizedStrategy: string) => {
+      if (!selectedSequenceId) {
+        throw new Error('Please select a sequence first');
+      }
       return await apiRequest("PATCH", `/api/sequences/${selectedSequenceId}/finalized-strategy`, { finalizedStrategy });
     },
     onSuccess: () => {
@@ -1178,7 +1186,7 @@ export default function EHub() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to save finalized strategy",
+        description: error?.message || String(error) || "Failed to save finalized strategy",
         variant: "destructive",
       });
     },
@@ -1187,6 +1195,9 @@ export default function EHub() {
   // Generate preview emails mutation
   const generatePreviewEmailsMutation = useMutation({
     mutationFn: async () => {
+      if (!selectedSequenceId) {
+        throw new Error('Please select a sequence first');
+      }
       const response = await apiRequest("POST", `/api/sequences/${selectedSequenceId}/preview-emails`, {});
       return response;
     },
@@ -1198,7 +1209,7 @@ export default function EHub() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to generate preview emails",
+        description: error?.message || String(error) || "Failed to generate preview emails",
         variant: "destructive",
       });
     },
@@ -2503,7 +2514,7 @@ export default function EHub() {
                     <Button
                       variant="outline"
                       onClick={() => generatePreviewEmailsMutation.mutate()}
-                      disabled={generatePreviewEmailsMutation.isPending}
+                      disabled={!selectedSequenceId || generatePreviewEmailsMutation.isPending}
                       data-testid="button-generate-preview"
                       className="w-full gap-2"
                     >
