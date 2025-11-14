@@ -40,8 +40,8 @@ export function getSession() {
     name: 'connect.sid',
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Use secure in production
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: true,
+      sameSite: 'lax',
       maxAge: sessionTtl,
       path: '/',
     },

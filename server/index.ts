@@ -10,9 +10,6 @@ import { startReplyDetectionWorker } from "./services/replyDetectionWorker";
 
 const app = express();
 
-// Trust Replit proxy for proper protocol detection (must be before routes)
-app.set('trust proxy', true);
-
 // Capture raw body for webhook signature validation
 app.use(express.json({
   limit: '10mb',
