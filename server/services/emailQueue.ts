@@ -373,7 +373,7 @@ async function processEmailQueue() {
             console.log(`[EmailQueue] ⛔ STEP 1 SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
             // Mark scheduled send as cancelled and recipient as skipped
             await storage.updateScheduledSend(scheduledSend.id, { status: 'cancelled' });
-            await storage.deleteRecipientSends(recipient.id); // Delete all future sends
+            await storage.deleteRecipientScheduledSends(recipient.id); // Delete all future sends
             await storage.updateRecipientStatus(recipient.id, { 
               status: 'skipped',
               nextSendAt: null
@@ -391,7 +391,7 @@ async function processEmailQueue() {
             console.log(`[EmailQueue] ⛔ STEP ${currentStepNumber} FOLLOW-UP SKIPPED ${recipient.email}: ${followUpCheck.reason}`);
             // Mark scheduled send as cancelled and delete all future sends
             await storage.updateScheduledSend(scheduledSend.id, { status: 'cancelled' });
-            await storage.deleteRecipientSends(recipient.id);
+            await storage.deleteRecipientScheduledSends(recipient.id);
             await storage.updateRecipientStatus(recipient.id, { 
               status: 'skipped',
               nextSendAt: null
@@ -492,10 +492,14 @@ async function processEmailQueue() {
           }
 
           // Determine recipient status based on remaining scheduled sends
-          const upcomingScheduledSends = await storage.getUpcomingScheduledSends({ 
-            recipientId: recipient.id, 
-            limit: 1 
-          });
+          const allRecipientSends = await storage.getScheduledSendsByRecipient(recipient.id);
+          const upcomingScheduledSends = allRecipientSends
+            .filter(s => s.status === 'pending' && !s.sentAt)
+            .sort((a, b) => {
+              const aTime = a.eligibleAt?.getTime() || 0;
+              const bTime = b.eligibleAt?.getTime() || 0;
+              return aTime - bTime;
+            });
           const recipientStatus = upcomingScheduledSends.length > 0 ? 'in_sequence' : 'completed';
 
           // Compute nextSendAt: use scheduledAt if assigned, otherwise fall back to eligibleAt
