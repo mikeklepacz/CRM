@@ -280,7 +280,7 @@ async function validateFollowUpEmail(recipientLink: string, recipientEmail: stri
 }
 
 export async function startEmailQueueProcessor() {
-  console.log('[EmailQueue] Starting email queue processor...');
+  console.log('[EmailQueue] Starting email queue processor (eligibility-based)...');
   
   // Validate OpenAI API key at startup (REQUIRED - no fallback system)
   try {
@@ -298,15 +298,14 @@ export async function startEmailQueueProcessor() {
     return;
   }
   
-  // Run every 60 seconds
+  // Run every 30 seconds (faster polling for responsiveness)
   setInterval(async () => {
     if (isProcessing) {
-      console.log('[EmailQueue] Skipping cycle - already processing');
       return;
     }
 
     await processEmailQueue();
-  }, 60000);
+  }, 30000);
 
   // Run immediately on startup
   await processEmailQueue();
@@ -318,26 +317,31 @@ async function processEmailQueue() {
   try {
     const settings = await storage.getEhubSettings();
     if (!settings) {
-      console.log('[EmailQueue] No E-Hub settings configured');
       return;
     }
 
     const now = new Date();
 
-    // Get pending scheduled sends (already sorted chronologically)
-    const scheduledSends = await storage.getNextScheduledSends(50);
+    // DUMB POLLING: Get sends where scheduledAt <= now() and sentAt IS NULL
+    // Coordinator has already validated windows, so worker just sends
+    const scheduledSends = await storage.getNextScheduledSends(10, now);
     
     if (scheduledSends.length === 0) {
-      console.log('[EmailQueue] No scheduled sends ready');
       return;
     }
 
-    console.log(`[EmailQueue] Found ${scheduledSends.length} scheduled sends to process`);
+    console.log(`[EmailQueue] Processing ${scheduledSends.length} scheduled sends`);
 
-    // Process each scheduled send chronologically
+    // Process each scheduled send
     for (const scheduledSend of scheduledSends) {
       try {
-        // Get recipient data FIRST (before claiming send)
+        // Atomically claim this scheduled send (prevents double-processing)
+        const claimed = await storage.claimScheduledSend(scheduledSend.id);
+        if (!claimed) {
+          continue;
+        }
+
+        // Get recipient data
         const recipient = await storage.getRecipient(scheduledSend.recipientId);
         if (!recipient) {
           console.error(`[EmailQueue] Recipient ${scheduledSend.recipientId} not found`);
@@ -350,39 +354,6 @@ async function processEmailQueue() {
         if (!sequence) {
           console.error(`[EmailQueue] Sequence ${scheduledSend.sequenceId} not found`);
           await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
-          continue;
-        }
-
-        // Resolve admin window
-        let adminWindow;
-        try {
-          adminWindow = await resolveAdminWindow(scheduledSend.sequenceId, storage);
-        } catch (adminError: any) {
-          console.error(`[EmailQueue] ⚠️  Failed to resolve admin window: ${adminError.message}`);
-          await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
-          continue;
-        }
-
-        // Check if current time is within admin sending window (BEFORE claiming)
-        const currentHourInAdminTz = parseInt(formatInTimeZone(now, adminWindow.timezone, 'H'), 10);
-        const currentDayInAdminTz = parseInt(formatInTimeZone(now, adminWindow.timezone, 'i'), 10);
-        const isWeekend = currentDayInAdminTz === 6 || currentDayInAdminTz === 7;
-
-        if (adminWindow.skipWeekends && isWeekend) {
-          console.log(`[EmailQueue] Skipping send - weekend in admin timezone`);
-          continue; // Leave as 'pending' - will retry later
-        }
-
-        if (currentHourInAdminTz < adminWindow.startHour || currentHourInAdminTz >= adminWindow.endHour) {
-          console.log(`[EmailQueue] Skipping send - outside admin hours`);
-          continue; // Leave as 'pending' - will retry later
-        }
-
-        // Atomically claim this scheduled send AFTER timing checks pass
-        // Only claim if still pending (prevents double-processing)
-        const claimed = await storage.claimScheduledSend(scheduledSend.id);
-        if (!claimed) {
-          console.log(`[EmailQueue] Send ${scheduledSend.id} already claimed by another worker`);
           continue;
         }
 
@@ -476,22 +447,18 @@ async function processEmailQueue() {
         });
 
         if (result.success) {
+          // Capture fresh timestamp for this send
+          const sentAt = new Date();
+
           // Mark scheduled send as sent with populated fields (keep for audit history)
           await storage.updateScheduledSend(scheduledSend.id, {
             status: 'sent',
-            sentAt: now,
+            sentAt,
             threadId: result.threadId || null,
             messageId: result.rfc822MessageId || null,
             subject: personalizedEmail.subject,
             body: personalizedEmail.body,
           });
-
-          // Determine recipient status
-          const nextScheduledSend = await storage.getUpcomingScheduledSends({ 
-            recipientId: recipient.id, 
-            limit: 1 
-          });
-          const recipientStatus = nextScheduledSend.length > 0 ? 'in_sequence' : 'completed';
 
           // Save sent email to sequenceRecipientMessages for AI context
           await storage.createRecipientMessage({
@@ -503,13 +470,48 @@ async function processEmailQueue() {
             messageId: result.rfc822MessageId || null,
           });
 
+          // LAZY REPEAT INSERTION: If repeatLastStep is enabled and we're on the last step
+          const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
+          const isLastStep = currentStepNumber === stepDelays.length;
+          
+          if (sequence.repeatLastStep && isLastStep && stepDelays.length > 0) {
+            const lastStepDelay = stepDelays[stepDelays.length - 1];
+            const repeatEligibleAt = addDays(sentAt, lastStepDelay);
+            
+            console.log(`[EmailQueue] 🔄 Repeat last step - creating next send for step ${currentStepNumber}, eligible at ${repeatEligibleAt.toISOString()}`);
+            
+            // Insert new scheduled send (coordinator will assign scheduledAt later)
+            await storage.insertScheduledSends([{
+              recipientId: recipient.id,
+              sequenceId: sequence.id,
+              stepNumber: currentStepNumber,
+              eligibleAt: repeatEligibleAt,
+              scheduledAt: null,
+              status: 'pending',
+            }]);
+          }
+
+          // Determine recipient status based on remaining scheduled sends
+          const upcomingScheduledSends = await storage.getUpcomingScheduledSends({ 
+            recipientId: recipient.id, 
+            limit: 1 
+          });
+          const recipientStatus = upcomingScheduledSends.length > 0 ? 'in_sequence' : 'completed';
+
+          // Compute nextSendAt: use scheduledAt if assigned, otherwise fall back to eligibleAt
+          let nextSendAt: Date | null = null;
+          if (upcomingScheduledSends.length > 0) {
+            const nextSend = upcomingScheduledSends[0];
+            nextSendAt = nextSend.scheduledAt ?? nextSend.eligibleAt;
+          }
+
           // Update recipient status
           await storage.updateRecipientStatus(recipient.id, {
             status: recipientStatus,
             currentStep: currentStepNumber,
-            lastStepSentAt: now,
-            nextSendAt: nextScheduledSend.length > 0 ? nextScheduledSend[0].scheduledAt : null,
-            sentAt: recipient.sentAt || now,
+            lastStepSentAt: sentAt,
+            nextSendAt,
+            sentAt: recipient.sentAt || sentAt,
             threadId: result.threadId || recipient.threadId,
           });
 
@@ -517,13 +519,13 @@ async function processEmailQueue() {
           const currentStats = await storage.getSequence(sequence.id);
           await storage.updateSequenceStats(sequence.id, {
             sentCount: (currentStats?.sentCount || 0) + 1,
-            lastSentAt: now,
+            lastSentAt: sentAt,
           });
 
           console.log(`[EmailQueue] ✅ Sent step ${currentStepNumber} to ${recipient.email}`);
 
-          // Random delay between sends
-          const delayMs = (settings.minDelayMinutes + Math.random() * (settings.maxDelayMinutes - settings.minDelayMinutes)) * 60 * 1000;
+          // Random delay between sends (1-3 minutes for natural pacing)
+          const delayMs = (1 + Math.random() * 2) * 60 * 1000;
           await new Promise(resolve => setTimeout(resolve, delayMs));
         } else {
           // Mark scheduled send as failed
