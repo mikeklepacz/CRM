@@ -20360,58 +20360,36 @@ Based on the conversation, help the user design an effective email sequence that
         return res.json({ message: 'No new recipients to import', count: 0 });
       }
 
-      // Calculate initial nextSendAt for all recipients using dual-window scheduling
-      const stepDelays = sequence.stepDelays || [];
-      const initialDelayDays = stepDelays.length > 0 ? parseFloat(stepDelays[0].toString()) : 0;
-      
-      // Import dual-window scheduler
-      const { computeNextSendTimeForRecipient } = await import('./services/emailSchedulingService');
-
-      // Add nextSendAt to all recipients using dual-window scheduling (admin + recipient windows)
-      const recipientsWithNextSend = await Promise.all(recipients.map(async r => {
-        const nextSendAt = await computeNextSendTimeForRecipient(
-          id, // sequenceId
-          r.businessHours || '',
-          r.timezone || 'America/New_York',
-          initialDelayDays,
-          storage
-        );
-        
-        return {
-          ...r,
-          nextSendAt,
-        };
+      // Eligibility-based enrollment: Create recipients with nextSendAt = null
+      // Coordinator will assign scheduledAt based on eligibleAt
+      const recipientsWithNextSend = recipients.map(r => ({
+        ...r,
+        nextSendAt: null,
       }));
 
       // Bulk insert recipients
       const created = await storage.addRecipients(recipientsWithNextSend);
 
-      // Pre-schedule all future sends for each recipient with random jitter
-      // Maintain FIFO queue: each recipient's schedule starts after previous recipient's last send
-      const { preScheduleRecipientSends } = await import('./services/emailSchedulingService');
+      // Create scheduled sends with eligibleAt (coordinator assigns scheduledAt later)
+      // stepDelays are gap-based, so use running sum for cumulative timing
+      const { addDays } = await import('date-fns');
+      const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
       const allScheduledSends = [];
-      let runningQueueTail: Date | undefined = undefined; // Will start from recipient.nextSendAt for first recipient
+      const now = new Date();
       
       for (const recipient of created) {
-        try {
-          const sends = await preScheduleRecipientSends(
-            recipient.id,
-            recipient.sequenceId,
-            recipient.timezone || 'America/New_York',
-            recipient.businessHours || '',
-            storage,
-            undefined, // ehubSettingsOverride
-            runningQueueTail || recipient.nextSendAt // First recipient uses their nextSendAt, others use queue tail
-          );
-          allScheduledSends.push(...sends);
-          
-          // Update queue tail to last send of this recipient to maintain FIFO ordering
-          if (sends.length > 0) {
-            const lastSend = sends[sends.length - 1];
-            runningQueueTail = lastSend.scheduledAt;
-          }
-        } catch (error) {
-          console.error(`Error pre-scheduling sends for ${recipient.email}:`, error);
+        let cumulativeDelay = 0;
+        for (let i = 0; i < stepDelays.length; i++) {
+          cumulativeDelay += stepDelays[i];
+          const eligibleAt = addDays(now, cumulativeDelay);
+          allScheduledSends.push({
+            recipientId: recipient.id,
+            sequenceId: sequence.id,
+            stepNumber: i + 1,
+            eligibleAt,
+            scheduledAt: null,
+            status: 'pending' as const,
+          });
         }
       }
 
@@ -20502,89 +20480,36 @@ Based on the conversation, help the user design an effective email sequence that
         return res.json({ message: 'All contacts already in sequence', count: 0 });
       }
 
-      // Calculate initial nextSendAt for all recipients using queue coordinator
-      // to ensure FIFO ordering and rate limit compliance
-      const stepDelays = sequence.stepDelays || [];
-      const initialDelayDays = stepDelays.length > 0 ? parseFloat(stepDelays[0].toString()) : 0;
-      
-      // Get admin window and settings
-      const { resolveAdminWindow } = await import('./services/emailSchedulingService');
-      const adminWindow = await resolveAdminWindow(id, storage);
-      const ehubSettings = await storage.getEhubSettings();
-      
-      // Get initial queue state ONCE before processing all recipients
-      let queueTailTime = await storage.getQueueTail();
-      let currentDailyCount = await storage.getDailyScheduledCount();
-      
-      // Import queue coordinator
-      const { requestNextSlot } = await import('./services/queueCoordinator');
-      
-      // Allocate slots sequentially with local cursor to avoid race conditions
-      const recipientsWithNextSend = [];
-      for (const r of recipients) {
-        const slotResult = requestNextSlot({
-          stepDelay: initialDelayDays,
-          lastStepSentAt: null, // New recipient, no previous send
-          adminTimezone: adminWindow.timezone,
-          adminStartHour: adminWindow.startHour,
-          adminEndHour: adminWindow.endHour,
-          minDelayMinutes: ehubSettings?.minDelayMinutes ?? 6,
-          maxDelayMinutes: ehubSettings?.maxDelayMinutes ?? 10,
-          recipientBusinessHours: r.businessHours || '',
-          recipientTimezone: r.timezone || 'America/New_York',
-          clientWindowStartOffset: adminWindow.clientWindowStartOffset,
-          clientWindowEndHour: adminWindow.clientWindowEndHour,
-          skipWeekends: adminWindow.skipWeekends,
-          queueTailTime,
-          dailyRateLimit: ehubSettings?.dailyEmailLimit ?? 20,
-          currentDailyCount,
-        });
-        
-        recipientsWithNextSend.push({
-          ...r,
-          nextSendAt: slotResult.nextSendAt,
-        });
-        
-        // Advance cursor for next recipient
-        queueTailTime = slotResult.nextSendAt;
-        // Only increment daily count if slot is within next 24 hours
-        const next24Hours = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
-        if (slotResult.nextSendAt < next24Hours) {
-          currentDailyCount++;
-        }
-      }
-      
-      console.log(`[AddRecipients] Scheduled ${recipientsWithNextSend.length} recipients using queue coordinator`);
+      // Eligibility-based enrollment: Create recipients with nextSendAt = null
+      // Coordinator will assign scheduledAt based on eligibleAt
+      const recipientsWithNextSend = recipients.map(r => ({
+        ...r,
+        nextSendAt: null,
+      }));
 
       // Bulk insert recipients
       const created = await storage.addRecipients(recipientsWithNextSend);
 
-      // Pre-schedule all future sends for each recipient with random jitter
-      // Maintain FIFO queue: each recipient's schedule starts after previous recipient's last send
-      const { preScheduleRecipientSends } = await import('./services/emailSchedulingService');
+      // Create scheduled sends with eligibleAt (coordinator assigns scheduledAt later)
+      // stepDelays are gap-based, so use running sum for cumulative timing
+      const { addDays } = await import('date-fns');
+      const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
       const allScheduledSends = [];
-      let runningQueueTail: Date | undefined = queueTailTime; // Start from existing queue tail
+      const now = new Date();
       
       for (const recipient of created) {
-        try {
-          const sends = await preScheduleRecipientSends(
-            recipient.id,
-            recipient.sequenceId,
-            recipient.timezone || 'America/New_York',
-            recipient.businessHours || '',
-            storage,
-            undefined, // ehubSettingsOverride
-            runningQueueTail || recipient.nextSendAt // First recipient uses nextSendAt, others use queue tail
-          );
-          allScheduledSends.push(...sends);
-          
-          // Update queue tail to last send of this recipient to maintain FIFO ordering
-          if (sends.length > 0) {
-            const lastSend = sends[sends.length - 1];
-            runningQueueTail = lastSend.scheduledAt;
-          }
-        } catch (error) {
-          console.error(`Error pre-scheduling sends for ${recipient.email}:`, error);
+        let cumulativeDelay = 0;
+        for (let i = 0; i < stepDelays.length; i++) {
+          cumulativeDelay += stepDelays[i];
+          const eligibleAt = addDays(now, cumulativeDelay);
+          allScheduledSends.push({
+            recipientId: recipient.id,
+            sequenceId: sequence.id,
+            stepNumber: i + 1,
+            eligibleAt,
+            scheduledAt: null,
+            status: 'pending' as const,
+          });
         }
       }
 
