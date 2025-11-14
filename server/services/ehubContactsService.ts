@@ -10,6 +10,52 @@ let cachedContacts: EhubContact[] | null = null;
 let cacheTimestamp: number | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+// Commission Tracker status classification patterns
+// Negative patterns: Explicitly indicate the contact has NOT been emailed
+// Note: Normalization converts curly apostrophes to straight, so patterns only need straight apostrophes
+const NEGATION_PATTERNS = [
+  /\b(?:no|not|never)\s+emailed\b/,           // "not emailed", "never emailed"
+  /\b(?:hasn't|haven't|didn't|won't|wasn't|weren't)\s+emailed\b/, // "hasn't emailed", "haven't emailed"
+  /\b(?:un|non)emailed\b/,                    // "unemailed", "nonemailed"
+  /\bemailed\s+(?:yet|ever)\b/,              // "emailed yet", "emailed ever"
+  /\bno\s+one\s+emailed\b/,                 // "no one emailed"
+];
+
+// Positive patterns: Indicate the contact HAS been reached
+const POSITIVE_PATTERNS = [
+  /\bemailed\b/,         // "emailed", "emailed - step 1", "status: emailed"
+  /\bcontacted\b/,       // "contacted"
+  /\breached\s+out\b/,   // "reached out"
+  /\breplied\b/,         // "replied"
+];
+
+/**
+ * Determine if a Commission Tracker status indicates the contact has been reached.
+ * Uses short-range negation patterns to avoid false positives like "Emailed – not interested"
+ * (which means the customer WAS emailed, they just declined).
+ */
+export function isTrackerContacted(rawStatus: string | null | undefined): boolean {
+  if (!rawStatus) return false;
+  
+  // Normalize: lowercase, convert curly apostrophes to straight, remove special chars (except apostrophes/hyphens), collapse whitespace
+  const normalized = rawStatus
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")  // Convert curly apostrophes (U+2018, U+2019) to straight apostrophe
+    .replace(/[^\p{L}\p{N}\s'_-]+/gu, ' ')  // Now only preserve straight apostrophes
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  if (!normalized) return false;
+  
+  // Check negation patterns first
+  if (NEGATION_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return false;
+  }
+  
+  // Check positive patterns
+  return POSITIVE_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 export async function getAllContacts(options: {
   page?: number;
   pageSize?: number;
@@ -127,6 +173,9 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
     }
   }
 
+  // Track emails that have been contacted according to Commission Tracker
+  const trackerEmailedMap = new Map<string, boolean>();
+  
   const commissionSheet = await storage.getGoogleSheetByPurpose('commissions');
   
   if (commissionSheet) {
@@ -143,18 +192,29 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
       const linkIndex = headers.findIndex((h: string) => h.toLowerCase().trim() === 'link');
       const nameIndex = headers.findIndex((h: string) => h.toLowerCase().trim() === 'name');
       const stateIndex = headers.findIndex((h: string) => h.toLowerCase().trim() === 'state');
+      const statusIndex = headers.findIndex((h: string) => h.toLowerCase().trim() === 'status');
 
       if (pocEmailIndex !== -1) {
         const commissionContacts = rows
           .filter((row: any[]) => row[pocEmailIndex] && row[pocEmailIndex].includes('@'))
-          .map((row: any[]) => ({
-            name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
-            email: row[pocEmailIndex].trim().toLowerCase(),
-            state: stateIndex !== -1 ? row[stateIndex] : undefined,
-            hours: undefined,
-            link: linkIndex !== -1 ? row[linkIndex] : undefined,
-            salesSummary: undefined,
-          }));
+          .map((row: any[]) => {
+            const email = row[pocEmailIndex].trim().toLowerCase();
+            const status = statusIndex !== -1 ? (row[statusIndex] || '').trim() : '';
+            
+            // Track if this email has been contacted according to Commission Tracker
+            if (isTrackerContacted(status)) {
+              trackerEmailedMap.set(email, true);
+            }
+            
+            return {
+              name: nameIndex !== -1 ? (row[nameIndex] || 'Unknown') : 'Unknown',
+              email,
+              state: stateIndex !== -1 ? row[stateIndex] : undefined,
+              hours: undefined,
+              link: linkIndex !== -1 ? row[linkIndex] : undefined,
+              salesSummary: undefined,
+            };
+          });
         allContacts.push(...commissionContacts);
       }
     }
@@ -229,6 +289,9 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
     };
 
     const timezone = contact.state ? detectTimezone(contact.state) : undefined;
+    
+    // Check if contact has been emailed according to Commission Tracker
+    const emailedInTracker = trackerEmailedMap.get(contact.email) || false;
 
     return {
       name: contact.name,
@@ -238,7 +301,7 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
       hours: contact.hours,
       link: contact.link,
       salesSummary: contact.salesSummary,
-      neverContacted: !status.inSequence,
+      neverContacted: !status.inSequence && !emailedInTracker,
       inSequence: status.inSequence,
       replied: status.replied,
       bounced: status.bounced,
