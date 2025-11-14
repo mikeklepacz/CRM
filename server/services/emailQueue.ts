@@ -422,7 +422,8 @@ async function processEmailQueue() {
               keywordBin: settings.keywordBin || undefined,
               signature: sequence.signature || undefined
             },
-            currentStepNumber
+            currentStepNumber,
+            sequence.finalizedStrategy || null  // Pass finalizedStrategy for 90% token savings
           );
 
           // OVERRIDE subject for follow-ups to ensure threading

@@ -210,7 +210,8 @@ export async function personalizeEmailWithAI(
   template: { subject?: string; body?: string },
   strategyTranscript: StrategyTranscript | null,
   settings: { promptInjection?: string; keywordBin?: string; signature?: string },
-  stepNumber: number = 1
+  stepNumber: number = 1,
+  finalizedStrategy?: string | null
 ): Promise<{ subject: string; body: string }> {
   // Get OpenAI settings - REQUIRED (no fallback system)
   const openaiSettings = await storage.getOpenaiSettings();
@@ -242,9 +243,13 @@ RECIPIENT CONTEXT (for understanding, do not directly quote in email):
 - Sales Summary: ${recipient.salesSummary || 'Not available'}
 `.trim();
 
-    // Build strategy context from transcript
+    // Build strategy context - PRIORITIZE finalizedStrategy over full transcript
     let strategyContext = '';
-    if (strategyTranscript?.messages && strategyTranscript.messages.length > 0) {
+    if (finalizedStrategy) {
+      // Use the concise, AI-distilled campaign brief (90% token savings!)
+      strategyContext = '\n\nCAMPAIGN STRATEGY:\n' + finalizedStrategy;
+    } else if (strategyTranscript?.messages && strategyTranscript.messages.length > 0) {
+      // Fallback: Replay full conversation (expensive, but functional)
       strategyContext = '\n\nCAMPAIGN STRATEGY CONTEXT:\n';
       strategyTranscript.messages.forEach(msg => {
         strategyContext += `${msg.role === 'user' ? 'YOU' : 'ASSISTANT'}: ${msg.content}\n`;
