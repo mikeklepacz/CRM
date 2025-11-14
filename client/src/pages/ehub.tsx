@@ -2445,9 +2445,6 @@ export default function EHub() {
                         {(currentSequence as any)?.finalizedStrategy ? 'Finalized' : 'Draft'}
                       </Badge>
                     </div>
-                    <CardDescription>
-                      AI-generated campaign strategy used for email personalization (saves 90% in token costs)
-                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {!finalizedStrategyEdit ? (
