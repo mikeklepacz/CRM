@@ -1,5 +1,5 @@
 import { addDays, addMinutes } from 'date-fns';
-import { toZonedTime, zonedTimeToUtc, formatInTimeZone } from 'date-fns-tz';
+import { toZonedTime, fromZonedTime as zonedTimeToUtc, formatInTimeZone } from 'date-fns-tz';
 import { computeNextSendSlot } from './smartTiming';
 import type { EhubSettings } from '@shared/schema';
 import { storage } from '../storage';
@@ -459,90 +459,76 @@ export function balanceByTimezone<T extends { timezone?: string | null }>(
 }
 
 /**
- * Recalculate all pending recipient send times based on current E-Hub settings
- * Called when settings change (min/max delays, time windows, daily limits)
- * Deletes all pending scheduled sends and regenerates them with new jitter
+ * Recalculate all pending scheduled sends based on current sequence step delays
+ * Called when step delays change - updates eligibleAt in place using SQL
+ * Clears scheduledAt so coordinator re-assigns times with current settings
  */
 export async function recalculateAllPendingRecipients(settings: EhubSettings): Promise<number> {
   try {
-    // Import pre-scheduling service
-    const { preScheduleRecipientSends } = await import('./emailSchedulingService');
+    const { db } = await import('../db');
+    const { sequenceScheduledSends, sequenceRecipients, sequences } = await import('@shared/schema');
+    const { sql, eq, and, isNull } = await import('drizzle-orm');
     
-    // Get ALL active recipients (pending or in_sequence status)
-    const recipients = await storage.getAllPendingRecipients();
+    console.log('[QueueRecalc] Recalculating eligibleAt for all pending scheduled sends');
     
-    if (recipients.length === 0) {
-      console.log('[QueueRecalc] No active recipients to recalculate');
-      return 0;
-    }
+    // Single SQL UPDATE: Recalculate eligibleAt for all pending sends
+    // Two formulas:
+    // - First step (no last_step_sent_at): enrolled_at + cumulative_delay(all delays up to step)
+    // - Follow-up step (has last_step_sent_at): last_step_sent_at + current_step_gap
+    // Note: step_number is 0-indexed, array is 1-indexed
+    // Only clamp to NOW() if computed time is in the past (preserve future timing)
+    const result = await db.execute(sql`
+      UPDATE sequence_scheduled_sends ss
+      SET 
+        eligible_at = (
+          CASE 
+            WHEN (
+              CASE
+                WHEN r.last_step_sent_at IS NULL THEN
+                  r.enrolled_at + (
+                    SELECT COALESCE(SUM(delay::numeric), 0) 
+                    FROM unnest(s.step_delays[1:(ss.step_number+1)]) AS delay
+                  ) * INTERVAL '1 day'
+                ELSE
+                  r.last_step_sent_at + 
+                  COALESCE(s.step_delays[ss.step_number+1]::numeric, 0) * INTERVAL '1 day'
+              END
+            ) < NOW()
+            THEN NOW()
+            ELSE (
+              CASE
+                WHEN r.last_step_sent_at IS NULL THEN
+                  r.enrolled_at + (
+                    SELECT COALESCE(SUM(delay::numeric), 0) 
+                    FROM unnest(s.step_delays[1:(ss.step_number+1)]) AS delay
+                  ) * INTERVAL '1 day'
+                ELSE
+                  r.last_step_sent_at + 
+                  COALESCE(s.step_delays[ss.step_number+1]::numeric, 0) * INTERVAL '1 day'
+              END
+            )
+          END
+        ),
+        scheduled_at = NULL
+      FROM sequence_recipients r
+      JOIN sequences s ON s.id = r.sequence_id
+      WHERE ss.recipient_id = r.id
+        AND ss.sequence_id = s.id
+        AND ss.sent_at IS NULL
+        AND ss.status = 'pending'
+    `);
     
-    console.log(`[QueueRecalc] Recalculating ${recipients.length} active recipients based on new settings`);
+    const rowCount = parseInt(String(result.rowCount || 0));
+    console.log(`[QueueRecalc] ✅ Updated eligibleAt for ${rowCount} pending scheduled sends`);
     
-    // Delete all pending scheduled sends globally - they'll be regenerated with new settings
-    console.log('[QueueRecalc] Deleting all pending scheduled sends...');
-    const deletedCount = await storage.deleteAllPendingScheduledSends();
-    console.log(`[QueueRecalc] Deleted ${deletedCount} pending scheduled sends`);
+    // Clear recipient nextSendAt so coordinator re-assigns
+    await db.execute(sql`
+      UPDATE sequence_recipients
+      SET next_send_at = NULL
+      WHERE status IN ('pending', 'in_sequence')
+    `);
     
-    // Skip recipients that sent very recently (< 1 hour ago) to avoid recalculating active sends
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const eligibleRecipients = recipients.filter(r => 
-      !r.lastStepSentAt || r.lastStepSentAt < oneHourAgo
-    );
-    
-    if (eligibleRecipients.length === 0) {
-      console.log('[QueueRecalc] All recipients sent recently - skipping regeneration');
-      return 0;
-    }
-    
-    console.log(`[QueueRecalc] ${eligibleRecipients.length} recipients eligible for regeneration`);
-    
-    // Preload all sequence data (batch query to avoid N+1)
-    const sequenceIds = [...new Set(eligibleRecipients.map(r => r.sequenceId))];
-    const sequences = await Promise.all(
-      sequenceIds.map(id => storage.getSequence(id))
-    );
-    const sequenceMap = new Map(
-      sequences.filter(s => s !== undefined).map(s => [s!.id, s!])
-    );
-    
-    // Pre-schedule and insert all future sends for each eligible recipient
-    let regeneratedCount = 0;
-    let totalScheduledSends = 0;
-    
-    for (const recipient of eligibleRecipients) {
-      try {
-        const sequence = sequenceMap.get(recipient.sequenceId);
-        if (!sequence || !sequence.stepDelays) {
-          console.warn(`[QueueRecalc] Skipping recipient ${recipient.id} - invalid sequence`);
-          continue;
-        }
-        
-        // Generate scheduled sends with new settings (pass settings override)
-        const scheduledSends = await preScheduleRecipientSends(
-          recipient.id,
-          recipient.sequenceId,
-          recipient.timezone || 'America/New_York',
-          recipient.businessHours || '9-17',
-          storage,
-          settings  // Pass the new settings to ensure they're used immediately
-        );
-        
-        // Insert the generated scheduled sends into the database
-        if (scheduledSends.length > 0) {
-          await storage.insertScheduledSends(scheduledSends);
-          totalScheduledSends += scheduledSends.length;
-        }
-        
-        regeneratedCount++;
-        
-      } catch (error: any) {
-        console.error(`[QueueRecalc] Error regenerating sends for ${recipient.id}:`, error.message);
-        // Continue with other recipients
-      }
-    }
-    
-    console.log(`[QueueRecalc] ✅ Regenerated ${totalScheduledSends} scheduled sends for ${regeneratedCount} recipients`);
-    return regeneratedCount;
+    return rowCount;
     
   } catch (error: any) {
     console.error('[QueueRecalc] ❌ Fatal error during recalculation:', error);
