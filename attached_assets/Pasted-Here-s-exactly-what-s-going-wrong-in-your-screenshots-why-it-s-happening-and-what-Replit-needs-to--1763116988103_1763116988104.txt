@@ -1,0 +1,134 @@
+Here’s exactly what’s going wrong in your screenshots, why it’s happening, and what Replit needs to fix in order for the queue to behave like a real FIFO email scheduler.
+
+I’m going to talk plainly and directly — no fluff.
+
+⸻
+
+WHAT YOU’RE SEEING IN THE SCREENSHOTS
+
+Symptom:
+
+Your new recipients are landing at:
+	•	3:00 PM
+	•	6:00 PM
+	•	9:00 PM
+	•	9:00 PM
+	•	9:00 PM
+
+Instead of:
+	•	15:27
+	•	15:49
+	•	16:14
+	•	16:38
+	•	17:01
+	•	17:26
+	•	… (paced with spacing + jitter)
+
+Diagnosis:
+
+The coordinator is still anchoring send times to the client’s business hours, not the rate-limit spacing.
+
+This is exactly what happened before — just in disguise.
+
+Even though the 15:00 → 23:00 window is correct on the admin side, the system is incorrectly pairing that with each store’s business hours, and scheduling based ONLY on “earliest possible allowed time,” instead of respecting FIFO + spacing.
+
+⸻
+
+THE REAL ROOT CAUSE (NOW VISIBLE IN YOUR DATA)
+
+Look at the client hours:
+
+1 Mill – Maine
+
+Mon-Fri: 11am–8pm
+→ Earliest allowed: 11:00 → offset +1h = 12:00
+You got 6:00 PM — matches the client window start.
+
+10th Street Cannabis – California
+
+Mon-Fri: 11am–7pm
+You got 9 PM because the system is anchoring on 7pm local → + offset errors → and admin window conversion errors.
+
+31 North – Vermont
+
+Mon–Wed: 9am–7pm
+You got 9 PM somehow, because the validator is overriding spacing and snapping to the nearest allowed hour that overlaps admin + client windows.
+
+⸻
+
+THE ACTUAL BUG
+
+The coordinator is doing this:
+
+for each email:
+  proposedTime = windowStart (15:00)
+  if clientWindowAllows(proposedTime):
+      schedule at proposedTime
+  else
+      snapToClientWindow(proposedTime)
+
+Instead of:
+
+for each email:
+  proposedTime = queueTail + spacing + jitter
+  proposedTime = computeNextSendSlot(proposedTime)
+  schedule at proposedTime
+  queueTail = proposedTime
+
+It’s skipping the spacing entirely
+
+This is why:
+	•	Anna and Mike = 3:00 PM (window start)
+	•	1 Mill = next matching client window = 6 PM
+	•	10th Street = client window = 9 PM
+	•	etc.
+
+The coordinator is choosing the earliest valid timestamp rather than advancing through the queue tail.
+
+This is the same anchor bug as before — just showing up at different times.
+
+⸻
+
+WHAT YOU SEND TO REPLIT (COPY/PASTE THIS EXACTLY)
+
+⸻
+
+The coordinator is still not applying spacing before slot validation.
+We can see the bug clearly from the scheduled times.
+
+Right now the algorithm is:
+	1.	Start with the admin window start (15:00)
+	2.	Check clientWindowAllows(15:00)
+	3.	Snap to the earliest valid client-local time
+	4.	Schedule
+	5.	Repeat
+	6.	…so everything collapses to 3 PM, 6 PM, 9 PM etc.
+
+The coordinator MUST do this in this exact order:
+
+1. proposed = queueTail + spacing
+2. proposed += jitter
+3. proposed = computeNextSendSlot(proposed)
+4. scheduled_at = proposed
+5. queueTail = proposed
+
+Spacing MUST come BEFORE any window validation.
+
+Right now spacing is NEVER being applied before computeNextSendSlot() is called.
+
+This is why:
+	•	Anna = 3:00 PM (window start)
+	•	Mike = 3:00 PM
+	•	1 Mill = 6:00 PM (client window)
+	•	10th Street = 9:00 PM (client window)
+	•	Others = 9:00 PM
+
+The coordinator is anchoring each recipient to the earliest allowed client-local time instead of advancing through the queue tail.
+
+Please fix the order of operations so spacing drives the queue, not the validation step.
+
+⸻
+
+If you want, I can also give you the EXACT block of code to replace in their coordinator so they can’t screw up the order again.
+
+Just ask.

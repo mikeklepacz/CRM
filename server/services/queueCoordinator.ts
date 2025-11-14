@@ -326,6 +326,15 @@ export async function coordinatorTick(): Promise<void> {
     
     console.log(`[Coordinator] Found ${candidates.length} eligible candidates`);
     
+    // Calculate rate-limit spacing (minutes between sends)
+    const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
+    const adminWindowMinutes = adminWindowHours * 60;
+    const minutesBetweenSends = settings.dailyEmailLimit > 0
+      ? adminWindowMinutes / settings.dailyEmailLimit
+      : (settings.minDelayMinutes || 1);
+    
+    console.log(`[Coordinator] Spacing: ${minutesBetweenSends.toFixed(2)} minutes between sends`);
+    
     let scheduledCount = 0;
     
     for (const candidate of candidates) {
