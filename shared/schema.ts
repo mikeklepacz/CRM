@@ -1272,6 +1272,7 @@ export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
   strategyTranscript: jsonb("strategy_transcript").$type<StrategyTranscript>(), // Full AI strategy conversation with envelope
+  finalizedStrategy: text("finalized_strategy"), // AI-distilled 200-300 word campaign brief (replaces replaying all strategy messages)
   stepDelays: decimal("step_delays", { precision: 10, scale: 4 }).array(), // Array of gap delays [0, 0.0035, 3, 14] - each is days AFTER previous step
   repeatLastStep: boolean("repeat_last_step").default(false), // If true, last step repeats indefinitely until reply
   promptInjection: text("prompt_injection"), // DEPRECATED: Use strategyTranscript instead
