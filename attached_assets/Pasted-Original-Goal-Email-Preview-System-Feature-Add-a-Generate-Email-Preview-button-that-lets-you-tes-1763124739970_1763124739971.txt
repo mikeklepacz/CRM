@@ -1,0 +1,26 @@
+Original Goal: Email Preview System
+Feature: Add a "Generate Email Preview" button that lets you test your 4-step email sequence WITHOUT actually sending emails to real clients.
+
+Why: You mentioned accidentally sending test emails to real clients, which was frustrating. This feature would:
+
+Pick a random contact from your database
+Generate all 4 emails using AI (just like real sends)
+Show you the subject lines and email bodies
+Never actually send anything - purely for preview/testing
+What I Added:
+
+Backend: POST /api/sequences/:id/preview-emails endpoint
+Frontend: "Email Preview" card with button in the sequence detail configuration column
+Dialog showing all 4 generated emails
+What Went Wrong:
+The new button broke the entire E-Hub page because it could be clicked when no sequence was selected, causing a crash.
+
+Yeah, I mean, that's the way I see it. If I go to the test emails section and I click the test emails button, then the system will take a couple of minutes to generate stage one and then send it back to the AI properly for stage two. After that, it will send it back to the AI properly for stage three, and then again send it back to the AI properly for stage four. We will see it logically fill out in order, as the data comes in.
+
+We don't need to rebuild anything. We just need to sort of hotwire ourselves into the existing code so that we can use it for testing purposes. Because honestly, last night I accidentally sent two clients real test emails, and I'm a little bit upset about it. So, I think we need to make sure that our testing stays offline.
+
+Right. And then the next thing, of course, is that I should be able to very easily go back into the campaign strategy section and have more conversations with the AI based on the results. Then, I want to be able to:
+
+Click the new button for it, or click the strategy button—or whatever we were just talking about.
+Go over to the test email section.
+Fire off the next set of emails to see if we're more or less getting the results that I want.
