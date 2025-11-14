@@ -589,6 +589,7 @@ export interface IStorage {
   // E-Hub Sequence Recipient Messages operations
   createRecipientMessage(message: InsertSequenceRecipientMessage): Promise<SequenceRecipientMessage>;
   getRecipientMessages(recipientId: string): Promise<SequenceRecipientMessage[]>;
+  deleteRecipientMessages(recipientId: string): Promise<void>;
   
   // E-Hub Strategy Chat operations
   appendSequenceStrategyMessages(sequenceId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>, threadId?: string): Promise<Sequence>;
@@ -4235,6 +4236,12 @@ export class DatabaseStorage implements IStorage {
       .from(sequenceRecipientMessages)
       .where(eq(sequenceRecipientMessages.recipientId, recipientId))
       .orderBy(sequenceRecipientMessages.sentAt);
+  }
+
+  async deleteRecipientMessages(recipientId: string): Promise<void> {
+    await db
+      .delete(sequenceRecipientMessages)
+      .where(eq(sequenceRecipientMessages.recipientId, recipientId));
   }
 
   // E-Hub Strategy Chat operations

@@ -20366,20 +20366,14 @@ Output format example:
         }
         
         // Clean up test data: delete messages first, then recipient
-        const messages = await storage.getRecipientMessages(testRecipientId);
-        for (const message of messages) {
-          await db.delete(sequenceRecipientMessages).where(eq(sequenceRecipientMessages.id, message.id));
-        }
+        await storage.deleteRecipientMessages(testRecipientId);
         await storage.removeRecipient(testRecipientId);
         
         res.json({ emails: generatedEmails });
       } catch (generationError: any) {
         // Clean up test recipient and messages on error
         try {
-          const messages = await storage.getRecipientMessages(testRecipientId);
-          for (const message of messages) {
-            await db.delete(sequenceRecipientMessages).where(eq(sequenceRecipientMessages.id, message.id));
-          }
+          await storage.deleteRecipientMessages(testRecipientId);
           await storage.removeRecipient(testRecipientId);
         } catch (cleanupError) {
           console.error('[SyntheticTest] Failed to clean up test data:', cleanupError);
