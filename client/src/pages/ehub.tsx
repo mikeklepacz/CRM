@@ -24,7 +24,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
 import { TestTube2, RefreshCw, Reply } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
