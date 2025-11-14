@@ -20322,7 +20322,7 @@ Output format example:
       };
       
       // Insert test recipient temporarily
-      await storage.createRecipient(testRecipient);
+      await storage.addRecipients([testRecipient]);
       
       try {
         // Import email generation function
@@ -20370,7 +20370,7 @@ Output format example:
         for (const message of messages) {
           await db.delete(sequenceRecipientMessages).where(eq(sequenceRecipientMessages.id, message.id));
         }
-        await storage.deleteRecipient(testRecipientId);
+        await storage.removeRecipient(testRecipientId);
         
         res.json({ emails: generatedEmails });
       } catch (generationError: any) {
@@ -20380,7 +20380,7 @@ Output format example:
           for (const message of messages) {
             await db.delete(sequenceRecipientMessages).where(eq(sequenceRecipientMessages.id, message.id));
           }
-          await storage.deleteRecipient(testRecipientId);
+          await storage.removeRecipient(testRecipientId);
         } catch (cleanupError) {
           console.error('[SyntheticTest] Failed to clean up test data:', cleanupError);
         }
