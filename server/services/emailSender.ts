@@ -247,13 +247,17 @@ RECIPIENT CONTEXT (for understanding, do not directly quote in email):
     let strategyContext = '';
     if (finalizedStrategy) {
       // Use the concise, AI-distilled campaign brief (90% token savings!)
+      console.log('[EmailAI] Using finalizedStrategy for step', stepNumber, '- Preview:', finalizedStrategy.substring(0, 80) + '...');
       strategyContext = '\n\nCAMPAIGN STRATEGY:\n' + finalizedStrategy;
     } else if (strategyTranscript?.messages && strategyTranscript.messages.length > 0) {
       // Fallback: Replay full conversation (expensive, but functional)
+      console.log('[EmailAI] Using strategyTranscript fallback for step', stepNumber, '- Messages:', strategyTranscript.messages.length);
       strategyContext = '\n\nCAMPAIGN STRATEGY CONTEXT:\n';
       strategyTranscript.messages.forEach(msg => {
         strategyContext += `${msg.role === 'user' ? 'YOU' : 'ASSISTANT'}: ${msg.content}\n`;
       });
+    } else {
+      console.log('[EmailAI] WARNING: No strategy context available for step', stepNumber);
     }
 
     // Build previous email context for follow-ups

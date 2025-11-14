@@ -20284,6 +20284,14 @@ Output format example:
         return res.status(404).json({ message: 'Sequence not found' });
       }
       
+      // Debug: Log strategy status
+      console.log('[SyntheticTest] Sequence strategy status:', {
+        hasFinalizedStrategy: !!(sequence as any).finalizedStrategy,
+        finalizedStrategyPreview: (sequence as any).finalizedStrategy?.substring(0, 100),
+        hasStrategyTranscript: !!sequence.strategyTranscript,
+        transcriptMessageCount: sequence.strategyTranscript?.messages?.length || 0,
+      });
+      
       // Check if sequence has step delays configured
       if (!sequence.stepDelays || sequence.stepDelays.length === 0) {
         return res.status(400).json({ message: 'Sequence has no steps configured. Set up step delays first.' });
@@ -20334,6 +20342,13 @@ Output format example:
         const stepCount = sequence.stepDelays.length;
         for (let stepIndex = 0; stepIndex < stepCount; stepIndex++) {
           const stepNumber = stepIndex + 1;
+          
+          // Debug: Log what we're passing to AI for this step
+          console.log(`[SyntheticTest] Generating step ${stepNumber}:`, {
+            hasFinalizedStrategy: !!(sequence as any).finalizedStrategy,
+            hasStrategyTranscript: !!sequence.strategyTranscript,
+            stepNumber,
+          });
           
           // Generate email using the existing AI logic
           const { subject, body } = await personalizeEmailWithAI(
