@@ -20162,6 +20162,116 @@ Based on the conversation, help the user design an effective email sequence that
     }
   });
 
+  // Generate finalized strategy brief from transcript (admin only)
+  app.post('/api/sequences/:id/finalize-strategy', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check sequence exists and has strategy transcript
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+      
+      if (!sequence.strategyTranscript || !sequence.strategyTranscript.messages || sequence.strategyTranscript.messages.length === 0) {
+        return res.status(400).json({ message: 'No strategy messages to finalize. Start a conversation first.' });
+      }
+      
+      // Get OpenAI settings
+      const openaiSettings = await storage.getOpenaiSettings();
+      if (!openaiSettings || !openaiSettings.apiKey) {
+        return res.status(400).json({ message: 'OpenAI API key not configured' });
+      }
+      
+      const openai = new OpenAI({ apiKey: openaiSettings.apiKey });
+      
+      // Build conversation context from transcript
+      let conversationContext = 'Here is the complete strategy conversation:\n\n';
+      sequence.strategyTranscript.messages.forEach(msg => {
+        const role = msg.role === 'user' ? 'USER' : 'ASSISTANT';
+        conversationContext += `${role}: ${msg.content}\n\n`;
+      });
+      
+      // Call OpenAI to distill the conversation into a brief
+      const systemPrompt = `You are a campaign strategy distillation expert. Your job is to read an entire strategy conversation and distill it into a concise, actionable campaign brief.
+
+REQUIREMENTS:
+- 200-300 words maximum
+- Clear, directive tone (not conversational)
+- Include: target audience, campaign goals, tone/voice, key messaging points, constraints
+- Organize with clear sections using markdown headers
+- This will be injected into email generation prompts, so be specific and actionable
+- Do NOT include explanations or meta-commentary - just the pure strategic brief
+
+Output format example:
+## Target Audience
+[Who we're reaching]
+
+## Campaign Goals
+[What we want to achieve]
+
+## Tone & Voice
+[How we should sound]
+
+## Key Messaging
+[Core points to emphasize]
+
+## Constraints
+[What to avoid or requirements]`;
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: conversationContext },
+        ],
+        temperature: 0.3, // Lower temperature for consistency
+        max_tokens: 500,
+      });
+      
+      const finalizedBrief = completion.choices[0]?.message?.content?.trim() || '';
+      
+      if (!finalizedBrief) {
+        throw new Error('Failed to generate finalized strategy');
+      }
+      
+      // Return the brief without saving (let user edit first)
+      res.json({ finalizedStrategy: finalizedBrief });
+    } catch (error: any) {
+      console.error('Error finalizing strategy:', error);
+      res.status(500).json({ message: error.message || 'Failed to finalize strategy' });
+    }
+  });
+
+  // Save or update finalized strategy (admin only)
+  app.patch('/api/sequences/:id/finalized-strategy', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Validate finalized strategy text
+      const { finalizedStrategy } = z.object({
+        finalizedStrategy: z.string().min(1, 'Finalized strategy cannot be empty'),
+      }).parse(req.body);
+      
+      // Check sequence exists
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+      
+      // Update sequence with finalized strategy
+      const updated = await storage.updateSequence(id, { finalizedStrategy });
+      
+      res.json({ sequence: updated });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid finalized strategy', errors: error.errors });
+      }
+      console.error('Error saving finalized strategy:', error);
+      res.status(500).json({ message: error.message || 'Failed to save finalized strategy' });
+    }
+  });
+
   // Update sequence step delays and auto-generate steps (admin only)
   app.put('/api/sequences/:id/step-delays', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
