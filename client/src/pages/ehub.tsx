@@ -2561,9 +2561,11 @@ export default function EHub() {
                         <div className="pt-2">
                           {(() => {
                             const currentStatus = sequences.find((s) => s.id === selectedSequenceId)?.status || 'draft';
+                            const currentSequence = sequences.find((s) => s.id === selectedSequenceId);
+                            const hasCampaignBrief = !!(currentSequence as any)?.finalizedStrategy?.trim();
                             const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
                             const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0);
-                            const canActivate = hasMessages && hasValidDelays;
+                            const canActivate = hasCampaignBrief && hasMessages && hasValidDelays;
                             
                             return currentStatus === 'active' ? (
                               <Button
@@ -2583,9 +2585,20 @@ export default function EHub() {
                                 <Button
                                   onClick={() => {
                                     // Double-check validation before activating
+                                    const currentSequence = sequences.find((s) => s.id === selectedSequenceId);
+                                    const hasCampaignBrief = !!(currentSequence as any)?.finalizedStrategy?.trim();
                                     const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
                                     const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0) && 
                                       stepDelays.every((d, i) => i === 0 || d > stepDelays[i - 1]);
+                                    
+                                    if (!hasCampaignBrief) {
+                                      toast({
+                                        title: "Cannot Activate",
+                                        description: "Campaign Brief is required. Complete 'Finalize Strategy' in the Strategy tab first.",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
                                     
                                     if (!hasMessages) {
                                       toast({
@@ -2620,6 +2633,7 @@ export default function EHub() {
                                   <Alert>
                                     <AlertCircle className="h-4 w-4" />
                                     <AlertDescription className="text-xs">
+                                      {!hasCampaignBrief && "Complete 'Finalize Strategy' first. "}
                                       {!hasMessages && "Add at least one strategy message. "}
                                       {!hasValidDelays && "Configure valid step delays (non-negative, ascending)."}
                                     </AlertDescription>
@@ -2970,16 +2984,34 @@ export default function EHub() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button
-                  variant="destructive"
-                  onClick={() => syntheticTestMutation.mutate()}
-                  disabled={!selectedSequenceId || syntheticTestMutation.isPending}
-                  data-testid="button-run-synthetic-test"
-                >
-                  {syntheticTestMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {!syntheticTestMutation.isPending && <TestTube2 className="w-4 h-4 mr-2" />}
-                  {syntheticTestMutation.isPending ? 'Generating...' : 'Run Test Sequence'}
-                </Button>
+                {(() => {
+                  const currentSequence = sequences.find((s) => s.id === selectedSequenceId);
+                  const hasCampaignBrief = !!(currentSequence as any)?.finalizedStrategy?.trim();
+                  const canTest = selectedSequenceId && hasCampaignBrief;
+                  
+                  return (
+                    <>
+                      <Button
+                        variant="destructive"
+                        onClick={() => syntheticTestMutation.mutate()}
+                        disabled={!canTest || syntheticTestMutation.isPending}
+                        data-testid="button-run-synthetic-test"
+                      >
+                        {syntheticTestMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                        {!syntheticTestMutation.isPending && <TestTube2 className="w-4 h-4 mr-2" />}
+                        {syntheticTestMutation.isPending ? 'Generating...' : 'Run Test Sequence'}
+                      </Button>
+                      {selectedSequenceId && !hasCampaignBrief && (
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-xs">
+                            Campaign Brief required. Complete "Finalize Strategy" in the Strategy tab first.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Preview results */}
                 {syntheticPreview && syntheticPreview.length > 0 && (

@@ -243,22 +243,16 @@ RECIPIENT CONTEXT (for understanding, do not directly quote in email):
 - Sales Summary: ${recipient.salesSummary || 'Not available'}
 `.trim();
 
-    // Build strategy context - PRIORITIZE finalizedStrategy over full transcript
-    let strategyContext = '';
-    if (finalizedStrategy) {
-      // Use the concise, AI-distilled campaign brief (90% token savings!)
-      console.log('[EmailAI] Using finalizedStrategy for step', stepNumber, '- Preview:', finalizedStrategy.substring(0, 80) + '...');
-      strategyContext = '\n\nCAMPAIGN STRATEGY:\n' + finalizedStrategy;
-    } else if (strategyTranscript?.messages && strategyTranscript.messages.length > 0) {
-      // Fallback: Replay full conversation (expensive, but functional)
-      console.log('[EmailAI] Using strategyTranscript fallback for step', stepNumber, '- Messages:', strategyTranscript.messages.length);
-      strategyContext = '\n\nCAMPAIGN STRATEGY CONTEXT:\n';
-      strategyTranscript.messages.forEach(msg => {
-        strategyContext += `${msg.role === 'user' ? 'YOU' : 'ASSISTANT'}: ${msg.content}\n`;
-      });
-    } else {
-      console.log('[EmailAI] WARNING: No strategy context available for step', stepNumber);
+    // CRITICAL: Campaign Brief (finalizedStrategy) is MANDATORY - NO FALLBACKS
+    if (!finalizedStrategy || finalizedStrategy.trim() === '') {
+      const error = new Error('FATAL: Campaign Brief (finalizedStrategy) is required for email generation. Sequence cannot proceed without finalized strategy.');
+      console.error('[EmailAI] ❌ FATAL ERROR:', error.message, '- Recipient:', recipient.email, '- Step:', stepNumber);
+      throw error;
     }
+
+    // Use the Campaign Brief (90% token savings compared to replaying full transcript)
+    console.log('[EmailAI] ✅ Using Campaign Brief (finalizedStrategy) for step', stepNumber, '- Preview:', finalizedStrategy.substring(0, 80) + '...');
+    const strategyContext = '\n\nCAMPAIGN STRATEGY:\n' + finalizedStrategy;
 
     // Build previous email context for follow-ups
     let previousEmailContext = '';

@@ -1,0 +1,89 @@
+How E-Hub Works (Simple Explanation)
+E-Hub is an automated email campaign system that sends personalized cold outreach emails to potential customers (cannabis dispensaries) using AI to write every message.
+
+The Big Picture
+Instead of manually writing hundreds of similar emails, you:
+
+Create a sequence (just give it a name like "Cold Outreach Q1 2025")
+Chat with AI to plan your campaign strategy (what you want to say, who you're targeting, your tone)
+Set step delays (how many days between Email 1, Email 2, Email 3, etc.)
+Add recipients (import contacts from Google Sheets)
+Activate the sequence
+Then the system automatically generates unique emails for each person and sends them at smart times.
+
+How AI Generates an Email (Step-by-Step)
+Step 1: You Plan the Campaign Strategy
+You chat with an AI assistant about your campaign goals
+Example conversation:
+You: "I'm reaching out to dispensaries to offer hemp wick products"
+AI: "What's your main value proposition?"
+You: "We help them reduce plastic waste and improve sustainability"
+AI: "Should I emphasize eco-friendly messaging or cost savings?"
+You: "Focus on sustainability first, then mention it saves money"
+This conversation gets saved as your campaign strategy.
+
+Step 2: The System Knows About the Recipient
+For each contact, the system already has:
+
+Their name (e.g., "Sarah Johnson")
+Their email
+Their dispensary info (name, location, business hours)
+A brief summary about their business (pulled from Leafly or your database)
+Step 3: AI Writes a Unique Email
+When it's time to send, the AI gets three things:
+
+Your campaign strategy (the conversation you had about tone, messaging, goals)
+Recipient context (their name, business info)
+Instructions (write short emails, don't sound spammy, use specific formatting)
+The AI then generates:
+
+A unique subject line (3-5 words, under 35 characters)
+A personalized email body (under 70 words for first email, even shorter for follow-ups)
+Step 4: AI Makes Each Email Different
+The AI doesn't use templates - it writes fresh content every time. Two emails might have:
+
+Different opening sentences
+Different ways of explaining your product
+Different calls-to-action
+But they all follow your campaign strategy
+Step 5: Follow-Ups Work Automatically
+If Email 1 doesn't get a reply:
+
+After the delay you set (e.g., 3 days), AI writes a follow-up email
+It references the previous email: "Following up on my message from a few days ago..."
+The subject line uses "Re:" to keep the email thread together
+It adds new value instead of repeating the intro
+Step 6: The System Stops When Appropriate
+Email sending stops automatically when:
+
+The recipient replies (detected by checking Gmail)
+The sequence is complete (sent all steps)
+You manually pause or remove them
+Smart Timing Example
+Let's say you set:
+
+Sequence: 3 emails with 0 days, 3 days, 7 days delays
+Sending hours: 9 AM - 2 PM (your timezone)
+Daily limit: 200 emails
+The system will:
+
+Email 1: Schedule immediately (but respects recipient's business hours and your sending window)
+Email 2: Wait 3 days, then send during their morning hours (e.g., 1 hour after they open)
+Email 3: Wait 7 more days, same smart timing
+All sends are spaced out throughout the day to avoid spam flags, and nothing goes out on weekends if you enable "skip weekends."
+
+Real Example Flow
+You add "Green Leaf Dispensary" to a sequence:
+
+System checks their timezone (Pacific) and business hours (9 AM - 9 PM)
+Calculates best send time: 10 AM Pacific (1 hour after they open)
+AI generates Email 1:
+Subject: "Quick Question"
+Body: "Hi, I found your contact on Leafly. We help dispensaries like Green Leaf reduce plastic waste with our hemp wick alternative. Would you be open to a quick call this week?"
+Email sends automatically at 10 AM Pacific
+System monitors Gmail for replies
+After 3 days with no reply, AI generates Email 2:
+Subject: "Re: Quick Question"
+Body: "Following up on my email from last week. Wanted to share that we just helped a similar dispensary cut their plastic usage by 40%. Would 15 minutes work to discuss?"
+If they reply at any point, system stops sending and marks them as "replied"
+The key insight: You write the strategy once, AI writes hundreds of unique emails following that strategy. No copy-paste, no templates, every email feels personal and natural.

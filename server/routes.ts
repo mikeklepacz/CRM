@@ -19960,6 +19960,21 @@ Use this store information to provide context-aware responses. When helping draf
       // Validate update payload
       const updates = insertSequenceSchema.partial().parse(req.body);
 
+      // CRITICAL: Campaign Brief is REQUIRED for activation
+      if (updates.status === 'active') {
+        const existingSequence = await storage.getSequence(id);
+        if (!existingSequence) {
+          return res.status(404).json({ message: 'Sequence not found' });
+        }
+        
+        const finalizedStrategy = (existingSequence as any).finalizedStrategy || (updates as any).finalizedStrategy;
+        if (!finalizedStrategy || finalizedStrategy.trim() === '') {
+          return res.status(422).json({ 
+            message: 'Campaign Brief is required before activation. Complete "Finalize Strategy" in the Strategy tab first.' 
+          });
+        }
+      }
+
       const sequence = await storage.updateSequence(id, updates);
       
       if (!sequence) {
@@ -20282,6 +20297,14 @@ Output format example:
       const sequence = await storage.getSequence(id);
       if (!sequence) {
         return res.status(404).json({ message: 'Sequence not found' });
+      }
+      
+      // CRITICAL: Campaign Brief is REQUIRED for testing
+      const finalizedStrategy = (sequence as any).finalizedStrategy;
+      if (!finalizedStrategy || finalizedStrategy.trim() === '') {
+        return res.status(422).json({ 
+          message: 'Campaign Brief is required before testing. Complete "Finalize Strategy" in the Strategy tab first.' 
+        });
       }
       
       // Debug: Log strategy status
