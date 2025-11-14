@@ -346,9 +346,19 @@ export async function coordinatorTick(): Promise<void> {
       const eligibleAt = new Date(candidate.eligibleAt);
       const anchorTime = eligibleAt > queueTail! ? eligibleAt : queueTail!;
       
+      // Apply rate-limit spacing to queue tail (spacing BEFORE validation)
+      const spacedTime = new Date(queueTail!.getTime() + (minutesBetweenSends * 60 * 1000));
+      
+      // Add random jitter
+      const appliedJitterMinutes = randomJitter(settings.minDelayMinutes, settings.maxDelayMinutes);
+      const jitteredTime = new Date(spacedTime.getTime() + (appliedJitterMinutes * 60 * 1000));
+      
+      // Use spaced+jittered time as baseline, but ensure it's not before eligible_at
+      const proposedTime = jitteredTime > anchorTime ? jitteredTime : anchorTime;
+      
       // Call computeNextSendSlot to find next valid slot (respects admin + client windows)
       const sendSlot = computeNextSendSlot({
-        baselineTime: anchorTime,
+        baselineTime: proposedTime,
         adminTimezone,
         adminStartHour: settings.sendingHoursStart,
         adminEndHour: settings.sendingHoursEnd,
@@ -365,7 +375,7 @@ export async function coordinatorTick(): Promise<void> {
         continue;
       }
       
-      // Calculate jitter (in minutes) for transparency
+      // Calculate actual jitter (in minutes) for transparency (includes spacing + jitter + window adjustments)
       const jitterMs = sendSlot.getTime() - anchorTime.getTime();
       const jitterMinutes = Math.round(jitterMs / 60000);
       
