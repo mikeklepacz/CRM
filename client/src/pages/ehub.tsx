@@ -1250,7 +1250,7 @@ export default function EHub() {
     onSuccess: () => {
       toast({
         title: "Settings Updated",
-        description: "E-Hub settings have been saved successfully.",
+        description: "Queue is being rescheduled with new settings. Coordinator will pick up changes on next tick.",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/settings'] });
     },
