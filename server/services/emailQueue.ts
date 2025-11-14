@@ -420,8 +420,7 @@ async function processEmailQueue() {
             { 
               promptInjection: settings.promptInjection || undefined, 
               keywordBin: settings.keywordBin || undefined,
-              signature: sequence.signature || undefined,
-              finalizedStrategy: sequence.finalizedStrategy || null
+              signature: sequence.signature || undefined
             },
             currentStepNumber
           );

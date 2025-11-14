@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -13,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Sparkles } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -969,8 +968,8 @@ export default function EHub() {
   const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
   const [testEmail, setTestEmail] = useState("");
   const [sheetId, setSheetId] = useState("");
-  const [contactedFilter, setContactedFilter] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState("sequences");
+  const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
+  const [activeTab, setActiveTab] = useState("all-contacts");
   
   // Strategy chat state
   const [strategyMessage, setStrategyMessage] = useState("");
@@ -1004,15 +1003,6 @@ export default function EHub() {
   // Nuke Test Data state
   const [nukeDialogOpen, setNukeDialogOpen] = useState(false);
 
-  // Finalize Strategy state
-  const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
-  const [finalizedStrategyDraft, setFinalizedStrategyDraft] = useState("");
-
-  // Email Preview state  
-  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
-  const [previewEmails, setPreviewEmails] = useState<Array<{step: number; subject: string; body: string}>>([]);
-  const [previewContact, setPreviewContact] = useState<{name: string; email: string} | null>(null);
-
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
     minDelayMinutes: 1,
@@ -1028,19 +1018,12 @@ export default function EHub() {
   });
 
   // Fetch sequences
-  const { data: sequences, isLoading, error: sequencesError } = useQuery<Sequence[]>({
+  const { data: sequences, isLoading } = useQuery<Sequence[]>({
     queryKey: ['/api/sequences'],
   });
 
-  // Log errors for debugging
-  useEffect(() => {
-    if (sequencesError) {
-      console.error('[E-Hub] Error loading sequences:', sequencesError);
-    }
-  }, [sequencesError]);
-
   // Fetch E-Hub settings
-  const { data: settings, error: settingsError, isError: isSettingsError } = useQuery<EhubSettings>({
+  const { data: settings } = useQuery<EhubSettings>({
     queryKey: ['/api/ehub/settings'],
   });
 
@@ -1124,9 +1107,6 @@ export default function EHub() {
   // Update sequence status mutation
   const updateSequenceStatusMutation = useMutation({
     mutationFn: async (status: string) => {
-      if (!selectedSequenceId) {
-        throw new Error('Please select a sequence first');
-      }
       return await apiRequest("PATCH", `/api/sequences/${selectedSequenceId}`, { status });
     },
     onSuccess: () => {
@@ -1139,77 +1119,7 @@ export default function EHub() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error?.message || String(error) || "Failed to update sequence status",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Finalize strategy mutation - calls AI to distill transcript
-  const finalizeStrategyMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedSequenceId) {
-        throw new Error('Please select a sequence first');
-      }
-      const response = await apiRequest("POST", `/api/sequences/${selectedSequenceId}/finalize-strategy`, {});
-      return response;
-    },
-    onSuccess: (data: any) => {
-      setFinalizedStrategyDraft(data.finalizedStrategy);
-      setFinalizeDialogOpen(true);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || String(error) || "Failed to finalize strategy",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Save finalized strategy mutation
-  const saveFinalizedStrategyMutation = useMutation({
-    mutationFn: async (finalizedStrategy: string) => {
-      if (!selectedSequenceId) {
-        throw new Error('Please select a sequence first');
-      }
-      return await apiRequest("PATCH", `/api/sequences/${selectedSequenceId}/finalized-strategy`, { finalizedStrategy });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
-      setFinalizeDialogOpen(false);
-      toast({
-        title: "Strategy Finalized",
-        description: "Your campaign strategy has been saved. Email generation will now use this brief.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || String(error) || "Failed to save finalized strategy",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Generate preview emails mutation
-  const generatePreviewEmailsMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedSequenceId) {
-        throw new Error('Please select a sequence first');
-      }
-      const response = await apiRequest("POST", `/api/sequences/${selectedSequenceId}/preview-emails`, {});
-      return response;
-    },
-    onSuccess: (data: any) => {
-      setPreviewEmails(data.previewEmails);
-      setPreviewContact(data.contact);
-      setPreviewDialogOpen(true);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || String(error) || "Failed to generate preview emails",
+        description: error.message || "Failed to update sequence status",
         variant: "destructive",
       });
     },
@@ -1627,20 +1537,6 @@ export default function EHub() {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-8 h-8 animate-spin" />
-      </div>
-    );
-  }
-
-  if (sequencesError) {
-    return (
-      <div className="p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading E-Hub</AlertTitle>
-          <AlertDescription>
-            {(sequencesError as Error).message || 'Failed to load email sequences'}
-          </AlertDescription>
-        </Alert>
       </div>
     );
   }
@@ -2331,37 +2227,6 @@ export default function EHub() {
                         )}
                       </Button>
                     </div>
-
-                    {/* Finalize Strategy Button */}
-                    {strategyTranscript && strategyTranscript.messages && strategyTranscript.messages.length > 0 && (
-                      <div className="flex justify-end gap-2 pt-2">
-                        {sequences?.find(s => s.id === selectedSequenceId)?.finalizedStrategy && (
-                          <Badge variant="secondary" className="gap-1">
-                            <Check className="w-3 h-3" />
-                            Strategy Finalized
-                          </Badge>
-                        )}
-                        <Button
-                          variant="outline"
-                          onClick={() => finalizeStrategyMutation.mutate()}
-                          disabled={finalizeStrategyMutation.isPending}
-                          data-testid="button-finalize-strategy"
-                          className="gap-2"
-                        >
-                          {finalizeStrategyMutation.isPending ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Generating Brief...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4" />
-                              {sequences?.find(s => s.id === selectedSequenceId)?.finalizedStrategy ? 'Re-finalize' : 'Finalize'} Strategy
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -2499,37 +2364,6 @@ export default function EHub() {
                         Save Delays
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-
-                {/* Email Preview Card */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Email Preview</CardTitle>
-                    <CardDescription>
-                      Generate a test preview of all 4 steps in your sequence using a random real contact. No emails will be sent.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button
-                      variant="outline"
-                      onClick={() => generatePreviewEmailsMutation.mutate()}
-                      disabled={!selectedSequenceId || generatePreviewEmailsMutation.isPending}
-                      data-testid="button-generate-preview"
-                      className="w-full gap-2"
-                    >
-                      {generatePreviewEmailsMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Generating Preview...
-                        </>
-                      ) : (
-                        <>
-                          <Mail className="w-4 h-4" />
-                          Generate Email Preview
-                        </>
-                      )}
-                    </Button>
                   </CardContent>
                 </Card>
 
@@ -2692,18 +2526,6 @@ export default function EHub() {
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-4">
-          {isSettingsError && (
-            <Card className="border-destructive">
-              <CardHeader>
-                <CardTitle className="text-destructive">Settings Error</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Unable to load E-Hub settings. Using default values. Error: {settingsError?.message || 'Unknown error'}
-                </p>
-              </CardContent>
-            </Card>
-          )}
           <Card>
             <CardHeader>
               <CardTitle>Global E-Hub Settings</CardTitle>
@@ -3419,89 +3241,6 @@ export default function EHub() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Finalize Strategy Dialog */}
-      <Dialog open={finalizeDialogOpen} onOpenChange={setFinalizeDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Finalize Campaign Strategy</DialogTitle>
-            <DialogDescription>
-              Review and edit the AI-generated campaign brief. This concise brief will be used for all email generation (instead of the full conversation history), improving performance and consistency.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="finalized-strategy">Campaign Brief (200-300 words)</Label>
-              <Textarea
-                id="finalized-strategy"
-                value={finalizedStrategyDraft}
-                onChange={(e) => setFinalizedStrategyDraft(e.target.value)}
-                className="min-h-[300px] font-mono text-sm"
-                placeholder="AI-generated campaign brief will appear here..."
-                data-testid="textarea-finalized-strategy"
-              />
-              <p className="text-xs text-muted-foreground mt-2">
-                {finalizedStrategyDraft.split(' ').length} words
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setFinalizeDialogOpen(false)}
-              data-testid="button-cancel-finalize"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => saveFinalizedStrategyMutation.mutate(finalizedStrategyDraft)}
-              disabled={!finalizedStrategyDraft.trim() || saveFinalizedStrategyMutation.isPending}
-              data-testid="button-save-finalized-strategy"
-            >
-              {saveFinalizedStrategyMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Save Strategy
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Email Preview Dialog */}
-      <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Email Sequence Preview</DialogTitle>
-            <DialogDescription>
-              Preview of the 4-step email sequence generated for {previewContact?.name} ({previewContact?.email}). These emails were NOT sent.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-            {previewEmails.map((email) => (
-              <Card key={email.step}>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Badge variant="outline">Step {email.step}</Badge>
-                    {email.subject}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div 
-                    className="prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: email.body }}
-                  />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="flex justify-end">
-            <Button
-              onClick={() => setPreviewDialogOpen(false)}
-              data-testid="button-close-preview"
-            >
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
