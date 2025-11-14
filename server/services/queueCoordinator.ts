@@ -1,5 +1,5 @@
 import { addDays, addMinutes } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+import { toZonedTime, zonedTimeToUtc, formatInTimeZone } from 'date-fns-tz';
 import { computeNextSendSlot } from './smartTiming';
 import type { EhubSettings } from '@shared/schema';
 import { storage } from '../storage';
@@ -31,7 +31,7 @@ export function isWeekend(date: Date): boolean {
  */
 export function inActiveWindow(now: Date, settings: EhubSettings): boolean {
   const hour = now.getHours();
-  return hour >= settings.adminStartHour && hour < settings.adminEndHour;
+  return hour >= settings.sendingHoursStart && hour < settings.sendingHoursEnd;
 }
 
 /**
@@ -40,7 +40,7 @@ export function inActiveWindow(now: Date, settings: EhubSettings): boolean {
  */
 export function runsLeftInWindow(now: Date, settings: EhubSettings): number {
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const endMinutes = settings.adminEndHour * 60;
+  const endMinutes = settings.sendingHoursEnd * 60;
   
   if (currentMinutes >= endMinutes) return 1;
   
@@ -89,12 +89,194 @@ export function randomJitter(minMinutes: number, maxMinutes: number): number {
 }
 
 /**
- * Get start of today (midnight) for daily quota tracking
+ * Get start of today (midnight) for daily quota tracking in a specific timezone
+ * @param now - Current time
+ * @param timezone - Timezone to calculate midnight in (e.g., 'America/New_York')
+ * @returns Date representing midnight in the target timezone (as UTC instant)
  */
-export function getStartOfToday(now: Date): Date {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  return d;
+export function getStartOfToday(now: Date, timezone: string): Date {
+  // Get the date in the target timezone (e.g., "2025-05-05")
+  const dateString = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
+  
+  // Create midnight timestamp in that timezone (e.g., "2025-05-05 00:00:00")
+  const midnightString = `${dateString} 00:00:00`;
+  
+  // Parse and convert to UTC instant
+  return zonedTimeToUtc(midnightString, timezone);
+}
+
+// ============================================================================
+// Coordinator Tick - Eligibility-Based Scheduling
+// ============================================================================
+
+/**
+ * Coordinator tick function - runs every 5 minutes to assign send slots
+ * 
+ * Architecture:
+ * - Stateless: No memory of tails or offsets
+ * - Transactional: Uses FOR UPDATE SKIP LOCKED for concurrency safety
+ * - Dual-window: Validates both admin window AND client business hours
+ * - Dynamic batching: Adjusts batch size based on remaining capacity and runs
+ * 
+ * Flow:
+ * 1. Check weekend/active window - exit early if not allowed
+ * 2. Count today's sent emails
+ * 3. Calculate remaining capacity
+ * 4. Query eligible emails (eligible_at <= now, scheduled_at IS NULL)
+ * 5. Filter by client business hours
+ * 6. Assign scheduled_at with random jitter
+ * 7. Commit transaction
+ */
+export async function coordinatorTick(): Promise<void> {
+  const now = new Date();
+  
+  // Get settings
+  const settings = await storage.getEhubSettings();
+  if (!settings) {
+    console.log('[Coordinator] No E-Hub settings found');
+    return;
+  }
+  
+  // Get admin timezone (use server timezone for now)
+  // TODO: Add adminTimezone to ehubSettings schema or get from admin user preferences
+  const adminTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
+  // Convert now to admin's timezone for window checking
+  const adminLocalTime = toZonedTime(now, adminTimezone);
+  
+  // Check weekend in admin's timezone
+  if (settings.skipWeekends && isWeekend(adminLocalTime)) {
+    console.log('[Coordinator] Skipping - weekend in admin timezone');
+    return;
+  }
+  
+  // Check active window in admin's timezone
+  if (!inActiveWindow(adminLocalTime, settings)) {
+    console.log('[Coordinator] Skipping - outside admin window');
+    return;
+  }
+  
+  // Get midnight in admin's timezone for quota tracking
+  const startOfToday = getStartOfToday(now, adminTimezone);
+  
+  // Count emails sent today
+  const { db } = await import('../db');
+  const { sequenceScheduledSends, sequenceRecipients } = await import('@shared/schema');
+  const { eq, and, gte, lte, isNull, isNotNull, sql } = await import('drizzle-orm');
+  
+  const [sentCountResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(sequenceScheduledSends)
+    .where(
+      and(
+        gte(sequenceScheduledSends.sentAt, startOfToday),
+        isNotNull(sequenceScheduledSends.sentAt)
+      )
+    );
+  
+  const sentToday = sentCountResult?.count || 0;
+  const remainingCapacity = settings.dailyEmailLimit - sentToday;
+  
+  if (remainingCapacity <= 0) {
+    console.log('[Coordinator] Daily limit reached');
+    return;
+  }
+  
+  // Calculate dynamic batch size using admin's local time
+  const remainingRuns = runsLeftInWindow(adminLocalTime, settings);
+  const batchSize = Math.max(1, Math.min(3, Math.ceil(remainingCapacity / remainingRuns)));
+  
+  // Query more candidates than batch size to allow client window filtering
+  const candidatesLimit = batchSize * 5;
+  
+  // Start transaction
+  const result = await db.transaction(async (tx) => {
+    // Query eligible emails with FOR UPDATE SKIP LOCKED
+    const candidates = await tx
+      .select({
+        id: sequenceScheduledSends.id,
+        recipientId: sequenceScheduledSends.recipientId,
+        stepNumber: sequenceScheduledSends.stepNumber,
+        eligibleAt: sequenceScheduledSends.eligibleAt,
+        timezone: sequenceRecipients.timezone,
+        businessHours: sequenceRecipients.businessHours,
+      })
+      .from(sequenceScheduledSends)
+      .innerJoin(
+        sequenceRecipients,
+        eq(sequenceScheduledSends.recipientId, sequenceRecipients.id)
+      )
+      .where(
+        and(
+          lte(sequenceScheduledSends.eligibleAt, now),
+          isNull(sequenceScheduledSends.scheduledAt),
+          isNull(sequenceScheduledSends.sentAt),
+          eq(sequenceScheduledSends.status, 'pending')
+        )
+      )
+      .orderBy(
+        sequenceScheduledSends.eligibleAt,
+        sequenceScheduledSends.recipientId,
+        sequenceScheduledSends.stepNumber,
+        sequenceScheduledSends.id
+      )
+      .limit(candidatesLimit)
+      .for('update', { skipLocked: true });
+    
+    if (candidates.length === 0) {
+      console.log('[Coordinator] No eligible emails found');
+      return 0;
+    }
+    
+    let scheduledCount = 0;
+    
+    for (const candidate of candidates) {
+      if (scheduledCount >= batchSize) {
+        break;
+      }
+      
+      // Convert to client's local time
+      const tz = candidate.timezone || 'UTC';
+      const clientLocalTime = toZonedTime(now, tz);
+      
+      // Check client business hours window
+      if (!clientWindowAllows(
+        clientLocalTime,
+        candidate.businessHours || '9-17',
+        tz,
+        settings
+      )) {
+        // Skip this candidate - will be retried on next coordinator run
+        continue;
+      }
+      
+      // Calculate base time - must be at least eligibleAt to respect sequence delays
+      const eligibleAt = new Date(candidate.eligibleAt);
+      const baseTime = now > eligibleAt ? now : eligibleAt;
+      
+      // Assign scheduled_at with random jitter anchored to baseTime
+      const jitterMinutes = randomJitter(
+        settings.minDelayMinutes,
+        settings.maxDelayMinutes
+      );
+      const scheduledAt = new Date(baseTime.getTime() + jitterMinutes * 60 * 1000);
+      
+      // Update the row
+      await tx
+        .update(sequenceScheduledSends)
+        .set({ 
+          scheduledAt,
+          jitterMinutes: jitterMinutes.toString()
+        })
+        .where(eq(sequenceScheduledSends.id, candidate.id));
+      
+      scheduledCount++;
+    }
+    
+    return scheduledCount;
+  });
+  
+  console.log(`[Coordinator] Scheduled ${result} emails (${sentToday}/${settings.dailyEmailLimit} sent today)`);
 }
 
 export interface QueueSlotRequest {

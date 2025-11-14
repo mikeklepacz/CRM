@@ -1359,7 +1359,8 @@ export const sequenceScheduledSends = pgTable("sequence_scheduled_sends", {
   sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: 'cascade' }),
   stepNumber: integer("step_number").notNull(), // Which step this is (1, 2, 3, etc.)
   repeatIndex: integer("repeat_index").notNull().default(0), // 0=first send, 1+=repeat iterations
-  scheduledAt: timestamp("scheduled_at").notNull(), // When to send this email
+  eligibleAt: timestamp("eligible_at").notNull(), // When email becomes eligible for scheduling (based on sequence delays)
+  scheduledAt: timestamp("scheduled_at"), // When coordinator assigns specific send time (nullable until coordinator assigns)
   jitterMinutes: decimal("jitter_minutes", { precision: 10, scale: 4 }), // Random jitter applied (preserved for transparency)
   status: varchar("status", { length: 50 }).notNull().default('pending'), // 'pending', 'processing', 'sent', 'cancelled', 'failed'
   sentAt: timestamp("sent_at"), // When actually sent
@@ -1368,6 +1369,7 @@ export const sequenceScheduledSends = pgTable("sequence_scheduled_sends", {
   subject: text("subject"), // Subject line (populated after send)
   body: text("body"), // Body content (populated after send)
   errorLog: text("error_log"), // Error message if send failed
+  retryAttempts: integer("retry_attempts").notNull().default(0), // Number of send retries
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_scheduled_sends_recipient").on(table.recipientId),
@@ -1375,6 +1377,7 @@ export const sequenceScheduledSends = pgTable("sequence_scheduled_sends", {
   index("idx_scheduled_sends_scheduled_at").on(table.scheduledAt),
   index("idx_scheduled_sends_status").on(table.status),
   index("idx_scheduled_sends_pending").on(table.status, table.scheduledAt), // Optimized for queue queries
+  index("idx_scheduled_sends_eligible_at").on(table.eligibleAt), // For coordinator queries
   uniqueIndex("idx_scheduled_sends_unique").on(table.recipientId, table.stepNumber, table.repeatIndex),
 ]);
 
