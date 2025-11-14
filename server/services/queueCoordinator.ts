@@ -193,8 +193,29 @@ export async function coordinatorTick(): Promise<void> {
     return;
   }
   
-  // Get admin timezone (use server timezone for now)
-  const adminTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Get admin user timezone from user_preferences
+  const { db } = await import('../db');
+  const { users, userPreferences } = await import('@shared/schema');
+  const { eq } = await import('drizzle-orm');
+  
+  const adminUsers = await db
+    .select({
+      userId: users.id,
+      timezone: userPreferences.timezone,
+    })
+    .from(users)
+    .leftJoin(userPreferences, eq(users.id, userPreferences.userId))
+    .where(eq(users.role, 'admin'))
+    .limit(1);
+  
+  const adminUser = adminUsers[0];
+  
+  if (!adminUser?.timezone) {
+    console.log('[Coordinator] No admin user timezone found in preferences, using UTC');
+  }
+  
+  const adminTimezone = adminUser?.timezone || 'UTC';
+  console.log(`[Coordinator] Using admin timezone: ${adminTimezone}`);
   
   // Find next valid admin sending window (handles weekends, past windows, etc.)
   const { windowStart, windowEnd, dayStart } = findNextAdminWindowBounds(
@@ -208,9 +229,8 @@ export async function coordinatorTick(): Promise<void> {
   console.log(`[Coordinator] Window: ${windowStart.toISOString()} - ${windowEnd.toISOString()}, inWindow: ${inWindow}`);
   
   // Count emails sent in the quota day (starting from dayStart)
-  const { db } = await import('../db');
   const { sequenceScheduledSends, sequenceRecipients } = await import('@shared/schema');
-  const { eq, and, gte, lte, isNull, isNotNull, sql, desc } = await import('drizzle-orm');
+  const { and, gte, lte, isNull, isNotNull, sql, desc } = await import('drizzle-orm');
   
   const [sentCountResult] = await db
     .select({ count: sql<number>`count(*)::int` })
