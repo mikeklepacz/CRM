@@ -2542,132 +2542,219 @@ export default function EHub() {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <h3 className="font-semibold">Sending Configuration</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="minDelay">Min Delay Between Sends (minutes)</Label>
+                    <Label htmlFor="startHour">Start Hour (24h)</Label>
                     <Input
-                      id="minDelay"
-                      data-testid="input-settings-min-delay"
+                      id="startHour"
+                      data-testid="input-settings-start-hour"
                       type="number"
-                      value={settingsForm.minDelayMinutes}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, minDelayMinutes: parseInt(e.target.value) || 1 })}
-                      min={1}
-                      max={60}
+                      value={settingsForm.sendingHoursStart}
+                      onChange={(e) => {
+                        const newStart = parseInt(e.target.value) || 9;
+                        const optimal = calculateOptimalDelays(
+                          newStart,
+                          settingsForm.sendingHoursEnd,
+                          settingsForm.clientWindowStartOffset,
+                          settingsForm.clientWindowEndHour,
+                          settingsForm.dailyEmailLimit
+                        );
+                        setSettingsForm({ 
+                          ...settingsForm, 
+                          sendingHoursStart: newStart,
+                          minDelayMinutes: optimal.minDelayMinutes,
+                          maxDelayMinutes: optimal.maxDelayMinutes
+                        });
+                      }}
+                      min={0}
+                      max={23}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="maxDelay">Max Delay Between Sends (minutes)</Label>
+                    <Label htmlFor="endHour">End Hour (24h)</Label>
                     <Input
-                      id="maxDelay"
-                      data-testid="input-settings-max-delay"
+                      id="endHour"
+                      data-testid="input-settings-end-hour"
                       type="number"
-                      value={settingsForm.maxDelayMinutes}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, maxDelayMinutes: parseInt(e.target.value) || 3 })}
+                      value={settingsForm.sendingHoursEnd}
+                      onChange={(e) => {
+                        const newEnd = parseInt(e.target.value) || 14;
+                        const optimal = calculateOptimalDelays(
+                          settingsForm.sendingHoursStart,
+                          newEnd,
+                          settingsForm.clientWindowStartOffset,
+                          settingsForm.clientWindowEndHour,
+                          settingsForm.dailyEmailLimit
+                        );
+                        setSettingsForm({ 
+                          ...settingsForm, 
+                          sendingHoursEnd: newEnd,
+                          minDelayMinutes: optimal.minDelayMinutes,
+                          maxDelayMinutes: optimal.maxDelayMinutes
+                        });
+                      }}
+                      min={0}
+                      max={23}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="dailyLimit">Daily Email Limit</Label>
+                    <Input
+                      id="dailyLimit"
+                      data-testid="input-settings-daily-limit"
+                      type="number"
+                      value={settingsForm.dailyEmailLimit}
+                      onChange={(e) => {
+                        const newLimit = parseInt(e.target.value) || 200;
+                        const optimal = calculateOptimalDelays(
+                          settingsForm.sendingHoursStart,
+                          settingsForm.sendingHoursEnd,
+                          settingsForm.clientWindowStartOffset,
+                          settingsForm.clientWindowEndHour,
+                          newLimit
+                        );
+                        setSettingsForm({ 
+                          ...settingsForm, 
+                          dailyEmailLimit: newLimit,
+                          minDelayMinutes: optimal.minDelayMinutes,
+                          maxDelayMinutes: optimal.maxDelayMinutes
+                        });
+                      }}
                       min={1}
-                      max={120}
+                      max={2000}
                     />
                   </div>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  Your sending window: when your team can send emails (Gmail limit: 500-2000/day)
+                </p>
 
-                <div>
-                  <Label htmlFor="dailyLimit">Daily Email Limit</Label>
-                  <Input
-                    id="dailyLimit"
-                    data-testid="input-settings-daily-limit"
-                    type="number"
-                    value={settingsForm.dailyEmailLimit}
-                    onChange={(e) => {
-                      const newLimit = parseInt(e.target.value) || 200;
-                      const optimal = calculateOptimalDelays(
-                        settingsForm.sendingHoursStart,
-                        settingsForm.sendingHoursEnd,
-                        settingsForm.clientWindowStartOffset,
-                        settingsForm.clientWindowEndHour,
-                        newLimit
-                      );
-                      setSettingsForm({ 
-                        ...settingsForm, 
-                        dailyEmailLimit: newLimit,
-                        minDelayMinutes: optimal.minDelayMinutes,
-                        maxDelayMinutes: optimal.maxDelayMinutes
-                      });
-                    }}
-                    min={1}
-                    max={2000}
-                  />
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Maximum emails sent per day (Gmail limit: 500-2000/day)
-                  </p>
+                {/* Calculated Email Spacing Display */}
+                <div className="rounded-md bg-muted/50 p-4 border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Calculated Email Spacing</p>
+                      <p className="text-xs text-muted-foreground">
+                        Based on your sending window and daily limit
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold">
+                        {(() => {
+                          const typicalClientStart = 9 + settingsForm.clientWindowStartOffset;
+                          const typicalClientEnd = settingsForm.clientWindowEndHour;
+                          const effectiveStart = Math.max(settingsForm.sendingHoursStart, typicalClientStart);
+                          const effectiveEnd = Math.min(settingsForm.sendingHoursEnd, typicalClientEnd);
+                          const effectiveWindowHours = Math.max(1, effectiveEnd - effectiveStart);
+                          const effectiveWindowMinutes = effectiveWindowHours * 60;
+                          const averageSpacing = settingsForm.dailyEmailLimit > 0 
+                            ? effectiveWindowMinutes / settingsForm.dailyEmailLimit 
+                            : 5;
+                          return Math.round(averageSpacing);
+                        })()}
+                        <span className="text-sm font-normal text-muted-foreground ml-1">min</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        ~{(() => {
+                          const typicalClientStart = 9 + settingsForm.clientWindowStartOffset;
+                          const typicalClientEnd = settingsForm.clientWindowEndHour;
+                          const effectiveStart = Math.max(settingsForm.sendingHoursStart, typicalClientStart);
+                          const effectiveEnd = Math.min(settingsForm.sendingHoursEnd, typicalClientEnd);
+                          const effectiveWindowHours = Math.max(1, effectiveEnd - effectiveStart);
+                          return effectiveWindowHours;
+                        })}hr window ÷ {settingsForm.dailyEmailLimit} emails
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="font-semibold">Company Time Range</h3>
-                  <p className="text-sm text-muted-foreground -mt-2">
-                    Your sending window (when your team can send emails)
-                  </p>
+                {/* Jitter Controls (Auto-calculated) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Random Jitter Range</p>
+                      <p className="text-xs text-muted-foreground">
+                        Auto-calculated to create natural variation (±50% of spacing)
+                      </p>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="startHour">Start Hour (24h format)</Label>
-                      <Input
-                        id="startHour"
-                        data-testid="input-settings-start-hour"
-                        type="number"
-                        value={settingsForm.sendingHoursStart}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, sendingHoursStart: parseInt(e.target.value) || 9 })}
-                        min={0}
-                        max={23}
-                      />
+                    <div className="rounded-md bg-muted/30 p-3 border border-dashed">
+                      <Label className="text-xs text-muted-foreground">Min Jitter</Label>
+                      <p className="text-lg font-semibold">{settingsForm.minDelayMinutes} min</p>
                     </div>
-                    <div>
-                      <Label htmlFor="endHour">End Hour (24h format)</Label>
-                      <Input
-                        id="endHour"
-                        data-testid="input-settings-end-hour"
-                        type="number"
-                        value={settingsForm.sendingHoursEnd}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, sendingHoursEnd: parseInt(e.target.value) || 14 })}
-                        min={0}
-                        max={23}
-                      />
+                    <div className="rounded-md bg-muted/30 p-3 border border-dashed">
+                      <Label className="text-xs text-muted-foreground">Max Jitter</Label>
+                      <p className="text-lg font-semibold">{settingsForm.maxDelayMinutes} min</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <h3 className="font-semibold">Client Time Range</h3>
-                  <p className="text-sm text-muted-foreground -mt-2">
-                    Client's receiving window (when emails are delivered in their timezone)
+                  <p className="text-sm text-muted-foreground">
+                    When emails are delivered in recipient's local timezone
                   </p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="clientStartOffset">Start Offset After Opening (hours)</Label>
+                      <Label htmlFor="clientStartOffset" className="text-xs">Start Offset After Opening (hours)</Label>
                       <Input
                         id="clientStartOffset"
                         data-testid="input-settings-client-start-offset"
                         type="number"
                         step="0.25"
                         value={settingsForm.clientWindowStartOffset}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, clientWindowStartOffset: parseFloat(e.target.value) || 1.0 })}
+                        onChange={(e) => {
+                          const newOffset = parseFloat(e.target.value) || 1.0;
+                          const optimal = calculateOptimalDelays(
+                            settingsForm.sendingHoursStart,
+                            settingsForm.sendingHoursEnd,
+                            newOffset,
+                            settingsForm.clientWindowEndHour,
+                            settingsForm.dailyEmailLimit
+                          );
+                          setSettingsForm({ 
+                            ...settingsForm, 
+                            clientWindowStartOffset: newOffset,
+                            minDelayMinutes: optimal.minDelayMinutes,
+                            maxDelayMinutes: optimal.maxDelayMinutes
+                          });
+                        }}
                         min={0}
                         max={24}
                       />
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Hours after business opens (e.g., 1.0 = 1 hour after)
+                      <p className="text-xs text-muted-foreground mt-1">
+                        e.g., 1.0 = 1 hour after opening
                       </p>
                     </div>
                     <div>
-                      <Label htmlFor="clientEndHour">Cutoff Hour (local time)</Label>
+                      <Label htmlFor="clientEndHour" className="text-xs">Cutoff Hour (24h local time)</Label>
                       <Input
                         id="clientEndHour"
                         data-testid="input-settings-client-end-hour"
                         type="number"
                         value={settingsForm.clientWindowEndHour}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, clientWindowEndHour: parseInt(e.target.value) || 14 })}
+                        onChange={(e) => {
+                          const newCutoff = parseInt(e.target.value) || 14;
+                          const optimal = calculateOptimalDelays(
+                            settingsForm.sendingHoursStart,
+                            settingsForm.sendingHoursEnd,
+                            settingsForm.clientWindowStartOffset,
+                            newCutoff,
+                            settingsForm.dailyEmailLimit
+                          );
+                          setSettingsForm({ 
+                            ...settingsForm, 
+                            clientWindowEndHour: newCutoff,
+                            minDelayMinutes: optimal.minDelayMinutes,
+                            maxDelayMinutes: optimal.maxDelayMinutes
+                          });
+                        }}
                         min={0}
                         max={23}
                       />
-                      <p className="text-sm text-muted-foreground mt-1">
-                        24h format (e.g., 14 = 2 PM local time)
+                      <p className="text-xs text-muted-foreground mt-1">
+                        e.g., 16 = 4 PM local time
                       </p>
                     </div>
                   </div>
