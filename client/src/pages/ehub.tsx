@@ -1032,7 +1032,7 @@ export default function EHub() {
   });
 
   // Fetch E-Hub settings
-  const { data: settings } = useQuery<EhubSettings>({
+  const { data: settings, error: settingsError, isError: isSettingsError } = useQuery<EhubSettings>({
     queryKey: ['/api/ehub/settings'],
   });
 
@@ -2658,6 +2658,18 @@ export default function EHub() {
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-4">
+          {isSettingsError && (
+            <Card className="border-destructive">
+              <CardHeader>
+                <CardTitle className="text-destructive">Settings Error</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Unable to load E-Hub settings. Using default values. Error: {settingsError?.message || 'Unknown error'}
+                </p>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle>Global E-Hub Settings</CardTitle>
