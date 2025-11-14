@@ -326,6 +326,11 @@ NOTE: Campaign Strategy instructions ALWAYS override these defaults.
 ⚙️ 4. TECHNICAL REQUIREMENTS
 ═══════════════════════════════════════════════════════════════
 - HTML FORMATTING: Use <p></p> tags for paragraphs and <br> for line breaks
+- HTML HYPERLINKS: Format ALL URLs as clickable HTML links using proper anchor tags
+  CRITICAL: Use the EXACT URL specified in the Campaign Strategy above
+  Example format: <a href="[EXACT URL FROM CAMPAIGN]">descriptive anchor text</a>
+  NEVER output plain text URLs - always wrap in <a> tags with the campaign-specified href
+  NEVER use placeholder URLs like "example.com" - use the real URL from Campaign Strategy
 - NO PERSONALIZATION: Don't mention business name, hours, or specific details from recipient context
 - SIGNATURE: End with ${settings.signature ? 'the provided signature' : 'a simple sign-off'}
 
@@ -384,6 +389,11 @@ NOTE: Campaign Strategy instructions ALWAYS override these defaults.
 ═══════════════════════════════════════════════════════════════
 - SUBJECT: Use "Re: [original subject]" - MUST match first email's subject for threading
 - HTML FORMATTING: Use <p></p> tags for paragraphs
+- HTML HYPERLINKS: Format ALL URLs as clickable HTML links using proper anchor tags
+  CRITICAL: Use the EXACT URL specified in the Campaign Strategy above
+  Example format: <a href="[EXACT URL FROM CAMPAIGN]">descriptive anchor text</a>
+  NEVER output plain text URLs - always wrap in <a> tags with the campaign-specified href
+  NEVER use placeholder URLs like "example.com" - use the real URL from Campaign Strategy
 - NO REPEAT: Don't rehash the full intro from Email 1
 - NO PERSONALIZATION: Don't mention business name, hours, or specific details from recipient context
 
