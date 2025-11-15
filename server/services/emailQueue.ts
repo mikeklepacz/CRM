@@ -335,6 +335,32 @@ async function processEmailQueue() {
     // Process each scheduled send
     for (const scheduledSend of scheduledSends) {
       try {
+        // Get sequence details BEFORE claiming to check if we should process it
+        const sequence = await storage.getSequence(scheduledSend.sequenceId);
+        if (!sequence) {
+          console.error(`[EmailQueue] Sequence ${scheduledSend.sequenceId} not found`);
+          // Claim it to mark as failed so it doesn't keep getting picked up
+          const claimed = await storage.claimScheduledSend(scheduledSend.id);
+          if (claimed) {
+            await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
+          }
+          continue;
+        }
+
+        // CRITICAL: Skip if sequence is paused (safeguard against race conditions)
+        // Don't claim it - let it remain pending so it can be sent when sequence is resumed
+        if (sequence.status === 'paused') {
+          console.log(`[EmailQueue] ⏸️ SKIPPED - Sequence "${sequence.name}" is paused (will retry when resumed)`);
+          continue;
+        }
+
+        // Skip if sequence is not active (draft, completed, cancelled, etc.)
+        // Don't claim these either - they may become active later
+        if (sequence.status !== 'active') {
+          console.log(`[EmailQueue] ⏸️ SKIPPED - Sequence "${sequence.name}" status is "${sequence.status}"`);
+          continue;
+        }
+
         // Atomically claim this scheduled send (prevents double-processing)
         const claimed = await storage.claimScheduledSend(scheduledSend.id);
         if (!claimed) {
@@ -345,14 +371,6 @@ async function processEmailQueue() {
         const recipient = await storage.getRecipient(scheduledSend.recipientId);
         if (!recipient) {
           console.error(`[EmailQueue] Recipient ${scheduledSend.recipientId} not found`);
-          await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
-          continue;
-        }
-
-        // Get sequence details
-        const sequence = await storage.getSequence(scheduledSend.sequenceId);
-        if (!sequence) {
-          console.error(`[EmailQueue] Sequence ${scheduledSend.sequenceId} not found`);
           await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
           continue;
         }

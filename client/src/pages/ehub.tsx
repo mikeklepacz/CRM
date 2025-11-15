@@ -1163,11 +1163,15 @@ export default function EHub() {
 
   // Update sequence status mutation
   const updateSequenceStatusMutation = useMutation({
-    mutationFn: async (status: string) => {
-      return await apiRequest("PATCH", `/api/sequences/${selectedSequenceId}`, { status });
+    mutationFn: async ({ sequenceId, status }: { sequenceId: string; status: string }) => {
+      return await apiRequest("PATCH", `/api/sequences/${sequenceId}`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+      // Invalidate all queue queries regardless of search/filter parameters
+      queryClient.invalidateQueries({ 
+        predicate: (query) => query.queryKey[0] === '/api/ehub/queue'
+      });
       toast({
         title: "Success",
         description: "Sequence status updated successfully",
@@ -2014,6 +2018,23 @@ export default function EHub() {
                             >
                               <Send className="w-4 h-4 mr-1" />
                               Test
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={async () => {
+                                const newStatus = sequence.status === 'paused' ? 'active' : 'paused';
+                                await updateSequenceStatusMutation.mutateAsync({ sequenceId: sequence.id, status: newStatus });
+                              }}
+                              disabled={updateSequenceStatusMutation.isPending}
+                              data-testid={`button-pause-resume-${sequence.id}`}
+                              title={sequence.status === 'paused' ? 'Resume sequence' : 'Pause sequence'}
+                            >
+                              {sequence.status === 'paused' ? (
+                                <Play className="w-4 h-4" />
+                              ) : (
+                                <Pause className="w-4 h-4" />
+                              )}
                             </Button>
                             <Button
                               size="icon"

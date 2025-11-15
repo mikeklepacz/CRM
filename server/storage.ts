@@ -3947,17 +3947,26 @@ export class DatabaseStorage implements IStorage {
   async getNextScheduledSends(limit: number): Promise<SequenceScheduledSend[]> {
     const now = new Date();
     
-    return await db
+    // Single query with conditional ordering: step 1 emails first, then by scheduled time
+    // Uses CASE expression to prioritize stepNumber = 1, then orders by scheduledAt
+    const results = await db
       .select()
       .from(sequenceScheduledSends)
+      .innerJoin(sequences, eq(sequenceScheduledSends.sequenceId, sequences.id))
       .where(
         and(
           eq(sequenceScheduledSends.status, 'pending'),
-          lte(sequenceScheduledSends.scheduledAt, now)
+          lte(sequenceScheduledSends.scheduledAt, now),
+          eq(sequences.status, 'active') // Only send from active sequences
         )
       )
-      .orderBy(sequenceScheduledSends.scheduledAt)
+      .orderBy(
+        sql`CASE WHEN ${sequenceScheduledSends.stepNumber} = 1 THEN 0 ELSE 1 END`,
+        sequenceScheduledSends.scheduledAt
+      )
       .limit(limit);
+    
+    return results.map(row => row.sequenceScheduledSends);
   }
 
   async getUpcomingScheduledSends(limit: number): Promise<SequenceScheduledSend[]> {
