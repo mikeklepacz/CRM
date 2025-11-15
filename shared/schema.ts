@@ -1371,6 +1371,7 @@ export const sequenceScheduledSends = pgTable("sequence_scheduled_sends", {
   body: text("body"), // Body content (populated after send)
   errorLog: text("error_log"), // Error message if send failed
   retryAttempts: integer("retry_attempts").notNull().default(0), // Number of send retries
+  manualOverride: boolean("manual_override").notNull().default(false), // True when user clicks "Send Now" to bypass pause
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_scheduled_sends_recipient").on(table.recipientId),
