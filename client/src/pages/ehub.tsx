@@ -29,12 +29,13 @@ import { TestTube2, RefreshCw, Reply } from "lucide-react";
  * Calculate optimal min/max delay suggestions for human-like email spacing
  * Based on pure company sending window (not client timezone overlap)
  * Spacing = (endHour - startHour) × 60 ÷ dailyLimit
- * Jitter = ±50% of spacing
+ * Jitter = configurable percentage of spacing (default ±50%)
  */
 function calculateOptimalDelays(
   companyStartHour: number,
   companyEndHour: number,
-  dailyEmailLimit: number
+  dailyEmailLimit: number,
+  jitterPercentage: number = 50
 ): { minDelayMinutes: number; maxDelayMinutes: number } {
   // Calculate pure company sending window (no client timezone logic)
   const companyWindowHours = companyEndHour - companyStartHour;
@@ -45,9 +46,14 @@ function calculateOptimalDelays(
     ? companyWindowMinutes / dailyEmailLimit 
     : 5;
   
-  // Jitter range: ±50% variance for natural randomness
-  const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * 0.5));
-  const maxDelay = Math.ceil(averageSpacingMinutes * 1.5);
+  // Convert jitter percentage to multipliers (e.g., 50% = 0.5 to 1.5, 30% = 0.7 to 1.3)
+  const jitterDecimal = jitterPercentage / 100;
+  const minMultiplier = 1 - jitterDecimal;
+  const maxMultiplier = 1 + jitterDecimal;
+  
+  // Apply jitter variance to create min/max range
+  const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * minMultiplier));
+  const maxDelay = Math.ceil(averageSpacingMinutes * maxMultiplier);
   
   return {
     minDelayMinutes: minDelay,
@@ -72,6 +78,7 @@ interface EhubSettings {
   id?: string;
   minDelayMinutes: number;
   maxDelayMinutes: number;
+  jitterPercentage: number;
   dailyEmailLimit: number;
   sendingHoursStart: number;
   sendingHoursEnd: number;
@@ -1008,6 +1015,7 @@ export default function EHub() {
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
     minDelayMinutes: 1,
     maxDelayMinutes: 3,
+    jitterPercentage: 50,
     dailyEmailLimit: 200,
     sendingHoursStart: 9,
     sendingHoursEnd: 14,
@@ -2745,7 +2753,8 @@ export default function EHub() {
                         const optimal = calculateOptimalDelays(
                           newStart,
                           settingsForm.sendingHoursEnd,
-                          settingsForm.dailyEmailLimit
+                          settingsForm.dailyEmailLimit,
+                          settingsForm.jitterPercentage
                         );
                         setSettingsForm({ 
                           ...settingsForm, 
@@ -2770,7 +2779,8 @@ export default function EHub() {
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           newEnd,
-                          settingsForm.dailyEmailLimit
+                          settingsForm.dailyEmailLimit,
+                          settingsForm.jitterPercentage
                         );
                         setSettingsForm({ 
                           ...settingsForm, 
@@ -2795,7 +2805,8 @@ export default function EHub() {
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           settingsForm.sendingHoursEnd,
-                          newLimit
+                          newLimit,
+                          settingsForm.jitterPercentage
                         );
                         setSettingsForm({ 
                           ...settingsForm, 
@@ -2846,8 +2857,32 @@ export default function EHub() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Random Jitter Range</p>
-                      <p className="text-xs text-muted-foreground">
-                        Auto-calculated to create natural variation (±50% of spacing)
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        Auto-calculated to create natural variation (±
+                        <Input
+                          type="number"
+                          value={settingsForm.jitterPercentage}
+                          onChange={(e) => {
+                            const newJitter = parseInt(e.target.value) || 50;
+                            const optimal = calculateOptimalDelays(
+                              settingsForm.sendingHoursStart,
+                              settingsForm.sendingHoursEnd,
+                              settingsForm.dailyEmailLimit,
+                              newJitter
+                            );
+                            setSettingsForm({
+                              ...settingsForm,
+                              jitterPercentage: newJitter,
+                              minDelayMinutes: optimal.minDelayMinutes,
+                              maxDelayMinutes: optimal.maxDelayMinutes
+                            });
+                          }}
+                          min={1}
+                          max={100}
+                          className="w-14 h-6 px-2 text-xs text-center"
+                          data-testid="input-jitter-percentage"
+                        />
+                        <span className="font-bold">%</span> of spacing)
                       </p>
                     </div>
                   </div>

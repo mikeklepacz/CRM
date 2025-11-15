@@ -63,14 +63,16 @@ export async function resolveAdminWindow(
  * @param clientWindowStartOffset - Hours after business opens (e.g., 1.0)
  * @param clientWindowEndHour - Client cutoff hour local time (24h format)
  * @param dailyEmailLimit - Max emails per day
- * @returns Suggested min/max delays in minutes with ±50% variance around average
+ * @param jitterPercentage - Jitter variance percentage (default 50 = ±50%)
+ * @returns Suggested min/max delays in minutes with configurable variance around average
  */
 export function calculateOptimalDelays(
   companyStartHour: number,
   companyEndHour: number,
   clientWindowStartOffset: number,
   clientWindowEndHour: number,
-  dailyEmailLimit: number
+  dailyEmailLimit: number,
+  jitterPercentage: number = 50
 ): { minDelayMinutes: number; maxDelayMinutes: number } {
   // Calculate effective sending window (overlap between company and typical client hours)
   // Typical client business: 9 AM - client cutoff
@@ -88,9 +90,14 @@ export function calculateOptimalDelays(
     ? effectiveWindowMinutes / dailyEmailLimit 
     : 5;
   
-  // Suggest range with ±50% variance for natural randomness
-  const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * 0.5));
-  const maxDelay = Math.ceil(averageSpacingMinutes * 1.5);
+  // Convert jitter percentage to multipliers (e.g., 50% = 0.5 to 1.5, 30% = 0.7 to 1.3)
+  const jitterDecimal = jitterPercentage / 100;
+  const minMultiplier = 1 - jitterDecimal;
+  const maxMultiplier = 1 + jitterDecimal;
+  
+  // Apply jitter variance to create min/max range
+  const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * minMultiplier));
+  const maxDelay = Math.ceil(averageSpacingMinutes * maxMultiplier);
   
   return {
     minDelayMinutes: minDelay,
