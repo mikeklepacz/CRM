@@ -82,10 +82,41 @@ export function clientWindowAllows(
 }
 
 /**
- * Generate random jitter between min and max delay
+ * Generate random jitter with seconds-level precision for human-like timing
+ * Ensures no two consecutive jitters are the same
+ * 
+ * @param minMinutes - Minimum delay in minutes
+ * @param maxMinutes - Maximum delay in minutes
+ * @param previousJitterSeconds - Previous jitter to avoid (optional, for duplicate prevention)
+ * @returns Total delay in milliseconds (includes random seconds, respects max)
  */
-export function randomJitter(minMinutes: number, maxMinutes: number): number {
-  return Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) + minMinutes;
+export function randomJitter(minMinutes: number, maxMinutes: number, previousJitterSeconds?: number): number {
+  let totalSeconds: number;
+  let attempts = 0;
+  
+  do {
+    // Convert min/max to seconds for range
+    const minSeconds = minMinutes * 60;
+    const maxSeconds = maxMinutes * 60;
+    
+    // For zero-delay ranges (instant sends), respect that
+    if (minSeconds === 0 && maxSeconds === 0) {
+      totalSeconds = 0;
+    } else {
+      // Generate random delay within the full seconds range
+      // This gives us sub-minute precision while respecting the max
+      totalSeconds = Math.floor(Math.random() * (maxSeconds - minSeconds + 1)) + minSeconds;
+    }
+    
+    attempts++;
+    // Prevent infinite loop (should never happen, but safety check)
+    if (attempts > 10) {
+      break;
+    }
+  } while (previousJitterSeconds !== undefined && totalSeconds === previousJitterSeconds);
+  
+  // Return milliseconds
+  return totalSeconds * 1000;
 }
 
 /**
@@ -336,27 +367,33 @@ export async function coordinatorTick(): Promise<void> {
     console.log(`[Coordinator] Spacing: ${minutesBetweenSends.toFixed(2)} minutes between sends`);
     
     let scheduledCount = 0;
+    let previousJitterSeconds: number | undefined = undefined;
     
     for (const candidate of candidates) {
       if (scheduledCount >= batchSize) {
         break;
       }
       
-      // Scheduling anchor = max(eligible_at, queueTail)
       const eligibleAt = new Date(candidate.eligibleAt);
       const anchorTime = eligibleAt > queueTail! ? eligibleAt : queueTail!;
       
-      // Apply rate-limit spacing to queue tail (spacing BEFORE validation)
-      const spacedTime = new Date(queueTail!.getTime() + (minutesBetweenSends * 60 * 1000));
+      // Generate random jitter with seconds-level precision (returns milliseconds)
+      // Pass previous jitter to avoid back-to-back duplicates
+      const baseJitterMs = randomJitter(settings.minDelayMinutes, settings.maxDelayMinutes, previousJitterSeconds);
+      previousJitterSeconds = baseJitterMs / 1000; // Store for next iteration
       
-      // Add random jitter
-      const appliedJitterMinutes = randomJitter(settings.minDelayMinutes, settings.maxDelayMinutes);
-      const jitteredTime = new Date(spacedTime.getTime() + (appliedJitterMinutes * 60 * 1000));
+      // Enforce rate-limit spacing - use whichever is larger
+      const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
+      const appliedJitterMs = Math.max(baseJitterMs, rateLimitSpacingMs);
       
-      // Use spaced+jittered time as baseline, but ensure it's not before eligible_at
-      const proposedTime = jitteredTime > anchorTime ? jitteredTime : anchorTime;
+      // Calculate the actual minimum send time (queue tail + applied spacing)
+      const minimumSendTime = new Date(queueTail!.getTime() + appliedJitterMs);
+      
+      // Ensure it's not before eligible_at
+      const proposedTime = minimumSendTime > eligibleAt ? minimumSendTime : eligibleAt;
       
       // Call computeNextSendSlot to find next valid slot (respects admin + client windows)
+      // Pass proposedTime as minimumTime to ensure slot can't be earlier than jittered baseline
       const sendSlot = computeNextSendSlot({
         baselineTime: proposedTime,
         adminTimezone,
@@ -367,7 +404,7 @@ export async function coordinatorTick(): Promise<void> {
         clientWindowStartOffset: settings.clientWindowStartOffset,
         clientWindowEndHour: settings.clientWindowEndHour,
         skipWeekends: settings.skipWeekends,
-        minimumTime: anchorTime,
+        minimumTime: proposedTime, // Enforce jittered time minimum
       });
       
       if (!sendSlot) {
@@ -375,7 +412,8 @@ export async function coordinatorTick(): Promise<void> {
         continue;
       }
       
-      // Calculate actual jitter (in minutes) for transparency (includes spacing + jitter + window adjustments)
+      // Calculate actual jitter (in minutes) for transparency
+      // This is the total delay from when email became eligible/queue-ready
       const jitterMs = sendSlot.getTime() - anchorTime.getTime();
       const jitterMinutes = Math.round(jitterMs / 60000);
       
@@ -465,32 +503,28 @@ export function requestNextSlot(request: QueueSlotRequest): QueueSlotResult {
     baselineTime = addDays(now, request.stepDelay);
   }
   
-  // Step 2: Helper function to generate random delay with rate limit respect
-  const generateRandomDelay = (): number => {
-    // Pick a random delay between min and max for natural variation
-    const randomJitter = request.minDelayMinutes + 
-      Math.random() * (request.maxDelayMinutes - request.minDelayMinutes);
-    
-    let spacing = Math.max(1, randomJitter);
-    
-    // Respect rate limit if it requires wider spacing
-    if (request.dailyRateLimit > 0) {
-      const adminWindowMinutes = (request.adminEndHour - request.adminStartHour) * 60;
-      const minutesBetweenSends = adminWindowMinutes / request.dailyRateLimit;
-      spacing = Math.max(spacing, minutesBetweenSends);
-    }
-    
-    return spacing;
-  };
+  // Step 2: Calculate rate-limit spacing if applicable
+  let rateLimitSpacingMinutes = 0;
+  if (request.dailyRateLimit > 0) {
+    const adminWindowMinutes = (request.adminEndHour - request.adminStartHour) * 60;
+    rateLimitSpacingMinutes = adminWindowMinutes / request.dailyRateLimit;
+  }
   
-  // Step 3: Apply randomization to baseline time (ensures ALL emails get jitter)
-  let minimumTime = addMinutes(baselineTime, generateRandomDelay());
+  // Step 3: Calculate initial jitter from baseline (for first email or after step delay)
+  const initialJitterMs = randomJitter(request.minDelayMinutes, request.maxDelayMinutes);
+  const initialJitterSeconds = initialJitterMs / 1000;
+  let minimumTime = new Date(baselineTime.getTime() + initialJitterMs);
   
   // Step 4: Enforce FIFO queue ordering with FRESH random delay
   if (request.queueTailTime) {
-    // Queue exists - ensure we're AFTER the tail plus a NEW random spacing
-    // This prevents deterministic spacing when queue is already populated
-    const afterTail = addMinutes(request.queueTailTime, generateRandomDelay());
+    // Queue exists - ensure we're AFTER the tail plus a NEW random jitter
+    // Pass previous jitter to avoid back-to-back duplicates
+    const queueJitterMs = randomJitter(request.minDelayMinutes, request.maxDelayMinutes, initialJitterSeconds);
+    
+    // Also respect rate limit spacing
+    const effectiveSpacingMs = Math.max(queueJitterMs, rateLimitSpacingMinutes * 60 * 1000);
+    const afterTail = new Date(request.queueTailTime.getTime() + effectiveSpacingMs);
+    
     if (afterTail > minimumTime) {
       minimumTime = afterTail;
     }
