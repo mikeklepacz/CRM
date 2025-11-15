@@ -979,6 +979,10 @@ export default function EHub() {
   const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
   const [activeTab, setActiveTab] = useState("all-contacts");
   
+  // Navigation guard for unsaved settings changes
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+  const [showNavigationWarning, setShowNavigationWarning] = useState(false);
+  
   // Strategy chat state
   const [strategyMessage, setStrategyMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1025,6 +1029,12 @@ export default function EHub() {
     keywordBin: "",
     skipWeekends: true,
   });
+  
+  // Track original settings for dirty state detection
+  const [originalSettings, setOriginalSettings] = useState<EhubSettings | null>(null);
+  
+  // Check if settings form has unsaved changes
+  const isSettingsDirty = originalSettings && JSON.stringify(settingsForm) !== JSON.stringify(originalSettings);
 
   // Finalize Strategy state - track if textarea has been edited
   const [finalizedStrategyEdit, setFinalizedStrategyEdit] = useState("");
@@ -1228,6 +1238,7 @@ export default function EHub() {
   useEffect(() => {
     if (settings) {
       setSettingsForm(settings);
+      setOriginalSettings(settings);
     }
   }, [settings]);
 
@@ -1327,12 +1338,14 @@ export default function EHub() {
   // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: (data: Partial<EhubSettings>) => apiRequest('PATCH', '/api/ehub/settings', data),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Settings Updated",
         description: "Queue is being rescheduled with new settings. Coordinator will pick up changes on next tick.",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/ehub/settings'] });
+      // Invalidate and refetch settings to ensure we have the latest values
+      await queryClient.invalidateQueries({ queryKey: ['/api/ehub/settings'] });
+      // The useEffect will automatically update both settingsForm and originalSettings when settings refetches
     },
     onError: (error: any) => {
       toast({
@@ -1619,6 +1632,39 @@ export default function EHub() {
     updateSettingsMutation.mutate(settingsForm);
   };
 
+  const handleDiscardSettings = () => {
+    if (originalSettings) {
+      setSettingsForm(originalSettings);
+      toast({
+        title: "Changes Discarded",
+        description: "Settings have been reset to the last saved values.",
+      });
+    }
+  };
+
+  const handleTabChange = (newTab: string) => {
+    // If leaving settings tab with unsaved changes, show warning
+    if (activeTab === 'settings' && isSettingsDirty) {
+      setPendingTab(newTab);
+      setShowNavigationWarning(true);
+    } else {
+      setActiveTab(newTab);
+    }
+  };
+
+  const handleConfirmNavigation = () => {
+    if (pendingTab) {
+      setActiveTab(pendingTab);
+      setPendingTab(null);
+    }
+    setShowNavigationWarning(false);
+  };
+
+  const handleCancelNavigation = () => {
+    setPendingTab(null);
+    setShowNavigationWarning(false);
+  };
+
   const handleImport = () => {
     if (!selectedSequenceId) return;
     importMutation.mutate({ sequenceId: selectedSequenceId, sheetId });
@@ -1659,7 +1705,7 @@ export default function EHub() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList>
           <TabsTrigger value="all-contacts" data-testid="tab-all-contacts">
             <Database className="w-4 h-4 mr-2" />
@@ -2999,10 +3045,34 @@ export default function EHub() {
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              {/* Unsaved Changes Warning */}
+              {isSettingsDirty && (
+                <div className="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-4">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-500" />
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                      You have unsaved changes
+                    </p>
+                  </div>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                    Save your changes or discard them before switching tabs.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                {isSettingsDirty && (
+                  <Button
+                    variant="outline"
+                    onClick={handleDiscardSettings}
+                    data-testid="button-discard-settings"
+                  >
+                    Discard Changes
+                  </Button>
+                )}
                 <Button
                   onClick={handleSaveSettings}
-                  disabled={updateSettingsMutation.isPending}
+                  disabled={updateSettingsMutation.isPending || !isSettingsDirty}
                   data-testid="button-save-settings"
                 >
                   {updateSettingsMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -3560,6 +3630,33 @@ export default function EHub() {
             >
               {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Delete Sequence
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Navigation Warning Dialog for Unsaved Settings */}
+      <AlertDialog open={showNavigationWarning} onOpenChange={setShowNavigationWarning}>
+        <AlertDialogContent data-testid="dialog-unsaved-settings">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Unsaved Changes
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes in your settings. If you leave now, these changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelNavigation} data-testid="button-cancel-navigation">
+              Stay on Settings
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmNavigation}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-navigation"
+            >
+              Leave Without Saving
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
