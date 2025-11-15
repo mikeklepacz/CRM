@@ -1,323 +1,183 @@
 import { parseBusinessHours } from './timezoneHours';
 import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz';
-import { addHours, addDays, isBefore, getDay, startOfDay } from 'date-fns';
-
-export interface SmartTimingOptions {
-  businessHours: string;
-  state: string; // Required for timezone resolution
-  skipWeekends: boolean;
-  baselineTime?: Date; // Optional baseline time (defaults to now)
-}
-
-/**
- * Compute the optimal send time for an email based on business hours and timezone
- * Rules:
- * - Send 1 hour after business opens
- * - Never send after 2pm local time
- * - Fallback to noon for "Closed" days
- * - Skip weekends if requested
- * 
- * @param options.baselineTime - Optional baseline time to start from (defaults to now)
- * @returns UTC Date object for optimal send time (next valid send window after baseline)
- */
-export function computeOptimalSendTime(options: SmartTimingOptions): Date {
-  const { businessHours, state, skipWeekends, baselineTime } = options;
-
-  // Parse business hours and get timezone
-  const parsed = parseBusinessHours(businessHours, state);
-  const { schedule, is24_7, isClosed, timezone } = parsed;
-
-  const nowUtc = baselineTime || new Date();
-  
-  // Helper to get day-of-week in recipient's timezone (0=Sunday, 6=Saturday)
-  const getDayOfWeek = (utcDate: Date): number => {
-    const dayStr = formatInTimeZone(utcDate, timezone, 'i'); // ISO day: 1=Mon, 7=Sun
-    const isoDay = parseInt(dayStr, 10);
-    return isoDay === 7 ? 0 : isoDay; // Convert to JS format: 0=Sun, 6=Sat
-  };
-  
-  // Helper to create a UTC Date for a specific date/time in recipient's timezone
-  const createSendTime = (utcDate: Date, daysOffset: number, hour: number, minute: number): Date => {
-    // Get the date in recipient's timezone
-    const localDateStr = formatInTimeZone(addDays(utcDate, daysOffset), timezone, 'yyyy-MM-dd');
-    // Build ISO string for the specific time
-    const isoStr = `${localDateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
-    // Parse as if it's in the recipient's timezone and convert to UTC
-    const [datePart, timePart] = isoStr.split('T');
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [h, m] = timePart.split(':').map(Number);
-    return fromZonedTime(new Date(year, month - 1, day, h, m, 0), timezone);
-  };
-  
-  let daysOffset = 0;
-  const maxAttempts = 14;
-  
-  while (daysOffset < maxAttempts) {
-    const candidateUtc = addDays(nowUtc, daysOffset);
-    const dayOfWeek = getDayOfWeek(candidateUtc);
-    
-    // Skip weekends if requested
-    if (skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
-      daysOffset++;
-      continue;
-    }
-    
-    let sendTimeUtc: Date;
-    
-    // Handle special cases
-    if (isClosed) {
-      // Entire business is closed, use noon
-      sendTimeUtc = createSendTime(nowUtc, daysOffset, 12, 0);
-    } else if (is24_7) {
-      // 24/7 business - try 1 hour from now if before 2pm, else noon
-      const oneHourFromNow = addHours(nowUtc, 1);
-      const oneHourLocalHour = parseInt(formatInTimeZone(oneHourFromNow, timezone, 'H'), 10);
-      const oneHourLocalDate = formatInTimeZone(oneHourFromNow, timezone, 'yyyy-MM-dd');
-      const candidateLocalDate = formatInTimeZone(candidateUtc, timezone, 'yyyy-MM-dd');
-      
-      // Only use "1 hour from now" if it's on the current candidate day and before 2pm
-      if (oneHourLocalDate === candidateLocalDate && oneHourLocalHour < 14) {
-        return oneHourFromNow;
-      }
-      
-      // Otherwise use noon on this candidate day
-      sendTimeUtc = createSendTime(nowUtc, daysOffset, 12, 0);
-    } else {
-      // Check if this specific day has a schedule
-      const daySchedules = schedule[dayOfWeek];
-      
-      if (!daySchedules || daySchedules.length === 0) {
-        // Day is closed, use noon
-        sendTimeUtc = createSendTime(nowUtc, daysOffset, 12, 0);
-      } else {
-        // Day has opening hours - use first schedule
-        const firstSchedule = daySchedules[0];
-        
-        // Convert opening minutes to hours and minutes
-        const openMinutes = firstSchedule.open;
-        const openHour = Math.floor(openMinutes / 60);
-        const openMinute = openMinutes % 60;
-        
-        // Calculate send time: opening + 1 hour
-        let sendHour = openHour + 1;
-        let sendMinute = openMinute;
-        
-        // Enforce 2pm rule
-        if (sendHour >= 14) {
-          sendHour = 12;
-          sendMinute = 0;
-        }
-        
-        sendTimeUtc = createSendTime(nowUtc, daysOffset, sendHour, sendMinute);
-      }
-    }
-    
-    // Check if this send time is in the future
-    if (isBefore(sendTimeUtc, nowUtc)) {
-      daysOffset++;
-      continue;
-    }
-    
-    // Valid send time found
-    return sendTimeUtc;
-  }
-  
-  // Fallback: 1 hour from now
-  return addHours(nowUtc, 1);
-}
-
-/**
- * Format a UTC date in the recipient's local timezone for display
- */
-export function formatSendTimeLocal(utcDate: Date, timezone: string): string {
-  return formatInTimeZone(utcDate, timezone, 'MMM d, yyyy h:mm a zzz');
-}
+import { addHours, addDays, isBefore } from 'date-fns';
 
 export interface DualWindowOptions {
-  baselineTime: Date; // Starting point (usually now or now + delay)
-  adminTimezone: string; // Admin's timezone from user_preferences
-  adminStartHour: number; // Admin's sending window start (e.g., 6 for 6am)
-  adminEndHour: number; // Admin's sending window end (e.g., 23 for 11pm)
-  recipientBusinessHours: string; // Recipient's business hours string
-  recipientTimezone: string; // Recipient's timezone (e.g., 'America/Detroit')
-  clientWindowStartOffset: number; // Hours after business opens to start sending (e.g., 1.0 = 1 hour after opening)
-  clientWindowEndHour: number; // Client local cutoff hour (e.g., 14 = 2 PM local time)
-  skipWeekends: boolean; // Whether to skip weekends
-  minimumTime?: Date; // Optional minimum time - never schedule before this (for queue ordering)
+  baselineTime: Date; 
+  adminTimezone: string; 
+  adminStartHour: number; 
+  adminEndHour: number; 
+  recipientBusinessHours: string; 
+  recipientTimezone: string; 
+  clientWindowStartOffset: number; 
+  clientWindowEndHour: number; 
+  skipWeekends: boolean; 
+  minimumTime?: Date;
 }
 
-/**
- * Compute next send time where BOTH admin and recipient windows overlap
- * 
- * Rules:
- * - Admin window: adminStartHour to adminEndHour in admin's timezone
- * - Recipient window: (opening + 1hr) to 2pm in recipient's timezone
- * - Returns earliest UTC time where both windows overlap
- * - If baseline is already inside overlap, returns baseline (immediate send)
- * 
- * @returns UTC Date object for next valid send time
- */
+// ===========================================================
+// CREATE UTC INSTANT FOR SPECIFIC LOCAL DATE/TIME IN TIMEZONE
+// ===========================================================
+function createTimeInZone(
+  base: Date,
+  daysOffset: number,
+  hour: number,
+  minute: number,
+  timezone: string
+): Date {
+  const zoned = toZonedTime(base, timezone);
+
+  const baseStr = formatInTimeZone(zoned, timezone, 'yyyy-MM-dd');
+  const [y, m, d] = baseStr.split('-').map(Number);
+
+  const target = new Date(y, m - 1, d + daysOffset);
+  const monthStr = String(target.getMonth() + 1).padStart(2, '0');
+  const dayStr = String(target.getDate()).padStart(2, '0');
+
+  const localString = `${target.getFullYear()}-${monthStr}-${dayStr}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00`;
+
+  return fromZonedTime(localString, timezone);
+}
+
+// ===========================================================
+// GET DAY OF WEEK IN TIMEZONE
+// ===========================================================
+function getDayOfWeek(dateUtc: Date, timezone: string): number {
+  const iso = parseInt(formatInTimeZone(dateUtc, timezone, 'i'), 10);
+  return iso === 7 ? 0 : iso;
+}
+
+// ===========================================================
+// RECIPIENT WINDOW FOR SPECIFIC DAY
+// ===========================================================
+function getRecipientWindow(
+  baseline: Date,
+  daysOffset: number,
+  timezone: string,
+  schedule: any,
+  isClosed: boolean,
+  is24_7: boolean,
+  clientWindowStartOffset: number,
+  clientWindowEndHour: number
+): { start: Date; end: Date } | null {
+
+  if (isClosed) {
+    const noon = createTimeInZone(baseline, daysOffset, 12, 0, timezone);
+    const cutoff = createTimeInZone(baseline, daysOffset, clientWindowEndHour, 0, timezone);
+    return { start: noon, end: cutoff };
+  }
+
+  if (is24_7) {
+    const start = createTimeInZone(baseline, daysOffset, 0, 0, timezone);
+    const end = createTimeInZone(baseline, daysOffset, clientWindowEndHour, 0, timezone);
+    return { start, end };
+  }
+
+  const candidateDay = getDayOfWeek(addDays(baseline, daysOffset), timezone);
+  const hours = schedule[candidateDay];
+
+  if (!hours || hours.length === 0) {
+    const noon = createTimeInZone(baseline, daysOffset, 12, 0, timezone);
+    const cutoff = createTimeInZone(baseline, daysOffset, clientWindowEndHour, 0, timezone);
+    return { start: noon, end: cutoff };
+  }
+
+  const first = hours[0];
+  const openMin = first.open;
+  const openHour = Math.floor(openMin / 60);
+  const openMinute = openMin % 60;
+
+  const startHour = openHour + Math.floor(clientWindowStartOffset);
+  const startMinute = openMinute + Math.floor((clientWindowStartOffset % 1) * 60);
+
+  let h = startHour;
+  let m = startMinute;
+
+  if (m >= 60) {
+    h += Math.floor(m / 60);
+    m = m % 60;
+  }
+
+  if (h >= clientWindowEndHour) return null;
+
+  const start = createTimeInZone(baseline, daysOffset, h, m, timezone);
+  const end = createTimeInZone(baseline, daysOffset, clientWindowEndHour, 0, timezone);
+
+  return { start, end };
+}
+
+// ===========================================================
+// MAIN: ADMIN + RECIPIENT WINDOW OVERLAP
+// ===========================================================
 export function computeNextSendSlot(options: DualWindowOptions): Date {
-  const { 
-    baselineTime, 
-    adminTimezone, 
-    adminStartHour, 
+  const {
+    baselineTime,
+    adminTimezone,
+    adminStartHour,
     adminEndHour,
     recipientBusinessHours,
     recipientTimezone,
     clientWindowStartOffset,
     clientWindowEndHour,
     skipWeekends,
-    minimumTime 
+    minimumTime,
   } = options;
 
-  // Use minimumTime as effective baseline if provided and greater than baselineTime
-  const effectiveBaseline = minimumTime && minimumTime > baselineTime ? minimumTime : baselineTime;
+  const effectiveBaseline =
+    minimumTime && minimumTime > baselineTime ? minimumTime : baselineTime;
 
-  // Parse recipient business hours (pass empty string for state since we already have timezone)
   const parsed = parseBusinessHours(recipientBusinessHours, '');
-  // Override timezone with the one we already have
   const { schedule, is24_7, isClosed } = parsed;
-  const timezone = recipientTimezone || parsed.timezone;
 
-  // Helper: Create UTC time for specific hour/minute in a timezone
-  const createTimeInZone = (
-    date: Date,
-    daysOffset: number,
-    hour: number,
-    minute: number,
-    timezone: string
-  ): Date => {
-    // Convert base date to target timezone first
-    const zonedDate = toZonedTime(date, timezone);
-    
-    // Get the date string in that timezone
-    const baseDateStr = formatInTimeZone(zonedDate, timezone, 'yyyy-MM-dd');
-    
-    // Parse to get year, month, day
-    const [year, month, day] = baseDateStr.split('-').map(Number);
-    
-    // Add days offset to get target date
-    const targetDate = new Date(year, month - 1, day + daysOffset);
-    const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
-    
-    // Build local datetime string with the target hour/minute
-    const localDateTime = `${targetDateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
-    
-    // Convert from timezone to UTC
-    const utcResult = fromZonedTime(localDateTime, timezone);
-    
-    return utcResult;
-  };
+  const tz = recipientTimezone || parsed.timezone;
 
-  // Helper: Get day of week in a specific timezone
-  const getDayOfWeek = (utcDate: Date, timezone: string): number => {
-    const dayStr = formatInTimeZone(utcDate, timezone, 'i');
-    const isoDay = parseInt(dayStr, 10);
-    return isoDay === 7 ? 0 : isoDay;
-  };
-
-  // Helper: Get recipient window for a specific day [earliestSend, latestSend]
-  const getRecipientWindow = (daysOffset: number): { start: Date; end: Date } | null => {
-    const candidateUtc = addDays(effectiveBaseline, daysOffset);
-    const dayOfWeek = getDayOfWeek(candidateUtc, timezone);
-
-    // Closed business
-    if (isClosed) {
-      const noon = createTimeInZone(effectiveBaseline, daysOffset, 12, 0, timezone);
-      return { start: noon, end: createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone) };
-    }
-
-    // 24/7 business
-    if (is24_7) {
-      const start = createTimeInZone(effectiveBaseline, daysOffset, 0, 0, timezone);
-      const end = createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone);
-      return { start, end };
-    }
-
-    // Scheduled hours
-    const daySchedules = schedule[dayOfWeek];
-    if (!daySchedules || daySchedules.length === 0) {
-      const noon = createTimeInZone(effectiveBaseline, daysOffset, 12, 0, timezone);
-      return { start: noon, end: createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone) };
-    }
-
-    const firstSchedule = daySchedules[0];
-    const openMinutes = firstSchedule.open;
-    const openHour = Math.floor(openMinutes / 60);
-    const openMinute = openMinutes % 60;
-
-    // Calculate send time based on configurable offset
-    const offsetHours = Math.floor(clientWindowStartOffset);
-    const offsetMinutes = Math.round((clientWindowStartOffset % 1) * 60);
-    let sendHour = openHour + offsetHours;
-    let sendMinute = openMinute + offsetMinutes;
-
-    // Handle minute overflow
-    if (sendMinute >= 60) {
-      sendHour += Math.floor(sendMinute / 60);
-      sendMinute = sendMinute % 60;
-    }
-
-    // If offset pushes start time at or past cutoff, no valid window exists for this day
-    if (sendHour >= clientWindowEndHour) {
-      return null;
-    }
-
-    const start = createTimeInZone(effectiveBaseline, daysOffset, sendHour, sendMinute, timezone);
-    const end = createTimeInZone(effectiveBaseline, daysOffset, clientWindowEndHour, 0, timezone);
-    return { start, end };
-  };
-
-  // Try up to 14 days
   let daysOffset = 0;
-  const maxAttempts = 14;
+  const maxDays = 14;
 
-  while (daysOffset < maxAttempts) {
+  while (daysOffset < maxDays) {
     const candidateUtc = addDays(effectiveBaseline, daysOffset);
 
-    // Check if we should skip weekends (in admin timezone)
     if (skipWeekends) {
-      const adminDayOfWeek = getDayOfWeek(candidateUtc, adminTimezone);
-      if (adminDayOfWeek === 0 || adminDayOfWeek === 6) {
+      const adminDay = getDayOfWeek(candidateUtc, adminTimezone);
+      if (adminDay === 0 || adminDay === 6) {
         daysOffset++;
         continue;
       }
     }
 
-    // Get admin window for this day
-    const adminWindowStart = createTimeInZone(effectiveBaseline, daysOffset, adminStartHour, 0, adminTimezone);
-    const adminWindowEnd = createTimeInZone(effectiveBaseline, daysOffset, adminEndHour, 0, adminTimezone);
+    const adminStart = createTimeInZone(effectiveBaseline, daysOffset, adminStartHour, 0, adminTimezone);
+    const adminEnd = createTimeInZone(effectiveBaseline, daysOffset, adminEndHour, 0, adminTimezone);
 
-    // Get recipient window for this day
-    const recipientWindow = getRecipientWindow(daysOffset);
-    if (!recipientWindow) {
+    const recWindow = getRecipientWindow(
+      effectiveBaseline,
+      daysOffset,
+      tz,
+      schedule,
+      isClosed,
+      is24_7,
+      clientWindowStartOffset,
+      clientWindowEndHour
+    );
+
+    if (!recWindow) {
       daysOffset++;
       continue;
     }
 
-    // Find overlap: [max(start1, start2), min(end1, end2)]
-    const overlapStart = adminWindowStart > recipientWindow.start ? adminWindowStart : recipientWindow.start;
-    const overlapEnd = adminWindowEnd < recipientWindow.end ? adminWindowEnd : recipientWindow.end;
+    const overlapStart = adminStart > recWindow.start ? adminStart : recWindow.start;
+    const overlapEnd = adminEnd < recWindow.end ? adminEnd : recWindow.end;
 
-    // Check if there's a valid overlap
     if (overlapStart < overlapEnd) {
-      // Overlap exists! Check if effectiveBaseline is already inside it
       if (effectiveBaseline >= overlapStart && effectiveBaseline < overlapEnd) {
-        // Immediate send - we're currently in the overlap window
         return effectiveBaseline;
       }
-
-      // Overlap is in the future
       if (overlapStart > effectiveBaseline) {
         return overlapStart;
       }
     }
 
-    // No overlap today, try next day
     daysOffset++;
   }
 
-  // Fallback: 1 hour from effective baseline
   return addHours(effectiveBaseline, 1);
 }
