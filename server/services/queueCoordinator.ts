@@ -198,37 +198,35 @@ export function findNextAdminWindowBounds(
 /**
  * Coordinator tick function - runs every 5 minutes to assign send slots
  * 
- * NEW ARCHITECTURE (Fixed):
- * - ALWAYS runs - no early returns for time/weekends
- * - Pre-fills queue for next available window
- * - Uses scheduling anchor = max(eligible_at, nextWindowStart)
- * - Preserves eligible_at (sequence logic), only modifies scheduled_at
- * - Stores jitter in DB for transparency
+ * SIMPLIFIED ARCHITECTURE:
+ * - Planner decides WHO (timezone balancing only)
+ * - Coordinator handles spacing + jitter + FIFO
+ * - computeNextSendSlot decides WHEN (only timing authority)
  * 
  * Flow:
- * 1. Find next admin window (today if not started, tomorrow if past, skip weekends)
- * 2. Count sent emails for quota day
- * 3. Calculate batch capacity (inside vs outside window logic)
- * 4. Query eligible emails (eligible_at <= now, scheduled_at IS NULL)
- * 5. For each: anchor = max(eligible_at, queueTail), call computeNextSendSlot
- * 6. Store scheduled_at + jitterMinutes in database
+ * 1. Count sent emails for quota tracking
+ * 2. Calculate batch size based on remaining capacity
+ * 3. Query eligible candidates (FIFO by eligibleAt)
+ * 4. Let planner balance selection across timezones
+ * 5. For each: apply spacing/jitter, call computeNextSendSlot for final time
+ * 6. Store scheduled_at in database
  * 7. Commit transaction
  */
 export async function coordinatorTick(): Promise<void> {
   const now = new Date();
-  
-  // Get settings
+
+  // 1) Load settings
   const settings = await storage.getEhubSettings();
   if (!settings) {
     console.log('[Coordinator] No E-Hub settings found');
     return;
   }
-  
-  // Get admin user timezone from user_preferences
+
+  // 2) Admin timezone (for "start of day" + smartTiming)
   const { db } = await import('../db');
-  const { users, userPreferences } = await import('@shared/schema');
-  const { eq } = await import('drizzle-orm');
-  
+  const { users, userPreferences, sequenceScheduledSends, sequenceRecipients } = await import('@shared/schema');
+  const { eq, and, gte, isNull, isNotNull, sql, lte } = await import('drizzle-orm');
+
   const adminUsers = await db
     .select({
       userId: users.id,
@@ -238,88 +236,64 @@ export async function coordinatorTick(): Promise<void> {
     .leftJoin(userPreferences, eq(users.id, userPreferences.userId))
     .where(eq(users.role, 'admin'))
     .limit(1);
-  
+
   const adminUser = adminUsers[0];
-  
-  if (!adminUser?.timezone) {
-    console.log('[Coordinator] No admin user timezone found in preferences, using UTC');
-  }
-  
   const adminTimezone = adminUser?.timezone || 'UTC';
+
   console.log(`[Coordinator] Using admin timezone: ${adminTimezone}`);
-  
-  // Find next valid admin sending window (handles weekends, past windows, etc.)
-  const { windowStart, windowEnd, dayStart } = findNextAdminWindowBounds(
-    now,
-    adminTimezone,
-    settings
-  );
-  
-  const inWindow = now >= windowStart && now < windowEnd;
-  
-  console.log(`[Coordinator] Window: ${windowStart.toISOString()} - ${windowEnd.toISOString()}, inWindow: ${inWindow}`);
-  
-  // Count emails sent in the quota day (starting from dayStart)
-  const { sequenceScheduledSends, sequenceRecipients } = await import('@shared/schema');
-  const { and, gte, lte, isNull, isNotNull, sql, desc } = await import('drizzle-orm');
-  
+
+  // 3) Compute dayStart in admin timezone, count sentToday
+  const dayStart = getStartOfToday(now, adminTimezone);
+
   const [sentCountResult] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(sequenceScheduledSends)
     .where(
       and(
         gte(sequenceScheduledSends.sentAt, dayStart),
-        isNotNull(sequenceScheduledSends.sentAt)
-      )
+        isNotNull(sequenceScheduledSends.sentAt),
+      ),
     );
-  
+
   const sentToday = sentCountResult?.count || 0;
-  const remainingCapacity = settings.dailyEmailLimit - sentToday;
-  
-  console.log(`[Coordinator] Sent today: ${sentToday}/${settings.dailyEmailLimit}, remaining: ${remainingCapacity}`);
-  
+  const remainingCapacity = Math.max(settings.dailyEmailLimit - sentToday, 0);
+
+  console.log(
+    `[Coordinator] Sent today: ${sentToday}/${settings.dailyEmailLimit}, remaining: ${remainingCapacity}`,
+  );
+
   if (remainingCapacity <= 0) {
-    console.log('[Coordinator] Daily limit reached - but still checking for eligible emails');
-    // Don't return - we still want to see what's eligible
+    console.log('[Coordinator] Daily limit reached, nothing to schedule');
+    return;
   }
-  
-  // Calculate batch capacity based on whether we're inside or outside window
-  let batchSize: number;
-  if (inWindow) {
-    // Inside window: distribute remaining capacity across remaining runs today
-    const adminLocalTime = toZonedTime(now, adminTimezone);
-    const remainingRuns = runsLeftInWindow(adminLocalTime, settings);
-    batchSize = Math.max(1, Math.min(5, Math.ceil(remainingCapacity / remainingRuns)));
-  } else {
-    // Outside window: pre-fill entire next window
-    const windowDurationHours = settings.sendingHoursEnd - settings.sendingHoursStart;
-    const windowCapacity = Math.floor((windowDurationHours * 60) / 5); // 5-minute coordinator cadence
-    batchSize = Math.min(windowCapacity, remainingCapacity, 50); // Cap at 50 to avoid huge batches
-  }
-  
-  console.log(`[Coordinator] Batch size: ${batchSize} (${inWindow ? 'inside window' : 'pre-fill next window'})`);
-  
-  // Fetch eligible candidates (increased limit for client window filtering)
-  const candidatesLimit = batchSize * 3;
-  
-  // Start transaction
-  const result = await db.transaction(async (tx) => {
-    // Find current queue tail (latest scheduled_at across all pending sends)
+
+  // 4) Decide batchSize (how many to schedule this tick)
+  // Simple, safe choice: don't exceed remainingCapacity or 50
+  const batchSize = Math.min(remainingCapacity, 50);
+  console.log(`[Coordinator] Batch size: ${batchSize}`);
+
+  // 5) Transaction for queue tail + scheduling
+  const result = await db.transaction(async tx => {
+    // 5a) Find current queue tail (latest scheduled_at among pending)
     const [tailResult] = await tx
       .select({ latestScheduled: sql<Date | null>`max(scheduled_at)` })
       .from(sequenceScheduledSends)
       .where(isNotNull(sequenceScheduledSends.scheduledAt));
-    
-    let queueTail = tailResult?.latestScheduled ? new Date(tailResult.latestScheduled) : null;
-    
-    // If no queue tail, use windowStart as the starting point
-    if (!queueTail || queueTail < windowStart) {
-      queueTail = windowStart;
+
+    let queueTail: Date | null = tailResult?.latestScheduled
+      ? new Date(tailResult.latestScheduled)
+      : null;
+
+    if (!queueTail || queueTail < now) {
+      // If nothing scheduled yet or everything in past, start from "now"
+      queueTail = now;
     }
-    
+
     console.log(`[Coordinator] Queue tail: ${queueTail.toISOString()}`);
-    
-    // Query eligible emails with FOR UPDATE SKIP LOCKED
+
+    // 5b) Fetch eligible candidates (FIFO by eligibleAt)
+    const candidatesLimit = batchSize * 3; // grab extra for planner balancing
+
     const candidates = await tx
       .select({
         id: sequenceScheduledSends.id,
@@ -332,90 +306,90 @@ export async function coordinatorTick(): Promise<void> {
       .from(sequenceScheduledSends)
       .innerJoin(
         sequenceRecipients,
-        eq(sequenceScheduledSends.recipientId, sequenceRecipients.id)
+        eq(sequenceScheduledSends.recipientId, sequenceRecipients.id),
       )
       .where(
         and(
           lte(sequenceScheduledSends.eligibleAt, now),
           isNull(sequenceScheduledSends.scheduledAt),
           isNull(sequenceScheduledSends.sentAt),
-          eq(sequenceScheduledSends.status, 'pending')
-        )
+          eq(sequenceScheduledSends.status, 'pending'),
+        ),
       )
       .orderBy(
         sequenceScheduledSends.eligibleAt,
         sequenceScheduledSends.recipientId,
-        sequenceScheduledSends.stepNumber
+        sequenceScheduledSends.stepNumber,
       )
       .limit(candidatesLimit)
       .for('update', { skipLocked: true });
-    
+
     if (candidates.length === 0) {
       console.log('[Coordinator] No eligible emails found');
       return 0;
     }
-    
+
     console.log(`[Coordinator] Found ${candidates.length} eligible candidates`);
-    
-    // Use eligibility planner to balance timezone distribution
+
+    // 5c) Let planner decide WHO gets scheduled in this batch
     const { planEligibleSchedule } = await import('./eligibilityPlanner');
     const planResult = planEligibleSchedule({
       candidates,
-      adminTimezone,
-      adminWindowStart: windowStart,
-      adminWindowEnd: windowEnd,
-      clientWindowStartOffset: settings.clientWindowStartOffset,
-      clientWindowEndHour: settings.clientWindowEndHour,
       batchSize,
     });
-    
+
     const balancedCandidates = planResult.balancedCandidates;
-    
-    // Log timezone distribution for observability
-    console.log(`[Coordinator] Timezone distribution:`);
+
+    console.log('[Coordinator] Timezone distribution (simple):');
     for (const plan of planResult.timezonePlans) {
-      const overlap = Math.round(plan.windowOverlap.overlapMinutes / 60 * 10) / 10; // Round to 1 decimal
-      console.log(`  ${plan.timezone}: ${plan.quota}/${plan.candidates.length} (${overlap}h overlap)`);
+      console.log(`  ${plan.timezone}: quota=${plan.quota}, pool=${plan.candidates.length}`);
     }
-    console.log(`[Coordinator] Schedulable: ${planResult.totalSchedulable}/${planResult.totalEligible} candidates`);
-    
-    // Calculate rate-limit spacing (minutes between sends)
-    const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
+    console.log(
+      `[Coordinator] Schedulable: ${planResult.totalSchedulable}/${planResult.totalEligible} candidates`,
+    );
+
+    // 5d) Compute spacing between sends based on admin window + daily limit
+    const adminWindowHours =
+      settings.sendingHoursEnd - settings.sendingHoursStart;
     const adminWindowMinutes = adminWindowHours * 60;
-    const minutesBetweenSends = settings.dailyEmailLimit > 0
-      ? adminWindowMinutes / settings.dailyEmailLimit
-      : (settings.minDelayMinutes || 1);
-    
-    console.log(`[Coordinator] Spacing: ${minutesBetweenSends.toFixed(2)} minutes between sends`);
-    
+    const minutesBetweenSends =
+      settings.dailyEmailLimit > 0
+        ? adminWindowMinutes / settings.dailyEmailLimit
+        : (settings.minDelayMinutes || 1);
+
+    console.log(
+      `[Coordinator] Spacing: ${minutesBetweenSends.toFixed(
+        2,
+      )} minutes between sends`,
+    );
+
     let scheduledCount = 0;
     let previousJitterSeconds: number | undefined = undefined;
-    
+
     for (const candidate of balancedCandidates) {
-      if (scheduledCount >= batchSize) {
-        break;
-      }
-      
+      if (scheduledCount >= batchSize) break;
+
       const eligibleAt = new Date(candidate.eligibleAt);
       const anchorTime = eligibleAt > queueTail! ? eligibleAt : queueTail!;
-      
-      // Generate random jitter with seconds-level precision (returns milliseconds)
-      // Pass previous jitter to avoid back-to-back duplicates
-      const baseJitterMs = randomJitter(settings.minDelayMinutes, settings.maxDelayMinutes, previousJitterSeconds);
-      previousJitterSeconds = baseJitterMs / 1000; // Store for next iteration
-      
-      // Enforce rate-limit spacing - use whichever is larger
+
+      // base jitter (ms)
+      const baseJitterMs = randomJitter(
+        settings.minDelayMinutes,
+        settings.maxDelayMinutes,
+        previousJitterSeconds,
+      );
+      previousJitterSeconds = baseJitterMs / 1000;
+
       const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
-      const appliedJitterMs = Math.max(baseJitterMs, rateLimitSpacingMs);
-      
-      // Calculate the actual minimum send time (queue tail + applied spacing)
-      const minimumSendTime = new Date(queueTail!.getTime() + appliedJitterMs);
-      
-      // Ensure it's not before eligible_at
-      const proposedTime = minimumSendTime > eligibleAt ? minimumSendTime : eligibleAt;
-      
-      // Call computeNextSendSlot to find next valid slot (respects admin + client windows)
-      // Pass proposedTime as minimumTime to ensure slot can't be earlier than jittered baseline
+      const appliedDelayMs = Math.max(baseJitterMs, rateLimitSpacingMs);
+
+      const minimumSendTime = new Date(anchorTime.getTime() + appliedDelayMs);
+
+      // never before eligibleAt
+      const proposedTime =
+        minimumSendTime > eligibleAt ? minimumSendTime : eligibleAt;
+
+      // 5e) FINAL TIMING DECISION: computeNextSendSlot
       const sendSlot = computeNextSendSlot({
         baselineTime: proposedTime,
         adminTimezone,
@@ -426,43 +400,35 @@ export async function coordinatorTick(): Promise<void> {
         clientWindowStartOffset: settings.clientWindowStartOffset,
         clientWindowEndHour: settings.clientWindowEndHour,
         skipWeekends: settings.skipWeekends,
-        minimumTime: proposedTime, // Enforce jittered time minimum
+        minimumTime: proposedTime,
       });
-      
-      if (!sendSlot) {
-        console.log(`[Coordinator] ⚠️ No valid slot found for candidate ${candidate.id}`);
-        continue;
-      }
-      
-      // Calculate actual jitter (in minutes) for transparency
-      // This is the total delay from when email became eligible/queue-ready
+
       const jitterMs = sendSlot.getTime() - anchorTime.getTime();
       const jitterMinutes = Math.round(jitterMs / 60000);
-      
-      // Update scheduled_at and jitterMinutes
+
       await tx
         .update(sequenceScheduledSends)
-        .set({ 
+        .set({
           scheduledAt: sendSlot,
-          jitterMinutes: jitterMinutes.toString()
+          jitterMinutes: jitterMinutes.toString(),
         })
         .where(eq(sequenceScheduledSends.id, candidate.id));
-      
-      // Update recipient's nextSendAt for queue visibility
+
       await tx
         .update(sequenceRecipients)
         .set({ nextSendAt: sendSlot })
         .where(eq(sequenceRecipients.id, candidate.recipientId));
-      
-      // Advance queue tail to maintain FIFO ordering
+
       queueTail = sendSlot;
       scheduledCount++;
     }
-    
+
     return scheduledCount;
   });
-  
-  console.log(`[Coordinator] ✅ Scheduled ${result} emails (${sentToday}/${settings.dailyEmailLimit} sent today)`);
+
+  console.log(
+    `[Coordinator] ✅ Scheduled ${result} emails (${sentToday}/${settings.dailyEmailLimit} sent today)`,
+  );
 }
 
 export interface QueueSlotRequest {
