@@ -1,0 +1,173 @@
+Got it. I’m not going to hand-hold or soften anything — here’s the blunt, expert architectural judgment on this exact file (queueCoordinator.ts), in plain English, with zero fluff.
+
+Read this carefully, because this is the core problem in your system right now.
+
+⸻
+
+The Hard Truth About queueCoordinator.ts
+
+1. This file is doing WAY too much.
+
+You have:
+	•	rate-limit spacing
+	•	jitter
+	•	admin window detection
+	•	client window detection
+	•	candidate selection
+	•	timezone balancing
+	•	next-window prediction
+	•	quota calculation
+	•	daily count logic
+	•	a planner
+	•	AND THEN calling computeNextSendSlot.
+
+This means you’re doing timing logic in 4 different places instead of one.
+
+Every layer thinks it is responsible for finding “the right time.”
+That’s why PST was getting 1:24 AM and EST was getting 9 PM.
+
+⸻
+
+The Core Problem
+
+2. The coordinator is trying to compute “when” BEFORE calling computeNextSendSlot.
+
+This is fatal.
+
+Look at this part:
+
+const minimumSendTime = new Date(queueTail!.getTime() + appliedJitterMs);
+const proposedTime = minimumSendTime > eligibleAt ? minimumSendTime : eligibleAt;
+
+Then you pass that into:
+
+computeNextSendSlot({ baselineTime: proposedTime, minimumTime: proposedTime })
+
+This is correct.
+This is the ONLY timing calculation the coordinator should do.
+
+But…
+
+You ALSO do these completely unnecessary timing calculations:
+	•	inActiveWindow
+	•	runsLeftInWindow
+	•	findNextAdminWindowBounds
+	•	clientWindowAllows
+	•	AND more window math inside the planner
+
+These create contradictory baselines and cause the queue to get anchored to the wrong timezone.
+
+⸻
+
+The Actual Fix
+
+You don’t need a full rewrite — you need a surgical extraction of all duplicate timing logic.
+
+Here is the rule:
+
+Only computeNextSendSlot decides WHEN an email gets sent.
+Everything else only decides WHO goes next.
+
+That means:
+
+DELETE ALL WINDOW-BASED SCHEDULING FROM queueCoordinator.ts
+
+Remove:
+	•	inActiveWindow
+	•	runsLeftInWindow
+	•	clientWindowAllows
+	•	the entire window/remainingRuns logic
+	•	the windowStart / windowEnd anchor behavior
+	•	ANYTHING time-related except jitter + spacing
+
+You keep only:
+
+The correct scheduling pipeline:
+	1.	Determine batchSize
+	2.	Get eligible candidates
+	3.	Let the planner decide which candidates
+	4.	For each candidate, compute:
+
+proposed = max(queueTail + spacing/jitter, eligible_at)
+scheduled_at = computeNextSendSlot({ baselineTime: proposed })
+queueTail = scheduled_at
+
+THAT’S IT.
+
+⸻
+
+The Specific Code Sections That Must Be Removed
+
+REMOVE:
+	•	findNextAdminWindowBounds
+	•	All use of windowStart, windowEnd, dayStart
+	•	Any time-whitelisting BEFORE jitter+spacing
+	•	Any cutoff logic in coordinator
+	•	Any admin/recipient window logic outside computeNextSendSlot
+
+These lines must be completely deleted:
+
+const { windowStart, windowEnd, dayStart } = findNextAdminWindowBounds(...)
+const inWindow = now >= windowStart && now < windowEnd;
+...
+const batchSize = inWindow ? ... : ...
+...
+if (!queueTail || queueTail < windowStart) queueTail = windowStart;
+
+This is the source of your West Coast bias.
+
+It forces the queue tail to start in admin time instead of in valid client windows.
+
+All timing logic MUST be delegated to computeNextSendSlot.
+
+⸻
+
+What the Coordinator Should Be Doing
+
+The coordinator’s job is ONLY:
+	•	Find eligible recipients
+	•	Order them fairly (planner)
+	•	Apply spacing + jitter
+	•	Pass proposed time to computeNextSendSlot
+	•	Write scheduled_at
+	•	Move the queueTail
+
+That’s it.
+
+No admin windows.
+No client windows.
+No overlap math.
+No conversions.
+No midnight logic.
+No hour checks.
+No weekend checks.
+
+ALL of that already exists in computeNextSendSlot.
+
+You’ve duplicated a full scheduling engine and they are now fighting each other.
+
+⸻
+
+Final Summary (for you and Replit)
+
+The coordinator currently has 4 independent subsystems trying to calculate timing.
+This is why you are seeing West Coast bias, incorrect cutoff times, and bad local scheduling.
+
+Only one subsystem should ever calculate timing:
+computeNextSendSlot.
+
+Everything else becomes:
+	•	spacing
+	•	jitter
+	•	FIFO
+	•	candidate selection
+
+If you want, I can produce a clean rewritten coordinator that:
+	•	removes 600+ lines of garbage
+	•	keeps all your business rules
+	•	produces perfect schedule alignment
+	•	never miscalculates a timezone again
+
+And I’ll do it in one file with no ambiguity.
+
+Just say the word.

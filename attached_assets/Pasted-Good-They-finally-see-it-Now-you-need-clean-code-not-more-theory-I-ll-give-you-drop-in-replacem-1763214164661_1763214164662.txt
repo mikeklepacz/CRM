@@ -1,0 +1,409 @@
+Good. They finally see it.
+
+Now you need clean code, not more theory. I’ll give you drop-in replacements / edits for the three moving parts so Replit can stop improvising.
+
+I’ll keep it tight.
+
+⸻
+
+1. smartTiming.ts — LEAVE computeNextSendSlot AS-IS
+
+Your computeNextSendSlot is fine. Do not change its behavior.
+
+It is the only place that should decide when an email can be sent.
+
+So: nothing to do here.
+
+⸻
+
+2. New eligibilityPlanner.ts — NO TIME MATH, ONLY QUOTAS
+
+Replace your current eligibilityPlanner.ts with this simplified version:
+
+// eligibilityPlanner.ts
+// Purpose: pick a balanced set of candidates across timezones.
+// NO time/window/UTC logic here. That all lives in computeNextSendSlot.
+
+interface Candidate {
+  id: string;
+  recipientId: string;
+  stepNumber: number;
+  eligibleAt: Date | string;
+  timezone: string | null;
+  businessHours: string | null;
+}
+
+interface TimezonePlan {
+  timezone: string;
+  quota: number;
+  candidates: Candidate[];
+}
+
+interface PlannerOptions {
+  candidates: Candidate[];
+  batchSize: number;
+}
+
+interface PlannerResult {
+  balancedCandidates: Candidate[];
+  timezonePlans: TimezonePlan[];
+  totalEligible: number;
+  totalSchedulable: number;
+}
+
+/**
+ * Eligibility Planner:
+ * - Groups candidates by timezone
+ * - Assigns quotas in proportion to candidate counts
+ * - Uses round-robin to interleave timezones
+ * 
+ * NO date, UTC, or window math. This only decides WHO, not WHEN.
+ */
+export function planEligibleSchedule(options: PlannerOptions): PlannerResult {
+  const { candidates, batchSize } = options;
+  if (candidates.length === 0 || batchSize <= 0) {
+    return {
+      balancedCandidates: [],
+      timezonePlans: [],
+      totalEligible: candidates.length,
+      totalSchedulable: 0,
+    };
+  }
+
+  // Group by timezone
+  const byTimezone = new Map<string, Candidate[]>();
+
+  for (const candidate of candidates) {
+    const tz = candidate.timezone || 'America/New_York';
+    if (!byTimezone.has(tz)) {
+      byTimezone.set(tz, []);
+    }
+    byTimezone.get(tz)!.push(candidate);
+  }
+
+  const timezonePlans: TimezonePlan[] = Array.from(byTimezone.entries()).map(
+    ([timezone, tzCandidates]) => ({
+      timezone,
+      quota: 0,
+      candidates: [...tzCandidates], // copy so we can shift()
+    }),
+  );
+
+  const totalEligible = candidates.length;
+  let remaining = Math.min(batchSize, totalEligible);
+
+  // Assign quotas proportional to candidate count
+  for (let i = 0; i < timezonePlans.length; i++) {
+    const plan = timezonePlans[i];
+
+    if (i === timezonePlans.length - 1) {
+      // Last timezone gets the remaining quota
+      plan.quota = Math.min(remaining, plan.candidates.length);
+    } else {
+      const proportion = plan.candidates.length / totalEligible;
+      const proposed = Math.round(proportion * batchSize);
+      plan.quota = Math.min(proposed, plan.candidates.length, remaining);
+      remaining -= plan.quota;
+    }
+  }
+
+  // Round-robin pick from each timezone until quotas are used or batch filled
+  const balancedCandidates: Candidate[] = [];
+  let idx = 0;
+
+  while (
+    balancedCandidates.length < batchSize &&
+    timezonePlans.some(p => p.quota > 0)
+  ) {
+    const plan = timezonePlans[idx];
+
+    if (plan.quota > 0 && plan.candidates.length > 0) {
+      balancedCandidates.push(plan.candidates.shift()!);
+      plan.quota--;
+    }
+
+    idx = (idx + 1) % timezonePlans.length;
+  }
+
+  return {
+    balancedCandidates,
+    timezonePlans,
+    totalEligible,
+    totalSchedulable: balancedCandidates.length,
+  };
+}
+
+Key point:
+No adminWindowStart, no adminWindowEnd, no zonedTimeToUtc, no overlap math.
+
+Planner’s job: pick N people, balanced by timezone.
+
+⸻
+
+3. Simplify coordinatorTick — ONLY SPACING + JITTER + computeNextSendSlot
+
+Now fix the coordinator so it stops trying to do extra scheduling.
+
+You can keep all the helper functions (randomJitter, getStartOfToday, etc.), but:
+	•	Stop using findNextAdminWindowBounds
+	•	Stop using inActiveWindow
+	•	Stop using runsLeftInWindow
+	•	Stop doing any admin-window math inside the coordinator
+
+Here is a simplified coordinatorTick that fits your current schema and uses the new planner:
+
+export async function coordinatorTick(): Promise<void> {
+  const now = new Date();
+
+  // 1) Load settings
+  const settings = await storage.getEhubSettings();
+  if (!settings) {
+    console.log('[Coordinator] No E-Hub settings found');
+    return;
+  }
+
+  // 2) Admin timezone (for “start of day” + smartTiming)
+  const { db } = await import('../db');
+  const { users, userPreferences, sequenceScheduledSends, sequenceRecipients } = await import('@shared/schema');
+  const { eq, and, gte, isNull, isNotNull, sql } = await import('drizzle-orm');
+
+  const adminUsers = await db
+    .select({
+      userId: users.id,
+      timezone: userPreferences.timezone,
+    })
+    .from(users)
+    .leftJoin(userPreferences, eq(users.id, userPreferences.userId))
+    .where(eq(users.role, 'admin'))
+    .limit(1);
+
+  const adminUser = adminUsers[0];
+  const adminTimezone = adminUser?.timezone || 'UTC';
+
+  console.log(`[Coordinator] Using admin timezone: ${adminTimezone}`);
+
+  // 3) Compute dayStart in admin timezone, count sentToday
+  const dayStart = getStartOfToday(now, adminTimezone);
+
+  const [sentCountResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(sequenceScheduledSends)
+    .where(
+      and(
+        gte(sequenceScheduledSends.sentAt, dayStart),
+        isNotNull(sequenceScheduledSends.sentAt),
+      ),
+    );
+
+  const sentToday = sentCountResult?.count || 0;
+  const remainingCapacity = Math.max(settings.dailyEmailLimit - sentToday, 0);
+
+  console.log(
+    `[Coordinator] Sent today: ${sentToday}/${settings.dailyEmailLimit}, remaining: ${remainingCapacity}`,
+  );
+
+  if (remainingCapacity <= 0) {
+    console.log('[Coordinator] Daily limit reached, nothing to schedule');
+    return;
+  }
+
+  // 4) Decide batchSize (how many to schedule this tick)
+  // Simple, safe choice: don't exceed remainingCapacity or 50
+  const batchSize = Math.min(remainingCapacity, 50);
+  console.log(`[Coordinator] Batch size: ${batchSize}`);
+
+  // 5) Transaction for queue tail + scheduling
+  const result = await db.transaction(async tx => {
+    const { desc, lte } = await import('drizzle-orm');
+
+    // 5a) Find current queue tail (latest scheduled_at among pending)
+    const [tailResult] = await tx
+      .select({ latestScheduled: sql<Date | null>`max(scheduled_at)` })
+      .from(sequenceScheduledSends)
+      .where(isNotNull(sequenceScheduledSends.scheduledAt));
+
+    let queueTail: Date | null = tailResult?.latestScheduled
+      ? new Date(tailResult.latestScheduled)
+      : null;
+
+    if (!queueTail || queueTail < now) {
+      // If nothing scheduled yet or everything in past, start from "now"
+      queueTail = now;
+    }
+
+    console.log(`[Coordinator] Queue tail: ${queueTail.toISOString()}`);
+
+    // 5b) Fetch eligible candidates (FIFO by eligibleAt)
+    const candidatesLimit = batchSize * 3; // grab extra for planner balancing
+
+    const candidates = await tx
+      .select({
+        id: sequenceScheduledSends.id,
+        recipientId: sequenceScheduledSends.recipientId,
+        stepNumber: sequenceScheduledSends.stepNumber,
+        eligibleAt: sequenceScheduledSends.eligibleAt,
+        timezone: sequenceRecipients.timezone,
+        businessHours: sequenceRecipients.businessHours,
+      })
+      .from(sequenceScheduledSends)
+      .innerJoin(
+        sequenceRecipients,
+        eq(sequenceScheduledSends.recipientId, sequenceRecipients.id),
+      )
+      .where(
+        and(
+          lte(sequenceScheduledSends.eligibleAt, now),
+          isNull(sequenceScheduledSends.scheduledAt),
+          isNull(sequenceScheduledSends.sentAt),
+          eq(sequenceScheduledSends.status, 'pending'),
+        ),
+      )
+      .orderBy(
+        sequenceScheduledSends.eligibleAt,
+        sequenceScheduledSends.recipientId,
+        sequenceScheduledSends.stepNumber,
+      )
+      .limit(candidatesLimit)
+      .for('update', { skipLocked: true });
+
+    if (candidates.length === 0) {
+      console.log('[Coordinator] No eligible emails found');
+      return 0;
+    }
+
+    console.log(`[Coordinator] Found ${candidates.length} eligible candidates`);
+
+    // 5c) Let planner decide WHO gets scheduled in this batch
+    const { planEligibleSchedule } = await import('./eligibilityPlanner');
+    const planResult = planEligibleSchedule({
+      candidates,
+      batchSize,
+    });
+
+    const balancedCandidates = planResult.balancedCandidates;
+
+    console.log('[Coordinator] Timezone distribution (simple):');
+    for (const plan of planResult.timezonePlans) {
+      console.log(`  ${plan.timezone}: quota=${plan.quota}, pool=${plan.candidates.length}`);
+    }
+    console.log(
+      `[Coordinator] Schedulable: ${planResult.totalSchedulable}/${planResult.totalEligible} candidates`,
+    );
+
+    // 5d) Compute spacing between sends based on admin window + daily limit
+    const adminWindowHours =
+      settings.sendingHoursEnd - settings.sendingHoursStart;
+    const adminWindowMinutes = adminWindowHours * 60;
+    const minutesBetweenSends =
+      settings.dailyEmailLimit > 0
+        ? adminWindowMinutes / settings.dailyEmailLimit
+        : (settings.minDelayMinutes || 1);
+
+    console.log(
+      `[Coordinator] Spacing: ${minutesBetweenSends.toFixed(
+        2,
+      )} minutes between sends`,
+    );
+
+    let scheduledCount = 0;
+    let previousJitterSeconds: number | undefined = undefined;
+
+    for (const candidate of balancedCandidates) {
+      if (scheduledCount >= batchSize) break;
+
+      const eligibleAt = new Date(candidate.eligibleAt);
+      const anchorTime = eligibleAt > queueTail! ? eligibleAt : queueTail!;
+
+      // base jitter (ms)
+      const baseJitterMs = randomJitter(
+        settings.minDelayMinutes,
+        settings.maxDelayMinutes,
+        previousJitterSeconds,
+      );
+      previousJitterSeconds = baseJitterMs / 1000;
+
+      const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
+      const appliedDelayMs = Math.max(baseJitterMs, rateLimitSpacingMs);
+
+      const minimumSendTime = new Date(anchorTime.getTime() + appliedDelayMs);
+
+      // never before eligibleAt
+      const proposedTime =
+        minimumSendTime > eligibleAt ? minimumSendTime : eligibleAt;
+
+      // 5e) FINAL TIMING DECISION: computeNextSendSlot
+      const sendSlot = computeNextSendSlot({
+        baselineTime: proposedTime,
+        adminTimezone,
+        adminStartHour: settings.sendingHoursStart,
+        adminEndHour: settings.sendingHoursEnd,
+        recipientBusinessHours: candidate.businessHours || '9-17',
+        recipientTimezone: candidate.timezone || 'UTC',
+        clientWindowStartOffset: settings.clientWindowStartOffset,
+        clientWindowEndHour: settings.clientWindowEndHour,
+        skipWeekends: settings.skipWeekends,
+        minimumTime: proposedTime,
+      });
+
+      const jitterMs = sendSlot.getTime() - anchorTime.getTime();
+      const jitterMinutes = Math.round(jitterMs / 60000);
+
+      await tx
+        .update(sequenceScheduledSends)
+        .set({
+          scheduledAt: sendSlot,
+          jitterMinutes: jitterMinutes.toString(),
+        })
+        .where(eq(sequenceScheduledSends.id, candidate.id));
+
+      await tx
+        .update(sequenceRecipients)
+        .set({ nextSendAt: sendSlot })
+        .where(eq(sequenceRecipients.id, candidate.recipientId));
+
+      queueTail = sendSlot;
+      scheduledCount++;
+    }
+
+    return scheduledCount;
+  });
+
+  console.log(
+    `[Coordinator] ✅ Scheduled ${result} emails (${sentToday}/${settings.dailyEmailLimit} sent today)`,
+  );
+}
+
+What changed (intentionally):
+	•	No findNextAdminWindowBounds
+	•	No inActiveWindow
+	•	No “pre-fill next window” complexity
+	•	No admin window decision logic inside coordinator beyond spacing math
+	•	Planner is only used for WHO, not WHEN
+	•	All window overlap and local business-hour validity is handled only by computeNextSendSlot
+
+⸻
+
+4. What to delete
+
+In queueCoordinator.ts, these are now dead weight and should be removed or left unused until cleaned:
+	•	inActiveWindow
+	•	runsLeftInWindow
+	•	clientWindowAllows
+	•	findNextAdminWindowBounds
+
+They aren’t called in the version above. They can go.
+
+⸻
+
+5. What this gives you in practice
+
+With these three pieces in place:
+	•	eligible_at = “allowed to get in line”
+	•	Planner = “which 20–50 people get picked today, fairly across timezones”
+	•	Coordinator = “space them out + jitter, then ask smartTiming for a legal timestamp”
+	•	computeNextSendSlot = only brain deciding final timestamps
+
+That’s what you actually wanted from day one:
+a human-like sender, timezone-respecting, quota-respecting, non-stupid.
+
+If you want to iterate further (e.g. smarter per-timezone quotas, logging, diagnostics), you build that on top of this, not by reintroducing time math in three places.

@@ -1,0 +1,68 @@
+Good, this is exactly what I needed.
+
+Here’s what I’d “tell” Replit and the architect about this file specifically, based on the code you pasted.
+
+⸻
+
+Message to Replit / Architect about smartTiming.ts
+
+Looking at smartTiming.ts, computeNextSendSlot is already the correct place to handle all timing logic:
+	•	It takes:
+	•	baselineTime
+	•	admin timezone + hours
+	•	recipient business hours + timezone
+	•	client start offset + client cutoff hour
+	•	skipWeekends
+	•	optional minimumTime
+	•	It correctly:
+	•	converts local dates with formatInTimeZone + fromZonedTime
+	•	handles closed / 24/7 / scheduled hours
+	•	applies “open + offset” and enforces client cutoff (clientWindowEndHour)
+	•	computes a proper overlap between:
+	•	admin window (adminTimezone, adminStartHour–adminEndHour)
+	•	recipient window (clientWindowStartOffset → clientWindowEndHour)
+	•	walks up to 14 days ahead
+	•	skips weekends (in admin timezone)
+	•	returns the earliest valid overlap, or 1 hour from baseline as a hard fallback
+
+This function is already doing exactly what we need for “WHEN can we send” (dual-window, timezone-safe scheduling).
+
+So:
+	1.	Do not duplicate any of this logic in eligibilityPlanner.ts.
+No more overlap math, no more “admin window converted to recipient window” inside the planner. The planner must not try to construct UTC windows.
+	2.	Coordinator must only call this function to get scheduled_at.
+The correct call pattern is:
+
+const proposed = queueTailPlusSpacingAndJitter; // computed in coordinator
+
+const scheduled = computeNextSendSlot({
+  baselineTime: proposed,
+  adminTimezone,
+  adminStartHour,
+  adminEndHour,
+  recipientBusinessHours,
+  recipientTimezone,
+  clientWindowStartOffset,
+  clientWindowEndHour,
+  skipWeekends,
+  minimumTime: proposed, // or omitted if not needed
+});
+
+// Then:
+scheduled_at = scheduled;
+queueTail = scheduled;
+
+
+	3.	If computeOptimalSendTime is no longer used anywhere, delete it.
+It’s a legacy single-window function. computeNextSendSlot is the canonical API for all future scheduling.
+	4.	From this point on, treat computeNextSendSlot as the single source of truth for timing.
+Any attempt to precompute or constrain windows elsewhere (especially in the planner) will reintroduce exactly the bugs we’re trying to eliminate.
+
+⸻
+
+That’s all they need to hear about smartTiming.ts: keep computeNextSendSlot, stop fighting it from other modules, and route all scheduling decisions through it.
+
+⸻
+
+Next step:
+Send me queueCoordinator.ts so we can lock in the correct spacing → jitter → computeNextSendSlot flow and stop the California-first nonsense.

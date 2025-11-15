@@ -1,0 +1,226 @@
+Here’s the straight answer with no sugar-coating:
+
+**Your eligibility planner is fundamentally doing the wrong job.
+
+And this entire file must be deleted.**
+
+Not “patched,” not “fixed,” not “rewritten.”
+Deleted.
+
+Because the planner is trying to compute time windows.
+But this is the coordinator’s job?
+No.
+It’s computeNextSendSlot’s job.
+
+Right now you have THREE different time engines:
+	1.	smartTiming.ts → computeNextSendSlot
+This one works. This is the correct engine.
+	2.	queueCoordinator.ts → admin window math
+This one duplicates computeNextSendSlot incorrectly.
+	3.	eligibilityPlanner.ts → fake timezone windows via calculateOverlap
+This one is broken beyond repair and mathematically unsalvageable.
+
+This planner is precisely what caused:
+	•	PST recipients → scheduled at 1:24 AM PST
+	•	EST recipients → scheduled at 9:00 PM EST
+	•	Emails queued starting in WEST COAST instead of EAST COAST
+	•	Day-boundary logic collapsing
+	•	Negative window length
+	•	Hard crashes (zonedTimeToUtc import error)
+	•	The system fighting itself about “who is eligible when”
+
+The architect already told you this:
+
+“Strip all time/window calculations from the planner — let computeNextSendSlot do all timing.”
+
+This is absolutely correct.
+
+⸻
+
+What the eligibility planner SHOULD be:
+
+A simple thing:
+
+Group candidates by timezone, assign quotas, return list.
+ZERO timing logic.
+
+That’s it.
+
+Not a single date.
+Not a single hour.
+Not a single conversion.
+Not a single zonedTimeToUtc.
+Not a single overlap window.
+
+Everything inside:
+	•	calculateTimezoneEligibility
+	•	calculateOverlap
+	•	any mention of adminWindowStart
+	•	windowOverlap
+	•	overlapMinutes
+	•	sorting by startUtc
+	•	quotas based on overlap duration
+
+All must be removed.
+
+⸻
+
+Why?
+
+Because the planner is pretending to be a scheduler.
+
+It’s computing:
+	•	when PST opens
+	•	when EST closes
+	•	overlap between admin and client
+	•	when clients become eligible
+	•	which windows are “bigger”
+	•	quota based on window lengths
+
+But NONE of that belongs here.
+
+This is exactly what computeNextSendSlot already does correctly.
+
+You have a working schedule engine.
+You added a second schedule engine.
+Then a third one inside coordinator.
+
+They fight each other.
+
+⸻
+
+So what do we keep?
+
+Keep only this part:
+
+// group candidates by timezone
+// weigh them by candidate count
+// assign quotas
+// round-robin selection
+// return balancedCandidates
+
+That’s the ONLY valid part of this file.
+
+Everything else?
+Burn it.
+
+⸻
+
+Here is EXACTLY what the eligibility planner should become:
+
+A minimal version:
+
+export function planEligibleSchedule({ candidates, batchSize }: PlannerOptions): PlannerResult {
+  // group by timezone
+  const byTZ = new Map<string, Candidate[]>();
+
+  for (const c of candidates) {
+    const tz = c.timezone || 'America/New_York';
+    if (!byTZ.has(tz)) byTZ.set(tz, []);
+    byTZ.get(tz)!.push(c);
+  }
+
+  // quota = proportional to candidate count
+  const zones = Array.from(byTZ.entries()).map(([tz, list]) => ({
+    timezone: tz,
+    candidates: list,
+    quota: 0
+  }));
+
+  const total = candidates.length;
+  let remaining = batchSize;
+
+  for (let i = 0; i < zones.length; i++) {
+    const z = zones[i];
+    if (i === zones.length - 1) {
+      z.quota = Math.min(z.candidates.length, remaining);
+    } else {
+      z.quota = Math.min(
+        Math.round((z.candidates.length / total) * batchSize),
+        z.candidates.length
+      );
+    }
+    remaining -= z.quota;
+  }
+
+  // round-robin selection
+  const balanced: Candidate[] = [];
+  let index = 0;
+
+  while (balanced.length < batchSize && zones.some(z => z.quota > 0)) {
+    const z = zones[index];
+    if (z.quota > 0 && z.candidates.length > 0) {
+      balanced.push(z.candidates.shift()!);
+      z.quota--;
+    }
+    index = (index + 1) % zones.length;
+  }
+
+  return {
+    balancedCandidates: balanced,
+    timezonePlans: zones,
+    totalEligible: candidates.length,
+    totalSchedulable: balanced.length
+  };
+}
+
+Notice what’s missing:
+	•	No admin window
+	•	No business hours
+	•	No UTC math
+	•	No overlap
+	•	No start/end times
+	•	No date-fns
+	•	No time engines
+	•	No midnight math
+
+Because none of that belongs here.
+
+⸻
+
+Where does time logic live?
+
+Only one place:
+
+computeNextSendSlot
+
+Already validated
+Already correct
+Already timezone-aware
+Already weekend-aware
+Already offset-aware
+Already admin-aware
+Already client-window aware
+
+Coordinator simply feeds it:
+
+baselineTime = max(queueTail + spacing/jitter, eligible_at)
+scheduled_at = computeNextSendSlot({ baselineTime })
+queueTail = scheduled_at
+
+Done.
+
+⸻
+
+Answer to your actual question: “Does the eligibility planner need this?”
+
+No.
+Not a single line of its current time logic is acceptable.
+
+It needs to be replaced entirely with the minimal version above.
+
+⸻
+
+If you want, I will rewrite:
+	1.	smartTiming.ts (cleaned + hardened)
+	2.	queueCoordinator.ts (clean, no duplicate timing)
+	3.	eligibilityPlanner.ts (simple, correct)
+
+I’ll deliver a fully integrated version where:
+	•	Planner decides WHO
+	•	Coordinator orders + spaces + jitters
+	•	computeNextSendSlot decides WHEN
+
+Your system will stop fighting itself and start behaving deterministically and correctly.
+
+Just say the word.
