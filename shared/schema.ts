@@ -1235,6 +1235,7 @@ export const ehubSettings = pgTable("ehub_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   minDelayMinutes: integer("min_delay_minutes").notNull().default(1), // Minimum minutes between sends
   maxDelayMinutes: integer("max_delay_minutes").notNull().default(3), // Maximum minutes between sends
+  jitterPercentage: integer("jitter_percentage").notNull().default(50), // Jitter variance percentage (default ±50% of spacing)
   dailyEmailLimit: integer("daily_email_limit").notNull().default(200), // Max emails per day
   sendingHoursStart: integer("sending_hours_start").notNull().default(9), // Company time range start hour (24h format, e.g., 9 = 9 AM)
   sendingHoursEnd: integer("sending_hours_end").notNull().default(14), // Company time range end hour (24h format, e.g., 14 = 2 PM)
@@ -1424,6 +1425,7 @@ const ehubSettingsBaseSchema = createInsertSchema(ehubSettings).omit({
 }).extend({
   minDelayMinutes: z.number().min(1).max(60),
   maxDelayMinutes: z.number().min(1).max(120),
+  jitterPercentage: z.number().min(1).max(100), // 1-100% jitter variance
   dailyEmailLimit: z.number().min(1).max(2000),
   sendingHoursStart: z.number().min(0).max(23),
   sendingHoursEnd: z.number().min(0).max(23),
