@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
 import { TestTube2, RefreshCw, Reply } from "lucide-react";
+import { formatDistanceToNow } from 'date-fns';
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
@@ -40,21 +41,21 @@ function calculateOptimalDelays(
   // Calculate pure company sending window (no client timezone logic)
   const companyWindowHours = companyEndHour - companyStartHour;
   const companyWindowMinutes = companyWindowHours * 60;
-  
+
   // Calculate average spacing needed for daily limit
   const averageSpacingMinutes = dailyEmailLimit > 0 
     ? companyWindowMinutes / dailyEmailLimit 
     : 5;
-  
+
   // Convert jitter percentage to multipliers (e.g., 50% = 0.5 to 1.5, 30% = 0.7 to 1.3)
   const jitterDecimal = jitterPercentage / 100;
   const minMultiplier = 1 - jitterDecimal;
   const maxMultiplier = 1 + jitterDecimal;
-  
+
   // Apply jitter variance to create min/max range
   const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * minMultiplier));
   const maxDelay = Math.ceil(averageSpacingMinutes * maxMultiplier);
-  
+
   return {
     minDelayMinutes: minDelay,
     maxDelayMinutes: maxDelay
@@ -72,6 +73,7 @@ interface Sequence {
   failedCount: number;
   repliedCount: number;
   createdAt: string;
+  finalizedStrategy?: string;
 }
 
 interface EhubSettings {
@@ -196,14 +198,14 @@ function SentHistoryView() {
         params.append('sequenceId', selectedSequence);
       }
       params.append('limit', '100');
-      
+
       const url = `/api/ehub/sent-history?${params.toString()}`;
       const res = await fetch(url, { credentials: 'include' });
-      
+
       if (!res.ok) {
         throw new Error(`Failed to fetch sent history: ${res.statusText}`);
       }
-      
+
       return await res.json();
     },
     refetchInterval: 60000, // Refresh every minute
@@ -222,7 +224,7 @@ function SentHistoryView() {
       const matchesEmail = msg.recipientEmail.toLowerCase().includes(searchLower);
       const matchesName = msg.recipientName?.toLowerCase().includes(searchLower);
       const matchesSubject = msg.subject.toLowerCase().includes(searchLower);
-      
+
       if (!matchesEmail && !matchesName && !matchesSubject) {
         return false;
       }
@@ -356,7 +358,7 @@ function QueueView() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [timeWindowDays, setTimeWindowDays] = useState<number>(3);
   const [statusFilter, setStatusFilter] = useState<'active' | 'paused'>('active');
-  
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -364,7 +366,7 @@ function QueueView() {
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
-  
+
   // Fetch active queue
   const { data: activeQueue, isLoading: isLoadingActive } = useQuery<IndividualSend[]>({
     queryKey: ['/api/ehub/queue', debouncedSearch, timeWindowDays],
@@ -373,14 +375,14 @@ function QueueView() {
       if (debouncedSearch) params.append('search', debouncedSearch);
       params.append('timeWindowDays', timeWindowDays.toString());
       params.append('statusFilter', 'active');
-      
+
       const url = `/api/ehub/queue?${params.toString()}`;
       const res = await fetch(url, { credentials: 'include' });
-      
+
       if (!res.ok) {
         throw new Error(`Failed to fetch queue: ${res.statusText}`);
       }
-      
+
       return await res.json();
     },
     refetchInterval: 30000,
@@ -566,14 +568,14 @@ function QueueView() {
   const sentItems = activeQueue?.filter(item => item.status === 'sent') || [];
   const scheduledItems = activeQueue?.filter(item => item.status === 'scheduled') || [];
   const overdueItems = activeQueue?.filter(item => item.status === 'overdue') || [];
-  
+
   // Get unique recipients for follow-ups vs fresh calculation (active only)
   const uniqueRecipients = new Set(activeQueue?.map(item => item.recipientId) || []);
   const followUpRecipients = new Set(
     activeQueue?.filter(item => item.stepNumber > 1).map(item => item.recipientId) || []
   );
   const freshRecipients = uniqueRecipients.size - followUpRecipients.size;
-  
+
   // Get next send time from scheduled items (active only)
   const nextScheduled = scheduledItems.length > 0 && scheduledItems[0].scheduledAt
     ? new Date(scheduledItems[0].scheduledAt)
@@ -586,7 +588,7 @@ function QueueView() {
     const now = new Date();
     const diffMs = date.getTime() - now.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 0) return 'Overdue';
     if (diffMins < 60) return `in ${diffMins}m`;
     if (diffMins < 1440) return `in ${Math.floor(diffMins / 60)}h`;
@@ -997,11 +999,11 @@ export default function EHub() {
   const [sheetId, setSheetId] = useState("");
   const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
   const [activeTab, setActiveTab] = useState("all-contacts");
-  
+
   // Navigation guard for unsaved settings changes
   const [pendingTab, setPendingTab] = useState<string | null>(null);
   const [showNavigationWarning, setShowNavigationWarning] = useState(false);
-  
+
   // Strategy chat state
   const [strategyMessage, setStrategyMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1033,6 +1035,10 @@ export default function EHub() {
 
   // Nuke Test Data state
   const [nukeDialogOpen, setNukeDialogOpen] = useState(false);
+  const [nukeCounts, setNukeCounts] = useState<any>(null); // For displaying counts after nuking
+  const [nukeEmailPattern, setNukeEmailPattern] = useState<string>(""); // For confirming nuke
+  const [nukeConfirmText, setNukeConfirmText] = useState<string>(""); // For confirming nuke
+  const [countsError, setCountsError] = useState<string | null>(null); // For displaying error if count fetch fails
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
@@ -1048,10 +1054,10 @@ export default function EHub() {
     keywordBin: "",
     skipWeekends: true,
   });
-  
+
   // Track original settings for dirty state detection
   const [originalSettings, setOriginalSettings] = useState<EhubSettings | null>(null);
-  
+
   // Check if settings form has unsaved changes
   const isSettingsDirty = originalSettings && JSON.stringify(settingsForm) !== JSON.stringify(originalSettings);
 
@@ -1625,7 +1631,7 @@ export default function EHub() {
 
   const handleAddToSequence = () => {
     if (!targetSequenceId) return;
-    
+
     if (selectAllMode === 'all') {
       addContactsMutation.mutate({
         sequenceId: targetSequenceId,
@@ -2289,7 +2295,7 @@ export default function EHub() {
                   </Button>
                 </div>
               </div>
-              
+
               {/* Existing Sequence Selector */}
               <div>
                 <Label htmlFor="strategy-sequence-select">Or Select Existing Sequence</Label>
@@ -2532,11 +2538,11 @@ export default function EHub() {
                         No step delays configured yet
                       </p>
                     )}
-                    
+
                     {/* Validation feedback */}
                     {stepDelays.length > 0 && (() => {
                       const hasNegative = stepDelays.some((d) => d < 0);
-                      
+
                       if (hasNegative) {
                         return (
                           <Alert variant="destructive">
@@ -2549,7 +2555,7 @@ export default function EHub() {
                       }
                       return null;
                     })()}
-                    
+
                     <div className="flex gap-2 pt-2">
                       <Button
                         variant="outline"
@@ -2567,7 +2573,7 @@ export default function EHub() {
                         onClick={() => {
                           // Validate before saving
                           const hasNegative = stepDelays.some((d) => d < 0);
-                          
+
                           if (hasNegative) {
                             toast({
                               title: "Invalid Delays",
@@ -2576,7 +2582,7 @@ export default function EHub() {
                             });
                             return;
                           }
-                          
+
                           saveStepDelaysMutation.mutate({ stepDelays, repeatLastStep });
                         }}
                         disabled={
@@ -2665,7 +2671,7 @@ export default function EHub() {
                               {sequences.find((s) => s.id === selectedSequenceId)?.status || 'draft'}
                             </Badge>
                           </div>
-                          
+
                           {strategyTranscript?.lastUpdatedAt && (
                             <div className="flex justify-between items-center">
                               <span className="text-sm font-medium">Last Updated:</span>
@@ -2698,7 +2704,7 @@ export default function EHub() {
                             const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
                             const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0);
                             const canActivate = hasCampaignBrief && hasMessages && hasValidDelays;
-                            
+
                             return currentStatus === 'active' ? (
                               <Button
                                 variant="outline"
@@ -2722,7 +2728,7 @@ export default function EHub() {
                                     const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
                                     const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0) && 
                                       stepDelays.every((d, i) => i === 0 || d > stepDelays[i - 1]);
-                                    
+
                                     if (!hasCampaignBrief) {
                                       toast({
                                         title: "Cannot Activate",
@@ -2731,7 +2737,7 @@ export default function EHub() {
                                       });
                                       return;
                                     }
-                                    
+
                                     if (!hasMessages) {
                                       toast({
                                         title: "Cannot Activate",
@@ -2740,7 +2746,7 @@ export default function EHub() {
                                       });
                                       return;
                                     }
-                                    
+
                                     if (!hasValidDelays) {
                                       toast({
                                         title: "Cannot Activate",
@@ -2749,7 +2755,7 @@ export default function EHub() {
                                       });
                                       return;
                                     }
-                                    
+
                                     updateSequenceStatusMutation.mutate('active');
                                   }}
                                   disabled={!canActivate || updateSequenceStatusMutation.isPending}
@@ -2803,11 +2809,11 @@ export default function EHub() {
                 Sent History
               </TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="active-queue" className="mt-4">
               <QueueView />
             </TabsContent>
-            
+
             <TabsContent value="sent-history" className="mt-4">
               <SentHistoryView />
             </TabsContent>
@@ -2843,7 +2849,7 @@ export default function EHub() {
                         }
                         const newStart = parseInt(val, 10);
                         if (isNaN(newStart)) return;
-                        
+
                         const optimal = calculateOptimalDelays(
                           newStart,
                           settingsForm.sendingHoursEnd,
@@ -2888,7 +2894,7 @@ export default function EHub() {
                         }
                         const newEnd = parseInt(val, 10);
                         if (isNaN(newEnd)) return;
-                        
+
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           newEnd,
@@ -2933,7 +2939,7 @@ export default function EHub() {
                         }
                         const newLimit = parseInt(val, 10);
                         if (isNaN(newLimit)) return;
-                        
+
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           settingsForm.sendingHoursEnd,
@@ -3014,7 +3020,7 @@ export default function EHub() {
                             }
                             const newJitter = parseInt(val, 10);
                             if (isNaN(newJitter)) return;
-                            
+
                             const optimal = calculateOptimalDelays(
                               settingsForm.sendingHoursStart,
                               settingsForm.sendingHoursEnd,
@@ -3083,7 +3089,7 @@ export default function EHub() {
                           }
                           const newOffset = parseFloat(val);
                           if (isNaN(newOffset)) return;
-                          
+
                           setSettingsForm({ 
                             ...settingsForm, 
                             clientWindowStartOffset: newOffset
@@ -3125,7 +3131,7 @@ export default function EHub() {
                           }
                           const newCutoff = parseInt(val, 10);
                           if (isNaN(newCutoff)) return;
-                          
+
                           setSettingsForm({ 
                             ...settingsForm, 
                             clientWindowEndHour: newCutoff
@@ -3285,7 +3291,7 @@ export default function EHub() {
                   const currentSequence = sequences.find((s) => s.id === selectedSequenceId);
                   const hasCampaignBrief = !!(currentSequence as any)?.finalizedStrategy?.trim();
                   const canTest = selectedSequenceId && hasCampaignBrief;
-                  
+
                   return (
                     <>
                       {/* Display store context at the top */}
@@ -3309,7 +3315,7 @@ export default function EHub() {
                           </AlertDescription>
                         </Alert>
                       )}
-                      
+
                       <Button
                         variant="destructive"
                         onClick={() => syntheticTestMutation.mutate()}
