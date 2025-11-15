@@ -716,131 +716,129 @@ function QueueView() {
                 {search ? 'No results found' : 'No emails in queue'}
               </div>
             ) : (
-              <ScrollArea className="h-[600px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Recipient</TableHead>
-                      <TableHead>Sequence</TableHead>
-                      <TableHead>Step</TableHead>
-                      <TableHead>Scheduled</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="w-[60px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activeQueue.map((item, idx) => (
-                      <TableRow
-                        key={`${item.recipientId}-${item.stepNumber}-${idx}`}
-                        className={getRowBgColor(item.status)}
-                        data-testid={`row-queue-${item.recipientId}-${item.stepNumber}`}
-                      >
-                      <TableCell data-testid={`text-recipient-name-${item.recipientId}-${item.stepNumber}`}>
-                        <div>
-                          <div className="font-medium">{item.recipientName || 'Unknown'}</div>
-                          <div className="text-sm text-muted-foreground">{item.recipientEmail}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell data-testid={`text-queue-sequence-${item.recipientId}-${item.stepNumber}`}>
-                        {item.sequenceName}
-                      </TableCell>
-                      <TableCell data-testid={`text-queue-step-${item.recipientId}-${item.stepNumber}`}>
-                        <Badge variant={item.stepNumber === 1 ? 'default' : 'secondary'}>
-                          Step {item.stepNumber}
-                        </Badge>
-                      </TableCell>
-                      <TableCell data-testid={`text-queue-scheduled-${item.recipientId}-${item.stepNumber}`}>
-                        {item.status === 'sent' 
-                          ? formatTimestamp(item.sentAt)
-                          : formatTimestamp(item.scheduledAt)
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Recipient</TableHead>
+                    <TableHead>Sequence</TableHead>
+                    <TableHead>Step</TableHead>
+                    <TableHead>Scheduled</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[60px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeQueue.map((item, idx) => (
+                    <TableRow
+                      key={`${item.recipientId}-${item.stepNumber}-${idx}`}
+                      className={getRowBgColor(item.status)}
+                      data-testid={`row-queue-${item.recipientId}-${item.stepNumber}`}
+                    >
+                    <TableCell data-testid={`text-recipient-name-${item.recipientId}-${item.stepNumber}`}>
+                      <div>
+                        <div className="font-medium">{item.recipientName || 'Unknown'}</div>
+                        <div className="text-sm text-muted-foreground">{item.recipientEmail}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell data-testid={`text-queue-sequence-${item.recipientId}-${item.stepNumber}`}>
+                      {item.sequenceName}
+                    </TableCell>
+                    <TableCell data-testid={`text-queue-step-${item.recipientId}-${item.stepNumber}`}>
+                      <Badge variant={item.stepNumber === 1 ? 'default' : 'secondary'}>
+                        Step {item.stepNumber}
+                      </Badge>
+                    </TableCell>
+                    <TableCell data-testid={`text-queue-scheduled-${item.recipientId}-${item.stepNumber}`}>
+                      {item.status === 'sent' 
+                        ? formatTimestamp(item.sentAt)
+                        : formatTimestamp(item.scheduledAt)
+                      }
+                    </TableCell>
+                    <TableCell data-testid={`text-queue-status-${item.recipientId}-${item.stepNumber}`}>
+                      <Badge 
+                        variant={
+                          item.status === 'sent' ? 'default' : 
+                          item.status === 'overdue' ? 'destructive' : 
+                          'outline'
                         }
-                      </TableCell>
-                      <TableCell data-testid={`text-queue-status-${item.recipientId}-${item.stepNumber}`}>
-                        <Badge 
-                          variant={
-                            item.status === 'sent' ? 'default' : 
-                            item.status === 'overdue' ? 'destructive' : 
-                            'outline'
-                          }
-                        >
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell data-testid={`actions-${item.recipientId}-${item.stepNumber}`}>
-                        {item.status !== 'sent' && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                data-testid={`button-actions-${item.recipientId}-${item.stepNumber}`}
+                      >
+                        {item.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell data-testid={`actions-${item.recipientId}-${item.stepNumber}`}>
+                      {item.status !== 'sent' && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              data-testid={`button-actions-${item.recipientId}-${item.stepNumber}`}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {statusFilter === 'paused' ? (
+                              <DropdownMenuItem
+                                onClick={() => resumeMutation.mutate(item.recipientId)}
+                                disabled={resumeMutation.isPending}
+                                data-testid={`action-resume-${item.recipientId}`}
                               >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {statusFilter === 'paused' ? (
+                                <Play className="mr-2 h-4 w-4" />
+                                Resume Recipient
+                              </DropdownMenuItem>
+                            ) : (
+                              <>
                                 <DropdownMenuItem
-                                  onClick={() => resumeMutation.mutate(item.recipientId)}
-                                  disabled={resumeMutation.isPending}
-                                  data-testid={`action-resume-${item.recipientId}`}
+                                  onClick={() => pauseMutation.mutate(item.recipientId)}
+                                  disabled={pauseMutation.isPending}
+                                  data-testid={`action-pause-${item.recipientId}`}
                                 >
-                                  <Play className="mr-2 h-4 w-4" />
-                                  Resume Recipient
+                                  <Pause className="mr-2 h-4 w-4" />
+                                  Pause Recipient
                                 </DropdownMenuItem>
-                              ) : (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={() => pauseMutation.mutate(item.recipientId)}
-                                    disabled={pauseMutation.isPending}
-                                    data-testid={`action-pause-${item.recipientId}`}
-                                  >
-                                    <Pause className="mr-2 h-4 w-4" />
-                                    Pause Recipient
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => skipStepMutation.mutate(item.recipientId)}
-                                    disabled={skipStepMutation.isPending}
-                                    data-testid={`action-skip-${item.recipientId}`}
-                                  >
-                                    <SkipForward className="mr-2 h-4 w-4" />
-                                    Skip This Step
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => sendNowMutation.mutate(item.recipientId)}
-                                    disabled={sendNowMutation.isPending}
-                                    data-testid={`action-send-now-${item.recipientId}`}
-                                  >
-                                    <Send className="mr-2 h-4 w-4" />
-                                    Send Now
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => setDelayDialog({ open: true, recipientId: item.recipientId, hours: 1 })}
-                                    data-testid={`action-delay-${item.recipientId}`}
-                                  >
-                                    <Clock className="mr-2 h-4 w-4" />
-                                    Delay by X hours
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => removeMutation.mutate(item.recipientId)}
-                                    disabled={removeMutation.isPending}
-                                    className="text-destructive"
-                                    data-testid={`action-remove-${item.recipientId}`}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Remove from Sequence
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
+                                <DropdownMenuItem
+                                  onClick={() => skipStepMutation.mutate(item.recipientId)}
+                                  disabled={skipStepMutation.isPending}
+                                  data-testid={`action-skip-${item.recipientId}`}
+                                >
+                                  <SkipForward className="mr-2 h-4 w-4" />
+                                  Skip This Step
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => sendNowMutation.mutate(item.recipientId)}
+                                  disabled={sendNowMutation.isPending}
+                                  data-testid={`action-send-now-${item.recipientId}`}
+                                >
+                                  <Send className="mr-2 h-4 w-4" />
+                                  Send Now
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setDelayDialog({ open: true, recipientId: item.recipientId, hours: 1 })}
+                                  data-testid={`action-delay-${item.recipientId}`}
+                                >
+                                  <Clock className="mr-2 h-4 w-4" />
+                                  Delay by X hours
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => removeMutation.mutate(item.recipientId)}
+                                  disabled={removeMutation.isPending}
+                                  className="text-destructive"
+                                  data-testid={`action-remove-${item.recipientId}`}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remove from Sequence
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
             )
           ) : (
             // PAUSED RECIPIENTS VIEW
