@@ -317,9 +317,23 @@ export function CategoryManagement() {
                   id="displayOrder"
                   type="number"
                   value={formData.displayOrder}
-                  onChange={(e) =>
-                    setFormData({ ...formData, displayOrder: parseInt(e.target.value) || 0 })
-                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setFormData({ ...formData, displayOrder: '' as any });
+                      return;
+                    }
+                    const parsed = parseInt(val, 10);
+                    if (isNaN(parsed)) return;
+                    setFormData({ ...formData, displayOrder: parsed });
+                  }}
+                  onBlur={() => {
+                    if (formData.displayOrder === '' || formData.displayOrder === null as any) {
+                      setFormData({ ...formData, displayOrder: 0 });
+                    } else if (formData.displayOrder < 0) {
+                      setFormData({ ...formData, displayOrder: 0 });
+                    }
+                  }}
                   min="0"
                   data-testid="input-category-order"
                 />

@@ -266,9 +266,20 @@ export function SharedColorPicker({
                     max="360"
                     value={Math.round(hslColor.h)}
                     onChange={(e) => {
-                      const h = parseInt(e.target.value) || 0;
-                      const hexColor = hslToHex(h, hslColor.s, hslColor.l);
+                      const val = e.target.value;
+                      if (val === '') return;
+                      const h = parseInt(val, 10);
+                      if (isNaN(h)) return;
+                      const clampedH = Math.max(0, Math.min(360, h));
+                      const hexColor = hslToHex(clampedH, hslColor.s, hslColor.l);
                       onChange(hexColor);
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        const hexColor = hslToHex(0, hslColor.s, hslColor.l);
+                        onChange(hexColor);
+                      }
                     }}
                     className="font-mono text-xs"
                   />
@@ -281,9 +292,20 @@ export function SharedColorPicker({
                     max="100"
                     value={Math.round(hslColor.s)}
                     onChange={(e) => {
-                      const s = parseInt(e.target.value) || 0;
-                      const hexColor = hslToHex(hslColor.h, s, hslColor.l);
+                      const val = e.target.value;
+                      if (val === '') return;
+                      const s = parseInt(val, 10);
+                      if (isNaN(s)) return;
+                      const clampedS = Math.max(0, Math.min(100, s));
+                      const hexColor = hslToHex(hslColor.h, clampedS, hslColor.l);
                       onChange(hexColor);
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        const hexColor = hslToHex(hslColor.h, 0, hslColor.l);
+                        onChange(hexColor);
+                      }
                     }}
                     className="font-mono text-xs"
                   />
@@ -296,9 +318,20 @@ export function SharedColorPicker({
                     max="100"
                     value={Math.round(hslColor.l)}
                     onChange={(e) => {
-                      const l = parseInt(e.target.value) || 0;
-                      const hexColor = hslToHex(hslColor.h, hslColor.s, l);
+                      const val = e.target.value;
+                      if (val === '') return;
+                      const l = parseInt(val, 10);
+                      if (isNaN(l)) return;
+                      const clampedL = Math.max(0, Math.min(100, l));
+                      const hexColor = hslToHex(hslColor.h, hslColor.s, clampedL);
                       onChange(hexColor);
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        const hexColor = hslToHex(hslColor.h, hslColor.s, 0);
+                        onChange(hexColor);
+                      }
                     }}
                     className="font-mono text-xs"
                   />
