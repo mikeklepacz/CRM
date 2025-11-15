@@ -181,10 +181,29 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
   const timezone = recipientTimezone || parsed.timezone;
 
   // Helper: Create UTC time for specific hour/minute in a timezone
-  const createTimeInZone = (date: Date, daysOffset: number, hour: number, minute: number, timezone: string): Date => {
-    // Get the calendar date IN THE TARGET TIMEZONE (not in UTC!)
-    const zonedDate = toZonedTime(addDays(date, daysOffset), timezone);
-    const localDateStr = formatInTimeZone(zonedDate, timezone, 'yyyy-MM-dd');
+  const createTimeInZone = (
+    date: Date,
+    daysOffset: number,
+    hour: number,
+    minute: number,
+    timezone: string
+  ): Date => {
+    // Step 1: Move forward daysOffset IN THE TARGET TIMEZONE
+    const zonedBase = toZonedTime(addDays(date, daysOffset), timezone);
+
+    // Step 2: Extract calendar day in that timezone
+    const localDateStr = formatInTimeZone(zonedBase, timezone, 'yyyy-MM-dd');
+
+    // Step 3: Build correct local datetime string
+    const localDateTime = `${localDateStr}T${hour.toString().padStart(2, '0')}:${minute
+      .toString()
+      .padStart(2, '0')}:00`;
+
+    // Step 4: Convert that LOCAL time to a precise UTC instant
+    const utcResult = fromZonedTime(localDateTime, timezone);
+
+    return utcResult;
+  };
     
     // Build proper local datetime string and convert back to UTC
     const localDateTime = `${localDateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;

@@ -184,7 +184,7 @@ export async function coordinatorTick(): Promise<void> {
     console.log(`[Coordinator] Queue tail: ${queueTail.toISOString()}`);
 
     // 5b) Fetch eligible candidates (FIFO by eligibleAt)
-    const candidatesLimit = batchSize * 3; // grab extra for planner balancing
+    const candidatesLimit = 1000; // grab extra for planner balancing
 
     const candidates = await tx
       .select({
@@ -223,22 +223,10 @@ export async function coordinatorTick(): Promise<void> {
 
     console.log(`[Coordinator] Found ${candidates.length} eligible candidates`);
 
-    // 5c) Let planner decide WHO gets scheduled in this batch
-    const { planEligibleSchedule } = await import('./eligibilityPlanner');
-    const planResult = planEligibleSchedule({
-      candidates,
-      batchSize,
-    });
-
-    const balancedCandidates = planResult.balancedCandidates;
-
-    console.log('[Coordinator] Timezone distribution (simple):');
-    for (const plan of planResult.timezonePlans) {
-      console.log(`  ${plan.timezone}: quota=${plan.quota}, pool=${plan.candidates.length}`);
-    }
-    console.log(
-      `[Coordinator] Schedulable: ${planResult.totalSchedulable}/${planResult.totalEligible} candidates`,
-    );
+    // 5c) Choose earliest eligible candidates (FIFO, no timezone round-robin)
+    const balancedCandidates = candidates
+      .sort((a, b) => new Date(a.eligibleAt).getTime() - new Date(b.eligibleAt).getTime())
+      .slice(0, batchSize);
 
     // 5d) Compute spacing between sends based on admin window + daily limit
     const adminWindowHours =
