@@ -239,10 +239,9 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
       sendMinute = sendMinute % 60;
     }
 
-    // Clamp to cutoff hour if offset pushes past it
+    // If offset pushes start time at or past cutoff, no valid window exists for this day
     if (sendHour >= clientWindowEndHour) {
-      sendHour = 12;
-      sendMinute = 0;
+      return null;
     }
 
     const start = createTimeInZone(effectiveBaseline, daysOffset, sendHour, sendMinute, timezone);

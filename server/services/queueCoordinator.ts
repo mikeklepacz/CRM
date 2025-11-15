@@ -357,6 +357,28 @@ export async function coordinatorTick(): Promise<void> {
     
     console.log(`[Coordinator] Found ${candidates.length} eligible candidates`);
     
+    // Use eligibility planner to balance timezone distribution
+    const { planEligibleSchedule } = await import('./eligibilityPlanner');
+    const planResult = planEligibleSchedule({
+      candidates,
+      adminTimezone,
+      adminWindowStart: windowStart,
+      adminWindowEnd: windowEnd,
+      clientWindowStartOffset: settings.clientWindowStartOffset,
+      clientWindowEndHour: settings.clientWindowEndHour,
+      batchSize,
+    });
+    
+    const balancedCandidates = planResult.balancedCandidates;
+    
+    // Log timezone distribution for observability
+    console.log(`[Coordinator] Timezone distribution:`);
+    for (const plan of planResult.timezonePlans) {
+      const overlap = Math.round(plan.windowOverlap.overlapMinutes / 60 * 10) / 10; // Round to 1 decimal
+      console.log(`  ${plan.timezone}: ${plan.quota}/${plan.candidates.length} (${overlap}h overlap)`);
+    }
+    console.log(`[Coordinator] Schedulable: ${planResult.totalSchedulable}/${planResult.totalEligible} candidates`);
+    
     // Calculate rate-limit spacing (minutes between sends)
     const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
     const adminWindowMinutes = adminWindowHours * 60;
@@ -369,7 +391,7 @@ export async function coordinatorTick(): Promise<void> {
     let scheduledCount = 0;
     let previousJitterSeconds: number | undefined = undefined;
     
-    for (const candidate of candidates) {
+    for (const candidate of balancedCandidates) {
       if (scheduledCount >= batchSize) {
         break;
       }
