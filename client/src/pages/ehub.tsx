@@ -926,7 +926,26 @@ function QueueView() {
                 min="0.1"
                 step="0.5"
                 value={delayDialog.hours}
-                onChange={(e) => setDelayDialog({ ...delayDialog, hours: parseFloat(e.target.value) || 1 })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || val === '.') {
+                    setDelayDialog({ ...delayDialog, hours: val as any });
+                    return;
+                  }
+                  const parsed = parseFloat(val);
+                  if (isNaN(parsed)) return;
+                  setDelayDialog({ ...delayDialog, hours: parsed });
+                }}
+                onBlur={() => {
+                  if (delayDialog.hours === '' || delayDialog.hours === '.' || delayDialog.hours === null as any) {
+                    setDelayDialog({ ...delayDialog, hours: 1 });
+                  } else {
+                    const val = typeof delayDialog.hours === 'string' ? parseFloat(delayDialog.hours) : delayDialog.hours;
+                    if (val < 0.1) {
+                      setDelayDialog({ ...delayDialog, hours: 0.1 });
+                    }
+                  }
+                }}
                 data-testid="input-delay-hours"
               />
               <p className="text-sm text-muted-foreground mt-1">
@@ -2449,9 +2468,30 @@ export default function EHub() {
                                   min="0"
                                   value={delay}
                                   onChange={(e) => {
+                                    const val = e.target.value;
                                     const newDelays = [...stepDelays];
-                                    newDelays[index] = parseFloat(e.target.value) || 0;
+                                    if (val === '' || val === '.') {
+                                      newDelays[index] = val as any;
+                                      setStepDelays(newDelays);
+                                      return;
+                                    }
+                                    const parsed = parseFloat(val);
+                                    if (isNaN(parsed)) return;
+                                    newDelays[index] = parsed;
                                     setStepDelays(newDelays);
+                                  }}
+                                  onBlur={() => {
+                                    const newDelays = [...stepDelays];
+                                    if (delay === '' || delay === '.' || delay === null as any) {
+                                      newDelays[index] = 0;
+                                      setStepDelays(newDelays);
+                                    } else {
+                                      const val = typeof delay === 'string' ? parseFloat(delay) : delay;
+                                      if (val < 0) {
+                                        newDelays[index] = 0;
+                                        setStepDelays(newDelays);
+                                      }
+                                    }
                                   }}
                                   data-testid={`input-step-delay-${index}`}
                                   className="mt-1"
@@ -2795,7 +2835,15 @@ export default function EHub() {
                       type="number"
                       value={settingsForm.sendingHoursStart}
                       onChange={(e) => {
-                        const newStart = parseInt(e.target.value) || 9;
+                        const val = e.target.value;
+                        // Allow empty string during typing
+                        if (val === '') {
+                          setSettingsForm({ ...settingsForm, sendingHoursStart: '' as any });
+                          return;
+                        }
+                        const newStart = parseInt(val, 10);
+                        if (isNaN(newStart)) return;
+                        
                         const optimal = calculateOptimalDelays(
                           newStart,
                           settingsForm.sendingHoursEnd,
@@ -2809,6 +2857,18 @@ export default function EHub() {
                           maxDelayMinutes: optimal.maxDelayMinutes
                         });
                       }}
+                      onBlur={() => {
+                        if (settingsForm.sendingHoursStart === '' || settingsForm.sendingHoursStart === null as any) {
+                          const optimal = calculateOptimalDelays(9, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, sendingHoursStart: 9, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        } else if (settingsForm.sendingHoursStart < 0) {
+                          const optimal = calculateOptimalDelays(0, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, sendingHoursStart: 0, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        } else if (settingsForm.sendingHoursStart > 23) {
+                          const optimal = calculateOptimalDelays(23, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, sendingHoursStart: 23, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        }
+                      }}
                       min={0}
                       max={23}
                     />
@@ -2821,7 +2881,14 @@ export default function EHub() {
                       type="number"
                       value={settingsForm.sendingHoursEnd}
                       onChange={(e) => {
-                        const newEnd = parseInt(e.target.value) || 14;
+                        const val = e.target.value;
+                        if (val === '') {
+                          setSettingsForm({ ...settingsForm, sendingHoursEnd: '' as any });
+                          return;
+                        }
+                        const newEnd = parseInt(val, 10);
+                        if (isNaN(newEnd)) return;
+                        
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           newEnd,
@@ -2835,6 +2902,18 @@ export default function EHub() {
                           maxDelayMinutes: optimal.maxDelayMinutes
                         });
                       }}
+                      onBlur={() => {
+                        if (settingsForm.sendingHoursEnd === '' || settingsForm.sendingHoursEnd === null as any) {
+                          const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, 14, settingsForm.dailyEmailLimit, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, sendingHoursEnd: 14, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        } else if (settingsForm.sendingHoursEnd < 0) {
+                          const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, 0, settingsForm.dailyEmailLimit, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, sendingHoursEnd: 0, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        } else if (settingsForm.sendingHoursEnd > 23) {
+                          const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, 23, settingsForm.dailyEmailLimit, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, sendingHoursEnd: 23, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        }
+                      }}
                       min={0}
                       max={23}
                     />
@@ -2847,7 +2926,14 @@ export default function EHub() {
                       type="number"
                       value={settingsForm.dailyEmailLimit}
                       onChange={(e) => {
-                        const newLimit = parseInt(e.target.value) || 200;
+                        const val = e.target.value;
+                        if (val === '') {
+                          setSettingsForm({ ...settingsForm, dailyEmailLimit: '' as any });
+                          return;
+                        }
+                        const newLimit = parseInt(val, 10);
+                        if (isNaN(newLimit)) return;
+                        
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           settingsForm.sendingHoursEnd,
@@ -2860,6 +2946,18 @@ export default function EHub() {
                           minDelayMinutes: optimal.minDelayMinutes,
                           maxDelayMinutes: optimal.maxDelayMinutes
                         });
+                      }}
+                      onBlur={() => {
+                        if (settingsForm.dailyEmailLimit === '' || settingsForm.dailyEmailLimit === null as any) {
+                          const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, 200, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, dailyEmailLimit: 200, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        } else if (settingsForm.dailyEmailLimit < 1) {
+                          const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, 1, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, dailyEmailLimit: 1, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        } else if (settingsForm.dailyEmailLimit > 2000) {
+                          const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, 2000, settingsForm.jitterPercentage);
+                          setSettingsForm({ ...settingsForm, dailyEmailLimit: 2000, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                        }
                       }}
                       min={1}
                       max={2000}
@@ -2909,7 +3007,14 @@ export default function EHub() {
                           type="number"
                           value={settingsForm.jitterPercentage}
                           onChange={(e) => {
-                            const newJitter = parseInt(e.target.value) || 50;
+                            const val = e.target.value;
+                            if (val === '') {
+                              setSettingsForm({ ...settingsForm, jitterPercentage: '' as any });
+                              return;
+                            }
+                            const newJitter = parseInt(val, 10);
+                            if (isNaN(newJitter)) return;
+                            
                             const optimal = calculateOptimalDelays(
                               settingsForm.sendingHoursStart,
                               settingsForm.sendingHoursEnd,
@@ -2922,6 +3027,18 @@ export default function EHub() {
                               minDelayMinutes: optimal.minDelayMinutes,
                               maxDelayMinutes: optimal.maxDelayMinutes
                             });
+                          }}
+                          onBlur={() => {
+                            if (settingsForm.jitterPercentage === '' || settingsForm.jitterPercentage === null as any) {
+                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, 50);
+                              setSettingsForm({ ...settingsForm, jitterPercentage: 50, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                            } else if (settingsForm.jitterPercentage < 1) {
+                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, 1);
+                              setSettingsForm({ ...settingsForm, jitterPercentage: 1, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                            } else if (settingsForm.jitterPercentage > 100) {
+                              const optimal = calculateOptimalDelays(settingsForm.sendingHoursStart, settingsForm.sendingHoursEnd, settingsForm.dailyEmailLimit, 100);
+                              setSettingsForm({ ...settingsForm, jitterPercentage: 100, minDelayMinutes: optimal.minDelayMinutes, maxDelayMinutes: optimal.maxDelayMinutes });
+                            }
                           }}
                           min={1}
                           max={100}
@@ -2959,11 +3076,32 @@ export default function EHub() {
                         step="0.25"
                         value={settingsForm.clientWindowStartOffset}
                         onChange={(e) => {
-                          const newOffset = parseFloat(e.target.value) || 1.0;
+                          const val = e.target.value;
+                          if (val === '' || val === '.') {
+                            setSettingsForm({ ...settingsForm, clientWindowStartOffset: val as any });
+                            return;
+                          }
+                          const newOffset = parseFloat(val);
+                          if (isNaN(newOffset)) return;
+                          
                           setSettingsForm({ 
                             ...settingsForm, 
                             clientWindowStartOffset: newOffset
                           });
+                        }}
+                        onBlur={() => {
+                          if (settingsForm.clientWindowStartOffset === '' || settingsForm.clientWindowStartOffset === '.' || settingsForm.clientWindowStartOffset === null as any) {
+                            setSettingsForm({ ...settingsForm, clientWindowStartOffset: 1.0 });
+                          } else {
+                            const val = typeof settingsForm.clientWindowStartOffset === 'string' 
+                              ? parseFloat(settingsForm.clientWindowStartOffset) 
+                              : settingsForm.clientWindowStartOffset;
+                            if (val < 0) {
+                              setSettingsForm({ ...settingsForm, clientWindowStartOffset: 0 });
+                            } else if (val > 24) {
+                              setSettingsForm({ ...settingsForm, clientWindowStartOffset: 24 });
+                            }
+                          }
                         }}
                         min={0}
                         max={24}
@@ -2980,11 +3118,27 @@ export default function EHub() {
                         type="number"
                         value={settingsForm.clientWindowEndHour}
                         onChange={(e) => {
-                          const newCutoff = parseInt(e.target.value) || 14;
+                          const val = e.target.value;
+                          if (val === '') {
+                            setSettingsForm({ ...settingsForm, clientWindowEndHour: '' as any });
+                            return;
+                          }
+                          const newCutoff = parseInt(val, 10);
+                          if (isNaN(newCutoff)) return;
+                          
                           setSettingsForm({ 
                             ...settingsForm, 
                             clientWindowEndHour: newCutoff
                           });
+                        }}
+                        onBlur={() => {
+                          if (settingsForm.clientWindowEndHour === '' || settingsForm.clientWindowEndHour === null as any) {
+                            setSettingsForm({ ...settingsForm, clientWindowEndHour: 14 });
+                          } else if (settingsForm.clientWindowEndHour < 0) {
+                            setSettingsForm({ ...settingsForm, clientWindowEndHour: 0 });
+                          } else if (settingsForm.clientWindowEndHour > 23) {
+                            setSettingsForm({ ...settingsForm, clientWindowEndHour: 23 });
+                          }
                         }}
                         min={0}
                         max={23}
