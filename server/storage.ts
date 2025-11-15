@@ -3773,8 +3773,36 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Cannot send: recipient status is ${recipient.status}`);
     }
     
-    // Force immediate send by setting nextSendAt to 1 second ago (triggers job runner)
+    // Find the next pending scheduled send for this recipient
+    const [nextScheduledSend] = await db
+      .select()
+      .from(sequenceScheduledSends)
+      .where(
+        and(
+          eq(sequenceScheduledSends.recipientId, id),
+          eq(sequenceScheduledSends.status, 'pending')
+        )
+      )
+      .orderBy(sequenceScheduledSends.stepNumber)
+      .limit(1);
+    
+    if (!nextScheduledSend) {
+      throw new Error('No pending scheduled send found for this recipient');
+    }
+    
+    // Force immediate send by:
+    // 1. Setting scheduledAt to 1 second ago (makes it immediately eligible: scheduledAt <= now)
+    // 2. Setting manualOverride to true (bypasses pause check)
     const oneSecondAgo = new Date(Date.now() - 1000);
+    await db
+      .update(sequenceScheduledSends)
+      .set({ 
+        scheduledAt: oneSecondAgo,
+        manualOverride: true
+      })
+      .where(eq(sequenceScheduledSends.id, nextScheduledSend.id));
+    
+    // Also update recipient's nextSendAt for consistency
     const [updated] = await db
       .update(sequenceRecipients)
       .set({ 
@@ -3949,6 +3977,7 @@ export class DatabaseStorage implements IStorage {
     
     // Single query with conditional ordering: step 1 emails first, then by scheduled time
     // Uses CASE expression to prioritize stepNumber = 1, then orders by scheduledAt
+    // Manual overrides (Send Now) bypass sequence pause status
     const results = await db
       .select()
       .from(sequenceScheduledSends)
@@ -3957,7 +3986,10 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(sequenceScheduledSends.status, 'pending'),
           lte(sequenceScheduledSends.scheduledAt, now),
-          eq(sequences.status, 'active') // Only send from active sequences
+          or(
+            eq(sequences.status, 'active'), // Normal sends from active sequences
+            eq(sequenceScheduledSends.manualOverride, true) // Manual "Send Now" bypasses pause
+          )
         )
       )
       .orderBy(

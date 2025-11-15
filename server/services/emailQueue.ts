@@ -347,18 +347,22 @@ async function processEmailQueue() {
           continue;
         }
 
-        // CRITICAL: Skip if sequence is paused (safeguard against race conditions)
-        // Don't claim it - let it remain pending so it can be sent when sequence is resumed
-        if (sequence.status === 'paused') {
+        // CRITICAL: Skip if sequence is paused UNLESS this is a manual override (Send Now)
+        // Manual overrides bypass pause to allow immediate sending of specific emails
+        if (sequence.status === 'paused' && !scheduledSend.manualOverride) {
           console.log(`[EmailQueue] ⏸️ SKIPPED - Sequence "${sequence.name}" is paused (will retry when resumed)`);
           continue;
         }
 
-        // Skip if sequence is not active (draft, completed, cancelled, etc.)
-        // Don't claim these either - they may become active later
-        if (sequence.status !== 'active') {
+        // Skip if sequence is not active (draft, completed, cancelled, etc.) UNLESS manual override
+        if (sequence.status !== 'active' && !scheduledSend.manualOverride) {
           console.log(`[EmailQueue] ⏸️ SKIPPED - Sequence "${sequence.name}" status is "${sequence.status}"`);
           continue;
+        }
+
+        // Log manual override if present
+        if (scheduledSend.manualOverride) {
+          console.log(`[EmailQueue] 🚀 MANUAL OVERRIDE - Sending despite sequence status "${sequence.status}"`);
         }
 
         // Atomically claim this scheduled send (prevents double-processing)
