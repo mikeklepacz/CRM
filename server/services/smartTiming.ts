@@ -1,6 +1,6 @@
 import { parseBusinessHours } from './timezoneHours';
 import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz';
-import { addHours, addDays, isBefore, getDay, startOfDay } from 'date-fns';
+import { addHours, addDays, addMinutes, isBefore, getDay, startOfDay } from 'date-fns';
 
 export interface SmartTimingOptions {
   businessHours: string;
@@ -183,11 +183,14 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
   // Helper: Create UTC time for specific hour/minute in a timezone
   const createTimeInZone = (date: Date, daysOffset: number, hour: number, minute: number, timezone: string): Date => {
     const localDateStr = formatInTimeZone(addDays(date, daysOffset), timezone, 'yyyy-MM-dd');
-    const isoStr = `${localDateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
-    const [datePart, timePart] = isoStr.split('T');
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [h, m] = timePart.split(':').map(Number);
-    return fromZonedTime(new Date(year, month - 1, day, h, m, 0), timezone);
+    
+    // Get midnight in the target timezone as UTC
+    const midnightIsoStr = `${localDateStr} 00:00:00`;
+    const midnightUtc = fromZonedTime(midnightIsoStr, timezone);
+    
+    // Add hour/minute offset to midnight
+    const totalMinutes = hour * 60 + minute;
+    return addMinutes(midnightUtc, totalMinutes);
   };
 
   // Helper: Get day of week in a specific timezone
