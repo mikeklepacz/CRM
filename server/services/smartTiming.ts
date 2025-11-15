@@ -1,6 +1,6 @@
 import { parseBusinessHours } from './timezoneHours';
-import { toZonedTime, fromZonedTime, formatInTimeZone, zonedTimeToUtc } from 'date-fns-tz';
-import { addHours, addDays, addMinutes, isBefore, getDay, startOfDay } from 'date-fns';
+import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { addHours, addDays, isBefore, getDay, startOfDay } from 'date-fns';
 
 export interface SmartTimingOptions {
   businessHours: string;
@@ -182,14 +182,15 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
 
   // Helper: Create UTC time for specific hour/minute in a timezone
   const createTimeInZone = (date: Date, daysOffset: number, hour: number, minute: number, timezone: string): Date => {
-    const targetDate = addDays(date, daysOffset);
-    const localDateStr = formatInTimeZone(targetDate, timezone, 'yyyy-MM-dd');
+    // Get the calendar date IN THE TARGET TIMEZONE (not in UTC!)
+    const zonedDate = toZonedTime(addDays(date, daysOffset), timezone);
+    const localDateStr = formatInTimeZone(zonedDate, timezone, 'yyyy-MM-dd');
     
-    // Build proper local datetime string and convert directly to UTC
+    // Build proper local datetime string and convert back to UTC
     const localDateTime = `${localDateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
     
-    // Correct conversion: local datetime string → UTC
-    return zonedTimeToUtc(localDateTime, timezone);
+    // Correct conversion: treat localDateTime as if it's in the timezone, convert to UTC
+    return fromZonedTime(localDateTime, timezone);
   };
 
   // Helper: Get day of week in a specific timezone
