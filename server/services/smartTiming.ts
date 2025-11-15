@@ -190,7 +190,13 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     const localDateTime = `${localDateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
     
     // Correct conversion: treat localDateTime as if it's in the timezone, convert to UTC
-    return fromZonedTime(localDateTime, timezone);
+    const utcResult = fromZonedTime(localDateTime, timezone);
+    
+    // DEBUG: Log what we're doing
+    const verifyLocal = formatInTimeZone(utcResult, timezone, 'yyyy-MM-dd HH:mm:ss zzz');
+    console.log(`[createTimeInZone] IN: hour=${hour}, min=${minute}, tz=${timezone}, offset=${daysOffset} | localDateTime="${localDateTime}" → UTC: ${utcResult.toISOString()} → verify: ${verifyLocal}`);
+    
+    return utcResult;
   };
 
   // Helper: Get day of week in a specific timezone
