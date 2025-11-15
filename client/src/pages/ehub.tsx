@@ -3802,6 +3802,21 @@ export default function EHub() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
+            <Button
+              onClick={() => {
+                handleSaveSettings();
+                setShowNavigationWarning(false);
+                if (pendingTab) {
+                  setActiveTab(pendingTab);
+                  setPendingTab(null);
+                }
+              }}
+              disabled={updateSettingsMutation.isPending}
+              data-testid="button-save-and-continue"
+            >
+              {updateSettingsMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Save
+            </Button>
             <AlertDialogCancel onClick={handleCancelNavigation} data-testid="button-cancel-navigation">
               Stay on Settings
             </AlertDialogCancel>
