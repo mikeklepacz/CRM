@@ -188,32 +188,24 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     minute: number,
     timezone: string
   ): Date => {
-    // Step 1: Move forward daysOffset IN THE TARGET TIMEZONE
-    const zonedBase = toZonedTime(addDays(date, daysOffset), timezone);
-
-    // Step 2: Extract calendar day in that timezone
-    const localDateStr = formatInTimeZone(zonedBase, timezone, 'yyyy-MM-dd');
-
-    // Step 3: Build correct local datetime string
-    const localDateTime = `${localDateStr}T${hour.toString().padStart(2, '0')}:${minute
-      .toString()
-      .padStart(2, '0')}:00`;
-
-    // Step 4: Convert that LOCAL time to a precise UTC instant
+    // Convert base date to target timezone first
+    const zonedDate = toZonedTime(date, timezone);
+    
+    // Get the date string in that timezone
+    const baseDateStr = formatInTimeZone(zonedDate, timezone, 'yyyy-MM-dd');
+    
+    // Parse to get year, month, day
+    const [year, month, day] = baseDateStr.split('-').map(Number);
+    
+    // Add days offset to get target date
+    const targetDate = new Date(year, month - 1, day + daysOffset);
+    const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    
+    // Build local datetime string with the target hour/minute
+    const localDateTime = `${targetDateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+    
+    // Convert from timezone to UTC
     const utcResult = fromZonedTime(localDateTime, timezone);
-
-    return utcResult;
-  };
-    
-    // Build proper local datetime string and convert back to UTC
-    const localDateTime = `${localDateStr}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
-    
-    // Correct conversion: treat localDateTime as if it's in the timezone, convert to UTC
-    const utcResult = fromZonedTime(localDateTime, timezone);
-    
-    // DEBUG: Log what we're doing
-    const verifyLocal = formatInTimeZone(utcResult, timezone, 'yyyy-MM-dd HH:mm:ss zzz');
-    console.log(`[createTimeInZone] IN: hour=${hour}, min=${minute}, tz=${timezone}, offset=${daysOffset} | localDateTime="${localDateTime}" → UTC: ${utcResult.toISOString()} → verify: ${verifyLocal}`);
     
     return utcResult;
   };
