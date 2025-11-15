@@ -69,6 +69,9 @@ export function SharedColorPicker({
   const [isOpen, setIsOpen] = useState(false);
   const [presetName, setPresetName] = useState("");
   const { toast } = useToast();
+  
+  // Temporary HSL string values during typing
+  const [tempHslValues, setTempHslValues] = useState<{h: string | number, s: string | number, l: string | number} | null>(null);
 
   const currentColor = value || "#000000";
   const hslColor = hexToHsl(currentColor);
@@ -264,22 +267,23 @@ export function SharedColorPicker({
                     type="number"
                     min="0"
                     max="360"
-                    value={Math.round(hslColor.h)}
+                    value={tempHslValues?.h ?? Math.round(hslColor.h)}
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val === '') return;
-                      const h = parseInt(val, 10);
-                      if (isNaN(h)) return;
-                      const clampedH = Math.max(0, Math.min(360, h));
-                      const hexColor = hslToHex(clampedH, hslColor.s, hslColor.l);
-                      onChange(hexColor);
+                      setTempHslValues({
+                        h: val,
+                        s: tempHslValues?.s ?? hslColor.s,
+                        l: tempHslValues?.l ?? hslColor.l
+                      });
                     }}
-                    onBlur={(e) => {
-                      const val = e.target.value;
-                      if (val === '') {
-                        const hexColor = hslToHex(0, hslColor.s, hslColor.l);
-                        onChange(hexColor);
-                      }
+                    onBlur={() => {
+                      const h = tempHslValues?.h;
+                      const hNum = h === '' || h === undefined ? 0 : Math.max(0, Math.min(360, parseInt(String(h), 10) || 0));
+                      const s = typeof tempHslValues?.s === 'number' ? tempHslValues.s : hslColor.s;
+                      const l = typeof tempHslValues?.l === 'number' ? tempHslValues.l : hslColor.l;
+                      const hexColor = hslToHex(hNum, s, l);
+                      onChange(hexColor);
+                      setTempHslValues(null);
                     }}
                     className="font-mono text-xs"
                   />
@@ -290,22 +294,23 @@ export function SharedColorPicker({
                     type="number"
                     min="0"
                     max="100"
-                    value={Math.round(hslColor.s)}
+                    value={tempHslValues?.s ?? Math.round(hslColor.s)}
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val === '') return;
-                      const s = parseInt(val, 10);
-                      if (isNaN(s)) return;
-                      const clampedS = Math.max(0, Math.min(100, s));
-                      const hexColor = hslToHex(hslColor.h, clampedS, hslColor.l);
-                      onChange(hexColor);
+                      setTempHslValues({
+                        h: tempHslValues?.h ?? hslColor.h,
+                        s: val,
+                        l: tempHslValues?.l ?? hslColor.l
+                      });
                     }}
-                    onBlur={(e) => {
-                      const val = e.target.value;
-                      if (val === '') {
-                        const hexColor = hslToHex(hslColor.h, 0, hslColor.l);
-                        onChange(hexColor);
-                      }
+                    onBlur={() => {
+                      const s = tempHslValues?.s;
+                      const sNum = s === '' || s === undefined ? 0 : Math.max(0, Math.min(100, parseInt(String(s), 10) || 0));
+                      const h = typeof tempHslValues?.h === 'number' ? tempHslValues.h : hslColor.h;
+                      const l = typeof tempHslValues?.l === 'number' ? tempHslValues.l : hslColor.l;
+                      const hexColor = hslToHex(h, sNum, l);
+                      onChange(hexColor);
+                      setTempHslValues(null);
                     }}
                     className="font-mono text-xs"
                   />
@@ -316,22 +321,23 @@ export function SharedColorPicker({
                     type="number"
                     min="0"
                     max="100"
-                    value={Math.round(hslColor.l)}
+                    value={tempHslValues?.l ?? Math.round(hslColor.l)}
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val === '') return;
-                      const l = parseInt(val, 10);
-                      if (isNaN(l)) return;
-                      const clampedL = Math.max(0, Math.min(100, l));
-                      const hexColor = hslToHex(hslColor.h, hslColor.s, clampedL);
-                      onChange(hexColor);
+                      setTempHslValues({
+                        h: tempHslValues?.h ?? hslColor.h,
+                        s: tempHslValues?.s ?? hslColor.s,
+                        l: val
+                      });
                     }}
-                    onBlur={(e) => {
-                      const val = e.target.value;
-                      if (val === '') {
-                        const hexColor = hslToHex(hslColor.h, hslColor.s, 0);
-                        onChange(hexColor);
-                      }
+                    onBlur={() => {
+                      const l = tempHslValues?.l;
+                      const lNum = l === '' || l === undefined ? 0 : Math.max(0, Math.min(100, parseInt(String(l), 10) || 0));
+                      const h = typeof tempHslValues?.h === 'number' ? tempHslValues.h : hslColor.h;
+                      const s = typeof tempHslValues?.s === 'number' ? tempHslValues.s : hslColor.s;
+                      const hexColor = hslToHex(h, s, lNum);
+                      onChange(hexColor);
+                      setTempHslValues(null);
                     }}
                     className="font-mono text-xs"
                   />

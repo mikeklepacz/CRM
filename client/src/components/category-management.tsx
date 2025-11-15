@@ -318,20 +318,21 @@ export function CategoryManagement() {
                   type="number"
                   value={formData.displayOrder}
                   onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '') {
-                      setFormData({ ...formData, displayOrder: '' as any });
-                      return;
-                    }
-                    const parsed = parseInt(val, 10);
-                    if (isNaN(parsed)) return;
-                    setFormData({ ...formData, displayOrder: parsed });
+                    // Store raw string value during typing
+                    setFormData({ ...formData, displayOrder: e.target.value as any });
                   }}
                   onBlur={() => {
-                    if (formData.displayOrder === '' || formData.displayOrder === null as any) {
+                    // Parse and validate only on blur
+                    const val = formData.displayOrder;
+                    if (val === '' || val === null || val === undefined) {
                       setFormData({ ...formData, displayOrder: 0 });
-                    } else if (formData.displayOrder < 0) {
-                      setFormData({ ...formData, displayOrder: 0 });
+                    } else {
+                      const parsed = typeof val === 'string' ? parseInt(val, 10) : val;
+                      if (isNaN(parsed) || parsed < 0) {
+                        setFormData({ ...formData, displayOrder: 0 });
+                      } else {
+                        setFormData({ ...formData, displayOrder: parsed });
+                      }
                     }
                   }}
                   min="0"

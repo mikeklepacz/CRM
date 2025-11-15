@@ -62,6 +62,9 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
   const [presetName, setPresetName] = useState("");
   const [hasLoadedInitialColors, setHasLoadedInitialColors] = useState(false);
   const { toast } = useToast();
+  
+  // Temporary HSL string values during typing (indexed by field name)
+  const [tempHslValues, setTempHslValues] = useState<Record<string, {h: string | number, s: string | number, l: string | number}>>({});
 
   // Sync customColors when preferences finish loading for the first time
   useEffect(() => {
@@ -366,24 +369,27 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                 type="number"
                                 min="0"
                                 max="360"
-                                value={Math.round(hslColor.h)}
+                                value={tempHslValues[field]?.h ?? Math.round(hslColor.h)}
                                 onChange={(e) => {
                                   const val = e.target.value;
-                                  if (val === '') return;
-                                  const h = parseInt(val, 10);
-                                  if (isNaN(h)) return;
-                                  const clampedH = Math.max(0, Math.min(360, h));
-                                  const hexColor = hslToHex(clampedH, hslColor.s, hslColor.l);
-                                  setCustomColors({ ...customColors, [field]: hexColor });
-                                  saveColors(customColors);
+                                  setTempHslValues({
+                                    ...tempHslValues,
+                                    [field]: {
+                                      h: val,
+                                      s: tempHslValues[field]?.s ?? hslColor.s,
+                                      l: tempHslValues[field]?.l ?? hslColor.l
+                                    }
+                                  });
                                 }}
-                                onBlur={(e) => {
-                                  const val = e.target.value;
-                                  if (val === '') {
-                                    const hexColor = hslToHex(0, hslColor.s, hslColor.l);
-                                    setCustomColors({ ...customColors, [field]: hexColor });
-                                    saveColors(customColors);
-                                  }
+                                onBlur={() => {
+                                  const h = tempHslValues[field]?.h;
+                                  const hNum = h === '' || h === undefined ? 0 : Math.max(0, Math.min(360, parseInt(String(h), 10) || 0));
+                                  const s = typeof tempHslValues[field]?.s === 'number' ? tempHslValues[field].s : hslColor.s;
+                                  const l = typeof tempHslValues[field]?.l === 'number' ? tempHslValues[field].l : hslColor.l;
+                                  const hexColor = hslToHex(hNum, s, l);
+                                  setCustomColors({ ...customColors, [field]: hexColor });
+                                  saveColors({ ...customColors, [field]: hexColor });
+                                  setTempHslValues({ ...tempHslValues, [field]: undefined as any });
                                 }}
                                 className="font-mono text-xs"
                               />
@@ -394,24 +400,27 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                 type="number"
                                 min="0"
                                 max="100"
-                                value={Math.round(hslColor.s)}
+                                value={tempHslValues[field]?.s ?? Math.round(hslColor.s)}
                                 onChange={(e) => {
                                   const val = e.target.value;
-                                  if (val === '') return;
-                                  const s = parseInt(val, 10);
-                                  if (isNaN(s)) return;
-                                  const clampedS = Math.max(0, Math.min(100, s));
-                                  const hexColor = hslToHex(hslColor.h, clampedS, hslColor.l);
-                                  setCustomColors({ ...customColors, [field]: hexColor });
-                                  saveColors(customColors);
+                                  setTempHslValues({
+                                    ...tempHslValues,
+                                    [field]: {
+                                      h: tempHslValues[field]?.h ?? hslColor.h,
+                                      s: val,
+                                      l: tempHslValues[field]?.l ?? hslColor.l
+                                    }
+                                  });
                                 }}
-                                onBlur={(e) => {
-                                  const val = e.target.value;
-                                  if (val === '') {
-                                    const hexColor = hslToHex(hslColor.h, 0, hslColor.l);
-                                    setCustomColors({ ...customColors, [field]: hexColor });
-                                    saveColors(customColors);
-                                  }
+                                onBlur={() => {
+                                  const s = tempHslValues[field]?.s;
+                                  const sNum = s === '' || s === undefined ? 0 : Math.max(0, Math.min(100, parseInt(String(s), 10) || 0));
+                                  const h = typeof tempHslValues[field]?.h === 'number' ? tempHslValues[field].h : hslColor.h;
+                                  const l = typeof tempHslValues[field]?.l === 'number' ? tempHslValues[field].l : hslColor.l;
+                                  const hexColor = hslToHex(h, sNum, l);
+                                  setCustomColors({ ...customColors, [field]: hexColor });
+                                  saveColors({ ...customColors, [field]: hexColor });
+                                  setTempHslValues({ ...tempHslValues, [field]: undefined as any });
                                 }}
                                 className="font-mono text-xs"
                               />
@@ -422,24 +431,27 @@ export function ColorCustomizer({ colorPresets, setColorPresets, deleteColorPres
                                 type="number"
                                 min="0"
                                 max="100"
-                                value={Math.round(hslColor.l)}
+                                value={tempHslValues[field]?.l ?? Math.round(hslColor.l)}
                                 onChange={(e) => {
                                   const val = e.target.value;
-                                  if (val === '') return;
-                                  const l = parseInt(val, 10);
-                                  if (isNaN(l)) return;
-                                  const clampedL = Math.max(0, Math.min(100, l));
-                                  const hexColor = hslToHex(hslColor.h, hslColor.s, clampedL);
-                                  setCustomColors({ ...customColors, [field]: hexColor });
-                                  saveColors(customColors);
+                                  setTempHslValues({
+                                    ...tempHslValues,
+                                    [field]: {
+                                      h: tempHslValues[field]?.h ?? hslColor.h,
+                                      s: tempHslValues[field]?.s ?? hslColor.s,
+                                      l: val
+                                    }
+                                  });
                                 }}
-                                onBlur={(e) => {
-                                  const val = e.target.value;
-                                  if (val === '') {
-                                    const hexColor = hslToHex(hslColor.h, hslColor.s, 0);
-                                    setCustomColors({ ...customColors, [field]: hexColor });
-                                    saveColors(customColors);
-                                  }
+                                onBlur={() => {
+                                  const l = tempHslValues[field]?.l;
+                                  const lNum = l === '' || l === undefined ? 0 : Math.max(0, Math.min(100, parseInt(String(l), 10) || 0));
+                                  const h = typeof tempHslValues[field]?.h === 'number' ? tempHslValues[field].h : hslColor.h;
+                                  const s = typeof tempHslValues[field]?.s === 'number' ? tempHslValues[field].s : hslColor.s;
+                                  const hexColor = hslToHex(h, s, lNum);
+                                  setCustomColors({ ...customColors, [field]: hexColor });
+                                  saveColors({ ...customColors, [field]: hexColor });
+                                  setTempHslValues({ ...tempHslValues, [field]: undefined as any });
                                 }}
                                 className="font-mono text-xs"
                               />
