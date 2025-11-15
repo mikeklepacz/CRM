@@ -19860,10 +19860,12 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Validate request body using centralized schema
+      // New sequences default to 'paused' to prevent accidental sends
+      // User must explicitly click resume/play to activate sending
       const sequenceData = insertSequenceSchema.parse({
         ...req.body,
         createdBy: userId,
-        status: 'draft',
+        status: 'paused',
       });
 
       const sequence = await storage.createSequence(sequenceData);
