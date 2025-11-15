@@ -26,60 +26,6 @@ export function isWeekend(date: Date): boolean {
   return day === 0 || day === 6;
 }
 
-/**
- * Check if current time is within admin's active sending window
- */
-export function inActiveWindow(now: Date, settings: EhubSettings): boolean {
-  const hour = now.getHours();
-  return hour >= settings.sendingHoursStart && hour < settings.sendingHoursEnd;
-}
-
-/**
- * Calculate how many coordinator runs are left in today's admin window
- * Assumes coordinator runs every 5 minutes
- */
-export function runsLeftInWindow(now: Date, settings: EhubSettings): number {
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const endMinutes = settings.sendingHoursEnd * 60;
-  
-  if (currentMinutes >= endMinutes) return 1;
-  
-  const remainingMinutes = endMinutes - currentMinutes;
-  return Math.ceil(remainingMinutes / 5); // 5-minute coordinator cadence
-}
-
-/**
- * Check if email can be sent in client's local business hours
- * Validates:
- * - Not a weekend (if skipWeekends enabled)
- * - After opening hour + offset
- * - Before cutoff hour
- */
-export function clientWindowAllows(
-  clientLocalTime: Date,
-  recipientBusinessHours: string,
-  recipientTimezone: string,
-  settings: EhubSettings
-): boolean {
-  // Check weekend
-  if (settings.skipWeekends && isWeekend(clientLocalTime)) {
-    return false;
-  }
-  
-  // Parse opening hour from business hours (e.g., "9-17" -> 9)
-  const openHour = parseInt(recipientBusinessHours.split('-')[0]) || 9;
-  
-  // Calculate start and cutoff hours
-  const startHour = openHour + settings.clientWindowStartOffset;
-  const cutoffHour = settings.clientWindowEndHour;
-  
-  const hour = clientLocalTime.getHours();
-  
-  if (hour < startHour) return false;
-  if (hour >= cutoffHour) return false;
-  
-  return true;
-}
 
 /**
  * Generate random jitter with seconds-level precision for human-like timing
@@ -136,60 +82,6 @@ export function getStartOfToday(now: Date, timezone: string): Date {
   return zonedTimeToUtc(midnightString, timezone);
 }
 
-/**
- * Find the next valid admin sending window
- * Returns { windowStart, windowEnd, dayStart } for the next available sending period
- * 
- * Logic:
- * - If current time is before today's window start → use today
- * - If current time is after today's window end → use tomorrow
- * - Skip weekends if configured
- * 
- * @param now - Current time
- * @param timezone - Admin's timezone
- * @param settings - E-Hub settings
- * @returns Object with windowStart (when window opens), windowEnd (when it closes), dayStart (midnight)
- */
-export function findNextAdminWindowBounds(
-  now: Date,
-  timezone: string,
-  settings: EhubSettings
-): { windowStart: Date; windowEnd: Date; dayStart: Date } {
-  const nowLocal = toZonedTime(now, timezone);
-  const currentHour = nowLocal.getHours();
-  
-  let candidateDate = new Date(nowLocal);
-  
-  // If we're past today's window end, start checking from tomorrow
-  if (currentHour >= settings.sendingHoursEnd) {
-    candidateDate = addDays(candidateDate, 1);
-  }
-  
-  // Skip weekends
-  while (settings.skipWeekends && isWeekend(candidateDate)) {
-    candidateDate = addDays(candidateDate, 1);
-  }
-  
-  // Get midnight of the candidate day
-  const dateString = formatInTimeZone(candidateDate, timezone, 'yyyy-MM-dd');
-  const dayStart = zonedTimeToUtc(`${dateString} 00:00:00`, timezone);
-  
-  // Calculate window start and end
-  const windowStartLocal = zonedTimeToUtc(
-    `${dateString} ${settings.sendingHoursStart.toString().padStart(2, '0')}:00:00`,
-    timezone
-  );
-  const windowEndLocal = zonedTimeToUtc(
-    `${dateString} ${settings.sendingHoursEnd.toString().padStart(2, '0')}:00:00`,
-    timezone
-  );
-  
-  return {
-    windowStart: windowStartLocal,
-    windowEnd: windowEndLocal,
-    dayStart,
-  };
-}
 
 // ============================================================================
 // Coordinator Tick - Eligibility-Based Scheduling
