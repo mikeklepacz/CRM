@@ -206,7 +206,7 @@ function SentHistoryView() {
       
       return await res.json();
     },
-    refetchInterval: 60000, // Refresh every minute
+    staleTime: 10 * 60 * 1000, // 10 minutes
   });
 
   // Client-side filtering
@@ -383,8 +383,7 @@ function QueueView() {
       
       return await res.json();
     },
-    refetchInterval: 30000,
-    staleTime: 15000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
     enabled: statusFilter === 'active',
   });
 
@@ -398,8 +397,7 @@ function QueueView() {
       }
       return await res.json();
     },
-    refetchInterval: 30000,
-    staleTime: 15000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
     enabled: statusFilter === 'paused',
   });
 
@@ -558,8 +556,7 @@ function QueueView() {
       const data = await res.json();
       return data.count || 0;
     },
-    refetchInterval: 30000,
-    staleTime: 15000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
   });
 
   // Calculate stats for ACTIVE queue only (don't calculate for paused view)
