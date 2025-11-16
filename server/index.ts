@@ -6,7 +6,6 @@ import { voiceProxyServer } from "./voice-proxy.js";
 import { startJobProcessor } from "./analysis-job-processor";
 import { renewCalendarWatchOnStartup } from "./calendarSync";
 import { startEmailQueueProcessor } from "./services/emailQueue";
-import { startReplyDetectionWorker } from "./services/replyDetectionWorker";
 
 const app = express();
 
@@ -88,22 +87,8 @@ app.use((req, res, next) => {
     // Start background job processor for AI analysis
     startJobProcessor();
 
-    // Start E-Hub email queue processor
+    // Start E-Hub email queue processor (real-time scheduling, no coordinator needed)
     startEmailQueueProcessor();
-
-    // Start E-Hub reply detection worker
-    startReplyDetectionWorker();
-
-    // Start E-Hub queue coordinator (runs every 5 minutes)
-    setInterval(async () => {
-      try {
-        const { coordinatorTick } = await import('./services/queueCoordinator');
-        await coordinatorTick();
-      } catch (err) {
-        console.error('[QueueCoordinator] Error in cron job:', err);
-      }
-    }, 300000); // 5 minutes
-    console.log('[QueueCoordinator] Cron job started (runs every 5 minutes)');
 
     console.log(`${new Date().toLocaleTimeString()} [express] serving on port ${port}`);
 
