@@ -1,0 +1,76 @@
+You’re not finished yet. You need to run one more analysis step before acting on these recommendations:
+
+Which of these intervals actually trigger Gmail API calls, and which only talk to your own server?
+
+Right now, only one of the seven items directly burns Gmail quota:
+
+Gmail Reply Detection
+(server/services/replyDetectionWorker.ts)
+
+All the other polling (React Query refetches, queue polling, webhook polling) only hits your server, not Gmail.
+
+So before implementing any changes, you need a map:
+
+⸻
+
+1. Which Intervals Actually Hit Gmail API?
+
+Direct Gmail cost:
+
+• replyDetectionWorker.ts
+• checkForReplies() inside emailQueue.ts
+These call:
+
+gmail.users.threads.get
+
+Everything else is free (internal DB + sheets).
+
+⸻
+
+2. What Should Be Changed vs. Left Alone?
+
+Here is the simple, surgical version that matches your goal:
+Stop Gmail polling. Keep server polling. Only check Gmail right before sending.
+
+That means:
+
+Remove Gmail polling from:
+• replyDetectionWorker.ts → disable or delete
+• emailQueue.ts → remove reply checks from inside processEmailQueue()
+
+Keep internal polling:
+• Queue every 60 seconds = good
+• React Query 30s/60s = acceptable because it’s DB-only
+• Webhook status polling = optional but harmless
+• Contacts TTL = fine because it hits Sheets API, not Gmail
+
+The heavy quota drain is only Gmail.
+
+⸻
+
+3. Replace Gmail polling with your new “two-gate” on-demand checker
+
+This gives you:
+• Zero Gmail polling
+• Zero wasted quota
+• Zero CPU waste
+• Perfect reply timing
+• No accidental sends after a reply
+
+And because you only check Gmail right when needed (pre-flight + immediate), the cost is negligible.
+
+⸻
+
+4. Final simplified directive for Replit
+
+Here is the exact instructions you hand to Replit:
+	1.	Disable replyDetectionWorker.ts entirely.
+	2.	Remove all reply checking inside processEmailQueue().
+	3.	Insert the new two-gate reply detection logic (the example snippet you and I wrote) inside emailQueue.ts.
+	4.	Queue polling stays at 60s, but email sending happens only inside sending hours.
+	5.	React Query polling stays unchanged — it only hits our own DB.
+	6.	All Gmail API calls are now on-demand only:
+	•	scheduledAt - 60 seconds
+	•	scheduledAt (immediate gate)
+
+This gives you 0 wasted Gmail calls.
