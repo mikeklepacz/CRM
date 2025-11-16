@@ -20804,11 +20804,8 @@ ${conversationContext}`;
   });
 
   // Add contacts to sequence from All Contacts tab (admin only)
+  // CLONE of Google Sheets import endpoint with contact data source
   app.post('/api/sequences/:id/contacts', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
-    // Acquire mutex lock to prevent concurrent bulk-adds from reading identical queue state
-    const { bulkEnrollmentMutex } = await import('./services/bulkEnrollmentLock');
-    const release = await bulkEnrollmentMutex.acquire();
-    
     try {
       const { id } = req.params;
       const { contacts, selectAll, search, statusFilter } = req.body;
@@ -20819,6 +20816,7 @@ ${conversationContext}`;
         return res.status(404).json({ message: 'Sequence not found' });
       }
 
+      // Get contacts data - either from provided array or via getAllContacts
       let contactsToAdd: any[] = [];
 
       if (selectAll) {
@@ -20840,31 +20838,78 @@ ${conversationContext}`;
         return res.json({ message: 'No contacts to add', count: 0 });
       }
 
-      // Prepare recipients for insertion
+      // Email regex for validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      
+      // Process contacts with same validation as Google Sheets import
       const recipients = [];
+      const seenEmails = new Set<string>();
+      const skippedRows: string[] = [];
+
       for (const contact of contactsToAdd) {
-        // Check if recipient already exists
-        const existing = await storage.findRecipientByEmail(id, contact.email.toLowerCase());
+        const rawEmail = contact.email?.toString().trim();
+        const rawName = contact.name?.toString().trim();
+
+        // Skip blank or whitespace-only contacts
+        if (!rawName || !rawEmail || rawName === '' || rawEmail === '') {
+          continue;
+        }
+
+        const email = rawEmail.toLowerCase();
+        const name = rawName;
+
+        // Validate email format with regex
+        if (!emailRegex.test(email)) {
+          skippedRows.push(`Invalid email: ${email}`);
+          continue;
+        }
+
+        // Skip duplicates in current batch
+        if (seenEmails.has(email)) continue;
+
+        // Check if recipient already exists in database
+        const existing = await storage.findRecipientByEmail(id, email);
         if (existing) continue;
 
-        // Use contact's timezone or default
+        // Use contact's data directly (already has timezone/businessHours from source)
+        const businessHours = contact.hours || contact.businessHours || '';
         const timezone = contact.timezone || 'America/New_York';
+        const state = contact.state || null;
 
-        recipients.push({
-          sequenceId: id,
-          email: contact.email.toLowerCase(),
-          name: contact.name || 'Unknown',
-          link: contact.link || '',
-          salesSummary: contact.salesSummary || '',
-          businessHours: contact.hours || '',
-          state: contact.state || null,
-          timezone,
-          status: 'pending' as const,
-        });
+        // Validate using Zod schema before adding to batch
+        try {
+          insertSequenceRecipientSchema.parse({
+            sequenceId: id,
+            email,
+            name,
+            link: contact.link || '',
+            salesSummary: contact.salesSummary || '',
+            businessHours,
+            state,
+            timezone,
+            status: 'pending',
+          });
+
+          seenEmails.add(email);
+          recipients.push({
+            sequenceId: id,
+            email,
+            name,
+            link: contact.link || '',
+            salesSummary: contact.salesSummary || '',
+            businessHours,
+            state,
+            timezone,
+            status: 'pending',
+          });
+        } catch (validationError) {
+          skippedRows.push(`Validation failed for ${email}: ${name}`);
+          continue;
+        }
       }
 
       if (recipients.length === 0) {
-        return res.json({ message: 'All contacts already in sequence', count: 0 });
+        return res.json({ message: 'No new recipients to import', count: 0 });
       }
 
       // MATRIX SCHEDULER: Calculate scheduledAt using unified global + recipient constraints
@@ -20899,20 +20944,36 @@ ${conversationContext}`;
       // Bulk insert recipients
       const created = await storage.addRecipients(scheduledRecipients);
 
-      // LAZY SCHEDULING: Create ONLY step 1 scheduled sends
-      // Future steps are created when current step completes
-      const firstStepSends = created.map(recipient => ({
-        recipientId: recipient.id,
-        sequenceId: sequence.id,
-        stepNumber: 1,
-        eligibleAt: recipient.nextSendAt!,
-        scheduledAt: recipient.nextSendAt!,
-        status: 'pending' as const,
-      }));
+      // MATRIX SCHEDULER: Now that we have real IDs, schedule each recipient
+      for (const recipient of created) {
+        // Recalculate scheduledAt with real recipient ID
+        const scheduledAt = await getNextMatrixSlot({
+          recipientId: recipient.id,
+          sequenceId: id,
+          stepNumber: 1,
+          stepDelay: stepDelays[0],
+          lastStepSentAt: null,
+          recipientTimezone: recipient.timezone,
+          recipientBusinessHours: recipient.businessHours,
+          userId: sequence.createdBy,
+        });
 
-      // Bulk insert step 1 sends
-      if (firstStepSends.length > 0) {
-        await storage.insertScheduledSends(firstStepSends);
+        // Insert scheduled send for step 1
+        await storage.insertScheduledSends([{
+          recipientId: recipient.id,
+          sequenceId: sequence.id,
+          stepNumber: 1,
+          eligibleAt: scheduledAt,
+          scheduledAt,
+          status: 'pending',
+        }]);
+
+        // Update recipient status
+        await storage.updateRecipient(recipient.id, {
+          status: 'in_sequence',
+          currentStep: 1,
+          nextSendAt: scheduledAt,
+        });
       }
 
       // Update sequence total count
@@ -20920,17 +20981,17 @@ ${conversationContext}`;
         totalRecipients: (sequence.totalRecipients || 0) + created.length,
       });
 
-      // Invalidate All Contacts cache
+      // Invalidate All Contacts cache to reflect new recipients
       const { invalidateCache } = await import('./services/ehubContactsService');
       invalidateCache();
 
-      res.json({ message: 'Contacts added successfully', count: created.length });
+      res.json({ message: 'Recipients imported successfully', count: created.length });
     } catch (error: any) {
-      console.error('Error adding contacts to sequence:', error);
-      res.status(500).json({ message: error.message || 'Failed to add contacts' });
-    } finally {
-      // Always release mutex lock
-      release();
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
+      }
+      console.error('Error importing recipients:', error);
+      res.status(500).json({ message: error.message || 'Failed to import recipients' });
     }
   });
 

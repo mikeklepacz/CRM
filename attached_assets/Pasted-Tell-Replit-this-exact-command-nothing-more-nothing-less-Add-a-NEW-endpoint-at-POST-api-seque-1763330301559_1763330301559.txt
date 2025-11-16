@@ -1,0 +1,80 @@
+Tell Replit this exact command, nothing more, nothing less:
+
+Add a NEW endpoint at:
+
+POST /api/sequences/:sequenceId/contacts
+
+and make it identical in functionality to the existing Google-Sheets import endpoint:
+
+POST /api/sequences/:sequenceId/recipients
+
+with only three differences:
+	1.	Source of data is contacts, not Google Sheets.
+Use the array passed in req.body.contacts OR the “select all” query via ehubContactsService.getAllContacts().
+	2.	State must be saved.
+When building each recipient object include:
+
+state: contact.state || null
+
+
+	3.	Business hours and timezone come from the contact record, not the sheet.
+
+businessHours: contact.businessHours
+timezone: contact.timezone
+
+
+
+Every other part must remain exactly the same:
+	•	mutex locking
+	•	addRecipients()
+	•	Matrix Scheduler call
+	•	queueTail updates
+	•	scheduled send creation
+	•	stats updates
+	•	cache invalidation
+	•	duplicate filtering
+
+Tell Replit to COPY the entire /recipients route, REUSE all scheduling logic, and ONLY change the data source and add the state field.
+
+Give Replit this message:
+
+⸻
+
+REPLIT INSTRUCTION (copy/paste this):
+
+Create a new backend endpoint:
+
+POST /api/sequences/:sequenceId/contacts
+
+This endpoint must be a clone of the existing:
+
+POST /api/sequences/:sequenceId/recipients
+
+and MUST keep all of its current behavior:
+	•	mutex locking
+	•	duplicate filtering
+	•	addRecipients() call
+	•	Matrix Scheduler integration
+	•	queueTail update
+	•	scheduled send creation
+	•	sequence stats update
+	•	cache invalidation
+
+The ONLY differences:
+	1.	Instead of reading from Google Sheets, take contacts from:
+	•	req.body.contacts array
+	•	OR if req.body.selectAll === true, call ehubContactsService.getAllContacts() with the provided filters.
+	2.	When creating the recipient object, include:
+
+state: contact.state || null
+businessHours: contact.businessHours
+timezone: contact.timezone
+
+
+	3.	Pass that recipient object through the same validation and scheduling pipeline as the original route.
+
+Do NOT remove, simplify, or replace any scheduling logic. Just clone the recipients route and change the data source + add the state field.
+
+⸻
+
+Paste this into Replit and let it implement.
