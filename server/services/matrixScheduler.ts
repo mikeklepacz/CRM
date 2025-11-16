@@ -135,7 +135,9 @@ export async function getNextMatrixSlot(
     const adminEndUtc = new Date(adminEndLocal);
 
     // RECIPIENT WINDOW (minutes → actual)
-    const localDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+    // Convert ISO weekday (1=Mon...7=Sun) to JS weekday (0=Sun...6=Sat)
+    const isoDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+    const localDay = isoDay === 7 ? 0 : isoDay;
 
     const todaysSchedule = parsed.schedule[localDay];
 

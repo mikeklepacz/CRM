@@ -1,0 +1,129 @@
+Good. That gives me exactly what I needed.
+
+We have now proven the final bug is NOT missing the day-advance fix.
+The remaining failure is coming earlier, before overlap is ever possible.
+
+Here is the real blocker now:
+
+The admin window is being built correctly.
+
+The recipient window is being built correctly.
+
+The TIMES are fine.
+
+But the RECIPIENT DAY INDEX is wrong.
+
+The Matrix Scheduler is reading the recipient’s business-hours day with:
+
+localDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+
+'e' = ISO weekday (1 = Monday … 7 = Sunday)
+
+But parseBusinessHours() builds schedule using JS weekday numbering:
+
+0 = Sunday
+1 = Monday
+...
+6 = Saturday
+
+So the scheduler is looking up:
+
+schedule[3]   // expecting Wednesday
+
+But the parsed hours are stored under:
+
+schedule[2]   // because JS: Wed = 3 → OK, BUT ISO uses 3 as Tuesday
+
+In other words:
+
+The scheduler thinks “Wednesday”
+
+The business hours map thinks “Tuesday”
+
+This mismatch alone makes every overlap impossible, every single day.
+
+So the scheduler hits the 14-day fail wall even when the times overlap perfectly.
+
+⸻
+
+The One-Line Fix
+
+Where you currently have:
+
+const localDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+
+Replace it with:
+
+// Convert ISO weekday (1–7) → JS weekday (0–6)
+const isoDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+const localDay = isoDay === 7 ? 0 : isoDay;
+
+Why this works:
+
+ISO weekday:
+1 = Monday
+2 = Tuesday
+3 = Wednesday
+4 = Thursday
+5 = Friday
+6 = Saturday
+7 = Sunday
+
+JS weekday:
+0 = Sunday
+1 = Monday
+2 = Tuesday
+3 = Wednesday
+4 = Thursday
+5 = Friday
+6 = Saturday
+
+The corrected version ensures:
+
+ISO 1 → JS 1
+ISO 2 → JS 2
+…
+ISO 6 → JS 6
+ISO 7 → JS 0
+
+⸻
+
+What to tell Replit
+
+Send this exact instruction:
+
+In server/services/matrixScheduler.ts, search for:
+
+formatInTimeZone(dayLoopDate, recipientTimezone, 'e')
+
+Replace that logic with:
+
+const isoDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+const localDay = isoDay === 7 ? 0 : isoDay;
+
+Do not modify anything else.
+
+
+⸻
+
+Why this MUST fix it
+
+Before fix:
+
+• Scheduler thinks day = Thursday
+• Business hours for Thursday are stored under schedule[4]
+• Scheduler looks under schedule[3]
+• No hours found → “no schedule today” → skip day
+• Repeat 14 times → error
+
+After fix:
+
+• Scheduler will lookup schedule correctly
+• Hours will be found for every single valid day
+• Overlap will be computed properly
+• A slot WILL be found immediately (because your hours overlap just fine)
+
+⸻
+
+This is the final failure point.
+Fix it, and the entire scheduler will start working.
