@@ -57,5 +57,8 @@ export async function getNextMatrixSlot(
     globalMinimum = new Date(Math.max(globalMinimum.getTime(), tailPlusSpacing.getTime()));
   }
 
-  return globalMinimum;
+  // STEP 6: Initialize candidate
+  let candidate = globalMinimum;
+
+  return candidate;
 }
