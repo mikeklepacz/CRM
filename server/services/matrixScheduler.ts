@@ -146,15 +146,16 @@ export async function getNextMatrixSlot(
     candidate >= overlapStart && candidate < overlapEnd;
   const candidateBeforeOverlap = candidate < overlapStart;
 
-  // Placeholder branches (empty for now)
+  // STEP 13: Fill in the two simplest branches
   if (!hasOverlap) {
-    // no-op for now
+    // leave empty for now
   } else if (candidateInsideOverlap) {
-    // no-op for now
+    // candidate already valid — do nothing
   } else if (candidateBeforeOverlap) {
-    // no-op for now
+    // move candidate forward to the start of the overlap window
+    candidate = new Date(overlapStart);
   } else {
-    // candidate after overlap end — no-op for now
+    // candidate after overlap end — leave empty for now
   }
 
   return candidate;
