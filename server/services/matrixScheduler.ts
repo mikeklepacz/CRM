@@ -1,5 +1,3 @@
-// server/services/matrixScheduler.ts
-
 import { storage } from '../storage';
 import { addDays } from 'date-fns';
 import { parseBusinessHours } from './timezoneHours';
@@ -19,80 +17,96 @@ interface MatrixSchedulerParams {
 export async function getNextMatrixSlot(
   params: MatrixSchedulerParams
 ): Promise<Date> {
-  const { stepDelay, lastStepSentAt, userId, recipientBusinessHours, recipientTimezone } = params;
+
+  const {
+    stepDelay,
+    lastStepSentAt,
+    userId,
+    recipientBusinessHours,
+    recipientTimezone
+  } = params;
 
   const settings = await storage.getEhubSettings();
-  if (!settings) {
-    throw new Error('E-Hub settings not found');
-  }
+  if (!settings) throw new Error("E-Hub settings not found");
 
-  const { clientWindowStartOffset, clientWindowEndHour } = settings;
+  const {
+    clientWindowStartOffset,
+    clientWindowEndHour,
+    sendingHoursStart,
+    sendingHoursEnd,
+    minDelayMinutes,
+    maxDelayMinutes,
+    skipWeekends,
+    dailyEmailLimit
+  } = settings;
 
+  // load admin timezone
   const userPrefs = await storage.getUserPreferences(userId);
-  const adminTimezone = userPrefs?.timezone || 'America/New_York';
+  const adminTimezone = userPrefs?.timezone || "America/New_York";
 
+  // baseline
   let baseline = lastStepSentAt
     ? addDays(lastStepSentAt, stepDelay)
     : addDays(new Date(), stepDelay);
 
-  if (baseline < new Date()) {
-    baseline = new Date();
-  }
+  if (baseline < new Date()) baseline = new Date();
 
-  // STEP 4: Get Global Queue Tail (across all users)
+  // FIFO queue tail
   const queueTail = await storage.getQueueTail();
-
-  // Global minimum starts at baseline
   let globalMinimum = baseline;
 
-  // If there is a queue tail, enforce FIFO
   if (queueTail) {
     const tailTime = new Date(queueTail).getTime();
     const baseTime = baseline.getTime();
     globalMinimum = new Date(Math.max(tailTime, baseTime));
   }
 
-  // STEP 5: Apply rate-limit spacing
-  const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
-  const spacingMs = (adminWindowHours * 3600000) / settings.dailyEmailLimit;
+  // rate limit spacing
+  const adminWindowHours = sendingHoursEnd - sendingHoursStart;
+  const spacingMs = (adminWindowHours * 3600000) / dailyEmailLimit;
 
   if (queueTail) {
-    const tailPlusSpacing = new Date(new Date(queueTail).getTime() + spacingMs);
-    globalMinimum = new Date(Math.max(globalMinimum.getTime(), tailPlusSpacing.getTime()));
+    const spaced = new Date(new Date(queueTail).getTime() + spacingMs);
+    globalMinimum = new Date(Math.max(globalMinimum.getTime(), spaced.getTime()));
   }
 
-  // STEP 6: Initialize candidate
+  // candidate
   let candidate = globalMinimum;
 
-  // STEP 7: Parse recipient business hours
-  const parsed = parseBusinessHours(recipientBusinessHours);
+  // BUSINESS HOURS PARSING
+  // IMPORTANT: parseBusinessHours(hoursStr, state) requires a state parameter.
+  // We do NOT have the state here — E-Hub currently does NOT track it per-recipient.
+  // To fix TS errors, pass a default state "" (timezone fallback → America/New_York).
+  const parsed = parseBusinessHours(recipientBusinessHours, "");
 
-  // STEP 8: Prepare for day-rolling loop
   let dayLoopDate = candidate;
-  let overlapStart: Date;
-  let overlapEnd: Date;
+  let overlapStart: Date = new Date();
+  let overlapEnd: Date = new Date();
 
-  // STEP 14-Real: Full day-rolling loop
+  // 14-day search loop
   for (let i = 0; i < 14; i++) {
-    // Weekend skipping check
+
+    // weekend skip
     const adminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
     if (skipWeekends && (adminDay === 6 || adminDay === 7)) {
       candidate = new Date(Date.UTC(
         dayLoopDate.getUTCFullYear(),
         dayLoopDate.getUTCMonth(),
         dayLoopDate.getUTCDate(),
-        settings.sendingHoursStart, 0, 0
+        sendingHoursStart,
+        0,
+        0
       ));
       dayLoopDate = addDays(candidate, 1);
       continue;
     }
 
-    // STEP 9: Admin window boundaries for current day
+    // ADMIN WINDOW (UTC)
     const adminStartUtc = new Date(Date.UTC(
       dayLoopDate.getUTCFullYear(),
       dayLoopDate.getUTCMonth(),
       dayLoopDate.getUTCDate(),
-      settings.sendingHoursStart,
+      sendingHoursStart,
       0,
       0
     ));
@@ -101,113 +115,135 @@ export async function getNextMatrixSlot(
       dayLoopDate.getUTCFullYear(),
       dayLoopDate.getUTCMonth(),
       dayLoopDate.getUTCDate(),
-      settings.sendingHoursEnd,
+      sendingHoursEnd,
       0,
       0
     ));
 
-    // STEP 10: Recipient delivery window
-    const localDay = parseInt(
-      formatInTimeZone(dayLoopDate, recipientTimezone, 'e'),
-      10
-    );
+    // RECIPIENT WINDOW (minutes → actual)
+    const localDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
 
-    const daySchedule = parsed.schedule[localDay];
+    const todaysSchedule = parsed.schedule[localDay];
 
-    let recipientOpenLocal = new Date(
-      formatInTimeZone(
-        dayLoopDate,
-        recipientTimezone,
-        `yyyy-MM-dd'T'${daySchedule ? daySchedule.open : '00:00'}:00`
-      )
-    );
+    if (parsed.isClosed || !todaysSchedule || todaysSchedule.length === 0) {
+      // no hours today → next day
+      candidate = new Date(Date.UTC(
+        dayLoopDate.getUTCFullYear(),
+        dayLoopDate.getUTCMonth(),
+        dayLoopDate.getUTCDate(),
+        sendingHoursStart,
+        0,
+        0
+      ));
+      dayLoopDate = addDays(candidate, 1);
+      continue;
+    }
 
+    // Take FIRST range
+    const range = todaysSchedule[0];     // {open: number, close: number}
+    const openMin = range.open;          // minutes since midnight
+    const closeMin = range.close;        // minutes since midnight
+
+    // Convert to actual times in recipient TZ
+    const openHour = Math.floor(openMin / 60);
+    const openMinute = openMin % 60;
+
+    const closeHour = Math.floor(closeMin / 60);
+    const closeMinute = closeMin % 60;
+
+    let recipientOpenLocal = new Date(formatInTimeZone(
+      dayLoopDate,
+      recipientTimezone,
+      `yyyy-MM-ddT${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`
+    ));
+
+    // apply start offset
     recipientOpenLocal = new Date(
       recipientOpenLocal.getTime() + clientWindowStartOffset * 3600000
     );
 
-    const recipientEndLocal = new Date(
-      formatInTimeZone(
-        dayLoopDate,
-        recipientTimezone,
-        `yyyy-MM-dd'T'${clientWindowEndHour.toString().padStart(2, '0')}:00`
-      )
-    );
+    const recipientEndLocal = new Date(formatInTimeZone(
+      dayLoopDate,
+      recipientTimezone,
+      `yyyy-MM-ddT${String(clientWindowEndHour).padStart(2,'0')}:00:00`
+    ));
 
     const recipientLegalStartUtc = new Date(recipientOpenLocal);
     const recipientLegalEndUtc = new Date(recipientEndLocal);
 
-    // STEP 11: Compute raw window overlap
+    // OVERLAP
     overlapStart = new Date(
       Math.max(adminStartUtc.getTime(), recipientLegalStartUtc.getTime())
     );
-
     overlapEnd = new Date(
       Math.min(adminEndUtc.getTime(), recipientLegalEndUtc.getTime())
     );
 
-    // Overlap validation and candidate adjustment
     const hasOverlap = overlapStart < overlapEnd;
-    const candidateInsideOverlap =
-      candidate >= overlapStart && candidate < overlapEnd;
-    const candidateBeforeOverlap = candidate < overlapStart;
+    const candidateInside = candidate >= overlapStart && candidate < overlapEnd;
+    const candidateBefore = candidate < overlapStart;
 
     if (!hasOverlap) {
       candidate = new Date(Date.UTC(
         dayLoopDate.getUTCFullYear(),
         dayLoopDate.getUTCMonth(),
         dayLoopDate.getUTCDate(),
-        settings.sendingHoursStart, 0, 0
+        sendingHoursStart,
+        0,
+        0
       ));
       dayLoopDate = addDays(candidate, 1);
       continue;
     }
 
-    if (candidateInsideOverlap) {
-      break;
-    }
+    if (candidateInside) break;
 
-    if (candidateBeforeOverlap) {
+    if (candidateBefore) {
       candidate = new Date(overlapStart);
       break;
     }
 
-    // candidate after overlap end → roll to next day
+    // candidate after overlap
     candidate = new Date(Date.UTC(
       dayLoopDate.getUTCFullYear(),
       dayLoopDate.getUTCMonth(),
       dayLoopDate.getUTCDate(),
-      settings.sendingHoursStart, 0, 0
+      sendingHoursStart,
+      0,
+      0
     ));
     dayLoopDate = addDays(candidate, 1);
   }
 
-  if (candidate < overlapStart! || candidate >= overlapEnd!) {
+  // sanity check
+  if (!(candidate >= overlapStart && candidate < overlapEnd)) {
     throw new Error("No legal send slot found within 14 days");
   }
 
-  // STEP: Final jitter
-  const jitterMin = settings.minDelayMinutes * 60000;
-  const jitterMax = settings.maxDelayMinutes * 60000;
+  // JITTER
+  const jitterMin = minDelayMinutes * 60000;
+  const jitterMax = maxDelayMinutes * 60000;
   const jitter = Math.floor(Math.random() * (jitterMax - jitterMin + 1)) + jitterMin;
 
   let finalStamp = new Date(candidate.getTime() + jitter);
 
-  // Compute admin window for final day (UTC)
   const finalAdminStart = new Date(Date.UTC(
     finalStamp.getUTCFullYear(),
     finalStamp.getUTCMonth(),
     finalStamp.getUTCDate(),
-    settings.sendingHoursStart, 0, 0
+    sendingHoursStart,
+    0,
+    0
   ));
   const finalAdminEnd = new Date(Date.UTC(
     finalStamp.getUTCFullYear(),
     finalStamp.getUTCMonth(),
     finalStamp.getUTCDate(),
-    settings.sendingHoursEnd, 0, 0
+    sendingHoursEnd,
+    0,
+    0
   ));
 
-  // Clamp if jitter pushes us outside the final day's admin window
   if (finalStamp < finalAdminStart) finalStamp = finalAdminStart;
   if (finalStamp > finalAdminEnd) finalStamp = finalAdminEnd;
 
