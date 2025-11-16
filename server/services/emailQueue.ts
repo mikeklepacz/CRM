@@ -440,32 +440,31 @@ async function processEmailQueue() {
         }
 
         // TWO-GATE REPLY DETECTION: Check for replies before sending
-        // For follow-ups only (step 2+), check if recipient has replied
-        if (currentStepNumber > 1 && recipient.threadId) {
-          try {
-            const { checkForReplies } = await import('./gmailReplyDetection');
-            const replyCheck = await checkForReplies(sequence.createdBy, recipient.threadId);
+        // Use centralized replyGuard for all follow-ups (step 2+)
+        if (currentStepNumber > 1) {
+          const { shouldSendEmail } = await import('./replyGuard');
+          const allowed = await shouldSendEmail({
+            userId: sequence.createdBy,
+            threadId: recipient.threadId,
+            scheduledAt: scheduledSend.scheduledAt,
+          });
+
+          if (!allowed) {
+            console.log(`[EmailQueue] ✉️  REPLY DETECTED for ${recipient.email} - Cancelling sequence`);
             
-            if (replyCheck.hasReply) {
-              console.log(`[EmailQueue] ✉️  REPLY DETECTED for ${recipient.email} - Cancelling sequence`);
-              
-              // Mark scheduled send as cancelled
-              await storage.updateScheduledSend(scheduledSend.id, { status: 'cancelled' });
-              
-              // Delete all future scheduled sends
-              await storage.deleteRecipientScheduledSends(recipient.id);
-              
-              // Update recipient status to 'replied'
-              await storage.updateRecipientStatus(recipient.id, {
-                status: 'replied',
-                nextSendAt: null,
-              });
-              
-              continue; // Skip this send
-            }
-          } catch (replyError: any) {
-            console.warn(`[EmailQueue] ⚠️  Reply detection failed for ${recipient.email}: ${replyError.message}`);
-            console.warn(`[EmailQueue] ⚠️  Proceeding with send despite error`);
+            // Mark scheduled send as cancelled
+            await storage.updateScheduledSend(scheduledSend.id, { status: 'cancelled' });
+            
+            // Delete all future scheduled sends
+            await storage.deleteRecipientScheduledSends(recipient.id);
+            
+            // Update recipient status to 'replied'
+            await storage.updateRecipientStatus(recipient.id, {
+              status: 'replied',
+              nextSendAt: null,
+            });
+            
+            continue; // Skip this send
           }
         }
 
