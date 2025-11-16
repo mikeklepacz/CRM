@@ -68,5 +68,24 @@ export async function getNextMatrixSlot(
   let dayLoopDate = candidate;
   let attempts = 0;
 
+  // STEP 9: Admin window boundaries for current day (scaffolding only)
+  const adminStartUtc = new Date(Date.UTC(
+    dayLoopDate.getUTCFullYear(),
+    dayLoopDate.getUTCMonth(),
+    dayLoopDate.getUTCDate(),
+    settings.sendingHoursStart,
+    0,
+    0
+  ));
+
+  const adminEndUtc = new Date(Date.UTC(
+    dayLoopDate.getUTCFullYear(),
+    dayLoopDate.getUTCMonth(),
+    dayLoopDate.getUTCDate(),
+    settings.sendingHoursEnd,
+    0,
+    0
+  ));
+
   return candidate;
 }
