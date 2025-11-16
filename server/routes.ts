@@ -20718,9 +20718,8 @@ ${conversationContext}`;
         return res.json({ message: 'No new recipients to import', count: 0 });
       }
 
-      // REAL-TIME SCHEDULING: Calculate scheduledAt immediately at enrollment
-      // No batch coordinator. No null scheduledAt. Only create step 1 (lazy scheduling).
-      const { scheduleRecipient } = await import('./services/emailSchedulingService');
+      // MATRIX SCHEDULER: Calculate scheduledAt using unified global + recipient constraints
+      const { getNextMatrixSlot } = await import('./services/matrixScheduler');
       const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
       
       if (stepDelays.length === 0) {
@@ -20731,7 +20730,7 @@ ${conversationContext}`;
       const scheduledRecipients = [];
       for (const recipient of recipients) {
         // Calculate scheduledAt for step 1
-        const scheduledAt = await scheduleRecipient({
+        const scheduledAt = await getNextMatrixSlot({
           recipientId: 'temp', // Will be replaced after insert
           sequenceId: id,
           stepNumber: 1,
@@ -20751,10 +20750,10 @@ ${conversationContext}`;
       // Bulk insert recipients
       const created = await storage.addRecipients(scheduledRecipients);
 
-      // REAL-TIME SCHEDULING: Now that we have real IDs, schedule each recipient
+      // MATRIX SCHEDULER: Now that we have real IDs, schedule each recipient
       for (const recipient of created) {
         // Recalculate scheduledAt with real recipient ID
-        const scheduledAt = await scheduleRecipient({
+        const scheduledAt = await getNextMatrixSlot({
           recipientId: recipient.id,
           sequenceId: id,
           stepNumber: 1,
@@ -20865,9 +20864,8 @@ ${conversationContext}`;
         return res.json({ message: 'All contacts already in sequence', count: 0 });
       }
 
-      // REAL-TIME SCHEDULING: Calculate scheduledAt immediately at enrollment
-      // No batch coordinator. No null scheduledAt. Only create step 1 (lazy scheduling).
-      const { scheduleRecipient } = await import('./services/emailSchedulingService');
+      // MATRIX SCHEDULER: Calculate scheduledAt using unified global + recipient constraints
+      const { getNextMatrixSlot } = await import('./services/matrixScheduler');
       const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
       
       if (stepDelays.length === 0) {
@@ -20878,7 +20876,7 @@ ${conversationContext}`;
       const scheduledRecipients = [];
       for (const recipient of recipients) {
         // Calculate scheduledAt for step 1
-        const scheduledAt = await scheduleRecipient({
+        const scheduledAt = await getNextMatrixSlot({
           recipientId: 'temp', // Will be replaced after insert
           sequenceId: id,
           stepNumber: 1,
