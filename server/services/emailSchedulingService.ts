@@ -22,90 +22,19 @@ export interface ScheduleRecipientParams {
 }
 
 /**
- * Calculate scheduledAt for a single recipient step immediately
+ * @deprecated REPLACED BY MATRIX SCHEDULER
  * 
- * This is the ONLY function that assigns scheduledAt.
- * No batch coordinator. No null scheduledAt.
+ * This function is NO LONGER USED and has been replaced by matrixScheduler.getNextMatrixSlot().
+ * All scheduling operations now go through the Matrix Scheduler for unified constraint enforcement.
  * 
- * Flow:
- * 1. Calculate baseline time (now + stepDelay, or lastStepSentAt + stepDelay)
- * 2. Get queue tail (latest scheduledAt for this user)
- * 3. Apply weekend skipping and sending-window alignment via computeNextSendSlot
- * 4. Apply FIFO queue ordering (ensure after tail + rate limit spacing)
- * 5. Apply jitter as final step (so each enrollment gets unique randomization)
+ * DO NOT USE THIS FUNCTION - it will throw an error to prevent accidental usage.
  * 
- * @returns scheduledAt as Date (never null)
+ * @throws Error always - function is disabled
  */
 export async function scheduleRecipient(params: ScheduleRecipientParams): Promise<Date> {
-  const {
-    stepNumber,
-    stepDelay,
-    lastStepSentAt,
-    recipientTimezone,
-    recipientBusinessHours,
-    userId,
-  } = params;
-
-  // Get E-Hub settings
-  const settings = await storage.getEhubSettings();
-  if (!settings) {
-    throw new Error('E-Hub settings not found');
-  }
-
-  // Get admin timezone
-  const userPrefs = await storage.getUserPreferences(userId);
-  const adminTimezone = userPrefs?.timezone || 'America/New_York';
-
-  const now = new Date();
-
-  // STEP 1: Calculate baseline time from step delay
-  let baselineTime: Date;
-  
-  if (lastStepSentAt) {
-    // Follow-up step: add delay to last sent time
-    baselineTime = addDays(lastStepSentAt, stepDelay);
-    
-    // If delay has already elapsed, use now
-    if (baselineTime <= now) {
-      baselineTime = now;
-    }
-  } else {
-    // First step: add delay from now
-    baselineTime = addDays(now, stepDelay);
-  }
-
-  // STEP 2: Get queue tail for this user (FIFO enforcement)
-  const queueTail = await storage.getLastScheduledSendForUser(userId);
-
-  // STEP 3: Apply business hours, weekends, admin window using smart timing
-  let scheduledAt = computeNextSendSlot({
-    baselineTime,
-    adminTimezone,
-    adminStartHour: settings.sendingHoursStart,
-    adminEndHour: settings.sendingHoursEnd,
-    recipientBusinessHours,
-    recipientTimezone,
-    clientWindowStartOffset: settings.clientWindowStartOffset,
-    clientWindowEndHour: settings.clientWindowEndHour,
-    skipWeekends: settings.skipWeekends,
-    minimumTime: baselineTime,
-  });
-
-  // STEP 4: Apply FIFO queue ordering
-  if (queueTail && queueTail.scheduledAt) {
-    const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
-    const adminWindowMinutes = adminWindowHours * 60;
-    const minutesBetweenSends = settings.dailyEmailLimit > 0
-      ? adminWindowMinutes / settings.dailyEmailLimit
-      : 1;
-    
-    const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
-    const afterTail = new Date(queueTail.scheduledAt.getTime() + rateLimitSpacingMs);
-    
-    if (afterTail > scheduledAt) {
-      scheduledAt = afterTail;
-    }
-  }
-
-  return scheduledAt;
+  throw new Error(
+    'scheduleRecipient() is deprecated and disabled. ' +
+    'Use matrixScheduler.getNextMatrixSlot() instead. ' +
+    'All scheduling logic has been unified in the Matrix Scheduler.'
+  );
 }

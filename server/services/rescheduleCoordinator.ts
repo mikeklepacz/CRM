@@ -186,9 +186,6 @@ export async function rescheduleAllPendingEmails(): Promise<RescheduleResult> {
       };
     }
     
-    // Import scheduling service
-    const { scheduleRecipient } = await import('./emailSchedulingService');
-    
     // Track global queue tail for FIFO enforcement
     let globalQueueTail: Date | null = null;
     let processedCount = 0;
