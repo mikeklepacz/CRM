@@ -186,5 +186,30 @@ export async function getNextMatrixSlot(
     throw new Error("No legal send slot found within 14 days");
   }
 
-  return candidate;
+  // STEP: Final jitter
+  const jitterMin = settings.minDelayMinutes * 60000;
+  const jitterMax = settings.maxDelayMinutes * 60000;
+  const jitter = Math.floor(Math.random() * (jitterMax - jitterMin + 1)) + jitterMin;
+
+  let finalStamp = new Date(candidate.getTime() + jitter);
+
+  // Compute admin window for final day (UTC)
+  const finalAdminStart = new Date(Date.UTC(
+    finalStamp.getUTCFullYear(),
+    finalStamp.getUTCMonth(),
+    finalStamp.getUTCDate(),
+    settings.sendingHoursStart, 0, 0
+  ));
+  const finalAdminEnd = new Date(Date.UTC(
+    finalStamp.getUTCFullYear(),
+    finalStamp.getUTCMonth(),
+    finalStamp.getUTCDate(),
+    settings.sendingHoursEnd, 0, 0
+  ));
+
+  // Clamp if jitter pushes us outside the final day's admin window
+  if (finalStamp < finalAdminStart) finalStamp = finalAdminStart;
+  if (finalStamp > finalAdminEnd) finalStamp = finalAdminEnd;
+
+  return finalStamp;
 }
