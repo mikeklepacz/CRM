@@ -548,11 +548,11 @@ async function processEmailQueue() {
           
           // Case 1: Repeat last step is enabled and we're on the last step
           if (sequence.repeatLastStep && isLastStep && stepDelays.length > 0) {
-            const { scheduleRecipient } = await import('./emailSchedulingService');
+            const { getNextMatrixSlot } = await import('./matrixScheduler');
             const lastStepDelay = stepDelays[stepDelays.length - 1];
             
             // Schedule the repeat of the last step
-            const scheduledAt = await scheduleRecipient({
+            const scheduledAt = await getNextMatrixSlot({
               recipientId: recipient.id,
               sequenceId: sequence.id,
               stepNumber: currentStepNumber, // Repeat same step
@@ -580,12 +580,12 @@ async function processEmailQueue() {
           }
           // Case 2: There are more steps in the sequence
           else if (!isLastStep && currentStepNumber < stepDelays.length) {
-            const { scheduleRecipient } = await import('./emailSchedulingService');
+            const { getNextMatrixSlot } = await import('./matrixScheduler');
             const nextStepNumber = currentStepNumber + 1;
             const nextStepDelay = stepDelays[nextStepNumber - 1];
             
             // Schedule the next step
-            const scheduledAt = await scheduleRecipient({
+            const scheduledAt = await getNextMatrixSlot({
               recipientId: recipient.id,
               sequenceId: sequence.id,
               stepNumber: nextStepNumber,
