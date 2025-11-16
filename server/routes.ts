@@ -20718,42 +20718,52 @@ ${conversationContext}`;
         return res.json({ message: 'No new recipients to import', count: 0 });
       }
 
-      // Eligibility-based enrollment: Create recipients with nextSendAt = null
-      // Coordinator will assign scheduledAt based on eligibleAt
-      const recipientsWithNextSend = recipients.map(r => ({
-        ...r,
-        nextSendAt: null,
-      }));
-
-      // Bulk insert recipients
-      const created = await storage.addRecipients(recipientsWithNextSend);
-
-      // Create scheduled sends with eligibleAt (coordinator assigns scheduledAt later)
-      // stepDelays are gap-based, so use running sum for cumulative timing
-      const { addDays } = await import('date-fns');
+      // REAL-TIME SCHEDULING: Calculate scheduledAt immediately at enrollment
+      // No batch coordinator. No null scheduledAt. Only create step 1 (lazy scheduling).
+      const { scheduleRecipient } = await import('./services/emailSchedulingService');
       const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
-      const allScheduledSends = [];
-      const now = new Date();
       
-      for (const recipient of created) {
-        let cumulativeDelay = 0;
-        for (let i = 0; i < stepDelays.length; i++) {
-          cumulativeDelay += stepDelays[i];
-          const eligibleAt = addDays(now, cumulativeDelay);
-          allScheduledSends.push({
-            recipientId: recipient.id,
-            sequenceId: sequence.id,
-            stepNumber: i + 1,
-            eligibleAt,
-            scheduledAt: null,
-            status: 'pending' as const,
-          });
-        }
+      if (stepDelays.length === 0) {
+        return res.status(400).json({ message: 'Sequence has no steps configured' });
       }
 
-      // Bulk insert all scheduled sends
-      if (allScheduledSends.length > 0) {
-        await storage.insertScheduledSends(allScheduledSends);
+      // Create recipients with calculated nextSendAt
+      const scheduledRecipients = [];
+      for (const recipient of recipients) {
+        // Calculate scheduledAt for step 1
+        const scheduledAt = await scheduleRecipient({
+          recipientId: 'temp', // Will be replaced after insert
+          sequenceId: id,
+          stepNumber: 1,
+          stepDelay: stepDelays[0],
+          lastStepSentAt: null,
+          recipientTimezone: recipient.timezone,
+          recipientBusinessHours: recipient.businessHours,
+          userId: sequence.createdBy,
+        });
+
+        scheduledRecipients.push({
+          ...recipient,
+          nextSendAt: scheduledAt,
+        });
+      }
+
+      // Bulk insert recipients
+      const created = await storage.addRecipients(scheduledRecipients);
+
+      // LAZY SCHEDULING: Create ONLY step 1 scheduled sends
+      // Future steps are created when current step completes
+      const firstStepSends = created.map(recipient => ({
+        recipientId: recipient.id,
+        sequenceId: sequence.id,
+        stepNumber: 1,
+        scheduledAt: recipient.nextSendAt!,
+        status: 'pending' as const,
+      }));
+
+      // Bulk insert step 1 sends
+      if (firstStepSends.length > 0) {
+        await storage.insertScheduledSends(firstStepSends);
       }
 
       // Update sequence total count
@@ -20764,15 +20774,6 @@ ${conversationContext}`;
       // Invalidate All Contacts cache to reflect new recipients
       const { invalidateCache } = await import('./services/ehubContactsService');
       invalidateCache();
-
-      // Immediately run coordinator to schedule sends (prevents "N/A" in UI)
-      // If coordinator fails, enrollment still succeeds - defers to 5-minute cron
-      try {
-        const { coordinatorTick } = await import('./services/queueCoordinator');
-        await coordinatorTick();
-      } catch (coordError: any) {
-        console.error('[Enrollment] Coordinator tick failed, deferring to cron:', coordError.message);
-      }
 
       res.json({ message: 'Recipients imported successfully', count: created.length });
     } catch (error: any) {
@@ -20847,42 +20848,52 @@ ${conversationContext}`;
         return res.json({ message: 'All contacts already in sequence', count: 0 });
       }
 
-      // Eligibility-based enrollment: Create recipients with nextSendAt = null
-      // Coordinator will assign scheduledAt based on eligibleAt
-      const recipientsWithNextSend = recipients.map(r => ({
-        ...r,
-        nextSendAt: null,
-      }));
-
-      // Bulk insert recipients
-      const created = await storage.addRecipients(recipientsWithNextSend);
-
-      // Create scheduled sends with eligibleAt (coordinator assigns scheduledAt later)
-      // stepDelays are gap-based, so use running sum for cumulative timing
-      const { addDays } = await import('date-fns');
+      // REAL-TIME SCHEDULING: Calculate scheduledAt immediately at enrollment
+      // No batch coordinator. No null scheduledAt. Only create step 1 (lazy scheduling).
+      const { scheduleRecipient } = await import('./services/emailSchedulingService');
       const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
-      const allScheduledSends = [];
-      const now = new Date();
       
-      for (const recipient of created) {
-        let cumulativeDelay = 0;
-        for (let i = 0; i < stepDelays.length; i++) {
-          cumulativeDelay += stepDelays[i];
-          const eligibleAt = addDays(now, cumulativeDelay);
-          allScheduledSends.push({
-            recipientId: recipient.id,
-            sequenceId: sequence.id,
-            stepNumber: i + 1,
-            eligibleAt,
-            scheduledAt: null,
-            status: 'pending' as const,
-          });
-        }
+      if (stepDelays.length === 0) {
+        return res.status(400).json({ message: 'Sequence has no steps configured' });
       }
 
-      // Bulk insert all scheduled sends
-      if (allScheduledSends.length > 0) {
-        await storage.insertScheduledSends(allScheduledSends);
+      // Create recipients with calculated nextSendAt
+      const scheduledRecipients = [];
+      for (const recipient of recipients) {
+        // Calculate scheduledAt for step 1
+        const scheduledAt = await scheduleRecipient({
+          recipientId: 'temp', // Will be replaced after insert
+          sequenceId: id,
+          stepNumber: 1,
+          stepDelay: stepDelays[0],
+          lastStepSentAt: null,
+          recipientTimezone: recipient.timezone,
+          recipientBusinessHours: recipient.businessHours,
+          userId: sequence.createdBy,
+        });
+
+        scheduledRecipients.push({
+          ...recipient,
+          nextSendAt: scheduledAt,
+        });
+      }
+
+      // Bulk insert recipients
+      const created = await storage.addRecipients(scheduledRecipients);
+
+      // LAZY SCHEDULING: Create ONLY step 1 scheduled sends
+      // Future steps are created when current step completes
+      const firstStepSends = created.map(recipient => ({
+        recipientId: recipient.id,
+        sequenceId: sequence.id,
+        stepNumber: 1,
+        scheduledAt: recipient.nextSendAt!,
+        status: 'pending' as const,
+      }));
+
+      // Bulk insert step 1 sends
+      if (firstStepSends.length > 0) {
+        await storage.insertScheduledSends(firstStepSends);
       }
 
       // Update sequence total count
@@ -20893,15 +20904,6 @@ ${conversationContext}`;
       // Invalidate All Contacts cache
       const { invalidateCache } = await import('./services/ehubContactsService');
       invalidateCache();
-
-      // Immediately run coordinator to schedule sends (prevents "N/A" in UI)
-      // If coordinator fails, enrollment still succeeds - defers to 5-minute cron
-      try {
-        const { coordinatorTick } = await import('./services/queueCoordinator');
-        await coordinatorTick();
-      } catch (coordError: any) {
-        console.error('[Enrollment] Coordinator tick failed, deferring to cron:', coordError.message);
-      }
 
       res.json({ message: 'Contacts added successfully', count: created.length });
     } catch (error: any) {
