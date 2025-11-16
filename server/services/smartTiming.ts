@@ -138,21 +138,13 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
     const candidateUtc = addDays(effectiveBaseline, daysOffset);
 
     if (skipWeekends) {
-      const adminDay = getDayOfWeek(startUtc, adminTimezone);
+      const adminDay = getDayOfWeek(candidateUtc, adminTimezone);
 
-      // HARD WEEKEND BLOCK — FIXES THE BUG
+      // HARD WEEKEND BLOCK
       if (adminDay === 0 || adminDay === 6) {
-        const jump = 1 + (adminDay === 0 ? 0 : 1); // Sunday→1, Saturday→2
-        startUtc = addDays(startUtc, jump);
-        startUtc.setHours(sendingHoursStart, 0, 0, 0);
-
-        // recompute adminDay after the jump
-        const newDay = getDayOfWeek(startUtc, adminTimezone);
-        // if still weekend (extremely rare edge), skip normally
-        if (newDay === 0 || newDay === 6) {
-          daysOffset++;
-          continue;
-        }
+        // Skip to next weekday
+        daysOffset++;
+        continue;
       }
     }
 

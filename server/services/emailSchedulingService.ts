@@ -103,7 +103,7 @@ export async function scheduleRecipient(params: ScheduleRecipientParams): Promis
   }
 
   // STEP 6: Apply business hours, weekends, admin window using smart timing
-  const scheduledAt = computeNextSendSlot({
+  let scheduledAt = computeNextSendSlot({
     baselineTime: minimumTime,
     adminTimezone,
     adminStartHour: settings.sendingHoursStart,
@@ -115,6 +115,11 @@ export async function scheduleRecipient(params: ScheduleRecipientParams): Promis
     skipWeekends: settings.skipWeekends,
     minimumTime, // Enforce queue order
   });
+
+  // CRITICAL: If business hours adjustment moved time backward, re-add jitter to maintain spacing
+  if (scheduledAt < minimumTime) {
+    scheduledAt = new Date(scheduledAt.getTime() + jitterMs);
+  }
 
   return scheduledAt;
 }
