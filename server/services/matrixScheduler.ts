@@ -64,5 +64,9 @@ export async function getNextMatrixSlot(
   // STEP 7: Parse recipient business hours
   const parsed = parseBusinessHours(recipientBusinessHours);
 
+  // STEP 8: Prepare for day-rolling loop (no logic yet)
+  let dayLoopDate = candidate;
+  let attempts = 0;
+
   return candidate;
 }
