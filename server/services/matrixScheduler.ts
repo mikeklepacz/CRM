@@ -48,5 +48,14 @@ export async function getNextMatrixSlot(
     globalMinimum = new Date(Math.max(tailTime, baseTime));
   }
 
+  // STEP 5: Apply rate-limit spacing
+  const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
+  const spacingMs = (adminWindowHours * 3600000) / settings.dailyEmailLimit;
+
+  if (queueTail) {
+    const tailPlusSpacing = new Date(new Date(queueTail).getTime() + spacingMs);
+    globalMinimum = new Date(Math.max(globalMinimum.getTime(), tailPlusSpacing.getTime()));
+  }
+
   return globalMinimum;
 }
