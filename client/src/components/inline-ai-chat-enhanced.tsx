@@ -1176,7 +1176,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
 
   const createGmailDraftMutation = useMutation({
     mutationFn: async ({ to, subject, body, clientLink }: { to: string; subject: string; body: string; clientLink?: string | null }) => {
-      const draftResult = await apiRequest("POST", "/api/gmail/create-draft", { to, subject, body });
+      const draftResult = await apiRequest("POST", "/api/gmail/create-draft", { to, subject, body, clientLink: clientLink || null });
       
       // Track email draft creation
       try {

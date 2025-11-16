@@ -86,6 +86,7 @@ export function EmailPreview({ subject, to, body, clientLink }: EmailPreviewProp
         to,
         subject,
         body,
+        clientLink: clientLink || null,
       });
       
       // Track email draft creation
