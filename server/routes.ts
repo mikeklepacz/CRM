@@ -20757,6 +20757,7 @@ ${conversationContext}`;
         recipientId: recipient.id,
         sequenceId: sequence.id,
         stepNumber: 1,
+        eligibleAt: recipient.nextSendAt!,
         scheduledAt: recipient.nextSendAt!,
         status: 'pending' as const,
       }));
@@ -20887,6 +20888,7 @@ ${conversationContext}`;
         recipientId: recipient.id,
         sequenceId: sequence.id,
         stepNumber: 1,
+        eligibleAt: recipient.nextSendAt!,
         scheduledAt: recipient.nextSendAt!,
         status: 'pending' as const,
       }));

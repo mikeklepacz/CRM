@@ -570,6 +570,7 @@ async function processEmailQueue() {
               recipientId: recipient.id,
               sequenceId: sequence.id,
               stepNumber: currentStepNumber,
+              eligibleAt: scheduledAt,
               scheduledAt,
               status: 'pending',
             }]);
@@ -602,6 +603,7 @@ async function processEmailQueue() {
               recipientId: recipient.id,
               sequenceId: sequence.id,
               stepNumber: nextStepNumber,
+              eligibleAt: scheduledAt,
               scheduledAt,
               status: 'pending',
             }]);
