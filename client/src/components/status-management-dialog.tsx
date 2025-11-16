@@ -212,6 +212,9 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
   // Delete confirmation state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  // Color picker state - track which picker is open
+  const [activeColorPicker, setActiveColorPicker] = useState<string | null>(null);
 
   // Fetch statuses
   const { data: statusesData, isLoading } = useQuery<{ statuses: Status[] }>({
@@ -426,17 +429,19 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
   const ColorPicker = ({ 
     label, 
     value, 
-    onChange 
+    onChange,
+    pickerId
   }: { 
     label: string; 
     value: string; 
     onChange: (color: string) => void;
+    pickerId: string;
   }) => {
     const hsl = hexToHsl(value);
     return (
       <div className="space-y-2">
         <Label className="text-xs">{label}</Label>
-        <Popover>
+        <Popover open={activeColorPicker === pickerId} onOpenChange={(open) => setActiveColorPicker(open ? pickerId : null)}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
@@ -559,11 +564,13 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
                       label="Background"
                       value={formData.lightBgColor}
                       onChange={(color) => setFormData({ ...formData, lightBgColor: color })}
+                      pickerId="light-bg"
                     />
                     <ColorPicker
                       label="Text"
                       value={formData.lightTextColor}
                       onChange={(color) => setFormData({ ...formData, lightTextColor: color })}
+                      pickerId="light-text"
                     />
                   </div>
                 </div>
@@ -579,11 +586,13 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
                       label="Background"
                       value={formData.darkBgColor}
                       onChange={(color) => setFormData({ ...formData, darkBgColor: color })}
+                      pickerId="dark-bg"
                     />
                     <ColorPicker
                       label="Text"
                       value={formData.darkTextColor}
                       onChange={(color) => setFormData({ ...formData, darkTextColor: color })}
+                      pickerId="dark-text"
                     />
                   </div>
                 </div>
