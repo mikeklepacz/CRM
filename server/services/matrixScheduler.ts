@@ -26,7 +26,14 @@ export async function getNextMatrixSlot(params: MatrixSchedulerParams): Promise<
   } = params;
 
   // Load settings
-  const settings = await storage.getAdminSettings(userId);
+  const settings = await storage.getEhubSettings();
+  if (!settings) {
+    throw new Error('E-Hub settings not found');
+  }
+  
+  const userPrefs = await storage.getUserPreferences(userId);
+  const adminTimezone = userPrefs?.timezone || 'America/New_York';
+  
   const {
     sendingHoursStart,
     sendingHoursEnd,
@@ -37,9 +44,6 @@ export async function getNextMatrixSlot(params: MatrixSchedulerParams): Promise<
     minDelayMinutes,
     maxDelayMinutes
   } = settings;
-
-  // Admin timezone
-  const adminTz = settings.adminTimezone || 'America/New_York';
 
   // 1. Baseline
   let baseline = lastStepSentAt
