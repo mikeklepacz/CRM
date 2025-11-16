@@ -28,7 +28,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **WooCommerce Sync**: Fetches orders, matches to stores, calculates commissions, and updates the Commission Tracker, including backfilling historical records.
 - **Referral Commission System**: Single-level tracking (10% of referred agents' monthly commissions).
 - **Sales Reports**: Generates PDF commission reports.
-- **Sales Assistant AI**: OpenAI-powered ChatGPT-like assistant with knowledge base integration for sales scripts, product info, and objection handling. Includes conversation management, context-aware data reading, admin-only knowledge base file upload, chat history, default script system, and smart template variables.
+- **Sales Assistant Page**: UI page powered by Wick Coach assistant, providing OpenAI-powered chat with knowledge base integration for sales scripts, product info, and objection handling. Includes conversation management, context-aware data reading, admin-only knowledge base file upload, chat history, default script system, and smart template variables.
 - **Document Browser**: Simplified Google Drive integration for browsing and downloading files.
 - **ElevenLabs AI Voice Calling**: Automated outbound AI voice calling with multi-agent support, three calling scenarios (Cold Calls, Follow-Ups, Recovery), queue management, real-time call status, and webhook integration for events and transcript capture. Features automated IVR/voicemail detection, agent prompt override, and AI call analytics with dynamic variables and comprehensive data extraction to PostgreSQL and Google Sheets.
 - **AI Insights (Admin-Only)**: OpenAI-powered analysis of call performance data identifying common objections, success patterns, sentiment, and coaching recommendations with PII redaction.
@@ -44,8 +44,8 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **⚠️ CRITICAL AI ARCHITECTURE RULE**: NEVER USE VANILLA CHATGPT (`openai.chat.completions.create()`). Always use OpenAI Assistants API with specialized knowledge bases. Generic ChatGPT responses are unacceptable - all AI operations MUST leverage assistant knowledge bases for quality, consistency, and access to curated documentation. No fallbacks to vanilla chat allowed. ONLY EXCEPTION: Store data parsing for DBA operations (automated data extraction from raw text).
 - **OpenAI Assistant Architecture**: System uses two specialized assistants with distinct purposes:
   - **Aligner** (`asst_H3RlcWO2lTuGnFvHI47elI8d`): Primary AI for E-Hub (email generation, strategy chat, campaign brief synthesis), call transcript analysis (considers Wick Coach's opinion + its own), and knowledge base management (proposals, edits, version control).
-  - **Wick Coach / Sales Assistant** (`asst_E90xejxvuX9yjbzJH03jevm4`): Embedded sales assist module in store details card, provides first-pass call analysis opinions to Aligner for comprehensive evaluation.
-- **Sales Assistant Architecture**: User's OpenAI API key stored securely, knowledge base files uploaded to OpenAI with metadata in PostgreSQL, utilizing the Assistants API with file search.
+  - **Wick Coach** (`asst_E9AxejxvuX9yjbzJH83jevW4`): Embedded sales assist module in store details card, provides first-pass call analysis opinions to Aligner for comprehensive evaluation. Also powers the Sales Assistant page.
+- **Wick Coach Architecture**: User's OpenAI API key stored securely, knowledge base files uploaded to OpenAI with metadata in PostgreSQL, utilizing the Assistants API with file search.
 - **KB System Architecture**: Three tables (`kb_files`, `kb_file_versions`, `kb_change_proposals`), custom diff algorithm, standalone management UI, and API routes.
 - **Database Migrations**: Manual SQL migrations.
 - **Google Sheets Write Operations**: All writes use header-based column mapping for robustness.
@@ -66,7 +66,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **WooCommerce REST API**: For order synchronization and commission calculation.
 - **Replit Auth (OpenID Connect)**: User authentication and role management.
 - **PostgreSQL (Neon)**: Primary database for user data and preferences.
-- **OpenAI API**: For the AI-powered Sales Assistant, AI Insights, and E-Hub email generation.
+- **OpenAI API**: For the AI-powered assistants (Wick Coach and Aligner), AI Insights, and E-Hub email generation.
 - **Gmail API**: For creating email drafts and E-Hub email sending/reply detection.
 - **Google Calendar API**: Per-user OAuth for creating calendar events and webhook management.
 - **ElevenLabs API**: For AI Voice Calling.

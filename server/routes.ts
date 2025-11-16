@@ -3378,7 +3378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!openaiSettings?.apiKey) {
         return res.status(400).json({ 
           error: 'OpenAI API key not configured',
-          message: 'Please configure your OpenAI API key in the Sales Assistant settings first'
+          message: 'Please configure your OpenAI API key in the settings first'
         });
       }
 
@@ -5570,7 +5570,7 @@ ${recommendations || '(none)'}`;
       // Get OpenAI settings (use Sales Assistant's API key)
       const openaiSettings = await storage.getOpenaiSettings();
       if (!openaiSettings?.apiKey) {
-        return res.status(500).json({ error: 'OpenAI API key not configured. Please configure your OpenAI API key in the Sales Assistant settings first.' });
+        return res.status(500).json({ error: 'OpenAI API key not configured. Please configure your OpenAI API key in the settings first.' });
       }
 
       const OpenAI = (await import('openai')).default;
