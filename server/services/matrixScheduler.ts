@@ -3,6 +3,7 @@
 import { storage } from '../storage';
 import { addDays } from 'date-fns';
 import { parseBusinessHours } from './timezoneHours';
+import { formatInTimeZone } from 'date-fns-tz';
 
 interface MatrixSchedulerParams {
   recipientId: string;
@@ -18,12 +19,14 @@ interface MatrixSchedulerParams {
 export async function getNextMatrixSlot(
   params: MatrixSchedulerParams
 ): Promise<Date> {
-  const { stepDelay, lastStepSentAt, userId, recipientBusinessHours } = params;
+  const { stepDelay, lastStepSentAt, userId, recipientBusinessHours, recipientTimezone } = params;
 
   const settings = await storage.getEhubSettings();
   if (!settings) {
     throw new Error('E-Hub settings not found');
   }
+
+  const { clientWindowStartOffset, clientWindowEndHour } = settings;
 
   const userPrefs = await storage.getUserPreferences(userId);
   const adminTimezone = userPrefs?.timezone || 'America/New_York';
@@ -86,6 +89,44 @@ export async function getNextMatrixSlot(
     0,
     0
   ));
+
+  // STEP 10: Recipient delivery window (scaffolding only)
+
+  // Determine recipient's local day-of-week
+  const localDay = parseInt(
+    formatInTimeZone(dayLoopDate, recipientTimezone, 'e'),
+    10
+  );
+
+  // Pull that day's schedule from parsed business hours
+  const daySchedule = parsed.schedule[localDay];
+
+  // Recipient opening time in local timezone
+  let recipientOpenLocal = new Date(
+    formatInTimeZone(
+      dayLoopDate,
+      recipientTimezone,
+      `yyyy-MM-dd'T'${daySchedule ? daySchedule.open : '00:00'}:00`
+    )
+  );
+
+  // Apply client window start offset (hours after opening)
+  recipientOpenLocal = new Date(
+    recipientOpenLocal.getTime() + clientWindowStartOffset * 3600000
+  );
+
+  // Recipient legal end (cutoff) in local timezone
+  const recipientEndLocal = new Date(
+    formatInTimeZone(
+      dayLoopDate,
+      recipientTimezone,
+      `yyyy-MM-dd'T'${clientWindowEndHour.toString().padStart(2, '0')}:00`
+    )
+  );
+
+  // Convert both to UTC
+  const recipientLegalStartUtc = new Date(recipientOpenLocal);
+  const recipientLegalEndUtc = new Date(recipientEndLocal);
 
   return candidate;
 }

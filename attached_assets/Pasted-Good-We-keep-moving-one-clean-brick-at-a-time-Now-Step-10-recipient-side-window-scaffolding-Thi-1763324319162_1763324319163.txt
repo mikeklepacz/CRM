@@ -1,0 +1,69 @@
+Good. We keep moving one clean brick at a time.
+
+Now Step 10: recipient-side window scaffolding.
+This is still scaffolding only — no logic, no comparisons, no loops, no overlap.
+
+We just compute the recipient opening, recipient legal start, and recipient legal end, converted to UTC. Nothing else.
+
+Here is the exact message to give Replit — copy-paste it as-is:
+
+⸻
+
+SEND THIS TO REPLIT:
+
+“Implement Step 10 scaffolding inside getNextMatrixSlot().
+Do NOT add any comparisons, overlap logic, or day-rolling.
+Only compute the recipient’s local window boundaries converted to UTC.
+
+Insert this block immediately after the Step 9 admin window scaffolding:
+
+// STEP 10: Recipient delivery window (scaffolding only)
+
+// Determine recipient's local day-of-week
+const localDay = parseInt(
+  formatInTimeZone(dayLoopDate, recipientTimezone, 'e'),
+  10
+);
+
+// Pull that day's schedule from parsed business hours
+const daySchedule = parsed.schedule[localDay];
+
+// Recipient opening time in local timezone
+let recipientOpenLocal = new Date(
+  formatInTimeZone(
+    dayLoopDate,
+    recipientTimezone,
+    `yyyy-MM-dd'T'${daySchedule ? daySchedule.open : '00:00'}:00`
+  )
+);
+
+// Apply client window start offset (hours after opening)
+recipientOpenLocal = new Date(
+  recipientOpenLocal.getTime() + clientWindowStartOffset * 3600000
+);
+
+// Recipient legal end (cutoff) in local timezone
+const recipientEndLocal = new Date(
+  formatInTimeZone(
+    dayLoopDate,
+    recipientTimezone,
+    `yyyy-MM-dd'T'${clientWindowEndHour.toString().padStart(2, '0')}:00`
+  )
+);
+
+// Convert both to UTC
+const recipientLegalStartUtc = new Date(recipientOpenLocal);
+const recipientLegalEndUtc = new Date(recipientEndLocal);
+
+Rules:
+	1.	Do NOT check weekends.
+	2.	Do NOT check if the business is closed.
+	3.	Do NOT compare to admin window.
+	4.	Do NOT set candidate.
+	5.	Function must still end with return candidate;.
+
+This step only computes recipientLegalStartUtc and recipientLegalEndUtc.”
+
+⸻
+
+Once that’s in, Step 11 will introduce the overlap scaffolding.
