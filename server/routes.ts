@@ -28,6 +28,7 @@ import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
 import { recalculateAllPendingRecipients } from "./services/queueCoordinator";
 import { rescheduleAllPendingSends } from "./services/rescheduleCoordinator";
+import { updateCommissionTrackerStatus } from "./services/commissionTrackerUpdate";
 import {
   insertConversationSchema,
   insertProjectSchema,
@@ -6879,7 +6880,7 @@ IMPORTANT:
   app.post('/api/gmail/create-draft', isAuthenticatedCustom, async (req: any, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { to, subject, body } = req.body;
+      const { to, subject, body, clientLink } = req.body;
 
       if (!to || !subject || !body) {
         return res.status(400).json({ message: "Missing required fields: to, subject, body" });
@@ -6988,6 +6989,21 @@ IMPORTANT:
 
       const draft = await draftResponse.json();
       console.log('📧 [GMAIL] ✅ Draft created successfully. Draft ID:', draft.id, 'Message ID:', draft.message.id);
+
+      // Update Commission Tracker status to "Emailed" if clientLink is provided
+      if (clientLink) {
+        console.log('📧 [GMAIL] Updating Commission Tracker status to "Emailed" for link:', clientLink);
+        const currentUser = await storage.getUser(userId);
+        const agentName = currentUser?.name || 'Unknown';
+        
+        const trackerResult = await updateCommissionTrackerStatus(clientLink, agentName, 'Emailed');
+        
+        if (trackerResult.success) {
+          console.log(`📧 [GMAIL] ✅ Commission Tracker updated: ${trackerResult.message}${trackerResult.created ? ' (new row created)' : ''}`);
+        } else {
+          console.warn(`📧 [GMAIL] ⚠️ Commission Tracker update failed: ${trackerResult.message}`);
+        }
+      }
 
       // Apply labels if user has configured them
       console.log('📧 [GMAIL] Fetching user settings to check for Gmail labels...');
