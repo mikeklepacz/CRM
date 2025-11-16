@@ -93,7 +93,6 @@ export async function scheduleRecipient(params: ScheduleRecipientParams): Promis
 
   // STEP 4: Apply FIFO queue ordering
   if (queueTail && queueTail.scheduledAt) {
-    // Calculate rate limit spacing
     const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
     const adminWindowMinutes = adminWindowHours * 60;
     const minutesBetweenSends = settings.dailyEmailLimit > 0
@@ -103,18 +102,18 @@ export async function scheduleRecipient(params: ScheduleRecipientParams): Promis
     const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
     const afterTail = new Date(queueTail.scheduledAt.getTime() + rateLimitSpacingMs);
     
-    // If queue tail + spacing is later than our current scheduled time, use that instead
     if (afterTail > scheduledAt) {
       scheduledAt = afterTail;
+      
+      // STEP 5: Only apply jitter when queue ordering pushed us forward
+      const minJitterMs = (settings.minDelayMinutes || 0) * 60 * 1000;
+      const maxJitterMs = (settings.maxDelayMinutes || 30) * 60 * 1000;
+      const jitterMs = Math.floor(Math.random() * (maxJitterMs - minJitterMs + 1)) + minJitterMs;
+      
+      scheduledAt = new Date(scheduledAt.getTime() + jitterMs);
     }
   }
-
-  // STEP 5: Apply jitter as final step (ensures unique timing for each enrollment)
-  const minJitterMs = (settings.minDelayMinutes || 0) * 60 * 1000;
-  const maxJitterMs = (settings.maxDelayMinutes || 30) * 60 * 1000;
-  const jitterMs = Math.floor(Math.random() * (maxJitterMs - minJitterMs + 1)) + minJitterMs;
-  
-  scheduledAt = new Date(scheduledAt.getTime() + jitterMs);
+  // If no queue or we're already at earliest slot, return it without jitter
 
   return scheduledAt;
 }

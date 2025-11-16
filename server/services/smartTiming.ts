@@ -137,12 +137,10 @@ export function computeNextSendSlot(options: DualWindowOptions): Date {
   while (daysOffset < maxDays) {
     const candidateUtc = addDays(effectiveBaseline, daysOffset);
 
+    // Only skip actual weekends, don't skip weekdays
     if (skipWeekends) {
       const adminDay = getDayOfWeek(candidateUtc, adminTimezone);
-
-      // HARD WEEKEND BLOCK
       if (adminDay === 0 || adminDay === 6) {
-        // Skip to next weekday
         daysOffset++;
         continue;
       }
