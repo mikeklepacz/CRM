@@ -212,6 +212,9 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
   // Delete confirmation state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  // Color picker state - track which picker is open
+  const [activeColorPicker, setActiveColorPicker] = useState<string | null>(null);
 
   // Fetch statuses
   const { data: statusesData, isLoading } = useQuery<{ statuses: Status[] }>({
@@ -438,7 +441,7 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
     return (
       <div className="space-y-2">
         <Label className="text-xs">{label}</Label>
-        <Popover>
+        <Popover open={activeColorPicker === pickerId} onOpenChange={(open) => setActiveColorPicker(open ? pickerId : null)}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
