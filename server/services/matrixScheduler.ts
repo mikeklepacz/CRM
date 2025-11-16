@@ -35,5 +35,18 @@ export async function getNextMatrixSlot(
     baseline = new Date();
   }
 
-  return baseline;
+  // STEP 4: Get Global Queue Tail (across all users)
+  const queueTail = await storage.getQueueTail();
+
+  // Global minimum starts at baseline
+  let globalMinimum = baseline;
+
+  // If there is a queue tail, enforce FIFO
+  if (queueTail) {
+    const tailTime = new Date(queueTail).getTime();
+    const baseTime = baseline.getTime();
+    globalMinimum = new Date(Math.max(tailTime, baseTime));
+  }
+
+  return globalMinimum;
 }
