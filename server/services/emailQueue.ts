@@ -324,7 +324,7 @@ async function processEmailQueue() {
 
     // GLOBAL SENDING HOURS CHECK: Only run during admin's sending window
     // Get admin's timezone from first sequence creator (assumes single admin)
-    const sequences = await storage.getAllSequences();
+    const sequences = await storage.listSequences();
     if (sequences.length === 0) {
       return; // No sequences to process
     }
