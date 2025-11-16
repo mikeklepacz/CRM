@@ -280,7 +280,7 @@ async function validateFollowUpEmail(recipientLink: string, recipientEmail: stri
 }
 
 export async function startEmailQueueProcessor() {
-  console.log('[EmailQueue] Starting email queue processor (eligibility-based)...');
+  console.log('[EmailQueue] Starting email queue processor (real-time scheduling)...');
   
   // Validate OpenAI API key at startup (REQUIRED - no fallback system)
   try {
@@ -298,14 +298,14 @@ export async function startEmailQueueProcessor() {
     return;
   }
   
-  // Run every 30 seconds (faster polling for responsiveness)
+  // Run every 60 seconds (NEW: slower polling since sends are pre-scheduled)
   setInterval(async () => {
     if (isProcessing) {
       return;
     }
 
     await processEmailQueue();
-  }, 30000);
+  }, 60000);
 
   // Run immediately on startup
   await processEmailQueue();
@@ -322,9 +322,26 @@ async function processEmailQueue() {
 
     const now = new Date();
 
-    // DUMB POLLING: Get sends where scheduledAt <= now() and sentAt IS NULL
-    // Coordinator has already validated windows, so worker just sends
-    const scheduledSends = await storage.getNextScheduledSends(10, now);
+    // GLOBAL SENDING HOURS CHECK: Only run during admin's sending window
+    // Get admin's timezone from first sequence creator (assumes single admin)
+    const sequences = await storage.getAllSequences();
+    if (sequences.length === 0) {
+      return; // No sequences to process
+    }
+
+    const firstSequence = sequences[0];
+    const userPrefs = await storage.getUserPreferences(firstSequence.createdBy);
+    const adminTimezone = userPrefs?.timezone || 'America/New_York';
+    
+    const currentAdminHour = parseInt(formatInTimeZone(now, adminTimezone, 'H'));
+    
+    if (currentAdminHour < settings.sendingHoursStart || currentAdminHour >= settings.sendingHoursEnd) {
+      console.log(`[EmailQueue] ⏸️  Outside sending hours (${currentAdminHour}:00 in ${adminTimezone}). Queue paused until ${settings.sendingHoursStart}:00.`);
+      return;
+    }
+
+    // Get sends where scheduledAt <= now (real-time scheduling - no null scheduledAt)
+    const scheduledSends = await storage.getNextScheduledSends(10);
     
     if (scheduledSends.length === 0) {
       return;
@@ -422,6 +439,36 @@ async function processEmailQueue() {
           }
         }
 
+        // TWO-GATE REPLY DETECTION: Check for replies before sending
+        // For follow-ups only (step 2+), check if recipient has replied
+        if (currentStepNumber > 1 && recipient.threadId) {
+          try {
+            const { checkForReplies } = await import('./gmailReplyDetection');
+            const replyCheck = await checkForReplies(sequence.createdBy, recipient.threadId);
+            
+            if (replyCheck.hasReply) {
+              console.log(`[EmailQueue] ✉️  REPLY DETECTED for ${recipient.email} - Cancelling sequence`);
+              
+              // Mark scheduled send as cancelled
+              await storage.updateScheduledSend(scheduledSend.id, { status: 'cancelled' });
+              
+              // Delete all future scheduled sends
+              await storage.deleteRecipientScheduledSends(recipient.id);
+              
+              // Update recipient status to 'replied'
+              await storage.updateRecipientStatus(recipient.id, {
+                status: 'replied',
+                nextSendAt: null,
+              });
+              
+              continue; // Skip this send
+            }
+          } catch (replyError: any) {
+            console.warn(`[EmailQueue] ⚠️  Reply detection failed for ${recipient.email}: ${replyError.message}`);
+            console.warn(`[EmailQueue] ⚠️  Proceeding with send despite error`);
+          }
+        }
+
         // For follow-ups, fetch first email's subject for threading
         let firstEmailSubject: string | null = null;
         if (currentStepNumber > 1) {
@@ -493,43 +540,74 @@ async function processEmailQueue() {
             messageId: result.rfc822MessageId || null,
           });
 
-          // LAZY REPEAT INSERTION: If repeatLastStep is enabled and we're on the last step
+          // LAZY SCHEDULING: Create next step's scheduled send immediately after current completes
           const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
           const isLastStep = currentStepNumber === stepDelays.length;
+          let nextSendAt: Date | null = null;
+          let recipientStatus: 'in_sequence' | 'completed' = 'completed';
           
+          // Case 1: Repeat last step is enabled and we're on the last step
           if (sequence.repeatLastStep && isLastStep && stepDelays.length > 0) {
+            const { scheduleRecipient } = await import('./emailSchedulingService');
             const lastStepDelay = stepDelays[stepDelays.length - 1];
-            const repeatEligibleAt = addDays(sentAt, lastStepDelay);
             
-            console.log(`[EmailQueue] 🔄 Repeat last step - creating next send for step ${currentStepNumber}, eligible at ${repeatEligibleAt.toISOString()}`);
+            // Schedule the repeat of the last step
+            const scheduledAt = await scheduleRecipient({
+              recipientId: recipient.id,
+              sequenceId: sequence.id,
+              stepNumber: currentStepNumber, // Repeat same step
+              stepDelay: lastStepDelay,
+              lastStepSentAt: sentAt,
+              recipientTimezone: recipient.timezone,
+              recipientBusinessHours: recipient.businessHours,
+              userId: sequence.createdBy,
+            });
             
-            // Insert new scheduled send (coordinator will assign scheduledAt later)
+            console.log(`[EmailQueue] 🔄 Repeat last step - creating next send for step ${currentStepNumber} at ${scheduledAt.toISOString()}`);
+            
+            // Insert new scheduled send with calculated scheduledAt
             await storage.insertScheduledSends([{
               recipientId: recipient.id,
               sequenceId: sequence.id,
               stepNumber: currentStepNumber,
-              eligibleAt: repeatEligibleAt,
-              scheduledAt: null,
+              scheduledAt,
               status: 'pending',
             }]);
+            
+            nextSendAt = scheduledAt;
+            recipientStatus = 'in_sequence';
           }
-
-          // Determine recipient status based on remaining scheduled sends
-          const allRecipientSends = await storage.getScheduledSendsByRecipient(recipient.id);
-          const upcomingScheduledSends = allRecipientSends
-            .filter(s => s.status === 'pending' && !s.sentAt)
-            .sort((a, b) => {
-              const aTime = a.eligibleAt?.getTime() || 0;
-              const bTime = b.eligibleAt?.getTime() || 0;
-              return aTime - bTime;
+          // Case 2: There are more steps in the sequence
+          else if (!isLastStep && currentStepNumber < stepDelays.length) {
+            const { scheduleRecipient } = await import('./emailSchedulingService');
+            const nextStepNumber = currentStepNumber + 1;
+            const nextStepDelay = stepDelays[nextStepNumber - 1];
+            
+            // Schedule the next step
+            const scheduledAt = await scheduleRecipient({
+              recipientId: recipient.id,
+              sequenceId: sequence.id,
+              stepNumber: nextStepNumber,
+              stepDelay: nextStepDelay,
+              lastStepSentAt: sentAt,
+              recipientTimezone: recipient.timezone,
+              recipientBusinessHours: recipient.businessHours,
+              userId: sequence.createdBy,
             });
-          const recipientStatus = upcomingScheduledSends.length > 0 ? 'in_sequence' : 'completed';
-
-          // Compute nextSendAt: use scheduledAt if assigned, otherwise fall back to eligibleAt
-          let nextSendAt: Date | null = null;
-          if (upcomingScheduledSends.length > 0) {
-            const nextSend = upcomingScheduledSends[0];
-            nextSendAt = nextSend.scheduledAt ?? nextSend.eligibleAt;
+            
+            console.log(`[EmailQueue] 📅 Lazy scheduling - creating step ${nextStepNumber} at ${scheduledAt.toISOString()}`);
+            
+            // Insert next step's scheduled send with calculated scheduledAt
+            await storage.insertScheduledSends([{
+              recipientId: recipient.id,
+              sequenceId: sequence.id,
+              stepNumber: nextStepNumber,
+              scheduledAt,
+              status: 'pending',
+            }]);
+            
+            nextSendAt = scheduledAt;
+            recipientStatus = 'in_sequence';
           }
 
           // Update recipient status
