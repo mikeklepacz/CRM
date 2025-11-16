@@ -74,6 +74,19 @@ export async function getNextMatrixSlot(
 
   // STEP 14-Real: Full day-rolling loop
   for (let i = 0; i < 14; i++) {
+    // Weekend skipping check
+    const adminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
+    if (skipWeekends && (adminDay === 6 || adminDay === 7)) {
+      candidate = new Date(Date.UTC(
+        dayLoopDate.getUTCFullYear(),
+        dayLoopDate.getUTCMonth(),
+        dayLoopDate.getUTCDate(),
+        settings.sendingHoursStart, 0, 0
+      ));
+      dayLoopDate = addDays(candidate, 1);
+      continue;
+    }
+
     // STEP 9: Admin window boundaries for current day
     const adminStartUtc = new Date(Date.UTC(
       dayLoopDate.getUTCFullYear(),
