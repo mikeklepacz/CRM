@@ -20693,6 +20693,7 @@ ${conversationContext}`;
             link: rawLink || '',
             salesSummary: rawSalesSummary || '',
             businessHours,
+            state: rawState || null,
             timezone,
             status: 'pending',
           });
@@ -20705,6 +20706,7 @@ ${conversationContext}`;
             link: rawLink || '',
             salesSummary: rawSalesSummary || '',
             businessHours,
+            state: rawState || null,
             timezone,
             status: 'pending',
           });
@@ -20855,6 +20857,7 @@ ${conversationContext}`;
           link: contact.link || '',
           salesSummary: contact.salesSummary || '',
           businessHours: contact.hours || '',
+          state: contact.state || null,
           timezone,
           status: 'pending' as const,
         });

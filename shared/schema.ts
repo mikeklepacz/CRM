@@ -1332,6 +1332,7 @@ export const sequenceRecipients = pgTable("sequence_recipients", {
   link: varchar("link", { length: 500 }), // Store link from Google Sheets for Commission Tracker sync
   salesSummary: text("sales_summary"), // From Google Sheets Column P
   businessHours: text("business_hours"), // From Google Sheets Hours column for timezone detection
+  state: varchar("state", { length: 100 }), // State from Google Sheets for timezone detection
   timezone: varchar("timezone", { length: 100 }), // Detected timezone (e.g., 'America/New_York')
   clientId: varchar("client_id").references(() => clients.id), // Link to CRM client record
   status: varchar("status", { length: 50 }).notNull().default('pending'), // 'pending', 'in_sequence', 'replied', 'bounced', 'completed'
