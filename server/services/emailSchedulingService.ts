@@ -1,3 +1,4 @@
+
 import { computeNextSendSlot } from './smartTiming';
 import { addDays } from 'date-fns';
 import { storage } from '../storage';
@@ -29,10 +30,9 @@ export interface ScheduleRecipientParams {
  * Flow:
  * 1. Calculate baseline time (now + stepDelay, or lastStepSentAt + stepDelay)
  * 2. Get queue tail (latest scheduledAt for this user)
- * 3. Apply FIFO: ensure we're after queue tail
- * 4. Apply rate limiting spacing
- * 5. Apply jitter
- * 6. Use computeOptimalSendTime for final time (respects business hours, weekends, admin window)
+ * 3. Apply weekend skipping and sending-window alignment via computeNextSendSlot
+ * 4. Apply FIFO queue ordering (ensure after tail + rate limit spacing)
+ * 5. Apply jitter as final step (so each enrollment gets unique randomization)
  * 
  * @returns scheduledAt as Date (never null)
  */
@@ -77,34 +77,9 @@ export async function scheduleRecipient(params: ScheduleRecipientParams): Promis
   // STEP 2: Get queue tail for this user (FIFO enforcement)
   const queueTail = await storage.getLastScheduledSendForUser(userId);
 
-  // STEP 3: Calculate rate limit spacing
-  const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
-  const adminWindowMinutes = adminWindowHours * 60;
-  const minutesBetweenSends = settings.dailyEmailLimit > 0
-    ? adminWindowMinutes / settings.dailyEmailLimit
-    : 1;
-
-  // STEP 4: Generate jitter (seconds precision for human-like timing)
-  const minJitterMs = (settings.minDelayMinutes || 0) * 60 * 1000;
-  const maxJitterMs = (settings.maxDelayMinutes || 30) * 60 * 1000;
-  const jitterMs = Math.floor(Math.random() * (maxJitterMs - minJitterMs + 1)) + minJitterMs;
-
-  // STEP 5: Apply FIFO queue ordering
-  let minimumTime = new Date(baselineTime.getTime() + jitterMs);
-
-  if (queueTail && queueTail.scheduledAt) {
-    // Queue exists - ensure we're after the tail
-    const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
-    const afterTail = new Date(queueTail.scheduledAt.getTime() + rateLimitSpacingMs);
-    
-    if (afterTail > minimumTime) {
-      minimumTime = afterTail;
-    }
-  }
-
-  // STEP 6: Apply business hours, weekends, admin window using smart timing
+  // STEP 3: Apply business hours, weekends, admin window using smart timing
   let scheduledAt = computeNextSendSlot({
-    baselineTime: minimumTime,
+    baselineTime,
     adminTimezone,
     adminStartHour: settings.sendingHoursStart,
     adminEndHour: settings.sendingHoursEnd,
@@ -113,13 +88,33 @@ export async function scheduleRecipient(params: ScheduleRecipientParams): Promis
     clientWindowStartOffset: settings.clientWindowStartOffset,
     clientWindowEndHour: settings.clientWindowEndHour,
     skipWeekends: settings.skipWeekends,
-    minimumTime, // Enforce queue order
+    minimumTime: baselineTime,
   });
 
-  // CRITICAL: If business hours adjustment moved time backward, re-add jitter to maintain spacing
-  if (scheduledAt < minimumTime) {
-    scheduledAt = new Date(scheduledAt.getTime() + jitterMs);
+  // STEP 4: Apply FIFO queue ordering
+  if (queueTail && queueTail.scheduledAt) {
+    // Calculate rate limit spacing
+    const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
+    const adminWindowMinutes = adminWindowHours * 60;
+    const minutesBetweenSends = settings.dailyEmailLimit > 0
+      ? adminWindowMinutes / settings.dailyEmailLimit
+      : 1;
+    
+    const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
+    const afterTail = new Date(queueTail.scheduledAt.getTime() + rateLimitSpacingMs);
+    
+    // If queue tail + spacing is later than our current scheduled time, use that instead
+    if (afterTail > scheduledAt) {
+      scheduledAt = afterTail;
+    }
   }
+
+  // STEP 5: Apply jitter as final step (ensures unique timing for each enrollment)
+  const minJitterMs = (settings.minDelayMinutes || 0) * 60 * 1000;
+  const maxJitterMs = (settings.maxDelayMinutes || 30) * 60 * 1000;
+  const jitterMs = Math.floor(Math.random() * (maxJitterMs - minJitterMs + 1)) + minJitterMs;
+  
+  scheduledAt = new Date(scheduledAt.getTime() + jitterMs);
 
   return scheduledAt;
 }
