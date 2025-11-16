@@ -20740,6 +20740,7 @@ ${conversationContext}`;
           lastStepSentAt: null,
           recipientTimezone: recipient.timezone,
           recipientBusinessHours: recipient.businessHours,
+          recipientState: recipient.state || null,
           userId: sequence.createdBy,
         });
 
@@ -20763,6 +20764,7 @@ ${conversationContext}`;
           lastStepSentAt: null,
           recipientTimezone: recipient.timezone,
           recipientBusinessHours: recipient.businessHours,
+          recipientState: recipient.state || null,
           userId: sequence.createdBy,
         });
 
@@ -20932,6 +20934,7 @@ ${conversationContext}`;
           lastStepSentAt: null,
           recipientTimezone: recipient.timezone,
           recipientBusinessHours: recipient.businessHours,
+          recipientState: recipient.state || null,
           userId: sequence.createdBy,
         });
 
@@ -20955,6 +20958,7 @@ ${conversationContext}`;
           lastStepSentAt: null,
           recipientTimezone: recipient.timezone,
           recipientBusinessHours: recipient.businessHours,
+          recipientState: recipient.state || null,
           userId: sequence.createdBy,
         });
 

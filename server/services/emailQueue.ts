@@ -560,6 +560,7 @@ async function processEmailQueue() {
               lastStepSentAt: sentAt,
               recipientTimezone: recipient.timezone,
               recipientBusinessHours: recipient.businessHours,
+              recipientState: recipient.state || null,
               userId: sequence.createdBy,
             });
             
@@ -593,6 +594,7 @@ async function processEmailQueue() {
               lastStepSentAt: sentAt,
               recipientTimezone: recipient.timezone,
               recipientBusinessHours: recipient.businessHours,
+              recipientState: recipient.state || null,
               userId: sequence.createdBy,
             });
             
