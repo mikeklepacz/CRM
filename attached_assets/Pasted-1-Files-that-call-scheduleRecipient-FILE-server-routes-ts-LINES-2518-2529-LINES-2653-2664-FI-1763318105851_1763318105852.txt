@@ -1,0 +1,138 @@
+1. Files that call scheduleRecipient()
+
+FILE: server/routes.ts
+LINES: 2518–2529
+LINES: 2653–2664
+
+FILE: server/services/emailQueue.ts
+LINES: 420–432
+LINES: 438–450
+
+⸻
+
+2. Files that write into sequence_scheduled_sends
+
+FILE: server/routes.ts
+LINES: 2543–2552
+LINES: 2678–2687
+
+FILE: server/services/emailQueue.ts
+LINES: 433–442
+LINES: 451–460
+
+FILE: server/services/rescheduleCoordinator.ts
+LINES: 201–204
+
+⸻
+
+3. Files that read sequence_scheduled_sends (queue execution)
+
+FILE: server/services/emailQueue.ts
+LINES: 259–261
+
+FILE: server/storage.ts
+(querying scheduled sends)
+
+⸻
+
+4. Files that update recipient.nextSendAt
+
+FILE: server/services/emailQueue.ts
+LINES: 468–474
+LINES: 353–357
+LINES: 378–382
+LINES: 400–404
+
+FILE: server/storage.ts
+(search: sendRecipientNow)
+(search: resumeRecipient)
+(search: skipCurrentStep)
+
+⸻
+
+5. Files enforcing admin sending window
+
+FILE: server/services/emailQueue.ts
+LINES: 245–254
+
+FILE: server/services/smartTiming.ts
+LINES: 108–109
+
+FILE: server/services/emailSchedulingService.ts
+LINES: 61–66
+
+FILE: server/services/rescheduleCoordinator.ts
+LINES: 168–173
+
+FILE: server/storage.ts
+(search: skipCurrentStep)
+
+⸻
+
+6. Files enforcing recipient business hours
+
+FILE: server/services/smartTiming.ts
+LINES: 98–146
+LINES: 148–162
+
+FILE: server/services/emailSchedulingService.ts
+LINES: 61–70
+
+FILE: server/services/rescheduleCoordinator.ts
+LINES: 168–177
+
+FILE: server/storage.ts
+(search: skipCurrentStep)
+
+⸻
+
+7. Files applying jitter
+
+FILE: server/services/emailSchedulingService.ts
+LINES: 86–92
+
+FILE: server/services/rescheduleCoordinator.ts
+LINES: 191–197
+
+⸻
+
+8. Files performing queue tail / FIFO logic
+
+FILE: server/services/emailSchedulingService.ts
+LINES: 73–74
+LINES: 76–92
+
+FILE: server/services/rescheduleCoordinator.ts
+LINES: 177–197
+
+FILE: server/storage.ts
+(search: resumeRecipient)
+
+⸻
+
+9. Files updating recipient.status during scheduling
+
+FILE: server/services/emailQueue.ts
+LINES: 353–357
+LINES: 378–382
+LINES: 400–404
+LINES: 468–474
+LINES: 485–489
+
+FILE: server/routes.ts
+LINES: 2536–2542
+LINES: 2671–2677
+
+FILE: server/storage.ts
+(search: resumeRecipient)
+
+⸻
+
+10. Files handling follow-up step scheduling
+
+FILE: server/services/emailQueue.ts
+LINES: 413–432
+LINES: 435–460
+
+FILE: server/storage.ts
+(search: skipCurrentStep)

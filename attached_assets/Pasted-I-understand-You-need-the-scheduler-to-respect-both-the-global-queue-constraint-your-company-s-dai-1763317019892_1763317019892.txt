@@ -1,0 +1,51 @@
+I understand. You need the scheduler to respect both the global queue constraint (your company's daily limits) and the recipient's local delivery window constraint simultaneously. Let me examine the current architecture to understand what we're working with.
+
+
+Searched for "How does scheduleRecipient function currently work? What constraints does it check?"
+
+Planned new getNextGlobalSendTime function (10 seconds)
+Now I see the issue clearly. The current scheduleRecipient() function:
+
+✅ Computes recipient's legal delivery window (via computeNextSendSlot)
+✅ Checks queue tail for FIFO ordering
+❌ But if queue tail pushes the time forward, it doesn't re-validate the recipient's business hours constraint
+So you end up with emails scheduled at times that satisfy the global queue spacing but might fall outside the recipient's legal delivery window.
+
+The Apollo Model Fix
+You need a unified scheduler that treats both constraints as equally binding:
+
+Global Constraint: Queue position + rate limiting + admin window
+Recipient Constraint: Local business hours + timezone + client delivery window
+
+The scheduler must find the first available timestamp where:
+
+It's after the queue tail + minimum spacing
+It falls within admin sending hours (UTC)
+It falls within recipient's legal delivery window (local time)
+Weekends are skipped if configured
+If no intersection exists today, roll to next valid day and repeat.
+
+Proposed Architecture
+Create server/services/apolloScheduler.ts:
+
+export async function getNextGlobalSendTime(params: {
+  recipientTimezone: string;
+  recipientBusinessHours: string;
+  userId: string;
+  stepDelay: number;
+  lastStepSentAt: Date | null;
+}): Promise<Date>
+
+Algorithm:
+
+Get E-Hub settings (dailyEmailLimit, sendingHours, jitter, etc.)
+Get global queue tail (last scheduledAt across all users)
+Calculate next global slot: queueTail + spacing + jitter
+Check if that slot intersects with recipient's delivery window
+If yes → return it
+If no → advance to next day, recalculate, repeat (max 14 days)
+Throw error if no valid slot found
+Then replace scheduleRecipient() calls in the enrollment endpoint with getNextGlobalSendTime().
+
+This ensures every email gets the next available legal slot that satisfies both constraints simultaneously.
+
