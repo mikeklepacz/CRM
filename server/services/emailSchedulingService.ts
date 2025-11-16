@@ -104,32 +104,8 @@ export async function scheduleRecipient(params: ScheduleRecipientParams): Promis
     
     if (afterTail > scheduledAt) {
       scheduledAt = afterTail;
-      
-      // STEP 5: Only apply jitter when queue ordering pushed us forward
-      const minJitterMs = (settings.minDelayMinutes || 0) * 60 * 1000;
-      const maxJitterMs = (settings.maxDelayMinutes || 30) * 60 * 1000;
-      const jitterMs = Math.floor(Math.random() * (maxJitterMs - minJitterMs + 1)) + minJitterMs;
-      
-      scheduledAt = new Date(scheduledAt.getTime() + jitterMs);
     }
   }
-  // If no queue or we're already at earliest slot, return it without jitter
 
   return scheduledAt;
-}
-
-/**
- * Helper: Generate random jitter with seconds precision
- * Ensures human-like timing variability
- */
-function randomJitter(minMinutes: number, maxMinutes: number): number {
-  const minSeconds = minMinutes * 60;
-  const maxSeconds = maxMinutes * 60;
-  
-  if (minSeconds === 0 && maxSeconds === 0) {
-    return 0;
-  }
-  
-  const totalSeconds = Math.floor(Math.random() * (maxSeconds - minSeconds + 1)) + minSeconds;
-  return totalSeconds * 1000; // Return milliseconds
 }
