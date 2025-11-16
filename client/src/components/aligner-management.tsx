@@ -15,13 +15,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 export function AlignerManagement() {
   const { toast } = useToast();
-  
+
   // File upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [fileContent, setFileContent] = useState("");
   const [fileName, setFileName] = useState("");
   const [fileCategory, setFileCategory] = useState("call-data");
-  
+
   // Fetch Aligner assistant
   const { data: alignerData, isLoading: alignerLoading } = useQuery({
     queryKey: ['/api/aligner'],
@@ -262,8 +262,8 @@ export function AlignerManagement() {
               The Aligner uses these instructions when analyzing call performance and generating KB improvement proposals
             </p>
           </div>
-          <Button 
-            onClick={handleSaveInstructions} 
+          <Button
+            onClick={handleSaveInstructions}
             disabled={updateInstructionsMutation.isPending}
             data-testid="button-save-aligner-instructions"
           >
@@ -316,8 +316,8 @@ export function AlignerManagement() {
               This template is used for each analysis job. Variables like {'{{transcriptContext}}'} and {'{{kbContext}}'} are replaced with actual data at runtime.
             </p>
           </div>
-          <Button 
-            onClick={handleSaveTaskPrompt} 
+          <Button
+            onClick={handleSaveTaskPrompt}
             disabled={updateTaskPromptMutation.isPending}
             data-testid="button-save-task-prompt"
           >
@@ -350,7 +350,7 @@ export function AlignerManagement() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Button 
+              <Button
                 onClick={() => syncKbMutation.mutate()}
                 disabled={!settings?.hasApiKey || !aligner?.assistantId || syncKbMutation.isPending}
                 variant="outline"
@@ -368,7 +368,7 @@ export function AlignerManagement() {
                   </>
                 )}
               </Button>
-              <Button 
+              <Button
                 onClick={() => setUploadDialogOpen(true)}
                 disabled={!settings?.hasApiKey}
                 data-testid="button-upload-aligner-file"
@@ -531,6 +531,36 @@ export function AlignerManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Placeholder for Sales Assistant details - if needed elsewhere in the component */}
+      {/* The following div is a placeholder and should be removed or adapted if not used */}
+      {/* The original code snippet did not include fetch for salesAssistant, so this might be unused */}
+      {/* If salesAssistant is intended to be fetched, add a useQuery hook for it */}
+      {/* Example: const { data: salesAssistantData } = useQuery({ queryKey: ['/api/sales-assistant'] }); */}
+      {/* const salesAssistant = salesAssistantData?.assistant; */}
+
+      {/* The following block was taken from the changes and needs to be placed in the correct context, potentially near the top if it's meant for overall status display */}
+      {/* Since it's not related to the Aligner specific logic and the AlignerManagement component's primary focus, */}
+      {/* it's commented out here. If it's meant to be part of this component, its placement needs careful consideration. */}
+      {/*
+      <div className="space-y-2">
+        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+          <div>
+            <h4 className="font-semibold">Sales Assistant</h4>
+            <p className="text-sm text-muted-foreground">{salesAssistant?.assistantId || 'Not configured'}</p>
+          </div>
+          <Badge variant="secondary">Used in Store Details</Badge>
+        </div>
+
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div>
+            <h4 className="font-semibold">Aligner</h4>
+            <p className="text-sm text-muted-foreground">{alignerAssistant?.assistantId || 'Not configured'}</p>
+          </div>
+          <Badge variant="secondary">KB Analysis System</Badge>
+        </div>
+      </div>
+      */}
     </div>
   );
 }
