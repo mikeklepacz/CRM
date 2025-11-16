@@ -138,5 +138,24 @@ export async function getNextMatrixSlot(
     Math.min(adminEndUtc.getTime(), recipientLegalEndUtc.getTime())
   );
 
+  // STEP 12: Overlap validation scaffolding (no logic yet)
+
+  // Flags for future logic
+  const hasOverlap = overlapStart < overlapEnd;
+  const candidateInsideOverlap =
+    candidate >= overlapStart && candidate < overlapEnd;
+  const candidateBeforeOverlap = candidate < overlapStart;
+
+  // Placeholder branches (empty for now)
+  if (!hasOverlap) {
+    // no-op for now
+  } else if (candidateInsideOverlap) {
+    // no-op for now
+  } else if (candidateBeforeOverlap) {
+    // no-op for now
+  } else {
+    // candidate after overlap end — no-op for now
+  }
+
   return candidate;
 }
