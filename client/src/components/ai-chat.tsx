@@ -237,7 +237,7 @@ export function AIChat({ className }: AIChatProps) {
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           <Bot className="h-5 w-5" />
-          <h3 className="font-semibold">Sales Assistant</h3>
+          <h3 className="font-semibold">Wick Coach</h3>
         </div>
         {messages.length > 0 && (
           <Button
@@ -262,7 +262,7 @@ export function AIChat({ className }: AIChatProps) {
           {messages.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="font-medium mb-2">Welcome to your Sales Assistant!</p>
+              <p className="font-medium mb-2">Welcome to your Wick Coach!</p>
               <p className="text-sm">Ask me anything about sales scripts, objection handling, or product information.</p>
             </div>
           ) : (

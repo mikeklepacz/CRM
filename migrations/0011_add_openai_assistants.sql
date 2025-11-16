@@ -38,8 +38,8 @@ CREATE INDEX IF NOT EXISTS idx_assistant_files_assistant ON openai_assistant_fil
 INSERT INTO openai_assistants (name, slug, description, instructions, model)
 VALUES 
   (
-    'Sales Assistant',
-    'sales-assistant',
+    'Wick Coach',
+    'wick-coach',
     'AI assistant for helping sales agents with conversations, scripts, and objection handling',
     'You are a helpful sales assistant for a hemp wick sales team. You help agents with sales scripts, handling objections, and providing product information. Be concise, professional, and focused on helping close deals.',
     'gpt-4o'

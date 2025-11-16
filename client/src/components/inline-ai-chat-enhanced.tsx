@@ -1445,7 +1445,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       {sidebarOpen && (
         <div className="w-64 border-r flex flex-col min-h-0 h-full">
           <div className="p-3 border-b flex items-center justify-between flex-shrink-0">
-            <h3 className="font-semibold text-sm">Sales Assistant</h3>
+            <h3 className="font-semibold text-sm">Wick Coach</h3>
             <Button
               variant="ghost"
               size="icon"
