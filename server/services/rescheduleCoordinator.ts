@@ -246,13 +246,6 @@ export async function rescheduleAllPendingEmails(): Promise<RescheduleResult> {
           
           if (afterTail > scheduledAt) {
             scheduledAt = afterTail;
-            
-            // Apply jitter ONLY when queue pushed us forward
-            const minJitterMs = (settings.minDelayMinutes || 0) * 60 * 1000;
-            const maxJitterMs = (settings.maxDelayMinutes || 30) * 60 * 1000;
-            const jitterMs = Math.floor(Math.random() * (maxJitterMs - minJitterMs + 1)) + minJitterMs;
-            
-            scheduledAt = new Date(scheduledAt.getTime() + jitterMs);
           }
         }
         
