@@ -1533,6 +1533,9 @@ export default function EHub() {
       queryClient.invalidateQueries({ queryKey: ['/api/test-email/history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/all-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/paused-recipients'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/scheduled-sends'] });
       setNukeDialogOpen(false);
     },
     onError: (error: any) => {
