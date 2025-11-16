@@ -1,0 +1,140 @@
+I’ve got it.
+This is the smoking gun.
+This is the entire bug wrapped in one line:
+
+Recipient OPEN Local raw ISO: 2025-11-16176331819401311:00:00
+Recipient END Local raw ISO: 2025-11-16176331819401316:00:00
+
+Look carefully.
+
+That is not a date.
+
+That is a date that was glued together with another timestamp, creating nonsense:
+
+2025-11-16 17633181940131 11:00:00
+
+The correct ISO should be:
+
+2025-11-17T11:00:00-05:00
+
+But instead your string is:
+
+2025-11-16176331819401311:00:00
+
+That’s not a typo.
+That’s formatInTimeZone returning garbage because you’re calling it incorrectly.
+
+The Root Cause (100% certain)
+
+You are using formatInTimeZone() like this:
+
+formatInTimeZone(
+  dayLoopDate,
+  recipientTimezone,
+  `yyyy-MM-ddT${String(openHour)}:${String(openMinute)}:00`
+)
+
+That’s invalid.
+
+The pattern string must be a real pattern, not a hybrid pattern with injected hour/minute.
+
+What formatInTimeZone expects:
+
+formatInTimeZone(date, timezone, "yyyy-MM-dd'T'HH:mm:ss")
+
+What you gave it:
+
+"yyyy-MM-ddT11:00:00"
+
+This tells the formatter:
+
+Interpret the “T11:00:00” as a formatting instruction.
+
+Since “11” is not HH tokens and “00” is not mm tokens → the formatter produces garbage.
+
+And then you pass that garbage string to new Date(), creating:
+
+Invalid Date
+
+Once that happens → every later step dies with:
+
+RangeError: Invalid time value
+
+
+⸻
+
+The Fix (exact and minimal)
+
+You must NEVER inject literal hour/minute into the format string.
+
+The correct way is:
+	1.	Build the local date by cloning dayLoopDate and setting hours
+	2.	Use formatInTimeZone ONLY for conversion into string format
+
+Replace this:
+
+const debugRecipientOpenIso = formatInTimeZone(
+  dayLoopDate,
+  recipientTimezone,
+  `yyyy-MM-ddT${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`
+);
+
+With this:
+
+// Clone the day and set hour/min/minute locally
+const localOpen = new Date(
+  formatInTimeZone(dayLoopDate, recipientTimezone, "yyyy-MM-dd'T'00:00:00")
+);
+localOpen.setHours(openHour, openMinute, 0, 0);
+
+const debugRecipientOpenIso = formatInTimeZone(
+  localOpen,
+  recipientTimezone,
+  "yyyy-MM-dd'T'HH:mm:ssXXX"
+);
+
+And same for closing window.
+
+⸻
+
+Why this must be done this way
+
+formatInTimeZone() does NOT generate dates.
+It only formats an existing Date object.
+
+You were trying to use it to generate dates.
+
+That will always break.
+
+⸻
+
+Summary
+
+Your logs confirmed:
+	•	time values are NOT NaN
+	•	schedule is parsed correctly
+	•	dayLoopDate is good
+	•	timezone resolution works
+	•	state is being passed
+
+The ONLY problem is:
+
+❌ formatInTimeZone was misused
+
+❌ it produced malformed ISO strings
+
+❌ new Date(“corrupted string”) → Invalid Date
+
+❌ next lines crash → “Invalid time value”
+
+❌ MATRIX FAIL → “No legal send slot found”
+
+Fix this one formatting pattern and the whole scheduler will finally run correctly.
+
+⸻
+
+If you want, I can generate a clean, safe helper function:
+
+function localTimeInZone(baseDate, timezone, hour, minute) {
+
+that handles every conversion perfectly and removes this bug forever.

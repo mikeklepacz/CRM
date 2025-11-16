@@ -195,28 +195,24 @@ export async function getNextMatrixSlot(
     const closeHour = Math.floor(closeMin / 60);
     const closeMinute = closeMin % 60;
 
-    const debugRecipientOpenIso = formatInTimeZone(
-      dayLoopDate,
-      recipientTimezone,
-      `yyyy-MM-ddT${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`
+    // Build local date at midnight in recipient TZ, then set hours/minutes
+    const localOpenBase = new Date(
+      formatInTimeZone(dayLoopDate, recipientTimezone, "yyyy-MM-dd'T'00:00:00")
     );
-    console.log("Recipient OPEN Local raw ISO:", debugRecipientOpenIso);
+    localOpenBase.setHours(openHour, openMinute, 0, 0);
 
-    let recipientOpenLocal = new Date(debugRecipientOpenIso);
-
-    // apply start offset
-    recipientOpenLocal = new Date(
-      recipientOpenLocal.getTime() + clientWindowStartOffset * 3600000
+    // Apply start offset
+    let recipientOpenLocal = new Date(
+      localOpenBase.getTime() + clientWindowStartOffset * 3600000
     );
 
-    const debugRecipientEndIso = formatInTimeZone(
-      dayLoopDate,
-      recipientTimezone,
-      `yyyy-MM-ddT${String(clientWindowEndHour).padStart(2,'0')}:00:00`
+    // Build local end date at midnight, then set closing hour
+    const localEndBase = new Date(
+      formatInTimeZone(dayLoopDate, recipientTimezone, "yyyy-MM-dd'T'00:00:00")
     );
-    console.log("Recipient END Local raw ISO:", debugRecipientEndIso);
+    localEndBase.setHours(clientWindowEndHour, 0, 0, 0);
 
-    const recipientEndLocal = new Date(debugRecipientEndIso);
+    const recipientEndLocal = new Date(localEndBase);
 
     const recipientLegalStartUtc = new Date(recipientOpenLocal);
     const recipientLegalEndUtc = new Date(recipientEndLocal);
