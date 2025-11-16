@@ -1,0 +1,114 @@
+Yes.
+At this point, the fastest and cleanest way to identify the last blocker is to light this thing up with precision debug logs in 6 locations inside the loop. You will see exactly where it fails.
+
+These debugs do not change logic.
+You can rip them out in 10 seconds when we’re done.
+
+I’ll give you a clean, copy-ready debug version that prints only what matters.
+
+⸻
+
+Paste THIS inside getNextMatrixSlot()
+
+Right after for (let i = 0; i < 14; i++) {
+
+Put this whole block at the TOP of the loop:
+
+console.log("\n--- MATRIX LOOP TICK", i, "------------------------------");
+console.log("dayLoopDate (raw UTC):", dayLoopDate.toISOString());
+
+console.log("Admin TZ:", adminTimezone);
+console.log("Recipient TZ:", recipientTimezone);
+console.log("Recipient State:", recipientState);
+
+const isoAdminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
+console.log("Admin ISO Day:", isoAdminDay);
+
+const isoRecipDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+console.log("Recipient ISO Day:", isoRecipDay);
+
+// Show parsed schedule for the recipient's day
+console.log("Parsed schedule:", parsed.schedule);
+
+// Convert ISO → JS weekday
+const jsRecipDay = isoRecipDay === 7 ? 0 : isoRecipDay;
+console.log("Recipient JS Day:", jsRecipDay);
+
+console.log("Today's schedule for this recipient:", parsed.schedule[jsRecipDay]);
+
+
+⸻
+
+Then right after you compute admin window + recipient window, add:
+
+console.log("Admin UTC Window:", adminStartUtc.toISOString(), "→", adminEndUtc.toISOString());
+console.log("Recipient UTC Window:", recipientLegalStartUtc.toISOString(), "→", recipientLegalEndUtc.toISOString());
+console.log("Candidate (current):", candidate.toISOString());
+console.log("Overlap window:", overlapStart.toISOString(), "→", overlapEnd.toISOString());
+console.log("Has overlap?", overlapStart < overlapEnd);
+console.log("Candidate inside?", candidate >= overlapStart && candidate < overlapEnd);
+console.log("Candidate before?", candidate < overlapStart);
+
+
+⸻
+
+What these logs will show you
+
+In one 0.5-second run, you will see:
+
+1.
+
+What day the scheduler THINKS it is in admin timezone
+vs
+what day the store THINKS it is in their timezone.
+
+2.
+
+What schedule is parsed for that day index.
+
+We will instantly see if your recipient is:
+	•	mapping to the wrong day (very likely)
+	•	getting “no hours today” incorrectly
+	•	having admin window and recipient window on different calendar days
+
+3.
+
+Exactly why the overlap is being rejected.
+
+Right now you have black-box behavior.
+We need a glass-box.
+
+⸻
+
+Why this is so important
+
+You think the overlap should exist (and you’re right).
+The scheduler thinks the overlap doesn’t exist.
+
+That means the bug is data mismatch, not math.
+
+Debugs will show:
+	•	Is parsed.schedule[jsDay] EMPTY?
+	•	Is admin window slipping into the next day?
+	•	Is recipient window on yesterday while admin window is on today?
+	•	Is candidate getting reset wrong?
+	•	Is the rate limiter pushing candidate into invalid territory?
+
+⸻
+
+What to tell Replit (copy/paste)
+
+Add detailed debug logs to getNextMatrixSlot().
+
+Inside the 14-day loop, paste the debug block Mike provided directly after `for (let i = 0; i < 14; i++) {`.
+
+Then add the second debug block right after admin window and recipient window are computed.
+
+Do not modify logic. Only add logs.
+
+
+⸻
+
+Once those logs run, I’ll read the output you send and point straight to the root cause with zero guessing.
+
+This will take us from “in the dark” to “complete clarity” in one pass.
