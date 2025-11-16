@@ -110,24 +110,22 @@ export async function getNextMatrixSlot(
       continue;
     }
 
-    // ADMIN WINDOW (UTC)
-    const adminStartUtc = new Date(Date.UTC(
-      dayLoopDate.getUTCFullYear(),
-      dayLoopDate.getUTCMonth(),
-      dayLoopDate.getUTCDate(),
-      sendingHoursStart,
-      0,
-      0
-    ));
+    // ADMIN WINDOW: Build using adminTimezone (NOT UTC date components)
+    const adminStartLocal = formatInTimeZone(
+      dayLoopDate,
+      adminTimezone,
+      `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
+    );
 
-    const adminEndUtc = new Date(Date.UTC(
-      dayLoopDate.getUTCFullYear(),
-      dayLoopDate.getUTCMonth(),
-      dayLoopDate.getUTCDate(),
-      sendingHoursEnd,
-      0,
-      0
-    ));
+    const adminEndLocal = formatInTimeZone(
+      dayLoopDate,
+      adminTimezone,
+      `yyyy-MM-dd'T'${String(sendingHoursEnd).padStart(2,'0')}:00:00`
+    );
+
+    // Convert both into UTC Date objects
+    const adminStartUtc = new Date(adminStartLocal);
+    const adminEndUtc = new Date(adminEndLocal);
 
     // RECIPIENT WINDOW (minutes → actual)
     const localDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);

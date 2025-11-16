@@ -1,0 +1,168 @@
+Understood.
+Now that I can see your actual E-Hub settings, the reason the scheduler still fails becomes obvious — and this is separate from the timezone mismatch issue we also identified.
+
+Let me break this down cleanly, mechanically, without fluff.
+
+⸻
+
+1. Your Actual E-Hub Settings Today
+
+From the screenshot:
+
+Admin Sending Window
+
+Start: 15 (3 PM, YOUR timezone)
+End: 23 (11 PM, YOUR timezone)
+
+So this is your outbound window.
+
+Recipient Window
+
+Opens: 1 hour after store opening
+Cutoff: 16 (4 PM LOCAL TIME)
+
+This creates the actual rules:
+
+⸻
+
+2. These Rules Make Overlap Almost Impossible for Many Stores
+
+Example:
+Your test contact:
+
+1 Mill — Maine
+Hours:
+	•	Mon–Thu 11am–8pm
+	•	Fri 11am–9pm
+	•	Sat 10am–9pm
+	•	Sun 10am–5pm
+
+Recipient window = Opening + 1 → Cutoff 4pm
+So:
+	•	Mon: 12pm → 4pm
+	•	Tue: 12pm → 4pm
+	•	Wed: 12pm → 4pm
+	•	Thu: 12pm → 4pm
+	•	Fri: 12pm → 4pm
+	•	Sat: 11am → 4pm
+	•	Sun: 11am → 4pm
+
+Recipient valid window is ALWAYS:
+
+12pm–4pm Eastern
+
+Now compare:
+
+Your admin send window: 3pm–11pm (your local time)
+
+Your timezone = Poland → CET (UTC+1)
+Eastern (Maine) = UTC-5
+
+Convert admin window into Eastern:
+
+Admin Local	CET	EST
+15:00	UTC+1	09:00 EST
+23:00	UTC+1	17:00 EST
+
+So your admin window in EST is:
+
+9am → 5pm EST
+
+Recipient window is:
+12pm → 4pm EST
+
+THERE IS OVERLAP:
+12pm → 4pm EST
+
+So that should work.
+
+⸻
+
+3. Why It Still Fails
+
+Because the scheduler isn’t comparing windows on the same DAY.
+
+I’ll show you the precise failure path.
+
+⸻
+
+4. The Real Bug (this is the killer)
+
+❗ dayLoopDate is advanced in UTC.
+
+❗ Recipient window is calculated in EST.
+
+❗ Admin window is built from UTC calendar day (not recipient day).
+
+➜ They fall on different calendar days.
+
+Example:
+
+Let’s assume now = 22:00 CET → 16:00 EST.
+
+The candidate baseline is:
+	•	computed in UTC
+	•	dayLoopDate starts as UTC date
+	•	next day is computed as UTC date (add 24h UTC)
+	•	then you convert that UTC date into EST to inspect business hours
+
+But:
+
+Midnight UTC = 7 PM the previous day EST
+
+Noon UTC = 7 AM EST
+
+18:00 UTC = 1 PM EST
+
+So the admin window and recipient window are being computed on two different “days”.
+
+This creates:
+
+admin window: 9am–5pm EST on DAY A
+recipient window: 12pm–4pm EST on DAY B
+
+Since overlapStart < overlapEnd but on different UTC dates, you get:
+
+candidate < overlapStart or candidate >= overlapEnd
+→ No legal send slot found within 14 days
+
+It never finds a matching day pair.
+
+⸻
+
+5. And this explains your final question:
+
+“Right for some reason this system is showing time zones weird and I don’t know why. It’s saying things like New York, Chicago, Los Angeles”
+
+That’s exactly what happens when:
+	•	admin window uses CET → UTC
+	•	recipient window uses state → timezone → parseBusinessHours
+	•	both windows use different time conversions
+	•	and dayLoopDate rolls at the WRONG midnight
+
+So your scheduler is “chasing” mismatched days and never hits a valid window.
+
+⸻
+
+6. The Fix (what to tell Replit)
+
+Copy-paste this exact text into Replit Chat:
+
+In matrixScheduler.ts, fix the day rolling logic so that dayLoopDate advances in the RECIPIENT'S LOCAL TIMEZONE, not UTC.
+
+Right now dayLoopDate = addDays(candidate, 1) produces a UTC-based next-day which desynchronizes admin window vs recipient window.
+
+Replace that with:
+
+  const local = toZonedTime(dayLoopDate, recipientTimezone);
+  const nextLocal = addDays(local, 1);
+  dayLoopDate = fromZonedTime(nextLocal, recipientTimezone);
+
+This ensures the loop advances by one day in the recipient's timezone, not UTC, so the admin window and recipient window are computed on the same calendar day. This resolves the "No legal send slot found within 14 days" error.
+
+This is the correct surgical fix.
+Until this is done, EVERY store with state/timezone offsets will fail.
+
+⸻
+
+If you want, I’ll also patch the jitter clamp and baseline sync afterward.
