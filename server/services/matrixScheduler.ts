@@ -128,5 +128,15 @@ export async function getNextMatrixSlot(
   const recipientLegalStartUtc = new Date(recipientOpenLocal);
   const recipientLegalEndUtc = new Date(recipientEndLocal);
 
+  // STEP 11: Compute raw window overlap (scaffolding only)
+
+  const overlapStart = new Date(
+    Math.max(adminStartUtc.getTime(), recipientLegalStartUtc.getTime())
+  );
+
+  const overlapEnd = new Date(
+    Math.min(adminEndUtc.getTime(), recipientLegalEndUtc.getTime())
+  );
+
   return candidate;
 }
