@@ -81,7 +81,6 @@ async function updateRescheduleJob(
  * This is triggered when:
  * - Sending windows change
  * - Daily limits change
- * - Jitter settings change
  * - Weekend toggle changes
  * - Sequence step changes
  * 
@@ -89,11 +88,13 @@ async function updateRescheduleJob(
  * 1. Lock with mutex (prevent concurrent reschedules)
  * 2. Fetch ALL pending/scheduled sends (not sent yet)
  * 3. Sort globally by: sequence > step > enrollment time
- * 4. Re-run scheduleRecipient() for each in FIFO order
+ * 4. Calculate new scheduledAt for each in FIFO order
  * 5. Apply business hours, windows, weekend skipping
  * 6. Apply rate-limit spacing globally (not per-user)
- * 7. Apply jitter as LAST step
- * 8. Update scheduledAt in database
+ * 7. Update scheduledAt in database
+ * 
+ * NOTE: This function uses inline scheduling logic.
+ * For new enrollments, use matrixScheduler.getNextMatrixSlot() instead.
  */
 export async function rescheduleAllPendingEmails(): Promise<RescheduleResult> {
   let jobId: string | null = null;
