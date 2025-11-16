@@ -1,0 +1,124 @@
+Direct and clean answers, no fluff.
+This locks the system design so Replit can continue.
+
+⸻
+
+	1.	Replace existing emailSchedulingService.ts?
+Yes. Replace entirely.
+The new file becomes the only scheduler.
+No preScheduleRecipientSends.
+No coordinator compatibility.
+
+⸻
+
+	2.	Pre-schedule all sends or lazy-create?
+Use lazy creation.
+Reason:
+• You avoid building 50 phantom future sends.
+• You avoid recalculating scheduledAt for steps you may never reach.
+• You simplify state transitions.
+
+Final rule:
+Only create ONE scheduled send at a time.
+
+Flow:
+Step N sent → schedule only Step N+1 now.
+If repeating last step → schedule only one repeat at a time.
+
+⸻
+
+	3.	Reply detection timing?
+Use queue cycle (60 seconds) for the 1-minute check.
+
+Meaning:
+
+On each cycle, before processing a scheduled send:
+
+If scheduledAt <= now + 60 seconds → run pre-check
+Then, immediately before send → run final check
+
+No need for a separate scheduled timer.
+
+⸻
+
+	4.	Sending-hour enforcement?
+Skip the entire cycle if outside hours.
+
+Not per-recipient.
+Not per-timezone.
+
+Just:
+If now is outside Sending Configuration Start/End hours → return early.
+
+Use admin/global timezone, not recipient timezone.
+
+Recipient timezone is handled inside computeOptimalSendTime() only.
+
+⸻
+
+These four decisions finalize the architecture.
+
+Tell Replit:
+
+• Replace emailSchedulingService.ts entirely
+• Use lazy scheduling
+• 60-second-cycle-based reply checks
+• Skip entire queue if outside global sending hours
+
+Here is the exact logic that will go into the new system:
+
+⸻
+
+Reply-Check Gate #1 (Pre-flight check)
+
+Triggered when the queue cycle sees:
+
+scheduledAt ≤ now + 60 seconds
+
+Before we ever mark the send as “claimed”, the system does:
+	1.	Look up the threadId
+	2.	Call Gmail and check for replies
+	3.	If reply exists:
+• Mark recipient as replied
+• Delete all future sends
+• Cancel this scheduled send
+• Stop processing this recipient
+	4.	If no reply → send is allowed to move forward to the “claim” step
+
+⸻
+
+Reply-Check Gate #2 (Immediate check)
+
+After the send has been claimed, immediately before sending:
+	1.	Run reply detection a second time
+	2.	If reply exists here →
+• Abort send
+• Mark send as cancelled
+• Mark recipient as replied
+• Delete future sends
+	3.	If no reply → proceed with email send
+
+⸻
+
+Guarantee: Nothing sends unless BOTH gates are clear
+
+There is no way for an email to be sent unless:
+
+• The 60-second pre-flight check finds no reply
+• The immediate pre-send check also finds no reply
+
+And since the queue is only alive during sending hours, everything behaves predictably and safely.
+
+⸻
+
+Result
+
+You get:
+
+• Zero wasted emails
+• Zero “oops I emailed someone who already replied”
+• Zero useless polling load
+• Only ~30 Gmail API checks per hour (not thousands)
+• Perfect deterministic safety net
+
+

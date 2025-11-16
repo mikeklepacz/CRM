@@ -1,266 +1,136 @@
 import { computeNextSendSlot } from './smartTiming';
 import { addDays } from 'date-fns';
-
-export interface AdminWindow {
-  timezone: string;
-  startHour: number;
-  endHour: number;
-  clientWindowStartOffset: number;
-  clientWindowEndHour: number;
-  skipWeekends: boolean;
-}
+import { storage } from '../storage';
 
 /**
- * Resolve admin sending window for a sequence
- * Fetches the sequence creator's timezone + ehub settings
+ * NEW REAL-TIME SCHEDULING SERVICE
  * 
- * @param sequenceId - The sequence ID
- * @param storage - Storage instance for database access
- * @returns Admin window configuration with timezone and hours
+ * Replaces batch coordinator with immediate per-recipient scheduling.
+ * Called at enrollment time to calculate scheduledAt instantly.
  */
-export async function resolveAdminWindow(
-  sequenceId: string, 
-  storage: any,
-  ehubSettingsOverride?: any
-): Promise<AdminWindow> {
-  // Fetch sequence to get creator
-  const sequence = await storage.getSequence(sequenceId);
-  if (!sequence) {
-    throw new Error(`Sequence ${sequenceId} not found`);
-  }
 
-  // Fetch creator's preferences
-  const creatorPrefs = await storage.getUserPreferences(sequence.createdBy);
-  
-  // Use override if provided, otherwise fetch E-Hub settings
-  const ehubSettings = ehubSettingsOverride || await storage.getEhubSettings();
-
-  // Resolve timezone with fallback
-  let timezone = creatorPrefs?.timezone || 'America/New_York';
-  if (!creatorPrefs?.timezone) {
-    console.warn(`[EmailScheduling] No timezone set for user ${sequence.createdBy}, falling back to ${timezone}`);
-  }
-
-  return {
-    timezone,
-    startHour: ehubSettings?.sendingHoursStart ?? 6,
-    endHour: ehubSettings?.sendingHoursEnd ?? 23,
-    // Convert minutes to hours (stored as 60 minutes = 1 hour)
-    clientWindowStartOffset: parseFloat(ehubSettings?.clientWindowStartOffset?.toString() ?? '60') / 60,
-    clientWindowEndHour: ehubSettings?.clientWindowEndHour ?? 14,
-    skipWeekends: ehubSettings?.skipWeekends ?? false,
-  };
-}
-
-/**
- * Calculate optimal min/max delay suggestions for human-like email spacing
- * 
- * Finds the overlap between company sending hours and typical client receiving hours,
- * then calculates natural-looking delay ranges based on daily email limit.
- * 
- * @param companyStartHour - Company sending window start (24h format)
- * @param companyEndHour - Company sending window end (24h format)
- * @param clientWindowStartOffset - Hours after business opens (e.g., 1.0)
- * @param clientWindowEndHour - Client cutoff hour local time (24h format)
- * @param dailyEmailLimit - Max emails per day
- * @param jitterPercentage - Jitter variance percentage (default 50 = ±50%)
- * @returns Suggested min/max delays in minutes with configurable variance around average
- */
-export function calculateOptimalDelays(
-  companyStartHour: number,
-  companyEndHour: number,
-  clientWindowStartOffset: number,
-  clientWindowEndHour: number,
-  dailyEmailLimit: number,
-  jitterPercentage: number = 50
-): { minDelayMinutes: number; maxDelayMinutes: number } {
-  // Calculate effective sending window (overlap between company and typical client hours)
-  // Typical client business: 9 AM - client cutoff
-  const typicalClientStart = 9 + clientWindowStartOffset; // e.g., 9 + 1 = 10 AM
-  const typicalClientEnd = clientWindowEndHour; // e.g., 20 (8 PM)
-  
-  // Find overlap
-  const effectiveStart = Math.max(companyStartHour, typicalClientStart);
-  const effectiveEnd = Math.min(companyEndHour, typicalClientEnd);
-  const effectiveWindowHours = Math.max(1, effectiveEnd - effectiveStart);
-  
-  // Calculate average spacing needed for daily limit
-  const effectiveWindowMinutes = effectiveWindowHours * 60;
-  const averageSpacingMinutes = dailyEmailLimit > 0 
-    ? effectiveWindowMinutes / dailyEmailLimit 
-    : 5;
-  
-  // Convert jitter percentage to multipliers (e.g., 50% = 0.5 to 1.5, 30% = 0.7 to 1.3)
-  const jitterDecimal = jitterPercentage / 100;
-  const minMultiplier = 1 - jitterDecimal;
-  const maxMultiplier = 1 + jitterDecimal;
-  
-  // Apply jitter variance to create min/max range
-  const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * minMultiplier));
-  const maxDelay = Math.ceil(averageSpacingMinutes * maxMultiplier);
-  
-  return {
-    minDelayMinutes: minDelay,
-    maxDelayMinutes: maxDelay
-  };
-}
-
-/**
- * Pre-schedule all future sends for a recipient with random jitter
- * 
- * Generates scheduled send records for all steps (including repeats) up to either:
- * - 50 total sends, OR
- * - 30 days from now
- * whichever comes first.
- * 
- * Each send time includes random jitter between minDelayMinutes and maxDelayMinutes,
- * and is validated against business hours using smartTiming.
- * 
- * @param recipientId - The recipient ID
- * @param sequenceId - The sequence ID
- * @param recipientTimezone - Recipient's detected timezone
- * @param recipientBusinessHours - Recipient's business hours string
- * @param storage - Storage instance for database access
- * @param ehubSettingsOverride - Optional settings override (used during recalculation)
- * @param startTime - Optional start time (used for bulk enrollment spacing)
- * @returns Array of scheduled send records ready for bulk insert
- */
-export async function preScheduleRecipientSends(
-  recipientId: string,
-  sequenceId: string,
-  recipientTimezone: string,
-  recipientBusinessHours: string,
-  storage: any,
-  ehubSettingsOverride?: any,
-  startTime?: Date
-): Promise<Array<{
+export interface ScheduleRecipientParams {
   recipientId: string;
   sequenceId: string;
   stepNumber: number;
-  repeatIndex: number;
-  scheduledAt: Date;
-  jitterMinutes: number;
-  status: string;
-}>> {
-  // Get sequence configuration
-  const sequence = await storage.getSequence(sequenceId);
-  if (!sequence) {
-    throw new Error(`Sequence ${sequenceId} not found`);
-  }
-
-  // Get E-Hub settings (use override if provided, otherwise fetch from storage)
-  const ehubSettings = ehubSettingsOverride || await storage.getEhubSettings();
-  if (!ehubSettings) {
-    throw new Error('E-Hub settings not found');
-  }
-
-  // Resolve admin window (pass settings override to ensure consistency)
-  const adminWindow = await resolveAdminWindow(sequenceId, storage, ehubSettings);
-
-  const stepDelays = (sequence.stepDelays || []).map((d: any) => parseFloat(d.toString()));
-  const repeatLastStep = sequence.repeatLastStep ?? false;
-  const minJitterMinutes = ehubSettings.minDelayMinutes;
-  const maxJitterMinutes = ehubSettings.maxDelayMinutes;
-
-  const scheduledSends: Array<{
-    recipientId: string;
-    sequenceId: string;
-    stepNumber: number;
-    repeatIndex: number;
-    scheduledAt: Date;
-    jitterMinutes: number;
-    status: string;
-  }> = [];
-
-  const now = new Date();
-  const thirtyDaysFromNow = addDays(now, 30);
-  // Use provided startTime for bulk enrollment spacing, otherwise use now
-  let currentTime = startTime || now;
-  let stepNumber = 1;
-  let repeatIndex = 0;
-
-  // Generate up to 50 sends or 30 days ahead
-  while (scheduledSends.length < 50) {
-    // Determine delay for this step
-    let delayDays: number;
-    
-    if (stepNumber <= stepDelays.length) {
-      // Regular step delay
-      delayDays = stepDelays[stepNumber - 1] || 0;
-    } else if (repeatLastStep && stepDelays.length > 0) {
-      // Repeat step - use last step's delay
-      delayDays = stepDelays[stepDelays.length - 1];
-      repeatIndex++;
-    } else {
-      // Sequence complete
-      break;
-    }
-
-    // Apply base delay
-    currentTime = addDays(currentTime, delayDays);
-
-    // Stop if we've exceeded 30 days
-    if (currentTime > thirtyDaysFromNow) {
-      break;
-    }
-
-    // Generate random jitter
-    const jitterMinutes = Math.random() * (maxJitterMinutes - minJitterMinutes) + minJitterMinutes;
-    const jitterMs = jitterMinutes * 60 * 1000;
-    let baselineTime = new Date(currentTime.getTime() + jitterMs);
-
-    // Validate against business hours using smartTiming
-    const scheduledAt = computeNextSendSlot({
-      baselineTime,
-      adminTimezone: adminWindow.timezone,
-      adminStartHour: adminWindow.startHour,
-      adminEndHour: adminWindow.endHour,
-      recipientBusinessHours,
-      recipientTimezone,
-      clientWindowStartOffset: adminWindow.clientWindowStartOffset,
-      clientWindowEndHour: adminWindow.clientWindowEndHour,
-      skipWeekends: adminWindow.skipWeekends,
-    });
-
-    // CRITICAL: Update currentTime to the adjusted scheduledAt
-    // This ensures subsequent steps start from the smartTiming-adjusted time,
-    // preserving proper spacing even when weekends/business hours shift sends forward
-    currentTime = scheduledAt;
-
-    // Add to scheduled sends
-    scheduledSends.push({
-      recipientId,
-      sequenceId,
-      stepNumber,
-      repeatIndex,
-      scheduledAt,
-      jitterMinutes,
-      status: 'pending',
-    });
-
-    // Advance to next step
-    if (stepNumber < stepDelays.length) {
-      // Move to next regular step
-      stepNumber++;
-      repeatIndex = 0;
-    } else if (repeatLastStep) {
-      // Stay at last step, increment repeat index
-      repeatIndex++;
-    } else {
-      // Sequence complete (no more steps, repeats disabled)
-      break;
-    }
-  }
-
-  return scheduledSends;
+  stepDelay: number; // in days (e.g., 0.0035 for 5 minutes)
+  lastStepSentAt: Date | null; // null for step 1
+  recipientTimezone: string;
+  recipientBusinessHours: string;
+  userId: string; // Admin/agent who created sequence
 }
 
 /**
- * DEPRECATED: computeNextSendTimeForRecipient
+ * Calculate scheduledAt for a single recipient step immediately
  * 
- * This function has been replaced by the Queue Coordinator system.
- * New recipient enrollment now uses requestNextSlot() from queueCoordinator.ts
- * which ensures FIFO ordering and rate limit compliance.
+ * This is the ONLY function that assigns scheduledAt.
+ * No batch coordinator. No null scheduledAt.
  * 
- * Kept for reference only - remove after verifying no external dependencies.
+ * Flow:
+ * 1. Calculate baseline time (now + stepDelay, or lastStepSentAt + stepDelay)
+ * 2. Get queue tail (latest scheduledAt for this user)
+ * 3. Apply FIFO: ensure we're after queue tail
+ * 4. Apply rate limiting spacing
+ * 5. Apply jitter
+ * 6. Use computeOptimalSendTime for final time (respects business hours, weekends, admin window)
+ * 
+ * @returns scheduledAt as Date (never null)
  */
+export async function scheduleRecipient(params: ScheduleRecipientParams): Promise<Date> {
+  const {
+    stepNumber,
+    stepDelay,
+    lastStepSentAt,
+    recipientTimezone,
+    recipientBusinessHours,
+    userId,
+  } = params;
+
+  // Get E-Hub settings
+  const settings = await storage.getEhubSettings();
+  if (!settings) {
+    throw new Error('E-Hub settings not found');
+  }
+
+  // Get admin timezone
+  const userPrefs = await storage.getUserPreferences(userId);
+  const adminTimezone = userPrefs?.timezone || 'America/New_York';
+
+  const now = new Date();
+
+  // STEP 1: Calculate baseline time from step delay
+  let baselineTime: Date;
+  
+  if (lastStepSentAt) {
+    // Follow-up step: add delay to last sent time
+    baselineTime = addDays(lastStepSentAt, stepDelay);
+    
+    // If delay has already elapsed, use now
+    if (baselineTime <= now) {
+      baselineTime = now;
+    }
+  } else {
+    // First step: add delay from now
+    baselineTime = addDays(now, stepDelay);
+  }
+
+  // STEP 2: Get queue tail for this user (FIFO enforcement)
+  const queueTail = await storage.getLastScheduledSendForUser(userId);
+
+  // STEP 3: Calculate rate limit spacing
+  const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
+  const adminWindowMinutes = adminWindowHours * 60;
+  const minutesBetweenSends = settings.dailyEmailLimit > 0
+    ? adminWindowMinutes / settings.dailyEmailLimit
+    : 1;
+
+  // STEP 4: Generate jitter (seconds precision for human-like timing)
+  const minJitterMs = (settings.minDelayMinutes || 0) * 60 * 1000;
+  const maxJitterMs = (settings.maxDelayMinutes || 30) * 60 * 1000;
+  const jitterMs = Math.floor(Math.random() * (maxJitterMs - minJitterMs + 1)) + minJitterMs;
+
+  // STEP 5: Apply FIFO queue ordering
+  let minimumTime = new Date(baselineTime.getTime() + jitterMs);
+
+  if (queueTail && queueTail.scheduledAt) {
+    // Queue exists - ensure we're after the tail
+    const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
+    const afterTail = new Date(queueTail.scheduledAt.getTime() + rateLimitSpacingMs);
+    
+    if (afterTail > minimumTime) {
+      minimumTime = afterTail;
+    }
+  }
+
+  // STEP 6: Apply business hours, weekends, admin window using smart timing
+  const scheduledAt = computeNextSendSlot({
+    baselineTime: minimumTime,
+    adminTimezone,
+    adminStartHour: settings.sendingHoursStart,
+    adminEndHour: settings.sendingHoursEnd,
+    recipientBusinessHours,
+    recipientTimezone,
+    clientWindowStartOffset: settings.clientWindowStartOffset,
+    clientWindowEndHour: settings.clientWindowEndHour,
+    skipWeekends: settings.skipWeekends,
+    minimumTime, // Enforce queue order
+  });
+
+  return scheduledAt;
+}
+
+/**
+ * Helper: Generate random jitter with seconds precision
+ * Ensures human-like timing variability
+ */
+function randomJitter(minMinutes: number, maxMinutes: number): number {
+  const minSeconds = minMinutes * 60;
+  const maxSeconds = maxMinutes * 60;
+  
+  if (minSeconds === 0 && maxSeconds === 0) {
+    return 0;
+  }
+  
+  const totalSeconds = Math.floor(Math.random() * (maxSeconds - minSeconds + 1)) + minSeconds;
+  return totalSeconds * 1000; // Return milliseconds
+}

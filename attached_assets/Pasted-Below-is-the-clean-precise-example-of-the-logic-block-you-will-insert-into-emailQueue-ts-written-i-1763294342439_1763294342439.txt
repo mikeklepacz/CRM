@@ -1,0 +1,99 @@
+Below is the clean, precise example of the logic block you will insert into emailQueue.ts, written in the exact structure Replit will understand.
+
+This isn’t the final code — it’s the canonical example showing exactly how the new two-gate reply-detection system looks inside the queue.
+
+⸻
+
+EXAMPLE: Two-Gate Reply Check Logic for emailQueue.ts
+
+// ===============================
+// GATE 1 — PRE-FLIGHT CHECK
+// Runs only when scheduledAt is within 60 seconds
+// ===============================
+const now = new Date();
+const msUntilSend = scheduledSend.scheduledAt.getTime() - now.getTime();
+
+if (msUntilSend <= 60000) {
+  console.log(`[EmailQueue] Pre-flight reply check for ${recipient.email}`);
+
+  const replyResult = await checkForReplies(sequence.createdBy, recipient.threadId);
+
+  if (replyResult.hasReply) {
+    console.log(`[EmailQueue] ⛔ Reply detected in pre-flight gate for ${recipient.email}`);
+
+    await storage.updateRecipientStatus(recipient.id, {
+      status: 'replied',
+      repliedAt: new Date(),
+      nextSendAt: null,
+    });
+
+    await storage.deleteRecipientScheduledSends(recipient.id);
+    await storage.updateScheduledSend(scheduledSend.id, {
+      status: 'cancelled',
+    });
+
+    return; // abort entire send
+  }
+}
+
+// CLAIM THE SEND
+const claimed = await storage.claimScheduledSend(scheduledSend.id);
+if (!claimed) return;
+
+// ===============================
+// GATE 2 — IMMEDIATE CHECK
+// Runs seconds before actually calling sendEmail()
+// ===============================
+console.log(`[EmailQueue] Immediate reply check for ${recipient.email}`);
+
+const replyResult2 = await checkForReplies(sequence.createdBy, recipient.threadId);
+
+if (replyResult2.hasReply) {
+  console.log(`[EmailQueue] ⛔ Reply detected in immediate gate for ${recipient.email}`);
+
+  await storage.updateRecipientStatus(recipient.id, {
+    status: 'replied',
+    repliedAt: new Date(),
+    nextSendAt: null,
+  });
+
+  await storage.deleteRecipientScheduledSends(recipient.id);
+  await storage.updateScheduledSend(scheduledSend.id, {
+    status: 'cancelled',
+  });
+
+  return; // skip sending
+}
+
+// ===============================
+// PROCEED WITH SEND
+// Only if both reply-detection gates passed
+// ===============================
+const result = await sendEmail({
+  userId: sequence.createdBy,
+  to: recipient.email,
+  subject: personalizedEmail.subject,
+  body: personalizedEmail.body,
+  threadId: recipient.threadId,
+});
+
+
+⸻
+
+Functional Notes
+	1.	Gate 1 ensures we never even queue up an email that is close to a reply.
+	2.	Gate 2 guarantees no email is sent even if the reply lands seconds before send.
+	3.	This removes the need for constant polling and makes reply detection cheap and controlled.
+	4.	Reply detection only runs when the system is about to do work, not 24/7.
+	5.	The replyWorker becomes optional or can be disabled entirely.
+
+⸻
+
+If you want, I can now write:
+
+• The exact changes required in emailQueue.ts
+• The modified signature of processEmailQueue()
+• The new coordinator logic
+• The patch instructions for Replit
+
+or I can prepare the full upgrade spec prompt to paste into Replit.
