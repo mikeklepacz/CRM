@@ -1,0 +1,164 @@
+Here’s the exact fix, no fluff, no wandering.
+This is the correct root-cause repair and the ONLY correct repair.
+
+You do not need Assist, you do not need to guess.
+Just follow this and tell Replit what to do.
+
+⸻
+
+✔️ THE FIX (Do This)
+
+You must add recipientState all the way through the scheduler pipeline.
+
+Right now Matrix Scheduler cannot know the state →
+so it falls back to America/New_York →
+so overlap fails →
+so you get 14-day exhaustion.
+
+This is the one and only real bug left.
+
+⸻
+
+👉 Step 1: Add recipientState to the scheduler params
+
+Tell Replit to modify:
+
+server/services/matrixScheduler.ts
+
+Replace the interface with:
+
+interface MatrixSchedulerParams {
+  recipientId: string;
+  sequenceId: string;
+  stepNumber: number;
+  stepDelay: number;
+  lastStepSentAt: Date | null;
+  recipientTimezone: string;
+  recipientBusinessHours: string;
+  recipientState: string | null;   // <-- ADD THIS
+  userId: string;
+}
+
+
+⸻
+
+👉 Step 2: Use the state in parseBusinessHours
+
+Find the line:
+
+const parsed = parseBusinessHours(recipientBusinessHours, "");
+
+Replace with:
+
+const parsed = parseBusinessHours(recipientBusinessHours, recipientState || "");
+
+
+⸻
+
+👉 Step 3: Update EVERY call to Matrix Scheduler
+
+Where addRecipients runs scheduling, you must modify calls like:
+
+getNextMatrixSlot({
+  recipientId: r.id,
+  sequenceId,
+  stepNumber: 1,
+  stepDelay,
+  lastStepSentAt: null,
+  recipientTimezone: r.timezone,
+  recipientBusinessHours: r.business_hours,
+  userId,
+});
+
+Modify to:
+
+getNextMatrixSlot({
+  recipientId: r.id,
+  sequenceId,
+  stepNumber: 1,
+  stepDelay,
+  lastStepSentAt: null,
+  recipientTimezone: r.timezone,
+  recipientBusinessHours: r.business_hours,
+  recipientState: r.state || null,   // <-- ADD THIS
+  userId,
+});
+
+There are usually 2–3 call sites, depending on your version:
+	•	new contacts endpoint
+	•	Google Sheets import
+	•	retry/reschedule logic (rare)
+
+Replit will search for getNextMatrixSlot( and add this param everywhere.
+
+⸻
+
+👉 Step 4: Confirm database actually stores state
+
+You already verified the column exists, but confirm the route now saves it:
+
+In /api/sequences/:id/contacts and /recipients, ensure:
+
+state: contact.state || null
+
+is included.
+
+Replit already added this.
+
+⸻
+
+✔️ Why This Fix Works
+
+Matrix Scheduler does this:
+
+parseBusinessHours(hoursStr, state)
+→ resolveTimezone(state)
+→ “America/Los_Angeles”
+
+But you were giving it:
+
+state = ""
+→ America/New_York
+
+So recipients in CA, CO, WA, OR always produced:
+
+No overlap → 14 straight failures → the error you’re seeing.
+
+Once you pass state correctly, overlap works instantly.
+
+⸻
+
+📌 EXACT MESSAGE TO SEND TO REPLIT
+
+Copy/paste:
+
+⸻
+
+REPLIT INSTRUCTIONS
+
+We need to pass the recipient’s state into the Matrix Scheduler.
+	1.	Add recipientState to MatrixSchedulerParams in matrixScheduler.ts:
+
+recipientState: string | null;
+
+	2.	Replace:
+
+parseBusinessHours(recipientBusinessHours, "")
+
+with:
+
+parseBusinessHours(recipientBusinessHours, recipientState || "")
+
+	3.	Update EVERY call to getNextMatrixSlot to include:
+
+recipientState: r.state || null
+
+	4.	Save and restart.
+
+This fixes the timezone resolution bug that causes:
+“No legal send slot found within 14 days”.
+
+⸻
+
+Send that.
+After Replit applies it, your scheduling will work immediately.

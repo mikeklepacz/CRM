@@ -11,6 +11,7 @@ interface MatrixSchedulerParams {
   lastStepSentAt: Date | null;
   recipientTimezone: string;
   recipientBusinessHours: string;
+  recipientState: string | null;
   userId: string;
 }
 
@@ -23,7 +24,8 @@ export async function getNextMatrixSlot(
     lastStepSentAt,
     userId,
     recipientBusinessHours,
-    recipientTimezone
+    recipientTimezone,
+    recipientState
   } = params;
 
   const settings = await storage.getEhubSettings();
@@ -74,10 +76,8 @@ export async function getNextMatrixSlot(
   let candidate = globalMinimum;
 
   // BUSINESS HOURS PARSING
-  // IMPORTANT: parseBusinessHours(hoursStr, state) requires a state parameter.
-  // We do NOT have the state here — E-Hub currently does NOT track it per-recipient.
-  // To fix TS errors, pass a default state "" (timezone fallback → America/New_York).
-  const parsed = parseBusinessHours(recipientBusinessHours, "");
+  // Use recipient's state to correctly resolve timezone
+  const parsed = parseBusinessHours(recipientBusinessHours, recipientState || "");
 
   let dayLoopDate = candidate;
   let overlapStart: Date = new Date();

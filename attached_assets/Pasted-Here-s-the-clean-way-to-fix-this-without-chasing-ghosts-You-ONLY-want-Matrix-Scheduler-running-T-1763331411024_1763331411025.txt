@@ -1,0 +1,91 @@
+Here’s the clean way to fix this without chasing ghosts:
+
+You ONLY want Matrix Scheduler running.
+
+The old Smart Timing system (computeNextSendSlot / smartTiming.ts) is still being called somewhere, and that system hard-codes:
+
+parseBusinessHours(recipientBusinessHours, '')
+
+which:
+	1.	Forces timezone = America/New_York
+	2.	Produces invalid overlaps
+	3.	Makes EVERY slot fail
+	4.	Triggers the 14-day exhaustion
+	5.	Causes the error you’re seeing
+
+So the real fix is not more debugging.
+The real fix is to fully disable Smart Timing everywhere.
+
+Here’s exactly what to tell Replit:
+
+⸻
+
+Tell Replit this message EXACTLY:
+
+Copy/paste this:
+
+⸻
+
+INSTRUCTION FOR REPLIT
+
+Search the entire codebase for any call to these functions:
+	•	computeNextSendSlot
+	•	computeOptimalSendTime
+	•	Anything within smartTiming.ts
+
+Then:
+	1.	Disable ALL Smart Timing references
+Replace every call with:
+
+await getNextMatrixSlot({
+  recipientId,
+  sequenceId,
+  stepNumber,
+  stepDelay,
+  lastStepSentAt,
+  recipientTimezone: recipient.timezone,
+  recipientBusinessHours: recipient.business_hours,
+  userId,
+});
+
+	2.	Completely stop using smartTiming.ts
+Comment out exports or leave the file, but NOTHING should call it.
+	3.	Ensure the only scheduler used for ALL send logic is:
+
+getNextMatrixSlot()
+
+	4.	Confirm that the state is passed correctly:
+
+Matrix Scheduler should use:
+
+parseBusinessHours(recipient.business_hours, recipient.state)
+
+not empty strings, not undefined.
+	5.	After removing Smart Timing, restart the server and test adding a recipient.
+
+⸻
+
+Why this will fix it immediately
+
+Right now:
+
+✓ Matrix Scheduler is correct
+✓ State saving is correct
+✓ Business hours are correct
+× Smart Timing overrides everything and uses NY timezone
+× Smart Timing always passes empty state
+× Smart Timing runs its own schedule logic → collision → failure
+
+This is why:
+
+Even though we fixed Matrix Scheduler, the system is STILL using the old scheduler.
+
+Once Replit removes those Smart Timing calls, the error disappears.
+
+⸻
+
+If you want, I can also give a small diagnostic script to print exactly which scheduler is being called at runtime.
+
+But start with removing Smart Timing.
+
+That’s your root cause.

@@ -1,0 +1,35 @@
+Looking at the error "No legal send slot found within 14 days" and the console logs, I can see the issue is in the Matrix Scheduler (matrixScheduler.ts).
+
+The error occurs when you try to import recipients into a sequence. The scheduler is trying to find a valid time slot that satisfies all these constraints:
+
+Admin sending window (sendingHoursStart to sendingHoursEnd)
+Recipient business hours (when the store is open)
+Weekend skipping (if enabled)
+Client window constraints (clientWindowStartOffset and clientWindowEndHour)
+The scheduler searches for 14 days but can't find any overlapping time that satisfies all constraints.
+
+Why this happens:
+
+Looking at the code in matrixScheduler.ts around line 220, the scheduler calculates the overlap between:
+
+Admin's sending window (in their timezone)
+Recipient's business hours (in their timezone)
+Maximum send time constraint (clientWindowEndHour, default 2pm recipient time)
+If there's no overlap for 14 consecutive days, it throws this error.
+
+Most likely causes:
+
+Admin timezone vs recipient timezone conflict - The admin's sending hours (in their timezone) don't overlap with the recipient's business hours (in their timezone) after converting both to UTC
+clientWindowEndHour too restrictive - Default is 14:00 (2pm) recipient local time, which may be cutting off valid slots
+Weekend skipping - If enabled and the next 14 days have mostly weekends or the recipient is closed weekdays
+To fix this, I need to see your E-Hub settings. Can you check:
+
+What are your sendingHoursStart and sendingHoursEnd in E-Hub settings?
+What is your admin timezone (in user preferences)?
+What is the recipient's timezone and business hours for the contact that failed?
+What is clientWindowEndHour set to in E-Hub settings?
+The scheduler likely needs either:
+
+Wider admin sending hours
+Later clientWindowEndHour (like 17:00 instead of 14:00)
+Or the constraints are fundamentally incompatible (e.g., admin only sends 9am-5pm EST, but recipient is only open 9am-5pm PST with a 2pm cutoff - no overlap)
