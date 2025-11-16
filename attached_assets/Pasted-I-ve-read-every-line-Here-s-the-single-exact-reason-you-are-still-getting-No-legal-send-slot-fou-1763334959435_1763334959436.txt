@@ -1,0 +1,123 @@
+I’ve read every line.
+Here’s the single exact reason you are still getting:
+
+“No legal send slot found within 14 days”
+
+The admin-day advancement fix was applied in two places…
+
+…but NOT in two other places.
+
+Because of that, the loop keeps mixing UTC-day and admin-day, and it ALWAYS falls into the “no overlap → skip day” path 14 times and dies.
+
+This is 100% deterministic, not random.
+
+Let me show you the two broken lines.
+
+⸻
+
+THE TWO REMAINING BUGS
+
+Your code uses:
+
+candidate = new Date(Date.UTC(
+  dayLoopDate.getUTCFullYear(),
+  dayLoopDate.getUTCMonth(),
+  dayLoopDate.getUTCDate(),
+  sendingHoursStart,
+  0,
+  0
+));
+
+This appears in two different branches:
+
+1. When no overlap exists
+
+(search for: if (!hasOverlap))
+
+2. When schedule is missing for today
+
+(search for: if (parsed.isClosed || !todaysSchedule || todaysSchedule.length === 0))
+
+In both cases, AFTER setting candidate, it does:
+
+dayLoopDate = addDays(candidate, 1);
+
+This completely bypasses the admin-timezone date rebuild.
+
+So half of your loop advances days in UTC (your fix branch), the other half advances days in a way that is out of sync with the recipient timezone.
+
+That mismatch is EXACTLY what keeps producing “no overlap” on every iteration.
+
+⸻
+
+Here is the CORRECT FIX (only two lines)
+
+Replace every:
+
+dayLoopDate = addDays(candidate, 1);
+
+with:
+
+// Advance exactly 1 calendar day in admin timezone
+dayLoopDate = new Date(
+  formatInTimeZone(
+    addDays(candidate, 1),
+    adminTimezone,
+    "yyyy-MM-dd'T'00:00:00"
+  )
+);
+
+There are two occurrences that must be replaced:
+	1.	In the “no schedule today” block
+	2.	In the “candidate after overlap end” block
+
+Everything else is already correct.
+
+⸻
+
+Why this fixes the scheduler
+
+Right now:
+
+• Some iterations advance days using UTC
+• Some iterations advance days using admin timezone
+
+→ They desynchronize instantly
+→ Admin thinks it’s Thursday
+→ Recipient thinks it’s Wednesday
+→ Overlap is always empty
+→ 14 loops → error
+
+After this fix:
+
+• EVERY iteration advances the date in the same timezone
+→ Admin window and recipient window align
+→ Overlap is correctly computed
+→ Candidate falls inside overlap
+→ Scheduler returns a valid slot
+
+⸻
+
+What to tell Replit
+
+Paste this:
+
+Search in server/services/matrixScheduler.ts for "dayLoopDate = addDays(candidate, 1)" (there are two occurrences). Replace both with:
+
+dayLoopDate = new Date(
+  formatInTimeZone(
+    addDays(candidate, 1),
+    adminTimezone,
+    "yyyy-MM-dd'T'00:00:00"
+  )
+);
+
+Do not modify anything else.
+
+Ask Replit to apply that exact patch.
+
+⸻
+
+When it’s done, test again.
+
+It will work.

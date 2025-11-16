@@ -240,7 +240,14 @@ export async function getNextMatrixSlot(
       0,
       0
     ));
-    dayLoopDate = addDays(candidate, 1);
+    // Advance one calendar day *in admin timezone*, not UTC
+    dayLoopDate = new Date(
+      formatInTimeZone(
+        addDays(dayLoopDate, 1),
+        adminTimezone,
+        "yyyy-MM-dd'T'00:00:00"
+      )
+    );
   }
 
   // sanity check
