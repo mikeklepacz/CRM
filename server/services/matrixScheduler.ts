@@ -195,22 +195,28 @@ export async function getNextMatrixSlot(
     const closeHour = Math.floor(closeMin / 60);
     const closeMinute = closeMin % 60;
 
-    let recipientOpenLocal = new Date(formatInTimeZone(
+    const debugRecipientOpenIso = formatInTimeZone(
       dayLoopDate,
       recipientTimezone,
       `yyyy-MM-ddT${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`
-    ));
+    );
+    console.log("Recipient OPEN Local raw ISO:", debugRecipientOpenIso);
+
+    let recipientOpenLocal = new Date(debugRecipientOpenIso);
 
     // apply start offset
     recipientOpenLocal = new Date(
       recipientOpenLocal.getTime() + clientWindowStartOffset * 3600000
     );
 
-    const recipientEndLocal = new Date(formatInTimeZone(
+    const debugRecipientEndIso = formatInTimeZone(
       dayLoopDate,
       recipientTimezone,
       `yyyy-MM-ddT${String(clientWindowEndHour).padStart(2,'0')}:00:00`
-    ));
+    );
+    console.log("Recipient END Local raw ISO:", debugRecipientEndIso);
+
+    const recipientEndLocal = new Date(debugRecipientEndIso);
 
     const recipientLegalStartUtc = new Date(recipientOpenLocal);
     const recipientLegalEndUtc = new Date(recipientEndLocal);
@@ -228,7 +234,22 @@ export async function getNextMatrixSlot(
     const candidateBefore = candidate < overlapStart;
 
     console.log("Admin UTC Window:", adminStartUtc.toISOString(), "→", adminEndUtc.toISOString());
-    console.log("Recipient UTC Window:", recipientLegalStartUtc.toISOString(), "→", recipientLegalEndUtc.toISOString());
+    console.log("Recipient Legal Start (raw):", recipientLegalStartUtc);
+    console.log("Recipient Legal End (raw):", recipientLegalEndUtc);
+
+    try {
+      console.log("Recipient UTC Window:", 
+        recipientLegalStartUtc.toISOString(), 
+        "→", 
+        recipientLegalEndUtc.toISOString()
+      );
+    } catch (err) {
+      console.log("ERROR converting recipient window to ISO:", err);
+      console.log("recipientOpenLocal:", recipientOpenLocal);
+      console.log("recipientEndLocal:", recipientEndLocal);
+      console.log("Parsed openMin/closeMin:", openMin, closeMin);
+      console.log("Computed openHour/closeHour:", openHour, openMinute, closeHour, closeMinute);
+    }
     console.log("Candidate (current):", candidate.toISOString());
     console.log("Overlap window:", overlapStart.toISOString(), "→", overlapEnd.toISOString());
     console.log("Has overlap?", overlapStart < overlapEnd);
