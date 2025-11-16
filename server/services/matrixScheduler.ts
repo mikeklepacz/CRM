@@ -28,6 +28,15 @@ export async function getNextMatrixSlot(
     recipientState
   } = params;
 
+  console.log("MATRIX_SCHEDULER_INPUT", {
+    business_hours: recipientBusinessHours,
+    timezone: recipientTimezone,
+    state: recipientState,
+    lastStepSentAt,
+    stepDelay,
+    userId
+  });
+
   const settings = await storage.getEhubSettings();
   if (!settings) throw new Error("E-Hub settings not found");
 
