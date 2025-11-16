@@ -67,116 +67,110 @@ export async function getNextMatrixSlot(
   // STEP 7: Parse recipient business hours
   const parsed = parseBusinessHours(recipientBusinessHours);
 
-  // STEP 8: Prepare for day-rolling loop (no logic yet)
+  // STEP 8: Prepare for day-rolling loop
   let dayLoopDate = candidate;
-  let attempts = 0;
+  let overlapStart: Date;
+  let overlapEnd: Date;
 
-  // STEP 9: Admin window boundaries for current day (scaffolding only)
-  const adminStartUtc = new Date(Date.UTC(
-    dayLoopDate.getUTCFullYear(),
-    dayLoopDate.getUTCMonth(),
-    dayLoopDate.getUTCDate(),
-    settings.sendingHoursStart,
-    0,
-    0
-  ));
+  // STEP 14-Real: Full day-rolling loop
+  for (let i = 0; i < 14; i++) {
+    // STEP 9: Admin window boundaries for current day
+    const adminStartUtc = new Date(Date.UTC(
+      dayLoopDate.getUTCFullYear(),
+      dayLoopDate.getUTCMonth(),
+      dayLoopDate.getUTCDate(),
+      settings.sendingHoursStart,
+      0,
+      0
+    ));
 
-  const adminEndUtc = new Date(Date.UTC(
-    dayLoopDate.getUTCFullYear(),
-    dayLoopDate.getUTCMonth(),
-    dayLoopDate.getUTCDate(),
-    settings.sendingHoursEnd,
-    0,
-    0
-  ));
+    const adminEndUtc = new Date(Date.UTC(
+      dayLoopDate.getUTCFullYear(),
+      dayLoopDate.getUTCMonth(),
+      dayLoopDate.getUTCDate(),
+      settings.sendingHoursEnd,
+      0,
+      0
+    ));
 
-  // STEP 10: Recipient delivery window (scaffolding only)
+    // STEP 10: Recipient delivery window
+    const localDay = parseInt(
+      formatInTimeZone(dayLoopDate, recipientTimezone, 'e'),
+      10
+    );
 
-  // Determine recipient's local day-of-week
-  const localDay = parseInt(
-    formatInTimeZone(dayLoopDate, recipientTimezone, 'e'),
-    10
-  );
+    const daySchedule = parsed.schedule[localDay];
 
-  // Pull that day's schedule from parsed business hours
-  const daySchedule = parsed.schedule[localDay];
+    let recipientOpenLocal = new Date(
+      formatInTimeZone(
+        dayLoopDate,
+        recipientTimezone,
+        `yyyy-MM-dd'T'${daySchedule ? daySchedule.open : '00:00'}:00`
+      )
+    );
 
-  // Recipient opening time in local timezone
-  let recipientOpenLocal = new Date(
-    formatInTimeZone(
-      dayLoopDate,
-      recipientTimezone,
-      `yyyy-MM-dd'T'${daySchedule ? daySchedule.open : '00:00'}:00`
-    )
-  );
+    recipientOpenLocal = new Date(
+      recipientOpenLocal.getTime() + clientWindowStartOffset * 3600000
+    );
 
-  // Apply client window start offset (hours after opening)
-  recipientOpenLocal = new Date(
-    recipientOpenLocal.getTime() + clientWindowStartOffset * 3600000
-  );
+    const recipientEndLocal = new Date(
+      formatInTimeZone(
+        dayLoopDate,
+        recipientTimezone,
+        `yyyy-MM-dd'T'${clientWindowEndHour.toString().padStart(2, '0')}:00`
+      )
+    );
 
-  // Recipient legal end (cutoff) in local timezone
-  const recipientEndLocal = new Date(
-    formatInTimeZone(
-      dayLoopDate,
-      recipientTimezone,
-      `yyyy-MM-dd'T'${clientWindowEndHour.toString().padStart(2, '0')}:00`
-    )
-  );
+    const recipientLegalStartUtc = new Date(recipientOpenLocal);
+    const recipientLegalEndUtc = new Date(recipientEndLocal);
 
-  // Convert both to UTC
-  const recipientLegalStartUtc = new Date(recipientOpenLocal);
-  const recipientLegalEndUtc = new Date(recipientEndLocal);
+    // STEP 11: Compute raw window overlap
+    overlapStart = new Date(
+      Math.max(adminStartUtc.getTime(), recipientLegalStartUtc.getTime())
+    );
 
-  // STEP 11: Compute raw window overlap (scaffolding only)
+    overlapEnd = new Date(
+      Math.min(adminEndUtc.getTime(), recipientLegalEndUtc.getTime())
+    );
 
-  const overlapStart = new Date(
-    Math.max(adminStartUtc.getTime(), recipientLegalStartUtc.getTime())
-  );
+    // Overlap validation and candidate adjustment
+    const hasOverlap = overlapStart < overlapEnd;
+    const candidateInsideOverlap =
+      candidate >= overlapStart && candidate < overlapEnd;
+    const candidateBeforeOverlap = candidate < overlapStart;
 
-  const overlapEnd = new Date(
-    Math.min(adminEndUtc.getTime(), recipientLegalEndUtc.getTime())
-  );
-
-  // STEP 12: Overlap validation scaffolding (no logic yet)
-
-  // Flags for future logic
-  const hasOverlap = overlapStart < overlapEnd;
-  const candidateInsideOverlap =
-    candidate >= overlapStart && candidate < overlapEnd;
-  const candidateBeforeOverlap = candidate < overlapStart;
-
-  // STEP 14: Add day-rolling logic to remaining branches
-  if (!hasOverlap) {
-    // No window intersection today → roll to next day at admin start
-    dayLoopDate = addDays(
-      new Date(Date.UTC(
+    if (!hasOverlap) {
+      candidate = new Date(Date.UTC(
         dayLoopDate.getUTCFullYear(),
         dayLoopDate.getUTCMonth(),
         dayLoopDate.getUTCDate(),
         settings.sendingHoursStart, 0, 0
-      )),
-      1
-    );
-    attempts++;
-    return dayLoopDate; // placeholder — will be replaced when loop is wired
-  } else if (candidateInsideOverlap) {
-    // already valid — do nothing
-  } else if (candidateBeforeOverlap) {
-    candidate = new Date(overlapStart);
-  } else {
-    // candidate after overlap end → roll to next day at admin start
-    dayLoopDate = addDays(
-      new Date(Date.UTC(
-        dayLoopDate.getUTCFullYear(),
-        dayLoopDate.getUTCMonth(),
-        dayLoopDate.getUTCDate(),
-        settings.sendingHoursStart, 0, 0
-      )),
-      1
-    );
-    attempts++;
-    return dayLoopDate; // placeholder — will be replaced when loop is wired
+      ));
+      dayLoopDate = addDays(candidate, 1);
+      continue;
+    }
+
+    if (candidateInsideOverlap) {
+      break;
+    }
+
+    if (candidateBeforeOverlap) {
+      candidate = new Date(overlapStart);
+      break;
+    }
+
+    // candidate after overlap end → roll to next day
+    candidate = new Date(Date.UTC(
+      dayLoopDate.getUTCFullYear(),
+      dayLoopDate.getUTCMonth(),
+      dayLoopDate.getUTCDate(),
+      settings.sendingHoursStart, 0, 0
+    ));
+    dayLoopDate = addDays(candidate, 1);
+  }
+
+  if (candidate < overlapStart! || candidate >= overlapEnd!) {
+    throw new Error("No legal send slot found within 14 days");
   }
 
   return candidate;
