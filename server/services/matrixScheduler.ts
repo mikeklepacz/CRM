@@ -146,16 +146,37 @@ export async function getNextMatrixSlot(
     candidate >= overlapStart && candidate < overlapEnd;
   const candidateBeforeOverlap = candidate < overlapStart;
 
-  // STEP 13: Fill in the two simplest branches
+  // STEP 14: Add day-rolling logic to remaining branches
   if (!hasOverlap) {
-    // leave empty for now
+    // No window intersection today → roll to next day at admin start
+    dayLoopDate = addDays(
+      new Date(Date.UTC(
+        dayLoopDate.getUTCFullYear(),
+        dayLoopDate.getUTCMonth(),
+        dayLoopDate.getUTCDate(),
+        settings.sendingHoursStart, 0, 0
+      )),
+      1
+    );
+    attempts++;
+    return dayLoopDate; // placeholder — will be replaced when loop is wired
   } else if (candidateInsideOverlap) {
-    // candidate already valid — do nothing
+    // already valid — do nothing
   } else if (candidateBeforeOverlap) {
-    // move candidate forward to the start of the overlap window
     candidate = new Date(overlapStart);
   } else {
-    // candidate after overlap end — leave empty for now
+    // candidate after overlap end → roll to next day at admin start
+    dayLoopDate = addDays(
+      new Date(Date.UTC(
+        dayLoopDate.getUTCFullYear(),
+        dayLoopDate.getUTCMonth(),
+        dayLoopDate.getUTCDate(),
+        settings.sendingHoursStart, 0, 0
+      )),
+      1
+    );
+    attempts++;
+    return dayLoopDate; // placeholder — will be replaced when loop is wired
   }
 
   return candidate;
