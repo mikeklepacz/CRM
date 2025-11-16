@@ -2,6 +2,7 @@
 
 import { storage } from '../storage';
 import { addDays } from 'date-fns';
+import { parseBusinessHours } from './timezoneHours';
 
 interface MatrixSchedulerParams {
   recipientId: string;
@@ -17,7 +18,7 @@ interface MatrixSchedulerParams {
 export async function getNextMatrixSlot(
   params: MatrixSchedulerParams
 ): Promise<Date> {
-  const { stepDelay, lastStepSentAt, userId } = params;
+  const { stepDelay, lastStepSentAt, userId, recipientBusinessHours } = params;
 
   const settings = await storage.getEhubSettings();
   if (!settings) {
@@ -59,6 +60,9 @@ export async function getNextMatrixSlot(
 
   // STEP 6: Initialize candidate
   let candidate = globalMinimum;
+
+  // STEP 7: Parse recipient business hours
+  const parsed = parseBusinessHours(recipientBusinessHours);
 
   return candidate;
 }
