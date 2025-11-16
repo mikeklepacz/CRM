@@ -32,8 +32,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, Plus, Save, X, Sun, Moon, Edit, Check, GripVertical } from "lucide-react";
-import { HslColorPicker } from "react-colorful";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SharedColorPicker } from "@/components/shared-color-picker";
 import {
   DndContext,
   closestCenter,
@@ -51,44 +50,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
-// HSL <-> Hex conversion utilities
-function hexToHsl(hex: string): { h: number; s: number; l: number } {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!result) return { h: 0, s: 0, l: 0 };
-
-  let r = parseInt(result[1], 16) / 255;
-  let g = parseInt(result[2], 16) / 255;
-  let b = parseInt(result[3], 16) / 255;
-
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h = 0, s = 0, l = (max + min) / 2;
-
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-
-    switch (max) {
-      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-      case g: h = ((b - r) / d + 2) / 6; break;
-      case b: h = ((r - g) / d + 4) / 6; break;
-    }
-  }
-
-  return { h: h * 360, s: s * 100, l: l * 100 };
-}
-
-function hslToHex(h: number, s: number, l: number): string {
-  l /= 100;
-  const a = s * Math.min(l, 1 - l) / 100;
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color).toString(16).padStart(2, '0');
-  };
-  return `#${f(0)}${f(8)}${f(4)}`;
-}
 
 interface Status {
   id: string;
@@ -212,9 +173,6 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
   // Delete confirmation state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  
-  // Color picker state - track which picker is open
-  const [activeColorPicker, setActiveColorPicker] = useState<string | null>(null);
 
   // Fetch statuses
   const { data: statusesData, isLoading } = useQuery<{ statuses: Status[] }>({
@@ -425,56 +383,6 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
     }
   };
 
-  // Color picker component
-  const ColorPicker = ({ 
-    label, 
-    value, 
-    onChange,
-    pickerId
-  }: { 
-    label: string; 
-    value: string; 
-    onChange: (color: string) => void;
-    pickerId: string;
-  }) => {
-    const hsl = hexToHsl(value);
-    return (
-      <div className="space-y-2">
-        <Label className="text-xs">{label}</Label>
-        <Popover open={activeColorPicker === pickerId} onOpenChange={(open) => setActiveColorPicker(open ? pickerId : null)}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-2 h-9"
-              data-testid={`button-color-${label.toLowerCase().replace(/\s/g, '-')}`}
-            >
-              <div 
-                className="w-5 h-5 rounded border"
-                style={{ backgroundColor: value }}
-              />
-              <span className="text-xs font-mono">{value}</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-3">
-            <HslColorPicker
-              color={hsl}
-              onChange={(newHsl) => {
-                const hex = hslToHex(newHsl.h, newHsl.s, newHsl.l);
-                onChange(hex);
-              }}
-            />
-            <Input
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              className="mt-2 font-mono text-xs"
-              placeholder="#000000"
-            />
-          </PopoverContent>
-        </Popover>
-      </div>
-    );
-  };
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -560,17 +468,17 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
                     Light Mode Colors *
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
-                    <ColorPicker
+                    <SharedColorPicker
                       label="Background"
                       value={formData.lightBgColor}
                       onChange={(color) => setFormData({ ...formData, lightBgColor: color })}
-                      pickerId="light-bg"
+                      testId="color-light-bg"
                     />
-                    <ColorPicker
+                    <SharedColorPicker
                       label="Text"
                       value={formData.lightTextColor}
                       onChange={(color) => setFormData({ ...formData, lightTextColor: color })}
-                      pickerId="light-text"
+                      testId="color-light-text"
                     />
                   </div>
                 </div>
@@ -582,17 +490,17 @@ export function StatusManagementDialog({ open, onOpenChange }: StatusManagementD
                     Dark Mode Colors *
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
-                    <ColorPicker
+                    <SharedColorPicker
                       label="Background"
                       value={formData.darkBgColor}
                       onChange={(color) => setFormData({ ...formData, darkBgColor: color })}
-                      pickerId="dark-bg"
+                      testId="color-dark-bg"
                     />
-                    <ColorPicker
+                    <SharedColorPicker
                       label="Text"
                       value={formData.darkTextColor}
                       onChange={(color) => setFormData({ ...formData, darkTextColor: color })}
-                      pickerId="dark-text"
+                      testId="color-dark-text"
                     />
                   </div>
                 </div>
