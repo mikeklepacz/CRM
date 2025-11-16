@@ -1,47 +1,23 @@
-/**
- * Matrix Scheduler - Unified Global + Recipient Constraint Scheduler
- * 
- * This is the ONLY function that calculates send times in the entire system.
- * It enforces both global queue constraints and recipient delivery windows simultaneously.
- * 
- * NO EXCEPTIONS. NO SHORTCUTS.
- */
+// server/services/matrixScheduler.ts
 
 import { storage } from '../storage';
-import { addDays, addHours } from 'date-fns';
 import { parseBusinessHours } from './timezoneHours';
+import { addDays, setHours, setMinutes, setSeconds } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 
 interface MatrixSchedulerParams {
   recipientId: string;
   sequenceId: string;
   stepNumber: number;
-  stepDelay: number;                 // Days to wait before this step
-  lastStepSentAt: Date | null;       // When previous step was sent (null for step 1)
+  stepDelay: number;                 
+  lastStepSentAt: Date | null;      
   recipientTimezone: string;
   recipientBusinessHours: string;
-  userId: string;                    // Sequence owner (for admin timezone lookup)
+  userId: string;
 }
 
-/**
- * Calculate the next legal send time that satisfies ALL constraints:
- * 
- * Global Constraints:
- * - After global queue tail (latest scheduledAt across ALL users)
- * - Rate-limit spacing (adminWindowHours / dailyEmailLimit)
- * - Inside admin sending window (sendingHoursStart → sendingHoursEnd, UTC)
- * - Jitter applied ONLY after validation
- * 
- * Recipient Constraints:
- * - Inside recipient's legal delivery window (open + offset → cutoff)
- * - Respects recipient timezone
- * - Skips weekends if configured
- * - Day-rolls if no valid slot exists today
- */
 export async function getNextMatrixSlot(params: MatrixSchedulerParams): Promise<Date> {
   const {
-    recipientId,
-    sequenceId,
-    stepNumber,
     stepDelay,
     lastStepSentAt,
     recipientTimezone,
@@ -49,120 +25,207 @@ export async function getNextMatrixSlot(params: MatrixSchedulerParams): Promise<
     userId,
   } = params;
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 1: Load E-Hub Settings (Global Rules)
-  // ═══════════════════════════════════════════════════════════════
-  // - dailyEmailLimit
-  // - sendingHoursStart / sendingHoursEnd (admin window in UTC)
-  // - clientWindowStartOffset (hours after recipient opens)
-  // - clientWindowEndHour (cutoff hour in recipient's timezone)
-  // - skipWeekends
-  // - minDelayMinutes / maxDelayMinutes (jitter range)
+  // Load settings
+  const settings = await storage.getAdminSettings(userId);
+  const {
+    sendingHoursStart,
+    sendingHoursEnd,
+    dailyEmailLimit,
+    clientWindowStartOffset,
+    clientWindowEndHour,
+    skipWeekends,
+    minDelayMinutes,
+    maxDelayMinutes
+  } = settings;
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 2: Load Admin Timezone
-  // ═══════════════════════════════════════════════════════════════
-  // Get user preferences for admin timezone
-  // Fallback to 'America/New_York' if not set
+  // Admin timezone
+  const adminTz = settings.adminTimezone || 'America/New_York';
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 3: Calculate Baseline Time
-  // ═══════════════════════════════════════════════════════════════
-  // If lastStepSentAt exists:
-  //   baseline = lastStepSentAt + stepDelay days
-  //   If that's in the past, use now
-  // Else (first step):
-  //   baseline = now + stepDelay days
+  // 1. Baseline
+  let baseline = lastStepSentAt
+    ? addDays(lastStepSentAt, stepDelay)
+    : addDays(new Date(), stepDelay);
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 4: Get Global Queue Tail
-  // ═══════════════════════════════════════════════════════════════
-  // Query: SELECT MAX(scheduledAt) FROM sequence_scheduled_sends
-  //        WHERE status = 'pending' AND scheduledAt IS NOT NULL
-  // This is the LAST scheduled email across ALL users (global FIFO)
+  if (baseline < new Date()) baseline = new Date();
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 5: Calculate Global Spacing
-  // ═══════════════════════════════════════════════════════════════
-  // adminWindowHours = sendingHoursEnd - sendingHoursStart
-  // globalSpacingMs = (adminWindowHours * 3600000) / dailyEmailLimit
-  // This spacing ensures we fit dailyEmailLimit emails within the admin window
+  // 2. Global queue tail
+  const tail = await storage.getGlobalQueueTail(); 
+  let globalMin = baseline;
+  if (tail) globalMin = new Date(Math.max(globalMin.getTime(), tail.getTime()));
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 6: Determine Global Minimum Slot
-  // ═══════════════════════════════════════════════════════════════
-  // If queueTail exists:
-  //   globalMinimum = queueTail + globalSpacingMs
-  // Else:
-  //   globalMinimum = baseline
-  
-  // candidate = max(baseline, globalMinimum)
-  // This ensures we never schedule before either constraint
+  // 3. Rate-limit spacing
+  const adminWindowHours = sendingHoursEnd - sendingHoursStart;
+  const spacingMs = (adminWindowHours * 3600000) / dailyEmailLimit;
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 7: Parse Recipient Business Hours
-  // ═══════════════════════════════════════════════════════════════
-  // Use parseBusinessHours() to get:
-  // - schedule (day-of-week mappings)
-  // - is24_7
-  // - isClosed
-  // - timezone (resolved from recipient data)
+  if (tail) {
+    const spaced = new Date(tail.getTime() + spacingMs);
+    if (spaced > globalMin) globalMin = spaced;
+  }
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 8: Day-Rolling Loop (Max 14 Days)
-  // ═══════════════════════════════════════════════════════════════
-  // Loop until we find a valid slot or hit 14-day limit:
-  //
-  // For each day:
-  //   A. Check weekend skip rule
-  //      - If skipWeekends && (Saturday || Sunday) → skip to next day
-  //
-  //   B. Calculate admin window for this day (UTC)
-  //      - adminStart = candidate day at sendingHoursStart (UTC)
-  //      - adminEnd = candidate day at sendingHoursEnd (UTC)
-  //
-  //   C. Calculate recipient window for this day (local timezone)
-  //      - Parse recipient's business hours for this day-of-week
-  //      - openingTime = business opens (local time)
-  //      - legalStart = openingTime + clientWindowStartOffset hours
-  //      - legalEnd = clientWindowEndHour (local time)
-  //      - Convert to UTC for comparison
-  //
-  //   D. Find window intersection
-  //      - overlapStart = max(adminStart, recipientLegalStart)
-  //      - overlapEnd = min(adminEnd, recipientLegalEnd)
-  //
-  //   E. Check if candidate fits in overlap
-  //      - If candidate >= overlapStart && candidate < overlapEnd:
-  //          → VALID SLOT FOUND, break loop
-  //      - Else if overlapStart exists and overlapStart > candidate:
-  //          → candidate = overlapStart (move to start of window)
-  //          → retry this day
-  //      - Else:
-  //          → No overlap today, advance to next day
-  //          → candidate = next day at adminStartHour
-  //
-  // If loop exhausted (14 days) without finding valid slot:
-  //   → throw Error('No valid send slot found within 14 days')
+  // 4. Recipient business hours parsed
+  const parsed = parseBusinessHours(recipientBusinessHours);
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 9: Apply Jitter (ONLY After Validation)
-  // ═══════════════════════════════════════════════════════════════
-  // Jitter is applied ONLY to the validated slot, not during search
-  // minJitterMs = minDelayMinutes * 60 * 1000
-  // maxJitterMs = maxDelayMinutes * 60 * 1000
-  // jitterMs = random(minJitterMs, maxJitterMs)
-  // finalSlot = candidate + jitterMs
-  //
-  // CRITICAL: Ensure jittered slot still fits in the valid window
-  // If finalSlot exceeds window end, cap it or skip jitter
+  // 5. Begin day-loop
+  let candidate = globalMin;
+  for (let i = 0; i < 14; i++) {
+    const d = candidate;
 
-  // ═══════════════════════════════════════════════════════════════
-  // STEP 10: Return Final Timestamp
-  // ═══════════════════════════════════════════════════════════════
-  // Return the Date object representing the next legal send time
-  // This timestamp satisfies ALL global and recipient constraints
+    // Admin window
+    const adminStartUtc = new Date(
+      Date.UTC(
+        d.getUTCFullYear(),
+        d.getUTCMonth(),
+        d.getUTCDate(),
+        sendingHoursStart, 0, 0
+      )
+    );
+    const adminEndUtc = new Date(
+      Date.UTC(
+        d.getUTCFullYear(),
+        d.getUTCMonth(),
+        d.getUTCDate(),
+        sendingHoursEnd, 0, 0
+      )
+    );
 
-  // Placeholder return (will be replaced with actual logic)
-  return new Date();
+    // Weekend skip
+    const adminDay = parseInt(formatInTimeZone(d, adminTz, 'e'), 10); 
+    if (skipWeekends && (adminDay === 6 || adminDay === 7)) {
+      candidate = addDays(
+        new Date(
+          Date.UTC(
+            d.getUTCFullYear(),
+            d.getUTCMonth(),
+            d.getUTCDate(),
+            sendingHoursStart, 0, 0
+          )
+        ),
+        1
+      );
+      continue;
+    }
+
+    // Recipient window for this day
+    const localDay = parseInt(formatInTimeZone(d, recipientTimezone, 'e'), 10);
+    const daySchedule = parsed.schedule[localDay];
+
+    if (!parsed.is24_7) {
+      if (!daySchedule || daySchedule.isClosed) {
+        candidate = addDays(
+          new Date(
+            Date.UTC(
+              d.getUTCFullYear(),
+              d.getUTCMonth(),
+              d.getUTCDate(),
+              sendingHoursStart, 0, 0
+            )
+          ),
+          1
+        );
+        continue;
+      }
+    }
+
+    // Recipient opening local
+    let recipientOpen = new Date(
+      formatInTimeZone(
+        d,
+        recipientTimezone,
+        `yyyy-MM-dd'T'${daySchedule ? daySchedule.open : "00:00"}`
+      )
+    );
+
+    // Legal start
+    recipientOpen = setHours(recipientOpen, recipientOpen.getHours() + clientWindowStartOffset);
+
+    // Legal end
+    let recipientEnd = new Date(
+      formatInTimeZone(
+        d,
+        recipientTimezone,
+        `yyyy-MM-ddT${clientWindowEndHour.toString().padStart(2, '0')}:00`
+      )
+    );
+
+    // Convert both to UTC dates
+    const legalStartUtc = new Date(recipientOpen);
+    const legalEndUtc = new Date(recipientEnd);
+
+    // Overlap
+    const overlapStart = new Date(Math.max(adminStartUtc.getTime(), legalStartUtc.getTime()));
+    const overlapEnd = new Date(Math.min(adminEndUtc.getTime(), legalEndUtc.getTime()));
+
+    // No overlap
+    if (overlapStart >= overlapEnd) {
+      candidate = addDays(
+        new Date(
+          Date.UTC(
+            d.getUTCFullYear(),
+            d.getUTCMonth(),
+            d.getUTCDate(),
+            sendingHoursStart, 0, 0
+          )
+        ),
+        1
+      );
+      continue;
+    }
+
+    // Candidate inside valid window?
+    if (candidate >= overlapStart && candidate < overlapEnd) {
+      candidate = new Date(candidate);
+      break;
+    }
+
+    // Candidate before window start
+    if (candidate < overlapStart) {
+      candidate = new Date(overlapStart);
+      break;
+    }
+
+    // Else next day
+    candidate = addDays(
+      new Date(
+        Date.UTC(
+          d.getUTCFullYear(),
+          d.getUTCMonth(),
+          d.getUTCDate(),
+          sendingHoursStart, 0, 0
+        )
+      ),
+      1
+    );
+  }
+
+  // 6. Jitter FINAL
+  const jitterMs =
+    Math.floor(
+      Math.random() * ((maxDelayMinutes - minDelayMinutes) * 60000)
+    ) +
+    minDelayMinutes * 60000;
+
+  let finalStamp = new Date(candidate.getTime() + jitterMs);
+
+  // Final cap: must not exceed overlapEnd
+  const finalDayAdminStart = new Date(
+    Date.UTC(
+      finalStamp.getUTCFullYear(),
+      finalStamp.getUTCMonth(),
+      finalStamp.getUTCDate(),
+      sendingHoursStart, 0, 0
+    )
+  );
+
+  const finalDayAdminEnd = new Date(
+    Date.UTC(
+      finalStamp.getUTCFullYear(),
+      finalStamp.getUTCMonth(),
+      finalStamp.getUTCDate(),
+      sendingHoursEnd, 0, 0
+    )
+  );
+
+  if (finalStamp > finalDayAdminEnd) finalStamp = finalDayAdminEnd;
+
+  return finalStamp;
 }
