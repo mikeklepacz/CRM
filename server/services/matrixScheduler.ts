@@ -93,7 +93,7 @@ export async function getNextMatrixSlot(params: MatrixSchedulerParams): Promise<
     );
 
     // Weekend skip
-    const adminDay = parseInt(formatInTimeZone(d, adminTz, 'e'), 10); 
+    const adminDay = parseInt(formatInTimeZone(d, adminTimezone, 'e'), 10); 
     if (skipWeekends && (adminDay === 6 || adminDay === 7)) {
       candidate = addDays(
         new Date(
