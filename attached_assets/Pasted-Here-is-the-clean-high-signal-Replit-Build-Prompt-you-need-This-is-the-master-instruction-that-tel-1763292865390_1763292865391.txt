@@ -1,0 +1,198 @@
+Here is the clean, high-signal Replit Build Prompt you need.
+This is the master instruction that tells Replit exactly what to build, what files it will receive, what architecture to produce, and how to modify the system.
+
+Use this as a single paste into Replit’s “Generate Code” window.
+
+No fluff. No ambiguity. This is the senior-engineer spec.
+
+⸻
+
+FULL SYSTEM REWRITE / UPGRADE PROMPT FOR REPLIT
+
+You (Replit Code Generator) are upgrading an existing TypeScript backend called E-Hub, which sends AI-generated emails based on business hours and sequence rules.
+
+You must follow the exact architecture below and modify ONLY the files provided by the user.
+The new system replaces the batch-based “queueCoordinator” with real-time per-recipient scheduling.
+
+⸻
+
+GOAL
+
+Replace the old scheduling model:
+
+• “eligibleAt” is set at enrollment
+• “scheduledAt” stays null
+• queueCoordinator assigns scheduledAt every 5 minutes
+• replyPollingWorker checks every 5 minutes
+
+With the new model:
+	1.	scheduledAt is assigned immediately when a recipient enters a sequence or moves to the next step.
+	2.	No 5-minute coordinator.
+	3.	Queue processor wakes every 60 seconds but only inside configured sending hours.
+	4.	Each scheduled send performs a reply check 1 minute before sending, then again immediately on send, blocking the send if a reply arrived.
+	5.	replyDetectionWorker is removed entirely unless used for analytics (default: removed).
+
+⸻
+
+FILES THE USER WILL PROVIDE YOU
+
+You will only modify these exact files:
+	1.	server/services/ehubContactsService.ts
+	2.	server/services/queueCoordinator.ts (delete or replace with no-op)
+	3.	server/services/emailQueue.ts
+	4.	server/services/replyDetectionWorker.ts (delete unless needed)
+	5.	server/services/gmailReplyDetection.ts
+	6.	server/services/timezoneHours.ts
+	7.	server/services/emailSender.ts
+	8.	server/storage.ts
+	9.	server/routes/ehub.ts
+
+You may create ONE new file:
+	10.	server/services/emailSchedulingService.ts
+
+⸻
+
+REQUIRED ARCHITECTURE
+
+1. NEW FILE: emailSchedulingService.ts
+
+The new scheduler runs on-demand whenever:
+
+• a recipient enrolls into step 1
+• a follow-up step is created
+• a repeated step is created
+
+It must calculate:
+	•	business-hour opening for that store
+	•	sendTime = opening + 1 hour
+	•	enforce “never send after SEND_CONFIG.endHour (local)”
+	•	skip weekends if enabled
+	•	add jitter 0–30 min
+	•	enforce rate limit (X emails per day per user)
+	•	enforce FIFO using the last scheduledAt in DB for that user
+	•	return a final scheduledAt in UTC
+
+2. Modify ehubContactsService.ts
+
+Replace:
+
+eligibleAt = now
+scheduledAt = null
+
+with:
+
+eligibleAt = now
+scheduledAt = await emailSchedulingService.scheduleRecipient(...)
+
+3. Remove queueCoordinator.ts
+
+Delete or replace the file with an empty stub.
+No jobs should run every 5 minutes.
+
+4. Modify emailQueue.ts
+
+Rules:
+	•	polling interval = 60 seconds
+	•	only run inside global sending hours
+	•	before sending an email:
+
+Step A — One-minute pre-check
+
+if (scheduledSend.scheduledAt <= now + 1 minute) {
+   run checkForReplies()
+   if reply → block send + mark recipient as replied
+}
+
+Step B — Final pre-send check
+Immediately before calling sendEmail():
+
+const replyCheck = await checkForReplies()
+if reply → block send, update recipient status
+else → send
+
+5. Remove replyDetectionWorker.ts
+
+Delete entirely.
+All reply detection happens inside emailQueue.ts.
+
+6. gmailReplyDetection.ts
+
+No major changes except:
+
+Replace:
+
+checkForReplies(userId, threadId)
+
+Return shape must include:
+
+{ hasReply, replyCount, replies[] }
+
+Keep the function pure.
+
+7. timezoneHours.ts
+
+No changes needed except:
+	•	export computeOptimalSendTime()
+	•	ensure the send time caps at “sendingHoursEnd”
+	•	ensure fallback for closed days → noon next open day
+	•	ensure getTimezone works correctly using US + Canada maps
+
+8. Modify storage.ts
+
+Add:
+	•	transaction-safe method to fetch queue tail:
+
+getLastScheduledSendForUser(userId)
+
+	•	ensure scheduledAt is indexed
+	•	ensure scheduled sends can be inserted atomically
+
+9. routes/ehub.ts
+
+Confirm that sequence enrollment calls:
+
+emailSchedulingService.scheduleRecipient()
+
+and no longer relies on queueCoordinator.
+
+⸻
+
+WHAT REPLIT MUST GENERATE
+
+The generator must:
+	1.	Create the new scheduling file exactly as specified.
+	2.	Update all imports so they reference the new scheduler.
+	3.	Remove coordinator-based scheduling.
+	4.	Make the queue processor fully real-time and reply-safe.
+	5.	Maintain all existing logic for:
+	•	AI email generation
+	•	threading in Gmail
+	•	commission tracker
+	•	step management
+	•	statistics
+
+Do not create new routes.
+Do not modify business logic outside scheduling and reply detection.
+
+⸻
+
+DEFINITIVE RULES
+
+• scheduledAt must ALWAYS be non-null for any pending email.
+• NO file may import queueCoordinator after upgrade.
+• replyDetectionWorker must be deleted.
+• All reply detection is performed inside emailQueue.ts.
+• Queue processor must not run outside global configured sending hours.
+• Use only the existing project patterns (storage, services, etc.).
+• Do not create new dependencies.
+
+⸻
+
+END OF PROMPT
+
+Paste this entire block into Replit and let it generate. After Replit produces the patch, bring me:
+	1.	The diff
+	2.	Any failures
+	3.	Any files it couldn’t modify
+
+I’ll correct whatever Replit gets wrong.

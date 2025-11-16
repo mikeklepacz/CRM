@@ -1,0 +1,33 @@
+I need to redesign the email scheduling flow so the system no longer depends on the 5-minute coordinator cron for assigning scheduledAt timestamps. Instead, I want new emails to be scheduled immediately at enrollment, and I want reply-detection to be handled at send-time only. Before I make structural changes, I need a full technical audit from you. Please answer each of these points clearly:
+
+A. CURRENT SCHEDULING MECHANICS
+	1.	Where exactly in the codebase are eligibleAt and scheduledAt timestamps currently assigned?
+	2.	Which files/functions actually decide the final send time (including jitter and rate spacing)?
+	3.	When a new sequence is created, what precise line of code determines whether emails are instantly schedulable vs waiting for the coordinator?
+
+B. DEPENDENCIES ON THE 5-MINUTE COORDINATOR
+	4.	List every place in the codebase where the coordinator cron is required for system correctness.
+	5.	Which operations would break if the coordinator stopped running?
+	6.	Does any part of computeNextSendSlot() assume batching via cron?
+
+C. REQUIREMENTS FOR REAL-TIME SCHEDULING
+	7.	What fields and constraints must be set immediately when a recipient is enrolled so the queue can function with zero cron delay?
+	8.	What functions or database writes must run synchronously at enrollment time?
+	9.	Which current coordinator responsibilities (sorting, spacing, jittering, business-hour windows) must be moved to another file?
+
+D. SENDING-TIME REPLY DETECTION INTEGRATION
+	10.	Which send-pipeline file should contain the new “check Gmail thread before sending this email” logic?
+	11.	What variables or fields (threadId, messageId, recipient status, etc.) are required for this check?
+	12.	What is the correct return shape from Gmail detection to cancel a send cleanly before the email is dispatched?
+
+E. POTENTIAL SIDE-EFFECTS
+	13.	Will moving to real-time scheduling break batching assumptions in reporting or stats?
+	14.	Does removing the coordinator require rewriting sorting logic (FIFO, jitter, etc.)?
+	15.	Are any race conditions or deadlocks possible if scheduling happens concurrently while queue is sending?
+
+F. FINAL OUTPUT
+	16.	Based on everything above, give me the exact list of code files that must be rewritten, in what order, and which functions need to be relocated or refactored.
+	17.	Provide a recommended architecture diagram for the new flow:
+Sequence Enrollment → Instant Scheduling → Queue Processing → Pre-Send Reply Check → Send
+
+Be precise. I need a complete dependency map so I can safely remove the coordinator and move to real-time scheduling plus intelligent reply checks at send time.”
