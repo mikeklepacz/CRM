@@ -75,27 +75,37 @@ async function updateRescheduleJob(
 }
 
 /**
- * Main reschedule function - clears scheduled_at for all pending sends
+ * GLOBAL RESCHEDULER - Apollo-style FIFO across all users
  * 
- * Simplified Flow:
- * 1. Check for concurrent reschedule jobs (mutex lock with timeout)
- * 2. Create new reschedule job record
- * 3. Clear scheduled_at for all pending sends (except imminent ones <5 min)
- * 4. Preserve eligible_at (sequence logic intact)
- * 5. Let coordinator naturally reschedule on next tick(s)
- * 6. Mark job as completed
+ * Recalculates scheduledAt for ALL pending emails in globally sorted order.
+ * This is triggered when:
+ * - Sending windows change
+ * - Daily limits change
+ * - Jitter settings change
+ * - Weekend toggle changes
+ * - Sequence step changes
  * 
- * Why this approach:
- * - Reuses all existing coordinator logic (no duplication)
- * - Guarantees FIFO, timezone balancing, dual-window validation
- * - No risk of breaking sequence timing (eligible_at untouched)
- * - Simple, safe, and bulletproof
+ * Flow:
+ * 1. Lock with mutex (prevent concurrent reschedules)
+ * 2. Fetch ALL pending/scheduled sends (not sent yet)
+ * 3. Sort globally by: sequence > step > enrollment time
+ * 4. Re-run scheduleRecipient() for each in FIFO order
+ * 5. Apply business hours, windows, weekend skipping
+ * 6. Apply rate-limit spacing globally (not per-user)
+ * 7. Apply jitter as LAST step
+ * 8. Update scheduledAt in database
  */
-export async function rescheduleAllPendingSends(settings: EhubSettings): Promise<RescheduleResult> {
+export async function rescheduleAllPendingEmails(): Promise<RescheduleResult> {
   let jobId: string | null = null;
   
   try {
-    // Mutex check with timeout - allow reschedule if last job is >10 min old and still "running"
+    // Get current settings
+    const settings = await storage.getEhubSettings();
+    if (!settings) {
+      throw new Error('E-Hub settings not found');
+    }
+
+    // Mutex check with timeout
     const runningJobs = await db
       .select()
       .from(rescheduleJobs)
@@ -106,7 +116,6 @@ export async function rescheduleAllPendingSends(settings: EhubSettings): Promise
       const job = runningJobs[0];
       const tenMinutesAgo = addMinutes(new Date(), -10);
       
-      // If job started < 10 min ago, it's still valid - block
       if (job.startedAt > tenMinutesAgo) {
         return {
           success: false,
@@ -115,7 +124,7 @@ export async function rescheduleAllPendingSends(settings: EhubSettings): Promise
         };
       }
       
-      // Job is stale (>10 min old and still running) - mark it failed and continue
+      // Stale job - mark failed
       await db
         .update(rescheduleJobs)
         .set({
@@ -129,22 +138,158 @@ export async function rescheduleAllPendingSends(settings: EhubSettings): Promise
     // Create job record
     jobId = await createRescheduleJob(settings);
     
-    // Clear scheduled_at for all pending sends (except imminent ones)
-    const now = new Date();
-    const fiveMinutesFromNow = addMinutes(now, 5);
+    console.log('[RescheduleCoordinator] 🔄 Starting global reschedule...');
     
-    const count = await storage.clearScheduledAtForPendingSends(fiveMinutesFromNow);
+    // Fetch ALL pending/scheduled sends (exclude sent, failed, cancelled)
+    const { inArray, and, or, isNull } = await import('drizzle-orm');
+    const { sequenceScheduledSends, sequenceRecipients, sequences } = await import('@shared/schema');
+    
+    const pendingSends = await db
+      .select({
+        id: sequenceScheduledSends.id,
+        recipientId: sequenceScheduledSends.recipientId,
+        sequenceId: sequenceScheduledSends.sequenceId,
+        stepNumber: sequenceScheduledSends.stepNumber,
+        eligibleAt: sequenceScheduledSends.eligibleAt,
+        recipientCreatedAt: sequenceRecipients.createdAt,
+        sequenceName: sequences.name,
+        recipientTimezone: sequenceRecipients.timezone,
+        recipientBusinessHours: sequenceRecipients.businessHours,
+        lastStepSentAt: sequenceRecipients.lastStepSentAt,
+        sequenceCreatedBy: sequences.createdBy,
+      })
+      .from(sequenceScheduledSends)
+      .innerJoin(sequenceRecipients, eq(sequenceScheduledSends.recipientId, sequenceRecipients.id))
+      .innerJoin(sequences, eq(sequenceScheduledSends.sequenceId, sequences.id))
+      .where(
+        and(
+          inArray(sequenceScheduledSends.status, ['pending', 'processing']),
+          or(
+            isNull(sequenceScheduledSends.sentAt),
+            eq(sequenceScheduledSends.sentAt, sql`NULL`)
+          )
+        )
+      )
+      .orderBy(
+        sequenceScheduledSends.sequenceId,
+        sequenceScheduledSends.stepNumber,
+        sequenceRecipients.createdAt
+      );
+    
+    console.log(`[RescheduleCoordinator] 📊 Found ${pendingSends.length} pending sends to reschedule`);
+    
+    if (pendingSends.length === 0) {
+      await updateRescheduleJob(jobId, 'completed', 0);
+      return {
+        success: true,
+        totalProcessed: 0,
+      };
+    }
+    
+    // Import scheduling service
+    const { scheduleRecipient } = await import('./emailSchedulingService');
+    
+    // Track global queue tail for FIFO enforcement
+    let globalQueueTail: Date | null = null;
+    let processedCount = 0;
+    
+    // Process each send in globally sorted order
+    for (const send of pendingSends) {
+      try {
+        // Get user prefs for admin timezone
+        const userPrefs = await storage.getUserPreferences(send.sequenceCreatedBy);
+        const adminTimezone = userPrefs?.timezone || 'America/New_York';
+        
+        // Calculate new scheduledAt using real-time scheduler
+        const now = new Date();
+        let baselineTime: Date;
+        
+        if (send.lastStepSentAt) {
+          // Follow-up: baseline from last sent time + delay
+          const sequence = await storage.getSequence(send.sequenceId);
+          const stepDelays = (sequence?.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
+          const stepDelay = stepDelays[send.stepNumber - 1] || 0;
+          baselineTime = addDays(send.lastStepSentAt, stepDelay);
+          if (baselineTime <= now) {
+            baselineTime = now;
+          }
+        } else {
+          // First step: use eligibleAt or now
+          baselineTime = send.eligibleAt > now ? send.eligibleAt : now;
+        }
+        
+        // Apply smart timing (business hours, weekends, admin window)
+        const { computeNextSendSlot } = await import('./smartTiming');
+        let scheduledAt = computeNextSendSlot({
+          baselineTime,
+          adminTimezone,
+          adminStartHour: settings.sendingHoursStart,
+          adminEndHour: settings.sendingHoursEnd,
+          recipientBusinessHours: send.recipientBusinessHours || '',
+          recipientTimezone: send.recipientTimezone || 'America/New_York',
+          clientWindowStartOffset: settings.clientWindowStartOffset,
+          clientWindowEndHour: settings.clientWindowEndHour,
+          skipWeekends: settings.skipWeekends,
+          minimumTime: baselineTime,
+        });
+        
+        // Apply GLOBAL FIFO queue ordering
+        if (globalQueueTail) {
+          const adminWindowHours = settings.sendingHoursEnd - settings.sendingHoursStart;
+          const adminWindowMinutes = adminWindowHours * 60;
+          const minutesBetweenSends = settings.dailyEmailLimit > 0
+            ? adminWindowMinutes / settings.dailyEmailLimit
+            : 1;
+          
+          const rateLimitSpacingMs = minutesBetweenSends * 60 * 1000;
+          const afterTail = new Date(globalQueueTail.getTime() + rateLimitSpacingMs);
+          
+          if (afterTail > scheduledAt) {
+            scheduledAt = afterTail;
+            
+            // Apply jitter ONLY when queue pushed us forward
+            const minJitterMs = (settings.minDelayMinutes || 0) * 60 * 1000;
+            const maxJitterMs = (settings.maxDelayMinutes || 30) * 60 * 1000;
+            const jitterMs = Math.floor(Math.random() * (maxJitterMs - minJitterMs + 1)) + minJitterMs;
+            
+            scheduledAt = new Date(scheduledAt.getTime() + jitterMs);
+          }
+        }
+        
+        // Update global queue tail
+        globalQueueTail = scheduledAt;
+        
+        // Update scheduledAt in database
+        await db
+          .update(sequenceScheduledSends)
+          .set({ scheduledAt })
+          .where(eq(sequenceScheduledSends.id, send.id));
+        
+        processedCount++;
+        
+        if (processedCount % 100 === 0) {
+          console.log(`[RescheduleCoordinator] ✅ Processed ${processedCount}/${pendingSends.length} sends`);
+        }
+        
+      } catch (error: any) {
+        console.error(`[RescheduleCoordinator] ❌ Error rescheduling send ${send.id}:`, error.message);
+        // Continue processing other sends
+      }
+    }
+    
+    console.log(`[RescheduleCoordinator] ✅ Global reschedule complete: ${processedCount} sends updated`);
     
     // Mark job as completed
-    await updateRescheduleJob(jobId, 'completed', count);
+    await updateRescheduleJob(jobId, 'completed', processedCount);
     
     return {
       success: true,
-      totalProcessed: count,
+      totalProcessed: processedCount,
     };
     
   } catch (error) {
     const errorLog = error instanceof Error ? error.message : String(error);
+    console.error('[RescheduleCoordinator] ❌ Reschedule failed:', errorLog);
     
     if (jobId) {
       await updateRescheduleJob(jobId, 'failed', 0, errorLog);
@@ -156,6 +301,15 @@ export async function rescheduleAllPendingSends(settings: EhubSettings): Promise
       errorLog,
     };
   }
+}
+
+/**
+ * LEGACY: Old reschedule function (kept for compatibility)
+ * Use rescheduleAllPendingEmails() instead
+ */
+export async function rescheduleAllPendingSends(settings: EhubSettings): Promise<RescheduleResult> {
+  console.warn('[RescheduleCoordinator] ⚠️  Using legacy rescheduleAllPendingSends - consider using rescheduleAllPendingEmails()');
+  return rescheduleAllPendingEmails();
 }
 
 /**
