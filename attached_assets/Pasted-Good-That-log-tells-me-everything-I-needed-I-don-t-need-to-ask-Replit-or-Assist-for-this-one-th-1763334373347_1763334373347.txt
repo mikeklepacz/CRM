@@ -1,0 +1,95 @@
+Good.
+That log tells me everything I needed.
+
+I don’t need to ask Replit or Assist for this one — the failure point and the line number give away the real problem.
+
+You’re still hitting:
+
+Error: No legal send slot found within 14 days
+at matrixScheduler.ts:227
+
+Even AFTER fixing admin window construction.
+
+That means one thing:
+
+The overlap calculation is still comparing mismatched days.
+
+And the only remaining place that still forces the scheduler onto the wrong day is here:
+
+The line you haven’t fixed yet.
+
+Inside the 14-day loop, you do:
+
+let dayLoopDate = candidate;
+
+and on each rollover you do:
+
+dayLoopDate = addDays(candidate, 1);
+
+This is the bug.
+
+Why this breaks the scheduler
+
+candidate is in UTC.
+
+addDays(candidate, 1) advances the day in UTC, NOT in the admin’s timezone.
+
+So you get:
+	•	Admin day: based on adminTimezone
+	•	Recipient day: based on recipientTimezone
+	•	Loop day increment: based on UTC
+
+Three different calendars are being mixed together.
+This absolutely guarantees that the windows land on different days, even when they should overlap.
+
+It results in a scheduler that thinks it’s rolling from Wed → Thu, but the recipient window stays on Wednesday, so overlap = false.
+
+This is why even with perfect business hours and perfect timezones it still dies.
+
+⸻
+
+The Fix
+
+Tell Replit to apply this patch next.
+
+PATCH 2 — Advance dayLoopDate in admin timezone
+
+FIND THIS LINE:
+
+dayLoopDate = addDays(candidate, 1);
+
+REPLACE WITH THIS:
+
+// Advance one calendar day *in admin timezone*, not UTC
+dayLoopDate = new Date(
+  formatInTimeZone(
+    addDays(dayLoopDate, 1),
+    adminTimezone,
+    "yyyy-MM-dd'T'00:00:00"
+  )
+);
+
+This ensures:
+	•	The rolling day always stays aligned with the admin’s calendar.
+	•	Admin windows and recipient windows are compared against the same intended day.
+	•	No more “drifts” caused by UTC conversions.
+
+⸻
+
+Why this is the last piece of the puzzle
+
+You already fixed:
+
+✔ Admin window building
+✔ State → timezone resolution
+✔ Correct parseBusinessHours() inputs
+✔ Correct scheduling endpoint
+
+But the loop day was still drifting because it used UTC.
+That alone can make the scheduler miss every possible overlap.
+
+This patch forces the loop to run on actual admin-calendar days, which finally makes overlap solvable.
+
+⸻
+
+If you want, I can generate a combined single patch for Replit to apply automatically.
