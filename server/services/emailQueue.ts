@@ -298,12 +298,12 @@ export async function startEmailQueueProcessor() {
     return;
   }
   
-  // Run every 60 seconds (NEW: slower polling since sends are pre-scheduled)
-  setInterval(async () => {
-    if (isProcessing) {
-      return;
-    }
+  // Run once at startup, queue will decide whether to sleep
+  await processEmailQueue();
 
+  // Run every 60 seconds, BUT the processor itself decides whether to sleep
+  setInterval(async () => {
+    if (isProcessing) return;
     await processEmailQueue();
   }, 60000);
 
@@ -336,7 +336,8 @@ async function processEmailQueue() {
     const currentAdminHour = parseInt(formatInTimeZone(now, adminTimezone, 'H'));
     
     if (currentAdminHour < settings.sendingHoursStart || currentAdminHour >= settings.sendingHoursEnd) {
-      console.log(`[EmailQueue] ⏸️  Outside sending hours (${currentAdminHour}:00 in ${adminTimezone}). Queue paused until ${settings.sendingHoursStart}:00.`);
+      console.log(`[EmailQueue] Sleeping (true sleep). Outside sending hours.`);
+      // DO NOTHING — no DB reads, no Gmail checks, no tracker checks.
       return;
     }
 

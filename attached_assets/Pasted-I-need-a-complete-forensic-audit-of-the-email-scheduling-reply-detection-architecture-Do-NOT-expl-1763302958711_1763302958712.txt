@@ -1,0 +1,41 @@
+I need a complete forensic audit of the email-scheduling + reply-detection architecture.
+Do NOT explain theory. I need literal yes/no and file/line references.
+
+Answer ALL of the following explicitly:
+	1.	Is the queueCoordinator.ts still being executed anywhere?
+– If yes: where is it imported, instantiated, or scheduled?
+– If no: what removed it?
+	2.	Is replyDetectionWorker.ts still being executed?
+– Identify the exact file and line where startReplyDetectionWorker() is called.
+– Confirm whether it runs every 5 minutes right now.
+	3.	Where is Gmail API being polled?
+– Exact file + line numbers calling gmail.users.threads.get()
+– Distinguish: polling loops vs point-in-time checks.
+	4.	Where is the new “replyGuard” logic actually invoked?
+– File + line number of the T-1 minute check.
+– File + line number of the T-0 send-time check.
+– Confirm whether those functions actually run before sendEmail().
+	5.	Does any code still rely on scheduledAt = null → coordinator assignment?
+– List all places where scheduledAt is written.
+– List all places where scheduledAt is expected to be non-null.
+	6.	Which system currently determines WHEN an email gets sent?
+– queueCoordinator.ts scheduling?
+– emailQueue.ts real-time logic?
+– Or both conflicting?
+	7.	Is preScheduleRecipientSends() still being used to create future steps?
+– File + line where it is invoked.
+– Confirm whether it creates scheduledAt=null placeholders.
+	8.	Is any React Query polling indirectly causing Gmail polling?
+– Identify every refetchInterval in the frontend.
+– Identify API routes hit every 30/60 seconds.
+	9.	Confirm actual send sequence
+– Start with a new recipient enrolling.
+– List: which functions run, in order, until the email is actually sent.
+– Identify any function that blocks, modifies, or bypasses scheduledAt.
+	10.	List every file that still uses the old “background worker” architecture.
+– coordinator
+– worker
+– cron-style loops
+– anything using setInterval besides the queue processor
+
+Return all answers with exact file paths and line numbers.
