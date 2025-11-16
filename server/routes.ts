@@ -20751,20 +20751,36 @@ ${conversationContext}`;
       // Bulk insert recipients
       const created = await storage.addRecipients(scheduledRecipients);
 
-      // LAZY SCHEDULING: Create ONLY step 1 scheduled sends
-      // Future steps are created when current step completes
-      const firstStepSends = created.map(recipient => ({
-        recipientId: recipient.id,
-        sequenceId: sequence.id,
-        stepNumber: 1,
-        eligibleAt: recipient.nextSendAt!,
-        scheduledAt: recipient.nextSendAt!,
-        status: 'pending' as const,
-      }));
+      // REAL-TIME SCHEDULING: Now that we have real IDs, schedule each recipient
+      for (const recipient of created) {
+        // Recalculate scheduledAt with real recipient ID
+        const scheduledAt = await scheduleRecipient({
+          recipientId: recipient.id,
+          sequenceId: id,
+          stepNumber: 1,
+          stepDelay: stepDelays[0],
+          lastStepSentAt: null,
+          recipientTimezone: recipient.timezone,
+          recipientBusinessHours: recipient.businessHours,
+          userId: sequence.createdBy,
+        });
 
-      // Bulk insert step 1 sends
-      if (firstStepSends.length > 0) {
-        await storage.insertScheduledSends(firstStepSends);
+        // Insert scheduled send for step 1
+        await storage.insertScheduledSends([{
+          recipientId: recipient.id,
+          sequenceId: sequence.id,
+          stepNumber: 1,
+          eligibleAt: scheduledAt,
+          scheduledAt,
+          status: 'pending',
+        }]);
+
+        // Update recipient status
+        await storage.updateRecipient(recipient.id, {
+          status: 'in_sequence',
+          currentStep: 1,
+          nextSendAt: scheduledAt,
+        });
       }
 
       // Update sequence total count
