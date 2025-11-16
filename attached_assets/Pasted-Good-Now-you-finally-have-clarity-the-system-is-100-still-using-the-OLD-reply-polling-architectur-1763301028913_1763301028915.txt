@@ -1,0 +1,163 @@
+Good.
+Now you finally have clarity: the system is 100% still using the OLD reply-polling architecture, and none of the new pre-send logic exists yet.
+
+Here is what you need to do next.
+And I’m going to give it to you straight.
+
+You are about to rewrite a core safety mechanism of the email engine.
+This requires precision, not half-guesses.
+
+So here are the six things you must now explicitly tell Replit to build, in exactly this order, or they’ll get lost again:
+
+⸻
+
+1. Remove the entire replyDetectionWorker
+
+Tell Replit to:
+• delete server/services/replyDetectionWorker.ts
+• delete startReplyDetectionWorker() calls
+• remove any imports
+• remove any cron or interval
+• remove any references in server startup
+
+The background Gmail polling must die.
+
+⸻
+
+2. Remove all Gmail polling logic from emailQueue.ts
+
+Ask Replit to remove every place where emailQueue is checking for replies unless it is exactly at:
+
+• scheduledAt minus 60 seconds
+• scheduledAt itself
+
+Right now it checks replies CONSTANTLY.
+That burns quota and breaks your intended architecture.
+
+⸻
+
+3. Add a new function: shouldSendEmail()
+
+Ask Replit to create this file:
+
+server/services/replyGuard.ts
+
+With a single exported function:
+
+async function shouldSendEmail({ userId, threadId, scheduledAt }): Promise<boolean>
+
+Rules inside:
+	1.	If now < scheduledAt - 60 seconds → return true (no check yet)
+	2.	If now between scheduledAt - 60 seconds and scheduledAt:
+• run checkForReplies()
+• if reply → return false
+• record lastCheckAt
+	3.	If now >= scheduledAt:
+• run checkForReplies() again immediately
+• if reply → return false
+	4.	Otherwise → return true
+
+This isolates the reply logic into ONE location.
+
+⸻
+
+4. Integrate shouldSendEmail() inside emailQueue.ts
+
+Tell Replit to modify processEmailQueue():
+
+Before sending:
+
+const allowed = await shouldSendEmail({
+  userId: sequence.createdBy,
+  threadId: recipient.threadId,
+  scheduledAt: scheduledSend.scheduledAt
+});
+if (!allowed) {
+  // mark as replied + kill remaining sends
+  continue;
+}
+
+This is your “greenlight” check.
+
+⸻
+
+5. Make emailQueue respect sending hours
+
+The queue loop itself should run every 60 seconds, but exit immediately if:
+
+now < sendingHoursStart OR now > sendingHoursEnd
+
+This prevents waste.
+
+⸻
+
+6. Confirm all React-Query polling is disabled or slowed
+
+Ask Replit to:
+
+• remove refetchInterval values
+• set staleTime much larger (10–30 min)
+• trigger manual refetch after mutations instead of constant intervals
+
+This prevents UI polling from triggering server calls.
+
+⸻
+
+Copy-Paste This EXACT Prompt Into Replit
+
+Here is the exact message you should now send:
+
+⸻
+
+PROMPT FOR REPLIT (copy/paste)
+
+We now have confirmation that the new architecture has NOT been implemented.
+We must replace the reply-polling system completely with the new pre-send logic.
+
+Please implement the following six changes exactly:
+	1.	Delete the old reply worker
+Remove server/services/replyDetectionWorker.ts
+Remove all imports, startup calls, cron jobs, or references.
+	2.	Remove all continuous Gmail polling
+Delete any Gmail reply checks in emailQueue.ts except for the new pre-send guard.
+	3.	Create new file: server/services/replyGuard.ts
+Export a function:
+
+async function shouldSendEmail({ userId, threadId, scheduledAt }): Promise<boolean>
+
+Behavior:
+• If now < scheduledAt - 60 seconds → return true
+• If now between scheduledAt - 60 seconds and scheduledAt:
+- run checkForReplies()
+- if reply → return false
+• If now >= scheduledAt:
+- run checkForReplies()
+- if reply → return false
+• Otherwise → return true
+
+	4.	Integrate shouldSendEmail() into processEmailQueue()
+Before sending email, do:
+
+const allowed = await shouldSendEmail({ userId: sequence.createdBy, threadId: recipient.threadId, scheduledAt });
+if (!allowed) {
+    // mark as replied, delete future sends
+    continue;
+}
+
+This is the only place that checks Gmail.
+
+	5.	Queue should obey sending hours
+In processEmailQueue(), if current time is outside sendingHoursStart/end, exit early without processing.
+	6.	Reduce/remove React Query polling
+Remove refetchInterval values in ehub.tsx
+Increase staleTime
+Use explicit invalidation after mutations instead of constant polling.
+
+Implement these changes in one pass, and output diffs for each file.
+
+⸻
+
+This is the correct prompt.
+Replit will now know exactly what to do.
+
+Once they generate the code, I’ll review it line-by-line for correctness, safety, concurrency issues, and Gmail quota impact.
