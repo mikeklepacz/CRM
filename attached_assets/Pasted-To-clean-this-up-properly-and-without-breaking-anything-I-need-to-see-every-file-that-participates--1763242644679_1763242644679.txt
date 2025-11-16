@@ -1,0 +1,161 @@
+To clean this up properly and without breaking anything, I need to see every file that participates in:
+	1.	Strategy creation
+	2.	Prompt injection
+	3.	Keyword bin handling
+	4.	Sequence timing + step logic
+	5.	Email queue processing
+	6.	Assistants API calls (if separate)
+	7.	Any schemas defining what data flows into generation
+
+Here is the exact list.
+
+I do not need the entire repo — only these specific files.
+
+⸻
+
+1. emailSender.ts (you already provided)
+
+This is the core generation logic. I have it.
+
+⸻
+
+2. E-Hub Settings Resolver
+
+The file that loads:
+	•	promptInjection
+	•	keywordBin
+	•	signature
+	•	daily limits
+	•	sending windows
+
+Likely one of:
+
+server/storage.ts
+server/services/settings.ts
+server/routes.ts (settings endpoints)
+
+I need where settings is fetched for emailSender.
+
+⸻
+
+3. Sequence Definition Files
+
+Everything that populates:
+	•	step delays
+	•	finalizedStrategy
+	•	strategyTranscript
+	•	sequence name
+	•	keywordBin (if stored there)
+
+Likely:
+
+server/routes.ts (sequence endpoints)
+shared/schema.ts
+client/src/pages/ehub.tsx
+
+Specifically the parts where:
+	•	strategy chat happens
+	•	finalize strategy
+	•	edited strategy is saved
+	•	recipients assigned to sequence
+
+⸻
+
+4. Strategy Chat Engine (Campaign Strategy phase)
+
+Any file handling:
+	•	/strategy-chat API
+	•	finalization into Campaign Brief
+	•	writing finalizedStrategy
+
+Likely:
+
+server/routes.ts (strategy handling)
+client/src/pages/ehub.tsx (strategy UI)
+
+I need to see exactly what goes into ‘finalizedStrategy’.
+
+⸻
+
+5. Keyword Bin Storage + Passing
+
+Right now keywordBin is dead code.
+To fix it cleanly, I need to see:
+	•	where keywordBin is stored
+	•	where it should attach to prompts
+
+So I need:
+
+shared/schema.ts
+server/routes.ts (settings update endpoint)
+client/src/pages/ehub.tsx (settings UI)
+
+
+⸻
+
+6. Email Queue + Worker
+
+Timing and follow-ups matter because:
+	•	stepNumber
+	•	previousMessages[]
+	•	step delays
+
+Flow is spread across:
+
+server/services/emailQueue.ts
+server/services/queueCoordinator.ts
+server/services/smartTiming.ts (already seen)
+
+These show exactly what is passed into emailSender during live sends.
+
+⸻
+
+7. parseBusinessHours / timezoneHours
+
+You referenced business hours logic. I’ll need:
+
+server/services/timezoneHours.ts
+server/services/parseBusinessHours.ts
+
+Just to ensure email generation isn’t affected by any of this (it shouldn’t be, but clean audit = no assumptions).
+
+⸻
+
+8. shared/schema.ts
+
+Must confirm:
+	•	Sequence fields
+	•	Recipient fields
+	•	FinalizedStrategy field type
+	•	keywordBin field location
+	•	openaiSettings structure
+	•	assistant slug mapping
+
+This ensures no prompt field is accidentally mismatched or overwritten.
+
+⸻
+
+Summary
+
+Send me these files next:
+	1.	server/routes.ts
+	2.	server/storage.ts (or wherever settings + sequences load)
+	3.	shared/schema.ts
+	4.	server/services/emailQueue.ts
+	5.	client/src/pages/ehub.tsx (only the strategy + settings parts — not the whole giant file)
+	6.	timezoneHours.ts / parseBusinessHours.ts
+	7.	Any file where keywordBin is saved or retrieved
+
+Once I have those, I can:
+	•	audit every prompt entry point
+	•	eliminate 70–80% of redundant text
+	•	unify Campaign Brief + promptInjection + keyword bin cleanly
+	•	guarantee deterministic behavior
+	•	minimize tokens
+	•	improve generation speed
+	•	keep your entire tone, rules, and structure intact
+	•	remove all “Replit Architect clutter”
+
+And then we rewrite emailSender.ts into a clean, sharp, efficient version.
+
+Send files when ready.
