@@ -578,6 +578,7 @@ export interface IStorage {
     threadId: string | null;
     messageId: string | null;
   }>>;
+  getLastScheduledSendForUser(userId: string): Promise<SequenceScheduledSend | null>;
 
   // E-Hub Sequence Steps operations
   createSequenceStep(step: InsertSequenceStep): Promise<SequenceStep>;
@@ -4009,6 +4010,25 @@ export class DatabaseStorage implements IStorage {
       .where(eq(sequenceScheduledSends.status, 'pending'))
       .orderBy(sequenceScheduledSends.scheduledAt)
       .limit(limit);
+  }
+
+  async getLastScheduledSendForUser(userId: string): Promise<SequenceScheduledSend | null> {
+    // Get the latest scheduledAt time for this user's sequences (FIFO queue tail)
+    // Used to enforce queue ordering when scheduling new sends
+    const results = await db
+      .select()
+      .from(sequenceScheduledSends)
+      .innerJoin(sequences, eq(sequenceScheduledSends.sequenceId, sequences.id))
+      .where(
+        and(
+          eq(sequences.createdBy, userId),
+          isNotNull(sequenceScheduledSends.scheduledAt)
+        )
+      )
+      .orderBy(desc(sequenceScheduledSends.scheduledAt))
+      .limit(1);
+    
+    return results.length > 0 ? results[0].sequenceScheduledSends : null;
   }
 
   async clearScheduledAtForPendingSends(imminentThreshold: Date): Promise<number> {
