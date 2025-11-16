@@ -28,6 +28,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **WooCommerce Sync**: Fetches orders, matches to stores, calculates commissions, and updates the Commission Tracker, including backfilling historical records.
 - **Referral Commission System**: Single-level tracking (10% of referred agents' monthly commissions).
 - **Sales Reports**: Generates PDF commission reports.
+- **Automatic Status Updates**: Commission Tracker status automatically updates to "Emailed" when agents create email drafts via Gmail integration. Creates new tracker rows if needed.
 - **Sales Assistant Page**: UI page powered by Wick Coach assistant, providing OpenAI-powered chat with knowledge base integration for sales scripts, product info, and objection handling. Includes conversation management, context-aware data reading, admin-only knowledge base file upload, chat history, default script system, and smart template variables.
 - **Document Browser**: Simplified Google Drive integration for browsing and downloading files.
 - **ElevenLabs AI Voice Calling**: Automated outbound AI voice calling with multi-agent support, three calling scenarios (Cold Calls, Follow-Ups, Recovery), queue management, real-time call status, and webhook integration for events and transcript capture. Features automated IVR/voicemail detection, agent prompt override, and AI call analytics with dynamic variables and comprehensive data extraction to PostgreSQL and Google Sheets.
