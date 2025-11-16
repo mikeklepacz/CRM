@@ -94,6 +94,27 @@ export async function getNextMatrixSlot(
 
   // 14-day search loop
   for (let i = 0; i < 14; i++) {
+    console.log("\n--- MATRIX LOOP TICK", i, "------------------------------");
+    console.log("dayLoopDate (raw UTC):", dayLoopDate.toISOString());
+    
+    console.log("Admin TZ:", adminTimezone);
+    console.log("Recipient TZ:", recipientTimezone);
+    console.log("Recipient State:", recipientState);
+    
+    const isoAdminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
+    console.log("Admin ISO Day:", isoAdminDay);
+    
+    const isoRecipDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+    console.log("Recipient ISO Day:", isoRecipDay);
+    
+    // Show parsed schedule for the recipient's day
+    console.log("Parsed schedule:", parsed.schedule);
+    
+    // Convert ISO → JS weekday
+    const jsRecipDay = isoRecipDay === 7 ? 0 : isoRecipDay;
+    console.log("Recipient JS Day:", jsRecipDay);
+    
+    console.log("Today's schedule for this recipient:", parsed.schedule[jsRecipDay]);
 
     // weekend skip
     const adminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
@@ -205,6 +226,14 @@ export async function getNextMatrixSlot(
     const hasOverlap = overlapStart < overlapEnd;
     const candidateInside = candidate >= overlapStart && candidate < overlapEnd;
     const candidateBefore = candidate < overlapStart;
+
+    console.log("Admin UTC Window:", adminStartUtc.toISOString(), "→", adminEndUtc.toISOString());
+    console.log("Recipient UTC Window:", recipientLegalStartUtc.toISOString(), "→", recipientLegalEndUtc.toISOString());
+    console.log("Candidate (current):", candidate.toISOString());
+    console.log("Overlap window:", overlapStart.toISOString(), "→", overlapEnd.toISOString());
+    console.log("Has overlap?", overlapStart < overlapEnd);
+    console.log("Candidate inside?", candidate >= overlapStart && candidate < overlapEnd);
+    console.log("Candidate before?", candidate < overlapStart);
 
     if (!hasOverlap) {
       candidate = new Date(Date.UTC(
