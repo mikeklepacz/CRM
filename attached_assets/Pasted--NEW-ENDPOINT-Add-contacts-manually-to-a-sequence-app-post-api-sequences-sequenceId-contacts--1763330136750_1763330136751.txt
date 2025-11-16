@@ -1,0 +1,65 @@
+// NEW ENDPOINT: Add contacts manually to a sequence
+app.post('/api/sequences/:sequenceId/contacts', async (req: any, res) => {
+  try {
+    const sequenceId = req.params.sequenceId;
+    const { contacts, selectAll, search, statusFilter } = req.body;
+
+    // Load full Store Database contact list
+    const allContacts = await ehubContactsService.getAllContacts();
+
+    // Determine which contacts to add
+    let selectedContacts = [];
+
+    if (selectAll) {
+      // Bulk selection using filters
+      selectedContacts = allContacts.filter((c) => {
+        let ok = true;
+        if (search) {
+          ok =
+            c.name?.toLowerCase().includes(search.toLowerCase()) ||
+            c.email?.toLowerCase().includes(search.toLowerCase()) ||
+            c.state?.toLowerCase().includes(search.toLowerCase());
+        }
+        if (statusFilter && statusFilter !== 'all') {
+          ok = ok && c.status === statusFilter;
+        }
+        return ok;
+      });
+    } else {
+      // Individual selected contacts
+      selectedContacts = contacts || [];
+    }
+
+    // Normalize objects for DB insertion
+    const recipientsToInsert = selectedContacts.map((c: any) => {
+      const rawState = c.state || null;
+
+      return {
+        sequence_id: sequenceId,
+        name: c.name || null,
+        email: c.email || null,
+        website_link: c.website_link || null,
+        business_hours: c.hours || null,
+        state: rawState || null,
+        timezone: detectTimezone(rawState) || 'America/New_York',
+        sales_summary: c.sales_summary || null,
+        link: c.link || null,
+        status: 'pending',
+        current_step: 0,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+    });
+
+    // Insert recipients
+    const inserted = await storage.addRecipients(recipientsToInsert);
+
+    return res.json({
+      success: true,
+      count: inserted?.length || 0,
+    });
+  } catch (err: any) {
+    console.error('Error adding contacts:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
