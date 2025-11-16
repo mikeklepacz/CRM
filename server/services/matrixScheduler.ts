@@ -230,22 +230,7 @@ export async function getNextMatrixSlot(
     const candidateBefore = candidate < overlapStart;
 
     console.log("Admin UTC Window:", adminStartUtc.toISOString(), "→", adminEndUtc.toISOString());
-    console.log("Recipient Legal Start (raw):", recipientLegalStartUtc);
-    console.log("Recipient Legal End (raw):", recipientLegalEndUtc);
-
-    try {
-      console.log("Recipient UTC Window:", 
-        recipientLegalStartUtc.toISOString(), 
-        "→", 
-        recipientLegalEndUtc.toISOString()
-      );
-    } catch (err) {
-      console.log("ERROR converting recipient window to ISO:", err);
-      console.log("recipientOpenLocal:", recipientOpenLocal);
-      console.log("recipientEndLocal:", recipientEndLocal);
-      console.log("Parsed openMin/closeMin:", openMin, closeMin);
-      console.log("Computed openHour/closeHour:", openHour, openMinute, closeHour, closeMinute);
-    }
+    console.log("Recipient UTC Window:", recipientLegalStartUtc.toISOString(), "→", recipientLegalEndUtc.toISOString());
     console.log("Candidate (current):", candidate.toISOString());
     console.log("Overlap window:", overlapStart.toISOString(), "→", overlapEnd.toISOString());
     console.log("Has overlap?", overlapStart < overlapEnd);
