@@ -383,7 +383,8 @@ function QueueView() {
       
       return await res.json();
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 0, // Always refetch
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
     enabled: statusFilter === 'active',
   });
 
@@ -397,7 +398,8 @@ function QueueView() {
       }
       return await res.json();
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 0, // Always refetch
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
     enabled: statusFilter === 'paused',
   });
 
