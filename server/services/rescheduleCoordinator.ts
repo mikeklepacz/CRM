@@ -3,7 +3,7 @@ import type { EhubSettings } from '@shared/schema';
 import { storage } from '../storage';
 import { rescheduleJobs } from '@shared/schema';
 import { db } from '../db';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 /**
  * Reschedule Coordinator: Recomputes all pending scheduled_at times when global settings change
