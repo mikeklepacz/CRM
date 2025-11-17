@@ -48,8 +48,8 @@ export async function generateDailySlots(config: SlotGenConfig) {
 
     slots.push({
       id: uuid(),
-      slot_ts: currentTs!,
-      day_key: dayKey,
+      slotTimeUtc: currentTs!,
+      slotDate: dayKey,
     });
   }
 

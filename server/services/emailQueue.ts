@@ -1,12 +1,13 @@
 
 import { storage } from '../storage';
 import { sendEmail, personalizeEmailWithAI } from './emailSender';
-import { computeNextSendSlot } from './smartTiming';
-import { resolveAdminWindow } from './emailSchedulingService';
 import { addDays } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import * as googleSheets from '../googleSheets';
 import { normalizeLink } from '../../shared/linkUtils';
+import { generateDailySlots } from './Matrix2/slotGenerator';
+import { runSlotAssigner } from './Matrix2/slotAssigner';
+import { getReadyToSendSlots, markSlotSent } from './Matrix2/slotDb';
 
 let isProcessing = false;
 
@@ -341,17 +342,39 @@ async function processEmailQueue() {
       return;
     }
 
-    // Get sends where scheduledAt <= now (real-time scheduling - no null scheduledAt)
-    const scheduledSends = await storage.getNextScheduledSends(10);
+    // MATRIX2: Generate and assign slots for today
+    try {
+      const todayUTC = formatInTimeZone(now, 'UTC', 'yyyy-MM-dd');
+      console.log(`[EmailQueue] [Matrix2] Running slot generation and assignment for ${todayUTC}`);
+      
+      // Generate daily slots (this will skip if slots already exist for today)
+      await generateDailySlots({
+        slotsPerDay: settings.dailyRateLimit || 20,
+        sendHourLocal: 16, // 4 PM default
+        jitterMin: 12,
+        jitterMax: 20,
+      });
+      
+      // Assign recipients to empty slots
+      await runSlotAssigner();
+      
+      console.log(`[EmailQueue] [Matrix2] Slot generation and assignment complete`);
+    } catch (matrix2Error: any) {
+      console.error(`[EmailQueue] [Matrix2] Error in slot generation/assignment: ${matrix2Error.message}`);
+      // Continue with queue processing even if Matrix2 fails
+    }
+
+    // MATRIX2: Get ready-to-send slots (filled=TRUE, sent=FALSE, time<=now)
+    const readySlots = await getReadyToSendSlots(10);
     
-    if (scheduledSends.length === 0) {
+    if (readySlots.length === 0) {
       return;
     }
 
-    console.log(`[EmailQueue] Processing ${scheduledSends.length} scheduled sends`);
+    console.log(`[EmailQueue] [Matrix2] Processing ${readySlots.length} ready-to-send slots`);
 
-    // Process each scheduled send
-    for (const scheduledSend of scheduledSends) {
+    // Process each ready slot
+    for (const slot of readySlots) {
       try {
         // Get sequence details BEFORE claiming to check if we should process it
         const sequence = await storage.getSequence(scheduledSend.sequenceId);

@@ -39,7 +39,7 @@ export async function runSlotAssigner() {
   if (recipients.length === 0) return;
 
   for (const slot of slots) {
-    const slotUtc = new Date(slot.slot_ts);
+    const slotUtc = slot.slotTimeUtc;
 
     let assigned = false;
 

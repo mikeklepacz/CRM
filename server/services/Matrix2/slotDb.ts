@@ -2,84 +2,121 @@
 
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
+import { dailySendSlots } from "../../../shared/schema";
+import { eq, and, lte } from "drizzle-orm";
 
-// TABLE SCHEMA (CREATE THIS LATER IN MIGRATION)
-// daily_send_slots:
-//   id (uuid primary key)
-//   slot_ts (timestamptz) - absolute UTC timestamp when email will be sent
-//   is_filled (boolean)
-//   recipient_id (uuid nullable)
-//   created_at (timestamptz)
-//   day_key (text) - "YYYY-MM-DD" in UTC (used for daily grouping)
-
+// Matches schema in shared/schema.ts
 export interface SlotRecord {
   id: string;
-  slot_ts: Date;
-  is_filled: boolean;
-  recipient_id: string | null;
-  day_key: string;
-  created_at: Date;
+  slotTimeUtc: Date;
+  slotDate: string;
+  filled: boolean;
+  recipientId: string | null;
+  sent: boolean;
+  createdAt: Date;
 }
-
-const SLOT_TABLE = "daily_send_slots";
 
 // -------------------------------------------------------
 // INSERT A BATCH OF SLOTS
 // -------------------------------------------------------
-export async function insertSlots(slots: { id: string; slot_ts: Date; day_key: string }[]) {
+export async function insertSlots(slots: { id: string; slotTimeUtc: Date; slotDate: string }[]) {
   if (!slots.length) return;
-  await db.execute(
-    sql`
-      INSERT INTO ${sql.identifier(SLOT_TABLE)} (id, slot_ts, day_key, is_filled, created_at)
-      VALUES ${sql.join(
-        slots.map(
-          (s) =>
-            sql`(${s.id}, ${s.slot_ts.toISOString()}, ${s.day_key}, false, NOW())`
-        ),
-        sql`,`
-      )}
-    `
+  
+  await db.insert(dailySendSlots).values(
+    slots.map(s => ({
+      id: s.id,
+      slotTimeUtc: s.slotTimeUtc,
+      slotDate: s.slotDate,
+      filled: false,
+      sent: false,
+    }))
   );
 }
 
 // -------------------------------------------------------
-// GET ALL SLOTS FOR A GIVEN UTC DAY
+// GET ALL UNASSIGNED SLOTS (not filled)
 // -------------------------------------------------------
-export async function getSlotsByDay(dayKey: string): Promise<SlotRecord[]> {
-  const { rows } = await db.execute(
-    sql`
-      SELECT *
-      FROM ${sql.identifier(SLOT_TABLE)}
-      WHERE day_key = ${dayKey}
-      ORDER BY slot_ts ASC
-    `
-  );
-
-  return rows as SlotRecord[];
+export async function getUnassignedSlots(): Promise<SlotRecord[]> {
+  const slots = await db
+    .select()
+    .from(dailySendSlots)
+    .where(eq(dailySendSlots.filled, false));
+  
+  return slots.map(s => ({
+    id: s.id,
+    slotTimeUtc: s.slotTimeUtc,
+    slotDate: s.slotDate,
+    filled: s.filled,
+    recipientId: s.recipientId || null,
+    sent: s.sent,
+    createdAt: s.createdAt!,
+  }));
 }
 
 // -------------------------------------------------------
-// MARK SLOT AS FILLED
+// GET READY-TO-SEND SLOTS (filled, not sent, time passed)
 // -------------------------------------------------------
-export async function fillSlot(slotId: string, recipientId: string) {
-  await db.execute(
-    sql`
-      UPDATE ${sql.identifier(SLOT_TABLE)}
-      SET is_filled = true,
-          recipient_id = ${recipientId}
-      WHERE id = ${slotId}
-    `
-  );
+export async function getReadyToSendSlots(limit: number = 10): Promise<SlotRecord[]> {
+  const now = new Date();
+  
+  const slots = await db
+    .select()
+    .from(dailySendSlots)
+    .where(
+      and(
+        eq(dailySendSlots.filled, true),
+        eq(dailySendSlots.sent, false),
+        lte(dailySendSlots.slotTimeUtc, now)
+      )
+    )
+    .limit(limit);
+  
+  return slots.map(s => ({
+    id: s.id,
+    slotTimeUtc: s.slotTimeUtc,
+    slotDate: s.slotDate,
+    filled: s.filled,
+    recipientId: s.recipientId || null,
+    sent: s.sent,
+    createdAt: s.createdAt!,
+  }));
+}
+
+// -------------------------------------------------------
+// MARK SLOT AS FILLED (assigned to recipient)
+// -------------------------------------------------------
+export async function markSlotAssigned(slotId: string, recipientId: string) {
+  await db
+    .update(dailySendSlots)
+    .set({ 
+      filled: true, 
+      recipientId: recipientId,
+      updatedAt: new Date() 
+    })
+    .where(eq(dailySendSlots.id, slotId));
+}
+
+// -------------------------------------------------------
+// MARK SLOT AS SENT
+// -------------------------------------------------------
+export async function markSlotSent(slotId: string) {
+  await db
+    .update(dailySendSlots)
+    .set({ 
+      sent: true,
+      updatedAt: new Date() 
+    })
+    .where(eq(dailySendSlots.id, slotId));
 }
 
 // -------------------------------------------------------
 // CLEAR SLOTS OLDER THAN N DAYS
 // -------------------------------------------------------
 export async function cleanupOldSlots(days: number = 7) {
-  await db.execute(
-    sql`
-      DELETE FROM ${sql.identifier(SLOT_TABLE)}
-      WHERE slot_ts < NOW() - INTERVAL '${days} days'
-    `
-  );
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  
+  await db
+    .delete(dailySendSlots)
+    .where(lte(dailySendSlots.slotTimeUtc, cutoffDate));
 }
