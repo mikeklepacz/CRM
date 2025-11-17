@@ -3183,10 +3183,10 @@ export class DatabaseStorage implements IStorage {
       .values({
         name: 'Manual Follow-Ups',
         isSystem: true,
-        status: 'active',
+        status: 'paused', // Start paused - user will activate after adding campaign strategy
         createdBy: adminUser.id,
         stepDelays: ['3', '7', '14'], // 3, 7, 14 days between steps
-        finalizedStrategy: 'This sequence handles automated follow-ups for manually sent emails. When you send an email from Store Details and the recipient doesn\'t reply, they\'ll automatically be enrolled here for AI-powered follow-ups.',
+        // No finalizedStrategy - user will program this themselves
       })
       .returning();
 

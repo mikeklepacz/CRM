@@ -1117,6 +1117,13 @@ export default function EHub() {
   // Nuke Test Data state
   const [nukeDialogOpen, setNukeDialogOpen] = useState(false);
 
+  // Reply Scanner state
+  const [replyScannnerDialogOpen, setReplyScannerDialogOpen] = useState(false);
+  const [scanPreviewResults, setScanPreviewResults] = useState<{
+    awaitingReply: Array<{ email: string; name: string; sequenceId: string; currentStep: number }>;
+    alreadySent: Array<{ email: string; name: string }>;
+  } | null>(null);
+
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
     minDelayMinutes: 1,
@@ -1301,6 +1308,36 @@ export default function EHub() {
       toast({
         title: "Error",
         description: error.message || "Failed to update sequence status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Scan for replies mutation
+  const scanRepliesMutation = useMutation({
+    mutationFn: async ({ dryRun }: { dryRun: boolean }) => {
+      return await apiRequest("POST", `/api/ehub/scan-replies`, { dryRun });
+    },
+    onSuccess: (data: any) => {
+      if (data.dryRun) {
+        setScanPreviewResults(data);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
+        queryClient.invalidateQueries({ 
+          predicate: (query) => query.queryKey[0] === '/api/ehub/queue'
+        });
+        toast({
+          title: "Success",
+          description: `Promoted ${data.promoted?.length || 0} contacts to Step 1 for automated follow-ups`,
+        });
+        setReplyScannerDialogOpen(false);
+        setScanPreviewResults(null);
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to scan for replies",
         variant: "destructive",
       });
     },
@@ -2055,7 +2092,23 @@ export default function EHub() {
 
         {/* Sequences Tab */}
         <TabsContent value="sequences" className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReplyScannerDialogOpen(true);
+                scanRepliesMutation.mutate({ dryRun: true });
+              }}
+              disabled={scanRepliesMutation.isPending}
+              data-testid="button-scan-replies"
+            >
+              {scanRepliesMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Mail className="w-4 h-4 mr-2" />
+              )}
+              Scan for Replies
+            </Button>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-create-sequence">
@@ -3886,6 +3939,85 @@ export default function EHub() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reply Scanner Dialog */}
+      <Dialog open={replyScannnerDialogOpen} onOpenChange={setReplyScannerDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Scan for Replies - Preview</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Checking Gmail for replies to Manual Follow-Ups recipients awaiting responses
+            </p>
+          </DialogHeader>
+
+          {scanRepliesMutation.isPending ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              <span className="ml-3 text-muted-foreground">Scanning Gmail...</span>
+            </div>
+          ) : scanPreviewResults ? (
+            <div className="space-y-4 py-4">
+              <div>
+                <h3 className="font-semibold mb-2">Ready to Promote ({scanPreviewResults.awaitingReply.length})</h3>
+                {scanPreviewResults.awaitingReply.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No contacts ready for promotion</p>
+                ) : (
+                  <div className="border rounded-md max-h-60 overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Current Step</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {scanPreviewResults.awaitingReply.map((recipient, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{recipient.name}</TableCell>
+                            <TableCell className="text-xs">{recipient.email}</TableCell>
+                            <TableCell>Step {recipient.currentStep}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+
+              {scanPreviewResults.alreadySent.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 text-muted-foreground">Already in Follow-Up ({scanPreviewResults.alreadySent.length})</h3>
+                  <p className="text-xs text-muted-foreground">
+                    These contacts are already at Step 1+ and won't be affected
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReplyScannerDialogOpen(false);
+                setScanPreviewResults(null);
+              }}
+              data-testid="button-cancel-scan"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => scanRepliesMutation.mutate({ dryRun: false })}
+              disabled={!scanPreviewResults || scanPreviewResults.awaitingReply.length === 0 || scanRepliesMutation.isPending}
+              data-testid="button-confirm-promote"
+            >
+              {scanRepliesMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Promote {scanPreviewResults?.awaitingReply.length || 0} to Step 1
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Navigation Warning Dialog for Unsaved Settings */}
       <AlertDialog open={showNavigationWarning} onOpenChange={setShowNavigationWarning}>
