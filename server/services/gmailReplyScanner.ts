@@ -1,62 +1,190 @@
 import { db } from '../db';
 import { sequenceRecipients, sequenceRecipientMessages, sequences, users, userIntegrations, systemIntegrations } from '@shared/schema';
 import { eq, and, lt, sql } from 'drizzle-orm';
+import { storage } from '../storage';
+import * as googleSheets from '../googleSheets';
 
-interface ReplyCheckResult {
-  recipientId: string;
-  email: string;
-  messageId: string;
-  sentAt: Date;
-  hasReply: boolean;
-  threadId?: string;
+interface GmailMessage {
+  id: string;
+  threadId: string;
+  internalDate: string;
+  to: string;
+  subject?: string;
 }
 
 interface ScanResult {
   scanned: number;
   promoted: number;
+  newEnrollments: number;
   errors: number;
   details: {
-    recipientId: string;
+    recipientId?: string;
     email: string;
-    status: 'promoted' | 'has_reply' | 'too_recent' | 'error';
+    status: 'promoted' | 'has_reply' | 'too_recent' | 'error' | 'newly_enrolled';
     message?: string;
+    isNew?: boolean;
   }[];
 }
 
 /**
  * Gmail Reply Scanner Service
  * 
- * Scans Manual Follow-Ups sequence recipients at Step 0 for email replies.
- * Auto-promotes recipients with no replies after waitDays to Step 1 for Matrix2 scheduling.
+ * Scans Gmail Sent folder for all emails sent to Commission Tracker POC Emails.
+ * Auto-enrolls new contacts at Step 0 and promotes non-responders to Step 1.
  */
 export class GmailReplyScanner {
-  private waitDays: number = 3; // Default wait time before checking for replies
+  private waitDays: number = 3;
 
   /**
-   * Check Gmail API for replies to a specific message
+   * Fetch all POC Emails from Commission Tracker sheet
    */
-  private async checkForReplies(
-    messageId: string,
-    accessToken: string
-  ): Promise<{ hasReply: boolean; threadId?: string }> {
+  private async fetchPOCEmails(): Promise<Set<string>> {
+    const pocEmails = new Set<string>();
+    
     try {
-      // Get the message to find its thread ID
-      const messageResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}`,
+      const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
+      
+      if (!trackerSheet) {
+        console.log('[ReplyScanner] Commission Tracker sheet not found');
+        return pocEmails;
+      }
+
+      const trackerData = await googleSheets.readSheetData(
+        trackerSheet.spreadsheetId,
+        `${trackerSheet.sheetName}!A:ZZ`
+      );
+
+      if (!trackerData || trackerData.length === 0) {
+        console.log('[ReplyScanner] Commission Tracker sheet is empty');
+        return pocEmails;
+      }
+
+      const headers = trackerData[0];
+      const rows = trackerData.slice(1);
+
+      const pocEmailIndex = headers.findIndex((h: string) => h.trim() === 'POC EMAIL');
+
+      if (pocEmailIndex === -1) {
+        console.error('[ReplyScanner] POC EMAIL column not found in Commission Tracker');
+        return pocEmails;
+      }
+
+      // Extract all valid POC emails
+      for (const row of rows) {
+        const email = row[pocEmailIndex];
+        if (email && typeof email === 'string' && email.includes('@')) {
+          pocEmails.add(email.trim().toLowerCase());
+        }
+      }
+
+      console.log(`[ReplyScanner] Found ${pocEmails.size} POC Emails in Commission Tracker`);
+      return pocEmails;
+    } catch (error: any) {
+      console.error('[ReplyScanner] Error fetching POC Emails:', error);
+      return pocEmails;
+    }
+  }
+
+  /**
+   * Fetch sent messages from Gmail
+   */
+  private async fetchSentMessages(
+    accessToken: string,
+    waitDays: number
+  ): Promise<GmailMessage[]> {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - waitDays);
+      const cutoffTimestamp = Math.floor(cutoffDate.getTime() / 1000);
+
+      // Fetch sent messages from Gmail API
+      const listResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:sent after:${cutoffTimestamp}`,
         {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         }
       );
 
-      if (!messageResponse.ok) {
-        console.error(`[ReplyScanner] Failed to fetch message ${messageId}: ${messageResponse.status}`);
-        return { hasReply: false };
+      if (!listResponse.ok) {
+        console.error(`[ReplyScanner] Failed to list sent messages: ${listResponse.status}`);
+        return [];
       }
 
-      const message = await messageResponse.json();
-      const threadId = message.threadId;
+      const listData = await listResponse.json();
+      const messageIds = (listData.messages || []).map((m: any) => m.id);
 
-      // Get all messages in the thread
+      console.log(`[ReplyScanner] Found ${messageIds.length} sent messages in the last ${waitDays}+ days`);
+
+      // Fetch full message details for each message (in batches)
+      const messages: GmailMessage[] = [];
+      const batchSize = 20;
+
+      for (let i = 0; i < messageIds.length; i += batchSize) {
+        const batch = messageIds.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (msgId: string) => {
+          try {
+            const msgResponse = await fetch(
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}`,
+              {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+              }
+            );
+
+            if (!msgResponse.ok) {
+              return null;
+            }
+
+            const msgData = await msgResponse.json();
+            const headers = msgData.payload?.headers || [];
+            
+            const toHeader = headers.find((h: any) => h.name.toLowerCase() === 'to');
+            const subjectHeader = headers.find((h: any) => h.name.toLowerCase() === 'subject');
+            
+            if (!toHeader?.value) {
+              return null;
+            }
+
+            // Extract email from "Name <email@domain.com>" format
+            const emailMatch = toHeader.value.match(/<([^>]+)>/) || [null, toHeader.value];
+            const toEmail = emailMatch[1]?.trim().toLowerCase();
+
+            if (!toEmail) {
+              return null;
+            }
+
+            return {
+              id: msgData.id,
+              threadId: msgData.threadId,
+              internalDate: msgData.internalDate,
+              to: toEmail,
+              subject: subjectHeader?.value
+            };
+          } catch (error) {
+            console.error(`[ReplyScanner] Error fetching message ${msgId}:`, error);
+            return null;
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        messages.push(...batchResults.filter((m): m is GmailMessage => m !== null));
+      }
+
+      return messages;
+    } catch (error: any) {
+      console.error('[ReplyScanner] Error fetching sent messages:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check if a thread has replies
+   */
+  private async checkForReplies(
+    messageId: string,
+    threadId: string,
+    accessToken: string
+  ): Promise<boolean> {
+    try {
       const threadResponse = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}`,
         {
@@ -65,20 +193,14 @@ export class GmailReplyScanner {
       );
 
       if (!threadResponse.ok) {
-        console.error(`[ReplyScanner] Failed to fetch thread ${threadId}: ${threadResponse.status}`);
-        return { hasReply: false, threadId };
+        return false;
       }
 
       const thread = await threadResponse.json();
-      
-      // Check if there are more messages in the thread than just the original
-      // A reply would mean thread has 2+ messages
-      const hasReply = thread.messages && thread.messages.length > 1;
-
-      return { hasReply, threadId };
+      return thread.messages && thread.messages.length > 1;
     } catch (error: any) {
       console.error('[ReplyScanner] Error checking for replies:', error);
-      return { hasReply: false };
+      return false;
     }
   }
 
@@ -116,239 +238,322 @@ export class GmailReplyScanner {
   }
 
   /**
-   * Scan for recipients ready to be promoted from Step 0 to Step 1
-   * 
-   * @param waitDays - Number of days to wait before checking for replies (default: 3)
-   * @param dryRun - If true, only scan without promoting
+   * Ensure Manual Follow-Ups system sequence exists
    */
-  async scan(waitDays: number = 3, dryRun: boolean = false): Promise<ScanResult> {
-    this.waitDays = waitDays;
-    
-    console.log(`[ReplyScanner] Starting scan (waitDays: ${waitDays}, dryRun: ${dryRun})`);
-
-    const result: ScanResult = {
-      scanned: 0,
-      promoted: 0,
-      errors: 0,
-      details: []
-    };
-
+  private async ensureSystemSequence(adminUserId: string): Promise<typeof sequences.$inferSelect | null> {
     try {
-      // Find the Manual Follow-Ups system sequence
-      const [systemSequence] = await db
+      const [existingSequence] = await db
         .select()
         .from(sequences)
         .where(eq(sequences.isSystem, true))
         .limit(1);
 
-      if (!systemSequence) {
-        console.log('[ReplyScanner] No Manual Follow-Ups sequence found');
+      if (existingSequence) {
+        return existingSequence;
+      }
+
+      // Create the system sequence
+      const [newSequence] = await db
+        .insert(sequences)
+        .values({
+          userId: adminUserId,
+          name: 'Manual Follow-Ups',
+          description: 'Protected system sequence for contacts created via Gmail drafts',
+          stepDelays: [3, 7, 14],
+          status: 'paused',
+          isSystem: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      console.log('[ReplyScanner] ✅ Created Manual Follow-Ups system sequence');
+      return newSequence;
+    } catch (error: any) {
+      console.error('[ReplyScanner] Error ensuring system sequence:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Main scan function - scans Gmail Sent folder and matches against Commission Tracker
+   */
+  async scan(waitDays: number = 3, dryRun: boolean = false): Promise<ScanResult> {
+    this.waitDays = waitDays;
+    
+    console.log(`[ReplyScanner] Starting Gmail Sent box scan (waitDays: ${waitDays}, dryRun: ${dryRun})`);
+
+    const result: ScanResult = {
+      scanned: 0,
+      promoted: 0,
+      newEnrollments: 0,
+      errors: 0,
+      details: []
+    };
+
+    try {
+      // Get admin user and Gmail access token
+      const [adminUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.role, 'admin'))
+        .limit(1);
+
+      if (!adminUser) {
+        console.error('[ReplyScanner] No admin user found');
         return result;
       }
 
-      // Find all recipients at Step 0 with status 'awaiting_reply'
+      const [userIntegration] = await db
+        .select()
+        .from(userIntegrations)
+        .where(eq(userIntegrations.userId, adminUser.id))
+        .limit(1);
+
+      if (!userIntegration?.googleCalendarAccessToken) {
+        console.log('[ReplyScanner] Gmail not connected for admin user');
+        return result;
+      }
+
+      // Refresh token if needed
+      let accessToken = userIntegration.googleCalendarAccessToken;
+      if (userIntegration.googleCalendarTokenExpiry && 
+          userIntegration.googleCalendarTokenExpiry < Date.now() &&
+          userIntegration.googleCalendarRefreshToken) {
+        
+        const [systemIntegration] = await db
+          .select()
+          .from(systemIntegrations)
+          .where(eq(systemIntegrations.serviceName, 'google_sheets'))
+          .limit(1);
+
+        if (systemIntegration?.googleClientId && systemIntegration?.googleClientSecret) {
+          const newToken = await this.refreshAccessToken(
+            userIntegration.googleCalendarRefreshToken,
+            systemIntegration.googleClientId,
+            systemIntegration.googleClientSecret
+          );
+
+          if (newToken) {
+            accessToken = newToken;
+            await db
+              .update(userIntegrations)
+              .set({
+                googleCalendarAccessToken: newToken,
+                googleCalendarTokenExpiry: Date.now() + (3600 * 1000)
+              })
+              .where(eq(userIntegrations.userId, adminUser.id));
+          }
+        }
+      }
+
+      // Fetch POC Emails from Commission Tracker
+      const pocEmails = await this.fetchPOCEmails();
+      
+      if (pocEmails.size === 0) {
+        console.log('[ReplyScanner] No POC Emails found in Commission Tracker');
+        return result;
+      }
+
+      // Fetch sent messages from Gmail
+      const sentMessages = await this.fetchSentMessages(accessToken, waitDays);
+      
+      if (sentMessages.length === 0) {
+        console.log('[ReplyScanner] No sent messages found');
+        return result;
+      }
+
+      // Filter messages to only those sent to POC Emails
+      const matchedMessages = sentMessages.filter(msg => pocEmails.has(msg.to));
+      console.log(`[ReplyScanner] ${matchedMessages.length}/${sentMessages.length} sent messages match Commission Tracker POC Emails`);
+
+      // Ensure system sequence exists
+      const systemSequence = await this.ensureSystemSequence(adminUser.id);
+      if (!systemSequence) {
+        console.error('[ReplyScanner] Failed to create/find system sequence');
+        return result;
+      }
+
+      // Check cutoff date for promotion
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - waitDays);
 
-      const recipientsAtStepZero = await db
-        .select({
-          recipientId: sequenceRecipients.id,
-          email: sequenceRecipients.email,
-          currentStep: sequenceRecipients.currentStep,
-          status: sequenceRecipients.status,
-        })
-        .from(sequenceRecipients)
-        .where(
-          and(
-            eq(sequenceRecipients.sequenceId, systemSequence.id),
-            eq(sequenceRecipients.currentStep, 0),
-            eq(sequenceRecipients.status, 'awaiting_reply')
-          )
-        );
-
-      console.log(`[ReplyScanner] Found ${recipientsAtStepZero.length} recipients at Step 0`);
-
-      // For each recipient, check their sent message and look for replies
-      for (const recipient of recipientsAtStepZero) {
+      // Process each matched message
+      for (const message of matchedMessages) {
         result.scanned++;
 
         try {
-          // Get the sent message for this recipient
-          const [sentMessage] = await db
+          // Check if recipient already exists in the sequence
+          const [existingRecipient] = await db
             .select()
-            .from(sequenceRecipientMessages)
+            .from(sequenceRecipients)
             .where(
               and(
-                eq(sequenceRecipientMessages.recipientId, recipient.recipientId),
-                eq(sequenceRecipientMessages.step, 0),
-                eq(sequenceRecipientMessages.status, 'sent')
+                eq(sequenceRecipients.sequenceId, systemSequence.id),
+                eq(sequenceRecipients.email, message.to)
               )
             )
             .limit(1);
 
-          if (!sentMessage) {
-            console.log(`[ReplyScanner] No sent message found for ${recipient.email}`);
-            result.details.push({
-              recipientId: recipient.recipientId,
-              email: recipient.email,
-              status: 'error',
-              message: 'No sent message found'
-            });
-            continue;
-          }
+          const sentDate = new Date(parseInt(message.internalDate));
+          const isOldEnough = sentDate <= cutoffDate;
 
-          // Check if message is old enough
-          if (sentMessage.sentAt && sentMessage.sentAt > cutoffDate) {
-            const daysOld = Math.floor((Date.now() - sentMessage.sentAt.getTime()) / (1000 * 60 * 60 * 24));
-            console.log(`[ReplyScanner] Message for ${recipient.email} is only ${daysOld} days old (need ${waitDays})`);
-            result.details.push({
-              recipientId: recipient.recipientId,
-              email: recipient.email,
-              status: 'too_recent',
-              message: `Sent ${daysOld} days ago, waiting for ${waitDays} days`
-            });
-            continue;
-          }
+          // Check for replies
+          const hasReply = await this.checkForReplies(message.id, message.threadId, accessToken);
 
-          // Get Gmail access token from the admin user (who created drafts)
-          // We need to check which user created this draft to use their Gmail token
-          const [adminUser] = await db
-            .select()
-            .from(users)
-            .where(eq(users.role, 'admin'))
-            .limit(1);
+          if (existingRecipient) {
+            // Existing recipient - check if ready to promote
+            if (existingRecipient.currentStep === 0 && existingRecipient.status === 'awaiting_reply') {
+              if (hasReply) {
+                if (!dryRun) {
+                  await db
+                    .update(sequenceRecipients)
+                    .set({
+                      status: 'replied',
+                      nextSendAt: null,
+                      updatedAt: new Date()
+                    })
+                    .where(eq(sequenceRecipients.id, existingRecipient.id));
+                }
 
-          if (!adminUser) {
-            console.error('[ReplyScanner] No admin user found');
-            result.errors++;
-            result.details.push({
-              recipientId: recipient.recipientId,
-              email: recipient.email,
-              status: 'error',
-              message: 'No admin user found'
-            });
-            continue;
-          }
+                result.details.push({
+                  recipientId: existingRecipient.id,
+                  email: message.to,
+                  status: 'has_reply',
+                  message: dryRun ? 'Has reply (dry run)' : 'Marked as replied'
+                });
+              } else if (isOldEnough) {
+                if (!dryRun) {
+                  const stepDelay = systemSequence.stepDelays?.[1] || 3;
+                  const nextSendAt = new Date();
+                  nextSendAt.setDate(nextSendAt.getDate() + Number(stepDelay));
 
-          // Get user's Gmail integration
-          const [userIntegration] = await db
-            .select()
-            .from(userIntegrations)
-            .where(eq(userIntegrations.userId, adminUser.id))
-            .limit(1);
+                  await db
+                    .update(sequenceRecipients)
+                    .set({
+                      currentStep: 1,
+                      status: 'in_sequence',
+                      nextSendAt,
+                      updatedAt: new Date()
+                    })
+                    .where(eq(sequenceRecipients.id, existingRecipient.id));
 
-          if (!userIntegration?.googleCalendarAccessToken || !sentMessage.messageId) {
-            console.log(`[ReplyScanner] No Gmail token or message ID for ${recipient.email}`);
-            result.details.push({
-              recipientId: recipient.recipientId,
-              email: recipient.email,
-              status: 'error',
-              message: 'Gmail not connected or no message ID'
-            });
-            continue;
-          }
+                  result.promoted++;
+                }
 
-          // Check token expiry and refresh if needed
-          let accessToken = userIntegration.googleCalendarAccessToken;
-          if (userIntegration.googleCalendarTokenExpiry && 
-              userIntegration.googleCalendarTokenExpiry < Date.now() &&
-              userIntegration.googleCalendarRefreshToken) {
-            
-            // Get system OAuth credentials
-            const [systemIntegration] = await db
-              .select()
-              .from(systemIntegrations)
-              .where(eq(systemIntegrations.serviceName, 'google_sheets'))
-              .limit(1);
-
-            if (systemIntegration?.googleClientId && systemIntegration?.googleClientSecret) {
-              const newToken = await this.refreshAccessToken(
-                userIntegration.googleCalendarRefreshToken,
-                systemIntegration.googleClientId,
-                systemIntegration.googleClientSecret
-              );
-
-              if (newToken) {
-                accessToken = newToken;
-                // Update stored token
-                await db
-                  .update(userIntegrations)
-                  .set({
-                    googleCalendarAccessToken: newToken,
-                    googleCalendarTokenExpiry: Date.now() + (3600 * 1000)
+                result.details.push({
+                  recipientId: existingRecipient.id,
+                  email: message.to,
+                  status: 'promoted',
+                  message: dryRun ? 'Ready to promote (dry run)' : 'Promoted to Step 1'
+                });
+              } else {
+                const daysOld = Math.floor((Date.now() - sentDate.getTime()) / (1000 * 60 * 60 * 24));
+                result.details.push({
+                  recipientId: existingRecipient.id,
+                  email: message.to,
+                  status: 'too_recent',
+                  message: `Sent ${daysOld} days ago, waiting for ${waitDays} days`
+                });
+              }
+            }
+          } else {
+            // New recipient - enroll at Step 0 if no reply
+            if (hasReply) {
+              result.details.push({
+                email: message.to,
+                status: 'has_reply',
+                message: 'Already has reply - not enrolled',
+                isNew: true
+              });
+            } else {
+              if (!dryRun) {
+                const [newRecipient] = await db
+                  .insert(sequenceRecipients)
+                  .values({
+                    sequenceId: systemSequence.id,
+                    name: message.to,
+                    email: message.to,
+                    currentStep: 0,
+                    status: 'awaiting_reply',
+                    nextSendAt: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
                   })
-                  .where(eq(userIntegrations.userId, adminUser.id));
+                  .returning();
+
+                // Record the sent message
+                await db
+                  .insert(sequenceRecipientMessages)
+                  .values({
+                    recipientId: newRecipient.id,
+                    step: 0,
+                    messageId: message.id,
+                    sentAt: sentDate,
+                    status: 'sent',
+                    subject: message.subject,
+                    createdAt: new Date()
+                  });
+
+                result.newEnrollments++;
+
+                // Check if old enough to promote immediately
+                if (isOldEnough) {
+                  const stepDelay = systemSequence.stepDelays?.[1] || 3;
+                  const nextSendAt = new Date();
+                  nextSendAt.setDate(nextSendAt.getDate() + Number(stepDelay));
+
+                  await db
+                    .update(sequenceRecipients)
+                    .set({
+                      currentStep: 1,
+                      status: 'in_sequence',
+                      nextSendAt,
+                      updatedAt: new Date()
+                    })
+                    .where(eq(sequenceRecipients.id, newRecipient.id));
+
+                  result.promoted++;
+
+                  result.details.push({
+                    recipientId: newRecipient.id,
+                    email: message.to,
+                    status: 'promoted',
+                    message: 'Newly enrolled and promoted to Step 1',
+                    isNew: true
+                  });
+                } else {
+                  const daysOld = Math.floor((Date.now() - sentDate.getTime()) / (1000 * 60 * 60 * 24));
+                  result.details.push({
+                    recipientId: newRecipient.id,
+                    email: message.to,
+                    status: 'newly_enrolled',
+                    message: `Enrolled at Step 0 (sent ${daysOld} days ago, waiting for ${waitDays} days)`,
+                    isNew: true
+                  });
+                }
+              } else {
+                result.details.push({
+                  email: message.to,
+                  status: 'newly_enrolled',
+                  message: 'Would be enrolled at Step 0 (dry run)',
+                  isNew: true
+                });
               }
             }
           }
-
-          // Check for replies using Gmail API
-          const { hasReply } = await this.checkForReplies(sentMessage.messageId, accessToken);
-
-          if (hasReply) {
-            console.log(`[ReplyScanner] ✅ ${recipient.email} has replied - marking as replied`);
-            
-            if (!dryRun) {
-              // Update recipient status to 'replied'
-              await db
-                .update(sequenceRecipients)
-                .set({
-                  status: 'replied',
-                  nextSendAt: null,
-                  updatedAt: new Date()
-                })
-                .where(eq(sequenceRecipients.id, recipient.recipientId));
-            }
-
-            result.details.push({
-              recipientId: recipient.recipientId,
-              email: recipient.email,
-              status: 'has_reply',
-              message: dryRun ? 'Has reply (dry run - not updated)' : 'Marked as replied'
-            });
-          } else {
-            console.log(`[ReplyScanner] 🔄 ${recipient.email} has no reply - promoting to Step 1`);
-            
-            if (!dryRun) {
-              // Calculate nextSendAt based on stepDelays[1] (delay before Step 1)
-              const stepDelay = systemSequence.stepDelays?.[1] || 3;
-              const nextSendAt = new Date();
-              nextSendAt.setDate(nextSendAt.getDate() + Number(stepDelay));
-
-              // Promote to Step 1 with status 'in_sequence'
-              await db
-                .update(sequenceRecipients)
-                .set({
-                  currentStep: 1,
-                  status: 'in_sequence',
-                  nextSendAt,
-                  updatedAt: new Date()
-                })
-                .where(eq(sequenceRecipients.id, recipient.recipientId));
-
-              result.promoted++;
-            }
-
-            result.details.push({
-              recipientId: recipient.recipientId,
-              email: recipient.email,
-              status: 'promoted',
-              message: dryRun ? 'Ready to promote (dry run)' : 'Promoted to Step 1'
-            });
-          }
         } catch (error: any) {
-          console.error(`[ReplyScanner] Error processing ${recipient.email}:`, error);
+          console.error(`[ReplyScanner] Error processing ${message.to}:`, error);
           result.errors++;
           result.details.push({
-            recipientId: recipient.recipientId,
-            email: recipient.email,
+            email: message.to,
             status: 'error',
             message: error.message || 'Unknown error'
           });
         }
       }
 
-      console.log(`[ReplyScanner] Scan complete: ${result.scanned} scanned, ${result.promoted} promoted, ${result.errors} errors`);
+      console.log(`[ReplyScanner] ✅ Scan complete: ${result.scanned} scanned, ${result.newEnrollments} newly enrolled, ${result.promoted} promoted, ${result.errors} errors`);
       return result;
     } catch (error: any) {
       console.error('[ReplyScanner] Fatal error during scan:', error);
