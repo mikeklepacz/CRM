@@ -3195,12 +3195,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAdminUserForSequences(): Promise<{ id: string; name: string } | undefined> {
-    const users = await db
+    const adminUsers = await db
       .select()
-      .from(schema.users)
-      .where(eq(schema.users.role, 'admin'))
+      .from(users)
+      .where(eq(users.role, 'admin'))
       .limit(1);
-    return users[0];
+    return adminUsers[0];
   }
 
   async updateSequenceStats(id: string, stats: { sentCount?: number; failedCount?: number; repliedCount?: number; lastSentAt?: Date }): Promise<Sequence> {
