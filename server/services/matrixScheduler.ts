@@ -92,6 +92,15 @@ export async function getNextMatrixSlot(
   let overlapStart: Date = new Date();
   let overlapEnd: Date = new Date();
 
+  // Helper: build admin start time for a given day in admin timezone
+  const buildAdminStartTime = (loopDate: Date): Date => {
+    const localStart = new Date(
+      formatInTimeZone(loopDate, adminTimezone, "yyyy-MM-dd'T'00:00:00")
+    );
+    localStart.setHours(sendingHoursStart, 0, 0, 0);
+    return localStart;
+  };
+
   // 14-day search loop
   for (let i = 0; i < 14; i++) {
     console.log("\n--- MATRIX LOOP TICK", i, "------------------------------");
@@ -119,15 +128,8 @@ export async function getNextMatrixSlot(
     // weekend skip
     const adminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
     if (skipWeekends && (adminDay === 6 || adminDay === 7)) {
-      candidate = new Date(Date.UTC(
-        dayLoopDate.getUTCFullYear(),
-        dayLoopDate.getUTCMonth(),
-        dayLoopDate.getUTCDate(),
-        sendingHoursStart,
-        0,
-        0
-      ));
-      // Advance one calendar day *in admin timezone*, not UTC
+      candidate = buildAdminStartTime(dayLoopDate);
+      // Advance one calendar day *in admin timezone*
       dayLoopDate = new Date(
         formatInTimeZone(
           addDays(dayLoopDate, 1),
@@ -164,15 +166,8 @@ export async function getNextMatrixSlot(
 
     if (parsed.isClosed || !todaysSchedule || todaysSchedule.length === 0) {
       // no hours today → next day
-      candidate = new Date(Date.UTC(
-        dayLoopDate.getUTCFullYear(),
-        dayLoopDate.getUTCMonth(),
-        dayLoopDate.getUTCDate(),
-        sendingHoursStart,
-        0,
-        0
-      ));
-      // Advance one calendar day *in admin timezone*, not UTC
+      candidate = buildAdminStartTime(dayLoopDate);
+      // Advance one calendar day *in admin timezone*
       dayLoopDate = new Date(
         formatInTimeZone(
           addDays(dayLoopDate, 1),
@@ -238,15 +233,8 @@ export async function getNextMatrixSlot(
     console.log("Candidate before?", candidate < overlapStart);
 
     if (!hasOverlap) {
-      candidate = new Date(Date.UTC(
-        dayLoopDate.getUTCFullYear(),
-        dayLoopDate.getUTCMonth(),
-        dayLoopDate.getUTCDate(),
-        sendingHoursStart,
-        0,
-        0
-      ));
-      // Advance one calendar day *in admin timezone*, not UTC
+      candidate = buildAdminStartTime(dayLoopDate);
+      // Advance one calendar day *in admin timezone*
       dayLoopDate = new Date(
         formatInTimeZone(
           addDays(dayLoopDate, 1),
@@ -265,15 +253,8 @@ export async function getNextMatrixSlot(
     }
 
     // candidate after overlap
-    candidate = new Date(Date.UTC(
-      dayLoopDate.getUTCFullYear(),
-      dayLoopDate.getUTCMonth(),
-      dayLoopDate.getUTCDate(),
-      sendingHoursStart,
-      0,
-      0
-    ));
-    // Advance one calendar day *in admin timezone*, not UTC
+    candidate = buildAdminStartTime(dayLoopDate);
+    // Advance one calendar day *in admin timezone*
     dayLoopDate = new Date(
       formatInTimeZone(
         addDays(dayLoopDate, 1),
