@@ -73,3 +73,37 @@ export async function markSlotSent(slotId: string) {
     WHERE id = ${slotId}
   `);
 }
+
+export async function deleteSlotsFromDate(dateIso: string) {
+  console.log('[SlotDb.deleteSlotsFromDate] Deleting slots from:', dateIso);
+  
+  await db.execute(sql`
+    DELETE FROM daily_send_slots
+    WHERE slot_date >= ${dateIso}
+  `);
+  
+  console.log('[SlotDb.deleteSlotsFromDate] ✅ Deleted slots from', dateIso);
+}
+
+export async function getScheduledSlotsFromDate(dateIso: string): Promise<DailySlot[]> {
+  console.log('[SlotDb.getScheduledSlotsFromDate] Fetching scheduled slots from:', dateIso);
+  
+  const result = await db.execute(sql`
+    SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
+    FROM daily_send_slots
+    WHERE slot_date >= ${dateIso}
+      AND filled = TRUE
+      AND sent = FALSE
+    ORDER BY slot_time_utc ASC
+  `);
+  
+  const rows = (result as any).rows || [];
+  
+  console.log('[SlotDb.getScheduledSlotsFromDate] Found:', {
+    count: rows.length,
+    fromDate: dateIso,
+    sample: rows.slice(0, 3)
+  });
+  
+  return rows;
+}
