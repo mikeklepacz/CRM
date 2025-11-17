@@ -25,7 +25,8 @@ export async function getEligibleRecipientsForAssignment() {
       sr.status,
       sr.last_step_sent_at,
       s.step_delays,
-      s.status as sequence_status
+      s.status as sequence_status,
+      s.is_system
     FROM sequence_recipients sr
     INNER JOIN sequences s ON sr.sequence_id = s.id
     WHERE sr.status = 'in_sequence'

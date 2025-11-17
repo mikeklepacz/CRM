@@ -49,6 +49,31 @@ import { getEmptySlots, fillSlot } from "./slotDb";
 import { getEligibleRecipientsForAssignment } from "./recipientDb";
 import { storage } from "../../storage";
 
+/**
+ * Calculate priority tier for a recipient
+ * 
+ * Tier 1 (Highest): Manual Follow-Ups at step 1+ (human handoffs getting AI follow-ups)
+ * Tier 2 (Medium): Active follow-ups at step 2+ (all other sequences) 
+ * Tier 3 (Lowest): Cold outreach at step 0 (first email in any sequence)
+ */
+function getPriorityTier(recipient: any): number {
+  const currentStep = recipient.current_step || 0;
+  const isManualFollowUps = recipient.is_system === true;
+
+  // Tier 1: Manual Follow-Ups sequence at step 1+
+  if (isManualFollowUps && currentStep >= 1) {
+    return 1;
+  }
+
+  // Tier 2: Any sequence at step 2+
+  if (currentStep >= 2) {
+    return 2;
+  }
+
+  // Tier 3: Cold outreach (step 0) or Manual Follow-Ups step 0 (waiting for promotion)
+  return 3;
+}
+
 export async function assignRecipientsToSlots() {
   const settings = await storage.getEhubSettings();
   if (!settings) {
@@ -95,16 +120,39 @@ export async function assignRecipientsToSlots() {
     return;
   }
 
-  console.log(`[Matrix2 Assigner] Assigning ${recipients.length} recipients to ${allSlots.length} slots across 3 days`);
+  // Apply three-tier priority sorting
+  // Tier 1: Manual Follow-Ups at step 1+ (human handoffs getting AI follow-ups)
+  // Tier 2: Active follow-ups at step 2+ (all other sequences)
+  // Tier 3: Cold outreach at step 0 (first email in any sequence)
+  const sortedRecipients = recipients.sort((a, b) => {
+    const tierA = getPriorityTier(a);
+    const tierB = getPriorityTier(b);
+    
+    // Lower tier number = higher priority
+    if (tierA !== tierB) {
+      return tierA - tierB;
+    }
+    
+    // Same tier: maintain FIFO (already sorted by created_at ASC from query)
+    return 0;
+  });
+
+  console.log('[Matrix2 Assigner] Priority distribution:', {
+    tier1: sortedRecipients.filter(r => getPriorityTier(r) === 1).length,
+    tier2: sortedRecipients.filter(r => getPriorityTier(r) === 2).length,
+    tier3: sortedRecipients.filter(r => getPriorityTier(r) === 3).length,
+  });
+
+  console.log(`[Matrix2 Assigner] Assigning ${sortedRecipients.length} recipients to ${allSlots.length} slots across 3 days`);
 
   let assignedCount = 0;
 
   for (const slot of allSlots) {
     const slotUtc = new Date(slot.slot_time_utc);
 
-    // Find first eligible recipient for this slot
-    for (let i = 0; i < recipients.length; i++) {
-      const r = recipients[i];
+    // Find first eligible recipient for this slot (now sorted by priority)
+    for (let i = 0; i < sortedRecipients.length; i++) {
+      const r = sortedRecipients[i];
       
       if (!isRecipientEligible(r, slotUtc, settings)) {
         continue;
@@ -113,10 +161,11 @@ export async function assignRecipientsToSlots() {
       // Assign this recipient to this slot
       await fillSlot(slot.id, r.id);
       
-      console.log(`[Matrix2 Assigner] Assigned recipient ${r.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
+      const tier = getPriorityTier(r);
+      console.log(`[Matrix2 Assigner] Assigned Tier ${tier} recipient ${r.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
       
       // Remove from available recipients
-      recipients.splice(i, 1);
+      sortedRecipients.splice(i, 1);
       assignedCount++;
       break;
     }
