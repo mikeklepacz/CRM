@@ -332,3 +332,97 @@ JSON FORMAT:
 
   return { subject, body };
 }
+
+/**
+ * Matrix2 Integration: Send email to recipient by ID
+ * Handles full workflow: fetch data, generate content, send, update metadata
+ */
+export async function sendEmailToRecipient(recipientId: string): Promise<boolean> {
+  try {
+    // 1. Fetch recipient with sequence data
+    const recipient = await storage.getRecipientById(recipientId);
+    if (!recipient) {
+      console.error(`[EmailSender] Recipient ${recipientId} not found`);
+      return false;
+    }
+
+    const sequence = await storage.getSequenceById(recipient.sequenceId);
+    if (!sequence) {
+      console.error(`[EmailSender] Sequence ${recipient.sequenceId} not found`);
+      return false;
+    }
+
+    const settings = await storage.getEhubSettings();
+    if (!settings) {
+      console.error('[EmailSender] E-Hub settings not found');
+      return false;
+    }
+
+    // 2. Get admin user for Gmail OAuth
+    const adminUser = await storage.getAdminUser();
+    if (!adminUser) {
+      console.error('[EmailSender] No admin user found');
+      return false;
+    }
+
+    // 3. Generate email content using AI
+    const currentStep = (recipient.currentStep || 0) + 1; // Next step to send
+    
+    const { subject, body } = await personalizeEmailWithAI(
+      recipient,
+      {}, // template not used - AI generates everything
+      sequence.strategyTranscript,
+      {
+        promptInjection: settings.promptInjection || undefined,
+        keywordBin: settings.keywordBin || undefined,
+        signature: settings.signature || undefined,
+      },
+      currentStep,
+      sequence.finalizedStrategy
+    );
+
+    // 4. Send email via Gmail
+    const emailResult = await sendEmail({
+      userId: adminUser.id,
+      to: recipient.email,
+      subject,
+      body,
+    });
+
+    if (!emailResult.success) {
+      console.error(`[EmailSender] Failed to send email to ${recipient.email}:`, emailResult.error);
+      return false;
+    }
+
+    // 5. Update recipient metadata
+    const now = new Date();
+    await storage.updateRecipient(recipient.id, {
+      currentStep,
+      lastStepSentAt: now,
+      status: currentStep >= (sequence.stepDelays?.length || 0) && !sequence.repeatLastStep 
+        ? 'completed' 
+        : 'in_sequence',
+      updatedAt: now,
+    });
+
+    // 6. Record message in history
+    await storage.insertRecipientMessage({
+      id: crypto.randomUUID(),
+      recipientId: recipient.id,
+      stepNumber: currentStep,
+      subject,
+      body,
+      sentAt: now,
+      gmailMessageId: emailResult.messageId,
+      gmailThreadId: emailResult.threadId,
+      rfc822MessageId: emailResult.rfc822MessageId,
+    });
+
+    console.log(`[EmailSender] ✅ Sent email to ${recipient.email} (step ${currentStep})`);
+    return true;
+
+  } catch (error: any) {
+    console.error(`[EmailSender] Error sending email to recipient ${recipientId}:`, error);
+    return false;
+  }
+}

@@ -2,7 +2,7 @@
 import { ensureDailySlots } from "./Matrix2/slotGenerator";
 import { assignRecipientsToSlots } from "./Matrix2/slotAssigner";
 import { storage } from "../storage";
-import { sendEmail } from "./emailSender";
+import { sendEmailToRecipient } from "./emailSender";
 import { markSlotSent } from "./Matrix2/slotDb";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
@@ -49,12 +49,12 @@ export async function processEmailQueue() {
 
   for (const slot of slots) {
     try {
-      const ok = await sendEmail(slot.recipient_id);
+      const ok = await sendEmailToRecipient(slot.recipient_id);
       if (ok) {
         await markSlotSent(slot.id);
-        console.log(`[EmailQueue] Sent email for slot ${slot.id} to recipient ${slot.recipient_id}`);
+        console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id}`);
       } else {
-        console.error(`[EmailQueue] Failed to send email for slot ${slot.id}`);
+        console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id}`);
       }
     } catch (error) {
       console.error(`[EmailQueue] Error sending slot ${slot.id}:`, error);
