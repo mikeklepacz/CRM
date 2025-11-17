@@ -20022,6 +20022,49 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Scan for Gmail replies and promote recipients (admin only)
+  app.post('/api/ehub/scan-replies', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { gmailReplyScanner } = await import('./services/gmailReplyScanner');
+      
+      // Support both dry run (preview) and actual execution
+      const { dryRun = true, waitDays = 3 } = req.body;
+      
+      console.log(`[API] Starting reply scan (dryRun: ${dryRun}, waitDays: ${waitDays})`);
+      
+      const result = await gmailReplyScanner.scan(waitDays, dryRun);
+      
+      res.json({
+        success: true,
+        ...result,
+        message: dryRun 
+          ? `Preview: ${result.details.filter(d => d.status === 'promoted').length} recipients ready to promote`
+          : `Promoted ${result.promoted} recipients to Step 1`
+      });
+    } catch (error: any) {
+      console.error('[API] Error scanning for replies:', error);
+      res.status(500).json({ 
+        success: false,
+        message: error.message || 'Failed to scan for replies' 
+      });
+    }
+  });
+
+  // Ensure Manual Follow-Ups system sequence exists (admin only)
+  app.post('/api/sequences/ensure-manual-followups', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const sequence = await storage.getOrCreateManualFollowUpsSequence();
+      res.json({
+        success: true,
+        sequence,
+        message: 'Manual Follow-Ups sequence is ready'
+      });
+    } catch (error: any) {
+      console.error('Error ensuring Manual Follow-Ups sequence:', error);
+      res.status(500).json({ message: error.message || 'Failed to ensure Manual Follow-Ups sequence' });
+    }
+  });
+
   // Create a new email sequence (admin only)
   app.post('/api/sequences', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
