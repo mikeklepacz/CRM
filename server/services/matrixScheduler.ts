@@ -158,18 +158,19 @@ export async function getNextMatrixSlot(
     // Build complete timestamp using explicit date string
     const recipientOpenString = `${recipientDateStr}T${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`;
 
-    // Apply start offset
-    let recipientOpenLocal = new Date(
-      new Date(recipientOpenString).getTime() + clientWindowStartOffset * 3600000
+    // Convert to UTC using recipient's timezone (handles DST correctly)
+    const recipientOpenUtc = zonedTimeToUtc(recipientOpenString, recipientTimezone);
+    
+    // Apply start offset (e.g., +1 hour after opening)
+    const recipientLegalStartUtc = new Date(
+      recipientOpenUtc.getTime() + clientWindowStartOffset * 3600000
     );
 
     // Build end timestamp using explicit date string
     const recipientEndString = `${recipientDateStr}T${String(clientWindowEndHour).padStart(2,'0')}:00:00`;
 
-    const recipientEndLocal = new Date(recipientEndString);
-
-    const recipientLegalStartUtc = new Date(recipientOpenLocal);
-    const recipientLegalEndUtc = new Date(recipientEndLocal);
+    // Convert to UTC using recipient's timezone (handles DST correctly)
+    const recipientLegalEndUtc = zonedTimeToUtc(recipientEndString, recipientTimezone);
 
     // OVERLAP
     overlapStart = new Date(
