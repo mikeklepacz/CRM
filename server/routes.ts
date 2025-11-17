@@ -19548,7 +19548,13 @@ Use this store information to provide context-aware responses. When helping draf
       const endDate = new Date(now);
       endDate.setDate(endDate.getDate() + timeWindowDays);
       
-      // SIMPLIFIED: Query ONLY daily_send_slots - no JOINs to avoid type mismatch issues
+      console.log('[QueueView] Fetching slots:', {
+        now: now.toISOString(),
+        endDate: endDate.toISOString(),
+        timeWindowDays
+      });
+      
+      // Query ONLY daily_send_slots table (slots are independent of sequences)
       const result = await db.execute(sql`
         SELECT 
           id,
@@ -19563,7 +19569,20 @@ Use this store information to provide context-aware responses. When helping draf
         LIMIT 100
       `);
       
+      console.log('[QueueView] Query result:', {
+        isArray: Array.isArray(result),
+        resultType: typeof result,
+        resultKeys: result ? Object.keys(result) : null,
+        length: Array.isArray(result) ? result.length : 'N/A'
+      });
+      
+      // Handle Drizzle result - it returns array directly
       const rows = Array.isArray(result) ? result : [];
+      
+      console.log('[QueueView] Rows extracted:', {
+        count: rows.length,
+        sample: rows.slice(0, 2)
+      });
       
       // Transform to IndividualSend format expected by frontend
       const queue = rows.map((row: any) => ({
@@ -19579,9 +19598,14 @@ Use this store information to provide context-aware responses. When helping draf
         subject: null,
       }));
       
+      console.log('[QueueView] Final queue:', {
+        count: queue.length,
+        sample: queue.slice(0, 2)
+      });
+      
       res.json(queue);
     } catch (error: any) {
-      console.error('Error fetching queue view:', error);
+      console.error('[QueueView] Error fetching queue:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch queue' });
     }
   });

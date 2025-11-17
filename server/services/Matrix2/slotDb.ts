@@ -23,7 +23,7 @@ export async function getSlotsForDate(dateIso: string): Promise<DailySlot[]> {
 export async function createSlots(dateIso: string, slots: Date[]) {
   for (const dt of slots) {
     await db.execute(sql`
-      INSERT INTO daily_send_slots (date, slot_time_utc, filled, sent)
+      INSERT INTO daily_send_slots (slot_date, slot_time_utc, filled, sent)
       VALUES (${dateIso}, ${dt.toISOString()}, FALSE, FALSE)
     `);
   }
