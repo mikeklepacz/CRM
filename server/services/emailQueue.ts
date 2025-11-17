@@ -5,7 +5,9 @@ import { storage } from "../storage";
 import { sendEmailToRecipient } from "./emailSender";
 import { markSlotSent } from "./Matrix2/slotDb";
 import { db } from "../db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { dailySendSlots, sequenceRecipients } from "../../shared/schema";
+import { formatInTimeZone } from "date-fns-tz";
 
 // Queue state
 let isProcessing = false;
@@ -15,6 +17,19 @@ export async function processEmailQueue() {
   const settings = await storage.getEhubSettings();
   if (!settings) {
     console.log('[EmailQueue] No E-Hub settings found, skipping processing');
+    return;
+  }
+
+  // Check if we're within sending hours (admin timezone)
+  const adminUser = await storage.getAdminUser();
+  const adminTz = adminUser?.timezone || 'America/New_York';
+  const now = new Date();
+  const currentHour = parseInt(formatInTimeZone(now, adminTz, 'HH'));
+  const sendingHoursStart = settings.sendingHoursStart || 6;
+  const sendingHoursEnd = settings.sendingHoursEnd || 23;
+  
+  if (currentHour < sendingHoursStart || currentHour >= sendingHoursEnd) {
+    console.log(`[EmailQueue] Outside sending hours (${currentHour}:00 not in ${sendingHoursStart}:00-${sendingHoursEnd}:00 ${adminTz})`);
     return;
   }
 
@@ -53,11 +68,36 @@ export async function processEmailQueue() {
       if (ok) {
         await markSlotSent(slot.id);
         console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id}`);
+        
+        // CRITICAL: Update recipient metadata after successful send
+        const recipient = await storage.getRecipientById(slot.recipient_id);
+        if (recipient) {
+          const nextStep = (recipient.currentStep || 0) + 1;
+          await db
+            .update(sequenceRecipients)
+            .set({
+              currentStep: nextStep,
+              lastStepSentAt: now,
+              status: 'in_sequence',
+              updatedAt: now
+            })
+            .where(eq(sequenceRecipients.id, slot.recipient_id));
+        }
       } else {
         console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id}`);
+        // Unfill the slot so it can be reassigned
+        await db
+          .update(dailySendSlots)
+          .set({ filled: false, recipientId: null })
+          .where(eq(dailySendSlots.id, slot.id));
       }
     } catch (error) {
       console.error(`[EmailQueue] Error sending slot ${slot.id}:`, error);
+      // Unfill the slot on error
+      await db
+        .update(dailySendSlots)
+        .set({ filled: false, recipientId: null })
+        .where(eq(dailySendSlots.id, slot.id));
     }
   }
 }
