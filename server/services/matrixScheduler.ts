@@ -92,15 +92,6 @@ export async function getNextMatrixSlot(
   let overlapStart: Date = new Date();
   let overlapEnd: Date = new Date();
 
-  // Helper: build admin start time for a given day in admin timezone
-  const buildAdminStartTime = (loopDate: Date): Date => {
-    const localStart = new Date(
-      formatInTimeZone(loopDate, adminTimezone, "yyyy-MM-dd'T'00:00:00")
-    );
-    localStart.setHours(sendingHoursStart, 0, 0, 0);
-    return localStart;
-  };
-
   // 14-day search loop
   for (let i = 0; i < 14; i++) {
     console.log("\n--- MATRIX LOOP TICK", i, "------------------------------");
@@ -128,7 +119,11 @@ export async function getNextMatrixSlot(
     // weekend skip
     const adminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
     if (skipWeekends && (adminDay === 6 || adminDay === 7)) {
-      candidate = buildAdminStartTime(dayLoopDate);
+      candidate = new Date(formatInTimeZone(
+        dayLoopDate,
+        adminTimezone,
+        `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
+      ));
       // Advance one calendar day *in admin timezone*
       dayLoopDate = new Date(
         formatInTimeZone(
@@ -166,7 +161,11 @@ export async function getNextMatrixSlot(
 
     if (parsed.isClosed || !todaysSchedule || todaysSchedule.length === 0) {
       // no hours today → next day
-      candidate = buildAdminStartTime(dayLoopDate);
+      candidate = new Date(formatInTimeZone(
+        dayLoopDate,
+        adminTimezone,
+        `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
+      ));
       // Advance one calendar day *in admin timezone*
       dayLoopDate = new Date(
         formatInTimeZone(
@@ -187,27 +186,26 @@ export async function getNextMatrixSlot(
     const openHour = Math.floor(openMin / 60);
     const openMinute = openMin % 60;
 
-    const closeHour = Math.floor(closeMin / 60);
-    const closeMinute = closeMin % 60;
-
-    // Build local date at midnight in recipient TZ, then set hours/minutes
-    const localOpenBase = new Date(
-      formatInTimeZone(dayLoopDate, recipientTimezone, "yyyy-MM-dd'T'00:00:00")
+    // Build complete timestamp in recipient timezone
+    const recipientOpenString = formatInTimeZone(
+      dayLoopDate,
+      recipientTimezone,
+      `yyyy-MM-dd'T'${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`
     );
-    localOpenBase.setHours(openHour, openMinute, 0, 0);
 
     // Apply start offset
     let recipientOpenLocal = new Date(
-      localOpenBase.getTime() + clientWindowStartOffset * 3600000
+      new Date(recipientOpenString).getTime() + clientWindowStartOffset * 3600000
     );
 
-    // Build local end date at midnight, then set closing hour
-    const localEndBase = new Date(
-      formatInTimeZone(dayLoopDate, recipientTimezone, "yyyy-MM-dd'T'00:00:00")
+    // Build end timestamp in recipient timezone
+    const recipientEndString = formatInTimeZone(
+      dayLoopDate,
+      recipientTimezone,
+      `yyyy-MM-dd'T'${String(clientWindowEndHour).padStart(2,'0')}:00:00`
     );
-    localEndBase.setHours(clientWindowEndHour, 0, 0, 0);
 
-    const recipientEndLocal = new Date(localEndBase);
+    const recipientEndLocal = new Date(recipientEndString);
 
     const recipientLegalStartUtc = new Date(recipientOpenLocal);
     const recipientLegalEndUtc = new Date(recipientEndLocal);
@@ -233,7 +231,11 @@ export async function getNextMatrixSlot(
     console.log("Candidate before?", candidate < overlapStart);
 
     if (!hasOverlap) {
-      candidate = buildAdminStartTime(dayLoopDate);
+      candidate = new Date(formatInTimeZone(
+        dayLoopDate,
+        adminTimezone,
+        `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
+      ));
       // Advance one calendar day *in admin timezone*
       dayLoopDate = new Date(
         formatInTimeZone(
@@ -253,7 +255,11 @@ export async function getNextMatrixSlot(
     }
 
     // candidate after overlap
-    candidate = buildAdminStartTime(dayLoopDate);
+    candidate = new Date(formatInTimeZone(
+      dayLoopDate,
+      adminTimezone,
+      `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
+    ));
     // Advance one calendar day *in admin timezone*
     dayLoopDate = new Date(
       formatInTimeZone(
