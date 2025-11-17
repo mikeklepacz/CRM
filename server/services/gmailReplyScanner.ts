@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { sequenceRecipients, sequenceRecipientMessages, sequences, schema } from '@db/schema';
+import { sequenceRecipients, sequenceRecipientMessages, sequences, users, userIntegrations, systemIntegrations } from '@db/schema';
 import { eq, and, lt, sql } from 'drizzle-orm';
 
 interface ReplyCheckResult {
@@ -214,8 +214,8 @@ export class GmailReplyScanner {
           // We need to check which user created this draft to use their Gmail token
           const [adminUser] = await db
             .select()
-            .from(schema.users)
-            .where(eq(schema.users.role, 'admin'))
+            .from(users)
+            .where(eq(users.role, 'admin'))
             .limit(1);
 
           if (!adminUser) {
@@ -233,8 +233,8 @@ export class GmailReplyScanner {
           // Get user's Gmail integration
           const [userIntegration] = await db
             .select()
-            .from(schema.userIntegrations)
-            .where(eq(schema.userIntegrations.userId, adminUser.id))
+            .from(userIntegrations)
+            .where(eq(userIntegrations.userId, adminUser.id))
             .limit(1);
 
           if (!userIntegration?.googleCalendarAccessToken || !sentMessage.messageId) {
@@ -257,8 +257,8 @@ export class GmailReplyScanner {
             // Get system OAuth credentials
             const [systemIntegration] = await db
               .select()
-              .from(schema.systemIntegrations)
-              .where(eq(schema.systemIntegrations.serviceName, 'google_sheets'))
+              .from(systemIntegrations)
+              .where(eq(systemIntegrations.serviceName, 'google_sheets'))
               .limit(1);
 
             if (systemIntegration?.googleClientId && systemIntegration?.googleClientSecret) {
@@ -272,12 +272,12 @@ export class GmailReplyScanner {
                 accessToken = newToken;
                 // Update stored token
                 await db
-                  .update(schema.userIntegrations)
+                  .update(userIntegrations)
                   .set({
                     googleCalendarAccessToken: newToken,
                     googleCalendarTokenExpiry: Date.now() + (3600 * 1000)
                   })
-                  .where(eq(schema.userIntegrations.userId, adminUser.id));
+                  .where(eq(userIntegrations.userId, adminUser.id));
               }
             }
           }
