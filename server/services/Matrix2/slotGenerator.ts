@@ -5,7 +5,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { addMinutes } from "date-fns";
 
 import { insertSlots } from "./slotDb";
-import { getEhubSettings } from "../ehubContactsService"; // Reads admin settings
+import { storage } from "../../storage"; // Access E-Hub settings
 
 // CONFIG:
 // N = number of slots per day
@@ -23,8 +23,8 @@ export async function generateDailySlots(config: SlotGenConfig) {
   const { slotsPerDay, sendHourLocal, jitterMin, jitterMax } = config;
 
   // Admin timezone (from E-Hub settings)
-  const settings = await getEhubSettings();
-  const adminTz = settings.timezone || "Europe/Warsaw";
+  const settings = await storage.getEhubSettings();
+  const adminTz = settings?.timezone || "Europe/Warsaw";
 
   // Today in admin timezone (clean YYYY-MM-DD)
   const dayKey = formatInTimeZone(new Date(), adminTz, "yyyy-MM-dd");

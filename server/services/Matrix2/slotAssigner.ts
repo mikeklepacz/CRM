@@ -2,7 +2,7 @@
 
 import { formatInTimeZone } from "date-fns-tz";
 import { isWeekend } from "date-fns";
-import { db } from "../../db"; // Your database adapter
+import { db } from "../../db";
 import {
   getUnassignedSlots,
   markSlotAssigned
@@ -11,20 +11,20 @@ import {
 import {
   getEligibleRecipientsForAssignment,
   markRecipientScheduled
-} from "./recipientDb"; // We'll implement this soon
+} from "./recipientDb";
 
-import { getBusinessHours } from "../timezoneHours";
-import { getEhubSettings } from "../ehubContactsService";
+import { parseBusinessHours } from "../timezoneHours";
+import { storage } from "../../storage";
 
 // --------------------------------------------------
 
 export async function runSlotAssigner() {
   console.log("\n[MATRIX 2.0] Running slot assigner engine...");
 
-  const settings = await getEhubSettings();
-  const sendOffsetHours = settings.clientWindowStartOffset ?? 1; // Default: 1 hr after opening
-  const endHour = settings.clientWindowEndHour ?? 14;            // Default: 2 PM local
-  const skipWeekends = settings.skipWeekends ?? false;
+  const settings = await storage.getEhubSettings();
+  const sendOffsetHours = settings?.clientWindowStartOffset ?? 1; // Default: 1 hr after opening
+  const endHour = settings?.clientWindowEndHour ?? 14;            // Default: 2 PM local
+  const skipWeekends = settings?.skipWeekends ?? false;
 
   // Get all empty slots for today
   const slots = await getUnassignedSlots();
