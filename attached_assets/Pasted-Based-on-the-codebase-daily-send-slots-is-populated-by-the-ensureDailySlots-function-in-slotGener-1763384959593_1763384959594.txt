@@ -1,0 +1,59 @@
+Based on the codebase, daily_send_slots is populated by the ensureDailySlots() function in slotGenerator.ts.
+
+What triggers it:
+Email Queue Processor - The primary trigger is processEmailQueue() in emailQueue.ts, which:
+
+Runs every 60 seconds via startEmailQueueProcessor()
+Calls ensureDailySlots() at the start of each cycle
+Started automatically when the server boots up in server/index.ts
+How it works:
+
+Checks if slots already exist for today (idempotent - won't duplicate)
+If no slots exist, generates them based on ehub_settings:
+dailyEmailLimit - number of slots to create
+sendingHoursStart / sendingHoursEnd - time window
+minDelayMinutes / maxDelayMinutes - jitter between slots
+Uses the admin user's timezone from user_preferences
+Inserts slots into the daily_send_slots table
+Current behavior from your logs:
+[EmailQueue] Outside sending hours (8:00 not in 15:00-23:00 America/New_York)
+Your system is currently outside the sending window (8 AM is before 3 PM EST), so:
+
+The queue processor is running
+But it's skipping slot generation/processing until the send window opens
+Slots will be auto-generated when the first queue cycle runs during sending hours (3 PM - 11 PM EST)
+The slots are created automatically - no manual trigger needed. They populate once per day when the email queue first runs during your configured sending hours.
+
+then why is that SQL empty?
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 11 files
+Looking at your console logs, the SQL query in processEmailQueue() is executing but returning an empty array because no slots exist for today yet.
+
+Here's what's happening:
+
+Why the slots table is empty:
+You're outside sending hours: The logs show:
+
+[EmailQueue] Outside sending hours (8:00 not in 15:00-23:00 America/New_York)
+Slot generation is skipped: In emailQueue.ts, the code returns early when outside sending hours:
+
+if (currentHour < sendingHoursStart || currentHour >= sendingHoursEnd) {
+  console.log(`[EmailQueue] Outside sending hours...`);
+  return; // ← EXITS HERE
+}
+// This never runs when outside hours:
+await ensureDailySlots();
+Slots are never created: Since ensureDailySlots() is called after the sending hours check, it never runs at 8:00 AM. The slots will only be generated when the first queue cycle runs during your sending window (3 PM - 11 PM EST).
+
+What will happen:
+At 3:00 PM EST today, when the queue processor runs again:
+The sending hours check will pass
+ensureDailySlots() will run
+Slots will be created in daily_send_slots
+The SQL query will return data
+The system is working as designed - it's just waiting for the send window to open before generating today's slots.
