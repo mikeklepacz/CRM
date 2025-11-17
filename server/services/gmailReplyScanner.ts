@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { sequenceRecipients, sequenceRecipientMessages, sequences, users, userIntegrations, systemIntegrations } from '../../db/schema';
+import { sequenceRecipients, sequenceRecipientMessages, sequences, users, userIntegrations, systemIntegrations } from '@shared/schema';
 import { eq, and, lt, sql } from 'drizzle-orm';
 
 interface ReplyCheckResult {
