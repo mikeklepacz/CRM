@@ -1,5 +1,5 @@
 import { storage } from '../storage';
-import { addDays } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { parseBusinessHours } from './timezoneHours';
 import { formatInTimeZone } from 'date-fns-tz';
 
@@ -92,23 +92,27 @@ export async function getNextMatrixSlot(
   let overlapStart: Date = new Date();
   let overlapEnd: Date = new Date();
 
+  // Use UTC as neutral reference - same calendar day for both timezones
+  const utcBaseDate = formatInTimeZone(startingMoment, 'UTC', 'yyyy-MM-dd');
+
   // 14-day search loop using day offset
   for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
     console.log("\n--- MATRIX LOOP DAY", dayOffset, "------------------------------");
-    
-    // Build dates independently in each timezone
-    const adminDayDate = addDays(startingMoment, dayOffset);
-    const recipientDayDate = addDays(startingMoment, dayOffset);
     
     console.log("Admin TZ:", adminTimezone);
     console.log("Recipient TZ:", recipientTimezone);
     console.log("Recipient State:", recipientState);
     
-    const isoAdminDay = parseInt(formatInTimeZone(adminDayDate, adminTimezone, 'e'), 10);
-    console.log("Admin ISO Day:", isoAdminDay);
+    // Both build from same UTC base date + offset
+    const targetDate = addDays(new Date(`${utcBaseDate}T12:00:00Z`), dayOffset);
+    const adminDateStr = formatInTimeZone(targetDate, adminTimezone, 'yyyy-MM-dd');
+    const recipientDateStr = formatInTimeZone(targetDate, recipientTimezone, 'yyyy-MM-dd');
     
-    const isoRecipDay = parseInt(formatInTimeZone(recipientDayDate, recipientTimezone, 'e'), 10);
-    console.log("Recipient ISO Day:", isoRecipDay);
+    const isoAdminDay = parseInt(formatInTimeZone(new Date(`${adminDateStr}T12:00:00`), adminTimezone, 'e'), 10);
+    console.log("Admin ISO Day:", isoAdminDay, "Date:", adminDateStr);
+    
+    const isoRecipDay = parseInt(formatInTimeZone(new Date(`${recipientDateStr}T12:00:00`), recipientTimezone, 'e'), 10);
+    console.log("Recipient ISO Day:", isoRecipDay, "Date:", recipientDateStr);
     
     // Show parsed schedule for the recipient's day
     console.log("Parsed schedule:", parsed.schedule);
@@ -121,26 +125,13 @@ export async function getNextMatrixSlot(
 
     // weekend skip
     if (skipWeekends && (isoAdminDay === 6 || isoAdminDay === 7)) {
-      candidate = new Date(formatInTimeZone(
-        adminDayDate,
-        adminTimezone,
-        `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
-      ));
+      candidate = new Date(`${adminDateStr}T${String(sendingHoursStart).padStart(2,'0')}:00:00`);
       continue;
     }
 
-    // ADMIN WINDOW: Build using adminTimezone
-    const adminStartLocal = formatInTimeZone(
-      adminDayDate,
-      adminTimezone,
-      `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
-    );
-
-    const adminEndLocal = formatInTimeZone(
-      adminDayDate,
-      adminTimezone,
-      `yyyy-MM-dd'T'${String(sendingHoursEnd).padStart(2,'0')}:00:00`
-    );
+    // ADMIN WINDOW: Build using explicit date string
+    const adminStartLocal = `${adminDateStr}T${String(sendingHoursStart).padStart(2,'0')}:00:00`;
+    const adminEndLocal = `${adminDateStr}T${String(sendingHoursEnd).padStart(2,'0')}:00:00`;
 
     // Convert both into UTC Date objects
     const adminStartUtc = new Date(adminStartLocal);
@@ -151,11 +142,7 @@ export async function getNextMatrixSlot(
 
     if (parsed.isClosed || !todaysSchedule || todaysSchedule.length === 0) {
       // no hours today → next day
-      candidate = new Date(formatInTimeZone(
-        adminDayDate,
-        adminTimezone,
-        `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
-      ));
+      candidate = new Date(`${adminDateStr}T${String(sendingHoursStart).padStart(2,'0')}:00:00`);
       continue;
     }
 
@@ -168,24 +155,16 @@ export async function getNextMatrixSlot(
     const openHour = Math.floor(openMin / 60);
     const openMinute = openMin % 60;
 
-    // Build complete timestamp in recipient timezone
-    const recipientOpenString = formatInTimeZone(
-      recipientDayDate,
-      recipientTimezone,
-      `yyyy-MM-dd'T'${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`
-    );
+    // Build complete timestamp using explicit date string
+    const recipientOpenString = `${recipientDateStr}T${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`;
 
     // Apply start offset
     let recipientOpenLocal = new Date(
       new Date(recipientOpenString).getTime() + clientWindowStartOffset * 3600000
     );
 
-    // Build end timestamp in recipient timezone
-    const recipientEndString = formatInTimeZone(
-      recipientDayDate,
-      recipientTimezone,
-      `yyyy-MM-dd'T'${String(clientWindowEndHour).padStart(2,'0')}:00:00`
-    );
+    // Build end timestamp using explicit date string
+    const recipientEndString = `${recipientDateStr}T${String(clientWindowEndHour).padStart(2,'0')}:00:00`;
 
     const recipientEndLocal = new Date(recipientEndString);
 
@@ -213,11 +192,7 @@ export async function getNextMatrixSlot(
     console.log("Candidate before?", candidate < overlapStart);
 
     if (!hasOverlap) {
-      candidate = new Date(formatInTimeZone(
-        adminDayDate,
-        adminTimezone,
-        `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
-      ));
+      candidate = new Date(`${adminDateStr}T${String(sendingHoursStart).padStart(2,'0')}:00:00`);
       continue;
     }
 
@@ -229,11 +204,7 @@ export async function getNextMatrixSlot(
     }
 
     // candidate after overlap
-    candidate = new Date(formatInTimeZone(
-      adminDayDate,
-      adminTimezone,
-      `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
-    ));
+    candidate = new Date(`${adminDateStr}T${String(sendingHoursStart).padStart(2,'0')}:00:00`);
   }
 
   // sanity check

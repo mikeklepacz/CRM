@@ -21379,6 +21379,42 @@ ${conversationContext}`;
     }
   });
 
+  // Test Matrix Scheduler endpoint (temporarily unauthenticated for testing)
+  app.post('/api/ehub/test-matrix', async (req: any, res) => {
+    try {
+      // Use hardcoded admin user ID for testing
+      const userId = '4df35876-ab89-4860-8656-0440accfea14';
+
+      const { getNextMatrixSlot } = await import('./services/matrixScheduler');
+
+      console.log('\n========== TESTING MATRIX SCHEDULER ==========');
+      
+      // Test with Maine contact (America/New_York timezone)
+      const testSlot = await getNextMatrixSlot({
+        recipientId: 'test-recipient-maine',
+        sequenceId: 'test-sequence',
+        stepNumber: 0,
+        stepDelay: 0,
+        lastStepSentAt: null,
+        recipientTimezone: 'America/New_York',
+        recipientBusinessHours: '11:00-22:00',
+        recipientState: 'ME',
+        userId: userId
+      });
+
+      console.log('========== TEST COMPLETE ==========\n');
+
+      res.json({ 
+        success: true, 
+        scheduledSlot: testSlot,
+        scheduledSlotFormatted: formatInTimeZone(testSlot, 'America/New_York', 'yyyy-MM-dd HH:mm:ss zzz')
+      });
+    } catch (error: any) {
+      console.error('Matrix scheduler test error:', error);
+      res.status(500).json({ message: error.message || 'Matrix scheduler test failed' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
