@@ -114,8 +114,14 @@ export async function ensureDailySlots() {
 
     // Check if slots already exist for this day
     const existing = await getSlotsForDate(dateIso);
-    if (existing.length > 0) {
-      console.log(`[Matrix2 Generator] Slots already exist for ${dateIso} (${existing.length} slots)`);
+    if (existing.length >= dailyLimit) {
+      console.log(`[Matrix2 Generator] Sufficient slots already exist for ${dateIso} (${existing.length}/${dailyLimit} slots)`);
+      continue;
+    }
+    
+    // If some slots exist but not enough, log warning and skip (don't partially fill)
+    if (existing.length > 0 && existing.length < dailyLimit) {
+      console.log(`[Matrix2 Generator] WARNING: Partial slots exist for ${dateIso} (${existing.length}/${dailyLimit}), skipping to prevent duplicates`);
       continue;
     }
 
