@@ -7005,6 +7005,59 @@ IMPORTANT:
         }
       }
 
+      // Auto-enroll recipient in "Manual Follow-Ups" system sequence
+      try {
+        console.log('📧 [MANUAL FOLLOW-UPS] Auto-enrolling recipient in system sequence...');
+        
+        // Get or create the Manual Follow-Ups system sequence
+        const systemSequence = await storage.getOrCreateManualFollowUpsSequence();
+        
+        // Check if recipient is already enrolled
+        const existingRecipient = await db
+          .select()
+          .from(sequenceRecipients)
+          .where(
+            and(
+              eq(sequenceRecipients.sequenceId, systemSequence.id),
+              eq(sequenceRecipients.email, to)
+            )
+          )
+          .limit(1);
+        
+        if (existingRecipient.length === 0) {
+          // Enroll new recipient
+          const [enrolled] = await db
+            .insert(sequenceRecipients)
+            .values({
+              sequenceId: systemSequence.id,
+              email: to,
+              status: 'awaiting_reply',
+              currentStep: 0,
+            })
+            .returning();
+          
+          // Insert the manually sent email content as Step 0
+          await db
+            .insert(sequenceRecipientMessages)
+            .values({
+              recipientId: enrolled.id,
+              step: 0,
+              subject: subject,
+              htmlBody: body,
+              status: 'sent',
+              sentAt: new Date(),
+              messageId: draft.message.id,
+            });
+          
+          console.log(`📧 [MANUAL FOLLOW-UPS] ✅ Enrolled ${to} at Step 0 (awaiting_reply). Message ID: ${draft.message.id}`);
+        } else {
+          console.log(`📧 [MANUAL FOLLOW-UPS] ℹ️ Recipient ${to} already enrolled. Skipping auto-enrollment.`);
+        }
+      } catch (enrollError: any) {
+        console.error('📧 [MANUAL FOLLOW-UPS] ❌ Auto-enrollment failed:', enrollError);
+        // Don't fail the entire request if auto-enrollment fails
+      }
+
       // Apply labels if user has configured them
       console.log('📧 [GMAIL] Fetching user settings to check for Gmail labels...');
       const user = await storage.getUser(userId);
