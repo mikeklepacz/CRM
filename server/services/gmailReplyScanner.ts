@@ -256,7 +256,7 @@ export class GmailReplyScanner {
       const [newSequence] = await db
         .insert(sequences)
         .values({
-          userId: adminUserId,
+          createdBy: adminUserId,
           name: 'Manual Follow-Ups',
           description: 'Protected system sequence for contacts created via Gmail drafts',
           stepDelays: [3, 7, 14],
