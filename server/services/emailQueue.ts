@@ -50,7 +50,7 @@ export async function processEmailQueue() {
       s.status as sequence_status,
       s.name as sequence_name
     FROM daily_send_slots dss
-    INNER JOIN sequence_recipients sr ON dss.recipient_id = sr.id
+    INNER JOIN sequence_recipients sr ON dss.recipient_id::varchar = sr.id
     INNER JOIN sequences s ON sr.sequence_id = s.id
     WHERE dss.sent = FALSE
       AND dss.filled = TRUE
