@@ -1,115 +1,74 @@
-// server/services/matrix2/slotAssigner.ts
-
-import { formatInTimeZone } from "date-fns-tz";
-import { isWeekend } from "date-fns";
-import { db } from "../../db";
-import {
-  getUnassignedSlots,
-  markSlotAssigned
-} from "./slotDb";
-
-import {
-  getEligibleRecipientsForAssignment,
-  markRecipientScheduled
-} from "./recipientDb";
-
+// server/services/Matrix2/slotAssigner.ts
 import { parseBusinessHours } from "../timezoneHours";
+import { zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
+import { getEmptySlots, fillSlot } from "./slotDb";
+import { getEligibleRecipientsForAssignment } from "./recipientDb";
 import { storage } from "../../storage";
+import { isWithinInterval } from "date-fns";
 
-// --------------------------------------------------
-
-export async function runSlotAssigner() {
-  console.log("\n[MATRIX 2.0] Running slot assigner engine...");
-
+export async function assignRecipientsToSlots() {
   const settings = await storage.getEhubSettings();
-  const sendOffsetHours = settings?.clientWindowStartOffset ?? 1; // Default: 1 hr after opening
-  const endHour = settings?.clientWindowEndHour ?? 14;            // Default: 2 PM local
-  const skipWeekends = settings?.skipWeekends ?? false;
 
-  // Get all empty slots for today
-  const slots = await getUnassignedSlots();
-  console.log(`[MATRIX 2.0] Found ${slots.length} unassigned slots`);
-
+  const today = new Date();
+  const dateIso = today.toISOString().slice(0, 10);
+  const slots = await getEmptySlots(dateIso);
   if (slots.length === 0) return;
 
-  // Get all recipients waiting for a send
   const recipients = await getEligibleRecipientsForAssignment();
-  console.log(`[MATRIX 2.0] Found ${recipients.length} eligible recipients`);
-
   if (recipients.length === 0) return;
 
   for (const slot of slots) {
-    const slotUtc = slot.slotTimeUtc;
-
-    let assigned = false;
+    const slotUtc = new Date(slot.slot_time_utc);
 
     for (const r of recipients) {
-      if (isRecipientEligibleForSlot(r, slotUtc, {
-        sendOffsetHours,
-        endHour,
-        skipWeekends
-      })) {
-        // Assign the slot
-        await markSlotAssigned(slot.id, r.id);
+      if (!isRecipientEligible(r, slotUtc, settings)) continue;
 
-        // Mark recipient as “scheduled”
-        await markRecipientScheduled(r.id, slotUtc);
+      await fillSlot(slot.id, r.id, r.sequence_id, r.current_step);
 
-        console.log(`[MATRIX 2.0] Slot ${slot.id} assigned to recipient ${r.id}`);
+      const idx = recipients.findIndex((x: any) => x.id === r.id);
+      if (idx >= 0) recipients.splice(idx, 1);
 
-        assigned = true;
-        break;
-      }
-    }
-
-    if (!assigned) {
-      console.log(`[MATRIX 2.0] No recipient eligible for slot ${slot.id}`);
+      break;
     }
   }
 }
 
-// --------------------------------------------------
+function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): boolean {
+  const local = utcToZonedTime(slotUtc, recipient.timezone);
 
-function isRecipientEligibleForSlot(
-  recipient: any,
-  slotUtc: Date,
-  ops: {
-    sendOffsetHours: number,
-    endHour: number,
-    skipWeekends: boolean
-  }
-): boolean {
+  const parsed = parseBusinessHours(recipient.business_hours);
+  const day = local.getDay();
+  const daySchedule = parsed[String(day)];
 
-  const { sendOffsetHours, endHour, skipWeekends } = ops;
+  if (!daySchedule || daySchedule.length === 0) return false;
 
-  const rTz = recipient.timezone;
-  if (!rTz) return false;
+  const windowStart = addMinutesLocal(local, settings.client_window_start_offset * 60);
+  const windowEnd = new Date(
+    local.getFullYear(),
+    local.getMonth(),
+    local.getDate(),
+    settings.client_window_end_hour,
+    0,
+    0
+  );
 
-  // Convert slot to recipient local time
-  const localIso = formatInTimeZone(slotUtc, rTz, "yyyy-MM-dd'T'HH:mm:ssXXX");
-  const localDate = new Date(localIso);
+  if (
+    !isWithinInterval(local, {
+      start: windowStart,
+      end: windowEnd,
+    })
+  ) return false;
 
-  if (skipWeekends && isWeekend(localDate)) {
-    return false;
-  }
-
-  // Get recipient’s parsed business hours for that weekday
-  const jsDay = localDate.getDay(); // 0=Sun, 1=Mon...
-  const bh = getBusinessHours(recipient.business_hours);
-  const todaysHours = bh[jsDay];
-  if (!todaysHours || todaysHours.length === 0) return false;
-
-  const minutesSinceMidnight = localDate.getHours() * 60 + localDate.getMinutes();
-
-  // Check against each business-hours block
-  for (const block of todaysHours) {
-    const legalStart = block.open + sendOffsetHours * 60; // e.g., 11am open + 1 hr = 12pm
-    const legalEnd = Math.min(block.close, endHour * 60); // must be before endHour
-
-    if (minutesSinceMidnight >= legalStart && minutesSinceMidnight <= legalEnd) {
-      return true;
-    }
+  if (recipient.step_delay > 0) {
+    if (!recipient.last_step_sent_at) return true;
+    const last = new Date(recipient.last_step_sent_at);
+    const delayMs = recipient.step_delay * 24 * 3600 * 1000;
+    if (Date.now() < last.getTime() + delayMs) return false;
   }
 
-  return false;
+  return true;
+}
+
+function addMinutesLocal(d: Date, mins: number) {
+  return new Date(d.getTime() + mins * 60000);
 }

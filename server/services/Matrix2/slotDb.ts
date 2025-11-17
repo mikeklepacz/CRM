@@ -1,122 +1,69 @@
-// server/services/matrix2/slotDb.ts
-
+// server/services/Matrix2/slotDb.ts
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
-import { dailySendSlots } from "../../../shared/schema";
-import { eq, and, lte } from "drizzle-orm";
 
-// Matches schema in shared/schema.ts
-export interface SlotRecord {
+export interface DailySlot {
   id: string;
-  slotTimeUtc: Date;
-  slotDate: string;
+  slot_time_utc: string;
   filled: boolean;
-  recipientId: string | null;
   sent: boolean;
-  createdAt: Date;
+  recipient_id: string | null;
+  sequence_id: string | null;
+  step: number | null;
 }
 
-// -------------------------------------------------------
-// INSERT A BATCH OF SLOTS
-// -------------------------------------------------------
-export async function insertSlots(slots: { id: string; slotTimeUtc: Date; slotDate: string }[]) {
-  if (!slots.length) return;
-  
-  await db.insert(dailySendSlots).values(
-    slots.map(s => ({
-      id: s.id,
-      slotTimeUtc: s.slotTimeUtc,
-      slotDate: s.slotDate,
-      filled: false,
-      sent: false,
-    }))
-  );
+export async function getSlotsForDate(dateIso: string): Promise<DailySlot[]> {
+  const rows = await db.execute(sql`
+    SELECT id, slot_time_utc, filled, sent, recipient_id, sequence_id, step
+    FROM daily_send_slots
+    WHERE date = ${dateIso}
+    ORDER BY slot_time_utc ASC
+  `);
+  return rows as any;
 }
 
-// -------------------------------------------------------
-// GET ALL UNASSIGNED SLOTS (not filled)
-// -------------------------------------------------------
-export async function getUnassignedSlots(): Promise<SlotRecord[]> {
-  const slots = await db
-    .select()
-    .from(dailySendSlots)
-    .where(eq(dailySendSlots.filled, false));
-  
-  return slots.map(s => ({
-    id: s.id,
-    slotTimeUtc: s.slotTimeUtc,
-    slotDate: s.slotDate,
-    filled: s.filled,
-    recipientId: s.recipientId || null,
-    sent: s.sent,
-    createdAt: s.createdAt!,
-  }));
+export async function createSlots(dateIso: string, slots: Date[]) {
+  for (const dt of slots) {
+    await db.execute(sql`
+      INSERT INTO daily_send_slots (date, slot_time_utc, filled, sent)
+      VALUES (${dateIso}, ${dt.toISOString()}, FALSE, FALSE)
+    `);
+  }
 }
 
-// -------------------------------------------------------
-// GET READY-TO-SEND SLOTS (filled, not sent, time passed)
-// -------------------------------------------------------
-export async function getReadyToSendSlots(limit: number = 10): Promise<SlotRecord[]> {
-  const now = new Date();
-  
-  const slots = await db
-    .select()
-    .from(dailySendSlots)
-    .where(
-      and(
-        eq(dailySendSlots.filled, true),
-        eq(dailySendSlots.sent, false),
-        lte(dailySendSlots.slotTimeUtc, now)
-      )
-    )
-    .limit(limit);
-  
-  return slots.map(s => ({
-    id: s.id,
-    slotTimeUtc: s.slotTimeUtc,
-    slotDate: s.slotDate,
-    filled: s.filled,
-    recipientId: s.recipientId || null,
-    sent: s.sent,
-    createdAt: s.createdAt!,
-  }));
+export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
+  const rows = await db.execute(sql`
+    SELECT id, slot_time_utc
+    FROM daily_send_slots
+    WHERE date = ${dateIso}
+      AND filled = FALSE
+      AND sent = FALSE
+    ORDER BY slot_time_utc ASC
+  `);
+  return rows as any;
 }
 
-// -------------------------------------------------------
-// MARK SLOT AS FILLED (assigned to recipient)
-// -------------------------------------------------------
-export async function markSlotAssigned(slotId: string, recipientId: string) {
-  await db
-    .update(dailySendSlots)
-    .set({ 
-      filled: true, 
-      recipientId: recipientId,
-      updatedAt: new Date() 
-    })
-    .where(eq(dailySendSlots.id, slotId));
+export async function fillSlot(
+  slotId: string,
+  recipientId: string,
+  sequenceId: string,
+  step: number
+) {
+  await db.execute(sql`
+    UPDATE daily_send_slots
+    SET
+      filled = TRUE,
+      recipient_id = ${recipientId},
+      sequence_id = ${sequenceId},
+      step = ${step}
+    WHERE id = ${slotId}
+  `);
 }
 
-// -------------------------------------------------------
-// MARK SLOT AS SENT
-// -------------------------------------------------------
 export async function markSlotSent(slotId: string) {
-  await db
-    .update(dailySendSlots)
-    .set({ 
-      sent: true,
-      updatedAt: new Date() 
-    })
-    .where(eq(dailySendSlots.id, slotId));
-}
-
-// -------------------------------------------------------
-// CLEAR SLOTS OLDER THAN N DAYS
-// -------------------------------------------------------
-export async function cleanupOldSlots(days: number = 7) {
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - days);
-  
-  await db
-    .delete(dailySendSlots)
-    .where(lte(dailySendSlots.slotTimeUtc, cutoffDate));
+  await db.execute(sql`
+    UPDATE daily_send_slots
+    SET sent = TRUE
+    WHERE id = ${slotId}
+  `);
 }

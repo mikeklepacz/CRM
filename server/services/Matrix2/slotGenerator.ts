@@ -1,67 +1,40 @@
-// server/services/matrix2/slotGenerator.ts
+// server/services/Matrix2/slotGenerator.ts
+import { storage } from "../../storage";
+import { getSlotsForDate, createSlots } from "./slotDb";
+import { addMinutes, formatISO9075 } from "date-fns";
+import { randomInt } from "crypto";
 
-import { v4 as uuid } from "uuid";
-import { formatInTimeZone } from "date-fns-tz";
-import { addMinutes } from "date-fns";
-
-import { insertSlots } from "./slotDb";
-import { storage } from "../../storage"; // Access E-Hub settings
-
-// CONFIG:
-// N = number of slots per day
-// sendHourLocal = target send time in recipient local timezone (default 16:00 = 4 PM)
-// jitterMin/jitterMax = minute ranges between slots
-
-export interface SlotGenConfig {
-  slotsPerDay: number;     // e.g., 20 or 50
-  sendHourLocal: number;   // 16 = 4 PM
-  jitterMin: number;       // 12
-  jitterMax: number;       // 20
-}
-
-export async function generateDailySlots(config: SlotGenConfig) {
-  const { slotsPerDay, sendHourLocal, jitterMin, jitterMax } = config;
-
-  // Admin timezone (from E-Hub settings)
+export async function ensureDailySlots() {
   const settings = await storage.getEhubSettings();
-  const adminTz = settings?.timezone || "Europe/Warsaw";
+  const adminTz = settings.admin_timezone; // user_preferences.timezone
 
-  // Today in admin timezone (clean YYYY-MM-DD)
-  const dayKey = formatInTimeZone(new Date(), adminTz, "yyyy-MM-dd");
+  const today = new Date();
+  const dateIso = formatISO9075(today, { representation: "date" });
+  const existing = await getSlotsForDate(dateIso);
+  if (existing.length > 0) return;
 
-  console.log(`\n[MATRIX 2.0] Generating daily slots for ${dayKey}`);
+  const count = settings.daily_email_limit;
+  const jitterMin = settings.jitter_min;
+  const jitterMax = settings.jitter_max;
+  const startHour = settings.sending_hours_start;
 
-  const slots = [];
-  let currentTs: Date | null = null;
+  const base = new Date(
+    Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate(),
+      startHour
+    )
+  );
 
-  for (let i = 0; i < slotsPerDay; i++) {
-    // Base time for today at 4 PM admin-local → convert to UTC
-    if (i === 0) {
-      const adminLocalIso = `${dayKey}T${String(sendHourLocal).padStart(2,"0")}:00:00`;
-      const asUtc = new Date(formatInTimeZone(adminLocalIso, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
-      currentTs = asUtc;
-    } else {
-      // Add jitter between slots
-      const jitter = randInt(jitterMin, jitterMax);
-      currentTs = addMinutes(currentTs!, jitter);
-    }
+  const slots: Date[] = [];
+  let cursor = base;
 
-    slots.push({
-      id: uuid(),
-      slotTimeUtc: currentTs!,
-      slotDate: dayKey,
-    });
+  for (let i = 0; i < count; i++) {
+    const jitter = randomInt(jitterMin, jitterMax + 1);
+    cursor = addMinutes(cursor, jitter);
+    slots.push(new Date(cursor));
   }
 
-  console.log(`[MATRIX 2.0] Created ${slots.length} jittered slots`);
-
-  await insertSlots(slots);
-
-  console.log(`[MATRIX 2.0] Slots written to DB for ${dayKey}`);
-}
-
-// -------------------------------------------------------
-
-function randInt(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  await createSlots(dateIso, slots);
 }
