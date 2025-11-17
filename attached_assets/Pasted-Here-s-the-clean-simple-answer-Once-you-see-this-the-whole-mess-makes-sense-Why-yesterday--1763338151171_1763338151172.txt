@@ -1,0 +1,127 @@
+Here’s the clean, simple answer.
+Once you see this, the whole mess makes sense.
+
+⸻
+
+Why “yesterday” is even happening
+
+Because the scheduler is not asking:
+
+“What time is it in Maine right now?”
+
+Instead, it’s doing this:
+	1.	Start with a JavaScript Date object in UTC
+(example: 2025-11-17T00:01:16Z)
+	2.	Use that UTC date to build local times:
+	•	“midnight in Warsaw”
+	•	“midnight in Maine”
+
+The problem is:
+midnight does not happen at the same moment in two timezones.
+
+Example:
+	•	When Warsaw crosses midnight into Monday
+	•	Maine is still in Sunday evening (18:00)
+
+So if you take “Monday 00:00 UTC-adjusted” and ask:
+
+“Format this in America/New_York time as midnight”
+
+…it doesn’t stay midnight.
+It becomes:
+
+Sunday 19:00
+
+So the scheduler thinks:
+
+“Today in Poland is Monday,
+but today in Maine is still Sunday.”
+
+Then the entire schedule calculation for the dispensary is built off Sunday’s hours.
+
+So the windows never overlap.
+
+⸻
+
+Why the scheduler “should know”… but doesn’t
+
+You’re right:
+In normal code you’d do:
+
+convert Poland midnight → Maine local time
+and you’d get the correct calendar day.
+
+But this code cheats.
+
+It uses one shared date number (the UTC day) for both windows.
+
+That’s the core mistake.
+
+It assumes:
+
+“If I advance one day in UTC, the local day in every timezone advances too.”
+
+That is false.
+
+Real-world truth:
+
+Advancing the UTC date by 24 hours
+does not guarantee that the other timezone’s local day has rolled over yet.
+
+This is where “yesterday” enters the chat.
+
+⸻
+
+The root of the bug in one sentence
+
+The code advances days in UTC, not in the recipient’s timezone.
+
+Because of that:
+	•	when Warsaw moves to Monday
+	•	Maine is still on Sunday
+
+So the code builds business hours for the wrong day.
+
+⸻
+
+Why this breaks everything
+
+Your sending window:
+	•	Monday 15:00–23:00 Warsaw (13:00–21:00 UTC)
+
+Recipient’s business window (mistaken):
+	•	Sunday’s 11:00–16:00 Maine (16:00–21:00 UTC)
+
+That pair never overlaps.
+Not today. Not tomorrow.
+Not for 14 days.
+
+Because the code always increments days using UTC,
+which keeps Maine’s “day number” always one behind.
+
+It’s a permanent 1-day mismatch.
+
+And the result is:
+
+“No legal send slot found within 14 days.”
+
+⸻
+
+The short version you can explain to anyone
+
+The scheduler is checking the wrong day for the recipient.
+It compares “Monday in Poland” against “Sunday in Maine,”
+so it never sees any overlap in hours.
+
+The fix is simple:
+
+Advance the day using the recipient’s timezone, not UTC.
+
+⸻
+
+If you want, I can now:
+	•	rewrite the scheduler loop correctly, OR
+	•	give Replit the exact copy-paste patch, OR
+	•	simplify the code path by removing the dual-timezone math entirely.
+
+Tell me the direction you want.
