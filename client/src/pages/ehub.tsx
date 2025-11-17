@@ -1120,8 +1120,16 @@ export default function EHub() {
   // Reply Scanner state
   const [replyScannnerDialogOpen, setReplyScannerDialogOpen] = useState(false);
   const [scanPreviewResults, setScanPreviewResults] = useState<{
-    awaitingReply: Array<{ email: string; name: string; sequenceId: string; currentStep: number }>;
-    alreadySent: Array<{ email: string; name: string }>;
+    scanned: number;
+    promoted: number;
+    errors: number;
+    dryRun?: boolean;
+    details: Array<{
+      recipientId: string;
+      email: string;
+      status: 'promoted' | 'has_reply' | 'too_recent' | 'error';
+      message?: string;
+    }>;
   } | null>(null);
 
   // Settings form state
@@ -3957,42 +3965,51 @@ export default function EHub() {
             </div>
           ) : scanPreviewResults ? (
             <div className="space-y-4 py-4">
-              <div>
-                <h3 className="font-semibold mb-2">Ready to Promote ({scanPreviewResults.awaitingReply.length})</h3>
-                {scanPreviewResults.awaitingReply.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No contacts ready for promotion</p>
-                ) : (
-                  <div className="border rounded-md max-h-60 overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Current Step</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {scanPreviewResults.awaitingReply.map((recipient, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{recipient.name}</TableCell>
-                            <TableCell className="text-xs">{recipient.email}</TableCell>
-                            <TableCell>Step {recipient.currentStep}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+              <div className="flex gap-4 mb-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Scanned:</span> <strong>{scanPreviewResults.scanned}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Ready to Promote:</span> <strong className="text-green-600">{scanPreviewResults.details.filter(d => d.status === 'promoted').length}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Has Replies:</span> <strong className="text-blue-600">{scanPreviewResults.details.filter(d => d.status === 'has_reply').length}</strong>
+                </div>
               </div>
 
-              {scanPreviewResults.alreadySent.length > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-2 text-muted-foreground">Already in Follow-Up ({scanPreviewResults.alreadySent.length})</h3>
-                  <p className="text-xs text-muted-foreground">
-                    These contacts are already at Step 1+ and won't be affected
-                  </p>
-                </div>
-              )}
+              <div className="border rounded-md max-h-96 overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Note</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {scanPreviewResults.details.map((detail, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="text-xs font-mono">{detail.email}</TableCell>
+                        <TableCell>
+                          {detail.status === 'promoted' && (
+                            <Badge variant="default" className="bg-green-600">Ready to Promote</Badge>
+                          )}
+                          {detail.status === 'has_reply' && (
+                            <Badge variant="default" className="bg-blue-600">Has Reply</Badge>
+                          )}
+                          {detail.status === 'too_recent' && (
+                            <Badge variant="secondary">Too Recent</Badge>
+                          )}
+                          {detail.status === 'error' && (
+                            <Badge variant="destructive">Error</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{detail.message}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           ) : null}
 
@@ -4009,11 +4026,11 @@ export default function EHub() {
             </Button>
             <Button
               onClick={() => scanRepliesMutation.mutate({ dryRun: false })}
-              disabled={!scanPreviewResults || scanPreviewResults.awaitingReply.length === 0 || scanRepliesMutation.isPending}
+              disabled={!scanPreviewResults || scanPreviewResults.details.filter(d => d.status === 'promoted').length === 0 || scanRepliesMutation.isPending}
               data-testid="button-confirm-promote"
             >
               {scanRepliesMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Promote {scanPreviewResults?.awaitingReply.length || 0} to Step 1
+              Promote {scanPreviewResults?.details.filter(d => d.status === 'promoted').length || 0} to Step 1
             </Button>
           </div>
         </DialogContent>
