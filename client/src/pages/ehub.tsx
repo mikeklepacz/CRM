@@ -356,6 +356,7 @@ function QueueView() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [timeWindowDays, setTimeWindowDays] = useState<number>(3);
   const [statusFilter, setStatusFilter] = useState<'active' | 'paused'>('active');
+  const [showJitter, setShowJitter] = useState(false);
   
   console.log('[QueueView] Component mounted/updated', {
     search: debouncedSearch,
@@ -758,6 +759,17 @@ function QueueView() {
                 <Pause className="mr-2 h-4 w-4" />
                 {statusFilter === 'paused' ? 'Show Active' : `Show Paused${pausedCount > 0 ? ` (${pausedCount})` : ''}`}
               </Button>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-jitter"
+                  checked={showJitter}
+                  onCheckedChange={(checked) => setShowJitter(!!checked)}
+                  data-testid="checkbox-show-jitter"
+                />
+                <Label htmlFor="show-jitter" className="text-sm cursor-pointer">
+                  Jitter
+                </Label>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -776,7 +788,7 @@ function QueueView() {
                     <TableHead>Sequence</TableHead>
                     <TableHead>Step</TableHead>
                     <TableHead>Scheduled</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{showJitter ? 'Jitter' : 'Status'}</TableHead>
                     <TableHead className="w-[60px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -808,16 +820,37 @@ function QueueView() {
                       }
                     </TableCell>
                     <TableCell data-testid={`text-queue-status-${item.recipientId}-${item.stepNumber}`}>
-                      <Badge 
-                        variant={
-                          item.status === 'sent' ? 'default' : 
-                          item.status === 'overdue' ? 'destructive' :
-                          item.status === 'open' ? 'secondary' :
-                          'outline'
-                        }
-                      >
-                        {item.status}
-                      </Badge>
+                      {showJitter ? (
+                        <span className="text-sm text-muted-foreground">
+                          {(() => {
+                            // Calculate jitter (time difference from previous entry)
+                            if (idx === 0) return '—';
+                            const prevItem = activeQueue[idx - 1];
+                            if (!prevItem.scheduledAt || !item.scheduledAt) return '—';
+                            
+                            const prevTime = new Date(prevItem.scheduledAt).getTime();
+                            const currTime = new Date(item.scheduledAt).getTime();
+                            const diffMs = currTime - prevTime;
+                            const diffMins = Math.floor(diffMs / 60000);
+                            
+                            if (diffMins < 60) return `${diffMins}m`;
+                            const hours = Math.floor(diffMins / 60);
+                            const mins = diffMins % 60;
+                            return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+                          })()}
+                        </span>
+                      ) : (
+                        <Badge 
+                          variant={
+                            item.status === 'sent' ? 'default' : 
+                            item.status === 'overdue' ? 'destructive' :
+                            item.status === 'open' ? 'secondary' :
+                            'outline'
+                          }
+                        >
+                          {item.status}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell data-testid={`actions-${item.recipientId}-${item.stepNumber}`}>
                       {item.status !== 'sent' && item.status !== 'open' && item.recipientId && (
