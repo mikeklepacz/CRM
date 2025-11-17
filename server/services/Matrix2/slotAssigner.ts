@@ -56,18 +56,26 @@ export async function assignRecipientsToSlots() {
     return;
   }
 
+  // Get all empty slots across the next 3 days (matching slot generator window)
   const today = new Date();
-  const dateIso = today.toISOString().slice(0, 10);
-  console.log('[Matrix2 Assigner] Starting assignment for date:', dateIso);
+  const allSlots = [];
   
-  const slots = await getEmptySlots(dateIso);
-  console.log('[Matrix2 Assigner] Empty slots found:', {
-    count: slots.length,
-    sample: slots.slice(0, 3)
+  for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
+    const targetDate = new Date(today);
+    targetDate.setDate(targetDate.getDate() + dayOffset);
+    const dateIso = targetDate.toISOString().slice(0, 10);
+    
+    const daySlots = await getEmptySlots(dateIso);
+    allSlots.push(...daySlots);
+  }
+  
+  console.log('[Matrix2 Assigner] Empty slots found across 3 days:', {
+    count: allSlots.length,
+    sample: allSlots.slice(0, 3)
   });
   
-  if (slots.length === 0) {
-    console.log(`[Matrix2 Assigner] No empty slots for ${dateIso}`);
+  if (allSlots.length === 0) {
+    console.log(`[Matrix2 Assigner] No empty slots available in 3-day window`);
     return;
   }
 
@@ -87,11 +95,11 @@ export async function assignRecipientsToSlots() {
     return;
   }
 
-  console.log(`[Matrix2 Assigner] Assigning ${recipients.length} recipients to ${slots.length} slots for ${dateIso}`);
+  console.log(`[Matrix2 Assigner] Assigning ${recipients.length} recipients to ${allSlots.length} slots across 3 days`);
 
   let assignedCount = 0;
 
-  for (const slot of slots) {
+  for (const slot of allSlots) {
     const slotUtc = new Date(slot.slot_time_utc);
 
     // Find first eligible recipient for this slot
