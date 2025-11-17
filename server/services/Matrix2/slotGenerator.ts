@@ -137,13 +137,19 @@ export async function ensureDailySlots() {
 }
 
 /**
- * Helper to get admin user (first user, or can be modified to get current logged-in user)
+ * Helper to get admin user preferences (including timezone)
  */
 async function getAdminUser() {
-  // For now, get the first user's preferences
+  // Get the first user's preferences (which includes timezone)
   // In production, you'd get the currently logged-in admin user
   const users = await storage.getAllUsers();
-  return users[0] || null;
+  if (!users || users.length === 0) {
+    return null;
+  }
+  
+  const firstUserId = users[0].id;
+  const preferences = await storage.getUserPreferences(firstUserId);
+  return preferences;
 }
 
 // Extend storage interface with helper method
