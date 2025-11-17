@@ -88,23 +88,26 @@ export async function getNextMatrixSlot(
   // Use recipient's state to correctly resolve timezone
   const parsed = parseBusinessHours(recipientBusinessHours, recipientState || "");
 
-  let dayLoopDate = candidate;
+  const startingMoment = new Date();
   let overlapStart: Date = new Date();
   let overlapEnd: Date = new Date();
 
-  // 14-day search loop
-  for (let i = 0; i < 14; i++) {
-    console.log("\n--- MATRIX LOOP TICK", i, "------------------------------");
-    console.log("dayLoopDate (raw UTC):", dayLoopDate.toISOString());
+  // 14-day search loop using day offset
+  for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
+    console.log("\n--- MATRIX LOOP DAY", dayOffset, "------------------------------");
+    
+    // Build dates independently in each timezone
+    const adminDayDate = addDays(startingMoment, dayOffset);
+    const recipientDayDate = addDays(startingMoment, dayOffset);
     
     console.log("Admin TZ:", adminTimezone);
     console.log("Recipient TZ:", recipientTimezone);
     console.log("Recipient State:", recipientState);
     
-    const isoAdminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
+    const isoAdminDay = parseInt(formatInTimeZone(adminDayDate, adminTimezone, 'e'), 10);
     console.log("Admin ISO Day:", isoAdminDay);
     
-    const isoRecipDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
+    const isoRecipDay = parseInt(formatInTimeZone(recipientDayDate, recipientTimezone, 'e'), 10);
     console.log("Recipient ISO Day:", isoRecipDay);
     
     // Show parsed schedule for the recipient's day
@@ -117,33 +120,24 @@ export async function getNextMatrixSlot(
     console.log("Today's schedule for this recipient:", parsed.schedule[jsRecipDay]);
 
     // weekend skip
-    const adminDay = parseInt(formatInTimeZone(dayLoopDate, adminTimezone, 'e'), 10);
-    if (skipWeekends && (adminDay === 6 || adminDay === 7)) {
+    if (skipWeekends && (isoAdminDay === 6 || isoAdminDay === 7)) {
       candidate = new Date(formatInTimeZone(
-        dayLoopDate,
+        adminDayDate,
         adminTimezone,
         `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
       ));
-      // Advance one calendar day *in admin timezone*
-      dayLoopDate = new Date(
-        formatInTimeZone(
-          addDays(dayLoopDate, 1),
-          adminTimezone,
-          "yyyy-MM-dd'T'00:00:00"
-        )
-      );
       continue;
     }
 
-    // ADMIN WINDOW: Build using adminTimezone (NOT UTC date components)
+    // ADMIN WINDOW: Build using adminTimezone
     const adminStartLocal = formatInTimeZone(
-      dayLoopDate,
+      adminDayDate,
       adminTimezone,
       `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
     );
 
     const adminEndLocal = formatInTimeZone(
-      dayLoopDate,
+      adminDayDate,
       adminTimezone,
       `yyyy-MM-dd'T'${String(sendingHoursEnd).padStart(2,'0')}:00:00`
     );
@@ -152,28 +146,16 @@ export async function getNextMatrixSlot(
     const adminStartUtc = new Date(adminStartLocal);
     const adminEndUtc = new Date(adminEndLocal);
 
-    // RECIPIENT WINDOW (minutes → actual)
-    // Convert ISO weekday (1=Mon...7=Sun) to JS weekday (0=Sun...6=Sat)
-    const isoDay = parseInt(formatInTimeZone(dayLoopDate, recipientTimezone, 'e'), 10);
-    const localDay = isoDay === 7 ? 0 : isoDay;
-
-    const todaysSchedule = parsed.schedule[localDay];
+    // RECIPIENT WINDOW
+    const todaysSchedule = parsed.schedule[jsRecipDay];
 
     if (parsed.isClosed || !todaysSchedule || todaysSchedule.length === 0) {
       // no hours today → next day
       candidate = new Date(formatInTimeZone(
-        dayLoopDate,
+        adminDayDate,
         adminTimezone,
         `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
       ));
-      // Advance one calendar day *in admin timezone*
-      dayLoopDate = new Date(
-        formatInTimeZone(
-          addDays(dayLoopDate, 1),
-          adminTimezone,
-          "yyyy-MM-dd'T'00:00:00"
-        )
-      );
       continue;
     }
 
@@ -188,7 +170,7 @@ export async function getNextMatrixSlot(
 
     // Build complete timestamp in recipient timezone
     const recipientOpenString = formatInTimeZone(
-      dayLoopDate,
+      recipientDayDate,
       recipientTimezone,
       `yyyy-MM-dd'T'${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`
     );
@@ -200,7 +182,7 @@ export async function getNextMatrixSlot(
 
     // Build end timestamp in recipient timezone
     const recipientEndString = formatInTimeZone(
-      dayLoopDate,
+      recipientDayDate,
       recipientTimezone,
       `yyyy-MM-dd'T'${String(clientWindowEndHour).padStart(2,'0')}:00:00`
     );
@@ -232,18 +214,10 @@ export async function getNextMatrixSlot(
 
     if (!hasOverlap) {
       candidate = new Date(formatInTimeZone(
-        dayLoopDate,
+        adminDayDate,
         adminTimezone,
         `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
       ));
-      // Advance one calendar day *in admin timezone*
-      dayLoopDate = new Date(
-        formatInTimeZone(
-          addDays(dayLoopDate, 1),
-          adminTimezone,
-          "yyyy-MM-dd'T'00:00:00"
-        )
-      );
       continue;
     }
 
@@ -256,18 +230,10 @@ export async function getNextMatrixSlot(
 
     // candidate after overlap
     candidate = new Date(formatInTimeZone(
-      dayLoopDate,
+      adminDayDate,
       adminTimezone,
       `yyyy-MM-dd'T'${String(sendingHoursStart).padStart(2,'0')}:00:00`
     ));
-    // Advance one calendar day *in admin timezone*
-    dayLoopDate = new Date(
-      formatInTimeZone(
-        addDays(dayLoopDate, 1),
-        adminTimezone,
-        "yyyy-MM-dd'T'00:00:00"
-      )
-    );
   }
 
   // sanity check
