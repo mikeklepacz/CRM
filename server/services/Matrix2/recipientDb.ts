@@ -37,7 +37,7 @@ export async function getEligibleRecipientsForAssignment() {
     ORDER BY sr.created_at ASC
   `);
   
-  const rows = Array.isArray(result) ? result : [];
+  const rows = (result as any).rows || [];
   
   console.log('[RecipientDb.getEligibleRecipientsForAssignment] Raw results:', {
     count: rows.length,
