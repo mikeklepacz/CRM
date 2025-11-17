@@ -1,0 +1,163 @@
+Got it. You want a clean “orders packet” you can hand to Replit / Assist so they finish this without more thrash.
+
+Here’s exactly what to tell them. Copy-paste this as a single prompt into Assist/Replit.
+
+⸻
+
+PROMPT TO ASSIST / REPLIT
+
+I need you to finish the Matrix2 slot-based scheduler and make it the ONLY scheduling system in this app.
+
+Facts:
+	•	Admin settings live in ehub_settings and are LAW:
+	•	sending_hours_start, sending_hours_end
+	•	daily_email_limit
+	•	min_delay_minutes, max_delay_minutes
+	•	client_window_start_offset (hours after store opens)
+	•	client_window_end_hour (local cutoff hour)
+	•	skip_weekends
+	•	The admin timezone comes from user_preferences.timezone.
+	•	Recipient business hours + state + timezone are on the sequence recipient records.
+	•	Matrix2 lives in server/services/Matrix2/:
+	•	slotDb.ts
+	•	slotGenerator.ts
+	•	slotAssigner.ts
+	•	recipientDb.ts
+	•	The normal queue is server/services/emailQueue.ts.
+
+Your job is to:
+	1.	Make Matrix2 the single source of truth for send times
+	•	Remove ALL uses of:
+	•	matrixScheduler.ts
+	•	emailSchedulingService.ts
+	•	smartTiming.ts
+	•	eligibilityPlanner.ts
+	•	rescheduleCoordinator.ts
+	•	No route, service, or worker is allowed to compute scheduled_at directly anymore.
+	•	Scheduling must be derived ONLY from:
+	•	daily_send_slots.slot_time_utc
+	•	plus which recipient is assigned to each slot.
+	2.	Fix enrollment to NOT schedule
+In server/routes.ts:
+	•	On sequence enrollment (and any “add recipient to sequence” flow):
+	•	Do not call emailSchedulingService.scheduleRecipient or matrixScheduler.getNextMatrixSlot.
+	•	Do not write a future scheduled_at into sequence_scheduled_sends.
+	•	Enrollment should only:
+	•	Create / update sequence_recipients with:
+	•	sequence_id
+	•	recipient_id
+	•	current_step
+	•	step_delay
+	•	business_hours
+	•	timezone
+	•	state
+	•	any flags you need for tracking progress.
+	•	Matrix2 will decide when to send later.
+	3.	Finish the Matrix2 implementation to obey ehub_settings
+In Matrix2/slotGenerator.ts:
+	•	Read the current E-Hub settings via storage.getEhubSettings().
+	•	Read the current admin timezone from user_preferences.timezone (current logged-in admin).
+	•	Use:
+	•	sending_hours_start / sending_hours_end to define the admin send window.
+	•	daily_email_limit to define how many slots to create per day.
+	•	min_delay_minutes / max_delay_minutes to jitter between slots.
+	•	Generate exactly daily_email_limit slots per day:
+	•	Start at sending_hours_start in admin timezone.
+	•	Space them evenly across the admin window, then apply random jitter within the min/max jitter range.
+	•	Insert them into daily_send_slots using a clean insertDailySlots() helper in slotDb.ts.
+In Matrix2/slotAssigner.ts:
+	•	Fix isRecipientEligible() to:
+	•	Use parseBusinessHours(recipient.business_hours || "", recipient.state || "").
+	•	If parsed.isClosed is true → not eligible.
+	•	Convert slotUtc to the recipient’s timezone:
+	•	Use recipient.timezone if present, else fallback to what parseBusinessHours gives you.
+	•	From that local time:
+	•	Determine day of week.
+	•	Read the correct schedule entry from parsed.schedule[dayIndex].
+	•	Compute the first open/close range in minutes since midnight.
+	•	Apply:
+	•	client_window_start_offset (hours after open).
+	•	client_window_end_hour (local cutoff hour).
+	•	Reject the slot if slotLocal falls outside [open+offset, min(close, client_window_end_hour)].
+	•	If skip_weekends is true, reject Saturday/Sunday.
+	•	Enforce step_delay:
+	•	If recipient.step_delay > 0 and recipient.last_step_sent_at exists:
+	•	Compute earliestNext = last_step_sent_at + step_delay (days).
+	•	Reject slots where slotUtc < earliestNext.
+	•	assignRecipientsToSlots() must:
+	•	Load today’s slots (getEmptySlots or equivalent) for dateIso (UTC date).
+	•	Load all eligible recipients via recipientDb.getEligibleRecipientsForAssignment().
+	•	For each slot, find the first eligible recipient and:
+	•	Call slotDb.fillSlot(slot.id, recipient.id).
+	•	Update recipient metadata (e.g. current_step, last_step_scheduled_at if you track it).
+	•	Log simple INFO lines like:
+	•	[Matrix2 Assigner] Assigning X recipients to Y slots for 2025-11-18
+	•	[Matrix2 Assigner] Assigned recipient R to slot S at TIME.
+	4.	Make emailQueue.ts consume Matrix2 slots only
+	•	At the beginning of each queue cycle:
+	1.	Ensure today’s slots exist:
+	•	Call Matrix2 slot generator; it should be idempotent (no duplicates if already created).
+	2.	Call assignRecipientsToSlots() to fill any empty slots.
+	•	When actually sending:
+	•	Query daily_send_slots for:
+	•	sent = false
+	•	slot_time_utc <= now()
+	•	recipient_id IS NOT NULL
+	•	Join to sequence_recipients / contacts to get email + content.
+	•	Send the email.
+	•	Mark the slot sent = true after success.
+	•	Do not use sequence_scheduled_sends to decide when to send.
+	•	You can still write a “history” row there if the app expects it for reporting, but it must be a mirror of what Matrix2 already decided:
+	•	scheduled_at = slot_time_utc
+	•	sent_at = actual send time
+	5.	Kill or quarantine the old scheduler
+	•	Ensure there are no remaining imports of:
+	•	./services/matrixScheduler
+	•	./services/emailSchedulingService
+	•	./services/smartTiming
+	•	./services/eligibilityPlanner
+	•	./services/rescheduleCoordinator
+	•	If you can’t delete them yet, turn their exported functions into hard errors with clear messages:
+	•	e.g. throw new Error("Deprecated: all scheduling must go through Matrix2.");
+	•	Verify with a full-text search that nothing calls these anymore.
+	6.	Honor settings as “god”
+	•	All timing behaviour must be derived from:
+	•	ehub_settings for:
+	•	sending_hours_start / sending_hours_end
+	•	daily_email_limit
+	•	min_delay_minutes / max_delay_minutes
+	•	client_window_start_offset
+	•	client_window_end_hour
+	•	skip_weekends
+	•	user_preferences.timezone for admin local timezone.
+	•	Do not introduce any extra “preferred hour” fields or hidden constants.
+	7.	Sanity test (required)
+After changes, please:
+	•	Create 3 test recipients in:
+	•	California
+	•	New York
+	•	Central Europe
+	•	Give each realistic business hours.
+	•	Set:
+	•	sending_hours_start = 15
+	•	sending_hours_end = 23
+	•	daily_email_limit = 5
+	•	client_window_start_offset = 1
+	•	client_window_end_hour = 16
+	•	skip_weekends = true
+	•	Enroll them in a sequence with step_delay = 0.
+	•	Run the queue.
+	•	Show me:
+	•	The generated daily_send_slots rows for today (slot_time_utc + recipient_id).
+	•	The logs from Matrix2 generator and assigner.
+	•	Confirmation that each recipient’s email is scheduled within:
+	•	1 hour after their open time
+	•	Before 4 PM local
+	•	Within my global send window
+	•	Obeying jitter and daily limit.
+
+⸻
+
+Use that as-is.
+
+After they respond with changes + logs, we can eyeball whether the behaviour actually matches what you want and then torture-test edge cases (weekends, step delays, different states) instead of continuing this half-wired hybrid.
