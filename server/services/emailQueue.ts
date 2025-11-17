@@ -376,52 +376,38 @@ async function processEmailQueue() {
     // Process each ready slot
     for (const slot of readySlots) {
       try {
-        // Get sequence details BEFORE claiming to check if we should process it
-        const sequence = await storage.getSequence(scheduledSend.sequenceId);
-        if (!sequence) {
-          console.error(`[EmailQueue] Sequence ${scheduledSend.sequenceId} not found`);
-          // Claim it to mark as failed so it doesn't keep getting picked up
-          const claimed = await storage.claimScheduledSend(scheduledSend.id);
-          if (claimed) {
-            await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
-          }
-          continue;
-        }
-
-        // CRITICAL: Skip if sequence is paused UNLESS this is a manual override (Send Now)
-        // Manual overrides bypass pause to allow immediate sending of specific emails
-        if (sequence.status === 'paused' && !scheduledSend.manualOverride) {
-          console.log(`[EmailQueue] ⏸️ SKIPPED - Sequence "${sequence.name}" is paused (will retry when resumed)`);
-          continue;
-        }
-
-        // Skip if sequence is not active (draft, completed, cancelled, etc.) UNLESS manual override
-        if (sequence.status !== 'active' && !scheduledSend.manualOverride) {
-          console.log(`[EmailQueue] ⏸️ SKIPPED - Sequence "${sequence.name}" status is "${sequence.status}"`);
-          continue;
-        }
-
-        // Log manual override if present
-        if (scheduledSend.manualOverride) {
-          console.log(`[EmailQueue] 🚀 MANUAL OVERRIDE - Sending despite sequence status "${sequence.status}"`);
-        }
-
-        // Atomically claim this scheduled send (prevents double-processing)
-        const claimed = await storage.claimScheduledSend(scheduledSend.id);
-        if (!claimed) {
+        // MATRIX2: Get recipient from slot
+        if (!slot.recipientId) {
+          console.error(`[EmailQueue] [Matrix2] Slot ${slot.id} has no recipientId`);
+          await markSlotSent(slot.id); // Mark as sent to prevent reprocessing
           continue;
         }
 
         // Get recipient data
-        const recipient = await storage.getRecipient(scheduledSend.recipientId);
+        const recipient = await storage.getRecipient(slot.recipientId);
         if (!recipient) {
-          console.error(`[EmailQueue] Recipient ${scheduledSend.recipientId} not found`);
-          await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
+          console.error(`[EmailQueue] [Matrix2] Recipient ${slot.recipientId} not found`);
+          await markSlotSent(slot.id);
           continue;
         }
 
-        // Determine current step from scheduledSend
-        const currentStepNumber = scheduledSend.stepNumber;
+        // Get sequence details
+        const sequence = await storage.getSequence(recipient.sequenceId);
+        if (!sequence) {
+          console.error(`[EmailQueue] [Matrix2] Sequence ${recipient.sequenceId} not found`);
+          await markSlotSent(slot.id);
+          continue;
+        }
+
+        // Skip if sequence is not active
+        if (sequence.status !== 'active') {
+          console.log(`[EmailQueue] [Matrix2] ⏸️ SKIPPED - Sequence "${sequence.name}" status is "${sequence.status}"`);
+          continue; // Don't mark as sent, allow retry when sequence is active again
+        }
+
+        // Determine current step to send (currentStep + 1)
+        // currentStep shows last completed step (0=none, 1=step1 done, etc.)
+        const currentStepNumber = (recipient.currentStep || 0) + 1;
 
         // CHECK COMMISSION TRACKER VALIDATION
         if (currentStepNumber === 1) {
@@ -433,10 +419,9 @@ async function processEmailQueue() {
           );
 
           if (trackerCheck.shouldSkip) {
-            console.log(`[EmailQueue] ⛔ STEP 1 SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
-            // Mark scheduled send as cancelled and recipient as skipped
-            await storage.updateScheduledSend(scheduledSend.id, { status: 'cancelled' });
-            await storage.deleteRecipientScheduledSends(recipient.id); // Delete all future sends
+            console.log(`[EmailQueue] [Matrix2] ⛔ STEP 1 SKIPPED ${recipient.email}: ${trackerCheck.reason}`);
+            // Mark slot as sent and recipient as skipped
+            await markSlotSent(slot.id);
             await storage.updateRecipientStatus(recipient.id, { 
               status: 'skipped',
               nextSendAt: null
@@ -451,10 +436,9 @@ async function processEmailQueue() {
           );
 
           if (followUpCheck.shouldSkip) {
-            console.log(`[EmailQueue] ⛔ STEP ${currentStepNumber} FOLLOW-UP SKIPPED ${recipient.email}: ${followUpCheck.reason}`);
-            // Mark scheduled send as cancelled and delete all future sends
-            await storage.updateScheduledSend(scheduledSend.id, { status: 'cancelled' });
-            await storage.deleteRecipientScheduledSends(recipient.id);
+            console.log(`[EmailQueue] [Matrix2] ⛔ STEP ${currentStepNumber} FOLLOW-UP SKIPPED ${recipient.email}: ${followUpCheck.reason}`);
+            // Mark slot as sent and recipient as skipped
+            await markSlotSent(slot.id);
             await storage.updateRecipientStatus(recipient.id, { 
               status: 'skipped',
               nextSendAt: null
@@ -470,17 +454,14 @@ async function processEmailQueue() {
           const allowed = await shouldSendEmail({
             userId: sequence.createdBy,
             threadId: recipient.threadId,
-            scheduledAt: scheduledSend.scheduledAt,
+            scheduledAt: slot.slotTimeUtc,
           });
 
           if (!allowed) {
-            console.log(`[EmailQueue] ✉️  REPLY DETECTED for ${recipient.email} - Cancelling sequence`);
+            console.log(`[EmailQueue] [Matrix2] ✉️  REPLY DETECTED for ${recipient.email} - Cancelling sequence`);
             
-            // Mark scheduled send as cancelled
-            await storage.updateScheduledSend(scheduledSend.id, { status: 'cancelled' });
-            
-            // Delete all future scheduled sends
-            await storage.deleteRecipientScheduledSends(recipient.id);
+            // Mark slot as sent
+            await markSlotSent(slot.id);
             
             // Update recipient status to 'replied'
             await storage.updateRecipientStatus(recipient.id, {
@@ -524,9 +505,9 @@ async function processEmailQueue() {
             console.log(`[EmailQueue] 📧 Step ${currentStepNumber} - enforcing threaded subject: "${personalizedEmail.subject}"`);
           }
         } catch (aiError: any) {
-          console.error(`[EmailQueue] 🔄 AI generation failed for ${recipient.email}: ${aiError.message}`);
-          console.error(`[EmailQueue] 🔄 Will retry in next queue cycle`);
-          await storage.updateScheduledSend(scheduledSend.id, { status: 'pending' }); // Reset to pending for retry
+          console.error(`[EmailQueue] [Matrix2] 🔄 AI generation failed for ${recipient.email}: ${aiError.message}`);
+          console.error(`[EmailQueue] [Matrix2] 🔄 Will retry in next queue cycle`);
+          // Don't mark slot as sent - allow retry
           continue;
         }
 
@@ -543,15 +524,8 @@ async function processEmailQueue() {
           // Capture fresh timestamp for this send
           const sentAt = new Date();
 
-          // Mark scheduled send as sent with populated fields (keep for audit history)
-          await storage.updateScheduledSend(scheduledSend.id, {
-            status: 'sent',
-            sentAt,
-            threadId: result.threadId || null,
-            messageId: result.rfc822MessageId || null,
-            subject: personalizedEmail.subject,
-            body: personalizedEmail.body,
-          });
+          // MATRIX2: Mark slot as sent
+          await markSlotSent(slot.id);
 
           // Save sent email to sequenceRecipientMessages for AI context
           await storage.createRecipientMessage({
@@ -563,77 +537,13 @@ async function processEmailQueue() {
             messageId: result.rfc822MessageId || null,
           });
 
-          // LAZY SCHEDULING: Create next step's scheduled send immediately after current completes
+          // MATRIX2: Determine recipient status after this send
           const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
           const isLastStep = currentStepNumber === stepDelays.length;
-          let nextSendAt: Date | null = null;
           let recipientStatus: 'in_sequence' | 'completed' = 'completed';
           
-          // Case 1: Repeat last step is enabled and we're on the last step
-          if (sequence.repeatLastStep && isLastStep && stepDelays.length > 0) {
-            const { getNextMatrixSlot } = await import('./matrixScheduler');
-            const lastStepDelay = stepDelays[stepDelays.length - 1];
-            
-            // Schedule the repeat of the last step
-            const scheduledAt = await getNextMatrixSlot({
-              recipientId: recipient.id,
-              sequenceId: sequence.id,
-              stepNumber: currentStepNumber, // Repeat same step
-              stepDelay: lastStepDelay,
-              lastStepSentAt: sentAt,
-              recipientTimezone: recipient.timezone,
-              recipientBusinessHours: recipient.businessHours,
-              recipientState: recipient.state || null,
-              userId: sequence.createdBy,
-            });
-            
-            console.log(`[EmailQueue] 🔄 Repeat last step - creating next send for step ${currentStepNumber} at ${scheduledAt.toISOString()}`);
-            
-            // Insert new scheduled send with calculated scheduledAt
-            await storage.insertScheduledSends([{
-              recipientId: recipient.id,
-              sequenceId: sequence.id,
-              stepNumber: currentStepNumber,
-              eligibleAt: scheduledAt,
-              scheduledAt,
-              status: 'pending',
-            }]);
-            
-            nextSendAt = scheduledAt;
-            recipientStatus = 'in_sequence';
-          }
-          // Case 2: There are more steps in the sequence
-          else if (!isLastStep && currentStepNumber < stepDelays.length) {
-            const { getNextMatrixSlot } = await import('./matrixScheduler');
-            const nextStepNumber = currentStepNumber + 1;
-            const nextStepDelay = stepDelays[nextStepNumber - 1];
-            
-            // Schedule the next step
-            const scheduledAt = await getNextMatrixSlot({
-              recipientId: recipient.id,
-              sequenceId: sequence.id,
-              stepNumber: nextStepNumber,
-              stepDelay: nextStepDelay,
-              lastStepSentAt: sentAt,
-              recipientTimezone: recipient.timezone,
-              recipientBusinessHours: recipient.businessHours,
-              recipientState: recipient.state || null,
-              userId: sequence.createdBy,
-            });
-            
-            console.log(`[EmailQueue] 📅 Lazy scheduling - creating step ${nextStepNumber} at ${scheduledAt.toISOString()}`);
-            
-            // Insert next step's scheduled send with calculated scheduledAt
-            await storage.insertScheduledSends([{
-              recipientId: recipient.id,
-              sequenceId: sequence.id,
-              stepNumber: nextStepNumber,
-              eligibleAt: scheduledAt,
-              scheduledAt,
-              status: 'pending',
-            }]);
-            
-            nextSendAt = scheduledAt;
+          // If there are more steps or repeat is enabled, recipient stays in sequence
+          if (!isLastStep || sequence.repeatLastStep) {
             recipientStatus = 'in_sequence';
           }
 
@@ -642,7 +552,7 @@ async function processEmailQueue() {
             status: recipientStatus,
             currentStep: currentStepNumber,
             lastStepSentAt: sentAt,
-            nextSendAt,
+            nextSendAt: null, // Matrix2 will handle next scheduling
             sentAt: recipient.sentAt || sentAt,
             threadId: result.threadId || recipient.threadId,
           });
@@ -654,14 +564,14 @@ async function processEmailQueue() {
             lastSentAt: sentAt,
           });
 
-          console.log(`[EmailQueue] ✅ Sent step ${currentStepNumber} to ${recipient.email}`);
+          console.log(`[EmailQueue] [Matrix2] ✅ Sent step ${currentStepNumber} to ${recipient.email}`);
 
           // Random delay between sends (1-3 minutes for natural pacing)
           const delayMs = (1 + Math.random() * 2) * 60 * 1000;
           await new Promise(resolve => setTimeout(resolve, delayMs));
         } else {
-          // Mark scheduled send as failed
-          await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
+          // MATRIX2: Mark slot as sent even on failure to prevent retry loops
+          await markSlotSent(slot.id);
 
           // Mark recipient as failed
           await storage.updateRecipientStatus(recipient.id, {
@@ -673,18 +583,18 @@ async function processEmailQueue() {
             failedCount: (currentStats?.failedCount || 0) + 1,
           });
 
-          console.error(`[EmailQueue] ❌ Failed to send to ${recipient.email}: ${result.error}`);
+          console.error(`[EmailQueue] [Matrix2] ❌ Failed to send to ${recipient.email}: ${result.error}`);
         }
       } catch (error: any) {
-        console.error(`[EmailQueue] Error processing scheduled send ${scheduledSend.id}:`, error);
-        // Mark as failed on unexpected errors
+        console.error(`[EmailQueue] [Matrix2] Error processing slot ${slot.id}:`, error);
+        // Mark slot as sent on unexpected errors to prevent infinite retries
         try {
-          await storage.updateScheduledSend(scheduledSend.id, { status: 'failed' });
+          await markSlotSent(slot.id);
         } catch (updateError) {
-          console.error(`[EmailQueue] Failed to mark send as failed:`, updateError);
+          console.error(`[EmailQueue] [Matrix2] Failed to mark slot as sent:`, updateError);
         }
       }
-    } // End of scheduled send loop
+    } // End of slot processing loop
   } catch (error: any) {
     console.error('[EmailQueue] Error in queue processor:', error);
   } finally {
