@@ -20036,6 +20036,7 @@ Use this store information to provide context-aware responses. When helping draf
       
       res.json({
         success: true,
+        dryRun,
         ...result,
         message: dryRun 
           ? `Preview: ${result.details.filter(d => d.status === 'promoted').length} recipients ready to promote`
