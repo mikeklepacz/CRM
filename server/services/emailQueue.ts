@@ -13,29 +13,51 @@ let queueInterval: NodeJS.Timeout | null = null;
 
 export async function processEmailQueue() {
   const settings = await storage.getEhubSettings();
+  if (!settings) {
+    console.log('[EmailQueue] No E-Hub settings found, skipping processing');
+    return;
+  }
 
+  // Generate today's slots if they don't exist
   await ensureDailySlots();
+  
+  // Assign eligible recipients to empty slots
   await assignRecipientsToSlots();
 
   const nowUtcIso = new Date().toISOString();
 
+  // Get slots that are ready to send (filled, not sent, time has arrived)
   const result = await db.execute(sql`
     SELECT id, slot_time_utc, recipient_id
     FROM daily_send_slots
     WHERE sent = FALSE
       AND filled = TRUE
+      AND recipient_id IS NOT NULL
       AND slot_time_utc <= ${nowUtcIso}
     ORDER BY slot_time_utc ASC
+    LIMIT 10
   `);
 
   const slots = Array.isArray(result) ? result : [];
 
-  for (const slot of slots) {
-    if (!slot.recipient_id) continue;
+  if (slots.length === 0) {
+    console.log('[EmailQueue] No slots ready to send');
+    return;
+  }
 
-    const ok = await sendEmail(slot.recipient_id);
-    if (ok) {
-      await markSlotSent(slot.id);
+  console.log(`[EmailQueue] Processing ${slots.length} ready slots`);
+
+  for (const slot of slots) {
+    try {
+      const ok = await sendEmail(slot.recipient_id);
+      if (ok) {
+        await markSlotSent(slot.id);
+        console.log(`[EmailQueue] Sent email for slot ${slot.id} to recipient ${slot.recipient_id}`);
+      } else {
+        console.error(`[EmailQueue] Failed to send email for slot ${slot.id}`);
+      }
+    } catch (error) {
+      console.error(`[EmailQueue] Error sending slot ${slot.id}:`, error);
     }
   }
 }

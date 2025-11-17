@@ -63,25 +63,34 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   const recipientTimezone = recipient.timezone;
   
   if (!recipientTimezone) {
-    return false; // Can't schedule without timezone
+    console.log(`[Matrix2 Assigner] Recipient ${recipient.email} has no timezone, skipping`);
+    return false;
+  }
+
+  // Validate timezone is valid IANA
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: recipientTimezone });
+  } catch (error) {
+    console.log(`[Matrix2 Assigner] Recipient ${recipient.email} has invalid timezone ${recipientTimezone}, skipping`);
+    return false;
   }
 
   // Convert slot UTC time to recipient's local time
   const localTime = toZonedTime(slotUtc, recipientTimezone);
+
+  // Get day of week (0 = Sunday, 6 = Saturday)
+  const dayOfWeek = localTime.getDay();
+
+  // Check skip_weekends setting FIRST (before business hours parsing)
+  if (settings.skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
+    return false;
+  }
 
   // Parse business hours with state parameter
   const parsed = parseBusinessHours(recipient.business_hours || '', recipientState);
   
   // If business is closed, not eligible
   if (parsed.isClosed) {
-    return false;
-  }
-
-  // Get day of week (0 = Sunday, 6 = Saturday)
-  const dayOfWeek = localTime.getDay();
-
-  // Check skip_weekends setting
-  if (settings.skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
     return false;
   }
 

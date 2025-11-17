@@ -3055,6 +3055,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEhubSettings(updates: Partial<InsertEhubSettings>): Promise<EhubSettings> {
+    // Validate settings
+    if (updates.sendingHoursStart !== undefined && updates.sendingHoursEnd !== undefined) {
+      if (updates.sendingHoursEnd <= updates.sendingHoursStart) {
+        throw new Error('sendingHoursEnd must be greater than sendingHoursStart');
+      }
+    }
+    
+    if (updates.minDelayMinutes !== undefined && updates.maxDelayMinutes !== undefined) {
+      if (updates.maxDelayMinutes < updates.minDelayMinutes) {
+        throw new Error('maxDelayMinutes must be greater than or equal to minDelayMinutes');
+      }
+    }
+    
+    if (updates.dailyEmailLimit !== undefined) {
+      if (updates.dailyEmailLimit < 1 || updates.dailyEmailLimit > 2000) {
+        throw new Error('dailyEmailLimit must be between 1 and 2000');
+      }
+    }
+
     // Get existing settings or create if none exist
     const existing = await this.getEhubSettings();
     

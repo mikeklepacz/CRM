@@ -22,12 +22,15 @@ export async function getEligibleRecipientsForAssignment() {
       sr.state,
       sr.status,
       sr.last_step_sent_at,
-      s.step_delays
+      s.step_delays,
+      s.status as sequence_status
     FROM sequence_recipients sr
-    LEFT JOIN sequences s ON sr.sequence_id = s.id
+    INNER JOIN sequences s ON sr.sequence_id = s.id
     WHERE sr.status = 'in_sequence'
       AND sr.timezone IS NOT NULL
+      AND sr.timezone != ''
       AND sr.business_hours IS NOT NULL
+      AND sr.business_hours != ''
       AND s.status = 'active'
     ORDER BY sr.created_at ASC
   `);
