@@ -1,7 +1,7 @@
 import { storage } from '../storage';
 import { addDays, format } from 'date-fns';
 import { parseBusinessHours } from './timezoneHours';
-import { formatInTimeZone } from 'date-fns-tz';
+import { formatInTimeZone, zonedTimeToUtc } from 'date-fns-tz';
 
 interface MatrixSchedulerParams {
   recipientId: string;
