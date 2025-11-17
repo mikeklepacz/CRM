@@ -44,15 +44,9 @@ export async function ensureDailySlots() {
   const minDelayMinutes = settings.minDelayMinutes || 6;
   const maxDelayMinutes = settings.maxDelayMinutes || 10;
 
-  console.log(`[Matrix2 Generator] Generating ${dailyLimit} slots for ${dateIso}`);
+  console.log(`[Matrix2 Generator] Generating up to ${dailyLimit} slots for ${dateIso}`);
   console.log(`[Matrix2 Generator] Send window: ${sendingHoursStart}:00 - ${sendingHoursEnd}:00 (${adminTz})`);
-  console.log(`[Matrix2 Generator] Jitter range: ${minDelayMinutes}-${maxDelayMinutes} minutes`);
-
-  // Calculate total send window in minutes
-  const windowMinutes = (sendingHoursEnd - sendingHoursStart) * 60;
-  
-  // Calculate even spacing if we need to fit all slots
-  const evenSpacing = Math.floor(windowMinutes / dailyLimit);
+  console.log(`[Matrix2 Generator] Pure jitter range: ${minDelayMinutes}-${maxDelayMinutes} minutes`);
 
   // Generate slots starting at sendingHoursStart in admin timezone
   const slots: Date[] = [];
@@ -60,16 +54,26 @@ export async function ensureDailySlots() {
   // Start time: today at sendingHoursStart in admin timezone → convert to UTC
   const startTimeStr = `${dateIso}T${String(sendingHoursStart).padStart(2, '0')}:00:00`;
   let cursor = new Date(formatInTimeZone(startTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
+  
+  // End time boundary: today at sendingHoursEnd
+  const endTimeStr = `${dateIso}T${String(sendingHoursEnd).padStart(2, '0')}:00:00`;
+  const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
 
   for (let i = 0; i < dailyLimit; i++) {
     if (i === 0) {
       // First slot starts at the exact send hour
       slots.push(new Date(cursor));
     } else {
-      // Subsequent slots: add even spacing + random jitter
+      // Subsequent slots: add pure random jitter (no even spacing)
       const jitter = randomInt(minDelayMinutes, maxDelayMinutes + 1);
-      const totalDelay = Math.max(evenSpacing, jitter); // Use larger of even spacing or jitter
-      cursor = addMinutes(cursor, totalDelay);
+      cursor = addMinutes(cursor, jitter);
+      
+      // Stop if we've exceeded the send window boundary
+      if (cursor >= endBoundary) {
+        console.log(`[Matrix2 Generator] Reached send window boundary at slot ${i}, stopping`);
+        break;
+      }
+      
       slots.push(new Date(cursor));
     }
   }
