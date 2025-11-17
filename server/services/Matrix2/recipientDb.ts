@@ -33,7 +33,6 @@ export async function getEligibleRecipientsForAssignment() {
       AND sr.timezone != ''
       AND sr.business_hours IS NOT NULL
       AND sr.business_hours != ''
-      AND s.status = 'active'
     ORDER BY sr.created_at ASC
   `);
   
