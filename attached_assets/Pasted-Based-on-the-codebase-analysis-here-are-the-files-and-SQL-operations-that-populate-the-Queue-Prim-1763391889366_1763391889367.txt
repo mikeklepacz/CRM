@@ -1,0 +1,50 @@
+Based on the codebase analysis, here are the files and SQL operations that populate the Queue:
+
+Primary Queue Population Flow
+1. Slot Generation (slotGenerator.ts)
+Function: ensureDailySlots() and generateSlotsForDay()
+SQL: Inserts into daily_send_slots table
+What it does: Pre-generates empty time slots for the next 3 days based on E-Hub settings
+INSERT INTO daily_send_slots (date, slot_time_utc, filled, sent)
+VALUES (${dateIso}, ${slotTimeUtc}, FALSE, FALSE)
+2. Slot Assignment (slotAssigner.ts)
+Function: assignRecipientsToSlots()
+SQL: Updates daily_send_slots to fill them with recipients
+What it does: Assigns eligible recipients to empty slots
+UPDATE daily_send_slots
+SET
+  filled = TRUE,
+  recipient_id = ${recipientId},
+  sequence_id = ${sequenceId},
+  step = ${step}
+WHERE id = ${slotId}
+3. Queue Retrieval (emailQueue.ts)
+Function: processEmailQueue()
+SQL: Reads filled slots that are ready to send
+What it does: Gets slots where time has arrived and they're filled but not sent yet
+SELECT id, slot_time_utc, recipient_id
+FROM daily_send_slots
+WHERE sent = FALSE
+  AND filled = TRUE
+  AND recipient_id IS NOT NULL
+  AND slot_time_utc <= ${nowUtcIso}
+ORDER BY slot_time_utc ASC
+LIMIT 10
+4. Empty Slots Query (slotDb.ts)
+Function: getEmptySlots()
+SQL: Finds unfilled slots for assignment
+What it does: Returns available slots that can be assigned to recipients
+SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
+FROM daily_send_slots
+WHERE slot_date = ${dateIso}
+  AND filled = FALSE
+  AND sent = FALSE
+ORDER BY slot_time_utc ASC
+The Issue
+Looking at your console output and the schema mismatch error (code: '42703' - column does not exist), there's a critical bug:
+
+slotDb.ts line references slot_date but schema.ts defines it as slotDate (camelCase in TypeScript, slot_date in SQL).
+
+The SQL queries in getEmptySlots() are inconsistent - they reference both slot_date and the migration shows the actual column name.
+
+This is why your Queue shows empty - the queries are failing due to column name mismatches.

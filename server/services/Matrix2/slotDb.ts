@@ -8,15 +8,13 @@ export interface DailySlot {
   filled: boolean;
   sent: boolean;
   recipient_id: string | null;
-  sequence_id: string | null;
-  step: number | null;
 }
 
 export async function getSlotsForDate(dateIso: string): Promise<DailySlot[]> {
   const rows = await db.execute(sql`
-    SELECT id, slot_time_utc, filled, sent, recipient_id, sequence_id, step
+    SELECT id, slot_time_utc, filled, sent, recipient_id
     FROM daily_send_slots
-    WHERE date = ${dateIso}
+    WHERE slot_date = ${dateIso}
     ORDER BY slot_time_utc ASC
   `);
   return rows as any;
@@ -54,17 +52,13 @@ export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
 
 export async function fillSlot(
   slotId: string,
-  recipientId: string,
-  sequenceId: string,
-  step: number
+  recipientId: string
 ) {
   await db.execute(sql`
     UPDATE daily_send_slots
     SET
       filled = TRUE,
-      recipient_id = ${recipientId},
-      sequence_id = ${sequenceId},
-      step = ${step}
+      recipient_id = ${recipientId}
     WHERE id = ${slotId}
   `);
 }
