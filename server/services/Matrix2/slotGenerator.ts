@@ -12,7 +12,7 @@ import { randomInt } from "crypto";
  * @param adminTz - Admin timezone
  * @param settings - E-Hub settings
  */
-async function generateSlotsForDay(
+export async function generateSlotsForDay(
   dateIso: string,
   adminTz: string,
   settings: {

@@ -2,7 +2,7 @@
 import { storage } from "../../storage";
 import { deleteSlotsFromDate } from "./slotDb";
 import { getScheduledRecipientsFromDate } from "./recipientDb";
-import { generateDailySlots } from "./slotGenerator";
+import { generateSlotsForDay } from "./slotGenerator";
 import { fillSlot, getEmptySlots } from "./slotDb";
 import { parseBusinessHours } from "../timezoneHours";
 import { toZonedTime } from "date-fns-tz";
@@ -87,7 +87,13 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     const targetDate = addDays(nextBusinessDay, dayOffset);
     const targetDateIso = targetDate.toISOString().slice(0, 10);
     
-    await generateDailySlots(targetDateIso, adminUserId);
+    await generateSlotsForDay(targetDateIso, adminTz, {
+      dailyEmailLimit: settings.dailyEmailLimit,
+      sendingHoursStart: settings.sendingHoursStart,
+      sendingHoursEnd: settings.sendingHoursEnd,
+      minDelayMinutes: settings.minDelayMinutes,
+      maxDelayMinutes: settings.maxDelayMinutes,
+    });
   }
   
   // 6. Reassign recipients in the same order to the new slots
