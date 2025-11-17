@@ -40,13 +40,23 @@ async function generateSlotsForDay(
   const endTimeStr = `${dateIso}T${String(sendingHoursEnd).padStart(2, '0')}:00:00`;
   const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
 
+  let previousJitter: number | null = null;
+  
   for (let i = 0; i < dailyEmailLimit; i++) {
     if (i === 0) {
       // First slot starts at the exact send hour
       slots.push(new Date(cursor));
     } else {
       // Subsequent slots: add pure random jitter (no even spacing)
-      const jitter = randomInt(minDelayMinutes, maxDelayMinutes + 1);
+      // Prevent consecutive duplicates for better randomness
+      let jitter = randomInt(minDelayMinutes, maxDelayMinutes + 1);
+      let attempts = 0;
+      while (jitter === previousJitter && attempts < 10) {
+        jitter = randomInt(minDelayMinutes, maxDelayMinutes + 1);
+        attempts++;
+      }
+      previousJitter = jitter;
+      
       cursor = addMinutes(cursor, jitter);
       
       // Stop if we've exceeded the send window boundary
