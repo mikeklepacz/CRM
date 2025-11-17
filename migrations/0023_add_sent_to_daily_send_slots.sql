@@ -1,0 +1,1 @@
+ALTER TABLE daily_send_slots ADD COLUMN sent BOOLEAN DEFAULT FALSE;
