@@ -19762,19 +19762,42 @@ Use this store information to provide context-aware responses. When helping draf
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
+      // Fetch current settings BEFORE updating to detect changes
+      const oldSettings = await storage.getEhubSettings();
+
       // Validate using update schema (partial with safe refinements)
       const updates = updateEhubSettingsSchema.parse({
         ...req.body,
         updatedBy: userId,
       });
 
-      const settings = await storage.updateEhubSettings(updates);
+      const newSettings = await storage.updateEhubSettings(updates);
       
-      // MATRIX2: Slot generator automatically reads ehub_settings and regenerates slots
-      // on next cycle (60s interval). No manual reschedule needed.
-      console.log('[EHub Settings] Settings updated - Matrix2 will auto-regenerate slots on next cycle');
+      // Detect if scheduling settings changed (NOT content settings like AI prompt or keywords)
+      const schedulingSettingsChanged = oldSettings && (
+        oldSettings.sendingHoursStart !== newSettings.sendingHoursStart ||
+        oldSettings.sendingHoursEnd !== newSettings.sendingHoursEnd ||
+        oldSettings.dailyEmailLimit !== newSettings.dailyEmailLimit ||
+        oldSettings.minDelayMinutes !== newSettings.minDelayMinutes ||
+        oldSettings.maxDelayMinutes !== newSettings.maxDelayMinutes ||
+        oldSettings.clientStartOffsetHours !== newSettings.clientStartOffsetHours ||
+        oldSettings.clientCutoffHour !== newSettings.clientCutoffHour ||
+        oldSettings.skipWeekends !== newSettings.skipWeekends
+      );
       
-      res.json(settings);
+      if (schedulingSettingsChanged) {
+        console.log('[EHub Settings] ⚡ Scheduling settings changed - triggering queue rebuild from next business day');
+        
+        // Trigger async queue rebuild (non-blocking)
+        const { rebuildQueueFromNextBusinessDay } = await import('./services/Matrix2/queueRebuilder');
+        rebuildQueueFromNextBusinessDay(userId).catch(err => {
+          console.error('[EHub Settings] ❌ Queue rebuild failed:', err);
+        });
+      } else {
+        console.log('[EHub Settings] Content settings updated (no queue rebuild needed)');
+      }
+      
+      res.json(newSettings);
     } catch (error: any) {
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: 'Invalid settings data', errors: error.errors });
