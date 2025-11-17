@@ -177,7 +177,7 @@ export class GmailReplyScanner {
   }
 
   /**
-   * Check if a thread has replies
+   * Check if a thread has replies from the recipient (not just multiple messages from sender)
    */
   private async checkForReplies(
     messageId: string,
@@ -186,18 +186,60 @@ export class GmailReplyScanner {
   ): Promise<boolean> {
     try {
       const threadResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`,
         {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         }
       );
 
       if (!threadResponse.ok) {
+        console.error(`[ReplyScanner] Failed to fetch thread ${threadId}: ${threadResponse.status}`);
         return false;
       }
 
       const thread = await threadResponse.json();
-      return thread.messages && thread.messages.length > 1;
+      const messages = thread.messages || [];
+
+      if (messages.length <= 1) {
+        return false; // Only original message, no replies
+      }
+
+      // Get sender email from admin Gmail profile
+      const profileResponse = await fetch(
+        'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+        {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        }
+      );
+
+      if (!profileResponse.ok) {
+        console.error('[ReplyScanner] Failed to fetch Gmail profile');
+        return false;
+      }
+
+      const profile = await profileResponse.json();
+      const senderEmail = profile.emailAddress.toLowerCase();
+
+      // Check if any message in thread is FROM someone other than sender
+      for (const msg of messages) {
+        const headers = msg.payload?.headers || [];
+        const fromHeader = headers.find((h: any) => h.name.toLowerCase() === 'from');
+        
+        if (fromHeader?.value) {
+          // Extract email from "Name <email@domain.com>" format
+          const emailMatch = fromHeader.value.match(/<([^>]+)>/) || [null, fromHeader.value];
+          const fromEmail = emailMatch[1]?.trim().toLowerCase() || fromHeader.value.toLowerCase();
+          
+          // If this message is from someone else, it's a reply
+          if (fromEmail !== senderEmail) {
+            console.log(`[ReplyScanner] Found reply in thread ${threadId}: from ${fromEmail}`);
+            return true;
+          }
+        }
+      }
+
+      console.log(`[ReplyScanner] Thread ${threadId} has ${messages.length} messages but no replies (all from ${senderEmail})`);
+      return false;
     } catch (error: any) {
       console.error('[ReplyScanner] Error checking for replies:', error);
       return false;
