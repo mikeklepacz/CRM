@@ -19573,11 +19573,12 @@ Use this store information to provide context-aware responses. When helping draf
         isArray: Array.isArray(result),
         resultType: typeof result,
         resultKeys: result ? Object.keys(result) : null,
-        length: Array.isArray(result) ? result.length : 'N/A'
+        rowCount: (result as any).rowCount,
+        rowsLength: (result as any).rows?.length
       });
       
-      // Handle Drizzle result - it returns array directly
-      const rows = Array.isArray(result) ? result : [];
+      // Handle Drizzle result - extract rows from result object
+      const rows = (result as any).rows || [];
       
       console.log('[QueueView] Rows extracted:', {
         count: rows.length,
