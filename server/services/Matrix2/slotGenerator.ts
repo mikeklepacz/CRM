@@ -85,6 +85,11 @@ export async function ensureDailySlots() {
 
   // Get admin timezone from user preferences
   const adminUser = await storage.getAdminUser();
+  console.log('[Matrix2 Generator] Admin user preferences:', {
+    hasUser: !!adminUser,
+    timezone: adminUser?.timezone,
+    fallback: !adminUser?.timezone ? 'America/New_York' : null
+  });
   const adminTz = adminUser?.timezone || 'America/New_York';
 
   const now = new Date();
@@ -138,17 +143,26 @@ export async function ensureDailySlots() {
 
 /**
  * Helper to get admin user preferences (including timezone)
+ * Finds the first user with a timezone set in their preferences
  */
 async function getAdminUser() {
-  // Get the first user's preferences (which includes timezone)
-  // In production, you'd get the currently logged-in admin user
   const users = await storage.getAllUsers();
   if (!users || users.length === 0) {
     return null;
   }
   
-  const firstUserId = users[0].id;
-  const preferences = await storage.getUserPreferences(firstUserId);
+  // Try to find the first user with a timezone set
+  for (const user of users) {
+    const preferences = await storage.getUserPreferences(user.id);
+    if (preferences?.timezone) {
+      console.log(`[Matrix2 Generator] Using timezone from user ${user.id}: ${preferences.timezone}`);
+      return preferences;
+    }
+  }
+  
+  // Fallback: return first user's preferences even if no timezone
+  console.log('[Matrix2 Generator] WARNING: No user with timezone found, using fallback');
+  const preferences = await storage.getUserPreferences(users[0].id);
   return preferences;
 }
 

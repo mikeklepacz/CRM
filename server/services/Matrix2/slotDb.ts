@@ -11,13 +11,14 @@ export interface DailySlot {
 }
 
 export async function getSlotsForDate(dateIso: string): Promise<DailySlot[]> {
-  const rows = await db.execute(sql`
+  const result = await db.execute(sql`
     SELECT id, slot_time_utc, filled, sent, recipient_id
     FROM daily_send_slots
     WHERE slot_date = ${dateIso}
     ORDER BY slot_time_utc ASC
   `);
-  return rows as any;
+  const rows = (result as any).rows || [];
+  return rows;
 }
 
 export async function createSlots(dateIso: string, slots: Date[]) {
@@ -32,7 +33,7 @@ export async function createSlots(dateIso: string, slots: Date[]) {
 export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
   console.log('[SlotDb.getEmptySlots] Fetching empty slots for:', dateIso);
 
-  const rows = await db.execute(sql`
+  const result = await db.execute(sql`
     SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
     FROM daily_send_slots
     WHERE slot_date = ${dateIso}
@@ -41,13 +42,15 @@ export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
     ORDER BY slot_time_utc ASC
   `);
 
+  const rows = (result as any).rows || [];
+
   console.log('[SlotDb.getEmptySlots] Found:', {
     count: rows.length,
     dateIso,
     sample: rows.slice(0, 3)
   });
 
-  return rows as any;
+  return rows;
 }
 
 export async function fillSlot(
