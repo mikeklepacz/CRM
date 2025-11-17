@@ -86,20 +86,16 @@ export class GmailReplyScanner {
   }
 
   /**
-   * Fetch sent messages from Gmail
+   * Fetch sent messages from Gmail - FULL HISTORICAL SCAN (no time filter)
    */
   private async fetchSentMessages(
     accessToken: string,
     waitDays: number
   ): Promise<GmailMessage[]> {
     try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - waitDays);
-      const cutoffTimestamp = Math.floor(cutoffDate.getTime() / 1000);
-
-      // Fetch sent messages from Gmail API
+      // Fetch ALL sent messages from Gmail API (no time filter)
       const listResponse = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:sent after:${cutoffTimestamp}`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:sent&maxResults=500`,
         {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         }
@@ -113,7 +109,7 @@ export class GmailReplyScanner {
       const listData = await listResponse.json();
       const messageIds = (listData.messages || []).map((m: any) => m.id);
 
-      console.log(`[ReplyScanner] Found ${messageIds.length} sent messages in the last ${waitDays}+ days`);
+      console.log(`[ReplyScanner] Found ${messageIds.length} total sent messages in Gmail (full historical scan)`);
 
       // Fetch full message details for each message (in batches)
       const messages: GmailMessage[] = [];
