@@ -124,10 +124,10 @@ interface IndividualSend {
   stepNumber: number;
   scheduledAt: string | null;
   sentAt: string | null;
-  status: 'sent' | 'scheduled' | 'overdue';
+  status: 'sent' | 'scheduled' | 'overdue' | 'open';
   subject: string | null;
-  threadId: string | null;
-  messageId: string | null;
+  threadId?: string | null;
+  messageId?: string | null;
 }
 
 interface PausedRecipient {
@@ -606,12 +606,15 @@ function QueueView() {
   };
 
   // Get row background color based on status
-  const getRowBgColor = (status: 'sent' | 'scheduled' | 'overdue') => {
+  const getRowBgColor = (status: 'sent' | 'scheduled' | 'overdue' | 'open') => {
     if (status === 'sent') {
       return 'bg-green-50 dark:bg-green-900/20';
     }
     if (status === 'overdue') {
       return 'bg-red-50 dark:bg-red-900/20';
+    }
+    if (status === 'open') {
+      return 'bg-gray-50 dark:bg-gray-900/20';
     }
     return 'bg-blue-50 dark:bg-blue-900/20'; // scheduled
   };
@@ -665,7 +668,7 @@ function QueueView() {
               <CardDescription>
                 {statusFilter === 'paused' 
                   ? 'Recipients whose email sequences have been paused'
-                  : 'Chronological view of all individual email sends • Green = Sent, Blue = Scheduled, Red = Overdue'
+                  : 'Chronological view of all time slots • Green = Sent, Blue = Scheduled, Gray = Open, Red = Overdue'
                 }
               </CardDescription>
             </div>
@@ -757,7 +760,8 @@ function QueueView() {
                       <Badge 
                         variant={
                           item.status === 'sent' ? 'default' : 
-                          item.status === 'overdue' ? 'destructive' : 
+                          item.status === 'overdue' ? 'destructive' :
+                          item.status === 'open' ? 'secondary' :
                           'outline'
                         }
                       >
@@ -765,7 +769,7 @@ function QueueView() {
                       </Badge>
                     </TableCell>
                     <TableCell data-testid={`actions-${item.recipientId}-${item.stepNumber}`}>
-                      {item.status !== 'sent' && (
+                      {item.status !== 'sent' && item.status !== 'open' && item.recipientId && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
