@@ -20067,6 +20067,18 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       
+      // Check if sequence is a system sequence (cannot be deleted)
+      const sequence = await storage.getSequence(id);
+      if (!sequence) {
+        return res.status(404).json({ message: 'Sequence not found' });
+      }
+      
+      if (sequence.isSystem) {
+        return res.status(403).json({ 
+          message: 'Cannot delete system sequence. This sequence is used by automated features and cannot be removed.' 
+        });
+      }
+      
       const deleted = await storage.deleteSequence(id);
       
       if (!deleted) {

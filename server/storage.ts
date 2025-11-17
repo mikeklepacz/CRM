@@ -3160,6 +3160,49 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
+  async getOrCreateManualFollowUpsSequence(): Promise<Sequence> {
+    // Try to find existing "Manual Follow-Ups" system sequence
+    const [existing] = await db
+      .select()
+      .from(sequences)
+      .where(eq(sequences.isSystem, true))
+      .limit(1);
+
+    if (existing) {
+      return existing;
+    }
+
+    // Create the system sequence
+    const adminUser = await this.getAdminUserForSequences();
+    if (!adminUser) {
+      throw new Error('No admin user found to create system sequence');
+    }
+
+    const [created] = await db
+      .insert(sequences)
+      .values({
+        name: 'Manual Follow-Ups',
+        isSystem: true,
+        status: 'active',
+        createdBy: adminUser.id,
+        stepDelays: ['3', '7', '14'], // 3, 7, 14 days between steps
+        finalizedStrategy: 'This sequence handles automated follow-ups for manually sent emails. When you send an email from Store Details and the recipient doesn\'t reply, they\'ll automatically be enrolled here for AI-powered follow-ups.',
+      })
+      .returning();
+
+    console.log('✅ [System] Created "Manual Follow-Ups" system sequence:', created.id);
+    return created;
+  }
+
+  async getAdminUserForSequences(): Promise<{ id: string; name: string } | undefined> {
+    const users = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.role, 'admin'))
+      .limit(1);
+    return users[0];
+  }
+
   async updateSequenceStats(id: string, stats: { sentCount?: number; failedCount?: number; repliedCount?: number; lastSentAt?: Date }): Promise<Sequence> {
     const [updated] = await db
       .update(sequences)
