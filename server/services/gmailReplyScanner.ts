@@ -592,6 +592,12 @@ export class GmailReplyScanner {
       }
 
       console.log(`[ReplyScanner] ✅ Scan complete: ${result.scanned} scanned, ${result.newEnrollments} newly enrolled, ${result.promoted} promoted, ${result.errors} errors`);
+      console.log(`[ReplyScanner] Details breakdown: ${result.details.length} total items`);
+      const statusCounts = result.details.reduce((acc: any, d: any) => {
+        acc[d.status] = (acc[d.status] || 0) + 1;
+        return acc;
+      }, {});
+      console.log(`[ReplyScanner] Status counts:`, statusCounts);
       return result;
     } catch (error: any) {
       console.error('[ReplyScanner] Fatal error during scan:', error);
