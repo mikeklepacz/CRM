@@ -1,0 +1,190 @@
+I want to outline a structural redesign for our outbound scheduling system. This is not a small tweak — it’s a shift in architecture. The current system is solving too many variables at the wrong point in the process, which is why the time-zone logic keeps breaking and why we see “yesterday/today” mismatches, negative windows, 14-day search failures, jitter collisions, etc.
+
+The core idea is simple:
+We should stop computing a legal send time for each individual recipient.
+Instead, we should build the daily send slots first, and then assign recipients to those slots.
+
+Here’s what’s wrong with the current model:
+	•	It processes each recipient independently.
+	•	It parses business hours and tries to find overlaps on the fly.
+	•	It compares against a moving queue tail.
+	•	It applies jitter after the fact.
+	•	It forward-searches up to 14 days for a legal match.
+	•	It is extremely sensitive to timezone boundaries, DST changes, server-local time pollution, and date-number mismatches between admin and recipient timezones.
+
+This “per-recipient” logic is fragile by nature, because it is unbounded: every new recipient creates a new multi-variable time-math search problem. That’s why we’re seeing all the failures we’re seeing.
+
+I want to shift the system to a Slot-First, Recipient-Second model.
+
+⸻
+
+New Model: Slot-First, Recipient-Second
+
+1. Define a single universal send moment
+
+For example:
+All emails should go out at 4 PM in the recipient’s local timezone.
+
+This becomes the anchor.
+No intersections.
+No overlap windows.
+No scanning calendars.
+No cross-day confusion.
+
+One rule.
+
+⸻
+
+2. Build the daily queue of empty slots
+
+If the daily email limit is 20, then each day we create 20 empty slots:
+	•	slot1 = 4 PM + jitter (12–20 min)
+	•	slot2 = slot1 + jitter
+	•	slot3 = slot2 + jitter
+	•	…
+	•	slot20 at the end
+
+These are simple timestamps.
+No recipients assigned yet.
+The entire daily queue generates in milliseconds.
+
+This eliminates queue-tail logic, jitter collisions, and forward scanning.
+
+⸻
+
+3. For each slot, find one recipient who qualifies
+
+The slot says:
+
+“This timestamp is 4:17 PM in a recipient’s local timezone.
+Who is legally eligible to receive an email at this time?”
+
+A recipient is eligible if:
+	•	Their business hours cover that time
+	•	It is at least 1 hour after their open
+	•	It is before their local 2 PM cap (or whatever the rule is)
+	•	Their stepDelay is satisfied
+	•	They haven’t been sent today
+	•	They are active in a sequence
+
+If a recipient matches, they fill the slot.
+If they don’t match any of today’s slots, they roll to tomorrow.
+
+⸻
+
+4. Daily refresh
+
+At server midnight:
+	1.	Generate tomorrow’s empty slot list
+	2.	Load all waiting recipients
+	3.	Match them into those slots
+	4.	Overflow automatically moves to the following day
+
+This produces:
+	•	no jitter collisions
+	•	no “yesterday/today” mismatches
+	•	no DST bugs
+	•	no UTC day-number issues
+	•	no 14-day search failures
+	•	stable, predictable daily throughput
+
+This is how modern outbound engines (Apollo, Outreach) handle scale.
+
+⸻
+
+Why This Works Better
+
+Time zones become trivial
+
+The slot time is converted into each recipient’s timezone before checking eligibility.
+No overlap calculations.
+No admin vs. recipient day-number drift.
+No DST hallucinations.
+
+Jitter becomes deterministic
+
+Slots are jittered once per day, not per recipient.
+No collisions.
+No accidental clustering.
+
+Rate limits become clean math
+
+Daily slots enforce spacing automatically.
+No more comparing against queue tail timestamps.
+
+Every client gets equal-quality scheduling
+
+Instead of “first recipients get the clean window and later ones get shoved around,”
+everyone gets a clean, legally valid time.
+
+No forward searching ever again
+
+The worst case is simple:
+today fills → they get a clean slot tomorrow.
+
+⸻
+
+Implementation Directions
+
+Here’s the architectural outline for you to interpret into code:
+
+1. Daily Slot Generator
+	•	Generates N slots per day (N = admin’s daily email limit)
+	•	Slots jittered between min/max jitter
+	•	Slots represent target local send time (e.g., 4 PM recipient-local)
+	•	Stored in DB with:
+	•	timestamp
+	•	jitter-applied UTC timestamp
+	•	filled/unfilled
+	•	recipientId (null until assigned)
+
+2. Recipient Matching Engine
+
+For each slot:
+	•	Convert slot timestamp into recipient’s timezone
+	•	Check legal delivery constraints
+	•	If legal, assign that recipient and lock the slot
+	•	Move to next slot
+
+3. Sequence Manager
+	•	Handle stepDelays
+	•	Move recipients forward in steps only when their slot sends
+	•	Rollover unassigned recipients to next day’s slots
+
+4. Remove overlap/queue-tail logic
+
+We no longer need:
+	•	admin/recipient window intersection
+	•	multi-day forward search
+	•	max/min-windows
+	•	queue-tail-based spacing
+
+5. Predictable performance
+
+Daily slot count is small.
+Matching is simple filtering.
+Everything stays deterministic.
+
+⸻
+
+Summary
+
+We’re flipping the system from:
+
+“Find a legal time for each recipient.”
+
+to
+
+“Find a legal recipient for each prebuilt slot.”
+
+This eliminates 100% of the current bugs and gives us a stable, scalable outbound engine that behaves predictably across time zones, business hours, rate limits, and step delays.
+
+⸻
+
+If you want, I can now produce:
+	•	a systems diagram
+	•	ideal table schema
+	•	migration path
+	•	phased rollout plan
+
+Just tell me when.
