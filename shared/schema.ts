@@ -1860,6 +1860,7 @@ export const dailySendSlots = pgTable("daily_send_slots", {
   slotTimeUtc: timestamp("slot_time_utc", { withTimezone: true }).notNull(),
   filled: boolean("filled").notNull().default(false),
   recipientId: uuid("recipient_id"),
+  sent: boolean("sent").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
