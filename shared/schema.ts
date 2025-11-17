@@ -1274,6 +1274,7 @@ export type StrategyTranscript = {
 export const sequences = pgTable("sequences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
+  isSystem: boolean("is_system").default(false), // System sequences (e.g., Manual Follow-Ups) cannot be deleted
   strategyTranscript: jsonb("strategy_transcript").$type<StrategyTranscript>(), // Full AI strategy conversation with envelope
   finalizedStrategy: text("finalized_strategy"), // AI-distilled 200-300 word campaign brief (replaces replaying all strategy messages)
   stepDelays: decimal("step_delays", { precision: 10, scale: 4 }).array(), // Array of gap delays [0, 0.0035, 3, 14] - each is days AFTER previous step
