@@ -19554,18 +19554,24 @@ Use this store information to provide context-aware responses. When helping draf
         timeWindowDays
       });
       
-      // Query ONLY daily_send_slots table (slots are independent of sequences)
+      // Query daily_send_slots and JOIN with recipient/sequence data
       const result = await db.execute(sql`
         SELECT 
-          id,
-          slot_time_utc,
-          filled,
-          sent,
-          recipient_id
-        FROM daily_send_slots
-        WHERE slot_time_utc >= ${now.toISOString()}
-          AND slot_time_utc < ${endDate.toISOString()}
-        ORDER BY slot_time_utc ASC
+          dss.id,
+          dss.slot_time_utc,
+          dss.filled,
+          dss.sent,
+          dss.recipient_id,
+          sr.email as recipient_email,
+          sr.current_step,
+          sr.sequence_id,
+          s.name as sequence_name
+        FROM daily_send_slots dss
+        LEFT JOIN sequence_recipients sr ON dss.recipient_id = sr.id
+        LEFT JOIN sequences s ON sr.sequence_id = s.id
+        WHERE dss.slot_time_utc >= ${now.toISOString()}
+          AND dss.slot_time_utc < ${endDate.toISOString()}
+        ORDER BY dss.slot_time_utc ASC
         LIMIT 100
       `);
       
@@ -19588,11 +19594,11 @@ Use this store information to provide context-aware responses. When helping draf
       // Transform to IndividualSend format expected by frontend
       const queue = rows.map((row: any) => ({
         recipientId: row.recipient_id || '',
-        recipientEmail: row.filled ? 'Assigned' : '(Open slot)',
-        recipientName: row.filled ? 'Assigned' : '(Open slot)',
-        sequenceId: '',
-        sequenceName: '',
-        stepNumber: 0,
+        recipientEmail: row.filled ? (row.recipient_email || 'Unknown') : '(Open slot)',
+        recipientName: row.filled ? (row.recipient_email || 'Unknown') : '(Open slot)',
+        sequenceId: row.sequence_id || '',
+        sequenceName: row.sequence_name || '',
+        stepNumber: row.current_step || 0,
         scheduledAt: row.slot_time_utc,
         sentAt: row.sent ? row.slot_time_utc : null,
         status: row.sent ? 'sent' : (row.filled ? 'scheduled' : 'open'),

@@ -41,32 +41,41 @@ export async function processEmailQueue() {
   const nowUtcIso = new Date().toISOString();
 
   // Get slots that are ready to send (filled, not sent, time has arrived)
+  // CRITICAL: Only send if sequence is ACTIVE (pause/resume controls sending)
   const result = await db.execute(sql`
-    SELECT id, slot_time_utc, recipient_id
-    FROM daily_send_slots
-    WHERE sent = FALSE
-      AND filled = TRUE
-      AND recipient_id IS NOT NULL
-      AND slot_time_utc <= ${nowUtcIso}
-    ORDER BY slot_time_utc ASC
+    SELECT 
+      dss.id, 
+      dss.slot_time_utc, 
+      dss.recipient_id,
+      s.status as sequence_status,
+      s.name as sequence_name
+    FROM daily_send_slots dss
+    INNER JOIN sequence_recipients sr ON dss.recipient_id = sr.id
+    INNER JOIN sequences s ON sr.sequence_id = s.id
+    WHERE dss.sent = FALSE
+      AND dss.filled = TRUE
+      AND dss.recipient_id IS NOT NULL
+      AND dss.slot_time_utc <= ${nowUtcIso}
+      AND s.status = 'active'
+    ORDER BY dss.slot_time_utc ASC
     LIMIT 10
   `);
 
-  const slots = Array.isArray(result) ? result : [];
+  const slots = (result as any).rows || [];
 
   if (slots.length === 0) {
-    console.log('[EmailQueue] No slots ready to send');
+    console.log('[EmailQueue] No slots ready to send (or all sequences paused)');
     return;
   }
 
-  console.log(`[EmailQueue] Processing ${slots.length} ready slots`);
+  console.log(`[EmailQueue] Processing ${slots.length} ready slots from ACTIVE sequences`);
 
   for (const slot of slots) {
     try {
       const ok = await sendEmailToRecipient(slot.recipient_id);
       if (ok) {
         await markSlotSent(slot.id);
-        console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id}`);
+        console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id} (sequence: ${slot.sequence_name})`);
         // Note: Recipient metadata is updated inside sendEmailToRecipient()
       } else {
         console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id}`);
