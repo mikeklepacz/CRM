@@ -19541,7 +19541,6 @@ Use this store information to provide context-aware responses. When helping draf
   // Get E-Hub queue view (admin only) - shows ALL time slots from Matrix2 scheduler
   app.get('/api/ehub/queue', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      const search = req.query.search as string | undefined;
       const timeWindowDays = parseInt(req.query.timeWindowDays as string) || 3;
       
       // Calculate time window
@@ -19549,56 +19548,31 @@ Use this store information to provide context-aware responses. When helping draf
       const endDate = new Date(now);
       endDate.setDate(endDate.getDate() + timeWindowDays);
       
-      // Query all slots from Matrix2 scheduler (filled and unfilled)
-      let query = sql`
+      // SIMPLIFIED: Query ONLY daily_send_slots - no JOINs to avoid type mismatch issues
+      const result = await db.execute(sql`
         SELECT 
-          dss.id as slot_id,
-          dss.slot_time_utc,
-          dss.sent,
-          dss.filled,
-          sr.id as recipient_id,
-          sr.email as recipient_email,
-          sr.first_name,
-          sr.last_name,
-          sr.current_step,
-          s.id as sequence_id,
-          s.name as sequence_name
-        FROM daily_send_slots dss
-        LEFT JOIN sequence_recipients sr ON dss.recipient_id::uuid = sr.id
-        LEFT JOIN sequences s ON sr.sequence_id = s.id
-        WHERE dss.slot_time_utc >= ${now.toISOString()}
-          AND dss.slot_time_utc < ${endDate.toISOString()}
-      `;
-      
-      // Add search filter if provided
-      if (search) {
-        query = sql`${query} AND (
-          dss.recipient_id IS NULL OR
-          sr.email ILIKE ${'%' + search + '%'} OR
-          sr.first_name ILIKE ${'%' + search + '%'} OR
-          sr.last_name ILIKE ${'%' + search + '%'} OR
-          s.name ILIKE ${'%' + search + '%'}
-        )`;
-      }
-      
-      query = sql`${query}
-        ORDER BY dss.slot_time_utc ASC
+          id,
+          slot_time_utc,
+          filled,
+          sent,
+          recipient_id
+        FROM daily_send_slots
+        WHERE slot_time_utc >= ${now.toISOString()}
+          AND slot_time_utc < ${endDate.toISOString()}
+        ORDER BY slot_time_utc ASC
         LIMIT 100
-      `;
+      `);
       
-      const result = await db.execute(query);
       const rows = Array.isArray(result) ? result : [];
       
       // Transform to IndividualSend format expected by frontend
       const queue = rows.map((row: any) => ({
         recipientId: row.recipient_id || '',
-        recipientEmail: row.recipient_email || '(Open slot)',
-        recipientName: row.first_name && row.last_name 
-          ? `${row.first_name} ${row.last_name}`
-          : row.first_name || row.last_name || '(Open slot)',
-        sequenceId: row.sequence_id || '',
-        sequenceName: row.sequence_name || '',
-        stepNumber: row.current_step ? row.current_step + 1 : 0,
+        recipientEmail: row.filled ? 'Assigned' : '(Open slot)',
+        recipientName: row.filled ? 'Assigned' : '(Open slot)',
+        sequenceId: '',
+        sequenceName: '',
+        stepNumber: 0,
         scheduledAt: row.slot_time_utc,
         sentAt: row.sent ? row.slot_time_utc : null,
         status: row.sent ? 'sent' : (row.filled ? 'scheduled' : 'open'),
