@@ -19564,7 +19564,7 @@ Use this store information to provide context-aware responses. When helping draf
           s.id as sequence_id,
           s.name as sequence_name
         FROM daily_send_slots dss
-        LEFT JOIN sequence_recipients sr ON dss.recipient_id = sr.id
+        LEFT JOIN sequence_recipients sr ON dss.recipient_id::uuid = sr.id
         LEFT JOIN sequences s ON sr.sequence_id = s.id
         WHERE dss.slot_time_utc >= ${now.toISOString()}
           AND dss.slot_time_utc < ${endDate.toISOString()}
@@ -19573,6 +19573,7 @@ Use this store information to provide context-aware responses. When helping draf
       // Add search filter if provided
       if (search) {
         query = sql`${query} AND (
+          dss.recipient_id IS NULL OR
           sr.email ILIKE ${'%' + search + '%'} OR
           sr.first_name ILIKE ${'%' + search + '%'} OR
           sr.last_name ILIKE ${'%' + search + '%'} OR

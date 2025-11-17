@@ -1,0 +1,43 @@
+The E-Hub Queue area UX is primarily handled by these files:
+
+Frontend (Client-Side)
+Main Queue Component:
+
+client/src/pages/ehub.tsx - Contains the QueueView() component (starting around line 500+) which renders:
+Queue statistics (follow-ups pending, fresh emails pending, next send time)
+Queue table with chronological email slots
+Paused recipients view
+Action buttons (pause, resume, skip step, send now, delay, remove)
+Time window filters (24 hours, 3 days, 7 days, etc.)
+UI Components Used:
+
+client/src/components/ui/table.tsx - Table structure
+client/src/components/ui/card.tsx - Card containers
+client/src/components/ui/badge.tsx - Status badges
+client/src/components/ui/button.tsx - Action buttons
+client/src/components/ui/dialog.tsx - Delay dialog
+client/src/components/ui/select.tsx - Time window dropdown
+client/src/components/ui/dropdown-menu.tsx - Row action menus
+Backend (Server-Side)
+API Endpoints (in server/routes.ts):
+
+GET /api/ehub/queue - Fetches active queue items (line ~2000+)
+GET /api/ehub/paused-recipients - Fetches paused recipients
+PATCH /api/ehub/recipients/:id/pause - Pauses a recipient
+PATCH /api/ehub/recipients/:id/resume - Resumes a recipient
+PATCH /api/ehub/recipients/:id/skip-step - Skips current step
+POST /api/ehub/recipients/:id/send-now - Immediate send
+PATCH /api/ehub/recipients/:id/delay - Delays send by X hours
+DELETE /api/ehub/recipients/:id - Removes from sequence
+POST /api/ehub/queue/generate - Generates 3-day queue
+Queue Processing:
+
+server/services/emailQueue.ts - Main queue processor that sends emails from daily_send_slots
+server/services/Matrix2/slotAssigner.ts - Assigns recipients to open slots
+server/services/Matrix2/slotGenerator.ts - Pre-generates daily email slots
+server/services/Matrix2/slotDb.ts - Database operations for slots
+server/services/Matrix2/recipientDb.ts - Database operations for recipients
+Database Schema:
+
+shared/schema.ts - Defines dailySendSlots and sequenceRecipients tables used by the queue
+The queue system uses a slot-first architecture where slots are pre-generated based on ehub_settings, then recipients are assigned to available slots based on their eligibility (business hours, step delays, timezone).
