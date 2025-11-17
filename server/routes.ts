@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, dailySendSlots } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -19580,6 +19580,11 @@ Use this store information to provide context-aware responses. When helping draf
       const { id } = req.params;
       const recipient = await storage.pauseRecipient(id);
       
+      // Clear any slot assignments in Matrix2 for this recipient
+      await db
+        .delete(dailySendSlots)
+        .where(eq(dailySendSlots.recipientId, id));
+      
       // TODO: Delete Gmail drafts for this recipient
       
       res.json(recipient);
@@ -19594,6 +19599,12 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const recipient = await storage.resumeRecipient(id);
+      
+      // Clear any slot assignments in Matrix2 - slotAssigner will reschedule on next cycle
+      await db
+        .delete(dailySendSlots)
+        .where(eq(dailySendSlots.recipientId, id));
+      
       res.json(recipient);
     } catch (error: any) {
       console.error('Error resuming recipient:', error);
@@ -19606,6 +19617,11 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { id } = req.params;
       const recipient = await storage.skipRecipientStep(id);
+      
+      // Clear any slot assignments in Matrix2 - slotAssigner will reschedule on next cycle
+      await db
+        .delete(dailySendSlots)
+        .where(eq(dailySendSlots.recipientId, id));
       
       // TODO: Delete Gmail draft for the skipped step
       
