@@ -19,7 +19,7 @@ export async function processEmailQueue() {
 
   const nowUtcIso = new Date().toISOString();
 
-  const slots = await db.execute(sql`
+  const result = await db.execute(sql`
     SELECT id, slot_time_utc, recipient_id
     FROM daily_send_slots
     WHERE sent = FALSE
@@ -28,7 +28,9 @@ export async function processEmailQueue() {
     ORDER BY slot_time_utc ASC
   `);
 
-  for (const slot of slots as any[]) {
+  const slots = Array.isArray(result) ? result : [];
+
+  for (const slot of slots) {
     if (!slot.recipient_id) continue;
 
     const ok = await sendEmail(slot.recipient_id);

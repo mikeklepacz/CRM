@@ -27,7 +27,6 @@ import OpenAI from "openai";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
 import { recalculateAllPendingRecipients } from "./services/queueCoordinator";
-import { rescheduleAllPendingSends } from "./services/rescheduleCoordinator";
 import { updateCommissionTrackerStatus } from "./services/commissionTrackerUpdate";
 import {
   insertConversationSchema,
@@ -19678,22 +19677,9 @@ Use this store information to provide context-aware responses. When helping draf
 
       const settings = await storage.updateEhubSettings(updates);
       
-      // Trigger async reschedule job to clear scheduled_at (preserves eligible_at)
-      // Coordinator will naturally reschedule using new settings on next tick
-      console.log('[EHub Settings] Settings updated - triggering queue reschedule');
-      
-      // Fire and forget - don't wait for reschedule to complete
-      rescheduleAllPendingSends(settings)
-        .then((result) => {
-          if (result.success) {
-            console.log(`[EHub Settings] ✅ Queue rescheduled: ${result.totalProcessed} sends cleared`);
-          } else {
-            console.error(`[EHub Settings] ⚠️ Queue reschedule failed: ${result.errorLog}`);
-          }
-        })
-        .catch((error) => {
-          console.error('[EHub Settings] ⚠️ Queue reschedule error:', error.message);
-        });
+      // MATRIX2: Slot generator automatically reads ehub_settings and regenerates slots
+      // on next cycle (60s interval). No manual reschedule needed.
+      console.log('[EHub Settings] Settings updated - Matrix2 will auto-regenerate slots on next cycle');
       
       res.json(settings);
     } catch (error: any) {
@@ -20720,69 +20706,23 @@ ${conversationContext}`;
         return res.json({ message: 'No new recipients to import', count: 0 });
       }
 
-      // MATRIX SCHEDULER: Calculate scheduledAt using unified global + recipient constraints
-      const { getNextMatrixSlot } = await import('./services/matrixScheduler');
+      // MATRIX2: Just create recipients with metadata - Matrix2 slot assigner handles scheduling
       const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
       
       if (stepDelays.length === 0) {
         return res.status(400).json({ message: 'Sequence has no steps configured' });
       }
 
-      // Create recipients with calculated nextSendAt
-      const scheduledRecipients = [];
-      for (const recipient of recipients) {
-        // Calculate scheduledAt for step 1
-        const scheduledAt = await getNextMatrixSlot({
-          recipientId: 'temp', // Will be replaced after insert
-          sequenceId: id,
-          stepNumber: 1,
-          stepDelay: stepDelays[0],
-          lastStepSentAt: null,
-          recipientTimezone: recipient.timezone,
-          recipientBusinessHours: recipient.businessHours,
-          recipientState: recipient.state || null,
-          userId: sequence.createdBy,
-        });
+      // Bulk insert recipients with metadata
+      const created = await storage.addRecipients(recipients);
 
-        scheduledRecipients.push({
-          ...recipient,
-          nextSendAt: scheduledAt,
-        });
-      }
-
-      // Bulk insert recipients
-      const created = await storage.addRecipients(scheduledRecipients);
-
-      // MATRIX SCHEDULER: Now that we have real IDs, schedule each recipient
+      // MATRIX2: Mark recipients as in_sequence with currentStep=0
+      // The slot assigner will automatically assign them to slots based on their metadata
       for (const recipient of created) {
-        // Recalculate scheduledAt with real recipient ID
-        const scheduledAt = await getNextMatrixSlot({
-          recipientId: recipient.id,
-          sequenceId: id,
-          stepNumber: 1,
-          stepDelay: stepDelays[0],
-          lastStepSentAt: null,
-          recipientTimezone: recipient.timezone,
-          recipientBusinessHours: recipient.businessHours,
-          recipientState: recipient.state || null,
-          userId: sequence.createdBy,
-        });
-
-        // Insert scheduled send for step 1
-        await storage.insertScheduledSends([{
-          recipientId: recipient.id,
-          sequenceId: sequence.id,
-          stepNumber: 1,
-          eligibleAt: scheduledAt,
-          scheduledAt,
-          status: 'pending',
-        }]);
-
-        // Update recipient status
         await storage.updateRecipientStatus(recipient.id, {
           status: 'in_sequence',
-          currentStep: 1,
-          nextSendAt: scheduledAt,
+          currentStep: 0,
+          nextSendAt: null, // Matrix2 will set this when assigning to slot
         });
       }
 
@@ -20914,69 +20854,23 @@ ${conversationContext}`;
         return res.json({ message: 'No new recipients to import', count: 0 });
       }
 
-      // MATRIX SCHEDULER: Calculate scheduledAt using unified global + recipient constraints
-      const { getNextMatrixSlot } = await import('./services/matrixScheduler');
+      // MATRIX2: Just create recipients with metadata - Matrix2 slot assigner handles scheduling
       const stepDelays = (sequence.stepDelays || []).map((d: string | number) => parseFloat(String(d)));
       
       if (stepDelays.length === 0) {
         return res.status(400).json({ message: 'Sequence has no steps configured' });
       }
 
-      // Create recipients with calculated nextSendAt
-      const scheduledRecipients = [];
-      for (const recipient of recipients) {
-        // Calculate scheduledAt for step 1
-        const scheduledAt = await getNextMatrixSlot({
-          recipientId: 'temp', // Will be replaced after insert
-          sequenceId: id,
-          stepNumber: 1,
-          stepDelay: stepDelays[0],
-          lastStepSentAt: null,
-          recipientTimezone: recipient.timezone,
-          recipientBusinessHours: recipient.businessHours,
-          recipientState: recipient.state || null,
-          userId: sequence.createdBy,
-        });
+      // Bulk insert recipients with metadata
+      const created = await storage.addRecipients(recipients);
 
-        scheduledRecipients.push({
-          ...recipient,
-          nextSendAt: scheduledAt,
-        });
-      }
-
-      // Bulk insert recipients
-      const created = await storage.addRecipients(scheduledRecipients);
-
-      // MATRIX SCHEDULER: Now that we have real IDs, schedule each recipient
+      // MATRIX2: Mark recipients as in_sequence with currentStep=0
+      // The slot assigner will automatically assign them to slots based on their metadata
       for (const recipient of created) {
-        // Recalculate scheduledAt with real recipient ID
-        const scheduledAt = await getNextMatrixSlot({
-          recipientId: recipient.id,
-          sequenceId: id,
-          stepNumber: 1,
-          stepDelay: stepDelays[0],
-          lastStepSentAt: null,
-          recipientTimezone: recipient.timezone,
-          recipientBusinessHours: recipient.businessHours,
-          recipientState: recipient.state || null,
-          userId: sequence.createdBy,
-        });
-
-        // Insert scheduled send for step 1
-        await storage.insertScheduledSends([{
-          recipientId: recipient.id,
-          sequenceId: sequence.id,
-          stepNumber: 1,
-          eligibleAt: scheduledAt,
-          scheduledAt,
-          status: 'pending',
-        }]);
-
-        // Update recipient status
         await storage.updateRecipientStatus(recipient.id, {
           status: 'in_sequence',
-          currentStep: 1,
-          nextSendAt: scheduledAt,
+          currentStep: 0,
+          nextSendAt: null, // Matrix2 will set this when assigning to slot
         });
       }
 
@@ -21376,42 +21270,6 @@ ${conversationContext}`;
     } catch (error: any) {
       console.error('Error nuking test data:', error);
       res.status(500).json({ message: error.message || 'Failed to delete test data' });
-    }
-  });
-
-  // Test Matrix Scheduler endpoint (temporarily unauthenticated for testing)
-  app.post('/api/ehub/test-matrix', async (req: any, res) => {
-    try {
-      // Use hardcoded admin user ID for testing
-      const userId = '4df35876-ab89-4860-8656-0440accfea14';
-
-      const { getNextMatrixSlot } = await import('./services/matrixScheduler');
-
-      console.log('\n========== TESTING MATRIX SCHEDULER ==========');
-      
-      // Test with Maine contact (America/New_York timezone)
-      const testSlot = await getNextMatrixSlot({
-        recipientId: 'test-recipient-maine',
-        sequenceId: 'test-sequence',
-        stepNumber: 0,
-        stepDelay: 0,
-        lastStepSentAt: null,
-        recipientTimezone: 'America/New_York',
-        recipientBusinessHours: '11:00-22:00',
-        recipientState: 'ME',
-        userId: userId
-      });
-
-      console.log('========== TEST COMPLETE ==========\n');
-
-      res.json({ 
-        success: true, 
-        scheduledSlot: testSlot,
-        scheduledSlotFormatted: formatInTimeZone(testSlot, 'America/New_York', 'yyyy-MM-dd HH:mm:ss zzz')
-      });
-    } catch (error: any) {
-      console.error('Matrix scheduler test error:', error);
-      res.status(500).json({ message: error.message || 'Matrix scheduler test failed' });
     }
   });
 

@@ -11,7 +11,7 @@ import { sql } from "drizzle-orm";
  * - has business_hours (required for eligibility checking)
  */
 export async function getEligibleRecipientsForAssignment() {
-  const rows = await db.execute(sql`
+  const result = await db.execute(sql`
     SELECT
       sr.id,
       sr.email,
@@ -31,6 +31,8 @@ export async function getEligibleRecipientsForAssignment() {
       AND s.status = 'active'
     ORDER BY sr.created_at ASC
   `);
+  
+  const rows = Array.isArray(result) ? result : [];
   
   // Calculate step_delay for each recipient
   return rows.map((r: any) => {
