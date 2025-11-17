@@ -12,6 +12,8 @@ import {
   boolean,
   integer,
   bigint,
+  date,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1850,3 +1852,26 @@ export const insertTestDataNukeLogSchema = createInsertSchema(testDataNukeLog).o
 
 export type InsertTestDataNukeLog = z.infer<typeof insertTestDataNukeLogSchema>;
 export type TestDataNukeLog = typeof testDataNukeLog.$inferSelect;
+
+// Daily Send Slots - pre-generated email slots for Matrix2 scheduling engine
+export const dailySendSlots = pgTable("daily_send_slots", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  slotDate: date("slot_date").notNull(),
+  slotTimeUtc: timestamp("slot_time_utc", { withTimezone: true }).notNull(),
+  filled: boolean("filled").notNull().default(false),
+  recipientId: uuid("recipient_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index("idx_slots_by_date").on(table.slotDate),
+  index("idx_slots_open").on(table.slotDate, table.filled),
+]);
+
+export const insertDailySendSlotSchema = createInsertSchema(dailySendSlots).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertDailySendSlot = z.infer<typeof insertDailySendSlotSchema>;
+export type DailySendSlot = typeof dailySendSlots.$inferSelect;
