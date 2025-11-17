@@ -1,0 +1,371 @@
+[MY-CLIENTS] Client 3: Skymint - totalSales=0.00, commission=0.00
+12:30:45 AM [express] GET /api/clients/my 200 in 1776ms :: [{"id":"https://www.leafly.com/cannabis-st…
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+12:31:15 AM [express] GET /api/tickets/unread-count 304 in 1006ms :: {"count":1}
+[Webhook Renewal] Checking for webhooks that need renewal...
+[CallDispatcher] Starting call processing cycle
+[Webhook Renewal] Renewing webhook for user d7a18720-14c3-4586-ad1d-c820ab8176c1
+[Webhook Renewal] Failed to stop old webhook: invalid_request
+[CallDispatcher] No calls ready to process
+[Webhook Renewal] ❌ FAILED to renew webhook for user d7a18720-14c3-4586-ad1d-c820ab8176c1: {
+  error: 'invalid_request',
+  userId: 'd7a18720-14c3-4586-ad1d-c820ab8176c1'
+}
+[Webhook Renewal] Check completed
+[EmailQueue] Sleeping (true sleep). Outside sending hours.
+12:31:43 AM [express] GET /api/ehub/settings 304 in 938ms :: {"id":"e24f5ab1-55bb-476e-a18b-ca80acb73…
+12:31:43 AM [express] GET /api/sequences 304 in 1013ms :: [{"id":"b1bc90d5-f7ba-4511-a173-f5f84a1c272…
+12:31:44 AM [express] GET /api/ehub/all-contacts 304 in 2610ms :: {"contacts":[{"name":"1 Mill","emai…
+12:31:45 AM [express] GET /api/tickets/unread-count 304 in 332ms :: {"count":1}
+MATRIX_SCHEDULER_INPUT {
+  business_hours: 'Mon–Thu 11am–8pm, Fri 11am–9pm, Sat 10am–9pm, Sun 10am–5pm',
+  timezone: 'America/New_York',
+  state: 'Maine',
+  lastStepSentAt: null,
+  stepDelay: 0,
+  userId: '4df35876-ab89-4860-8656-0440accfea14'
+}
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+
+--- MATRIX LOOP TICK 0 ------------------------------
+dayLoopDate (raw UTC): 2025-11-17T00:31:50.922Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 2
+Recipient ISO Day: 1
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 1
+Today's schedule for this recipient: [ { open: 660, close: 1200 } ]
+Admin UTC Window: 2025-11-17T15:00:00.000Z → 2025-11-17T23:00:00.000Z
+Recipient UTC Window: 2025-11-16T12:00:00.000Z → 2025-11-16T16:00:00.000Z
+Candidate (current): 2025-11-17T00:31:50.922Z
+Overlap window: 2025-11-17T15:00:00.000Z → 2025-11-16T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 1 ------------------------------
+dayLoopDate (raw UTC): 2025-11-18T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 3
+Recipient ISO Day: 2
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 2
+Today's schedule for this recipient: [ { open: 660, close: 1200 } ]
+Admin UTC Window: 2025-11-18T15:00:00.000Z → 2025-11-18T23:00:00.000Z
+Recipient UTC Window: 2025-11-17T12:00:00.000Z → 2025-11-17T16:00:00.000Z
+Candidate (current): 2025-11-17T15:00:00.000Z
+Overlap window: 2025-11-18T15:00:00.000Z → 2025-11-17T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 2 ------------------------------
+dayLoopDate (raw UTC): 2025-11-19T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 4
+Recipient ISO Day: 3
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 3
+Today's schedule for this recipient: [ { open: 660, close: 1200 } ]
+Admin UTC Window: 2025-11-19T15:00:00.000Z → 2025-11-19T23:00:00.000Z
+Recipient UTC Window: 2025-11-18T12:00:00.000Z → 2025-11-18T16:00:00.000Z
+Candidate (current): 2025-11-18T15:00:00.000Z
+Overlap window: 2025-11-19T15:00:00.000Z → 2025-11-18T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 3 ------------------------------
+dayLoopDate (raw UTC): 2025-11-20T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 5
+Recipient ISO Day: 4
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 4
+Today's schedule for this recipient: [ { open: 660, close: 1200 } ]
+Admin UTC Window: 2025-11-20T15:00:00.000Z → 2025-11-20T23:00:00.000Z
+Recipient UTC Window: 2025-11-19T12:00:00.000Z → 2025-11-19T16:00:00.000Z
+Candidate (current): 2025-11-19T15:00:00.000Z
+Overlap window: 2025-11-20T15:00:00.000Z → 2025-11-19T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 4 ------------------------------
+dayLoopDate (raw UTC): 2025-11-21T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 6
+Recipient ISO Day: 5
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 5
+Today's schedule for this recipient: [ { open: 660, close: 1260 } ]
+
+--- MATRIX LOOP TICK 5 ------------------------------
+dayLoopDate (raw UTC): 2025-11-22T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 7
+Recipient ISO Day: 6
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 6
+Today's schedule for this recipient: [ { open: 600, close: 1260 } ]
+
+--- MATRIX LOOP TICK 6 ------------------------------
+dayLoopDate (raw UTC): 2025-11-23T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 1
+Recipient ISO Day: 7
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 0
+Today's schedule for this recipient: [ { open: 600, close: 1020 } ]
+Admin UTC Window: 2025-11-23T15:00:00.000Z → 2025-11-23T23:00:00.000Z
+Recipient UTC Window: 2025-11-22T11:00:00.000Z → 2025-11-22T16:00:00.000Z
+Candidate (current): 2025-11-22T15:00:00.000Z
+Overlap window: 2025-11-23T15:00:00.000Z → 2025-11-22T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 7 ------------------------------
+dayLoopDate (raw UTC): 2025-11-24T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 2
+Recipient ISO Day: 1
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 1
+Today's schedule for this recipient: [ { open: 660, close: 1200 } ]
+Admin UTC Window: 2025-11-24T15:00:00.000Z → 2025-11-24T23:00:00.000Z
+Recipient UTC Window: 2025-11-23T12:00:00.000Z → 2025-11-23T16:00:00.000Z
+Candidate (current): 2025-11-23T15:00:00.000Z
+Overlap window: 2025-11-24T15:00:00.000Z → 2025-11-23T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 8 ------------------------------
+dayLoopDate (raw UTC): 2025-11-25T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 3
+Recipient ISO Day: 2
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 2
+Today's schedule for this recipient: [ { open: 660, close: 1200 } ]
+Admin UTC Window: 2025-11-25T15:00:00.000Z → 2025-11-25T23:00:00.000Z
+Recipient UTC Window: 2025-11-24T12:00:00.000Z → 2025-11-24T16:00:00.000Z
+Candidate (current): 2025-11-24T15:00:00.000Z
+Overlap window: 2025-11-25T15:00:00.000Z → 2025-11-24T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 9 ------------------------------
+dayLoopDate (raw UTC): 2025-11-26T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 4
+Recipient ISO Day: 3
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 3
+Today's schedule for this recipient: [ { open: 660, close: 1200 } ]
+Admin UTC Window: 2025-11-26T15:00:00.000Z → 2025-11-26T23:00:00.000Z
+Recipient UTC Window: 2025-11-25T12:00:00.000Z → 2025-11-25T16:00:00.000Z
+Candidate (current): 2025-11-25T15:00:00.000Z
+Overlap window: 2025-11-26T15:00:00.000Z → 2025-11-25T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 10 ------------------------------
+dayLoopDate (raw UTC): 2025-11-27T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 5
+Recipient ISO Day: 4
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 4
+Today's schedule for this recipient: [ { open: 660, close: 1200 } ]
+Admin UTC Window: 2025-11-27T15:00:00.000Z → 2025-11-27T23:00:00.000Z
+Recipient UTC Window: 2025-11-26T12:00:00.000Z → 2025-11-26T16:00:00.000Z
+Candidate (current): 2025-11-26T15:00:00.000Z
+Overlap window: 2025-11-27T15:00:00.000Z → 2025-11-26T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+
+--- MATRIX LOOP TICK 11 ------------------------------
+dayLoopDate (raw UTC): 2025-11-28T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 6
+Recipient ISO Day: 5
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 5
+Today's schedule for this recipient: [ { open: 660, close: 1260 } ]
+
+--- MATRIX LOOP TICK 12 ------------------------------
+dayLoopDate (raw UTC): 2025-11-29T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 7
+Recipient ISO Day: 6
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 6
+Today's schedule for this recipient: [ { open: 600, close: 1260 } ]
+
+--- MATRIX LOOP TICK 13 ------------------------------
+dayLoopDate (raw UTC): 2025-11-30T00:00:00.000Z
+Admin TZ: Europe/Warsaw
+Recipient TZ: America/New_York
+Recipient State: Maine
+Admin ISO Day: 1
+Recipient ISO Day: 7
+Parsed schedule: {
+  '0': [ { open: 600, close: 1020 } ],
+  '1': [ { open: 660, close: 1200 } ],
+  '2': [ { open: 660, close: 1200 } ],
+  '3': [ { open: 660, close: 1200 } ],
+  '4': [ { open: 660, close: 1200 } ],
+  '5': [ { open: 660, close: 1260 } ],
+  '6': [ { open: 600, close: 1260 } ]
+}
+Recipient JS Day: 0
+Today's schedule for this recipient: [ { open: 600, close: 1020 } ]
+Admin UTC Window: 2025-11-30T15:00:00.000Z → 2025-11-30T23:00:00.000Z
+Recipient UTC Window: 2025-11-29T11:00:00.000Z → 2025-11-29T16:00:00.000Z
+Candidate (current): 2025-11-29T15:00:00.000Z
+Overlap window: 2025-11-30T15:00:00.000Z → 2025-11-29T16:00:00.000Z
+Has overlap? false
+Candidate inside? false
+Candidate before? true
+Error importing recipients: Error: No legal send slot found within 14 days
+    at getNextMatrixSlot (/home/runner/workspace/server/services/matrixScheduler.ts:275:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:20929:29)
+12:31:51 AM [express] POST /api/sequences/b1bc90d5-f7ba-4511-a173-f5f84a1c272c/contacts 500 in 990ms …
