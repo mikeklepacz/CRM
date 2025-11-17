@@ -11,6 +11,8 @@ import { sql } from "drizzle-orm";
  * - has business_hours (required for eligibility checking)
  */
 export async function getEligibleRecipientsForAssignment() {
+  console.log('[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...');
+  
   const result = await db.execute(sql`
     SELECT
       sr.id,
@@ -36,6 +38,17 @@ export async function getEligibleRecipientsForAssignment() {
   `);
   
   const rows = Array.isArray(result) ? result : [];
+  
+  console.log('[RecipientDb.getEligibleRecipientsForAssignment] Raw results:', {
+    count: rows.length,
+    sample: rows.slice(0, 3).map((r: any) => ({
+      email: r.email,
+      status: r.status,
+      sequence_status: r.sequence_status,
+      timezone: r.timezone,
+      current_step: r.current_step
+    }))
+  });
   
   // Calculate step_delay for each recipient
   return rows.map((r: any) => {

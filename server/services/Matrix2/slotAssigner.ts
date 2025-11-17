@@ -58,7 +58,13 @@ export async function assignRecipientsToSlots() {
 
   const today = new Date();
   const dateIso = today.toISOString().slice(0, 10);
+  console.log('[Matrix2 Assigner] Starting assignment for date:', dateIso);
+  
   const slots = await getEmptySlots(dateIso);
+  console.log('[Matrix2 Assigner] Empty slots found:', {
+    count: slots.length,
+    sample: slots.slice(0, 3)
+  });
   
   if (slots.length === 0) {
     console.log(`[Matrix2 Assigner] No empty slots for ${dateIso}`);
@@ -66,6 +72,15 @@ export async function assignRecipientsToSlots() {
   }
 
   const recipients = await getEligibleRecipientsForAssignment();
+  console.log('[Matrix2 Assigner] Eligible recipients found:', {
+    count: recipients.length,
+    sample: recipients.slice(0, 3).map(r => ({
+      email: r.email,
+      sequenceId: r.sequence_id,
+      currentStep: r.current_step,
+      status: r.status
+    }))
+  });
   
   if (recipients.length === 0) {
     console.log(`[Matrix2 Assigner] No eligible recipients for assignment`);

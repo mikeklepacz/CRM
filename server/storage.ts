@@ -153,8 +153,8 @@ import {
   sequences,
   sequenceRecipients,
   sequenceSteps,
-  sequenceRecipientMessages,
   sequenceScheduledSends,
+  sequenceRecipientMessages,
   testEmailSends,
   testDataNukeLog,
   type EhubSettings,
@@ -570,7 +570,7 @@ export interface IStorage {
   updateScheduledSend(id: string, updates: Partial<InsertSequenceScheduledSend>): Promise<SequenceScheduledSend>;
   claimScheduledSend(id: string): Promise<boolean>;
   getScheduledSendsByRecipient(recipientId: string): Promise<SequenceScheduledSend[]>;
-  getScheduledSendsQueue(options: { search?: string; statusFilter?: 'active' | 'paused'; limit: number }): Promise<Array<{
+  getScheduledSendsQueue(options: { search?: string; statusFilter?: 'active' | 'paused'; limit: number; timeWindowDays?: number }): Promise<Array<{
     recipientId: string;
     recipientEmail: string;
     recipientName: string;
@@ -579,7 +579,7 @@ export interface IStorage {
     stepNumber: number;
     scheduledAt: Date | null;
     sentAt: Date | null;
-    status: 'sent' | 'scheduled' | 'overdue';
+    status: 'sent' | 'scheduled' | 'overdue' | 'open';
     subject: string | null;
     threadId: string | null;
     messageId: string | null;
@@ -1719,7 +1719,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Category operations
-  async getAllCategories(): Promise<Category[]> {
+  async getAllCategories(): Promise<Category[]>{
     return await db
       .select()
       .from(categories)
@@ -4086,7 +4086,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sequenceScheduledSends.scheduledAt);
   }
 
-  async getScheduledSendsQueue(options: { search?: string; statusFilter?: 'active' | 'paused'; limit: number }): Promise<Array<{
+  async getScheduledSendsQueue(options: { search?: string; statusFilter?: 'active' | 'paused'; limit: number; timeWindowDays?: number }): Promise<Array<{
     recipientId: string;
     recipientEmail: string;
     recipientName: string;
@@ -4095,13 +4095,23 @@ export class DatabaseStorage implements IStorage {
     stepNumber: number;
     scheduledAt: Date | null;
     sentAt: Date | null;
-    status: 'sent' | 'scheduled' | 'overdue';
+    status: 'sent' | 'scheduled' | 'overdue' | 'open';
     subject: string | null;
     threadId: string | null;
     messageId: string | null;
   }>> {
-    const { search, statusFilter = 'active', limit } = options;
+    const { search, statusFilter = 'active', limit, timeWindowDays = 3 } = options;
+
+    console.log('[Storage.getScheduledSendsQueue] Called with:', {
+      search,
+      statusFilter,
+      limit,
+      timeWindowDays
+    });
+
     const now = new Date();
+    const endTime = new Date(now.getTime() + timeWindowDays * 24 * 60 * 60 * 1000);
+    const nowUtc = now.toISOString();
 
     // Build base query joining scheduled sends with recipients and sequences
     const whereConditions: any[] = [];
@@ -4134,8 +4144,18 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
+    // Add time window filter for active searches
+    if (statusFilter === 'active') {
+      whereConditions.push(
+        and(
+          isNotNull(sequenceScheduledSends.scheduledAt),
+          lte(sequenceScheduledSends.scheduledAt, endTime)
+        )
+      );
+    }
+
     // Query scheduled sends with recipient and sequence info
-    const results = await db
+    const query = db
       .select({
         id: sequenceScheduledSends.id,
         recipientId: sequenceScheduledSends.recipientId,
@@ -4158,8 +4178,17 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sequenceScheduledSends.scheduledAt)
       .limit(limit);
 
+    const results = await db.execute(query);
+
+    console.log('[Storage.getScheduledSendsQueue] Query results:', {
+      count: results.length,
+      timeWindow: `${nowUtc} to ${endTime.toISOString()}`,
+      statusFilter,
+      sampleRows: results.slice(0, 3)
+    });
+
     // Transform to expected format with status calculation
-    return results.map(row => ({
+    return results.map((row: any) => ({
       recipientId: row.recipientId,
       recipientEmail: row.recipientEmail,
       recipientName: row.recipientName,
