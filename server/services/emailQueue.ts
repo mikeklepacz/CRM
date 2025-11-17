@@ -28,14 +28,13 @@ export async function processEmailQueue() {
   const sendingHoursStart = settings.sendingHoursStart || 6;
   const sendingHoursEnd = settings.sendingHoursEnd || 23;
   
+  // Only send emails during configured sending hours
+  // (Slot generation is handled by slotMaintenance.ts)
   if (currentHour < sendingHoursStart || currentHour >= sendingHoursEnd) {
     console.log(`[EmailQueue] Outside sending hours (${currentHour}:00 not in ${sendingHoursStart}:00-${sendingHoursEnd}:00 ${adminTz})`);
     return;
   }
 
-  // Generate today's slots if they don't exist
-  await ensureDailySlots();
-  
   // Assign eligible recipients to empty slots
   await assignRecipientsToSlots();
 

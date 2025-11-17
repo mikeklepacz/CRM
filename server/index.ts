@@ -6,6 +6,7 @@ import { voiceProxyServer } from "./voice-proxy.js";
 import { startJobProcessor } from "./analysis-job-processor";
 import { renewCalendarWatchOnStartup } from "./calendarSync";
 import { startEmailQueueProcessor } from "./services/emailQueue";
+import { startSlotMaintenance } from "./services/slotMaintenance";
 
 const app = express();
 
@@ -87,7 +88,10 @@ app.use((req, res, next) => {
     // Start background job processor for AI analysis
     startJobProcessor();
 
-    // Start E-Hub email queue processor (real-time scheduling, no coordinator needed)
+    // Start E-Hub slot maintenance (generates 3-day buffer at configured hours)
+    startSlotMaintenance();
+
+    // Start E-Hub email queue processor (sends emails during sending hours)
     startEmailQueueProcessor();
 
     console.log(`${new Date().toLocaleTimeString()} [express] serving on port ${port}`);
