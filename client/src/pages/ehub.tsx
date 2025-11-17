@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { AllContactsResponse, EhubContact } from "@shared/schema";
 import { TestTube2, RefreshCw, Reply } from "lucide-react";
+import { formatDistanceToNow } from 'date-fns';
 
 /**
  * Calculate optimal min/max delay suggestions for human-like email spacing
@@ -40,21 +41,21 @@ function calculateOptimalDelays(
   // Calculate pure company sending window (no client timezone logic)
   const companyWindowHours = companyEndHour - companyStartHour;
   const companyWindowMinutes = companyWindowHours * 60;
-  
+
   // Calculate average spacing needed for daily limit
   const averageSpacingMinutes = dailyEmailLimit > 0 
     ? companyWindowMinutes / dailyEmailLimit 
     : 5;
-  
+
   // Convert jitter percentage to multipliers (e.g., 50% = 0.5 to 1.5, 30% = 0.7 to 1.3)
   const jitterDecimal = jitterPercentage / 100;
   const minMultiplier = 1 - jitterDecimal;
   const maxMultiplier = 1 + jitterDecimal;
-  
+
   // Apply jitter variance to create min/max range
   const minDelay = Math.max(1, Math.floor(averageSpacingMinutes * minMultiplier));
   const maxDelay = Math.ceil(averageSpacingMinutes * maxMultiplier);
-  
+
   return {
     minDelayMinutes: minDelay,
     maxDelayMinutes: maxDelay
@@ -116,12 +117,12 @@ interface TestEmailSend {
 }
 
 interface IndividualSend {
-  recipientId: string;
-  recipientEmail: string;
-  recipientName: string;
-  sequenceId: string;
-  sequenceName: string;
-  stepNumber: number;
+  recipientId: string | null; // Made recipientId nullable to represent empty slots
+  recipientEmail: string | null;
+  recipientName: string | null;
+  sequenceId: string | null;
+  sequenceName: string | null;
+  stepNumber: number | null;
   scheduledAt: string | null;
   sentAt: string | null;
   status: 'sent' | 'scheduled' | 'overdue' | 'open';
@@ -196,14 +197,14 @@ function SentHistoryView() {
         params.append('sequenceId', selectedSequence);
       }
       params.append('limit', '100');
-      
+
       const url = `/api/ehub/sent-history?${params.toString()}`;
       const res = await fetch(url, { credentials: 'include' });
-      
+
       if (!res.ok) {
         throw new Error(`Failed to fetch sent history: ${res.statusText}`);
       }
-      
+
       return await res.json();
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -222,7 +223,7 @@ function SentHistoryView() {
       const matchesEmail = msg.recipientEmail.toLowerCase().includes(searchLower);
       const matchesName = msg.recipientName?.toLowerCase().includes(searchLower);
       const matchesSubject = msg.subject.toLowerCase().includes(searchLower);
-      
+
       if (!matchesEmail && !matchesName && !matchesSubject) {
         return false;
       }
@@ -356,7 +357,7 @@ function QueueView() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [timeWindowDays, setTimeWindowDays] = useState<number>(3);
   const [statusFilter, setStatusFilter] = useState<'active' | 'paused'>('active');
-  
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -364,7 +365,7 @@ function QueueView() {
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
-  
+
   // Fetch active queue
   const { data: activeQueue, isLoading: isLoadingActive } = useQuery<IndividualSend[]>({
     queryKey: ['/api/ehub/queue', debouncedSearch, timeWindowDays],
@@ -373,14 +374,14 @@ function QueueView() {
       if (debouncedSearch) params.append('search', debouncedSearch);
       params.append('timeWindowDays', timeWindowDays.toString());
       params.append('statusFilter', 'active');
-      
+
       const url = `/api/ehub/queue?${params.toString()}`;
       const res = await fetch(url, { credentials: 'include' });
-      
+
       if (!res.ok) {
         throw new Error(`Failed to fetch queue: ${res.statusText}`);
       }
-      
+
       return await res.json();
     },
     staleTime: 0, // Always refetch
@@ -586,14 +587,14 @@ function QueueView() {
   const sentItems = activeQueue?.filter(item => item.status === 'sent') || [];
   const scheduledItems = activeQueue?.filter(item => item.status === 'scheduled') || [];
   const overdueItems = activeQueue?.filter(item => item.status === 'overdue') || [];
-  
+
   // Get unique recipients for follow-ups vs fresh calculation (active only)
   const uniqueRecipients = new Set(activeQueue?.map(item => item.recipientId) || []);
   const followUpRecipients = new Set(
-    activeQueue?.filter(item => item.stepNumber > 1).map(item => item.recipientId) || []
+    activeQueue?.filter(item => item.stepNumber && item.stepNumber > 1).map(item => item.recipientId) || []
   );
   const freshRecipients = uniqueRecipients.size - followUpRecipients.size;
-  
+
   // Get next send time from scheduled items (active only)
   const nextScheduled = scheduledItems.length > 0 && scheduledItems[0].scheduledAt
     ? new Date(scheduledItems[0].scheduledAt)
@@ -606,7 +607,7 @@ function QueueView() {
     const now = new Date();
     const diffMs = date.getTime() - now.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 0) return 'Overdue';
     if (diffMins < 60) return `in ${diffMins}m`;
     if (diffMins < 1440) return `in ${Math.floor(diffMins / 60)}h`;
@@ -627,7 +628,7 @@ function QueueView() {
   };
 
   // Get row background color based on status
-  const getRowBgColor = (status: 'sent' | 'scheduled' | 'overdue' | 'open') => {
+  const getRowBgColor = (status: 'sent' | 'scheduled' | 'overdue' | 'open' | undefined) => {
     if (status === 'sent') {
       return 'bg-green-50 dark:bg-green-900/20';
     }
@@ -637,7 +638,7 @@ function QueueView() {
     if (status === 'open') {
       return 'bg-gray-50 dark:bg-gray-900/20';
     }
-    return 'bg-blue-50 dark:bg-blue-900/20'; // scheduled
+    return 'bg-blue-50 dark:bg-blue-900/20'; // scheduled or empty slot
   };
 
   if (isLoading) {
@@ -769,31 +770,39 @@ function QueueView() {
                 <TableBody>
                   {activeQueue.map((item, idx) => (
                     <TableRow
-                      key={`${item.recipientId}-${item.stepNumber}-${idx}`}
-                      className={getRowBgColor(item.status)}
-                      data-testid={`row-queue-${item.recipientId}-${item.stepNumber}`}
-                    >
-                    <TableCell data-testid={`text-recipient-name-${item.recipientId}-${item.stepNumber}`}>
-                      <div>
-                        <div className="font-medium">{item.recipientName || 'Unknown'}</div>
-                        <div className="text-sm text-muted-foreground">{item.recipientEmail}</div>
-                      </div>
+                        key={item.recipientId ? `${item.recipientId}-${item.stepNumber}-${idx}` : `empty-slot-${idx}`}
+                        className={getRowBgColor(item.status)}
+                        data-testid={item.recipientId ? `row-queue-${item.recipientId}-${item.stepNumber}` : `row-empty-slot-${idx}`}
+                      >
+                    <TableCell data-testid={item.recipientId ? `text-recipient-name-${item.recipientId}-${item.stepNumber}` : `text-empty-slot-${idx}`}>
+                      {item.recipientId ? (
+                        <div>
+                          <div className="font-medium">{item.recipientName || 'Unknown'}</div>
+                          <div className="text-sm text-muted-foreground">{item.recipientEmail}</div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground italic">Empty Slot</div>
+                      )}
                     </TableCell>
-                    <TableCell data-testid={`text-queue-sequence-${item.recipientId}-${item.stepNumber}`}>
-                      {item.sequenceName}
+                    <TableCell data-testid={item.recipientId ? `text-queue-sequence-${item.recipientId}-${item.stepNumber}` : `text-empty-sequence-${idx}`}>
+                      {item.sequenceName || '—'}
                     </TableCell>
-                    <TableCell data-testid={`text-queue-step-${item.recipientId}-${item.stepNumber}`}>
-                      <Badge variant={item.stepNumber === 1 ? 'default' : 'secondary'}>
-                        Step {item.stepNumber}
-                      </Badge>
+                    <TableCell data-testid={item.recipientId ? `text-queue-step-${item.recipientId}-${item.stepNumber}` : `text-empty-step-${idx}`}>
+                      {item.stepNumber ? (
+                        <Badge variant={item.stepNumber === 1 ? 'default' : 'secondary'}>
+                          Step {item.stepNumber}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
-                    <TableCell data-testid={`text-queue-scheduled-${item.recipientId}-${item.stepNumber}`}>
+                    <TableCell data-testid={item.recipientId ? `text-queue-scheduled-${item.recipientId}-${item.stepNumber}` : `text-empty-scheduled-${idx}`}>
                       {item.status === 'sent' 
                         ? formatTimestamp(item.sentAt)
                         : formatTimestamp(item.scheduledAt)
                       }
                     </TableCell>
-                    <TableCell data-testid={`text-queue-status-${item.recipientId}-${item.stepNumber}`}>
+                    <TableCell data-testid={item.recipientId ? `text-queue-status-${item.recipientId}-${item.stepNumber}` : `text-empty-status-${idx}`}>
                       <Badge 
                         variant={
                           item.status === 'sent' ? 'default' : 
@@ -805,7 +814,7 @@ function QueueView() {
                         {item.status}
                       </Badge>
                     </TableCell>
-                    <TableCell data-testid={`actions-${item.recipientId}-${item.stepNumber}`}>
+                    <TableCell data-testid={item.recipientId ? `actions-${item.recipientId}-${item.stepNumber}` : `actions-empty-${idx}`}>
                       {item.status !== 'sent' && item.status !== 'open' && item.recipientId && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -820,7 +829,7 @@ function QueueView() {
                           <DropdownMenuContent align="end">
                             {statusFilter === 'paused' ? (
                               <DropdownMenuItem
-                                onClick={() => resumeMutation.mutate(item.recipientId)}
+                                onClick={() => resumeMutation.mutate(item.recipientId!)}
                                 disabled={resumeMutation.isPending}
                                 data-testid={`action-resume-${item.recipientId}`}
                               >
@@ -830,7 +839,7 @@ function QueueView() {
                             ) : (
                               <>
                                 <DropdownMenuItem
-                                  onClick={() => pauseMutation.mutate(item.recipientId)}
+                                  onClick={() => pauseMutation.mutate(item.recipientId!)}
                                   disabled={pauseMutation.isPending}
                                   data-testid={`action-pause-${item.recipientId}`}
                                 >
@@ -838,7 +847,7 @@ function QueueView() {
                                   Pause Recipient
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => skipStepMutation.mutate(item.recipientId)}
+                                  onClick={() => skipStepMutation.mutate(item.recipientId!)}
                                   disabled={skipStepMutation.isPending}
                                   data-testid={`action-skip-${item.recipientId}`}
                                 >
@@ -846,7 +855,7 @@ function QueueView() {
                                   Skip This Step
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => sendNowMutation.mutate(item.recipientId)}
+                                  onClick={() => sendNowMutation.mutate(item.recipientId!)}
                                   disabled={sendNowMutation.isPending}
                                   data-testid={`action-send-now-${item.recipientId}`}
                                 >
@@ -854,14 +863,14 @@ function QueueView() {
                                   Send Now
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => setDelayDialog({ open: true, recipientId: item.recipientId, hours: 1 })}
+                                  onClick={() => setDelayDialog({ open: true, recipientId: item.recipientId!, hours: 1 })}
                                   data-testid={`action-delay-${item.recipientId}`}
                                 >
                                   <Clock className="mr-2 h-4 w-4" />
                                   Delay by X hours
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => removeMutation.mutate(item.recipientId)}
+                                  onClick={() => removeMutation.mutate(item.recipientId!)}
                                   disabled={removeMutation.isPending}
                                   className="text-destructive"
                                   data-testid={`action-remove-${item.recipientId}`}
@@ -1033,11 +1042,11 @@ export default function EHub() {
   const [sheetId, setSheetId] = useState("");
   const [contactedFilter, setContactedFilter] = useState<string>("all"); // 'all' | 'contacted' | 'not contacted' | 'unknown'
   const [activeTab, setActiveTab] = useState("all-contacts");
-  
+
   // Navigation guard for unsaved settings changes
   const [pendingTab, setPendingTab] = useState<string | null>(null);
   const [showNavigationWarning, setShowNavigationWarning] = useState(false);
-  
+
   // Strategy chat state
   const [strategyMessage, setStrategyMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1069,6 +1078,10 @@ export default function EHub() {
 
   // Nuke Test Data state
   const [nukeDialogOpen, setNukeDialogOpen] = useState(false);
+  const [nukeCounts, setNukeCounts] = useState<any>(null); // To store counts from the API response
+  const [nukeEmailPattern, setNukeEmailPattern] = useState<string>(""); // For filtering test emails
+  const [nukeConfirmText, setNukeConfirmText] = useState<string>(""); // For confirmation input
+  const [countsError, setCountsError] = useState<string | null>(null); // For error messages related to counts
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
@@ -1084,10 +1097,10 @@ export default function EHub() {
     keywordBin: "",
     skipWeekends: true,
   });
-  
+
   // Track original settings for dirty state detection
   const [originalSettings, setOriginalSettings] = useState<EhubSettings | null>(null);
-  
+
   // Check if settings form has unsaved changes
   const isSettingsDirty = originalSettings && JSON.stringify(settingsForm) !== JSON.stringify(originalSettings);
 
@@ -1215,8 +1228,8 @@ export default function EHub() {
 
   // Save step delays mutation
   const saveStepDelaysMutation = useMutation({
-    mutationFn: async (data: { stepDelays: number[], repeatLastStep: boolean }) => {
-      return await apiRequest("PUT", `/api/sequences/${selectedSequenceId}/step-delays`, data);
+    mutationFn: (data: { stepDelays: number[], repeatLastStep: boolean }) => {
+      return apiRequest("PUT", `/api/sequences/${selectedSequenceId}/step-delays`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
@@ -1567,11 +1580,15 @@ export default function EHub() {
 
   // Nuke Test Data mutation
   const nukeTestDataMutation = useMutation({
-    mutationFn: () => apiRequest('POST', '/api/ehub/test-data/nuke', {}),
-    onSuccess: (data: any) => {
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/ehub/test-data/nuke', { emailPattern: nukeEmailPattern });
+      setNukeCounts(response); // Store counts from the response
+      return response;
+    },
+    onSuccess: () => {
       toast({
         title: "Test Data Deleted",
-        description: `Deleted ${data.recipientsDeleted} recipients, ${data.messagesDeleted} messages, ${data.testEmailsDeleted} test emails, and ${data.sequencesDeleted || 0} empty sequences.`,
+        description: `Deleted ${nukeCounts?.recipientsDeleted} recipients, ${nukeCounts?.messagesDeleted} messages, ${nukeCounts?.testEmailsDeleted} test emails, and ${nukeCounts?.sequencesDeleted || 0} empty sequences.`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/test-email/history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
@@ -1664,7 +1681,7 @@ export default function EHub() {
 
   const handleAddToSequence = () => {
     if (!targetSequenceId) return;
-    
+
     if (selectAllMode === 'all') {
       addContactsMutation.mutate({
         sequenceId: targetSequenceId,
@@ -2328,7 +2345,7 @@ export default function EHub() {
                   </Button>
                 </div>
               </div>
-              
+
               {/* Existing Sequence Selector */}
               <div>
                 <Label htmlFor="strategy-sequence-select">Or Select Existing Sequence</Label>
@@ -2571,11 +2588,11 @@ export default function EHub() {
                         No step delays configured yet
                       </p>
                     )}
-                    
+
                     {/* Validation feedback */}
                     {stepDelays.length > 0 && (() => {
                       const hasNegative = stepDelays.some((d) => d < 0);
-                      
+
                       if (hasNegative) {
                         return (
                           <Alert variant="destructive">
@@ -2588,7 +2605,7 @@ export default function EHub() {
                       }
                       return null;
                     })()}
-                    
+
                     <div className="flex gap-2 pt-2">
                       <Button
                         variant="outline"
@@ -2606,7 +2623,7 @@ export default function EHub() {
                         onClick={() => {
                           // Validate before saving
                           const hasNegative = stepDelays.some((d) => d < 0);
-                          
+
                           if (hasNegative) {
                             toast({
                               title: "Invalid Delays",
@@ -2615,7 +2632,7 @@ export default function EHub() {
                             });
                             return;
                           }
-                          
+
                           saveStepDelaysMutation.mutate({ stepDelays, repeatLastStep });
                         }}
                         disabled={
@@ -2704,7 +2721,7 @@ export default function EHub() {
                               {sequences.find((s) => s.id === selectedSequenceId)?.status || 'draft'}
                             </Badge>
                           </div>
-                          
+
                           {strategyTranscript?.lastUpdatedAt && (
                             <div className="flex justify-between items-center">
                               <span className="text-sm font-medium">Last Updated:</span>
@@ -2737,7 +2754,7 @@ export default function EHub() {
                             const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
                             const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0);
                             const canActivate = hasCampaignBrief && hasMessages && hasValidDelays;
-                            
+
                             return currentStatus === 'active' ? (
                               <Button
                                 variant="outline"
@@ -2761,7 +2778,7 @@ export default function EHub() {
                                     const hasMessages = strategyTranscript?.messages && strategyTranscript.messages.length > 0;
                                     const hasValidDelays = stepDelays.length > 0 && stepDelays.every((d) => d >= 0) && 
                                       stepDelays.every((d, i) => i === 0 || d > stepDelays[i - 1]);
-                                    
+
                                     if (!hasCampaignBrief) {
                                       toast({
                                         title: "Cannot Activate",
@@ -2770,7 +2787,7 @@ export default function EHub() {
                                       });
                                       return;
                                     }
-                                    
+
                                     if (!hasMessages) {
                                       toast({
                                         title: "Cannot Activate",
@@ -2779,7 +2796,7 @@ export default function EHub() {
                                       });
                                       return;
                                     }
-                                    
+
                                     if (!hasValidDelays) {
                                       toast({
                                         title: "Cannot Activate",
@@ -2788,7 +2805,7 @@ export default function EHub() {
                                       });
                                       return;
                                     }
-                                    
+
                                     updateSequenceStatusMutation.mutate('active');
                                   }}
                                   disabled={!canActivate || updateSequenceStatusMutation.isPending}
@@ -2842,11 +2859,11 @@ export default function EHub() {
                 Sent History
               </TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="active-queue" className="mt-4">
               <QueueView />
             </TabsContent>
-            
+
             <TabsContent value="sent-history" className="mt-4">
               <SentHistoryView />
             </TabsContent>
@@ -2882,7 +2899,7 @@ export default function EHub() {
                         }
                         const newStart = parseInt(val, 10);
                         if (isNaN(newStart)) return;
-                        
+
                         const optimal = calculateOptimalDelays(
                           newStart,
                           settingsForm.sendingHoursEnd,
@@ -2927,7 +2944,7 @@ export default function EHub() {
                         }
                         const newEnd = parseInt(val, 10);
                         if (isNaN(newEnd)) return;
-                        
+
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           newEnd,
@@ -2972,7 +2989,7 @@ export default function EHub() {
                         }
                         const newLimit = parseInt(val, 10);
                         if (isNaN(newLimit)) return;
-                        
+
                         const optimal = calculateOptimalDelays(
                           settingsForm.sendingHoursStart,
                           settingsForm.sendingHoursEnd,
@@ -3053,7 +3070,7 @@ export default function EHub() {
                             }
                             const newJitter = parseInt(val, 10);
                             if (isNaN(newJitter)) return;
-                            
+
                             const optimal = calculateOptimalDelays(
                               settingsForm.sendingHoursStart,
                               settingsForm.sendingHoursEnd,
@@ -3122,7 +3139,7 @@ export default function EHub() {
                           }
                           const newOffset = parseFloat(val);
                           if (isNaN(newOffset)) return;
-                          
+
                           setSettingsForm({ 
                             ...settingsForm, 
                             clientWindowStartOffset: newOffset
@@ -3164,7 +3181,7 @@ export default function EHub() {
                           }
                           const newCutoff = parseInt(val, 10);
                           if (isNaN(newCutoff)) return;
-                          
+
                           setSettingsForm({ 
                             ...settingsForm, 
                             clientWindowEndHour: newCutoff
@@ -3295,10 +3312,10 @@ export default function EHub() {
                   variant="destructive"
                   onClick={() => {
                     setNukeDialogOpen(true);
-                    setNukeCounts(null);
-                    setNukeEmailPattern("");
-                    setNukeConfirmText("");
-                    setCountsError(null);
+                    setNukeCounts(null); // Clear previous counts
+                    setNukeEmailPattern(""); // Clear pattern
+                    setNukeConfirmText(""); // Clear confirmation text
+                    setCountsError(null); // Clear error
                   }}
                   data-testid="button-open-nuke-dialog"
                 >
@@ -3324,7 +3341,7 @@ export default function EHub() {
                   const currentSequence = sequences.find((s) => s.id === selectedSequenceId);
                   const hasCampaignBrief = !!(currentSequence as any)?.finalizedStrategy?.trim();
                   const canTest = selectedSequenceId && hasCampaignBrief;
-                  
+
                   return (
                     <>
                       {/* Display store context at the top */}
@@ -3348,7 +3365,7 @@ export default function EHub() {
                           </AlertDescription>
                         </Alert>
                       )}
-                      
+
                       <Button
                         variant="destructive"
                         onClick={() => syntheticTestMutation.mutate()}
@@ -3634,13 +3651,57 @@ export default function EHub() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete all test emails, sequence recipients, and messages. This action cannot be undone.
+              <div className="mt-4 space-y-2">
+                <Label htmlFor="nuke-email-pattern">
+                  Optional: Enter a partial email address to only delete test data associated with it.
+                </Label>
+                <Input 
+                  id="nuke-email-pattern"
+                  placeholder="e.g., test@example.com"
+                  value={nukeEmailPattern}
+                  onChange={(e) => setNukeEmailPattern(e.target.value)}
+                  data-testid="input-nuke-email-pattern"
+                />
+              </div>
+              <div className="mt-4 space-y-2">
+                <Label htmlFor="nuke-confirm-text">
+                  Type "DELETE ALL DATA" to confirm.
+                </Label>
+                <Input 
+                  id="nuke-confirm-text"
+                  value={nukeConfirmText}
+                  onChange={(e) => setNukeConfirmText(e.target.value)}
+                  placeholder="DELETE ALL DATA"
+                  data-testid="input-nuke-confirm-text"
+                />
+              </div>
+              {countsError && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{countsError}</AlertDescription>
+                </Alert>
+              )}
+              {nukeCounts && (
+                <Alert className="mt-4 bg-muted/50">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    <p className="font-medium">About to delete:</p>
+                    <ul className="list-disc list-inside text-xs mt-1">
+                      <li>{nukeCounts.recipientsDeleted} recipients</li>
+                      <li>{nukeCounts.messagesDeleted} messages</li>
+                      <li>{nukeCounts.testEmailsDeleted} test emails</li>
+                      <li>{nukeCounts.sequencesDeleted || 0} empty sequences</li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-nuke">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => nukeTestDataMutation.mutate()}
-              disabled={nukeTestDataMutation.isPending}
+              disabled={nukeTestDataMutation.isPending || nukeConfirmText !== "DELETE ALL DATA"}
               className="bg-destructive text-destructive-foreground hover-elevate active-elevate-2"
               data-testid="button-confirm-nuke"
             >
@@ -3740,7 +3801,7 @@ export default function EHub() {
             <p className="text-sm text-muted-foreground">
               {selectAllMode === 'all'
                 ? `Add all ${allContactsData?.total || 0} matching contacts to a sequence`
-                : `Add ${selectedContacts.length} selected contact${selectedContacts.length !== 1 ? 's' : ''} to a sequence`}
+                : `Add ${selectedContacts.length} contact${selectedContacts.length !== 1 ? 's' : ''} to a sequence`}
             </p>
           </DialogHeader>
           <div className="space-y-4 py-4">
