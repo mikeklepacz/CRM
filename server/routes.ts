@@ -28,6 +28,7 @@ import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
 import { recalculateAllPendingRecipients } from "./services/queueCoordinator";
 import { updateCommissionTrackerStatus } from "./services/commissionTrackerUpdate";
+import { ensureDailySlots } from "./services/Matrix2/slotGenerator";
 import {
   insertConversationSchema,
   insertProjectSchema,
@@ -19607,6 +19608,18 @@ Use this store information to provide context-aware responses. When helping draf
     } catch (error: any) {
       console.error('Error fetching queue view:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch queue' });
+    }
+  });
+
+  // Generate Queue - manually trigger 3-day slot generation (admin only)
+  app.post('/api/ehub/queue/generate', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      console.log('[API] Manual queue generation triggered');
+      await ensureDailySlots();
+      res.json({ message: 'Queue generation completed successfully' });
+    } catch (error: any) {
+      console.error('Error generating queue:', error);
+      res.status(500).json({ message: error.message || 'Failed to generate queue' });
     }
   });
 

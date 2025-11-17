@@ -549,6 +549,27 @@ function QueueView() {
     },
   });
 
+  // Generate Queue mutation
+  const generateQueueMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', '/api/ehub/queue/generate');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      toast({
+        title: 'Queue generated',
+        description: '3 days of email slots have been created',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to generate queue',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Fetch paused count separately
   const { data: pausedCount = 0 } = useQuery<number>({
     queryKey: ['/api/ehub/queue/paused-count'],
@@ -698,6 +719,22 @@ function QueueView() {
                     </SelectContent>
                   </Select>
                 </>
+              )}
+              {statusFilter === 'active' && !activeQueue?.length && !search && (
+                <Button
+                  onClick={() => generateQueueMutation.mutate()}
+                  disabled={generateQueueMutation.isPending}
+                  data-testid="button-generate-queue"
+                >
+                  {generateQueueMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    'Generate Queue'
+                  )}
+                </Button>
               )}
               <Button
                 variant={statusFilter === 'paused' ? 'default' : 'outline'}
