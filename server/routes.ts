@@ -20973,7 +20973,7 @@ ${conversationContext}`;
         }]);
 
         // Update recipient status
-        await storage.updateRecipient(recipient.id, {
+        await storage.updateRecipientStatus(recipient.id, {
           status: 'in_sequence',
           currentStep: 1,
           nextSendAt: scheduledAt,
