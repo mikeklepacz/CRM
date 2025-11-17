@@ -14,7 +14,7 @@ export async function getEligibleRecipientsForAssignment() {
   const rows = await db.execute(sql`
     SELECT
       sr.id,
-      sr.recipient_id,
+      sr.email,
       sr.sequence_id,
       sr.current_step,
       sr.timezone,

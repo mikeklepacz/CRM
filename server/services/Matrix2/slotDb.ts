@@ -4,19 +4,18 @@ import { sql } from "drizzle-orm";
 
 export interface DailySlot {
   id: string;
+  slot_date: string;
   slot_time_utc: string;
   filled: boolean;
   sent: boolean;
   recipient_id: string | null;
-  sequence_id: string | null;
-  step: number | null;
 }
 
 export async function getSlotsForDate(dateIso: string): Promise<DailySlot[]> {
   const rows = await db.execute(sql`
-    SELECT id, slot_time_utc, filled, sent, recipient_id, sequence_id, step
+    SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
     FROM daily_send_slots
-    WHERE date = ${dateIso}
+    WHERE slot_date = ${dateIso}
     ORDER BY slot_time_utc ASC
   `);
   return rows as any;
@@ -25,7 +24,7 @@ export async function getSlotsForDate(dateIso: string): Promise<DailySlot[]> {
 export async function createSlots(dateIso: string, slots: Date[]) {
   for (const dt of slots) {
     await db.execute(sql`
-      INSERT INTO daily_send_slots (date, slot_time_utc, filled, sent)
+      INSERT INTO daily_send_slots (slot_date, slot_time_utc, filled, sent)
       VALUES (${dateIso}, ${dt.toISOString()}, FALSE, FALSE)
     `);
   }
@@ -33,9 +32,9 @@ export async function createSlots(dateIso: string, slots: Date[]) {
 
 export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
   const rows = await db.execute(sql`
-    SELECT id, slot_time_utc
+    SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
     FROM daily_send_slots
-    WHERE date = ${dateIso}
+    WHERE slot_date = ${dateIso}
       AND filled = FALSE
       AND sent = FALSE
     ORDER BY slot_time_utc ASC
@@ -45,17 +44,14 @@ export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
 
 export async function fillSlot(
   slotId: string,
-  recipientId: string,
-  sequenceId: string,
-  step: number
+  recipientId: string
 ) {
   await db.execute(sql`
     UPDATE daily_send_slots
     SET
       filled = TRUE,
       recipient_id = ${recipientId},
-      sequence_id = ${sequenceId},
-      step = ${step}
+      updated_at = NOW()
     WHERE id = ${slotId}
   `);
 }
@@ -63,7 +59,28 @@ export async function fillSlot(
 export async function markSlotSent(slotId: string) {
   await db.execute(sql`
     UPDATE daily_send_slots
-    SET sent = TRUE
+    SET 
+      sent = TRUE,
+      updated_at = NOW()
     WHERE id = ${slotId}
   `);
+}
+
+/**
+ * Get ready-to-send slots (filled, not sent, time has arrived)
+ */
+export async function getReadySlots(limit: number = 10): Promise<DailySlot[]> {
+  const nowUtc = new Date().toISOString();
+  
+  const rows = await db.execute(sql`
+    SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
+    FROM daily_send_slots
+    WHERE sent = FALSE
+      AND filled = TRUE
+      AND slot_time_utc <= ${nowUtc}
+    ORDER BY slot_time_utc ASC
+    LIMIT ${limit}
+  `);
+  
+  return rows as any;
 }

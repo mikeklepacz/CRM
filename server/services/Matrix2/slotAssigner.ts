@@ -1,6 +1,6 @@
 // server/services/Matrix2/slotAssigner.ts
 import { parseBusinessHours } from "../timezoneHours";
-import { utcToZonedTime } from "date-fns-tz";
+import { toZonedTime } from "date-fns-tz";
 import { getEmptySlots, fillSlot } from "./slotDb";
 import { getEligibleRecipientsForAssignment } from "./recipientDb";
 import { storage } from "../../storage";
@@ -44,9 +44,9 @@ export async function assignRecipientsToSlots() {
       }
 
       // Assign this recipient to this slot
-      await fillSlot(slot.id, r.id, r.sequence_id, r.current_step);
+      await fillSlot(slot.id, r.id);
       
-      console.log(`[Matrix2 Assigner] Assigned recipient ${r.recipient_id} to slot ${slot.id} at ${slotUtc.toISOString()}`);
+      console.log(`[Matrix2 Assigner] Assigned recipient ${r.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
       
       // Remove from available recipients
       recipients.splice(i, 1);
@@ -67,7 +67,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   }
 
   // Convert slot UTC time to recipient's local time
-  const localTime = utcToZonedTime(slotUtc, recipientTimezone);
+  const localTime = toZonedTime(slotUtc, recipientTimezone);
 
   // Parse business hours with state parameter
   const parsed = parseBusinessHours(recipient.business_hours || '', recipientState);

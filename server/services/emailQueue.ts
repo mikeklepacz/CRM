@@ -7,6 +7,10 @@ import { markSlotSent } from "./Matrix2/slotDb";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 
+// Queue state
+let isProcessing = false;
+let queueInterval: NodeJS.Timeout | null = null;
+
 export async function processEmailQueue() {
   const settings = await storage.getEhubSettings();
 
@@ -32,4 +36,36 @@ export async function processEmailQueue() {
       await markSlotSent(slot.id);
     }
   }
+}
+
+/**
+ * Start the email queue processor
+ * Runs every 60 seconds to process pending emails
+ */
+export function startEmailQueueProcessor() {
+  console.log('[EmailQueue] Starting email queue processor (Matrix2)...');
+  
+  // Run immediately on startup
+  processEmailQueue().catch(err => {
+    console.error('[EmailQueue] Error in initial queue processing:', err);
+  });
+
+  // Then run every 60 seconds
+  queueInterval = setInterval(async () => {
+    if (isProcessing) {
+      console.log('[EmailQueue] Queue already processing, skipping this cycle');
+      return;
+    }
+
+    isProcessing = true;
+    try {
+      await processEmailQueue();
+    } catch (error) {
+      console.error('[EmailQueue] Error processing email queue:', error);
+    } finally {
+      isProcessing = false;
+    }
+  }, 60000); // 60 seconds
+
+  console.log('[EmailQueue] ✅ Queue processor started (60s interval)');
 }
