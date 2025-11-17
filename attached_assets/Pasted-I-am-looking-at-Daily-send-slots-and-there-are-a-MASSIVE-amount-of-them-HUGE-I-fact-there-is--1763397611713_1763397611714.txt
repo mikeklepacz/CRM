@@ -1,0 +1,80 @@
+I am looking at Daily send slots and there are a MASSIVE amount of them. HUGE>>>>
+
+I fact, there is more than 20. Like maybe 100!! for the 17th Of November...
+
+Look at the Daily_send_slots SQL yourself .... the slot time UTC column has a shitload of rows....
+
+what is causing this SQL to get more than 20 rows per day??? My SQL EHUB_settings has a daily email limit equal to 20! So how the hell is there like a hundred rows for each day in this table for the daily send slots???
+
+Please do a full audit and find the bug.
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 12 files
+I'll audit the slot generation logic to find why you're getting ~100 slots per day instead of 20.
+
+Let me trace through the code:
+
+Looking at slotGenerator.ts, the generateSlotsForDay function has a critical bug in its loop logic:
+
+for (let i = 0; i < dailyEmailLimit; i++) {
+  if (i === 0) {
+    // First slot starts at the exact send hour
+    slots.push(new Date(cursor));
+  } else {
+    // Subsequent slots: add pure random jitter (no even spacing)
+    const jitter = randomInt(minDelayMinutes, maxDelayMinutes + 1);
+    cursor = addMinutes(cursor, jitter);
+    
+    // Stop if we've exceeded the send window boundary
+    if (cursor >= endBoundary) {
+      console.log(`[Matrix2 Generator] Reached send window boundary at slot ${i}, stopping`);
+      break;
+    }
+    
+    slots.push(new Date(cursor));
+  }
+}
+The Bug: The loop creates dailyEmailLimit slots (20), but then ensureDailySlots() calls this function multiple times for the same date. Looking at the maintenance scheduler in slotMaintenance.ts:
+
+// Check next 3 calendar days
+for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
+  const targetDate = new Date(now);
+  targetDate.setDate(targetDate.getDate() + dayOffset);
+  const dateIso = formatInTimeZone(targetDate, adminTz, 'yyyy-MM-dd');
+  
+  // Check if slots already exist for this day
+  const existing = await getSlotsForDate(dateIso);
+  if (existing.length > 0) {
+    console.log(`[Matrix2 Generator] Slots already exist for ${dateIso} (${existing.length} slots)`);
+    continue;
+  }
+The check if (existing.length > 0) only skips generation if slots exist. But there's another issue - the maintenance runs at two times per day (at sendingHoursStart and sendingHoursEnd), and if it's being called from multiple places, it could be adding slots multiple times.
+
+However, the real smoking gun is likely that ensureDailySlots() is being called from multiple places without proper coordination:
+
+[slotMaintenance.ts] - runs on startup and every hour
+emailQueue.ts - calls assignRecipientsToSlots() which doesn't generate slots
+Manual trigger via routes.ts - /api/ehub/queue/generate
+The issue is that if the maintenance scheduler runs multiple times in the same hour (perhaps due to restarts), or if you manually triggered generation, it will keep adding 20 more slots each time because the date check isn't specific enough.
+
+Let me check the actual slot creation in slotDb.ts:
+
+export async function createSlots(dateIso: string, slots: Date[]) {
+  for (const dt of slots) {
+    await db.execute(sql`
+      INSERT INTO daily_send_slots (slot_date, slot_time_utc, filled, sent)
+      VALUES (${dateIso}, ${dt.toISOString()}, FALSE, FALSE)
+    `);
+  }
+}
+There's NO duplicate prevention! The table schema from 0022_daily_send_slots.sql doesn't have a unique constraint on (slot_date, slot_time_utc), so it will happily insert duplicate slots.
+
+Root Cause: If ensureDailySlots() gets called multiple times (server restarts, manual triggers, etc.), it will keep inserting 20 new slots each time because:
+
+The duplicate check if (existing.length > 0) only checks if ANY slots exist, not if the right NUMBER exist
+There's no unique constraint preventing duplicate slot times
+No transaction wrapping to prevent race conditions
