@@ -1,0 +1,36 @@
+talk to the arch and see what code is preventing the Ehub > Queue table from showing the currect rows via data from the "daily_send_slots"? I am supposed to see a visual representation of the queue slots with and without Clients assigned to those slots. 
+
+
+assist said:
+
+After analyzing the codebase, here's what's preventing the E-Hub Queue table from displaying the daily send slots correctly:
+
+The Problem:
+
+The Queue view in client/src/pages/ehub.tsx is fetching data from the wrong endpoint. It's calling /api/ehub/queue which returns IndividualSend[] - this is showing recipient-centric data (each recipient's next scheduled email), not slot-centric data from the daily_send_slots table.
+
+What You're Seeing vs. What You Should See:
+
+Currently: The queue shows recipients and when their next email will be sent (recipient-focused view)
+What You Want: A chronological list of time slots showing which slots are empty (unfilled) and which have recipients assigned to them (filled)
+The Root Cause:
+
+The QueueView component doesn't have any code that queries the daily_send_slots table. It's using this query:
+
+const { data: activeQueue } = useQuery<IndividualSend[]>({
+  queryKey: ['/api/ehub/queue', ...],
+  // This endpoint doesn't return slot data - it returns recipient send schedules
+});
+What's Missing:
+
+No API endpoint exists that returns the raw daily_send_slots data with slot timing, fill status, and assigned recipient info
+No frontend query to fetch that slot-centric view
+No UI component to render the slots as a visual queue (like you'd see in a calendar or timeline)
+The Fix Needed:
+
+You need to:
+
+Create a new backend endpoint (e.g., /api/ehub/slots) that queries daily_send_slots and returns slots with their fill status and recipient info
+Add a new query in the Queue tab to fetch this slot data
+Render the slots visually showing: slot time, whether it's filled/empty, and which recipient (if any) is assigned
+The current queue is working correctly for its designed purpose (showing recipient send schedules), but it's architecturally the wrong view for what you want - you need a slot-first view instead of a recipient-first view.
