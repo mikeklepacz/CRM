@@ -178,7 +178,6 @@ import { db } from "./db";
 import { eq, ne, and, or, inArray, sql, desc, lte, gte, gt, lt, isNull, isNotNull } from "drizzle-orm";
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, addMilliseconds } from 'date-fns';
-import { computeNextSendSlot } from './services/smartTiming';
 
 export interface IStorage {
   // User operations - Required for Replit Auth
@@ -3878,7 +3877,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async skipRecipientStep(id: string): Promise<SequenceRecipient> {
-    // Get recipient with sequence and E-Hub settings
+    // Get recipient with sequence info
     const [recipientData] = await db
       .select({
         recipient: sequenceRecipients,
@@ -3894,84 +3893,24 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Recipient ${id} not found`);
     }
 
-    // Get E-Hub settings for smart timing
-    const settings = await this.getEhubSettings();
-    if (!settings) {
-      throw new Error('E-Hub settings not found');
-    }
-
-    // Find last ACTUALLY SENT step by querying message history
-    const [lastSentMessage] = await db
-      .select()
-      .from(sequenceRecipientMessages)
-      .where(eq(sequenceRecipientMessages.recipientId, id))
-      .orderBy(desc(sequenceRecipientMessages.stepNumber))
-      .limit(1);
-
     const { recipient, stepDelays, repeatLastStep } = recipientData;
     const oldCurrentStep = recipient.currentStep || 0;
     const newStep = oldCurrentStep + 1;
     const delays = stepDelays ? stepDelays.map((d: string) => parseFloat(d)) : [];
     const now = new Date();
     
-    // Get last ACTUALLY SENT step and timestamp
-    const lastSentStep = lastSentMessage ? lastSentMessage.stepNumber : 0;
-    const lastSent = recipient.lastStepSentAt || now;
-    
-    // Calculate next send time using CUMULATIVE gap-based delays + smart timing
-    let nextSendAt: Date | null = null;
+    // Determine status based on sequence completion
     let recipientStatus = 'in_sequence';
-    
-    if (newStep < delays.length) {
-      // Calculate cumulative gaps from last ACTUALLY SENT step through new position
-      // MUST include delays[newStep] since the skip handler advances currentStep without sending
-      // Example: lastSentStep=1, newStep=3 → sum delays[1] + delays[2] + delays[3]
-      let cumulativeGapDays = 0;
-      for (let i = lastSentStep; i <= newStep; i++) {
-        cumulativeGapDays += delays[i] ?? 0;
-      }
-      
-      const baselineTime = addDays(lastSent, cumulativeGapDays);
-      
-      const { computeNextSendSlot } = await import('./services/smartTiming');
-      nextSendAt = computeNextSendSlot({
-        baselineTime,
-        adminTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        adminStartHour: settings.sendingHoursStart,
-        adminEndHour: settings.sendingHoursEnd,
-        recipientBusinessHours: recipient.businessHours || '',
-        recipientTimezone: recipient.timezone || 'America/New_York',
-        clientWindowStartOffset: settings.clientWindowStartOffset,
-        clientWindowEndHour: settings.clientWindowEndHour,
-        skipWeekends: settings.skipWeekends,
-      });
-    } else if (newStep === delays.length && repeatLastStep) {
-      // On last step with repeat enabled - schedule repeat from last send
-      const lastGapDays = delays[delays.length - 1];
-      const baselineTime = addDays(lastSent, lastGapDays);
-      
-      const { computeNextSendSlot } = await import('./services/smartTiming');
-      nextSendAt = computeNextSendSlot({
-        baselineTime,
-        adminTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        adminStartHour: settings.sendingHoursStart,
-        adminEndHour: settings.sendingHoursEnd,
-        recipientBusinessHours: recipient.businessHours || '',
-        recipientTimezone: recipient.timezone || 'America/New_York',
-        clientWindowStartOffset: settings.clientWindowStartOffset,
-        clientWindowEndHour: settings.clientWindowEndHour,
-        skipWeekends: settings.skipWeekends,
-      });
-    } else {
-      // Sequence complete
+    if (newStep >= delays.length && !repeatLastStep) {
       recipientStatus = 'completed';
     }
 
+    // With Matrix2: clear nextSendAt and let slotAssigner schedule it on next cycle
     const [updated] = await db
       .update(sequenceRecipients)
       .set({ 
         currentStep: newStep,
-        nextSendAt,
+        nextSendAt: null, // Matrix2 will assign slot on next cycle
         status: recipientStatus,
         updatedAt: now
       })
