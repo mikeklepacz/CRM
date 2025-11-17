@@ -47,24 +47,14 @@ export async function updateCommissionTrackerStatus(
       return { success: false, message: 'Missing required columns (Link or Status)' };
     }
 
-    // Find the row by normalized link AND agent name
+    // Find the row by normalized link only (agent is already set when claimed)
     let rowIndex = -1;
     for (let i = 1; i < trackerRows.length; i++) {
       const rowLink = trackerRows[i][linkIndex];
-      const rowAgent = agentNameIndex !== -1 ? trackerRows[i][agentNameIndex] : '';
       
       if (rowLink && normalizeLink(rowLink) === normalizedInputLink) {
-        // If agent name column exists, match on both link AND agent
-        if (agentNameIndex !== -1) {
-          if (rowAgent?.toString().trim() === agentName.trim()) {
-            rowIndex = i + 1; // 1-indexed for Google Sheets
-            break;
-          }
-        } else {
-          // No agent name column, just match on link
-          rowIndex = i + 1;
-          break;
-        }
+        rowIndex = i + 1; // 1-indexed for Google Sheets
+        break;
       }
     }
 
