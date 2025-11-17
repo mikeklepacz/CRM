@@ -1,7 +1,7 @@
 import { storage } from '../storage';
 import { addDays, format } from 'date-fns';
 import { parseBusinessHours } from './timezoneHours';
-import { formatInTimeZone, zonedTimeToUtc } from 'date-fns-tz';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 
 interface MatrixSchedulerParams {
   recipientId: string;
@@ -133,9 +133,9 @@ export async function getNextMatrixSlot(
     const adminStartLocal = `${adminDateStr}T${String(sendingHoursStart).padStart(2,'0')}:00:00`;
     const adminEndLocal = `${adminDateStr}T${String(sendingHoursEnd).padStart(2,'0')}:00:00`;
 
-    // Convert both into UTC Date objects
-    const adminStartUtc = new Date(adminStartLocal);
-    const adminEndUtc = new Date(adminEndLocal);
+    // Convert to UTC using admin's timezone (handles DST correctly)
+    const adminStartUtc = fromZonedTime(adminStartLocal, adminTimezone);
+    const adminEndUtc = fromZonedTime(adminEndLocal, adminTimezone);
 
     // RECIPIENT WINDOW
     const todaysSchedule = parsed.schedule[jsRecipDay];
@@ -159,7 +159,7 @@ export async function getNextMatrixSlot(
     const recipientOpenString = `${recipientDateStr}T${String(openHour).padStart(2,'0')}:${String(openMinute).padStart(2,'0')}:00`;
 
     // Convert to UTC using recipient's timezone (handles DST correctly)
-    const recipientOpenUtc = zonedTimeToUtc(recipientOpenString, recipientTimezone);
+    const recipientOpenUtc = fromZonedTime(recipientOpenString, recipientTimezone);
     
     // Apply start offset (e.g., +1 hour after opening)
     const recipientLegalStartUtc = new Date(
@@ -170,7 +170,7 @@ export async function getNextMatrixSlot(
     const recipientEndString = `${recipientDateStr}T${String(clientWindowEndHour).padStart(2,'0')}:00:00`;
 
     // Convert to UTC using recipient's timezone (handles DST correctly)
-    const recipientLegalEndUtc = zonedTimeToUtc(recipientEndString, recipientTimezone);
+    const recipientLegalEndUtc = fromZonedTime(recipientEndString, recipientTimezone);
 
     // OVERLAP
     overlapStart = new Date(
