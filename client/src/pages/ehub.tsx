@@ -2142,7 +2142,16 @@ export default function EHub() {
                           setActiveTab("recipients");
                         }}
                       >
-                        <TableCell className="font-medium">{sequence.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {sequence.name}
+                            {sequence.isSystem && (
+                              <Badge variant="outline" className="text-xs">
+                                🔒 System
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>{sequence.stepDelays?.length || 0} steps</TableCell>
                         <TableCell>
                           <Badge variant={getStatusColor(sequence.status)}>
@@ -2195,14 +2204,17 @@ export default function EHub() {
                                 <Pause className="w-4 h-4" />
                               )}
                             </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              onClick={() => setDeleteSequenceId(sequence.id)}
-                              data-testid={`button-delete-${sequence.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            {!sequence.isSystem && (
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => setDeleteSequenceId(sequence.id)}
+                                data-testid={`button-delete-${sequence.id}`}
+                                title="Delete sequence"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
