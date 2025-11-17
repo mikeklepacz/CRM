@@ -3954,7 +3954,7 @@ export default function EHub() {
           <DialogHeader>
             <DialogTitle>Scan for Replies - Preview</DialogTitle>
             <p className="text-sm text-muted-foreground">
-              Checking Gmail for replies to Manual Follow-Ups recipients awaiting responses
+              Scanning Gmail Sent folder for emails to Commission Tracker POC Emails
             </p>
           </DialogHeader>
 
@@ -3965,15 +3965,18 @@ export default function EHub() {
             </div>
           ) : scanPreviewResults ? (
             <div className="space-y-4 py-4">
-              <div className="flex gap-4 mb-4 text-sm">
+              <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
                 <div>
-                  <span className="text-muted-foreground">Scanned:</span> <strong>{scanPreviewResults.scanned}</strong>
+                  <span className="text-muted-foreground">Sent Emails Scanned:</span> <strong>{scanPreviewResults.scanned}</strong>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Ready to Promote:</span> <strong className="text-green-600">{scanPreviewResults.details.filter(d => d.status === 'promoted').length}</strong>
+                  <span className="text-muted-foreground">Newly Discovered:</span> <strong className="text-purple-600">{scanPreviewResults.details.filter((d: any) => d.isNew).length}</strong>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Has Replies:</span> <strong className="text-blue-600">{scanPreviewResults.details.filter(d => d.status === 'has_reply').length}</strong>
+                  <span className="text-muted-foreground">Ready to Promote:</span> <strong className="text-green-600">{scanPreviewResults.details.filter((d: any) => d.status === 'promoted').length}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Has Replies:</span> <strong className="text-blue-600">{scanPreviewResults.details.filter((d: any) => d.status === 'has_reply').length}</strong>
                 </div>
               </div>
 
@@ -3987,15 +3990,21 @@ export default function EHub() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {scanPreviewResults.details.map((detail, idx) => (
+                    {scanPreviewResults.details.map((detail: any, idx: number) => (
                       <TableRow key={idx}>
-                        <TableCell className="text-xs font-mono">{detail.email}</TableCell>
+                        <TableCell className="text-xs font-mono">
+                          {detail.email}
+                          {detail.isNew && <span className="ml-2 text-purple-600">✨ New</span>}
+                        </TableCell>
                         <TableCell>
                           {detail.status === 'promoted' && (
                             <Badge variant="default" className="bg-green-600">Ready to Promote</Badge>
                           )}
                           {detail.status === 'has_reply' && (
                             <Badge variant="default" className="bg-blue-600">Has Reply</Badge>
+                          )}
+                          {detail.status === 'newly_enrolled' && (
+                            <Badge variant="default" className="bg-purple-600">Newly Enrolled</Badge>
                           )}
                           {detail.status === 'too_recent' && (
                             <Badge variant="secondary">Too Recent</Badge>
