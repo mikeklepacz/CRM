@@ -1,3 +1,47 @@
+
+/**
+ * Immediately assign a specific recipient to the next available slot
+ * Called when a recipient is enrolled to avoid waiting for the 60s queue cycle
+ */
+export async function assignSingleRecipient(recipientId: string) {
+  const settings = await storage.getEhubSettings();
+  if (!settings) {
+    console.log('[Matrix2 Assigner] No E-Hub settings found');
+    return;
+  }
+
+  const today = new Date();
+  const dateIso = today.toISOString().slice(0, 10);
+  const slots = await getEmptySlots(dateIso);
+  
+  if (slots.length === 0) {
+    console.log(`[Matrix2 Assigner] No empty slots available for ${recipientId}`);
+    return;
+  }
+
+  // Get the specific recipient
+  const recipients = await getEligibleRecipientsForAssignment();
+  const recipient = recipients.find(r => r.id === recipientId);
+  
+  if (!recipient) {
+    console.log(`[Matrix2 Assigner] Recipient ${recipientId} not eligible for assignment`);
+    return;
+  }
+
+  // Try to assign to first available slot
+  for (const slot of slots) {
+    const slotUtc = new Date(slot.slot_time_utc);
+
+    if (isRecipientEligible(recipient, slotUtc, settings)) {
+      await fillSlot(slot.id, recipient.id);
+      console.log(`[Matrix2 Assigner] Assigned recipient ${recipient.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
+      return;
+    }
+  }
+
+  console.log(`[Matrix2 Assigner] No eligible slots found for recipient ${recipient.email}`);
+}
+
 // server/services/Matrix2/slotAssigner.ts
 import { parseBusinessHours } from "../timezoneHours";
 import { toZonedTime } from "date-fns-tz";

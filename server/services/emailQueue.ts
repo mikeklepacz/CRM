@@ -68,21 +68,7 @@ export async function processEmailQueue() {
       if (ok) {
         await markSlotSent(slot.id);
         console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id}`);
-        
-        // CRITICAL: Update recipient metadata after successful send
-        const recipient = await storage.getRecipientById(slot.recipient_id);
-        if (recipient) {
-          const nextStep = (recipient.currentStep || 0) + 1;
-          await db
-            .update(sequenceRecipients)
-            .set({
-              currentStep: nextStep,
-              lastStepSentAt: now,
-              status: 'in_sequence',
-              updatedAt: now
-            })
-            .where(eq(sequenceRecipients.id, slot.recipient_id));
-        }
+        // Note: Recipient metadata is updated inside sendEmailToRecipient()
       } else {
         console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id}`);
         // Unfill the slot so it can be reassigned

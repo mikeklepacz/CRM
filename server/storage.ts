@@ -283,7 +283,7 @@ export interface IStorage {
   // OpenAI operations
   getOpenaiSettings(): Promise<OpenaiSettings | undefined>;
   saveOpenaiSettings(settings: Partial<InsertOpenaiSettings>): Promise<OpenaiSettings>;
-  
+
   // Knowledge base operations
   getAllKnowledgeBaseFiles(): Promise<KnowledgeBaseFile[]>;
   getKnowledgeBaseFile(id: string): Promise<KnowledgeBaseFile | undefined>;
@@ -291,19 +291,19 @@ export interface IStorage {
   updateKnowledgeBaseFileStatus(id: string, status: string): Promise<KnowledgeBaseFile>;
   updateKnowledgeBaseFile(id: string, updates: Partial<InsertKnowledgeBaseFile>): Promise<KnowledgeBaseFile>;
   deleteKnowledgeBaseFile(id: string): Promise<void>;
-  
+
   // Chat operations
   getChatHistory(userId: string, limit?: number): Promise<ChatMessage[]>;
   getConversationMessages(conversationId: string): Promise<ChatMessage[]>;
   saveChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   clearChatHistory(userId: string): Promise<void>;
-  
+
   // Project operations
   getProjects(userId: string): Promise<Project[]>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, updates: Partial<InsertProject>): Promise<Project>;
   deleteProject(id: string): Promise<void>;
-  
+
   // Conversation operations
   getConversations(userId: string): Promise<Conversation[]>;
   getConversation(id: string): Promise<Conversation | undefined>;
@@ -311,7 +311,7 @@ export interface IStorage {
   updateConversation(id: string, updates: Partial<InsertConversation>): Promise<Conversation>;
   deleteConversation(id: string): Promise<void>;
   moveConversationToProject(conversationId: string, projectId: string | null): Promise<Conversation>;
-  
+
   // Template operations
   getUserTemplates(userId: string): Promise<Template[]>;  // Per-user templates
   getTemplate(id: string): Promise<Template | undefined>;
@@ -319,13 +319,13 @@ export interface IStorage {
   updateTemplate(id: string, updates: Partial<InsertTemplate>): Promise<Template>;
   deleteTemplate(id: string): Promise<void>;
   getAllTemplateTags(): Promise<string[]>; // Get all unique tags across all templates
-  
+
   // User Tag operations
   getUserTags(userId: string): Promise<UserTag[]>;
   addUserTag(userId: string, tag: string): Promise<UserTag>;
   removeUserTag(userId: string, tag: string): Promise<void>;
   removeUserTagById(userId: string, id: string): Promise<void>;
-  
+
   // Category operations
   getAllCategories(): Promise<Category[]>;
   getActiveCategories(): Promise<Category[]>;
@@ -333,23 +333,23 @@ export interface IStorage {
   createCategory(category: InsertCategory): Promise<Category>;
   updateCategory(id: string, updates: Partial<InsertCategory>): Promise<Category>;
   deleteCategory(id: string): Promise<void>;
-  
+
   // Imported Places operations
   checkImportedPlaces(placeIds: string[]): Promise<Set<string>>;
   recordImportedPlace(placeId: string): Promise<void>;
-  
+
   // Search History operations
   getAllSearchHistory(): Promise<SearchHistory[]>;
   recordSearch(businessType: string, city: string, state: string, country: string, excludedKeywords?: string[], excludedTypes?: string[], category?: string): Promise<SearchHistory>;
   deleteSearchHistory(id: string): Promise<void>;
-  
+
   // Saved Exclusions operations
   getAllSavedExclusions(): Promise<SavedExclusion[]>;
   getSavedExclusionsByType(type: 'keyword' | 'place_type'): Promise<SavedExclusion[]>;
   createSavedExclusion(exclusion: InsertSavedExclusion): Promise<SavedExclusion>;
   deleteSavedExclusion(id: string): Promise<void>;
   updateUserActiveExclusions(userId: string, activeKeywords: string[], activeTypes: string[]): Promise<UserPreferences>;
-  
+
   // Status operations
   getAllStatuses(): Promise<Status[]>;
   getActiveStatuses(): Promise<Status[]>;
@@ -358,7 +358,7 @@ export interface IStorage {
   updateStatus(id: string, updates: Partial<InsertStatus>): Promise<Status>;
   deleteStatus(id: string): Promise<void>;
   reorderStatuses(updates: { id: string; displayOrder: number }[]): Promise<void>;
-  
+
   // Ticket operations
   getAllTickets(): Promise<Ticket[]>;
   getUserTickets(userId: string): Promise<Ticket[]>;
@@ -368,20 +368,20 @@ export interface IStorage {
   getUnreadAdminCount(): Promise<number>;
   markTicketReadByAdmin(id: string): Promise<Ticket>;
   markTicketReadByUser(id: string): Promise<Ticket>;
-  
+
   // Ticket Reply operations
   getTicketReplies(ticketId: string): Promise<TicketReply[]>;
   createTicketReply(reply: InsertTicketReply): Promise<TicketReply>;
-  
+
   // Call History operations
   createCallHistory(callData: InsertCallHistory): Promise<CallHistory>;
   getUserCallHistory(userId: string): Promise<CallHistory[]>;
   getAllCallHistory(agentId?: string): Promise<CallHistory[]>;
-  
+
   // Email Draft operations
   createEmailDraft(draftData: InsertEmailDraft): Promise<EmailDraft>;
   getUserEmailDrafts(userId: string): Promise<EmailDraft[]>;
-  
+
   // Drive Folder operations
   getAllDriveFolders(): Promise<DriveFolder[]>;
   getDriveFolder(id: string): Promise<DriveFolder | undefined>;
@@ -389,24 +389,24 @@ export interface IStorage {
   createDriveFolder(folder: InsertDriveFolder): Promise<DriveFolder>;
   updateDriveFolder(id: string, updates: Partial<InsertDriveFolder>): Promise<DriveFolder>;
   deleteDriveFolder(id: string): Promise<void>;
-  
+
   // Follow-up Center operations
   getFollowUpClients(userId: string, userRole: string): Promise<{
     claimedUntouched: Array<Client & { daysSinceContact: number }>;
     interestedGoingCold: Array<Client & { daysSinceContact: number }>;
     closedWonReorder: Array<Client & { daysSinceOrder: number }>;
   }>;
-  
+
   // ElevenLabs settings operations
   getElevenLabsConfig(): Promise<{ apiKey: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string } | undefined>;
   updateElevenLabsConfig(config: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void>;
-  
+
   // ElevenLabs Phone Numbers operations
   getAllElevenLabsPhoneNumbers(): Promise<ElevenLabsPhoneNumber[]>;
   getElevenLabsPhoneNumber(phoneNumberId: string): Promise<ElevenLabsPhoneNumber | undefined>;
   upsertElevenLabsPhoneNumber(phoneData: InsertElevenLabsPhoneNumber): Promise<ElevenLabsPhoneNumber>;
   deleteElevenLabsPhoneNumber(phoneNumberId: string): Promise<void>;
-  
+
   getAllElevenLabsAgents(): Promise<ElevenLabsAgent[]>;
   getElevenLabsAgent(id: string): Promise<ElevenLabsAgent | undefined>;
   getDefaultElevenLabsAgent(): Promise<ElevenLabsAgent | undefined>;
@@ -431,7 +431,7 @@ export interface IStorage {
   deleteCallTranscripts(conversationId: string): Promise<void>;
 
   // AI Insights helper operations
-  getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number; onlyUnanalyzed?: boolean }): Promise<Array<{
+  getCallsWithTranscripts(filters: { startDate?: string; endDate?: string; agentId?: string; limit?: number; onlyUnanalyzed?: boolean; conversationIds?: string[] }): Promise<Array<{
     session: CallSession;
     transcripts: CallTranscript[];
     client: Client;
@@ -496,7 +496,7 @@ export interface IStorage {
   createAssistantFile(file: any): Promise<any>;
   // Scoped delete method enforces assistant ownership at storage layer
   deleteAssistantFileByAssistantId(fileId: string, assistantId: string): Promise<boolean>;
-  
+
   // Non-duplicate operations
   markAsNotDuplicate(link1: string, link2: string, userId: string): Promise<NonDuplicate>;
   isMarkedAsNotDuplicate(link1: string, link2: string): Promise<boolean>;
@@ -506,7 +506,7 @@ export interface IStorage {
   // Background Audio Settings operations
   getBackgroundAudioSettings(): Promise<BackgroundAudioSettings | undefined>;
   updateBackgroundAudioSettings(settings: InsertBackgroundAudioSettings): Promise<BackgroundAudioSettings>;
-  
+
   // Voice Proxy Session operations
   createVoiceProxySession(session: InsertVoiceProxySession): Promise<VoiceProxySession>;
   getVoiceProxySession(streamSid: string): Promise<VoiceProxySession | undefined>;
@@ -517,7 +517,7 @@ export interface IStorage {
   // E-Hub Settings operations
   getEhubSettings(): Promise<EhubSettings | undefined>;
   updateEhubSettings(updates: Partial<InsertEhubSettings>): Promise<EhubSettings>;
-  
+
   // E-Hub Sequence operations
   createSequence(sequence: InsertSequence): Promise<Sequence>;
   getSequence(id: string): Promise<Sequence | undefined>;
@@ -551,13 +551,20 @@ export interface IStorage {
   updateRecipientStatus(id: string, updates: Partial<InsertSequenceRecipient>): Promise<SequenceRecipient>;
   findRecipientByEmail(sequenceId: string, email: string): Promise<SequenceRecipient | undefined>;
   pauseRecipient(id: string): Promise<SequenceRecipient>;
+  resumeRecipient(id: string): Promise<SequenceRecipient>; // Added this method to resume paused recipients
+  getPausedRecipientsCount(): Promise<number>;
+  getQueueTail(options?: { excludeRecipientId?: string }): Promise<Date | null>;
+  getDailyScheduledCount(options?: { date?: Date; excludeRecipientId?: string }): Promise<number>;
   removeRecipient(id: string): Promise<SequenceRecipient>;
+  sendRecipientNow(id: string): Promise<SequenceRecipient>;
+  delayRecipient(id: string, hours: number): Promise<SequenceRecipient>;
   skipRecipientStep(id: string): Promise<SequenceRecipient>;
 
   // E-Hub Sequence Scheduled Sends operations
   insertScheduledSends(sends: InsertSequenceScheduledSend[]): Promise<SequenceScheduledSend[]>;
   getNextScheduledSends(limit: number): Promise<SequenceScheduledSend[]>;
   getUpcomingScheduledSends(limit: number): Promise<SequenceScheduledSend[]>;
+  clearScheduledAtForPendingSends(imminentThreshold: Date): Promise<number>;
   deleteRecipientScheduledSends(recipientId: string): Promise<number>;
   deleteAllPendingScheduledSends(sequenceId?: string): Promise<number>;
   updateScheduledSend(id: string, updates: Partial<InsertSequenceScheduledSend>): Promise<SequenceScheduledSend>;
@@ -590,7 +597,7 @@ export interface IStorage {
   createRecipientMessage(message: InsertSequenceRecipientMessage): Promise<SequenceRecipientMessage>;
   getRecipientMessages(recipientId: string): Promise<SequenceRecipientMessage[]>;
   deleteRecipientMessages(recipientId: string): Promise<void>;
-  
+
   // E-Hub Strategy Chat operations
   appendSequenceStrategyMessages(sequenceId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>, threadId?: string): Promise<Sequence>;
 
@@ -686,52 +693,52 @@ export class DatabaseStorage implements IStorage {
   async deleteUser(id: string): Promise<void> {
     // Cascade delete all user data
     // Note: Most tables have ON DELETE CASCADE set, but we'll explicitly delete all for safety
-    
+
     // Delete user integrations
     await db.delete(userIntegrations).where(eq(userIntegrations.userId, id));
-    
+
     // Delete reminders
     await db.delete(reminders).where(eq(reminders.userId, id));
-    
+
     // Delete conversations and their messages
     const userConversations = await db.select().from(conversations).where(eq(conversations.userId, id));
     for (const conv of userConversations) {
       await db.delete(chatMessages).where(eq(chatMessages.conversationId, conv.id));
     }
     await db.delete(conversations).where(eq(conversations.userId, id));
-    
+
     // Delete templates
     await db.delete(templates).where(eq(templates.userId, id));
-    
+
     // Delete user tags
     await db.delete(userTags).where(eq(userTags.userId, id));
-    
+
     // Delete user preferences
     await db.delete(userPreferences).where(eq(userPreferences.userId, id));
-    
+
     // Note: openaiSettings is a global admin table with no userId - don't delete it per user
-    
+
     // Delete knowledge base files (metadata only - actual OpenAI files deleted in route handler)
     await db.delete(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.uploadedBy, id));
-    
+
     // Delete projects
     await db.delete(projects).where(eq(projects.userId, id));
-    
+
     // Delete notifications
     await db.delete(notifications).where(eq(notifications.userId, id));
-    
+
     // Delete widget layouts
     await db.delete(widgetLayouts).where(eq(widgetLayouts.userId, id));
-    
+
     // Note: dashboardCards, savedExclusions, searchHistory, categories, statuses are global tables - don't delete
-    
+
     // Delete support tickets and replies
     const userTickets = await db.select().from(tickets).where(eq(tickets.userId, id));
     for (const ticket of userTickets) {
       await db.delete(ticketReplies).where(eq(ticketReplies.ticketId, ticket.id));
     }
     await db.delete(tickets).where(eq(tickets.userId, id));
-    
+
     // Finally, delete the user
     await db.delete(users).where(eq(users.id, id));
   }
@@ -789,7 +796,7 @@ export class DatabaseStorage implements IStorage {
       .from(userIntegrations)
       .innerJoin(users, eq(userIntegrations.userId, users.id))
       .where(eq(users.isActive, true));
-    
+
     return results.map(r => r.integration);
   }
 
@@ -979,7 +986,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const results = await query.orderBy(clients.createdAt);
-    
+
     return results;
   }
 
@@ -1041,7 +1048,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateLastContactDate(clientId: string, contactDate?: Date): Promise<Client | undefined> {
     const newContactDate = contactDate || new Date();
-    
+
     const [updated] = await db
       .update(clients)
       .set({
@@ -1058,13 +1065,13 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .returning();
-    
+
     if (updated) {
       console.log(`[updateLastContactDate] Updated client ${clientId} lastContactDate to ${newContactDate}`);
     } else {
       console.log(`[updateLastContactDate] Skipped client ${clientId} - existing date is newer or client not found`);
     }
-    
+
     return updated;
   }
 
@@ -1223,7 +1230,7 @@ export class DatabaseStorage implements IStorage {
       const totalClients = await db.select().from(clients);
       const totalAgents = await db.select().from(users).where(eq(users.role, 'agent'));
       const totalOrders = await db.select().from(orders);
-      
+
       return {
         totalClients: totalClients.length,
         totalAgents: totalAgents.length,
@@ -1235,19 +1242,19 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(clients)
         .where(eq(clients.assignedAgent, userId));
-      
+
       const agentOrders = await db
         .select()
         .from(orders)
         .where(eq(orders.agentId, userId));
-      
+
       return {
         myClients: agentClients.length,
         myOrders: agentOrders.length,
         claimedClients: agentClients.filter(c => c.status === 'claimed').length,
       };
     }
-    
+
     return {};
   }
 
@@ -1420,7 +1427,7 @@ export class DatabaseStorage implements IStorage {
 
   async saveOpenaiSettings(settings: Partial<InsertOpenaiSettings>): Promise<OpenaiSettings> {
     const existing = await this.getOpenaiSettings();
-    
+
     if (existing) {
       const [updated] = await db
         .update(openaiSettings)
@@ -1455,7 +1462,7 @@ export class DatabaseStorage implements IStorage {
       .from(knowledgeBaseFiles)
       .where(eq(knowledgeBaseFiles.isActive, true))
       .orderBy(desc(knowledgeBaseFiles.uploadedAt));
-    
+
     return results;
   }
 
@@ -1656,7 +1663,7 @@ export class DatabaseStorage implements IStorage {
   async getAllTemplateTags(): Promise<string[]> {
     const allTemplates = await db.select().from(templates);
     const tagsSet = new Set<string>();
-    
+
     allTemplates.forEach(template => {
       if (template.tags && Array.isArray(template.tags)) {
         template.tags.forEach(tag => {
@@ -1666,7 +1673,7 @@ export class DatabaseStorage implements IStorage {
         });
       }
     });
-    
+
     return Array.from(tagsSet).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   }
 
@@ -1681,17 +1688,17 @@ export class DatabaseStorage implements IStorage {
 
   async addUserTag(userId: string, tag: string): Promise<UserTag> {
     const trimmedTag = tag.trim().toLowerCase();
-    
+
     const existing = await db
       .select()
       .from(userTags)
       .where(and(eq(userTags.userId, userId), eq(userTags.tag, trimmedTag)))
       .limit(1);
-    
+
     if (existing.length > 0) {
       return existing[0];
     }
-    
+
     const [newTag] = await db
       .insert(userTags)
       .values({ userId, tag: trimmedTag })
@@ -1761,12 +1768,12 @@ export class DatabaseStorage implements IStorage {
   // Imported Places operations - for duplicate detection in Map Search
   async checkImportedPlaces(placeIds: string[]): Promise<Set<string>> {
     if (placeIds.length === 0) return new Set();
-    
+
     const results = await db
       .select({ placeId: importedPlaces.placeId })
       .from(importedPlaces)
       .where(inArray(importedPlaces.placeId, placeIds));
-    
+
     return new Set(results.map(r => r.placeId));
   }
 
@@ -2063,7 +2070,7 @@ export class DatabaseStorage implements IStorage {
       .insert(ticketReplies)
       .values(reply)
       .returning();
-    
+
     // Update the ticket's lastReplyAt and mark as replied
     await db
       .update(tickets)
@@ -2073,7 +2080,7 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(tickets.id, reply.ticketId));
-    
+
     return newReply;
   }
 
@@ -2157,37 +2164,37 @@ export class DatabaseStorage implements IStorage {
   async deleteDriveFolder(id: string): Promise<void> {
     await db.delete(driveFolders).where(eq(driveFolders.id, id));
   }
-  
+
   async getFollowUpClients(userId: string, userRole: string): Promise<{
     claimedUntouched: Array<Client & { daysSinceContact: number }>;
     interestedGoingCold: Array<Client & { daysSinceContact: number }>;
     closedWonReorder: Array<Client & { daysSinceOrder: number }>;
   }> {
     const now = new Date();
-    
+
     // Base query - get clients for this agent (or all if admin)
     const baseQuery = userRole === 'admin' 
       ? db.select().from(clients)
       : db.select().from(clients).where(eq(clients.assignedAgent, userId));
-    
+
     const allClients = await baseQuery;
-    
+
     // Filter 1: Claimed but never contacted OR contacted but ghosted (>7 days)
     const claimedUntouched = allClients
       .filter(c => {
         const status = (c.data?.Status || c.data?.status || '').toLowerCase();
-        
+
         // Scenario 1: Status = 'claimed' and no contact yet
         if (status === 'claimed' && !c.lastContactDate) {
           return true;
         }
-        
+
         // Scenario 2: Status = 'contacted' but last contact > 7 days ago
         if (status === 'contacted' && c.lastContactDate) {
           const daysSinceContact = Math.floor((now.getTime() - new Date(c.lastContactDate).getTime()) / (1000 * 60 * 60 * 24));
           return daysSinceContact > 7;
         }
-        
+
         return false;
       })
       .map(c => ({
@@ -2198,7 +2205,7 @@ export class DatabaseStorage implements IStorage {
               ? Math.floor((now.getTime() - new Date(c.claimDate).getTime()) / (1000 * 60 * 60 * 24))
               : 0)
       }));
-    
+
     // Filter 2: Interested leads going cold (interested, sample sent, follow up, warm)
     const interestedGoingCold = allClients
       .filter(c => {
@@ -2211,7 +2218,7 @@ export class DatabaseStorage implements IStorage {
         ...c,
         daysSinceContact: Math.floor((now.getTime() - new Date(c.lastContactDate!).getTime()) / (1000 * 60 * 60 * 24))
       }));
-    
+
     // Filter 3: Closed-won but hasn't reordered
     const closedWonReorder = allClients
       .filter(c => c.firstOrderDate && c.firstOrderDate === c.lastOrderDate)
@@ -2219,7 +2226,7 @@ export class DatabaseStorage implements IStorage {
         ...c,
         daysSinceOrder: Math.floor((now.getTime() - new Date(c.firstOrderDate!).getTime()) / (1000 * 60 * 60 * 24))
       }));
-    
+
     return {
       claimedUntouched,
       interestedGoingCold,
@@ -2242,7 +2249,7 @@ export class DatabaseStorage implements IStorage {
   async updateElevenLabsConfig(configData: { apiKey?: string; twilioNumber?: string; webhookSecret?: string; phoneNumberId?: string }): Promise<void> {
     // Get existing config first to preserve values
     const existing = await this.getElevenLabsConfig();
-    
+
     // Merge with existing values (only update provided fields)
     const merged = {
       apiKey: configData.apiKey !== undefined ? configData.apiKey : (existing?.apiKey ?? ''),
@@ -2250,7 +2257,7 @@ export class DatabaseStorage implements IStorage {
       webhookSecret: configData.webhookSecret !== undefined ? configData.webhookSecret : (existing?.webhookSecret ?? null),
       phoneNumberId: configData.phoneNumberId !== undefined ? configData.phoneNumberId : (existing?.phoneNumberId ?? null)
     };
-    
+
     // Delete old config and insert new (single row table)
     await db.delete(elevenLabsConfig);
     await db.insert(elevenLabsConfig).values(merged);
@@ -2269,7 +2276,7 @@ export class DatabaseStorage implements IStorage {
   async upsertElevenLabsPhoneNumber(phoneData: InsertElevenLabsPhoneNumber): Promise<ElevenLabsPhoneNumber> {
     // Check if phone number already exists
     const existing = await this.getElevenLabsPhoneNumber(phoneData.phoneNumberId);
-    
+
     if (existing) {
       // Update existing phone number
       const [updated] = await db.update(elevenLabsPhoneNumbers)
@@ -2405,12 +2412,12 @@ export class DatabaseStorage implements IStorage {
     client: Client;
   }>> {
     const limit = filters.limit || 100;
-    
+
     // Build query conditions
     const conditions = [
       eq(callSessions.status, 'completed')
     ];
-    
+
     // If conversationIds provided, fetch those specific calls
     if (filters.conversationIds && filters.conversationIds.length > 0) {
       conditions.push(inArray(callSessions.conversationId, filters.conversationIds));
@@ -2442,7 +2449,7 @@ export class DatabaseStorage implements IStorage {
       sessions.map(async (session) => {
         const transcripts = await this.getCallTranscripts(session.conversationId!);
         const client = await this.getClient(session.clientId);
-        
+
         return {
           session,
           transcripts,
@@ -2456,7 +2463,7 @@ export class DatabaseStorage implements IStorage {
 
   async markCallsAsAnalyzed(conversationIds: string[]): Promise<void> {
     if (conversationIds.length === 0) return;
-    
+
     await db.update(callSessions)
       .set({ lastAnalyzedAt: new Date() })
       .where(inArray(callSessions.conversationId, conversationIds));
@@ -2465,15 +2472,15 @@ export class DatabaseStorage implements IStorage {
   async nukeAllAnalysis(): Promise<{ deletedInsights: number; deletedProposals: number; resetCalls: number }> {
     // Delete all KB change proposals
     const deletedProposals = await db.delete(kbChangeProposals).returning();
-    
+
     // Delete all AI insights and related records (cascade will handle objections, patterns, recommendations)
     const deletedInsights = await db.delete(aiInsights).returning();
-    
+
     // Reset all call sessions' last_analyzed_at to null so they can be re-analyzed
     const resetCalls = await db.update(callSessions)
       .set({ lastAnalyzedAt: null })
       .returning();
-    
+
     return {
       deletedInsights: deletedInsights.length,
       deletedProposals: deletedProposals.length,
@@ -2596,25 +2603,25 @@ export class DatabaseStorage implements IStorage {
     recommendations: InsertAiInsightRecommendation[]
   ): Promise<AiInsight> {
     const [savedInsight] = await db.insert(aiInsights).values(insight).returning();
-    
+
     if (objections.length > 0) {
       await db.insert(aiInsightObjections).values(
         objections.map(obj => ({ ...obj, insightId: savedInsight.id }))
       );
     }
-    
+
     if (patterns.length > 0) {
       await db.insert(aiInsightPatterns).values(
         patterns.map(pat => ({ ...pat, insightId: savedInsight.id }))
       );
     }
-    
+
     if (recommendations.length > 0) {
       await db.insert(aiInsightRecommendations).values(
         recommendations.map(rec => ({ ...rec, insightId: savedInsight.id }))
       );
     }
-    
+
     return savedInsight;
   }
 
@@ -2653,7 +2660,7 @@ export class DatabaseStorage implements IStorage {
     recommendations: AiInsightRecommendation[] 
   }>> {
     let query = db.select().from(aiInsights);
-    
+
     const conditions = [];
     if (filters?.agentId) {
       conditions.push(eq(aiInsights.agentId, filters.agentId));
@@ -2664,13 +2671,13 @@ export class DatabaseStorage implements IStorage {
     if (filters?.endDate) {
       conditions.push(lte(aiInsights.dateRangeEnd, filters.endDate));
     }
-    
+
     if (conditions.length > 0) {
       query = query.where(and(...conditions)) as any;
     }
-    
+
     const insights = await query.orderBy(desc(aiInsights.analyzedAt)).limit(filters?.limit || 50);
-    
+
     const enrichedInsights = await Promise.all(
       insights.map(async (insight) => {
         const [objections, patterns, recommendations] = await Promise.all([
@@ -2678,7 +2685,7 @@ export class DatabaseStorage implements IStorage {
           db.select().from(aiInsightPatterns).where(eq(aiInsightPatterns.insightId, insight.id)),
           db.select().from(aiInsightRecommendations).where(eq(aiInsightRecommendations.insightId, insight.id))
         ]);
-        
+
         return {
           ...insight,
           objections,
@@ -2687,7 +2694,7 @@ export class DatabaseStorage implements IStorage {
         };
       })
     );
-    
+
     return enrichedInsights;
   }
 
@@ -2750,7 +2757,7 @@ export class DatabaseStorage implements IStorage {
 
   async getKbProposals(filters?: { status?: string; kbFileId?: string }): Promise<KbChangeProposal[]> {
     let query = db.select().from(kbChangeProposals);
-    
+
     const conditions = [];
     if (filters?.status) {
       conditions.push(eq(kbChangeProposals.status, filters.status));
@@ -2758,11 +2765,11 @@ export class DatabaseStorage implements IStorage {
     if (filters?.kbFileId) {
       conditions.push(eq(kbChangeProposals.kbFileId, filters.kbFileId));
     }
-    
+
     if (conditions.length > 0) {
       query = query.where(and(...conditions)) as any;
     }
-    
+
     return await query.orderBy(desc(kbChangeProposals.createdAt));
   }
 
@@ -2781,7 +2788,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteKbProposal(id: string): Promise<boolean> {
-    const result = await db.delete(kbChangeProposals).where(eq(kbChangeProposals.id, id));
+    const result = await db.delete(kbChangeProposals).where(eq(kbChangeProposals.id, id)).returning();
     return (result.rowCount ?? 0) > 0;
   }
 
@@ -2896,12 +2903,12 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return result.length > 0;
   }
-  
+
   // Non-duplicate operations
   async markAsNotDuplicate(link1: string, link2: string, userId: string): Promise<NonDuplicate> {
     // Normalize order: always store smaller link first
     const [first, second] = link1 < link2 ? [link1, link2] : [link2, link1];
-    
+
     const [result] = await db
       .insert(nonDuplicates)
       .values({
@@ -2911,7 +2918,7 @@ export class DatabaseStorage implements IStorage {
       })
       .onConflictDoNothing()
       .returning();
-    
+
     if (!result) {
       // Already exists, fetch it
       const [existing] = await db
@@ -2925,13 +2932,13 @@ export class DatabaseStorage implements IStorage {
         );
       return existing;
     }
-    
+
     return result;
   }
 
   async isMarkedAsNotDuplicate(link1: string, link2: string): Promise<boolean> {
     const [first, second] = link1 < link2 ? [link1, link2] : [link2, link1];
-    
+
     const [result] = await db
       .select()
       .from(nonDuplicates)
@@ -2942,7 +2949,7 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .limit(1);
-    
+
     return !!result;
   }
 
@@ -2952,7 +2959,7 @@ export class DatabaseStorage implements IStorage {
 
   async removeNonDuplicateMark(link1: string, link2: string): Promise<void> {
     const [first, second] = link1 < link2 ? [link1, link2] : [link2, link1];
-    
+
     await db
       .delete(nonDuplicates)
       .where(
@@ -2971,7 +2978,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateBackgroundAudioSettings(settings: InsertBackgroundAudioSettings): Promise<BackgroundAudioSettings> {
     const existing = await this.getBackgroundAudioSettings();
-    
+
     if (existing) {
       const [updated] = await db
         .update(backgroundAudioSettings)
@@ -3030,7 +3037,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // E-Hub Settings operations
-  
+
   /**
    * Normalize E-Hub settings by converting PostgreSQL decimal types to numbers
    * PostgreSQL numeric/decimal columns return as strings, so we parse them here
@@ -3049,7 +3056,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(ehubSettings)
       .limit(1);
-    
+
     return settings ? this.normalizeEhubSettings(settings) : undefined;
   }
 
@@ -3060,13 +3067,13 @@ export class DatabaseStorage implements IStorage {
         throw new Error('sendingHoursEnd must be greater than sendingHoursStart');
       }
     }
-    
+
     if (updates.minDelayMinutes !== undefined && updates.maxDelayMinutes !== undefined) {
       if (updates.maxDelayMinutes < updates.minDelayMinutes) {
         throw new Error('maxDelayMinutes must be greater than or equal to minDelayMinutes');
       }
     }
-    
+
     if (updates.dailyEmailLimit !== undefined) {
       if (updates.dailyEmailLimit < 1 || updates.dailyEmailLimit > 2000) {
         throw new Error('dailyEmailLimit must be between 1 and 2000');
@@ -3075,7 +3082,7 @@ export class DatabaseStorage implements IStorage {
 
     // Get existing settings or create if none exist
     const existing = await this.getEhubSettings();
-    
+
     if (existing) {
       const [updated] = await db
         .update(ehubSettings)
@@ -3123,7 +3130,7 @@ export class DatabaseStorage implements IStorage {
 
   async listSequences(filters?: { createdBy?: string; status?: string }): Promise<Sequence[]> {
     let query = db.select().from(sequences);
-    
+
     const conditions = [];
     if (filters?.createdBy) {
       conditions.push(eq(sequences.createdBy, filters.createdBy));
@@ -3131,11 +3138,11 @@ export class DatabaseStorage implements IStorage {
     if (filters?.status) {
       conditions.push(eq(sequences.status, filters.status));
     }
-    
+
     if (conditions.length > 0) {
       query = query.where(and(...conditions)) as any;
     }
-    
+
     return await query.orderBy(desc(sequences.createdAt));
   }
 
@@ -3165,7 +3172,7 @@ export class DatabaseStorage implements IStorage {
   // E-Hub Sequence Recipients operations
   async addRecipients(recipients: InsertSequenceRecipient[]): Promise<SequenceRecipient[]> {
     if (recipients.length === 0) return [];
-    
+
     const created = await db
       .insert(sequenceRecipients)
       .values(recipients)
@@ -3178,7 +3185,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(sequenceRecipients)
       .where(eq(sequenceRecipients.sequenceId, sequenceId));
-    
+
     if (filters?.status) {
       query = query.where(
         and(
@@ -3187,11 +3194,11 @@ export class DatabaseStorage implements IStorage {
         )
       ) as any;
     }
-    
+
     if (filters?.limit) {
       query = query.limit(filters.limit) as any;
     }
-    
+
     return await query.orderBy(desc(sequenceRecipients.createdAt));
   }
 
@@ -3206,9 +3213,9 @@ export class DatabaseStorage implements IStorage {
 
   async getNextRecipientsToSend(limit: number): Promise<SequenceRecipient[]> {
     const now = new Date();
-    
+
     // Two-tier priority queue: follow-ups first, then fresh emails
-    
+
     // Stage 1: Get all due follow-ups (currentStep > 0)
     // IMPORTANT: Exclude recipients who have replied
     const followUps = await db
@@ -3227,13 +3234,13 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(sequenceRecipients.nextSendAt)
       .limit(limit);
-    
+
     // Stage 2: If we haven't filled the quota, get fresh emails (currentStep = 0)
     // Include both 'pending' AND 'in_sequence' status (resumed recipients before step 1)
     // IMPORTANT: Exclude recipients who have replied (shouldn't happen for currentStep=0 but being safe)
     const remaining = limit - followUps.length;
     let freshEmails: SequenceRecipient[] = [];
-    
+
     if (remaining > 0) {
       freshEmails = await db
         .select()
@@ -3252,30 +3259,30 @@ export class DatabaseStorage implements IStorage {
         .orderBy(sequenceRecipients.nextSendAt)
         .limit(remaining);
     }
-    
+
     // Apply timezone balancing to diversify sends across geographic regions
     // IMPORTANT: Only balance within cohorts of recipients due at the same time
     // to preserve FIFO ordering across different due times
     const { balanceByTimezone } = await import('./services/queueCoordinator');
-    
+
     const balanceWithinCohorts = <T extends { nextSendAt?: Date | null; timezone?: string | null }>(items: T[]): T[] => {
       // Group by minute (rounded nextSendAt)
       const cohorts = new Map<string, T[]>();
-      
+
       for (const item of items) {
         const roundedTime = item.nextSendAt 
           ? new Date(Math.floor(item.nextSendAt.getTime() / 60000) * 60000).toISOString()
           : 'null';
-        
+
         if (!cohorts.has(roundedTime)) {
           cohorts.set(roundedTime, []);
         }
         cohorts.get(roundedTime)!.push(item);
       }
-      
+
       // Sort cohort keys chronologically
       const sortedKeys = Array.from(cohorts.keys()).sort();
-      
+
       // Balance each cohort by timezone, then concatenate in chronological order
       const result: T[] = [];
       for (const key of sortedKeys) {
@@ -3283,13 +3290,13 @@ export class DatabaseStorage implements IStorage {
         const balanced = balanceByTimezone(cohort, (r) => r.timezone || 'America/New_York');
         result.push(...balanced);
       }
-      
+
       return result;
     };
-    
+
     const balancedFollowUps = balanceWithinCohorts(followUps);
     const balancedFreshEmails = balanceWithinCohorts(freshEmails);
-    
+
     // Merge: follow-ups first, then fresh emails
     return [...balancedFollowUps, ...balancedFreshEmails];
   }
@@ -3353,7 +3360,7 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(sequenceRecipients.nextSendAt);
-    
+
     return results as Array<SequenceRecipient & { sequenceName: string }>;
   }
 
@@ -3372,9 +3379,9 @@ export class DatabaseStorage implements IStorage {
     messageId: string | null;
   }>> {
     const { search, statusFilter = 'active' } = options;
-    
+
     const now = new Date();
-    
+
     // Build where conditions based on statusFilter
     const whereConditions: any[] = [
       statusFilter === 'paused'
@@ -3384,7 +3391,7 @@ export class DatabaseStorage implements IStorage {
             eq(sequenceRecipients.status, 'in_sequence')
           )
     ];
-    
+
     // Add search filter if provided
     if (search && search.trim()) {
       const searchLower = search.trim().toLowerCase();
@@ -3395,12 +3402,12 @@ export class DatabaseStorage implements IStorage {
         )
       );
     }
-    
+
     // For active recipients, also require nextSendAt to be set
     if (statusFilter === 'active') {
       whereConditions.push(isNotNull(sequenceRecipients.nextSendAt));
     }
-    
+
     // Get all active recipients with sequence info
     const recipients = await db
       .select({
@@ -3420,7 +3427,7 @@ export class DatabaseStorage implements IStorage {
       .from(sequenceRecipients)
       .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
       .where(and(...whereConditions));
-    
+
     // Build individual send records
     const individualSends: Array<{
       recipientId: string;
@@ -3436,7 +3443,7 @@ export class DatabaseStorage implements IStorage {
       threadId: string | null;
       messageId: string | null;
     }> = [];
-    
+
     for (const recipient of recipients) {
       // Get sent messages for this recipient
       const sentMessages = await db
@@ -3444,7 +3451,7 @@ export class DatabaseStorage implements IStorage {
         .from(sequenceRecipientMessages)
         .where(eq(sequenceRecipientMessages.recipientId, recipient.id))
         .orderBy(sequenceRecipientMessages.stepNumber);
-      
+
       // Add ALL sent messages (no time window filter for audit history)
       for (const message of sentMessages) {
         individualSends.push({
@@ -3462,18 +3469,18 @@ export class DatabaseStorage implements IStorage {
           messageId: message.messageId,
         });
       }
-      
+
       // For paused recipients, only show sent message history (no future sends)
       if (statusFilter === 'paused') {
         continue; // Skip future send calculations for paused recipients
       }
-      
+
       // Add the immediate next send for this recipient (active recipients only)
       if (recipient.nextSendAt) {
         const currentStep = recipient.currentStep || 0;
         const nextStep = currentStep + 1;
         const status: 'scheduled' | 'overdue' = recipient.nextSendAt < now ? 'overdue' : 'scheduled';
-        
+
         individualSends.push({
           recipientId: recipient.id,
           recipientEmail: recipient.email,
@@ -3490,23 +3497,23 @@ export class DatabaseStorage implements IStorage {
         });
       }
     }
-    
+
     // Sort chronologically by scheduled/sent time (deterministic ordering)
     individualSends.sort((a, b) => {
       const timeA = a.sentAt || a.scheduledAt;
       const timeB = b.sentAt || b.scheduledAt;
-      
+
       if (!timeA && !timeB) return a.recipientId.localeCompare(b.recipientId); // Tie-breaker
       if (!timeA) return 1;
       if (!timeB) return -1;
-      
+
       const timeDiff = timeA.getTime() - timeB.getTime();
       if (timeDiff !== 0) return timeDiff;
-      
+
       // Tie-breaker for same time: use recipient ID for stability
       return a.recipientId.localeCompare(b.recipientId);
     });
-    
+
     // Return next 50 sends chronologically
     return individualSends.slice(0, 50);
   }
@@ -3548,7 +3555,7 @@ export class DatabaseStorage implements IStorage {
 
     // Build result with message history
     const result = [];
-    
+
     for (const recipient of pausedRecipients) {
       // Get message history for this recipient
       const messages = await db
@@ -3637,34 +3644,34 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
       .where(eq(sequenceRecipients.id, id))
       .limit(1);
-    
+
     if (!result || !result.sequence) {
       throw new Error(`Recipient ${id} or sequence not found`);
     }
-    
+
     const recipient = result.recipient;
     const sequence = result.sequence;
     const stepDelays = (sequence.stepDelays || []).map((d: string) => parseFloat(d));
     const currentStep = recipient.currentStep || 0;
-    
+
     // Check if sequence is complete (shouldn't resume if beyond sequence length)
     if (currentStep >= stepDelays.length && !sequence.repeatLastStep) {
       throw new Error(`Recipient ${id} has completed sequence and cannot be resumed`);
     }
-    
+
     // Determine which step delay to use
     const stepDelay = currentStep < stepDelays.length 
       ? stepDelays[currentStep]
       : stepDelays[stepDelays.length - 1]; // Use last delay for repeat
-    
+
     // Get admin settings and preferences
     const creatorPrefs = await this.getUserPreferences(sequence.createdBy);
     const ehubSettings = await this.getEhubSettings();
-    
+
     // Get current queue state (exclude this recipient to avoid self-comparison)
     const queueTailTime = await this.getQueueTail({ excludeRecipientId: id });
     const currentDailyCount = await this.getDailyScheduledCount({ excludeRecipientId: id });
-    
+
     // Use queue coordinator to assign next send slot
     const { requestNextSlot } = await import('./services/queueCoordinator');
     const slotResult = requestNextSlot({
@@ -3684,9 +3691,9 @@ export class DatabaseStorage implements IStorage {
       dailyRateLimit: ehubSettings?.dailyEmailLimit ?? 20,
       currentDailyCount,
     });
-    
+
     console.log(`[resumeRecipient] ${recipient.email} scheduled: ${slotResult.reason}`);
-    
+
     const [updated] = await db
       .update(sequenceRecipients)
       .set({ 
@@ -3704,7 +3711,7 @@ export class DatabaseStorage implements IStorage {
       .select({ count: sql<number>`count(*)` })
       .from(sequenceRecipients)
       .where(eq(sequenceRecipients.status, 'paused'));
-    
+
     return Number(result[0]?.count || 0);
   }
 
@@ -3715,17 +3722,17 @@ export class DatabaseStorage implements IStorage {
       inArray(sequenceRecipients.status, ['pending', 'in_sequence']),
       isNotNull(sequenceRecipients.nextSendAt),
     ];
-    
+
     if (options?.excludeRecipientId) {
       conditions.push(ne(sequenceRecipients.id, options.excludeRecipientId));
     }
-    
+
     try {
       const [result] = await db
         .select({ maxSendAt: sql<Date>`MAX(${sequenceRecipients.nextSendAt})` })
         .from(sequenceRecipients)
         .where(and(...conditions));
-      
+
       return result?.maxSendAt || null;
     } catch (error) {
       console.error('[getQueueTail] Error querying queue tail:', error);
@@ -3738,24 +3745,24 @@ export class DatabaseStorage implements IStorage {
     // (or from a specific date if provided)
     const now = options?.date || new Date();
     const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    
+
     const conditions = [
       inArray(sequenceRecipients.status, ['pending', 'in_sequence']),
       isNotNull(sequenceRecipients.nextSendAt),
       gte(sequenceRecipients.nextSendAt, now),
       lt(sequenceRecipients.nextSendAt, next24Hours),
     ];
-    
+
     if (options?.excludeRecipientId) {
       conditions.push(ne(sequenceRecipients.id, options.excludeRecipientId));
     }
-    
+
     try {
       const [result] = await db
         .select({ count: sql<number>`count(*)` })
         .from(sequenceRecipients)
         .where(and(...conditions));
-      
+
       return Number(result?.count || 0);
     } catch (error) {
       console.error('[getDailyScheduledCount] Error counting scheduled sends:', error);
@@ -3782,16 +3789,16 @@ export class DatabaseStorage implements IStorage {
       .from(sequenceRecipients)
       .where(eq(sequenceRecipients.id, id))
       .limit(1);
-    
+
     if (!recipient) {
       throw new Error(`Recipient ${id} not found`);
     }
-    
+
     // Only allow sending for pending/in_sequence recipients
     if (recipient.status !== 'pending' && recipient.status !== 'in_sequence') {
       throw new Error(`Cannot send: recipient status is ${recipient.status}`);
     }
-    
+
     // Find the next pending scheduled send for this recipient
     const [nextScheduledSend] = await db
       .select()
@@ -3804,11 +3811,11 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(sequenceScheduledSends.stepNumber)
       .limit(1);
-    
+
     if (!nextScheduledSend) {
       throw new Error('No pending scheduled send found for this recipient');
     }
-    
+
     // Force immediate send by:
     // 1. Setting scheduledAt to 1 second ago (makes it immediately eligible: scheduledAt <= now)
     // 2. Setting manualOverride to true (bypasses pause check)
@@ -3820,7 +3827,7 @@ export class DatabaseStorage implements IStorage {
         manualOverride: true
       })
       .where(eq(sequenceScheduledSends.id, nextScheduledSend.id));
-    
+
     // Also update recipient's nextSendAt for consistency
     const [updated] = await db
       .update(sequenceRecipients)
@@ -3830,7 +3837,7 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(sequenceRecipients.id, id))
       .returning();
-    
+
     return updated;
   }
 
@@ -3839,31 +3846,31 @@ export class DatabaseStorage implements IStorage {
     if (!Number.isFinite(hours) || hours <= 0 || hours > 720) {
       throw new Error('Hours must be a finite number between 0 and 720 (30 days)');
     }
-    
+
     // Get current recipient
     const [recipient] = await db
       .select()
       .from(sequenceRecipients)
       .where(eq(sequenceRecipients.id, id))
       .limit(1);
-    
+
     if (!recipient) {
       throw new Error(`Recipient ${id} not found`);
     }
-    
+
     // Only allow delaying for pending/in_sequence recipients with a scheduled send
     if (recipient.status !== 'pending' && recipient.status !== 'in_sequence') {
       throw new Error(`Cannot delay: recipient status is ${recipient.status}`);
     }
-    
+
     if (!recipient.nextSendAt) {
       throw new Error('Cannot delay: recipient has no scheduled send time');
     }
-    
+
     // Add hours to nextSendAt
     const delayMs = hours * 60 * 60 * 1000;
     const newSendTime = new Date(recipient.nextSendAt.getTime() + delayMs);
-    
+
     const [updated] = await db
       .update(sequenceRecipients)
       .set({ 
@@ -3872,7 +3879,7 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(sequenceRecipients.id, id))
       .returning();
-    
+
     return updated;
   }
 
@@ -3898,7 +3905,7 @@ export class DatabaseStorage implements IStorage {
     const newStep = oldCurrentStep + 1;
     const delays = stepDelays ? stepDelays.map((d: string) => parseFloat(d)) : [];
     const now = new Date();
-    
+
     // Determine status based on sequence completion
     let recipientStatus = 'in_sequence';
     if (newStep >= delays.length && !repeatLastStep) {
@@ -3916,14 +3923,14 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(sequenceRecipients.id, id))
       .returning();
-    
+
     return updated;
   }
 
   // E-Hub Sequence Scheduled Sends operations
   async insertScheduledSends(sends: InsertSequenceScheduledSend[]): Promise<SequenceScheduledSend[]> {
     if (sends.length === 0) return [];
-    
+
     const created = await db
       .insert(sequenceScheduledSends)
       .values(sends)
@@ -3933,7 +3940,7 @@ export class DatabaseStorage implements IStorage {
 
   async getNextScheduledSends(limit: number): Promise<SequenceScheduledSend[]> {
     const now = new Date();
-    
+
     // Single query with conditional ordering: step 1 emails first, then by scheduled time
     // Uses CASE expression to prioritize stepNumber = 1, then orders by scheduledAt
     // Manual overrides (Send Now) bypass sequence pause status
@@ -3956,7 +3963,7 @@ export class DatabaseStorage implements IStorage {
         sequenceScheduledSends.scheduledAt
       )
       .limit(limit);
-    
+
     return results.map(row => row.sequenceScheduledSends);
   }
 
@@ -3985,7 +3992,7 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(sequenceScheduledSends.scheduledAt))
       .limit(1);
-    
+
     return results.length > 0 ? results[0].sequenceScheduledSends : null;
   }
 
@@ -3993,7 +4000,7 @@ export class DatabaseStorage implements IStorage {
     // Clear scheduled_at for all pending sends (except imminent ones)
     // This allows coordinator to reschedule them with new settings
     // Preserves eligible_at (sequence logic intact)
-    
+
     // Step 1: Clear scheduled sends
     const updated = await db
       .update(sequenceScheduledSends)
@@ -4009,7 +4016,7 @@ export class DatabaseStorage implements IStorage {
         )
       ))
       .returning({ recipientId: sequenceScheduledSends.recipientId });
-    
+
     // Step 2: Clear nextSendAt for affected recipients (critical for coordinator to reschedule)
     if (updated.length > 0) {
       const recipientIds = [...new Set(updated.map(r => r.recipientId))];
@@ -4018,7 +4025,7 @@ export class DatabaseStorage implements IStorage {
         .set({ nextSendAt: null })
         .where(inArray(sequenceRecipients.id, recipientIds));
     }
-    
+
     return updated.length;
   }
 
@@ -4036,11 +4043,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAllPendingScheduledSends(sequenceId?: string): Promise<number> {
     const conditions = [eq(sequenceScheduledSends.status, 'pending')];
-    
+
     if (sequenceId) {
       conditions.push(eq(sequenceScheduledSends.sequenceId, sequenceId));
     }
-    
+
     const deleted = await db
       .delete(sequenceScheduledSends)
       .where(and(...conditions))
@@ -4270,7 +4277,7 @@ export class DatabaseStorage implements IStorage {
     threadId?: string
   ): Promise<Sequence> {
     const timestamp = new Date().toISOString();
-    
+
     // Generate message objects with IDs and timestamps
     const newMessages = messages.map(msg => ({
       id: crypto.randomUUID(),
@@ -4372,7 +4379,7 @@ export class DatabaseStorage implements IStorage {
       .select({ count: sql<number>`count(*)::int` })
       .from(sequenceRecipients)
       .where(buildEmailFilter(sequenceRecipients.email));
-    
+
     const recipientsCount = recipientsResult?.count || 0;
 
     // Count messages for matching recipients
@@ -4384,7 +4391,7 @@ export class DatabaseStorage implements IStorage {
         FROM ${sequenceRecipients} 
         WHERE ${buildEmailFilter(sequenceRecipients.email)}
       )`);
-    
+
     const messagesCount = messagesResult?.count || 0;
 
     // Count test emails
@@ -4392,7 +4399,7 @@ export class DatabaseStorage implements IStorage {
       .select({ count: sql<number>`count(*)::int` })
       .from(testEmailSends)
       .where(buildEmailFilter(testEmailSends.recipientEmail));
-    
+
     const testEmailsCount = testEmailsResult?.count || 0;
 
     return {
@@ -4424,7 +4431,7 @@ export class DatabaseStorage implements IStorage {
         .select({ sequenceId: sequenceRecipients.sequenceId })
         .from(sequenceRecipients)
         .where(buildEmailFilter(sequenceRecipients.email));
-      
+
       const affectedSequenceIds = [...new Set(affectedRecipients.map(r => r.sequenceId))];
 
       // Step 1: Delete messages first (child records)
@@ -4436,7 +4443,7 @@ export class DatabaseStorage implements IStorage {
           WHERE ${buildEmailFilter(sequenceRecipients.email)}
         )`)
         .returning({ id: sequenceRecipientMessages.id });
-      
+
       const messagesDeleted = deletedMessages.length;
 
       // Step 2: Delete recipients
@@ -4444,7 +4451,7 @@ export class DatabaseStorage implements IStorage {
         .delete(sequenceRecipients)
         .where(buildEmailFilter(sequenceRecipients.email))
         .returning({ id: sequenceRecipients.id });
-      
+
       const recipientsDeleted = deletedRecipients.length;
 
       // Step 3: Delete test emails
@@ -4452,7 +4459,7 @@ export class DatabaseStorage implements IStorage {
         .delete(testEmailSends)
         .where(buildEmailFilter(testEmailSends.recipientEmail))
         .returning({ id: testEmailSends.id });
-      
+
       const testEmailsDeleted = deletedTestEmails.length;
 
       // Step 4: Recalculate stats for affected sequences AND fix any orphaned sequences
@@ -4469,22 +4476,22 @@ export class DatabaseStorage implements IStorage {
             gt(sequences.bouncedCount, 0)
           )
         );
-      
+
       // Combine affected sequences with sequences that have stale counts
       const allSequenceIdsToFix = [...new Set([
         ...affectedSequenceIds,
         ...sequencesWithCounts.map(s => s.id)
       ])];
-      
+
       for (const sequenceId of allSequenceIdsToFix) {
         // Count remaining recipients for this sequence
         const [recipientCount] = await tx
           .select({ count: sql<number>`count(*)::int` })
           .from(sequenceRecipients)
           .where(eq(sequenceRecipients.sequenceId, sequenceId));
-        
+
         const remainingRecipients = recipientCount?.count || 0;
-        
+
         if (remainingRecipients === 0) {
           // No recipients left - reset all stats to 0
           await tx
@@ -4512,7 +4519,7 @@ export class DatabaseStorage implements IStorage {
             .from(sequenceRecipients)
             .leftJoin(sequenceRecipientMessages, eq(sequenceRecipients.id, sequenceRecipientMessages.recipientId))
             .where(eq(sequenceRecipients.sequenceId, sequenceId));
-          
+
           await tx
             .update(sequences)
             .set({
