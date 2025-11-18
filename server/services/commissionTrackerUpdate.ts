@@ -27,6 +27,12 @@ export async function updateCommissionTrackerStatus(
     
     console.log(`[Tracker Status Update] Processing link: ${normalizedInputLink}, agent: ${agentName}, status: ${newStatus}`);
 
+    // Validate agent name
+    if (!agentName || agentName.trim() === '') {
+      console.error('[Tracker Status Update] ❌ Invalid agent name provided');
+      return { success: false, message: 'Agent name is required' };
+    }
+
     // Read Commission Tracker data
     const trackerRange = `${sheetName}!A:ZZ`;
     const trackerRows = await googleSheets.readSheetData(spreadsheetId, trackerRange);
