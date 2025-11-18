@@ -31,7 +31,7 @@ interface ScanResult {
  * Gmail Reply Scanner Service
  * 
  * Scans Gmail Sent folder for all emails sent to Commission Tracker POC Emails.
- * Auto-enrolls new contacts at Step 0 and promotes non-responders to Step 1.
+ * Auto-enrolls new contacts at Step 1 (manual email) and promotes non-responders to Step 2.
  */
 export class GmailReplyScanner {
   private waitDays: number = 3;
@@ -570,8 +570,8 @@ export class GmailReplyScanner {
           const hasReply = emailHasReply.get(message.to) || false;
 
           if (existingRecipient) {
-            // Existing recipient - check if ready to promote
-            if (existingRecipient.currentStep === 0 && existingRecipient.status === 'awaiting_reply') {
+            // Existing recipient - check if ready to promote from Step 1 to Step 2
+            if (existingRecipient.currentStep === 1 && existingRecipient.status === 'awaiting_reply') {
               if (hasReply) {
                 if (!dryRun) {
                   await db
@@ -592,14 +592,14 @@ export class GmailReplyScanner {
                 });
               } else if (isOldEnough) {
                 if (!dryRun) {
-                  const stepDelay = systemSequence.stepDelays?.[1] || 3;
+                  const stepDelay = systemSequence.stepDelays?.[2] || 3;
                   const nextSendAt = new Date();
                   nextSendAt.setDate(nextSendAt.getDate() + Number(stepDelay));
 
                   await db
                     .update(sequenceRecipients)
                     .set({
-                      currentStep: 1,
+                      currentStep: 2,
                       status: 'in_sequence',
                       nextSendAt,
                       updatedAt: new Date()
@@ -613,7 +613,7 @@ export class GmailReplyScanner {
                   recipientId: existingRecipient.id,
                   email: message.to,
                   status: 'promoted',
-                  message: dryRun ? 'Ready to promote (dry run)' : 'Promoted to Step 1'
+                  message: dryRun ? 'Ready to promote (dry run)' : 'Promoted to Step 2'
                 });
               } else {
                 const daysOld = Math.floor((Date.now() - sentDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -626,7 +626,7 @@ export class GmailReplyScanner {
               }
             }
           } else {
-            // New recipient - enroll at Step 0 if no reply
+            // New recipient - enroll at Step 1 (manual email) if no reply
             if (hasReply) {
               result.details.push({
                 email: message.to,
@@ -650,7 +650,7 @@ export class GmailReplyScanner {
                     sequenceId: systemSequence.id,
                     name: message.to,
                     email: message.to,
-                    currentStep: 0,
+                    currentStep: 1,
                     status: 'awaiting_reply',
                     nextSendAt: null,
                     createdAt: new Date(),
@@ -658,12 +658,12 @@ export class GmailReplyScanner {
                   })
                   .returning();
 
-                // Record the sent message with full content for AI context
+                // Record the sent message with full content for AI context (Step 1 = manual email)
                 await db
                   .insert(sequenceRecipientMessages)
                   .values({
                     recipientId: newRecipient.id,
-                    stepNumber: 0,
+                    stepNumber: 1,
                     messageId: message.id,
                     threadId: message.threadId,
                     subject: message.subject || '(No subject)',
@@ -674,16 +674,16 @@ export class GmailReplyScanner {
 
                 result.newEnrollments++;
 
-                // Check if old enough to promote immediately
+                // Check if old enough to promote immediately to Step 2
                 if (isOldEnough) {
-                  const stepDelay = systemSequence.stepDelays?.[1] || 3;
+                  const stepDelay = systemSequence.stepDelays?.[2] || 3;
                   const nextSendAt = new Date();
                   nextSendAt.setDate(nextSendAt.getDate() + Number(stepDelay));
 
                   await db
                     .update(sequenceRecipients)
                     .set({
-                      currentStep: 1,
+                      currentStep: 2,
                       status: 'in_sequence',
                       nextSendAt,
                       updatedAt: new Date()
@@ -696,7 +696,7 @@ export class GmailReplyScanner {
                     recipientId: newRecipient.id,
                     email: message.to,
                     status: 'promoted',
-                    message: 'Newly enrolled and promoted to Step 1',
+                    message: 'Newly enrolled and promoted to Step 2',
                     isNew: true
                   });
                 } else {
@@ -705,7 +705,7 @@ export class GmailReplyScanner {
                     recipientId: newRecipient.id,
                     email: message.to,
                     status: 'newly_enrolled',
-                    message: `Enrolled at Step 0 (sent ${daysOld} days ago, waiting for ${waitDays} days)`,
+                    message: `Enrolled at Step 1 (sent ${daysOld} days ago, waiting for ${waitDays} days)`,
                     isNew: true
                   });
                 }
@@ -714,19 +714,19 @@ export class GmailReplyScanner {
                 const daysOld = Math.floor((Date.now() - sentDate.getTime()) / (1000 * 60 * 60 * 24));
                 
                 if (isOldEnough) {
-                  // Would be enrolled AND promoted to Step 1 in one shot
+                  // Would be enrolled AND promoted to Step 2 in one shot
                   result.details.push({
                     email: message.to,
                     status: 'promoted',
-                    message: `Would be enrolled and promoted to Step 1 (sent ${daysOld} days ago)`,
+                    message: `Would be enrolled and promoted to Step 2 (sent ${daysOld} days ago)`,
                     isNew: true
                   });
                 } else {
-                  // Would be enrolled at Step 0 and wait
+                  // Would be enrolled at Step 1 and wait
                   result.details.push({
                     email: message.to,
                     status: 'newly_enrolled',
-                    message: `Would be enrolled at Step 0 (sent ${daysOld} days ago, needs ${waitDays - daysOld} more days)`,
+                    message: `Would be enrolled at Step 1 (sent ${daysOld} days ago, needs ${waitDays - daysOld} more days)`,
                     isNew: true
                   });
                 }
