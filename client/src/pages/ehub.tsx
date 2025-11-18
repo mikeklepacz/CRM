@@ -1334,9 +1334,13 @@ export default function EHub() {
         queryClient.invalidateQueries({ 
           predicate: (query) => query.queryKey[0] === '/api/ehub/queue'
         });
+        
+        const newEnrolled = data.newEnrollments || 0;
+        const promoted = data.promoted || 0;
+        
         toast({
-          title: "Success",
-          description: `Promoted ${data.promoted?.length || 0} contacts to Step 1 for automated follow-ups`,
+          title: "Enrollment Complete",
+          description: `Enrolled ${newEnrolled} new contacts at Step 0. Promoted ${promoted} to Step 1 for AI follow-ups.`,
         });
         setReplyScannerDialogOpen(false);
         setScanPreviewResults(null);
@@ -4035,11 +4039,20 @@ export default function EHub() {
             </Button>
             <Button
               onClick={() => scanRepliesMutation.mutate({ dryRun: false })}
-              disabled={!scanPreviewResults || scanPreviewResults.details.filter(d => d.status === 'promoted').length === 0 || scanRepliesMutation.isPending}
-              data-testid="button-confirm-promote"
+              disabled={
+                !scanPreviewResults || 
+                (scanPreviewResults.details.filter(d => d.status === 'newly_enrolled' || d.status === 'promoted').length === 0) ||
+                scanRepliesMutation.isPending
+              }
+              data-testid="button-confirm-enroll"
             >
               {scanRepliesMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Promote {scanPreviewResults?.details.filter(d => d.status === 'promoted').length || 0} to Step 1
+              Confirm Enrollment
+              {scanPreviewResults && (
+                <span className="ml-2 text-xs">
+                  ({scanPreviewResults.details.filter(d => d.status === 'newly_enrolled').length} new, {scanPreviewResults.details.filter(d => d.status === 'promoted').length} promoted)
+                </span>
+              )}
             </Button>
           </div>
         </DialogContent>
