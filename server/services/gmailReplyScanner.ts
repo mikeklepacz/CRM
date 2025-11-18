@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { sequenceRecipients, sequenceRecipientMessages, sequences, users, userIntegrations, systemIntegrations } from '@shared/schema';
+import { sequenceRecipients, sequenceRecipientMessages, sequences, users, userIntegrations, systemIntegrations, emailBlacklist } from '@shared/schema';
 import { eq, and, lt, sql } from 'drizzle-orm';
 import { storage } from '../storage';
 import * as googleSheets from '../googleSheets';
@@ -10,6 +10,7 @@ interface GmailMessage {
   internalDate: string;
   to: string;
   subject?: string;
+  body?: string;
 }
 
 interface ScanResult {
@@ -20,7 +21,7 @@ interface ScanResult {
   details: {
     recipientId?: string;
     email: string;
-    status: 'promoted' | 'has_reply' | 'too_recent' | 'error' | 'newly_enrolled';
+    status: 'promoted' | 'has_reply' | 'too_recent' | 'error' | 'newly_enrolled' | 'blacklisted';
     message?: string;
     isNew?: boolean;
   }[];
@@ -110,6 +111,45 @@ export class GmailReplyScanner {
   }
 
   /**
+   * Extract email body from Gmail message payload
+   */
+  private extractEmailBody(payload: any): string {
+    if (!payload) return '';
+
+    // Check for plain text in body.data
+    if (payload.body?.data) {
+      return Buffer.from(payload.body.data, 'base64').toString('utf-8');
+    }
+
+    // Check for multipart message
+    if (payload.parts) {
+      for (const part of payload.parts) {
+        // Prefer text/plain
+        if (part.mimeType === 'text/plain' && part.body?.data) {
+          return Buffer.from(part.body.data, 'base64').toString('utf-8');
+        }
+      }
+
+      // Fallback to text/html
+      for (const part of payload.parts) {
+        if (part.mimeType === 'text/html' && part.body?.data) {
+          return Buffer.from(part.body.data, 'base64').toString('utf-8');
+        }
+      }
+
+      // Recursively check nested parts
+      for (const part of payload.parts) {
+        if (part.parts) {
+          const body = this.extractEmailBody(part);
+          if (body) return body;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  /**
    * Fetch sent messages from Gmail - FULL HISTORICAL SCAN (no time filter)
    */
   private async fetchSentMessages(
@@ -172,12 +212,16 @@ export class GmailReplyScanner {
               return null;
             }
 
+            // Extract email body
+            const body = this.extractEmailBody(msgData.payload);
+
             return {
               id: msgData.id,
               threadId: msgData.threadId,
               internalDate: msgData.internalDate,
               to: toEmail,
-              subject: subjectHeader?.value
+              subject: subjectHeader?.value,
+              body
             };
           } catch (error) {
             console.error(`[ReplyScanner] Error fetching message ${msgId}:`, error);
@@ -296,6 +340,24 @@ export class GmailReplyScanner {
     } catch (error: any) {
       console.error('[ReplyScanner] Error refreshing token:', error);
       return null;
+    }
+  }
+
+  /**
+   * Check if email is blacklisted
+   */
+  private async isBlacklisted(email: string): Promise<boolean> {
+    try {
+      const [blacklisted] = await db
+        .select()
+        .from(emailBlacklist)
+        .where(eq(emailBlacklist.email, email.toLowerCase()))
+        .limit(1);
+
+      return !!blacklisted;
+    } catch (error: any) {
+      console.error('[ReplyScanner] Error checking blacklist:', error);
+      return false;
     }
   }
 
@@ -478,6 +540,17 @@ export class GmailReplyScanner {
         result.scanned++;
 
         try {
+          // Check blacklist first
+          const isBlacklisted = await this.isBlacklisted(message.to);
+          if (isBlacklisted) {
+            result.details.push({
+              email: message.to,
+              status: 'blacklisted',
+              message: 'Email is blacklisted - skipped'
+            });
+            continue;
+          }
+
           // Check if recipient already exists in the sequence
           const [existingRecipient] = await db
             .select()
@@ -577,16 +650,17 @@ export class GmailReplyScanner {
                   })
                   .returning();
 
-                // Record the sent message
+                // Record the sent message with full content for AI context
                 await db
                   .insert(sequenceRecipientMessages)
                   .values({
                     recipientId: newRecipient.id,
-                    step: 0,
+                    stepNumber: 0,
                     messageId: message.id,
+                    threadId: message.threadId,
+                    subject: message.subject || '(No subject)',
+                    body: message.body || '',
                     sentAt: sentDate,
-                    status: 'sent',
-                    subject: message.subject,
                     createdAt: new Date()
                   });
 
