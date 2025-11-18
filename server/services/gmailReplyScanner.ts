@@ -429,6 +429,39 @@ export class GmailReplyScanner {
       const matchedMessages = sentMessages.filter(msg => pocEmails.has(msg.to));
       console.log(`[ReplyScanner] ${matchedMessages.length}/${sentMessages.length} sent messages match Commission Tracker POC Emails`);
 
+      // Deduplicate: Group messages by email address
+      const emailGroups = new Map<string, GmailMessage[]>();
+      for (const msg of matchedMessages) {
+        if (!emailGroups.has(msg.to)) {
+          emailGroups.set(msg.to, []);
+        }
+        emailGroups.get(msg.to)!.push(msg);
+      }
+
+      // For each unique email, pick the most recent message and check if ANY have replies
+      const deduplicatedMessages: GmailMessage[] = [];
+      const emailHasReply = new Map<string, boolean>();
+      
+      for (const [email, messages] of emailGroups.entries()) {
+        // Sort by internalDate descending (most recent first)
+        messages.sort((a, b) => parseInt(b.internalDate) - parseInt(a.internalDate));
+        deduplicatedMessages.push(messages[0]); // Use most recent for processing
+        
+        // Check if ANY message to this email has a reply
+        let hasAnyReply = false;
+        for (const msg of messages) {
+          const hasReply = await this.checkForReplies(msg.id, msg.threadId, accessToken);
+          if (hasReply) {
+            hasAnyReply = true;
+            break; // Stop checking once we find one reply
+          }
+        }
+        emailHasReply.set(email, hasAnyReply);
+      }
+
+      console.log(`[ReplyScanner] Deduplicated to ${deduplicatedMessages.length} unique email addresses`);
+      console.log(`[ReplyScanner] Eliminated ${matchedMessages.length - deduplicatedMessages.length} duplicate sends`);
+
       // Ensure system sequence exists
       const systemSequence = await this.ensureSystemSequence(adminUser.id);
       if (!systemSequence) {
@@ -440,8 +473,8 @@ export class GmailReplyScanner {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - waitDays);
 
-      // Process each matched message
-      for (const message of matchedMessages) {
+      // Process each deduplicated message (one per unique email)
+      for (const message of deduplicatedMessages) {
         result.scanned++;
 
         try {
@@ -460,8 +493,8 @@ export class GmailReplyScanner {
           const sentDate = new Date(parseInt(message.internalDate));
           const isOldEnough = sentDate <= cutoffDate;
 
-          // Check for replies
-          const hasReply = await this.checkForReplies(message.id, message.threadId, accessToken);
+          // Use pre-computed reply status (checked across ALL messages to this email)
+          const hasReply = emailHasReply.get(message.to) || false;
 
           if (existingRecipient) {
             // Existing recipient - check if ready to promote
