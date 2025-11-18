@@ -628,12 +628,26 @@ export class GmailReplyScanner {
                   });
                 }
               } else {
-                result.details.push({
-                  email: message.to,
-                  status: 'newly_enrolled',
-                  message: 'Would be enrolled at Step 0 (dry run)',
-                  isNew: true
-                });
+                // Dry run: Check dates to show accurate preview
+                const daysOld = Math.floor((Date.now() - sentDate.getTime()) / (1000 * 60 * 60 * 24));
+                
+                if (isOldEnough) {
+                  // Would be enrolled AND promoted to Step 1 in one shot
+                  result.details.push({
+                    email: message.to,
+                    status: 'promoted',
+                    message: `Would be enrolled and promoted to Step 1 (sent ${daysOld} days ago)`,
+                    isNew: true
+                  });
+                } else {
+                  // Would be enrolled at Step 0 and wait
+                  result.details.push({
+                    email: message.to,
+                    status: 'newly_enrolled',
+                    message: `Would be enrolled at Step 0 (sent ${daysOld} days ago, needs ${waitDays - daysOld} more days)`,
+                    isNew: true
+                  });
+                }
               }
             }
           }
