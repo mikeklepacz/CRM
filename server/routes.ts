@@ -6994,7 +6994,7 @@ IMPORTANT:
       if (clientLink) {
         console.log('📧 [GMAIL] Updating Commission Tracker status to "Emailed" for link:', clientLink);
         const currentUser = await storage.getUser(userId);
-        const agentName = currentUser?.name || 'Unknown';
+        const agentName = currentUser.agentName;
         
         const trackerResult = await updateCommissionTrackerStatus(clientLink, agentName, 'Emailed');
         
