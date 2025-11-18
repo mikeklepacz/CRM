@@ -1402,6 +1402,17 @@ export const rescheduleJobs = pgTable("reschedule_jobs", {
   index("idx_reschedule_jobs_started_at").on(table.startedAt),
 ]);
 
+// Email blacklist - permanently exclude emails from Manual Follow-Ups scanner
+export const emailBlacklist = pgTable("email_blacklist", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  reason: text("reason"), // Optional note about why blacklisted
+  blacklistedBy: varchar("blacklisted_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_email_blacklist_email").on(table.email),
+]);
+
 export const insertSequenceSchema = createInsertSchema(sequences).omit({
   id: true,
   createdAt: true,
