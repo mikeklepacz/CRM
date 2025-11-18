@@ -20051,6 +20051,77 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Get all blacklisted emails (admin only)
+  app.get('/api/ehub/blacklist', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const blacklist = await db
+        .select()
+        .from(emailBlacklist)
+        .orderBy(desc(emailBlacklist.createdAt));
+      
+      res.json(blacklist);
+    } catch (error: any) {
+      console.error('[API] Error fetching blacklist:', error);
+      res.status(500).json({ message: error.message || 'Failed to fetch blacklist' });
+    }
+  });
+
+  // Add email to blacklist (admin only)
+  app.post('/api/ehub/blacklist', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { email, reason } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: 'Email address is required' });
+      }
+
+      // Check if already blacklisted
+      const existing = await db
+        .select()
+        .from(emailBlacklist)
+        .where(eq(emailBlacklist.email, email.toLowerCase().trim()))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return res.status(409).json({ message: 'Email already blacklisted' });
+      }
+
+      const [newEntry] = await db
+        .insert(emailBlacklist)
+        .values({
+          email: email.toLowerCase().trim(),
+          reason: reason || null,
+        })
+        .returning();
+
+      res.json(newEntry);
+    } catch (error: any) {
+      console.error('[API] Error adding to blacklist:', error);
+      res.status(500).json({ message: error.message || 'Failed to add to blacklist' });
+    }
+  });
+
+  // Remove email from blacklist (admin only)
+  app.delete('/api/ehub/blacklist/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+
+      const deleted = await db
+        .delete(emailBlacklist)
+        .where(eq(emailBlacklist.id, id))
+        .returning();
+
+      if (deleted.length === 0) {
+        return res.status(404).json({ message: 'Blacklist entry not found' });
+      }
+
+      res.json({ success: true, deleted: deleted[0] });
+    } catch (error: any) {
+      console.error('[API] Error removing from blacklist:', error);
+      res.status(500).json({ message: error.message || 'Failed to remove from blacklist' });
+    }
+  });
+
   // Ensure Manual Follow-Ups system sequence exists (admin only)
   app.post('/api/sequences/ensure-manual-followups', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
