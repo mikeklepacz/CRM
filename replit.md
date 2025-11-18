@@ -56,6 +56,15 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **E-Hub Queue Coordinator**: Centralized scheduling system enforcing FIFO ordering, rate limiting, and geographic distribution, using cohort-based timezone balancing and two-tier priority.
 - **Matrix2 Slot-First Scheduler**: Production email scheduling system using a slot-first architecture, pre-generating daily email slots and assigning eligible recipients.
 - **Matrix2 Priority Tiers (Planned)**: Three-tier priority system for slot assignment: Tier 1 (Manual Follow-Ups at step 1+ after human contact), Tier 2 (active follow-ups at step 2+), Tier 3 (cold outreach at step 0). Higher priority recipients get first access to available slots.
+- **Manual Follow-Ups System Architecture**: 
+  - **Step Numbering**: All manual emails (Store Details drafts + Scanner enrollments) are stored at Step 1, NOT Step 0. First AI follow-up happens at Step 2 after wait period. This prevents accidental instant-sends if stepDelays[1] = 0.
+  - **Auto-Enrollment Triggers**: (1) Store Details Gmail drafts with `clientLink` parameter trigger automatic enrollment at Step 1 via POST /api/email-drafts. (2) Gmail Reply Scanner enrolls recipients at Step 1 when scanning sent emails.
+  - **Original Email as Context**: Full email content (subject, body) stored in `sequence_recipient_messages` at stepNumber=1 enables AI to reference previous outreach when generating Step 2+ emails.
+  - **Promotion Logic**: Background job (Gmail Reply Scanner) checks contacts at Step 1 after configurable wait period (default 3 days), promotes to Step 2 (status: in_sequence) if no replies detected.
+  - **Safety Checks**: Enrollment skips if already enrolled, blacklisted, or existing customer (Amount > $0 in Commission Tracker).
+  - **AI Context Handling**: `personalizeEmailWithAI` queries all previous messages (including Step 1 manual email) when generating Step 2+ follow-ups, providing AI with full conversation history.
+  - **Dedicated Management UI**: Scanner Management tab in E-Hub with Gmail Reply Scanner controls, blacklist management, and selective enrollment with checkboxes.
+  - **Deduplication**: System-wide email deduplication prevents double-enrollment across manual drafts and scanner operations.
 
 ## External Dependencies
 - **Google Sheets API**: For "Store Database" and "Commission Tracker" interaction.
