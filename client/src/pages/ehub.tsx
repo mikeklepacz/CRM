@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import DOMPurify from 'dompurify';
+import { formatDistanceToNow } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -13,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -347,6 +348,369 @@ function SentHistoryView() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function ScannerManagementView() {
+  const { toast } = useToast();
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResults, setScanResults] = useState<any>(null);
+  const [waitDays, setWaitDays] = useState(3);
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [newBlacklistEmail, setNewBlacklistEmail] = useState('');
+  const [newBlacklistReason, setNewBlacklistReason] = useState('');
+
+  // Fetch blacklist
+  const { data: blacklist, isLoading: isLoadingBlacklist } = useQuery<Array<{
+    id: string;
+    email: string;
+    reason: string | null;
+    createdAt: string;
+  }>>({
+    queryKey: ['/api/ehub/blacklist'],
+  });
+
+  // Add to blacklist mutation
+  const addToBlacklistMutation = useMutation({
+    mutationFn: async (data: { email: string; reason?: string }) => {
+      return await apiRequest('/api/ehub/blacklist', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/blacklist'] });
+      toast({
+        title: 'Email Blacklisted',
+        description: 'The email has been added to the blacklist',
+      });
+      setNewBlacklistEmail('');
+      setNewBlacklistReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add email to blacklist',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Remove from blacklist mutation
+  const removeFromBlacklistMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest(`/api/ehub/blacklist/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/blacklist'] });
+      toast({
+        title: 'Email Removed',
+        description: 'The email has been removed from the blacklist',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to remove email from blacklist',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Scan for replies (preview)
+  const handleScan = async (dryRun: boolean) => {
+    setIsScanning(true);
+    try {
+      const res = await fetch('/api/ehub/scan-replies', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          dryRun, 
+          waitDays,
+          selectedEmails: dryRun ? undefined : selectedEmails.length > 0 ? selectedEmails : undefined
+        }),
+      });
+
+      if (!res.ok) throw new Error('Scan failed');
+
+      const result = await res.json();
+      setScanResults(result);
+
+      if (dryRun) {
+        toast({
+          title: 'Scan Complete',
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: 'Enrollment Complete',
+          description: result.message,
+        });
+        // Clear selection after enrollment
+        setSelectedEmails([]);
+        setSelectAll(false);
+        // Re-scan to get updated data
+        setTimeout(() => handleScan(true), 1000);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to scan for replies',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // Toggle email selection
+  const toggleEmail = (email: string) => {
+    setSelectedEmails(prev =>
+      prev.includes(email)
+        ? prev.filter(e => e !== email)
+        : [...prev, email]
+    );
+  };
+
+  // Toggle select all
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedEmails([]);
+    } else {
+      const eligibleEmails = scanResults?.details
+        .filter((d: any) => d.isNew && d.status !== 'has_reply' && d.status !== 'blacklisted')
+        .map((d: any) => d.email) || [];
+      setSelectedEmails(eligibleEmails);
+    }
+    setSelectAll(!selectAll);
+  };
+
+  // Add to blacklist
+  const handleAddToBlacklist = () => {
+    if (!newBlacklistEmail.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Email address is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    addToBlacklistMutation.mutate({
+      email: newBlacklistEmail.trim(),
+      reason: newBlacklistReason.trim() || undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Reply Scanner Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Gmail Reply Scanner</CardTitle>
+          <CardDescription>
+            Scan your Gmail sent folder for draft recipients and enroll them into Manual Follow-Ups
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <Label htmlFor="wait-days">Wait Days</Label>
+              <Input
+                id="wait-days"
+                type="number"
+                min="1"
+                value={waitDays}
+                onChange={(e) => setWaitDays(parseInt(e.target.value) || 3)}
+                data-testid="input-wait-days"
+              />
+            </div>
+            <div className="flex gap-2 items-end">
+              <Button
+                onClick={() => handleScan(true)}
+                disabled={isScanning}
+                data-testid="button-scan-preview"
+              >
+                {isScanning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Search className="w-4 h-4 mr-2" />}
+                Scan
+              </Button>
+              {scanResults && selectedEmails.length > 0 && (
+                <Button
+                  onClick={() => handleScan(false)}
+                  disabled={isScanning}
+                  variant="default"
+                  data-testid="button-enroll-selected"
+                >
+                  Enroll {selectedEmails.length} Selected
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {scanResults && (
+            <div className="space-y-4">
+              <Alert>
+                <AlertCircle className="w-4 h-4" />
+                <AlertTitle>Scan Results</AlertTitle>
+                <AlertDescription>
+                  Scanned {scanResults.scanned} emails. Found {scanResults.details.filter((d: any) => d.isNew).length} new contacts.
+                </AlertDescription>
+              </Alert>
+
+              {scanResults.details.filter((d: any) => d.isNew && d.status !== 'has_reply' && d.status !== 'blacklisted').length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectAll}
+                      onCheckedChange={handleSelectAll}
+                      data-testid="checkbox-select-all"
+                    />
+                    <Label className="cursor-pointer" onClick={handleSelectAll}>
+                      Select All ({scanResults.details.filter((d: any) => d.isNew && d.status !== 'has_reply' && d.status !== 'blacklisted').length})
+                    </Label>
+                  </div>
+
+                  <ScrollArea className="h-[300px] border rounded-md p-4">
+                    <div className="space-y-2">
+                      {scanResults.details
+                        .filter((d: any) => d.isNew && d.status !== 'has_reply' && d.status !== 'blacklisted')
+                        .map((detail: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-2 p-2 hover:bg-muted rounded">
+                            <Checkbox
+                              checked={selectedEmails.includes(detail.email)}
+                              onCheckedChange={() => toggleEmail(detail.email)}
+                              data-testid={`checkbox-email-${idx}`}
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium">{detail.email}</div>
+                              <div className="text-sm text-muted-foreground">{detail.message}</div>
+                            </div>
+                            <Badge variant={detail.status === 'new' ? 'default' : 'secondary'}>
+                              {detail.status}
+                            </Badge>
+                          </div>
+                        ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {scanResults.details.filter((d: any) => !d.isNew || d.status === 'has_reply' || d.status === 'blacklisted').length > 0 && (
+                <div className="space-y-2">
+                  <Label>Already Enrolled or Excluded</Label>
+                  <ScrollArea className="h-[200px] border rounded-md p-4">
+                    <div className="space-y-2">
+                      {scanResults.details
+                        .filter((d: any) => !d.isNew || d.status === 'has_reply' || d.status === 'blacklisted')
+                        .map((detail: any, idx: number) => (
+                          <div key={idx} className="p-2 hover:bg-muted rounded">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium">{detail.email}</div>
+                              <Badge variant="secondary">{detail.status}</Badge>
+                            </div>
+                            <div className="text-sm text-muted-foreground">{detail.message}</div>
+                          </div>
+                        ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Email Blacklist Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Blacklist</CardTitle>
+          <CardDescription>
+            Permanently exclude email addresses from enrollment
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Add to Blacklist Form */}
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                placeholder="Email address"
+                value={newBlacklistEmail}
+                onChange={(e) => setNewBlacklistEmail(e.target.value)}
+                data-testid="input-blacklist-email"
+              />
+            </div>
+            <div className="flex-1">
+              <Input
+                placeholder="Reason (optional)"
+                value={newBlacklistReason}
+                onChange={(e) => setNewBlacklistReason(e.target.value)}
+                data-testid="input-blacklist-reason"
+              />
+            </div>
+            <Button
+              onClick={handleAddToBlacklist}
+              disabled={addToBlacklistMutation.isPending}
+              data-testid="button-add-blacklist"
+            >
+              {addToBlacklistMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4 mr-2" />
+              )}
+              Add
+            </Button>
+          </div>
+
+          {/* Blacklist Table */}
+          {isLoadingBlacklist ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          ) : blacklist && blacklist.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead>Added</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {blacklist.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="font-medium">{entry.email}</TableCell>
+                    <TableCell>{entry.reason || '-'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFromBlacklistMutation.mutate(entry.id)}
+                        disabled={removeFromBlacklistMutation.isPending}
+                        data-testid={`button-remove-blacklist-${entry.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No blacklisted emails
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -1888,6 +2252,12 @@ export default function EHub() {
             <Mail className="w-4 h-4 mr-2" />
             Queue
           </TabsTrigger>
+          {user?.role === 'admin' && (
+            <TabsTrigger value="scanner" data-testid="tab-scanner">
+              <Search className="w-4 h-4 mr-2" />
+              Scanner
+            </TabsTrigger>
+          )}
           <TabsTrigger value="settings" data-testid="tab-settings">
             <Settings className="w-4 h-4 mr-2" />
             Settings
@@ -2983,6 +3353,13 @@ export default function EHub() {
             </TabsContent>
           </Tabs>
         </TabsContent>
+
+        {/* Scanner Management Tab (Admin Only) */}
+        {user?.role === 'admin' && (
+          <TabsContent value="scanner" className="space-y-4">
+            <ScannerManagementView />
+          </TabsContent>
+        )}
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-4">
