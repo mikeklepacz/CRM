@@ -20027,12 +20027,12 @@ Use this store information to provide context-aware responses. When helping draf
     try {
       const { gmailReplyScanner } = await import('./services/gmailReplyScanner');
       
-      // Support both dry run (preview) and actual execution
-      const { dryRun = true, waitDays = 3 } = req.body;
+      // Support both dry run (preview) and actual execution with optional email selection
+      const { dryRun = true, waitDays = 3, selectedEmails } = req.body;
       
-      console.log(`[API] Starting reply scan (dryRun: ${dryRun}, waitDays: ${waitDays})`);
+      console.log(`[API] Starting reply scan (dryRun: ${dryRun}, waitDays: ${waitDays}, selected: ${selectedEmails?.length || 'all'})`);
       
-      const result = await gmailReplyScanner.scan(waitDays, dryRun);
+      const result = await gmailReplyScanner.scan(waitDays, dryRun, selectedEmails);
       
       res.json({
         success: true,
@@ -20040,7 +20040,7 @@ Use this store information to provide context-aware responses. When helping draf
         ...result,
         message: dryRun 
           ? `Preview: ${result.details.filter(d => d.status === 'promoted').length} recipients ready to promote`
-          : `Promoted ${result.promoted} recipients to Step 1`
+          : `Enrolled ${result.newEnrollments} new contacts, promoted ${result.promoted} to Step 1`
       });
     } catch (error: any) {
       console.error('[API] Error scanning for replies:', error);

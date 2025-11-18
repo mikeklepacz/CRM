@@ -402,10 +402,10 @@ export class GmailReplyScanner {
   /**
    * Main scan function - scans Gmail Sent folder and matches against Commission Tracker
    */
-  async scan(waitDays: number = 3, dryRun: boolean = false): Promise<ScanResult> {
+  async scan(waitDays: number = 3, dryRun: boolean = false, selectedEmails?: string[]): Promise<ScanResult> {
     this.waitDays = waitDays;
     
-    console.log(`[ReplyScanner] Starting Gmail Sent box scan (waitDays: ${waitDays}, dryRun: ${dryRun})`);
+    console.log(`[ReplyScanner] Starting Gmail Sent box scan (waitDays: ${waitDays}, dryRun: ${dryRun}, selectedEmails: ${selectedEmails?.length || 'all'})`);
 
     const result: ScanResult = {
       scanned: 0,
@@ -635,6 +635,14 @@ export class GmailReplyScanner {
                 isNew: true
               });
             } else {
+              // If selectedEmails provided and not in dry run, only enroll selected emails
+              const shouldEnroll = !selectedEmails || selectedEmails.includes(message.to);
+              
+              if (!dryRun && !shouldEnroll) {
+                // Skip this email - not selected by user
+                continue;
+              }
+              
               if (!dryRun) {
                 const [newRecipient] = await db
                   .insert(sequenceRecipients)

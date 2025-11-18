@@ -1127,10 +1127,12 @@ export default function EHub() {
     details: Array<{
       recipientId: string;
       email: string;
-      status: 'promoted' | 'has_reply' | 'too_recent' | 'error';
+      status: 'promoted' | 'has_reply' | 'too_recent' | 'error' | 'newly_enrolled' | 'blacklisted';
       message?: string;
+      isNew?: boolean;
     }>;
   } | null>(null);
+  const [selectedScanEmails, setSelectedScanEmails] = useState<Set<string>>(new Set());
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState<EhubSettings>({
@@ -1323,12 +1325,17 @@ export default function EHub() {
 
   // Scan for replies mutation
   const scanRepliesMutation = useMutation({
-    mutationFn: async ({ dryRun }: { dryRun: boolean }) => {
-      return await apiRequest("POST", `/api/ehub/scan-replies`, { dryRun });
+    mutationFn: async ({ dryRun, selectedEmails }: { dryRun: boolean; selectedEmails?: string[] }) => {
+      return await apiRequest("POST", `/api/ehub/scan-replies`, { dryRun, selectedEmails });
     },
     onSuccess: (data: any) => {
       if (data.dryRun) {
         setScanPreviewResults(data);
+        // Auto-select all enrollable emails (not blacklisted, not has_reply)
+        const enrollable = data.details
+          .filter((d: any) => d.status === 'newly_enrolled' || d.status === 'promoted')
+          .map((d: any) => d.email);
+        setSelectedScanEmails(new Set(enrollable));
       } else {
         queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
         queryClient.invalidateQueries({ 
@@ -3988,38 +3995,79 @@ export default function EHub() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedScanEmails.size > 0 && scanPreviewResults.details.filter(d => d.status === 'newly_enrolled' || d.status === 'promoted').every(d => selectedScanEmails.has(d.email))}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              const enrollable = scanPreviewResults.details
+                                .filter(d => d.status === 'newly_enrolled' || d.status === 'promoted')
+                                .map(d => d.email);
+                              setSelectedScanEmails(new Set(enrollable));
+                            } else {
+                              setSelectedScanEmails(new Set());
+                            }
+                          }}
+                          data-testid="checkbox-select-all-scan"
+                        />
+                      </TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Note</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {scanPreviewResults.details.map((detail: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell className="text-xs font-mono">
-                          {detail.email}
-                          {detail.isNew && <span className="ml-2 text-purple-600">✨ New</span>}
-                        </TableCell>
-                        <TableCell>
-                          {detail.status === 'promoted' && (
-                            <Badge variant="default" className="bg-green-600">Ready to Promote</Badge>
-                          )}
-                          {detail.status === 'has_reply' && (
-                            <Badge variant="default" className="bg-blue-600">Has Reply</Badge>
-                          )}
-                          {detail.status === 'newly_enrolled' && (
-                            <Badge variant="default" className="bg-purple-600">Newly Enrolled</Badge>
-                          )}
-                          {detail.status === 'too_recent' && (
-                            <Badge variant="secondary">Too Recent</Badge>
-                          )}
-                          {detail.status === 'error' && (
-                            <Badge variant="destructive">Error</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{detail.message}</TableCell>
-                      </TableRow>
-                    ))}
+                    {scanPreviewResults.details.map((detail: any, idx: number) => {
+                      const isEnrollable = detail.status === 'newly_enrolled' || detail.status === 'promoted';
+                      const isSelected = selectedScanEmails.has(detail.email);
+                      
+                      return (
+                        <TableRow key={idx} className={isSelected ? 'bg-accent/50' : ''}>
+                          <TableCell>
+                            {isEnrollable && (
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  const newSet = new Set(selectedScanEmails);
+                                  if (checked) {
+                                    newSet.add(detail.email);
+                                  } else {
+                                    newSet.delete(detail.email);
+                                  }
+                                  setSelectedScanEmails(newSet);
+                                }}
+                                data-testid={`checkbox-scan-${idx}`}
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs font-mono">
+                            {detail.email}
+                            {detail.isNew && <span className="ml-2 text-purple-600">✨ New</span>}
+                          </TableCell>
+                          <TableCell>
+                            {detail.status === 'promoted' && (
+                              <Badge variant="default" className="bg-green-600">Ready to Promote</Badge>
+                            )}
+                            {detail.status === 'has_reply' && (
+                              <Badge variant="default" className="bg-blue-600">Has Reply</Badge>
+                            )}
+                            {detail.status === 'newly_enrolled' && (
+                              <Badge variant="default" className="bg-purple-600">Newly Enrolled</Badge>
+                            )}
+                            {detail.status === 'too_recent' && (
+                              <Badge variant="secondary">Too Recent</Badge>
+                            )}
+                            {detail.status === 'blacklisted' && (
+                              <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">Blacklisted</Badge>
+                            )}
+                            {detail.status === 'error' && (
+                              <Badge variant="destructive">Error</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{detail.message}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -4038,21 +4086,16 @@ export default function EHub() {
               Cancel
             </Button>
             <Button
-              onClick={() => scanRepliesMutation.mutate({ dryRun: false })}
+              onClick={() => scanRepliesMutation.mutate({ dryRun: false, selectedEmails: Array.from(selectedScanEmails) })}
               disabled={
                 !scanPreviewResults || 
-                (scanPreviewResults.details.filter(d => d.status === 'newly_enrolled' || d.status === 'promoted').length === 0) ||
+                selectedScanEmails.size === 0 ||
                 scanRepliesMutation.isPending
               }
               data-testid="button-confirm-enroll"
             >
               {scanRepliesMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Confirm Enrollment
-              {scanPreviewResults && (
-                <span className="ml-2 text-xs">
-                  ({scanPreviewResults.details.filter(d => d.status === 'newly_enrolled').length} new, {scanPreviewResults.details.filter(d => d.status === 'promoted').length} promoted)
-                </span>
-              )}
+              Enroll {selectedScanEmails.size} Selected Contact{selectedScanEmails.size !== 1 ? 's' : ''}
             </Button>
           </div>
         </DialogContent>
