@@ -37,6 +37,7 @@ export class GmailReplyScanner {
 
   /**
    * Fetch all POC Emails from Commission Tracker sheet
+   * ONLY includes prospects (Amount = $0), excludes existing customers (Amount > $0)
    */
   private async fetchPOCEmails(): Promise<Set<string>> {
     const pocEmails = new Set<string>();
@@ -63,21 +64,44 @@ export class GmailReplyScanner {
       const rows = trackerData.slice(1);
 
       const pocEmailIndex = headers.findIndex((h: string) => h.trim() === 'POC EMAIL');
+      const amountIndex = headers.findIndex((h: string) => h.trim() === 'Amount');
 
       if (pocEmailIndex === -1) {
         console.error('[ReplyScanner] POC EMAIL column not found in Commission Tracker');
         return pocEmails;
       }
 
-      // Extract all valid POC emails
+      if (amountIndex === -1) {
+        console.error('[ReplyScanner] Amount column not found in Commission Tracker');
+        return pocEmails;
+      }
+
+      let totalEmails = 0;
+      let excludedCustomers = 0;
+
+      // Extract POC emails ONLY for prospects (Amount = $0)
       for (const row of rows) {
         const email = row[pocEmailIndex];
+        const amountStr = row[amountIndex];
+        
         if (email && typeof email === 'string' && email.includes('@')) {
-          pocEmails.add(email.trim().toLowerCase());
+          totalEmails++;
+          
+          // Parse amount (handles "$500", "500", "500.00", etc.)
+          const amount = parseFloat((amountStr || '0').toString().replace(/[$,]/g, ''));
+          
+          // Only include prospects (Amount = $0), exclude customers
+          if (amount === 0 || isNaN(amount)) {
+            pocEmails.add(email.trim().toLowerCase());
+          } else {
+            excludedCustomers++;
+          }
         }
       }
 
-      console.log(`[ReplyScanner] Found ${pocEmails.size} POC Emails in Commission Tracker`);
+      console.log(`[ReplyScanner] Found ${totalEmails} total POC Emails`);
+      console.log(`[ReplyScanner] Excluded ${excludedCustomers} existing customers (Amount > $0)`);
+      console.log(`[ReplyScanner] Tracking ${pocEmails.size} prospect emails (Amount = $0)`);
       return pocEmails;
     } catch (error: any) {
       console.error('[ReplyScanner] Error fetching POC Emails:', error);
