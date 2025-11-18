@@ -19066,6 +19066,7 @@ Use this store information to provide context-aware responses. When helping draf
   // ==================================================================================
   // EMAIL DRAFT TRACKING - Track when sales agents compose emails
   // Supports both Gmail API drafts and mailto links for email activity analytics
+  // Auto-enrolls Store Details drafts into Manual Follow-Ups at Step 1
   // ==================================================================================
   app.post('/api/email-drafts', isAuthenticatedCustom, async (req, res) => {
     try {
@@ -19090,6 +19091,76 @@ Use this store information to provide context-aware responses. When helping draf
       };
 
       const newDraft = await storage.createEmailDraft(draftData);
+
+      // Auto-enroll into Manual Follow-Ups if this draft has a clientLink (from Store Details)
+      if (clientLink) {
+        try {
+          console.log('[ManualFollowUps] Auto-enrolling draft recipient:', recipientEmail);
+          
+          // Get or create Manual Follow-Ups sequence
+          const manualFollowUpsSequence = await storage.getOrCreateManualFollowUpsSequence();
+          
+          // Check if email is blacklisted
+          const [blacklisted] = await db
+            .select()
+            .from(emailBlacklist)
+            .where(eq(emailBlacklist.email, recipientEmail.toLowerCase()))
+            .limit(1);
+          
+          if (blacklisted) {
+            console.log('[ManualFollowUps] Email is blacklisted, skipping enrollment:', recipientEmail);
+          } else {
+            // Check if already enrolled
+            const [existing] = await db
+              .select()
+              .from(sequenceRecipients)
+              .where(
+                and(
+                  eq(sequenceRecipients.sequenceId, manualFollowUpsSequence.id),
+                  eq(sequenceRecipients.email, recipientEmail)
+                )
+              )
+              .limit(1);
+            
+            if (existing) {
+              console.log('[ManualFollowUps] Recipient already enrolled, skipping:', recipientEmail);
+            } else {
+              // Enroll at Step 1 (manual email)
+              const [newRecipient] = await db
+                .insert(sequenceRecipients)
+                .values({
+                  sequenceId: manualFollowUpsSequence.id,
+                  name: recipientEmail,
+                  email: recipientEmail,
+                  currentStep: 1,
+                  status: 'awaiting_reply',
+                  nextSendAt: null,
+                  createdAt: new Date(),
+                  updatedAt: new Date()
+                })
+                .returning();
+              
+              // Store original email content for AI context (Step 1 = manual email)
+              await db
+                .insert(sequenceRecipientMessages)
+                .values({
+                  recipientId: newRecipient.id,
+                  stepNumber: 1,
+                  subject: subject || '(No subject)',
+                  body: body || '',
+                  sentAt: new Date(),
+                  createdAt: new Date()
+                });
+              
+              console.log('[ManualFollowUps] ✅ Auto-enrolled at Step 1:', recipientEmail);
+            }
+          }
+        } catch (enrollError: any) {
+          // Log error but don't fail the draft creation
+          console.error('[ManualFollowUps] Error auto-enrolling recipient:', enrollError);
+        }
+      }
+
       res.json(newDraft);
     } catch (error: any) {
       console.error('Error creating email draft record:', error);
