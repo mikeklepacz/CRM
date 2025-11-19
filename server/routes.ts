@@ -26,7 +26,6 @@ import { normalizeLink } from "../shared/linkUtils";
 import OpenAI from "openai";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
-import { recalculateAllPendingRecipients } from "./services/queueCoordinator";
 import { updateCommissionTrackerStatus } from "./services/commissionTrackerUpdate";
 import { ensureDailySlots } from "./services/Matrix2/slotGenerator";
 import {
@@ -20872,18 +20871,8 @@ ${conversationContext}`;
       // Get updated sequence
       const updatedSequence = await storage.getSequence(id);
 
-      // Trigger queue recalculation since delays changed
-      try {
-        const settings = await storage.getEhubSettings();
-        if (settings) {
-          const { recalculateAllPendingRecipients } = await import('./services/queueCoordinator');
-          const recalcCount = await recalculateAllPendingRecipients(settings);
-          console.log(`[StepDelays] Queue recalculated: ${recalcCount} recipients updated`);
-        }
-      } catch (recalcError: any) {
-        console.error('[StepDelays] Failed to recalculate queue:', recalcError.message);
-        // Don't fail the request if recalc fails - step delays were still saved
-      }
+      // Matrix2 Note: Queue recalculation removed - Matrix2 slotAssigner handles scheduling
+      console.log(`[StepDelays] Step delays updated - Matrix2 slotAssigner will handle rescheduling`);
 
       res.json({
         sequence: updatedSequence,

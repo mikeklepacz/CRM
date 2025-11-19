@@ -3279,45 +3279,9 @@ export class DatabaseStorage implements IStorage {
         .limit(remaining);
     }
 
-    // Apply timezone balancing to diversify sends across geographic regions
-    // IMPORTANT: Only balance within cohorts of recipients due at the same time
-    // to preserve FIFO ordering across different due times
-    const { balanceByTimezone } = await import('./services/queueCoordinator');
-
-    const balanceWithinCohorts = <T extends { nextSendAt?: Date | null; timezone?: string | null }>(items: T[]): T[] => {
-      // Group by minute (rounded nextSendAt)
-      const cohorts = new Map<string, T[]>();
-
-      for (const item of items) {
-        const roundedTime = item.nextSendAt 
-          ? new Date(Math.floor(item.nextSendAt.getTime() / 60000) * 60000).toISOString()
-          : 'null';
-
-        if (!cohorts.has(roundedTime)) {
-          cohorts.set(roundedTime, []);
-        }
-        cohorts.get(roundedTime)!.push(item);
-      }
-
-      // Sort cohort keys chronologically
-      const sortedKeys = Array.from(cohorts.keys()).sort();
-
-      // Balance each cohort by timezone, then concatenate in chronological order
-      const result: T[] = [];
-      for (const key of sortedKeys) {
-        const cohort = cohorts.get(key)!;
-        const balanced = balanceByTimezone(cohort, (r) => r.timezone || 'America/New_York');
-        result.push(...balanced);
-      }
-
-      return result;
-    };
-
-    const balancedFollowUps = balanceWithinCohorts(followUps);
-    const balancedFreshEmails = balanceWithinCohorts(freshEmails);
-
     // Merge: follow-ups first, then fresh emails
-    return [...balancedFollowUps, ...balancedFreshEmails];
+    // Note: Timezone balancing removed - Matrix2 uses slot-based scheduling
+    return [...followUps, ...freshEmails];
   }
 
   async getAllPendingRecipients(): Promise<SequenceRecipient[]> {
@@ -3653,7 +3617,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async resumeRecipient(id: string): Promise<SequenceRecipient> {
-    // Get recipient with sequence info
+    // Get recipient with sequence info for validation
     const [result] = await db
       .select({
         recipient: sequenceRecipients,
@@ -3678,46 +3642,15 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Recipient ${id} has completed sequence and cannot be resumed`);
     }
 
-    // Determine which step delay to use
-    const stepDelay = currentStep < stepDelays.length 
-      ? stepDelays[currentStep]
-      : stepDelays[stepDelays.length - 1]; // Use last delay for repeat
-
-    // Get admin settings and preferences
-    const creatorPrefs = await this.getUserPreferences(sequence.createdBy);
-    const ehubSettings = await this.getEhubSettings();
-
-    // Get current queue state (exclude this recipient to avoid self-comparison)
-    const queueTailTime = await this.getQueueTail({ excludeRecipientId: id });
-    const currentDailyCount = await this.getDailyScheduledCount({ excludeRecipientId: id });
-
-    // Use queue coordinator to assign next send slot
-    const { requestNextSlot } = await import('./services/queueCoordinator');
-    const slotResult = requestNextSlot({
-      stepDelay,
-      lastStepSentAt: recipient.lastStepSentAt,
-      adminTimezone: creatorPrefs?.timezone || 'America/New_York',
-      adminStartHour: ehubSettings?.sendingHoursStart ?? 6,
-      adminEndHour: ehubSettings?.sendingHoursEnd ?? 23,
-      minDelayMinutes: ehubSettings?.minDelayMinutes ?? 6,
-      maxDelayMinutes: ehubSettings?.maxDelayMinutes ?? 10,
-      recipientBusinessHours: recipient.businessHours || '',
-      recipientTimezone: recipient.timezone || 'America/New_York',
-      clientWindowStartOffset: parseFloat(ehubSettings?.clientWindowStartOffset?.toString() ?? '1.0'),
-      clientWindowEndHour: ehubSettings?.clientWindowEndHour ?? 14,
-      skipWeekends: ehubSettings?.skipWeekends ?? false,
-      queueTailTime,
-      dailyRateLimit: ehubSettings?.dailyEmailLimit ?? 20,
-      currentDailyCount,
-    });
-
-    console.log(`[resumeRecipient] ${recipient.email} scheduled: ${slotResult.reason}`);
+    // Matrix2 Note: Set status to 'in_sequence' and clear nextSendAt
+    // The Matrix2 slotAssigner will handle scheduling on next cycle
+    console.log(`[resumeRecipient] ${recipient.email} resumed - Matrix2 slotAssigner will reschedule`);
 
     const [updated] = await db
       .update(sequenceRecipients)
       .set({ 
         status: 'in_sequence',
-        nextSendAt: slotResult.nextSendAt,
+        nextSendAt: null, // Matrix2 slotAssigner will assign slot
         updatedAt: new Date()
       })
       .where(eq(sequenceRecipients.id, id))
