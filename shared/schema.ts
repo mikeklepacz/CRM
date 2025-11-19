@@ -369,20 +369,6 @@ export const callHistory = pgTable("call_history", {
   index("idx_call_history_agent_date").on(table.agentId, table.calledAt),
 ]);
 
-// Email Drafts table - tracks email drafts created via Gmail API or mailto links
-export const emailDrafts = pgTable("email_drafts", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  clientLink: varchar("client_link", { length: 500 }), // Link to store/client if available
-  recipientEmail: varchar("recipient_email", { length: 255 }).notNull(),
-  subject: varchar("subject", { length: 500 }),
-  bodyPreview: text("body_preview"), // First 500 chars of email body
-  method: varchar("method", { length: 20 }).notNull(), // 'gmail' or 'mailto'
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("idx_email_drafts_user_date").on(table.userId, table.createdAt),
-]);
-
 // Dashboard widget layouts - save drag-and-drop positions
 export const widgetLayouts = pgTable("widget_layouts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -765,11 +751,6 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 export const insertCallHistorySchema = createInsertSchema(callHistory).omit({
   id: true,
   calledAt: true,
-});
-
-export const insertEmailDraftSchema = createInsertSchema(emailDrafts).omit({
-  id: true,
-  createdAt: true,
 });
 
 export const insertWidgetLayoutSchema = createInsertSchema(widgetLayouts).omit({
@@ -1672,8 +1653,6 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type CallHistory = typeof callHistory.$inferSelect;
 export type InsertCallHistory = z.infer<typeof insertCallHistorySchema>;
-export type EmailDraft = typeof emailDrafts.$inferSelect;
-export type InsertEmailDraft = z.infer<typeof insertEmailDraftSchema>;
 export type WidgetLayout = typeof widgetLayouts.$inferSelect;
 export type InsertWidgetLayout = z.infer<typeof insertWidgetLayoutSchema>;
 export type OpenaiSettings = typeof openaiSettings.$inferSelect;

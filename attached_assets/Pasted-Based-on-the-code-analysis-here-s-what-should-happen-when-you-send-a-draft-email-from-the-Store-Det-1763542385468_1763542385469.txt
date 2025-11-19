@@ -1,0 +1,66 @@
+Based on the code analysis, here's what should happen when you send a draft email from the Store Details page:
+
+Expected Flow
+1. Email Draft Creation (Store Details → Gmail)
+User clicks "Create Gmail Draft" button in EmailPreview component
+System calls /api/gmail/create-draft endpoint
+Gmail draft is created via Google OAuth API
+2. Email Draft Tracking (Currently Implemented)
+From email-preview.tsx and inline-ai-chat-enhanced.tsx:
+
+await apiRequest("POST", "/api/email-drafts", {
+  recipientEmail: to,
+  subject,
+  body,
+  method: 'gmail',
+  clientLink: clientLink || null,
+});
+This creates a record in the email_drafts table with:
+
+userId: Current user ID
+recipientEmail: Store email
+subject: Email subject
+bodyPreview: First 500 chars of body
+method: 'gmail'
+clientLink: Store link
+createdAt: Timestamp
+3. E-Hub Integration (NOT Currently Implemented)
+❌ CRITICAL GAP: There is NO automatic migration from email_drafts → E-Hub sequences.
+
+The code shows:
+
+email_drafts table exists for tracking only
+No cron job or background worker processes email_drafts
+No API endpoint consumes email_drafts data
+Manual Follow-Ups System enrollment happens via the Scanner tab, NOT from Store Details drafts
+What IS Tracked vs What You Expected
+✅ What Actually Happens:
+Draft email sent to Gmail ✓
+Record created in email_drafts table ✓
+Email visible in Gmail drafts ✓
+❌ What Does NOT Happen Automatically:
+❌ Recipient NOT added to any E-Hub sequence
+❌ Contact NOT enrolled in Manual Follow-Ups
+❌ No future AI-generated follow-ups scheduled
+❌ No reply detection configured
+The Correct E-Hub Enrollment Path
+Based on replit.md and the Scanner implementation:
+
+Manual Follow-Ups are enrolled via the Scanner tab ONLY:
+
+Admin goes to E-Hub → Scanner tab
+Clicks "Scan for Replies" button
+Scanner reads Gmail Sent folder
+Finds emails sent to POC emails from Store Database
+Enrolls NEW contacts at Step 1 (not Step 0)
+First AI follow-up happens at Step 2 after configured delay
+If You Want Store Details Drafts → E-Hub Integration
+You would need to add a background worker that:
+
+Reads unprocessed email_drafts records
+Checks if Gmail draft was actually sent (via Gmail API)
+Enrolls recipient into Manual Follow-Ups sequence at Step 1
+Marks email_drafts record as processed
+This does not currently exist in the codebase.
+
+TL;DR: Your draft email will be tracked in email_drafts table, but will NOT automatically migrate to E-Hub. You must use the Scanner tab to enroll contacts into Manual Follow-Ups after sending them manual emails.
