@@ -89,17 +89,16 @@ export function EmailPreview({ subject, to, body, clientLink }: EmailPreviewProp
         clientLink: clientLink || null,
       });
       
-      // Track email draft creation
+      // Auto-enroll in Manual Follow-Ups if clientLink present
       try {
         await apiRequest("POST", "/api/email-drafts", {
           recipientEmail: to,
           subject,
           body,
-          method: 'gmail',
           clientLink: clientLink || null,
         });
       } catch (error) {
-        console.error('Failed to track email draft:', error);
+        console.error('Failed to enroll in Manual Follow-Ups:', error);
       }
       
       // Check if labels were applied successfully
@@ -130,18 +129,17 @@ export function EmailPreview({ subject, to, body, clientLink }: EmailPreviewProp
   // Generate mailto link
   const mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-  // Track mailto link clicks
+  // Auto-enroll in Manual Follow-Ups when mailto clicked
   const handleMailtoClick = async () => {
     try {
       await apiRequest("POST", "/api/email-drafts", {
         recipientEmail: to,
         subject,
         body,
-        method: 'mailto',
         clientLink: clientLink || null,
       });
     } catch (error) {
-      console.error('Failed to track mailto link:', error);
+      console.error('Failed to enroll in Manual Follow-Ups:', error);
     }
   };
 

@@ -1178,17 +1178,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
     mutationFn: async ({ to, subject, body, clientLink }: { to: string; subject: string; body: string; clientLink?: string | null }) => {
       const draftResult = await apiRequest("POST", "/api/gmail/create-draft", { to, subject, body, clientLink: clientLink || null });
       
-      // Track email draft creation
+      // Auto-enroll in Manual Follow-Ups if clientLink present
       try {
         await apiRequest("POST", "/api/email-drafts", {
           recipientEmail: to,
           subject,
           body,
-          method: 'gmail',
           clientLink: clientLink || null,
         });
       } catch (error) {
-        console.error('Failed to track email draft:', error);
+        console.error('Failed to enroll in Manual Follow-Ups:', error);
       }
       
       return draftResult;
@@ -1385,17 +1384,16 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
         template.title
       )}&body=${encodeURIComponent(filledContent)}`;
       
-      // Track mailto link click
+      // Auto-enroll in Manual Follow-Ups if clientLink present
       try {
         await apiRequest("POST", "/api/email-drafts", {
           recipientEmail: email,
           subject: template.title,
           body: filledContent,
-          method: 'mailto',
           clientLink: storeContext?.link || null,
         });
       } catch (error) {
-        console.error('Failed to track mailto link:', error);
+        console.error('Failed to enroll in Manual Follow-Ups:', error);
       }
       
       window.location.href = mailtoLink;
