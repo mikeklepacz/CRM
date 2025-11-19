@@ -19064,35 +19064,20 @@ Use this store information to provide context-aware responses. When helping draf
   });
 
   // ==================================================================================
-  // EMAIL DRAFT TRACKING - Track when sales agents compose emails
-  // Supports both Gmail API drafts and mailto links for email activity analytics
-  // Auto-enrolls Store Details drafts into Manual Follow-Ups at Step 1
+  // MANUAL FOLLOW-UPS AUTO-ENROLLMENT
+  // Auto-enrolls Store Details Gmail drafts into Manual Follow-Ups at Step 1
+  // Saves full email content to sequence_recipient_messages for AI context
   // ==================================================================================
   app.post('/api/email-drafts', isAuthenticatedCustom, async (req, res) => {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const { recipientEmail, subject, body, method, clientLink } = req.body;
+      const { recipientEmail, subject, body, clientLink } = req.body;
 
-      if (!recipientEmail || !method) {
-        return res.status(400).json({ message: 'Recipient email and method are required' });
+      if (!recipientEmail) {
+        return res.status(400).json({ message: 'Recipient email is required' });
       }
 
-      if (method !== 'gmail' && method !== 'mailto') {
-        return res.status(400).json({ message: 'Method must be either "gmail" or "mailto"' });
-      }
-
-      const draftData = {
-        userId,
-        recipientEmail,
-        subject: subject || null,
-        bodyPreview: body ? body.substring(0, 500) : null,
-        method,
-        clientLink: clientLink || null,
-      };
-
-      const newDraft = await storage.createEmailDraft(draftData);
-
-      // Auto-enroll into Manual Follow-Ups if this draft has a clientLink (from Store Details)
+      // Only enroll if this draft has a clientLink (from Store Details)
       if (clientLink) {
         try {
           console.log('[ManualFollowUps] Auto-enrolling draft recipient:', recipientEmail);
@@ -19156,26 +19141,15 @@ Use this store information to provide context-aware responses. When helping draf
             }
           }
         } catch (enrollError: any) {
-          // Log error but don't fail the draft creation
           console.error('[ManualFollowUps] Error auto-enrolling recipient:', enrollError);
+          return res.status(500).json({ message: enrollError.message || 'Failed to enroll recipient' });
         }
       }
 
-      res.json(newDraft);
+      res.json({ success: true, message: 'Recipient enrolled in Manual Follow-Ups' });
     } catch (error: any) {
-      console.error('Error creating email draft record:', error);
-      res.status(500).json({ message: error.message || 'Failed to log email draft' });
-    }
-  });
-
-  app.get('/api/email-drafts', isAuthenticatedCustom, async (req, res) => {
-    try {
-      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      const drafts = await storage.getUserEmailDrafts(userId);
-      res.json(drafts);
-    } catch (error: any) {
-      console.error('Error fetching email drafts:', error);
-      res.status(500).json({ message: error.message || 'Failed to fetch email drafts' });
+      console.error('Error enrolling recipient:', error);
+      res.status(500).json({ message: error.message || 'Failed to enroll recipient' });
     }
   });
 
