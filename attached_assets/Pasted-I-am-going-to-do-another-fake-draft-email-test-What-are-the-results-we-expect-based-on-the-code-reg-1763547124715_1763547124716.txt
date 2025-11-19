@@ -1,0 +1,67 @@
+I am going to do another fake draft email test. What are the results we expect based on the code regarding the E-Hub? This means I will be in the store details card, using the email template to send a draft to gmail. And I am expecting data generated from that action to migrate into E-Hub.
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 18 files
+Based on the code analysis, here's what should happen when you send a draft email from Store Details:
+
+Expected Flow
+1. Email Preview Component (client/src/components/email-preview.tsx)
+When you click "Create Gmail Draft" or use mailto:
+
+Calls POST /api/gmail/create-draft with to, subject, body, and clientLink
+Then calls POST /api/email-drafts to enroll in Manual Follow-Ups
+2. Manual Follow-Ups Enrollment (server/routes.ts)
+The POST /api/email-drafts endpoint should:
+
+Find or create the "Manual Follow-Ups" sequence (system sequence)
+Create a new recipient record at Step 1 (not Step 0) with these fields:
+email, name, salesSummary, businessHours, link, state, timezone
+currentStep: 1
+status: 'in_sequence'
+lastStepSentAt: new Date() (timestamp of the draft send)
+Create a message record in sequence_recipient_messages with:
+stepNumber: 1
+subject, body
+sentAt: new Date()
+gmailMessageId (if available from Gmail API)
+3. What Happens in E-Hub
+All Contacts Tab
+The contact should appear with:
+neverContacted: false (because they're now in a sequence)
+inSequence: true
+sequenceNames: ['Manual Follow-Ups']
+Recipients Tab
+If you select "Manual Follow-Ups" sequence, the contact appears
+Shows as Step 1 (already sent)
+Status should be in_sequence
+Queue Tab
+Contact will NOT appear in active queue immediately
+They need to wait for the step delay before appearing
+The "Manual Follow-Ups" sequence has stepDelays configured in the sequence settings
+Next send will be scheduled based on: lastStepSentAt + stepDelays[1] (the delay for Step 2)
+4. Matrix2 Slot Assignment
+Later, when the delay period expires:
+
+slotAssigner.ts will find this recipient as eligible
+Assigns them to an open slot in daily_send_slots
+Respects their timezone and business hours
+Email gets sent automatically when slot time arrives
+Key Architecture Points
+Step Numbering: Manual drafts go to Step 1, NOT Step 0 (this prevents accidental instant-sends)
+AI Follow-ups: First AI-generated follow-up happens at Step 2 after the configured delay
+Scanner Integration: The Reply Scanner can also enroll contacts at Step 1 (same as manual drafts)
+Priority: Manual Follow-Ups recipients at Step 2+ get Tier 1 priority in slot assignment
+What You Should See
+After sending a test draft:
+
+✅ Gmail draft created (or mailto opened)
+✅ Contact appears in E-Hub → All Contacts → "In Sequence" filter
+✅ Contact appears in E-Hub → Sequences → "Manual Follow-Ups" row
+✅ Contact appears in E-Hub → Recipients tab (when Manual Follow-Ups selected)
+⏳ Contact appears in Queue tab after delay period expires
+🔄 Automated AI follow-up sends at Step 2 when slot time arrives
+The critical check is: Does the contact appear in All Contacts with inSequence: true? That confirms enrollment worked.
