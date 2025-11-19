@@ -1456,7 +1456,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
           </div>
 
           {/* Conversations Collapsible */}
-          <Collapsible open={conversationsOpen} onOpenChange={handleConversationsToggle} className={conversationsOpen ? "flex-1 flex flex-col min-h-0" : "flex-shrink-0"}>
+          <Collapsible open={conversationsOpen} onOpenChange={handleConversationsToggle} className={conversationsOpen ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "flex-shrink-0"}>
               <div className="border-b flex-shrink-0">
                 <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-conversations">
                   <div className="flex items-center gap-2">
@@ -1468,8 +1468,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                     className={`h-4 w-4 transition-transform ${conversationsOpen ? "rotate-180" : ""}`}
                   />
                 </CollapsibleTrigger>
-                <CollapsibleContent className="flex-1 overflow-y-auto min-h-0">
-                  <div className="p-2 h-full">
+                <CollapsibleContent className="flex-1 min-h-0 overflow-hidden">
+                  <div className="p-2 h-full overflow-y-auto">
                     <div className="flex gap-1 mb-2">
                       <Button
                         variant="outline"
@@ -1570,7 +1570,7 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
             </Collapsible>
 
           {/* Template Library */}
-          <Collapsible open={templatesOpen} onOpenChange={handleTemplatesToggle} className={templatesOpen ? "flex-1 flex flex-col min-h-0" : "flex-shrink-0"}>
+          <Collapsible open={templatesOpen} onOpenChange={handleTemplatesToggle} className={templatesOpen ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "flex-shrink-0"}>
             <div className="border-t flex-shrink-0">
               <CollapsibleTrigger className="w-full p-3 flex items-center justify-between hover-elevate active-elevate-2" data-testid="button-toggle-templates">
                 <div className="flex items-center gap-2">
@@ -1582,8 +1582,8 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
                   className={`h-4 w-4 transition-transform ${templatesOpen ? "rotate-180" : ""}`}
                 />
               </CollapsibleTrigger>
-              <CollapsibleContent className="flex-1 overflow-y-auto min-h-0">
-                <div className="p-2 space-y-3 h-full">
+              <CollapsibleContent className="flex-1 min-h-0 overflow-hidden">
+                <div className="p-2 space-y-3 h-full overflow-y-auto">
                   {/* Template Builder Button */}
                   <Button
                     onClick={() => {
