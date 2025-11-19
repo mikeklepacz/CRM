@@ -29,7 +29,6 @@ import {
   tickets,
   ticketReplies,
   callHistory,
-  emailDrafts,
   driveFolders,
   elevenLabsConfig,
   elevenLabsPhoneNumbers,
