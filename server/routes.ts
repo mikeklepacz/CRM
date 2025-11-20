@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, sql, inArray, and } from "drizzle-orm";
-import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, emailBlacklist, dailySendSlots } from "@shared/schema";
+import { commissions, users, clients, callSessions, callCampaignTargets, kbFiles, kbFileVersions, kbChangeProposals, sequenceRecipientMessages, sequenceRecipients, emailBlacklist, dailySendSlots, userPreferences } from "@shared/schema";
 import { setupAuth, isAuthenticated, getOidcConfig } from "./replitAuth";
 import { differenceInMonths } from "date-fns";
 import { startJobProcessor } from "./analysis-job-processor";
@@ -7030,26 +7030,27 @@ IMPORTANT:
             .insert(sequenceRecipients)
             .values({
               sequenceId: systemSequence.id,
+              name: to, // Use email as fallback name
               email: to,
+              link: clientLink || null,
               status: 'awaiting_reply',
               currentStep: 0,
             })
             .returning();
           
-          // Insert the manually sent email content as Step 0
+          // Insert the manually sent email content as Step 1 (manual email)
           await db
             .insert(sequenceRecipientMessages)
             .values({
               recipientId: enrolled.id,
-              step: 0,
+              stepNumber: 1,
               subject: subject,
-              htmlBody: body,
-              status: 'sent',
+              body: body,
               sentAt: new Date(),
               messageId: draft.message.id,
             });
           
-          console.log(`📧 [MANUAL FOLLOW-UPS] ✅ Enrolled ${to} at Step 0 (awaiting_reply). Message ID: ${draft.message.id}`);
+          console.log(`📧 [MANUAL FOLLOW-UPS] ✅ Enrolled ${to} at Step 1 (awaiting_reply). Original email saved. Message ID: ${draft.message.id}`);
         } else {
           console.log(`📧 [MANUAL FOLLOW-UPS] ℹ️ Recipient ${to} already enrolled. Skipping auto-enrollment.`);
         }
