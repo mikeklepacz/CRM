@@ -309,6 +309,9 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
     
     // Check if contact has been emailed according to Commission Tracker
     const emailedInTracker = trackerEmailedMap.get(contact.email) || false;
+    
+    // Check if contact has EVER been in a sequence (historical record)
+    const hasSequenceHistory = hasSequenceHistoryMap.get(contact.email) || false;
 
     return {
       name: contact.name,
@@ -318,8 +321,8 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
       hours: contact.hours,
       link: contact.link,
       salesSummary: contact.salesSummary,
-      neverContacted: !status.inSequence && !emailedInTracker,
-      contacted: emailedInTracker && !status.inSequence,
+      neverContacted: !emailedInTracker && !hasSequenceHistory,
+      contacted: (emailedInTracker || hasSequenceHistory) && !status.inSequence,
       inSequence: status.inSequence,
       replied: status.replied,
       bounced: status.bounced,
