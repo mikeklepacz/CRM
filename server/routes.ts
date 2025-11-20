@@ -20247,6 +20247,17 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Sync recipient counts for all sequences (admin only)
+  app.post('/api/sequences/sync-recipient-counts', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const result = await storage.syncSequenceRecipientCounts();
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error syncing recipient counts:', error);
+      res.status(500).json({ message: error.message || 'Failed to sync recipient counts' });
+    }
+  });
+
   // Get a specific sequence (admin only)
   app.get('/api/sequences/:id', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

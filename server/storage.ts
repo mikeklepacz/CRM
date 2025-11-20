@@ -518,6 +518,7 @@ export interface IStorage {
   updateSequence(id: string, updates: Partial<InsertSequence>): Promise<Sequence | undefined>;
   deleteSequence(id: string): Promise<boolean>;
   updateSequenceStats(id: string, stats: { sentCount?: number; failedCount?: number; repliedCount?: number; lastSentAt?: Date }): Promise<Sequence>;
+  syncSequenceRecipientCounts(): Promise<{ updated: number; sequences: Array<{ id: string; name: string; oldCount: number; newCount: number }> }>;
 
   // E-Hub Sequence Recipients operations
   addRecipients(recipients: InsertSequenceRecipient[]): Promise<SequenceRecipient[]>;
@@ -3188,6 +3189,51 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async syncSequenceRecipientCounts(): Promise<{ updated: number; sequences: Array<{ id: string; name: string; oldCount: number; newCount: number }> }> {
+    // Get all sequences
+    const allSequences = await db.select().from(sequences);
+    
+    const results = [];
+    let updated = 0;
+
+    for (const sequence of allSequences) {
+      // Count actual recipients (excluding 'removed' status)
+      const recipientCount = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(sequenceRecipients)
+        .where(
+          and(
+            eq(sequenceRecipients.sequenceId, sequence.id),
+            sql`${sequenceRecipients.status} != 'removed'`
+          )
+        );
+
+      const actualCount = recipientCount[0]?.count || 0;
+      const oldCount = sequence.totalRecipients || 0;
+
+      // Update if counts don't match
+      if (actualCount !== oldCount) {
+        await db
+          .update(sequences)
+          .set({ 
+            totalRecipients: actualCount,
+            updatedAt: new Date()
+          })
+          .where(eq(sequences.id, sequence.id));
+
+        results.push({
+          id: sequence.id,
+          name: sequence.name,
+          oldCount,
+          newCount: actualCount
+        });
+        updated++;
+      }
+    }
+
+    return { updated, sequences: results };
+  }
+
   // E-Hub Sequence Recipients operations
   async addRecipients(recipients: InsertSequenceRecipient[]): Promise<SequenceRecipient[]> {
     if (recipients.length === 0) return [];
@@ -3196,6 +3242,27 @@ export class DatabaseStorage implements IStorage {
       .insert(sequenceRecipients)
       .values(recipients)
       .returning();
+    
+    // Update totalRecipients counter for each affected sequence
+    if (created.length > 0) {
+      // Group by sequenceId to handle multiple sequences in one batch
+      const countsBySequence = created.reduce((acc, recipient) => {
+        acc[recipient.sequenceId] = (acc[recipient.sequenceId] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Update each sequence's counter
+      for (const [sequenceId, count] of Object.entries(countsBySequence)) {
+        await db
+          .update(sequences)
+          .set({ 
+            totalRecipients: sql`${sequences.totalRecipients} + ${count}`,
+            updatedAt: new Date()
+          })
+          .where(eq(sequences.id, sequenceId));
+      }
+    }
+    
     return created;
   }
 
@@ -3723,6 +3790,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeRecipient(id: string): Promise<SequenceRecipient> {
+    // Get the recipient first to know which sequence to update
+    const [recipient] = await db
+      .select()
+      .from(sequenceRecipients)
+      .where(eq(sequenceRecipients.id, id))
+      .limit(1);
+
+    if (!recipient) {
+      throw new Error('Recipient not found');
+    }
+
     const [updated] = await db
       .update(sequenceRecipients)
       .set({ 
@@ -3731,6 +3809,16 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(sequenceRecipients.id, id))
       .returning();
+    
+    // Decrement totalRecipients counter
+    await db
+      .update(sequences)
+      .set({ 
+        totalRecipients: sql`GREATEST(${sequences.totalRecipients} - 1, 0)`,
+        updatedAt: new Date()
+      })
+      .where(eq(sequences.id, recipient.sequenceId));
+    
     return updated;
   }
 

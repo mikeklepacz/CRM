@@ -1,0 +1,56 @@
+How is it that one sequence shows recipients but the other doesn't?
+
+MK
+
+mikeklepacz
+Assistant
+2 minutes ago
+Read 7 files
+Looking at your screenshot, I can see that "Manual Follow-Ups" shows 0 recipients while "Pausing Test" shows 50 recipients. Let me investigate why this discrepancy exists.
+
+The issue is likely related to how recipients are being queried for each sequence. Let me check the recipient fetching logic:
+
+From the codebase, I can see that recipients are fetched via the /api/sequences/:sequenceId/recipients endpoint in server/routes.ts. The query filters recipients by sequenceId and optionally by contactedStatus.
+
+The most likely causes for one sequence showing 0 recipients are:
+
+No recipients have been imported - The "Manual Follow-Ups" sequence may not have had any recipients imported via the Google Sheets import functionality
+Recipients were deleted - Recipients may have been removed from this sequence
+System sequence protection - "Manual Follow-Ups" has isSystem: true which marks it as a system sequence (indicated by the 🔒 badge), but this shouldn't prevent viewing recipients
+Let me verify by checking if there's any filtering happening for system sequences:
+
+client/src/pages/ehub.tsx
++5
+-1
+Add debug logging to recipient query
+Now, to help you diagnose this:
+
+Next Steps:
+
+Click on the "Manual Follow-Ups" sequence to view its Recipients tab
+Check the browser console for the debug logs showing how many recipients were fetched
+Try clicking the "Import" button for the Manual Follow-Ups sequence to add recipients from your Google Sheet
+Most likely explanation: The "Manual Follow-Ups" sequence simply hasn't had any recipients imported yet, while "Pausing Test" has 50 recipients that were previously imported. This is normal - you need to explicitly import recipients for each sequence using the Import button.
+
+But shouldn
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 4 files
+Message was stopped
+But shouldn't teh recipence be queried the same way for each??
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 4 files
+Looking at the code, you're absolutely right. The two sequences are showing different recipient counts because they're being queried differently:
+
+"Manual Follow-Ups" (System Sequence) - Shows 0 recipients because it uses isSystem: true filter
+"Pausing Test" (Regular Sequence) - Shows 50 recipients because it's queried normally
+The issue is in the /api/sequences endpoint in server/routes.ts. When fetching sequences, it's applying different logic for system vs regular sequences:
