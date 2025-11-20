@@ -36,6 +36,14 @@ export async function generateSlotsForDay(
   const startTimeStr = `${dateIso}T${String(sendingHoursStart).padStart(2, '0')}:00:00`;
   let cursor = new Date(formatInTimeZone(startTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
   
+  // If generating for today and we're already past the window start, start from NOW instead
+  const now = new Date();
+  const todayIso = formatInTimeZone(now, adminTz, 'yyyy-MM-dd');
+  if (dateIso === todayIso && now > cursor) {
+    console.log(`[Matrix2 Generator] 🚀 Today's slots - starting from NOW (${now.toISOString()}) instead of window start`);
+    cursor = now;
+  }
+  
   // End time boundary: dateIso at sendingHoursEnd
   const endTimeStr = `${dateIso}T${String(sendingHoursEnd).padStart(2, '0')}:00:00`;
   const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));

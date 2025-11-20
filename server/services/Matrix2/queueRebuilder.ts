@@ -34,7 +34,9 @@ function getNextBusinessDay(fromDate: Date, adminTz: string, skipWeekends: boole
 }
 
 /**
- * Rebuild the queue from the next business day forward
+ * Rebuild the queue with context-aware start date
+ * - If we're still in today's sending window with remaining time, use today
+ * - If before sending window or after it ends, start from next business day
  * Preserves recipient order but regenerates all slot times with new settings
  * 
  * @param adminUserId - User ID to fetch timezone preferences
@@ -55,15 +57,49 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   console.log('[QueueRebuilder] Using admin timezone:', adminTz);
   console.log('[QueueRebuilder] Skip weekends:', settings.skipWeekends);
   
-  // 2. Calculate next business day (tomorrow, accounting for weekends)
+  // 2. Determine the rebuild start date based on current time and sending window
   const now = new Date();
-  const nextBusinessDay = getNextBusinessDay(now, adminTz, settings.skipWeekends);
-  const nextBusinessDayIso = nextBusinessDay.toISOString().slice(0, 10);
+  const adminLocalTime = toZonedTime(now, adminTz);
+  const currentHour = adminLocalTime.getHours();
+  const currentMinute = adminLocalTime.getMinutes();
+  const currentTimeMinutes = currentHour * 60 + currentMinute;
   
-  console.log('[QueueRebuilder] Next business day:', nextBusinessDayIso);
+  const sendingStartMinutes = settings.sendingHoursStart * 60;
+  const sendingEndMinutes = settings.sendingHoursEnd * 60;
+  
+  // Check if we're currently in the sending window with meaningful time remaining
+  const isInSendingWindow = currentTimeMinutes >= sendingStartMinutes && currentTimeMinutes < sendingEndMinutes;
+  const remainingMinutes = sendingEndMinutes - currentTimeMinutes;
+  const hasUsefulTimeRemaining = remainingMinutes >= settings.maxDelayMinutes; // At least one jitter window remaining
+  
+  let rebuildStartDate: Date;
+  let rebuildStartDateIso: string;
+  
+  if (isInSendingWindow && hasUsefulTimeRemaining) {
+    // We're in the window with time left - use today to capture remaining slots
+    rebuildStartDate = now;
+    rebuildStartDateIso = now.toISOString().slice(0, 10);
+    console.log('[QueueRebuilder] 🚀 In sending window with time remaining - rebuilding from TODAY:', {
+      currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
+      windowEnd: `${settings.sendingHoursEnd}:00`,
+      remainingMinutes,
+      startDate: rebuildStartDateIso
+    });
+  } else {
+    // Either before window, after window, or not enough time left - start from next business day
+    rebuildStartDate = getNextBusinessDay(now, adminTz, settings.skipWeekends);
+    rebuildStartDateIso = rebuildStartDate.toISOString().slice(0, 10);
+    console.log('[QueueRebuilder] 📅 Starting from next business day:', {
+      reason: !isInSendingWindow ? 'outside sending window' : 'insufficient time remaining',
+      currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
+      windowStart: `${settings.sendingHoursStart}:00`,
+      windowEnd: `${settings.sendingHoursEnd}:00`,
+      nextBusinessDay: rebuildStartDateIso
+    });
+  }
   
   // 3. Fetch all recipients currently scheduled from that day forward (in order)
-  const scheduledRecipients = await getScheduledRecipientsFromDate(nextBusinessDayIso);
+  const scheduledRecipients = await getScheduledRecipientsFromDate(rebuildStartDateIso);
   
   console.log('[QueueRebuilder] Found scheduled recipients:', {
     count: scheduledRecipients.length,
@@ -78,13 +114,13 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     return;
   }
   
-  // 4. Delete all slots from next business day onward
-  await deleteSlotsFromDate(nextBusinessDayIso);
+  // 4. Delete all slots from rebuild start date onward
+  await deleteSlotsFromDate(rebuildStartDateIso);
   
   // 5. Regenerate 3 days worth of fresh slots with new settings
   console.log('[QueueRebuilder] Regenerating slots for 3 days...');
   for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
-    const targetDate = addDays(nextBusinessDay, dayOffset);
+    const targetDate = addDays(rebuildStartDate, dayOffset);
     const targetDateIso = targetDate.toISOString().slice(0, 10);
     
     await generateSlotsForDay(targetDateIso, adminTz, {
@@ -107,7 +143,7 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     let assigned = false;
     
     for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
-      const targetDate = addDays(nextBusinessDay, dayOffset);
+      const targetDate = addDays(rebuildStartDate, dayOffset);
       const targetDateIso = targetDate.toISOString().slice(0, 10);
       
       const emptySlots = await getEmptySlots(targetDateIso);
