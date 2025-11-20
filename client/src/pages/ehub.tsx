@@ -87,7 +87,7 @@ interface EhubSettings {
   clientWindowEndHour: number;
   promptInjection: string;
   keywordBin: string;
-  skipWeekends: boolean;
+  excludedDays: number[];
 }
 
 interface Recipient {
@@ -1510,7 +1510,7 @@ export default function EHub() {
     clientWindowEndHour: 14,
     promptInjection: "",
     keywordBin: "",
-    skipWeekends: true,
+    excludedDays: [],
   });
   
   // Track original settings for dirty state detection
@@ -3729,19 +3729,37 @@ export default function EHub() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="skipWeekends">Skip Weekends</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Don't send emails on Saturday and Sunday
-                    </p>
+                <div className="space-y-2">
+                  <Label>Active Days</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Select which days emails can be sent (green = active, red = excluded)
+                  </p>
+                  <div className="grid grid-cols-7 gap-2">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((dayLetter, index) => {
+                      const isExcluded = settingsForm.excludedDays.includes(index);
+                      return (
+                        <Button
+                          key={index}
+                          type="button"
+                          size="default"
+                          data-testid={`button-day-${index}`}
+                          className={`min-h-9 ${
+                            isExcluded
+                              ? 'bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white border-red-700 dark:border-red-800'
+                              : 'bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 text-white border-green-700 dark:border-green-800'
+                          }`}
+                          onClick={() => {
+                            const newExcludedDays = isExcluded
+                              ? settingsForm.excludedDays.filter(d => d !== index)
+                              : [...settingsForm.excludedDays, index].sort((a, b) => a - b);
+                            setSettingsForm({ ...settingsForm, excludedDays: newExcludedDays });
+                          }}
+                        >
+                          {dayLetter}
+                        </Button>
+                      );
+                    })}
                   </div>
-                  <Switch
-                    id="skipWeekends"
-                    data-testid="switch-skip-weekends"
-                    checked={settingsForm.skipWeekends}
-                    onCheckedChange={(checked) => setSettingsForm({ ...settingsForm, skipWeekends: checked })}
-                  />
                 </div>
               </div>
 
