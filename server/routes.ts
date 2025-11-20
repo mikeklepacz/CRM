@@ -19072,7 +19072,16 @@ Use this store information to provide context-aware responses. When helping draf
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const { recipientEmail, subject, body, clientLink } = req.body;
 
+      console.log('[ManualFollowUps] 🔵 Request received:', {
+        recipientEmail,
+        hasSubject: !!subject,
+        hasBody: !!body,
+        hasClientLink: !!clientLink,
+        clientLink,
+      });
+
       if (!recipientEmail) {
+        console.log('[ManualFollowUps] ❌ Missing recipient email');
         return res.status(400).json({ message: 'Recipient email is required' });
       }
 
@@ -19143,9 +19152,12 @@ Use this store information to provide context-aware responses. When helping draf
           console.error('[ManualFollowUps] Error auto-enrolling recipient:', enrollError);
           return res.status(500).json({ message: enrollError.message || 'Failed to enroll recipient' });
         }
+      } else {
+        console.log('[ManualFollowUps] ⚠️  No clientLink provided, skipping enrollment');
       }
 
-      res.json({ success: true, message: 'Recipient enrolled in Manual Follow-Ups' });
+      console.log('[ManualFollowUps] ✅ Request completed successfully');
+      res.json({ success: true, message: 'Draft processed' });
     } catch (error: any) {
       console.error('Error enrolling recipient:', error);
       res.status(500).json({ message: error.message || 'Failed to enroll recipient' });

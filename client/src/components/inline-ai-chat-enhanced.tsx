@@ -1385,17 +1385,40 @@ export function InlineAIChatEnhanced({ storeContext, contextUpdateTrigger, loadD
       )}&body=${encodeURIComponent(filledContent)}`;
       
       // Auto-enroll in Manual Follow-Ups if clientLink present
-      try {
-        await apiRequest("POST", "/api/email-drafts", {
-          recipientEmail: email,
-          subject: template.title,
-          body: filledContent,
-          clientLink: storeContext?.link || null,
-        });
-      } catch (error) {
-        console.error('Failed to enroll in Manual Follow-Ups:', error);
+      if (storeContext?.link) {
+        try {
+          console.log('[TemplateEmail] Enrolling in Manual Follow-Ups...', {
+            email,
+            clientLink: storeContext.link,
+            hasSubject: !!template.title,
+            hasBody: !!filledContent,
+          });
+          
+          await apiRequest("POST", "/api/email-drafts", {
+            recipientEmail: email,
+            subject: template.title,
+            body: filledContent,
+            clientLink: storeContext.link,
+          });
+          
+          console.log('[TemplateEmail] ✅ Enrollment successful');
+          toast({
+            title: "Enrolled in Follow-Ups",
+            description: "Contact added to automated follow-up sequence",
+          });
+        } catch (error) {
+          console.error('[TemplateEmail] ❌ Enrollment failed:', error);
+          toast({
+            title: "Enrollment Failed",
+            description: error instanceof Error ? error.message : "Failed to enroll in follow-up sequence",
+            variant: "destructive",
+          });
+        }
+      } else {
+        console.log('[TemplateEmail] Skipping enrollment - no clientLink');
       }
       
+      // Open mailto after enrollment completes
       window.location.href = mailtoLink;
     }
   };
