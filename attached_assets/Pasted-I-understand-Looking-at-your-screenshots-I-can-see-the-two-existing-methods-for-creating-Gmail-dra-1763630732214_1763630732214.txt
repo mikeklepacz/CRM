@@ -1,0 +1,34 @@
+I understand. Looking at your screenshots, I can see the two existing methods for creating Gmail drafts from the Store Details AI Assistant:
+
+Template "Email" button - When you click "Email" on a template (like "Cold Email 1"), it creates a draft
+"Create Gmail Draft" button - After the AI generates an email response in the chat, you can click this button to create a draft
+You're right that you don't need a third method. The issue you're experiencing is that when drafts are created through these two methods, they should automatically enroll the contact in the "Manual Follow-Ups" sequence for the E-Hub, but this enrollment is failing.
+
+Let me trace through the code to identify where the enrollment is supposed to happen:
+
+Method 1 (Template Email button): In inline-ai-chat-enhanced.tsx, the handleEmailTemplate function creates a Gmail draft via createGmailDraftMutation.
+
+Method 2 (Create Gmail Draft button): In email-preview.tsx, the handleCreateDraft function creates a Gmail draft and attempts enrollment.
+
+Both methods call /api/gmail/create-draft and then /api/email-drafts for enrollment.
+
+The problem is that the enrollment to Manual Follow-Ups is failing silently. Based on the code in rag://rag_source_0 (email-preview.tsx), I can see the enrollment happens in a try-catch that swallows errors:
+
+try {
+  await apiRequest("POST", "/api/email-drafts", {
+    recipientEmail: to,
+    subject,
+    body,
+    clientLink: clientLink || null,
+  });
+} catch (error) {
+  console.error('Failed to enroll in Manual Follow-Ups:', error);
+}
+The enrollment requires a clientLink (the store's profile URL) to work. If that's missing or if there's a database issue, the enrollment fails silently.
+
+To fix this so your E-Hub enrollment works properly, you need to ensure:
+
+The store has a valid link field (profile URL) in the database
+The enrollment API endpoint properly validates and processes the request
+Error messages are surfaced to you when enrollment fails
+Would you like me to add better error handling and user feedback to these two existing methods so you can see when and why the E-Hub enrollment is failing?
