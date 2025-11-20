@@ -234,22 +234,25 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
 
   const uniqueEmails = [...new Set(contactsFromSheet.map(c => c.email))];
 
-  let recipientData: Array<{
+  // Query ALL sequence_recipients to build complete history
+  let allRecipientData: Array<{
     email: string;
     sequenceId: string;
     sequenceName: string | null;
     replied: Date | null;
     bounced: string | null;
+    status: string;
   }> = [];
 
   if (uniqueEmails.length > 0) {
-    recipientData = await db
+    allRecipientData = await db
       .select({
         email: sql<string>`LOWER(${sequenceRecipients.email})`,
         sequenceId: sequenceRecipients.sequenceId,
         sequenceName: sql<string>`${sequences.name}`,
         replied: sequenceRecipients.repliedAt,
         bounced: sequenceRecipients.bounceType,
+        status: sequenceRecipients.status,
       })
       .from(sequenceRecipients)
       .innerJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
@@ -258,6 +261,13 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
       );
   }
 
+  // Build hasSequenceHistory map (any email that was EVER in a sequence)
+  const hasSequenceHistoryMap = new Map<string, boolean>();
+  allRecipientData.forEach(row => {
+    hasSequenceHistoryMap.set(row.email, true);
+  });
+
+  // Build emailStatusMap for ACTIVE recipients only
   const emailStatusMap = new Map<string, {
     inSequence: boolean;
     replied: boolean;
@@ -265,7 +275,7 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
     sequenceNames: string[];
   }>();
 
-  recipientData.forEach(row => {
+  allRecipientData.forEach(row => {
     const existing = emailStatusMap.get(row.email) || {
       inSequence: false,
       replied: false,
@@ -273,12 +283,16 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
       sequenceNames: [],
     };
 
-    existing.inSequence = true;
+    // Only mark as inSequence if status is 'in_sequence'
+    if (row.status === 'in_sequence') {
+      existing.inSequence = true;
+      if (row.sequenceName && !existing.sequenceNames.includes(row.sequenceName)) {
+        existing.sequenceNames.push(row.sequenceName);
+      }
+    }
+    
     if (row.replied) existing.replied = true;
     if (row.bounced) existing.bounced = true;
-    if (row.sequenceName && !existing.sequenceNames.includes(row.sequenceName)) {
-      existing.sequenceNames.push(row.sequenceName);
-    }
 
     emailStatusMap.set(row.email, existing);
   });
