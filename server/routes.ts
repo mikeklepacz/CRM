@@ -7025,7 +7025,7 @@ IMPORTANT:
           .limit(1);
         
         if (existingRecipient.length === 0) {
-          // Enroll new recipient
+          // Enroll new recipient at Step 1 (manual email already sent)
           const [enrolled] = await db
             .insert(sequenceRecipients)
             .values({
@@ -7034,7 +7034,7 @@ IMPORTANT:
               email: to,
               link: clientLink || null,
               status: 'awaiting_reply',
-              currentStep: 0,
+              currentStep: 1, // Manual email = Step 1
             })
             .returning();
           
@@ -7050,7 +7050,7 @@ IMPORTANT:
               messageId: draft.message.id,
             });
           
-          console.log(`📧 [MANUAL FOLLOW-UPS] ✅ Enrolled ${to} at Step 1 (awaiting_reply). Original email saved. Message ID: ${draft.message.id}`);
+          console.log(`📧 [MANUAL FOLLOW-UPS] ✅ Enrolled ${to} at currentStep=1 (awaiting_reply). Original email saved as Step 1. Message ID: ${draft.message.id}`);
         } else {
           console.log(`📧 [MANUAL FOLLOW-UPS] ℹ️ Recipient ${to} already enrolled. Skipping auto-enrollment.`);
         }
