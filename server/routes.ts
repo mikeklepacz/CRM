@@ -19093,12 +19093,24 @@ Use this store information to provide context-aware responses. When helping draf
           // Get or create Manual Follow-Ups sequence
           const manualFollowUpsSequence = await storage.getOrCreateManualFollowUpsSequence();
           
-          // Check if email is blacklisted
-          const [blacklisted] = await db
+          // Fetch user preferences to check blacklistCheckEnabled
+          const [prefs] = await db
             .select()
-            .from(emailBlacklist)
-            .where(eq(emailBlacklist.email, recipientEmail.toLowerCase()))
+            .from(userPreferences)
+            .where(eq(userPreferences.userId, userId))
             .limit(1);
+          
+          const blacklistCheckEnabled = prefs?.blacklistCheckEnabled ?? true;
+          
+          // Check if email is blacklisted (only if blacklistCheckEnabled is true)
+          let blacklisted = null;
+          if (blacklistCheckEnabled) {
+            [blacklisted] = await db
+              .select()
+              .from(emailBlacklist)
+              .where(eq(emailBlacklist.email, recipientEmail.toLowerCase()))
+              .limit(1);
+          }
           
           if (blacklisted) {
             console.log('[ManualFollowUps] Email is blacklisted, skipping enrollment:', recipientEmail);
