@@ -1710,6 +1710,12 @@ export default function EHub() {
         queryClient.invalidateQueries({ 
           predicate: (query) => query.queryKey[0] === '/api/ehub/queue'
         });
+        // Invalidate recipients queries for all sequences to show newly enrolled contacts
+        queryClient.invalidateQueries({ 
+          predicate: (query) => 
+            query.queryKey[0] === '/api/sequences' && 
+            query.queryKey[2] === 'recipients'
+        });
         
         const newEnrolled = data.newEnrollments || 0;
         const promoted = data.promoted || 0;
