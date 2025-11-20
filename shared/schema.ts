@@ -1741,6 +1741,7 @@ export const ehubContactSchema = z.object({
   link: z.string().optional(),
   salesSummary: z.string().optional(),
   neverContacted: z.boolean(),
+  contacted: z.boolean(),
   inSequence: z.boolean(),
   replied: z.boolean(),
   bounced: z.boolean(),
@@ -1755,6 +1756,7 @@ export const allContactsResponseSchema = z.object({
   statusCounts: z.object({
     all: z.number(),
     neverContacted: z.number(),
+    contacted: z.number(),
     inSequence: z.number(),
     replied: z.number(),
     bounced: z.number(),

@@ -60,7 +60,7 @@ export async function getAllContacts(options: {
   page?: number;
   pageSize?: number;
   search?: string;
-  statusFilter?: 'all' | 'neverContacted' | 'inSequence' | 'replied' | 'bounced';
+  statusFilter?: 'all' | 'neverContacted' | 'contacted' | 'inSequence' | 'replied' | 'bounced';
 }): Promise<AllContactsResponse> {
   const {
     page = 1,
@@ -96,6 +96,8 @@ export async function getAllContacts(options: {
       switch (statusFilter) {
         case 'neverContacted':
           return contact.neverContacted;
+        case 'contacted':
+          return contact.contacted;
         case 'inSequence':
           return contact.inSequence;
         case 'replied':
@@ -111,6 +113,7 @@ export async function getAllContacts(options: {
   const statusCounts = {
     all: contactsAfterSearch.length,
     neverContacted: contactsAfterSearch.filter(c => c.neverContacted).length,
+    contacted: contactsAfterSearch.filter(c => c.contacted).length,
     inSequence: contactsAfterSearch.filter(c => c.inSequence).length,
     replied: contactsAfterSearch.filter(c => c.replied).length,
     bounced: contactsAfterSearch.filter(c => c.bounced).length,
@@ -302,6 +305,7 @@ async function fetchAndEnrichContacts(): Promise<EhubContact[]> {
       link: contact.link,
       salesSummary: contact.salesSummary,
       neverContacted: !status.inSequence && !emailedInTracker,
+      contacted: emailedInTracker && !status.inSequence,
       inSequence: status.inSequence,
       replied: status.replied,
       bounced: status.bounced,

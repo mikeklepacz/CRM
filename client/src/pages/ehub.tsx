@@ -2323,6 +2323,9 @@ export default function EHub() {
                   <ToggleGroupItem value="neverContacted" data-testid="filter-never-contacted">
                     Never Contacted ({allContactsData?.statusCounts.neverContacted || 0})
                   </ToggleGroupItem>
+                  <ToggleGroupItem value="contacted" data-testid="filter-contacted">
+                    Contacted ({allContactsData?.statusCounts.contacted || 0})
+                  </ToggleGroupItem>
                   <ToggleGroupItem value="inSequence" data-testid="filter-in-sequence">
                     In Sequence ({allContactsData?.statusCounts.inSequence || 0})
                   </ToggleGroupItem>
