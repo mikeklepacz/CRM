@@ -1885,7 +1885,7 @@ export default function EHub() {
 
   // Update blacklist preference mutation
   const updateBlacklistPreferenceMutation = useMutation({
-    mutationFn: (enabled: boolean) => apiRequest('PATCH', '/api/user/preferences', { blacklistCheckEnabled: enabled }),
+    mutationFn: (enabled: boolean) => apiRequest('PUT', '/api/user/preferences', { blacklistCheckEnabled: enabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
       toast({

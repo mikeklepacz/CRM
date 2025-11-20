@@ -922,6 +922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     defaultCalendarReminders: z.array(z.object({ method: z.string(), minutes: z.number() })).optional(),
     autoKbAnalysis: z.boolean().optional(),
     kbAnalysisThreshold: z.number().optional(),
+    blacklistCheckEnabled: z.boolean().optional(),
     followUpFilters: z.object({
       claimedDays: z.tuple([z.number(), z.number()]),
       interestedDays: z.tuple([z.number(), z.number()]),
