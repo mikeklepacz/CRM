@@ -1537,6 +1537,11 @@ export default function EHub() {
     queryKey: ['/api/sequences'],
   });
 
+  // Fetch user preferences for blacklist toggle
+  const { data: userPreferences } = useQuery<{ blacklistCheckEnabled?: boolean }>({
+    queryKey: ['/api/user/preferences'],
+  });
+
   // Fetch E-Hub settings
   const { data: settings } = useQuery<EhubSettings>({
     queryKey: ['/api/ehub/settings'],
@@ -1873,6 +1878,27 @@ export default function EHub() {
       toast({
         title: "Error",
         description: error.message || "Failed to update settings",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update blacklist preference mutation
+  const updateBlacklistPreferenceMutation = useMutation({
+    mutationFn: (enabled: boolean) => apiRequest('PATCH', '/api/user/preferences', { blacklistCheckEnabled: enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
+      toast({
+        title: "Blacklist Check " + (userPreferences?.blacklistCheckEnabled ? "Disabled" : "Enabled"),
+        description: userPreferences?.blacklistCheckEnabled 
+          ? "Blacklist checking is now OFF (for testing)"
+          : "Blacklist checking is now ON",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update preference",
         variant: "destructive",
       });
     },
@@ -3787,6 +3813,36 @@ export default function EHub() {
         {/* Test Emails Tab */}
         {user?.role === 'admin' && (
           <TabsContent value="test-emails" className="space-y-4">
+            {/* Blacklist Toggle */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Blacklist Checking</CardTitle>
+                <CardDescription>
+                  Control whether enrollment checks the blacklist. Turn OFF for testing.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      checked={userPreferences?.blacklistCheckEnabled ?? true}
+                      onCheckedChange={(checked) => updateBlacklistPreferenceMutation.mutate(checked)}
+                      disabled={updateBlacklistPreferenceMutation.isPending}
+                      data-testid="toggle-blacklist-check"
+                    />
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        Blacklist Check: {userPreferences?.blacklistCheckEnabled ? 'ON' : 'OFF'}
+                      </span>
+                      <Badge variant={userPreferences?.blacklistCheckEnabled ? 'default' : 'secondary'}>
+                        {userPreferences?.blacklistCheckEnabled ? '✓ Enabled' : '✗ Disabled'}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Danger Zone - Nuke Test Data */}
             <Card className="border-destructive/50 bg-destructive/5">
               <CardHeader>
