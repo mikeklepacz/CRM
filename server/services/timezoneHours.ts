@@ -230,7 +230,7 @@ export function parseBusinessHours(hoursStr: string, state: string): ParsedBusin
 // ============================================================================
 
 export interface SendTimeConfig {
-  skipWeekends: boolean;
+  excludedDays: number[]; // Days to exclude (0=Sunday, 1=Monday, ..., 6=Saturday)
   sendingHoursEnd: number; // Max hour (24h format, e.g., 14 = 2pm)
 }
 
@@ -273,8 +273,8 @@ export function computeOptimalSendTime(
     return fromZonedTime(isoString, timezone);
   };
 
-  // Helper to check if a day is a weekend
-  const isWeekend = (day: number): boolean => day === 0 || day === 6; // Sunday or Saturday
+  // Helper to check if a day is excluded
+  const isDayExcluded = (day: number): boolean => config.excludedDays.includes(day);
 
   // Maximum send time in minutes (e.g., 14:00 = 840 minutes)
   const maxSendMinutes = config.sendingHoursEnd * 60;
@@ -288,13 +288,13 @@ export function computeOptimalSendTime(
   if (parsedHours.isClosed || Object.keys(parsedHours.schedule).length === 0) {
     const noonMinutes = 12 * 60; // 720 minutes = noon
 
-    // Find next valid day (skip weekends if configured)
+    // Find next valid day (skip excluded days if configured)
     for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
       const targetDay = (currentDay + dayOffset) % 7;
       const targetDate = new Date(year, month - 1, dateNum + dayOffset);
 
-      // Skip weekends if configured
-      if (config.skipWeekends && isWeekend(targetDay)) continue;
+      // Skip excluded days if configured
+      if (isDayExcluded(targetDay)) continue;
 
       // If today and past noon, try tomorrow
       if (dayOffset === 0 && currentMinutes >= noonMinutes) continue;
@@ -313,8 +313,8 @@ export function computeOptimalSendTime(
     const targetDay = (currentDay + dayOffset) % 7;
     const targetDate = new Date(year, month - 1, dateNum + dayOffset);
 
-    // Skip weekends if configured
-    if (config.skipWeekends && isWeekend(targetDay)) continue;
+    // Skip excluded days if configured
+    if (isDayExcluded(targetDay)) continue;
 
     // Check if this day has a schedule
     if (parsedHours.schedule[targetDay]) {
@@ -343,12 +343,12 @@ export function computeOptimalSendTime(
     }
   }
 
-  // Fallback: send at noon tomorrow (respecting weekend skip)
+  // Fallback: send at noon tomorrow (respecting excluded days)
   for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
     const targetDay = (currentDay + dayOffset) % 7;
     const targetDate = new Date(year, month - 1, dateNum + dayOffset);
 
-    if (config.skipWeekends && isWeekend(targetDay)) continue;
+    if (isDayExcluded(targetDay)) continue;
 
     return buildScheduledTime(
       targetDate.getFullYear(),

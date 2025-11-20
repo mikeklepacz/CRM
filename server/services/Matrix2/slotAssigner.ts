@@ -197,8 +197,9 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   // Get day of week (0 = Sunday, 6 = Saturday)
   const dayOfWeek = localTime.getDay();
 
-  // Check skip_weekends setting FIRST (before business hours parsing)
-  if (settings.skipWeekends && (dayOfWeek === 0 || dayOfWeek === 6)) {
+  // Check excluded days setting FIRST (before business hours parsing)
+  const excludedDays = settings.excludedDays || [];
+  if (excludedDays.includes(dayOfWeek)) {
     return false;
   }
 

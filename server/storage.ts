@@ -3078,7 +3078,7 @@ export class DatabaseStorage implements IStorage {
           sendingHoursEnd: 14,
           clientWindowStartOffset: '1.00',
           clientWindowEndHour: 14,
-          skipWeekends: true,
+          excludedDays: [],
           ...updates,
         })
         .returning();

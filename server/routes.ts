@@ -19650,7 +19650,7 @@ Use this store information to provide context-aware responses. When helping draf
           clientWindowEndHour: 14,
           promptInjection: '',
           keywordBin: '',
-          skipWeekends: true,
+          excludedDays: [],
         });
       }
       
@@ -19905,7 +19905,7 @@ Use this store information to provide context-aware responses. When helping draf
         oldSettings.maxDelayMinutes !== newSettings.maxDelayMinutes ||
         oldSettings.clientStartOffsetHours !== newSettings.clientStartOffsetHours ||
         oldSettings.clientCutoffHour !== newSettings.clientCutoffHour ||
-        oldSettings.skipWeekends !== newSettings.skipWeekends
+        JSON.stringify(oldSettings.excludedDays) !== JSON.stringify(newSettings.excludedDays)
       );
       
       if (schedulingSettingsChanged) {

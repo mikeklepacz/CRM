@@ -1227,7 +1227,7 @@ export const ehubSettings = pgTable("ehub_settings", {
   clientWindowEndHour: integer("client_window_end_hour").notNull().default(14), // Client local cutoff hour (24h format, e.g., 14 = 2 PM local time)
   promptInjection: text("prompt_injection"), // Global AI instructions for email personalization
   keywordBin: text("keyword_bin"), // Global context keywords for AI
-  skipWeekends: boolean("skip_weekends").notNull().default(true), // Skip sending on Saturday/Sunday
+  excludedDays: integer("excluded_days").array().notNull().default(sql`ARRAY[]::integer[]`), // Days to exclude from sending (0=Sunday, 1=Monday, ..., 6=Saturday)
   updatedAt: timestamp("updated_at").defaultNow(),
   updatedBy: varchar("updated_by").references(() => users.id),
 });

@@ -108,7 +108,7 @@ export async function ensureDailySlots() {
   const sendingHoursEnd = settings.sendingHoursEnd || 23;
   const minDelayMinutes = settings.minDelayMinutes || 6;
   const maxDelayMinutes = settings.maxDelayMinutes || 10;
-  const skipWeekends = settings.skipWeekends || false;
+  const excludedDays = settings.excludedDays || [];
 
   console.log('[Matrix2 Generator] Ensuring 3 days worth of slots...');
 
@@ -118,13 +118,13 @@ export async function ensureDailySlots() {
     targetDate.setDate(targetDate.getDate() + dayOffset);
     const dateIso = formatInTimeZone(targetDate, adminTz, 'yyyy-MM-dd');
     
-    // Skip weekends if configured
-    if (skipWeekends) {
-      const dayOfWeek = parseInt(formatInTimeZone(targetDate, adminTz, 'i')); // 1=Mon, 7=Sun
-      if (dayOfWeek === 6 || dayOfWeek === 7) { // Saturday or Sunday
-        console.log(`[Matrix2 Generator] Skipping ${dateIso} (weekend)`);
-        continue;
-      }
+    // Skip excluded days if configured
+    const dayOfWeek = parseInt(formatInTimeZone(targetDate, adminTz, 'i')); // 1=Mon, 7=Sun
+    // Convert ISO day (1=Mon, 7=Sun) to JS day (0=Sun, 1=Mon, etc.)
+    const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
+    if (excludedDays.includes(jsDay)) {
+      console.log(`[Matrix2 Generator] Skipping ${dateIso} (day ${jsDay} is excluded)`);
+      continue;
     }
 
     // Check if slots already exist for this day
