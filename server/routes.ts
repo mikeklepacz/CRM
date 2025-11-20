@@ -21298,8 +21298,9 @@ ${conversationContext}`;
       const headers = rows[0];
       const linkIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'link');
       const statusIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'status');
-      const nameIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'name');
-      const salesSummaryIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'sales summary');
+      const pocIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'point of contact');
+      const pocEmailIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'poc email');
+      const salesSummaryIndex = headers.findIndex(h => h?.toString().toLowerCase() === 'sales-ready summary');
 
       if (linkIndex === -1) {
         console.error('[E-Hub Recipients] Link column not found in Commission Tracker');
@@ -21308,37 +21309,56 @@ ${conversationContext}`;
         });
       }
 
-      // Build link → tracker data map (includes ALL fields from Commission Tracker)
-      const linkDataMap = new Map<string, { 
-        status: string; 
-        name: string | null; 
-        salesSummary: string | null; 
-      }>();
+      // Build TWO maps: one for link matching, one for email matching
+      type TrackerData = {
+        status: string;
+        name: string | null;
+        link: string | null;
+        salesSummary: string | null;
+      };
+
+      const linkDataMap = new Map<string, TrackerData>();
+      const emailDataMap = new Map<string, TrackerData>();
       
       for (let i = 1; i < rows.length; i++) {
         const rowLink = rows[i][linkIndex];
+        const rowEmail = pocEmailIndex !== -1 ? rows[i][pocEmailIndex] : null;
+        const trackerData: TrackerData = {
+          status: statusIndex !== -1 ? (rows[i][statusIndex]?.toString().trim() || '') : '',
+          name: pocIndex !== -1 ? (rows[i][pocIndex]?.toString().trim() || null) : null,
+          link: rowLink ? rowLink.toString().trim() : null,
+          salesSummary: salesSummaryIndex !== -1 ? (rows[i][salesSummaryIndex]?.toString().trim() || null) : null,
+        };
+
+        // Index by link
         if (rowLink) {
           const normalizedLink = normalizeLink(rowLink.toString().trim());
-          linkDataMap.set(normalizedLink, {
-            status: statusIndex !== -1 ? (rows[i][statusIndex]?.toString().trim() || '') : '',
-            name: nameIndex !== -1 ? (rows[i][nameIndex]?.toString().trim() || null) : null,
-            salesSummary: salesSummaryIndex !== -1 ? (rows[i][salesSummaryIndex]?.toString().trim() || null) : null,
-          });
+          linkDataMap.set(normalizedLink, trackerData);
+        }
+
+        // Index by email
+        if (rowEmail) {
+          const normalizedEmail = rowEmail.toString().trim().toLowerCase();
+          emailDataMap.set(normalizedEmail, trackerData);
         }
       }
 
       // Enrich recipients with FRESH data from Commission Tracker
+      // Match by Link OR Email
       const enrichedRecipients = recipients.map(recipient => {
-        if (!recipient.link) {
-          return { 
-            ...recipient, 
-            contactedStatus: 'unknown', // No link = can't check tracker
-            trackerStatus: null
-          };
+        let trackerData: TrackerData | undefined;
+
+        // Try to match by link first
+        if (recipient.link) {
+          const normalizedRecipientLink = normalizeLink(recipient.link.trim());
+          trackerData = linkDataMap.get(normalizedRecipientLink);
         }
 
-        const normalizedRecipientLink = normalizeLink(recipient.link.trim());
-        const trackerData = linkDataMap.get(normalizedRecipientLink);
+        // If no link match, try email match
+        if (!trackerData && recipient.email) {
+          const normalizedEmail = recipient.email.trim().toLowerCase();
+          trackerData = emailDataMap.get(normalizedEmail);
+        }
 
         // Three-state logic based on tracker presence:
         // - No tracker row (undefined) → 'unknown'
@@ -21347,7 +21367,7 @@ ${conversationContext}`;
         let contactedStatus: 'contacted' | 'not contacted' | 'unknown';
         
         if (!trackerData) {
-          contactedStatus = 'unknown'; // No tracker row for this link
+          contactedStatus = 'unknown'; // No tracker row found
         } else if (trackerData.status.trim().toLowerCase() === 'contacted') {
           contactedStatus = 'contacted'; // Tracker status is 'Contacted'
         } else {
@@ -21358,8 +21378,9 @@ ${conversationContext}`;
         // This overrides stale data from import with current sheet data
         return { 
           ...recipient,
-          // Override name and salesSummary with fresh tracker data if available
+          // Override name, link, and salesSummary with fresh tracker data if available
           name: trackerData?.name || recipient.name,
+          link: trackerData?.link || recipient.link,
           salesSummary: trackerData?.salesSummary || recipient.salesSummary,
           // Add status fields
           contactedStatus,

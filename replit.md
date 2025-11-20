@@ -66,6 +66,27 @@ The application is built around a client dashboard unifying data from "Store Dat
   - **Dedicated Management UI**: Scanner Management tab in E-Hub with Gmail Reply Scanner controls, blacklist management, and selective enrollment with checkboxes.
   - **Deduplication**: System-wide email deduplication prevents double-enrollment across manual drafts and scanner operations.
 
+## Google Sheets Column Schemas
+
+### Commission Tracker Columns
+Complete column schema for Commission Tracker Google Sheet (used for matching recipients and enrichment):
+- **Link**: Store URL (primary matching field)
+- **POC EMAIL**: Point of Contact email address (secondary matching field)
+- **Point of Contact**: Contact name (used for Name enrichment)
+- **Status**: Contact status (e.g., "Contacted", "Emailed")
+- **Sales-ready Summary**: Sales summary text (Column P, used for enrichment)
+- Transaction ID, Date, Agent Name, Order ID, Commission Type, Amount, Follow-Up Date, Next Action, Notes, POC Phone, time, update, Total, DBA, Parent Link, POC Title
+
+### Store Database Columns
+Complete column schema for Store Database Google Sheet:
+- **Link**: Store URL (primary matching field)
+- **Email**: Store contact email (secondary matching field)
+- **Name**: Store/business name
+- **Sales-ready Summary**: Sales summary text (used for enrichment)
+- Type, Member Since, Address, City, State, Zip, Phone, Website, Followers, Tags, Hours, Vibe Score, OPEN, Category, Automated Line
+
+**Matching Logic**: Recipients are matched to Google Sheet rows by Link OR Email (POC EMAIL in Commission Tracker, Email in Store Database). Data is enriched from matched rows regardless of what was stored during import.
+
 ## External Dependencies
 - **Google Sheets API**: For "Store Database" and "Commission Tracker" interaction.
 - **WooCommerce REST API**: For order synchronization and commission calculation.
