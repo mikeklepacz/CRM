@@ -75,19 +75,42 @@ export async function processEmailQueue() {
         console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id} (sequence: ${slot.sequence_name})`);
         // Note: Recipient metadata is updated inside sendEmailToRecipient()
       } else {
-        console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id} - moving recipient to next available slot`);
-        // Instead of unfilling the slot, move the recipient to the next available slot
-        const nextSlot = await getNextAvailableSlot(slot.slot_time_utc);
-        if (nextSlot) {
+        console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id} - bumping to next slot in cascade`);
+        // Get the immediate next slot (not just any available slot)
+        const nextSlotResult = await db.execute(sql`
+          SELECT id, slot_time_utc, filled, recipient_id
+          FROM daily_send_slots
+          WHERE slot_time_utc > ${slot.slot_time_utc}
+            AND sent = FALSE
+          ORDER BY slot_time_utc ASC
+          LIMIT 1
+        `);
+        const nextSlotRows = (nextSlotResult as any).rows || [];
+        
+        if (nextSlotRows.length > 0) {
+          const nextSlot = nextSlotRows[0];
+          const bumpedRecipientId = nextSlot.recipient_id; // Could be null if slot was empty
+          
+          // Move failed recipient to next slot
           await fillSlot(nextSlot.id, slot.recipient_id);
-          console.log(`[EmailQueue] 🔄 Moved recipient ${slot.recipient_id} from slot ${slot.id} to next slot ${nextSlot.id} (${nextSlot.slot_time_utc})`);
-          // Unfill current slot so it's empty
-          await db
-            .update(dailySendSlots)
-            .set({ filled: false, recipientId: null })
-            .where(eq(dailySendSlots.id, slot.id));
+          console.log(`[EmailQueue] 🔄 Recipient ${slot.recipient_id} bumped from slot ${slot.id} to slot ${nextSlot.id}`);
+          
+          // Put person who was in next slot back to pool (if any)
+          if (bumpedRecipientId) {
+            await db
+              .update(dailySendSlots)
+              .set({ filled: false, recipientId: null })
+              .where(eq(dailySendSlots.id, slot.id));
+            console.log(`[EmailQueue] 📤 Bumped recipient ${bumpedRecipientId} back to pool from slot ${nextSlot.id}`);
+          } else {
+            // Next slot was empty, just clear current slot
+            await db
+              .update(dailySendSlots)
+              .set({ filled: false, recipientId: null })
+              .where(eq(dailySendSlots.id, slot.id));
+          }
         } else {
-          console.warn(`[EmailQueue] ⚠️  No next available slot found for recipient ${slot.recipient_id} - unfilling current slot`);
+          console.warn(`[EmailQueue] ⚠️  No next slot available to bump to - unfilling current slot`);
           // If no next slot available, just unfill current slot
           await db
             .update(dailySendSlots)
@@ -97,18 +120,41 @@ export async function processEmailQueue() {
       }
     } catch (error) {
       console.error(`[EmailQueue] Error sending slot ${slot.id}:`, error);
-      // Move to next slot on error (same logic as send failure)
-      const nextSlot = await getNextAvailableSlot(slot.slot_time_utc);
-      if (nextSlot) {
+      // Same cascading logic on error - move to next slot in cascade
+      const nextSlotResult = await db.execute(sql`
+        SELECT id, slot_time_utc, filled, recipient_id
+        FROM daily_send_slots
+        WHERE slot_time_utc > ${slot.slot_time_utc}
+          AND sent = FALSE
+        ORDER BY slot_time_utc ASC
+        LIMIT 1
+      `);
+      const nextSlotRows = (nextSlotResult as any).rows || [];
+      
+      if (nextSlotRows.length > 0) {
+        const nextSlot = nextSlotRows[0];
+        const bumpedRecipientId = nextSlot.recipient_id; // Could be null if slot was empty
+        
+        // Move failed recipient to next slot
         await fillSlot(nextSlot.id, slot.recipient_id);
-        console.log(`[EmailQueue] 🔄 Moved recipient ${slot.recipient_id} from slot ${slot.id} to next slot ${nextSlot.id} (${nextSlot.slot_time_utc}) after error`);
-        // Unfill current slot
-        await db
-          .update(dailySendSlots)
-          .set({ filled: false, recipientId: null })
-          .where(eq(dailySendSlots.id, slot.id));
+        console.log(`[EmailQueue] 🔄 Recipient ${slot.recipient_id} bumped from slot ${slot.id} to slot ${nextSlot.id} (after error)`);
+        
+        // Put person who was in next slot back to pool (if any)
+        if (bumpedRecipientId) {
+          await db
+            .update(dailySendSlots)
+            .set({ filled: false, recipientId: null })
+            .where(eq(dailySendSlots.id, slot.id));
+          console.log(`[EmailQueue] 📤 Bumped recipient ${bumpedRecipientId} back to pool from slot ${nextSlot.id}`);
+        } else {
+          // Next slot was empty, just clear current slot
+          await db
+            .update(dailySendSlots)
+            .set({ filled: false, recipientId: null })
+            .where(eq(dailySendSlots.id, slot.id));
+        }
       } else {
-        console.warn(`[EmailQueue] ⚠️  No next available slot found for recipient ${slot.recipient_id} - unfilling current slot`);
+        console.warn(`[EmailQueue] ⚠️  No next slot available to bump to - unfilling current slot`);
         // If no next slot available, just unfill current slot
         await db
           .update(dailySendSlots)
