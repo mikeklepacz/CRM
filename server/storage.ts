@@ -3801,14 +3801,15 @@ export class DatabaseStorage implements IStorage {
       throw new Error('Recipient not found');
     }
 
-    const [updated] = await db
-      .update(sequenceRecipients)
-      .set({ 
-        status: 'removed',
-        updatedAt: new Date()
-      })
-      .where(eq(sequenceRecipients.id, id))
-      .returning();
+    // Delete all messages for this recipient
+    await db
+      .delete(sequenceRecipientMessages)
+      .where(eq(sequenceRecipientMessages.recipientId, id));
+
+    // Delete the recipient itself (hard delete, not soft delete)
+    await db
+      .delete(sequenceRecipients)
+      .where(eq(sequenceRecipients.id, id));
     
     // Decrement totalRecipients counter
     await db
@@ -3819,7 +3820,7 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(sequences.id, recipient.sequenceId));
     
-    return updated;
+    return recipient;
   }
 
   async sendRecipientNow(id: string): Promise<SequenceRecipient> {
