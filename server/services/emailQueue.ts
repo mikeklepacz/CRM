@@ -3,7 +3,7 @@ import { ensureDailySlots } from "./Matrix2/slotGenerator";
 import { assignRecipientsToSlots } from "./Matrix2/slotAssigner";
 import { storage } from "../storage";
 import { sendEmailToRecipient } from "./emailSender";
-import { markSlotSent } from "./Matrix2/slotDb";
+import { markSlotSent, getNextAvailableSlot, fillSlot } from "./Matrix2/slotDb";
 import { db } from "../db";
 import { sql, eq } from "drizzle-orm";
 import { dailySendSlots, sequenceRecipients } from "../../shared/schema";
@@ -75,20 +75,46 @@ export async function processEmailQueue() {
         console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id} (sequence: ${slot.sequence_name})`);
         // Note: Recipient metadata is updated inside sendEmailToRecipient()
       } else {
-        console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id}`);
-        // Unfill the slot so it can be reassigned
+        console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id} - moving recipient to next available slot`);
+        // Instead of unfilling the slot, move the recipient to the next available slot
+        const nextSlot = await getNextAvailableSlot(slot.slot_time_utc);
+        if (nextSlot) {
+          await fillSlot(nextSlot.id, slot.recipient_id);
+          console.log(`[EmailQueue] 🔄 Moved recipient ${slot.recipient_id} from slot ${slot.id} to next slot ${nextSlot.id} (${nextSlot.slot_time_utc})`);
+          // Unfill current slot so it's empty
+          await db
+            .update(dailySendSlots)
+            .set({ filled: false, recipientId: null })
+            .where(eq(dailySendSlots.id, slot.id));
+        } else {
+          console.warn(`[EmailQueue] ⚠️  No next available slot found for recipient ${slot.recipient_id} - unfilling current slot`);
+          // If no next slot available, just unfill current slot
+          await db
+            .update(dailySendSlots)
+            .set({ filled: false, recipientId: null })
+            .where(eq(dailySendSlots.id, slot.id));
+        }
+      }
+    } catch (error) {
+      console.error(`[EmailQueue] Error sending slot ${slot.id}:`, error);
+      // Move to next slot on error (same logic as send failure)
+      const nextSlot = await getNextAvailableSlot(slot.slot_time_utc);
+      if (nextSlot) {
+        await fillSlot(nextSlot.id, slot.recipient_id);
+        console.log(`[EmailQueue] 🔄 Moved recipient ${slot.recipient_id} from slot ${slot.id} to next slot ${nextSlot.id} (${nextSlot.slot_time_utc}) after error`);
+        // Unfill current slot
+        await db
+          .update(dailySendSlots)
+          .set({ filled: false, recipientId: null })
+          .where(eq(dailySendSlots.id, slot.id));
+      } else {
+        console.warn(`[EmailQueue] ⚠️  No next available slot found for recipient ${slot.recipient_id} - unfilling current slot`);
+        // If no next slot available, just unfill current slot
         await db
           .update(dailySendSlots)
           .set({ filled: false, recipientId: null })
           .where(eq(dailySendSlots.id, slot.id));
       }
-    } catch (error) {
-      console.error(`[EmailQueue] Error sending slot ${slot.id}:`, error);
-      // Unfill the slot on error
-      await db
-        .update(dailySendSlots)
-        .set({ filled: false, recipientId: null })
-        .where(eq(dailySendSlots.id, slot.id));
     }
   }
 }

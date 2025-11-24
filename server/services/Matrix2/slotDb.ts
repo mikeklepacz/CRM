@@ -109,6 +109,25 @@ export async function getScheduledSlotsFromDate(dateIso: string): Promise<DailyS
 }
 
 /**
+ * Find the next available (empty) slot after a given slot time
+ * Used for retrying failed sends by moving them to the next slot
+ */
+export async function getNextAvailableSlot(afterSlotTimeUtc: string): Promise<DailySlot | null> {
+  const result = await db.execute(sql`
+    SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
+    FROM daily_send_slots
+    WHERE slot_time_utc > ${afterSlotTimeUtc}
+      AND filled = FALSE
+      AND sent = FALSE
+    ORDER BY slot_time_utc ASC
+    LIMIT 1
+  `);
+  
+  const rows = (result as any).rows || [];
+  return rows.length > 0 ? rows[0] : null;
+}
+
+/**
  * Clear slots assigned to recipients from a specific sequence
  * Called when a sequence is deleted to free up those slots
  */
