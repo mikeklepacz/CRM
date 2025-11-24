@@ -89,20 +89,26 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       sr.state,
       sr.status,
       sr.last_step_sent_at,
-      s.step_delays
+      s.step_delays,
+      s.status as sequence_status
     FROM sequence_recipients sr
     LEFT JOIN sequences s ON sr.sequence_id = s.id
     WHERE sr.status NOT IN ('completed', 'failed', 'blacklisted')
-    ORDER BY sr.id ASC
+    ORDER BY 
+      CASE WHEN s.status = 'active' THEN 0 ELSE 1 END ASC,
+      sr.id ASC
   `);
   
   const allRecipients = (recipientResult as any).rows || [];
   
   console.log('[QueueRebuilder] Found active recipients:', {
     count: allRecipients.length,
+    activeSequenceCount: allRecipients.filter((r: any) => r.sequence_status === 'active').length,
+    pausedSequenceCount: allRecipients.filter((r: any) => r.sequence_status !== 'active').length,
     sample: allRecipients.slice(0, 3).map((r: any) => ({
       email: r.email,
-      status: r.status
+      status: r.status,
+      sequenceStatus: r.sequence_status
     }))
   });
   
