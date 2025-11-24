@@ -4625,6 +4625,79 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db.insert(testDataNukeLog).values(log).returning();
     return created;
   }
+
+  // Matrix2 Email Sender: Get recipient by ID (used in email sending)
+  async getRecipientById(recipientId: string): Promise<any | null> {
+    try {
+      const { sql } = await import('drizzle-orm');
+      const result = await db.execute(sql`
+        SELECT 
+          sr.id,
+          sr.email,
+          sr.name,
+          sr.sequence_id as "sequenceId",
+          sr.current_step as "currentStep",
+          sr.timezone,
+          sr.business_hours,
+          sr.state,
+          sr.status,
+          sr.last_step_sent_at as "lastStepSentAt",
+          s.id as "seqId",
+          s.step_delays as "stepDelays"
+        FROM sequence_recipients sr
+        LEFT JOIN sequences s ON sr.sequence_id = s.id
+        WHERE sr.id = ${recipientId}
+        LIMIT 1
+      `);
+      return (result as any).rows?.[0] || null;
+    } catch (error) {
+      console.error(`[Storage] Error fetching recipient ${recipientId}:`, error);
+      return null;
+    }
+  }
+
+  // Get sequence by ID (used in email sending)
+  async getSequenceById(sequenceId: string): Promise<any | null> {
+    try {
+      const { sql } = await import('drizzle-orm');
+      const result = await db.execute(sql`
+        SELECT 
+          id,
+          name,
+          strategy_transcript as "strategyTranscript",
+          finalized_strategy as "finalizedStrategy"
+        FROM sequences
+        WHERE id = ${sequenceId}
+        LIMIT 1
+      `);
+      return (result as any).rows?.[0] || null;
+    } catch (error) {
+      console.error(`[Storage] Error fetching sequence ${sequenceId}:`, error);
+      return null;
+    }
+  }
+
+  // Get admin user (used in email sending)
+  async getAdminUser(): Promise<any | null> {
+    try {
+      const { sql } = await import('drizzle-orm');
+      const result = await db.execute(sql`
+        SELECT 
+          id,
+          email,
+          first_name as "firstName",
+          last_name as "lastName"
+        FROM users
+        WHERE role = 'admin'
+        ORDER BY created_at ASC
+        LIMIT 1
+      `);
+      return (result as any).rows?.[0] || null;
+    } catch (error) {
+      console.error(`[Storage] Error fetching admin user:`, error);
+      return null;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();
