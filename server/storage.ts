@@ -4698,6 +4698,63 @@ export class DatabaseStorage implements IStorage {
       return null;
     }
   }
+
+  // Update recipient after email sent (used in email sender)
+  async updateRecipient(recipientId: string, updates: any): Promise<any> {
+    try {
+      const { sql } = await import('drizzle-orm');
+      const result = await db.execute(sql`
+        UPDATE sequence_recipients
+        SET
+          current_step = ${updates.currentStep || sql`current_step`},
+          last_step_sent_at = ${updates.lastStepSentAt || sql`last_step_sent_at`},
+          status = ${updates.status || sql`status`},
+          updated_at = NOW()
+        WHERE id = ${recipientId}
+        RETURNING *
+      `);
+      return (result as any).rows?.[0] || null;
+    } catch (error) {
+      console.error(`[Storage] Error updating recipient ${recipientId}:`, error);
+      return null;
+    }
+  }
+
+  // Insert recipient message record (used in email sender)
+  async insertRecipientMessage(message: any): Promise<any> {
+    try {
+      const { sql } = await import('drizzle-orm');
+      const result = await db.execute(sql`
+        INSERT INTO sequence_recipient_messages (
+          id,
+          recipient_id,
+          step_number,
+          subject,
+          body,
+          sent_at,
+          gmail_message_id,
+          gmail_thread_id,
+          rfc822_message_id
+        )
+        VALUES (
+          ${message.id},
+          ${message.recipientId},
+          ${message.stepNumber},
+          ${message.subject || null},
+          ${message.body || null},
+          ${message.sentAt || sql`NOW()`},
+          ${message.gmailMessageId || null},
+          ${message.gmailThreadId || null},
+          ${message.rfc822MessageId || null}
+        )
+        RETURNING *
+      `);
+      return (result as any).rows?.[0] || null;
+    } catch (error) {
+      console.error(`[Storage] Error inserting recipient message:`, error);
+      return null;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();
