@@ -34,15 +34,19 @@ function getNextBusinessDay(fromDate: Date, adminTz: string, skipWeekends: boole
 }
 
 /**
- * Rebuild the queue with context-aware start date
- * - If we're still in today's sending window with remaining time, use today
- * - If before sending window or after it ends, start from next business day
- * Preserves recipient order but regenerates all slot times with new settings
+ * Manually rebuild the entire queue with new settings
+ * - ALWAYS starts from today to ensure all future slots are regenerated with new jitter
+ * - Deletes all slots from today forward
+ * - Regenerates 3 days of fresh slots with current jitter settings
+ * - Reassigns existing scheduled recipients to new slots
+ * 
+ * This is triggered when user manually clicks "Rebuild Queue" button to refresh
+ * settings like jitter that may have changed
  * 
  * @param adminUserId - User ID to fetch timezone preferences
  */
 export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
-  console.log('[QueueRebuilder] Starting queue rebuild...');
+  console.log('[QueueRebuilder] 🔄 Starting MANUAL queue rebuild - will refresh all future slots with new settings');
   
   // 1. Get admin timezone and E-Hub settings
   const userPrefs = await storage.getUserPreferences(adminUserId);
@@ -54,49 +58,22 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     return;
   }
   
-  console.log('[QueueRebuilder] Using admin timezone:', adminTz);
-  console.log('[QueueRebuilder] Skip weekends:', settings.skipWeekends);
+  console.log('[QueueRebuilder] Current E-Hub Settings:', {
+    timezone: adminTz,
+    sendingWindow: `${settings.sendingHoursStart}:00 - ${settings.sendingHoursEnd}:00`,
+    jitterRange: `${settings.minDelayMinutes} - ${settings.maxDelayMinutes} minutes`,
+    dailyLimit: settings.dailyEmailLimit,
+    skipWeekends: settings.skipWeekends
+  });
   
-  // 2. Determine the rebuild start date based on current time and sending window
+  // For MANUAL rebuild, ALWAYS start from today - this ensures new jitter is applied everywhere
   const now = new Date();
-  const adminLocalTime = toZonedTime(now, adminTz);
-  const currentHour = adminLocalTime.getHours();
-  const currentMinute = adminLocalTime.getMinutes();
-  const currentTimeMinutes = currentHour * 60 + currentMinute;
+  const rebuildStartDate = now;
+  const rebuildStartDateIso = now.toISOString().slice(0, 10);
   
-  const sendingStartMinutes = settings.sendingHoursStart * 60;
-  const sendingEndMinutes = settings.sendingHoursEnd * 60;
-  
-  // Check if we're currently in the sending window with meaningful time remaining
-  const isInSendingWindow = currentTimeMinutes >= sendingStartMinutes && currentTimeMinutes < sendingEndMinutes;
-  const remainingMinutes = sendingEndMinutes - currentTimeMinutes;
-  const hasUsefulTimeRemaining = remainingMinutes >= settings.maxDelayMinutes; // At least one jitter window remaining
-  
-  let rebuildStartDate: Date;
-  let rebuildStartDateIso: string;
-  
-  if (isInSendingWindow && hasUsefulTimeRemaining) {
-    // We're in the window with time left - use today to capture remaining slots
-    rebuildStartDate = now;
-    rebuildStartDateIso = now.toISOString().slice(0, 10);
-    console.log('[QueueRebuilder] 🚀 In sending window with time remaining - rebuilding from TODAY:', {
-      currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
-      windowEnd: `${settings.sendingHoursEnd}:00`,
-      remainingMinutes,
-      startDate: rebuildStartDateIso
-    });
-  } else {
-    // Either before window, after window, or not enough time left - start from next business day
-    rebuildStartDate = getNextBusinessDay(now, adminTz, settings.skipWeekends);
-    rebuildStartDateIso = rebuildStartDate.toISOString().slice(0, 10);
-    console.log('[QueueRebuilder] 📅 Starting from next business day:', {
-      reason: !isInSendingWindow ? 'outside sending window' : 'insufficient time remaining',
-      currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
-      windowStart: `${settings.sendingHoursStart}:00`,
-      windowEnd: `${settings.sendingHoursEnd}:00`,
-      nextBusinessDay: rebuildStartDateIso
-    });
-  }
+  console.log('[QueueRebuilder] 🚀 Manual rebuild - starting from TODAY to apply new settings:', {
+    todayDate: rebuildStartDateIso
+  });
   
   // 3. Fetch all recipients currently scheduled from that day forward (in order)
   const scheduledRecipients = await getScheduledRecipientsFromDate(rebuildStartDateIso);
