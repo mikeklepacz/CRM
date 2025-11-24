@@ -5,6 +5,7 @@ import type {
   StrategyTranscript,
 } from "../../shared/schema";
 import OpenAI from "openai";
+import { updateCommissionTrackerStatus } from "./commissionTrackerUpdate";
 
 /**
  * Convert time difference in milliseconds to casual timeframe reference
@@ -423,6 +424,44 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       gmailThreadId: emailResult.threadId,
       rfc822MessageId: emailResult.rfc822MessageId,
     });
+
+    // 7. POST-SEND BOOKKEEPING (critical fixes for broken system)
+    // Increment sequence sentCount
+    try {
+      const currentSentCount = sequence.sentCount || 0;
+      await storage.updateSequenceStats(sequence.id, {
+        sentCount: currentSentCount + 1,
+        lastSentAt: now,
+      });
+      console.log(`[EmailSender] ✅ Incremented sentCount for sequence ${sequence.id} (was ${currentSentCount}, now ${currentSentCount + 1})`);
+    } catch (error) {
+      console.error(`[EmailSender] ⚠️  Failed to update sequence stats:`, error);
+    }
+
+    // 8. UPDATE COMMISSION TRACKER GOOGLE SHEETS (critical fix!)
+    if (recipient.link) {
+      try {
+        // Get the user who created this sequence to find their agentName
+        const sequenceCreator = await storage.getUserById(sequence.createdBy);
+        const agentName = sequenceCreator?.agentName || 'Unknown Agent';
+        
+        const trackerResult = await updateCommissionTrackerStatus(
+          recipient.link,
+          agentName,
+          'Emailed'
+        );
+        
+        if (trackerResult.success) {
+          console.log(`[EmailSender] ✅ Updated Commission Tracker for ${recipient.link} to "Emailed"`);
+        } else {
+          console.warn(`[EmailSender] ⚠️  Commission Tracker update failed: ${trackerResult.message}`);
+        }
+      } catch (error) {
+        console.error(`[EmailSender] ⚠️  Exception updating Commission Tracker:`, error);
+      }
+    } else {
+      console.warn(`[EmailSender] ⚠️  No store link for recipient ${recipient.email}, skipping Commission Tracker update`);
+    }
 
     console.log(`[EmailSender] ✅ Sent email to ${recipient.email} (step ${currentStep})`);
     return true;
