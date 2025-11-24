@@ -518,6 +518,7 @@ export interface IStorage {
   updateSequence(id: string, updates: Partial<InsertSequence>): Promise<Sequence | undefined>;
   deleteSequence(id: string): Promise<boolean>;
   updateSequenceStats(id: string, stats: { sentCount?: number; failedCount?: number; repliedCount?: number; lastSentAt?: Date }): Promise<Sequence>;
+  incrementSequenceSentCount(id: string): Promise<void>;
   syncSequenceRecipientCounts(): Promise<{ updated: number; sequences: Array<{ id: string; name: string; oldCount: number; newCount: number }> }>;
 
   // E-Hub Sequence Recipients operations
@@ -3187,6 +3188,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(sequences.id, id))
       .returning();
     return updated;
+  }
+
+  async incrementSequenceSentCount(id: string): Promise<void> {
+    await db.execute(sql`
+      UPDATE sequences 
+      SET 
+        sent_count = sent_count + 1,
+        last_sent_at = NOW(),
+        updated_at = NOW()
+      WHERE id = ${id}
+    `);
   }
 
   async syncSequenceRecipientCounts(): Promise<{ updated: number; sequences: Array<{ id: string; name: string; oldCount: number; newCount: number }> }> {
