@@ -29,11 +29,15 @@ export async function getEligibleRecipientsForAssignment() {
       s.is_system
     FROM sequence_recipients sr
     INNER JOIN sequences s ON sr.sequence_id = s.id
+    LEFT JOIN daily_send_slots dss ON sr.id = dss.recipient_id::varchar 
+      AND dss.filled = TRUE 
+      AND dss.sent = FALSE
     WHERE sr.status = 'in_sequence'
       AND sr.timezone IS NOT NULL
       AND sr.timezone != ''
       AND sr.business_hours IS NOT NULL
       AND sr.business_hours != ''
+      AND dss.id IS NULL
     ORDER BY sr.created_at ASC
   `);
   

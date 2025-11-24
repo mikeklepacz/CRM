@@ -110,6 +110,15 @@ export async function processEmailQueue() {
         await markSlotSent(slot.id);
         console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id} (sequence: ${slot.sequence_name})`);
         // Note: Recipient metadata is updated inside sendEmailToRecipient()
+        
+        // Immediately trigger slot assignment for next step (Matrix2 multi-step progression)
+        try {
+          await assignRecipientsToSlots();
+          console.log(`[EmailQueue] 📧 Post-send slot assignment completed for recipient ${slot.recipient_id}`);
+        } catch (assignError) {
+          console.error(`[EmailQueue] ⚠️  Error during post-send slot assignment for recipient ${slot.recipient_id}:`, assignError);
+          // Don't rethrow - continue processing other slots even if assignment fails
+        }
       } else {
         console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id} - initiating cascade bump`);
         // Clear current slot first
