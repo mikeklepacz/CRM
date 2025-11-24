@@ -130,6 +130,25 @@ export async function clearSlotsForSequence(sequenceId: string) {
 }
 
 /**
+ * Clear slots assigned to a specific recipient
+ * Called when a recipient is deleted to free up those slots
+ */
+export async function clearSlotsForRecipient(recipientId: string) {
+  console.log('[SlotDb.clearSlotsForRecipient] Clearing slots for recipient:', recipientId);
+  
+  const result = await db.execute(sql`
+    UPDATE daily_send_slots
+    SET filled = FALSE, recipient_id = NULL
+    WHERE recipient_id = ${recipientId}
+  `);
+  
+  const affectedRows = (result as any).rowCount || 0;
+  console.log('[SlotDb.clearSlotsForRecipient] ✅ Cleared', affectedRows, 'slots');
+  
+  return affectedRows;
+}
+
+/**
  * Clear all orphaned slots (pointing to deleted recipients)
  * Useful for cleanup after sequence deletion or data corruption
  */

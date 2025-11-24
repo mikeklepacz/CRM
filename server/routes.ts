@@ -19888,6 +19888,14 @@ Use this store information to provide context-aware responses. When helping draf
       const { id } = req.params;
       const recipient = await storage.removeRecipient(id);
       
+      // Clean up slots assigned to this recipient
+      const { clearSlotsForRecipient } = await import('./services/Matrix2/slotDb');
+      await clearSlotsForRecipient(id);
+      
+      // Invalidate cache
+      const { invalidateCache } = await import('./services/ehubContactsService');
+      invalidateCache();
+      
       // TODO: Delete all Gmail drafts for this recipient
       
       res.json(recipient);
