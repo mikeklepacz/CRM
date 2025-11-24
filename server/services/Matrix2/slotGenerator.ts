@@ -1,7 +1,7 @@
 // server/services/Matrix2/slotGenerator.ts
 import { storage } from "../../storage";
 import { getSlotsForDate, createSlots } from "./slotDb";
-import { addMinutes } from "date-fns";
+import { addMinutes, addDays, parseISO } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { randomInt } from "crypto";
 
@@ -45,8 +45,16 @@ export async function generateSlotsForDay(
   }
   
   // End time boundary: dateIso at sendingHoursEnd
-  const endTimeStr = `${dateIso}T${String(sendingHoursEnd).padStart(2, '0')}:00:00`;
+  // Handle midnight crossover: if endHour < startHour, use NEXT day for endBoundary
+  const isMidnightCrossover = sendingHoursEnd < sendingHoursStart;
+  const endDate = isMidnightCrossover ? addDays(parseISO(dateIso), 1) : parseISO(dateIso);
+  const endDateIso = formatInTimeZone(endDate, adminTz, 'yyyy-MM-dd');
+  const endTimeStr = `${endDateIso}T${String(sendingHoursEnd).padStart(2, '0')}:00:00`;
   const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
+  
+  if (isMidnightCrossover) {
+    console.log(`[Matrix2 Generator] ⏰ Midnight crossover detected: ${sendingHoursStart}:00 - ${sendingHoursEnd}:00 spans to next day`);
+  }
 
   let previousJitter: number | null = null;
   
