@@ -4682,6 +4682,7 @@ export class DatabaseStorage implements IStorage {
   async getAdminUser(): Promise<any | null> {
     try {
       const { sql } = await import('drizzle-orm');
+      console.log('[Storage.getAdminUser] EXECUTING QUERY...');
       const result = await db.execute(sql`
         SELECT 
           id,
@@ -4693,7 +4694,19 @@ export class DatabaseStorage implements IStorage {
         ORDER BY created_at ASC
         LIMIT 1
       `);
-      return (result as any).rows?.[0] || null;
+      console.log('[Storage.getAdminUser] RAW RESULT:', {
+        hasRows: !!(result as any).rows,
+        rowCount: (result as any).rows?.length,
+        firstRow: (result as any).rows?.[0]
+      });
+      const adminUser = (result as any).rows?.[0] || null;
+      console.log('[Storage.getAdminUser] Query result:', {
+        found: !!adminUser,
+        userId: adminUser?.id,
+        userEmail: adminUser?.email,
+        fullObject: adminUser
+      });
+      return adminUser;
     } catch (error) {
       console.error(`[Storage] Error fetching admin user:`, error);
       return null;

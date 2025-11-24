@@ -367,11 +367,9 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
     }
 
     // 2. Get admin user for Gmail OAuth
-    const adminUser = await storage.getAdminUser();
-    if (!adminUser) {
-      console.error('[EmailSender] No admin user found');
-      return false;
-    }
+    // CRITICAL FIX: Hardcode the actual admin user ID to bypass ghost user bug
+    const ADMIN_USER_ID = '4df35876-ab89-4860-8656-0440accfea14'; // michael@naturalmaterials.eu
+    console.log('[EmailSender] Using HARDCODED admin user ID for Gmail:', ADMIN_USER_ID);
 
     // 3. Generate email content using AI
     const currentStep = (recipient.currentStep || 0) + 1; // Next step to send
@@ -391,7 +389,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
 
     // 4. Send email via Gmail
     const emailResult = await sendEmail({
-      userId: adminUser.id,
+      userId: ADMIN_USER_ID,
       to: recipient.email,
       subject,
       body,
