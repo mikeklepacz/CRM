@@ -949,6 +949,28 @@ function QueueView() {
     },
   });
 
+  // Rebuild Queue mutation - force delete and regenerate all slots
+  const rebuildQueueMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', '/api/ehub/queue/rebuild');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ehub/paused-recipients'] });
+      toast({
+        title: 'Queue rebuilt',
+        description: 'All slots have been regenerated with current settings',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to rebuild queue',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Fetch paused count separately
   const { data: pausedCount = 0 } = useQuery<number>({
     queryKey: ['/api/ehub/queue/paused-count'],
@@ -1112,6 +1134,26 @@ function QueueView() {
                     </>
                   ) : (
                     'Generate Queue'
+                  )}
+                </Button>
+              )}
+              {statusFilter === 'active' && (
+                <Button
+                  variant="outline"
+                  onClick={() => rebuildQueueMutation.mutate()}
+                  disabled={rebuildQueueMutation.isPending}
+                  data-testid="button-rebuild-queue"
+                >
+                  {rebuildQueueMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Rebuilding...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Rebuild Queue
+                    </>
                   )}
                 </Button>
               )}
