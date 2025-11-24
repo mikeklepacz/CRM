@@ -1528,6 +1528,15 @@ export default function EHub() {
 
   // Nuke Test Data state
   const [nukeDialogOpen, setNukeDialogOpen] = useState(false);
+  const [nukeCounts, setNukeCounts] = useState<{
+    recipientsCount: number;
+    messagesCount: number;
+    testEmailsCount: number;
+    slotsCount: number;
+  } | null>(null);
+  const [nukeEmailPattern, setNukeEmailPattern] = useState("");
+  const [nukeConfirmText, setNukeConfirmText] = useState("");
+  const [countsError, setCountsError] = useState<string | null>(null);
 
   // Reply Scanner state
   const [replyScannnerDialogOpen, setReplyScannerDialogOpen] = useState(false);
@@ -1847,6 +1856,22 @@ export default function EHub() {
     setSyntheticPreview(null);
   }, [selectedSequenceId]);
 
+  // Fetch nuke counts when dialog opens
+  useEffect(() => {
+    if (nukeDialogOpen) {
+      fetch('/api/ehub/test-data/nuke/counts')
+        .then(res => res.json())
+        .then(data => {
+          setNukeCounts(data);
+          setCountsError(null);
+        })
+        .catch(error => {
+          setCountsError('Failed to fetch counts');
+          console.error('Error fetching nuke counts:', error);
+        });
+    }
+  }, [nukeDialogOpen]);
+
   // Fetch selected sequence recipients with filter
   const { data: recipients, isLoading: isLoadingRecipients, error: recipientsError } = useQuery<Recipient[]>({
     queryKey: ['/api/sequences', selectedSequenceId, 'recipients', contactedFilter],
@@ -2151,8 +2176,12 @@ export default function EHub() {
     onSuccess: (data: any) => {
       toast({
         title: "Test Data Deleted",
-        description: `Deleted ${data.recipientsDeleted} recipients, ${data.messagesDeleted} messages, ${data.testEmailsDeleted} test emails, and ${data.sequencesDeleted || 0} empty sequences.`,
+        description: `Deleted ${data.recipientsDeleted} recipients, ${data.messagesDeleted} messages, ${data.slotsDeleted || 0} slots, and ${data.testEmailsDeleted} test emails.`,
       });
+      setNukeDialogOpen(false);
+      setNukeCounts(null);
+      setNukeEmailPattern("");
+      setNukeConfirmText("");
       queryClient.invalidateQueries({ queryKey: ['/api/test-email/history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/sequences'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ehub/all-contacts'] });
@@ -4420,12 +4449,40 @@ export default function EHub() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="w-5 h-5" />
-              Delete All Test Data?
+              Clear Test Data
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete all test emails, sequence recipients, and messages. This action cannot be undone.
+              This will permanently delete test recipients, messages, slots, and test emails. Sequences themselves will be preserved with stats reset to zero.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {nukeCounts && (
+              <Alert>
+                <AlertDescription className="space-y-2">
+                  <div className="font-medium mb-2">Preview:</div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>Recipients:</div>
+                    <div className="font-mono">{nukeCounts.recipientsCount}</div>
+                    <div>Messages:</div>
+                    <div className="font-mono">{nukeCounts.messagesCount}</div>
+                    <div>Slots:</div>
+                    <div className="font-mono">{nukeCounts.slotsCount}</div>
+                    <div>Test Emails:</div>
+                    <div className="font-mono">{nukeCounts.testEmailsCount}</div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {countsError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{countsError}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-nuke">Cancel</AlertDialogCancel>
             <AlertDialogAction
