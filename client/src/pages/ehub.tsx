@@ -1590,11 +1590,11 @@ export default function EHub() {
     queryKey: ['/api/user/preferences'],
   });
 
-  // Fetch user integrations to check Gmail connection status
-  const { data: userIntegrations } = useQuery<any>({
-    queryKey: ['/api/user/integrations'],
+  // Fetch integration status to check Gmail connection
+  const { data: integrationStatus } = useQuery<{ googleCalendarConnected?: boolean }>({
+    queryKey: ['/api/integrations/status'],
   });
-  const gmailConnected = userIntegrations?.some((integration: any) => integration.provider === 'google' && integration.type === 'oauth');
+  const gmailConnected = integrationStatus?.googleCalendarConnected;
 
   // Fetch E-Hub settings
   const { data: settings } = useQuery<EhubSettings>({
