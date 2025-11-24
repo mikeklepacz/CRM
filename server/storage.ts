@@ -4680,6 +4680,8 @@ export class DatabaseStorage implements IStorage {
           sr.id,
           sr.email,
           sr.name,
+          sr.link,
+          sr.sales_summary as "salesSummary",
           sr.sequence_id as "sequenceId",
           sr.current_step as "currentStep",
           sr.timezone,
