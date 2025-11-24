@@ -608,11 +608,13 @@ export interface IStorage {
     recipientsCount: number;
     messagesCount: number;
     testEmailsCount: number;
+    slotsCount: number;
   }>;
   nukeTestData(userId: string, emailPattern?: string): Promise<{
     recipientsDeleted: number;
     messagesDeleted: number;
     testEmailsDeleted: number;
+    slotsDeleted: number;
   }>;
   logTestDataNuke(log: InsertTestDataNukeLog): Promise<TestDataNukeLog>;
 }
@@ -4443,6 +4445,7 @@ export class DatabaseStorage implements IStorage {
     recipientsCount: number;
     messagesCount: number;
     testEmailsCount: number;
+    slotsCount: number;
   }> {
     // Build email filter - if pattern provided, match it; otherwise match all (%)
     const buildEmailFilter = (emailColumn: any) => {
@@ -4484,10 +4487,23 @@ export class DatabaseStorage implements IStorage {
 
     const testEmailsCount = testEmailsResult?.count || 0;
 
+    // Count daily send slots for matching recipients
+    const [slotsResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(dailySendSlots)
+      .where(sql`${dailySendSlots.recipientId} IN (
+        SELECT ${sequenceRecipients.id} 
+        FROM ${sequenceRecipients} 
+        WHERE ${buildEmailFilter(sequenceRecipients.email)}
+      )`);
+
+    const slotsCount = slotsResult?.count || 0;
+
     return {
       recipientsCount,
       messagesCount,
       testEmailsCount,
+      slotsCount,
     };
   }
 
@@ -4495,6 +4511,7 @@ export class DatabaseStorage implements IStorage {
     recipientsDeleted: number;
     messagesDeleted: number;
     testEmailsDeleted: number;
+    slotsDeleted: number;
   }> {
     return await db.transaction(async (tx) => {
       // Build email filter - reuse same logic as counts
@@ -4528,7 +4545,19 @@ export class DatabaseStorage implements IStorage {
 
       const messagesDeleted = deletedMessages.length;
 
-      // Step 2: Delete recipients
+      // Step 2: Delete daily send slots (child records - must happen BEFORE deleting recipients)
+      const deletedSlots = await tx
+        .delete(dailySendSlots)
+        .where(sql`${dailySendSlots.recipientId} IN (
+          SELECT ${sequenceRecipients.id} 
+          FROM ${sequenceRecipients} 
+          WHERE ${buildEmailFilter(sequenceRecipients.email)}
+        )`)
+        .returning({ id: dailySendSlots.id });
+
+      const slotsDeleted = deletedSlots.length;
+
+      // Step 3: Delete recipients (parent records)
       const deletedRecipients = await tx
         .delete(sequenceRecipients)
         .where(buildEmailFilter(sequenceRecipients.email))
@@ -4536,7 +4565,7 @@ export class DatabaseStorage implements IStorage {
 
       const recipientsDeleted = deletedRecipients.length;
 
-      // Step 3: Delete test emails
+      // Step 4: Delete test emails (independent table)
       const deletedTestEmails = await tx
         .delete(testEmailSends)
         .where(buildEmailFilter(testEmailSends.recipientEmail))
@@ -4544,7 +4573,7 @@ export class DatabaseStorage implements IStorage {
 
       const testEmailsDeleted = deletedTestEmails.length;
 
-      // Step 4: Recalculate stats for affected sequences AND fix any orphaned sequences
+      // Step 5: Recalculate stats for affected sequences AND fix any orphaned sequences
       // Find all sequences with non-zero counts
       const sequencesWithCounts = await tx
         .select({ id: sequences.id })
@@ -4617,7 +4646,7 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Step 5: Log the nuke operation (in-transaction)
+      // Step 6: Log the nuke operation (in-transaction)
       await tx.insert(testDataNukeLog).values({
         executedBy: userId,
         emailPattern: emailPattern || null,
@@ -4630,6 +4659,7 @@ export class DatabaseStorage implements IStorage {
         recipientsDeleted,
         messagesDeleted,
         testEmailsDeleted,
+        slotsDeleted,
       };
     });
   }
