@@ -118,7 +118,7 @@ export async function clearSlotsForSequence(sequenceId: string) {
   const result = await db.execute(sql`
     UPDATE daily_send_slots
     SET filled = FALSE, recipient_id = NULL
-    WHERE recipient_id IN (
+    WHERE recipient_id::VARCHAR IN (
       SELECT id FROM sequence_recipients WHERE sequence_id = ${sequenceId}
     )
   `);
