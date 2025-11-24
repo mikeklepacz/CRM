@@ -19139,7 +19139,6 @@ Use this store information to provide context-aware responses. When helping draf
                   sequenceId: manualFollowUpsSequence.id,
                   name: recipientEmail,
                   email: recipientEmail,
-                  link: clientLink || '',
                   currentStep: 1,
                   status: 'awaiting_reply',
                   nextSendAt: null,
