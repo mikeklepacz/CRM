@@ -93,9 +93,9 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       s.status as sequence_status
     FROM sequence_recipients sr
     LEFT JOIN sequences s ON sr.sequence_id = s.id
-    WHERE sr.status NOT IN ('completed', 'failed', 'blacklisted')
+    WHERE sr.status NOT IN ('bounced')
+      AND s.status = 'active'
     ORDER BY 
-      CASE WHEN s.status = 'active' THEN 0 ELSE 1 END ASC,
       sr.id ASC
   `);
   
@@ -103,12 +103,9 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   
   console.log('[QueueRebuilder] Found active recipients:', {
     count: allRecipients.length,
-    activeSequenceCount: allRecipients.filter((r: any) => r.sequence_status === 'active').length,
-    pausedSequenceCount: allRecipients.filter((r: any) => r.sequence_status !== 'active').length,
     sample: allRecipients.slice(0, 3).map((r: any) => ({
       email: r.email,
-      status: r.status,
-      sequenceStatus: r.sequence_status
+      status: r.status
     }))
   });
   
@@ -132,19 +129,14 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     });
   }
   
-  // 6. Reassign recipients in the same order to the new slots
-  // PRIORITY: Active sequences get slots first, then paused sequences
-  const activeRecipients = allRecipients.filter((r: any) => r.sequence_status === 'active');
-  const pausedRecipients = allRecipients.filter((r: any) => r.sequence_status !== 'active');
-  const orderedRecipients = [...activeRecipients, ...pausedRecipients];
+  // 6. Reassign recipients to the new slots
+  // All recipients fetched are from ACTIVE sequences only
+  const orderedRecipients = allRecipients;
   
   console.log('[QueueRebuilder] Reassigning recipients to new slots...');
   console.log('[QueueRebuilder] Recipients to assign:', {
-    active: activeRecipients.length,
-    paused: pausedRecipients.length,
     total: orderedRecipients.length,
-    activeEmails: activeRecipients.map((r: any) => r.email),
-    pausedEmails: pausedRecipients.slice(0, 3).map((r: any) => r.email)
+    emails: orderedRecipients.map((r: any) => r.email)
   });
   
   let assignedCount = 0;
