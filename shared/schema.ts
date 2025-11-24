@@ -1849,11 +1849,11 @@ export type TestDataNukeLog = typeof testDataNukeLog.$inferSelect;
 
 // Daily Send Slots - pre-generated email slots for Matrix2 scheduling engine
 export const dailySendSlots = pgTable("daily_send_slots", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   slotDate: date("slot_date").notNull(),
   slotTimeUtc: timestamp("slot_time_utc", { withTimezone: true }).notNull(),
   filled: boolean("filled").notNull().default(false),
-  recipientId: uuid("recipient_id"),
+  recipientId: varchar("recipient_id"),
   sent: boolean("sent").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
