@@ -20328,6 +20328,10 @@ Use this store information to provide context-aware responses. When helping draf
         });
       }
       
+      // Clean up slots BEFORE deleting sequence (while recipients still exist)
+      const { clearSlotsForSequence } = await import('./services/Matrix2/slotDb');
+      await clearSlotsForSequence(id);
+      
       const deleted = await storage.deleteSequence(id);
       
       if (!deleted) {
