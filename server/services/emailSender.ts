@@ -426,16 +426,12 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
     });
 
     // 7. POST-SEND BOOKKEEPING (critical fixes for broken system)
-    // Increment sequence sentCount
+    // Increment sequence sentCount (atomic operation to prevent race conditions)
     try {
-      const currentSentCount = sequence.sentCount || 0;
-      await storage.updateSequenceStats(sequence.id, {
-        sentCount: currentSentCount + 1,
-        lastSentAt: now,
-      });
-      console.log(`[EmailSender] ✅ Incremented sentCount for sequence ${sequence.id} (was ${currentSentCount}, now ${currentSentCount + 1})`);
+      await storage.incrementSequenceSentCount(sequence.id);
+      console.log(`[EmailSender] ✅ Atomically incremented sentCount for sequence ${sequence.id}`);
     } catch (error) {
-      console.error(`[EmailSender] ⚠️  Failed to update sequence stats:`, error);
+      console.error(`[EmailSender] ⚠️  Failed to increment sequence sentCount:`, error);
     }
 
     // 8. UPDATE COMMISSION TRACKER GOOGLE SHEETS (critical fix!)
