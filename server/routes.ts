@@ -21263,6 +21263,37 @@ ${conversationContext}`;
         return res.json({ message: 'No contacts to add', count: 0 });
       }
 
+      // ENRICH CONTACTS: Build a lookup map from Store Database to populate missing link fields
+      const storeEmailToLink = new Map<string, { link?: string; salesSummary?: string }>();
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      
+      if (storeSheet) {
+        const storeData = await googleSheets.readSheetData(
+          storeSheet.spreadsheetId,
+          `${storeSheet.sheetName}!A:ZZ`
+        );
+        
+        if (storeData && storeData.length > 0) {
+          const headers = storeData[0].map((h: string) => h.toLowerCase().trim());
+          const emailIndex = headers.indexOf('email');
+          const linkIndex = headers.indexOf('link');
+          const salesSummaryIndex = headers.indexOf('sales-ready summary');
+          
+          if (emailIndex !== -1) {
+            for (let i = 1; i < storeData.length; i++) {
+              const row = storeData[i];
+              const rowEmail = row[emailIndex]?.toString().toLowerCase().trim();
+              if (rowEmail && rowEmail.includes('@')) {
+                storeEmailToLink.set(rowEmail, {
+                  link: linkIndex !== -1 ? row[linkIndex] : undefined,
+                  salesSummary: salesSummaryIndex !== -1 ? row[salesSummaryIndex] : undefined
+                });
+              }
+            }
+          }
+        }
+      }
+
       // Email regex for validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       
@@ -21296,6 +21327,11 @@ ${conversationContext}`;
         const existing = await storage.findRecipientByEmail(id, email);
         if (existing) continue;
 
+        // ENRICH: Look up email in Store Database to get link and salesSummary
+        const storeData = storeEmailToLink.get(email);
+        const enrichedLink = contact.link || storeData?.link || '';
+        const enrichedSalesSummary = contact.salesSummary || storeData?.salesSummary || '';
+
         // Use contact's data directly (already has timezone/businessHours from source)
         const businessHours = contact.hours || contact.businessHours || '';
         const timezone = contact.timezone || 'America/New_York';
@@ -21307,8 +21343,8 @@ ${conversationContext}`;
             sequenceId: id,
             email,
             name,
-            link: contact.link || '',
-            salesSummary: contact.salesSummary || '',
+            link: enrichedLink,
+            salesSummary: enrichedSalesSummary,
             businessHours,
             state,
             timezone,
@@ -21320,8 +21356,8 @@ ${conversationContext}`;
             sequenceId: id,
             email,
             name,
-            link: contact.link || '',
-            salesSummary: contact.salesSummary || '',
+            link: enrichedLink,
+            salesSummary: enrichedSalesSummary,
             businessHours,
             state,
             timezone,
