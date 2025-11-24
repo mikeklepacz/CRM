@@ -1,0 +1,67 @@
+We had a queue that was ready to fire. But I deleted the sequence that was filling it. Then I made a new sequence and added emaails to it. What should I expect now based on the code?
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 18 files
+Based on the code, here's what should happen after you deleted the old sequence and created a new one:
+
+What Happened When You Deleted the Sequence
+Cascade deletion - When you deleted the sequence, all related data was automatically deleted via ON DELETE CASCADE:
+All recipients in that sequence (sequence_recipients)
+All filled slots that referenced those recipients became orphaned (unfilled)
+Looking at the slot assignment code in slotDb.ts and slotAssigner.ts, the daily_send_slots table has a recipient_id column but no foreign key constraint to sequence_recipients. This means:
+
+The slots still exist with the old recipient_id values
+Those recipient IDs are now invalid (orphaned references)
+The slots are still marked as filled = TRUE but point to non-existent recipients
+What Should Happen Now
+From emailQueue.ts (line 29-48):
+
+const result = await db.execute(sql`
+    SELECT 
+      dss.id, 
+      dss.slot_time_utc, 
+      dss.recipient_id,
+      s.status as sequence_status,
+      s.name as sequence_name
+    FROM daily_send_slots dss
+    INNER JOIN sequence_recipients sr ON dss.recipient_id::varchar = sr.id
+    INNER JOIN sequences s ON sr.sequence_id = s.id
+    WHERE dss.sent = FALSE
+      AND dss.filled = TRUE
+      AND dss.recipient_id IS NOT NULL
+      AND dss.slot_time_utc <= ${nowUtcIso}
+      AND s.status = 'active'
+    ORDER BY dss.slot_time_utc ASC
+    LIMIT 10
+  `);
+The orphaned slots won't fire because the INNER JOIN on sequence_recipients will fail - those recipients no longer exist.
+
+What You Should Expect With Your New Sequence
+New recipients won't be scheduled yet - You just added emails to a new sequence, but they need to be assigned to slots
+Slot assignment runs every 60 seconds - From slotAssigner.ts, the assignRecipientsToSlots() function runs periodically
+Empty slots should be filled - The assigner will:
+Find your new recipients (with status = 'in_sequence')
+Assign them to any empty slots (filled = FALSE)
+The orphaned slots are still marked as filled = TRUE, so they won't be reused
+The Problem
+Your queue is partially blocked by ghost slots. The orphaned slots are:
+
+Marked as filled
+Point to deleted recipients
+Won't fire (due to INNER JOIN failure)
+Won't be reassigned (because filled = TRUE)
+What Should Happen (Clean State)
+You need to either:
+
+Option A: Clear orphaned slots - Mark them as unfilled so they can be reused:
+
+UPDATE daily_send_slots 
+SET filled = FALSE, recipient_id = NULL 
+WHERE recipient_id NOT IN (SELECT id FROM sequence_recipients);
+Option B: Wait for slot regeneration - The ensureDailySlots() function runs every 60 seconds and generates 3 days of fresh slots, so your new recipients should get assigned to newly generated slots for future dates.
+
+Currently, based on the logs showing 100 slots with "Unknown" recipient details, you're in the orphaned state. The system will work once the slot assigner runs and fills newly generated empty slots with your new recipients.

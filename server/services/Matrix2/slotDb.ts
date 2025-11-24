@@ -107,3 +107,44 @@ export async function getScheduledSlotsFromDate(dateIso: string): Promise<DailyS
   
   return rows;
 }
+
+/**
+ * Clear slots assigned to recipients from a specific sequence
+ * Called when a sequence is deleted to free up those slots
+ */
+export async function clearSlotsForSequence(sequenceId: string) {
+  console.log('[SlotDb.clearSlotsForSequence] Clearing slots for sequence:', sequenceId);
+  
+  const result = await db.execute(sql`
+    UPDATE daily_send_slots
+    SET filled = FALSE, recipient_id = NULL
+    WHERE recipient_id IN (
+      SELECT id FROM sequence_recipients WHERE sequence_id = ${sequenceId}
+    )
+  `);
+  
+  const affectedRows = (result as any).rowCount || 0;
+  console.log('[SlotDb.clearSlotsForSequence] ✅ Cleared', affectedRows, 'slots');
+  
+  return affectedRows;
+}
+
+/**
+ * Clear all orphaned slots (pointing to deleted recipients)
+ * Useful for cleanup after sequence deletion or data corruption
+ */
+export async function clearOrphanedSlots() {
+  console.log('[SlotDb.clearOrphanedSlots] Finding and clearing orphaned slots...');
+  
+  const result = await db.execute(sql`
+    UPDATE daily_send_slots
+    SET filled = FALSE, recipient_id = NULL
+    WHERE recipient_id IS NOT NULL
+      AND recipient_id NOT IN (SELECT id FROM sequence_recipients)
+  `);
+  
+  const affectedRows = (result as any).rowCount || 0;
+  console.log('[SlotDb.clearOrphanedSlots] ✅ Cleared', affectedRows, 'orphaned slots');
+  
+  return affectedRows;
+}
