@@ -34,10 +34,9 @@ function getNextBusinessDay(fromDate: Date, adminTz: string, skipWeekends: boole
 }
 
 /**
- * Manually rebuild the entire queue with new settings
- * - ALWAYS starts from today to ensure all future slots are regenerated with new jitter
- * - Deletes all slots from today forward
- * - Regenerates 3 days of fresh slots with current jitter settings
+ * Manually rebuild the ENTIRE queue with new settings
+ * - Deletes ALL slots (past, present, and future)
+ * - Regenerates fresh queue from today forward for 3 days with current jitter settings
  * - Reassigns existing scheduled recipients to new slots
  * 
  * This is triggered when user manually clicks "Rebuild Queue" button to refresh
@@ -46,7 +45,7 @@ function getNextBusinessDay(fromDate: Date, adminTz: string, skipWeekends: boole
  * @param adminUserId - User ID to fetch timezone preferences
  */
 export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
-  console.log('[QueueRebuilder] 🔄 Starting MANUAL queue rebuild - will refresh all future slots with new settings');
+  console.log('[QueueRebuilder] 🔄 Starting COMPLETE queue rebuild - will NUKE entire queue and rebuild from scratch');
   
   // 1. Get admin timezone and E-Hub settings
   const userPrefs = await storage.getUserPreferences(adminUserId);
@@ -66,17 +65,18 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     skipWeekends: settings.skipWeekends
   });
   
-  // For MANUAL rebuild, ALWAYS start from today - this ensures new jitter is applied everywhere
+  // For COMPLETE rebuild, delete ALL slots and start fresh from today
   const now = new Date();
   const rebuildStartDate = now;
   const rebuildStartDateIso = now.toISOString().slice(0, 10);
   
-  console.log('[QueueRebuilder] 🚀 Manual rebuild - starting from TODAY to apply new settings:', {
+  console.log('[QueueRebuilder] 🚀 COMPLETE rebuild - NUKING entire queue and regenerating from TODAY:', {
     todayDate: rebuildStartDateIso
   });
   
-  // 3. Fetch all recipients currently scheduled from that day forward (in order)
-  const scheduledRecipients = await getScheduledRecipientsFromDate(rebuildStartDateIso);
+  // 3. Fetch all recipients currently scheduled (from all dates) to preserve them
+  // Using very old date to get ALL recipients, not just future ones
+  const scheduledRecipients = await getScheduledRecipientsFromDate('2020-01-01');
   
   console.log('[QueueRebuilder] Found scheduled recipients:', {
     count: scheduledRecipients.length,
@@ -86,13 +86,12 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     }))
   });
   
-  if (scheduledRecipients.length === 0) {
-    console.log('[QueueRebuilder] ✅ No recipients to reschedule');
-    return;
-  }
-  
-  // 4. Delete all slots from rebuild start date onward
-  await deleteSlotsFromDate(rebuildStartDateIso);
+  // 4. DELETE ALL SLOTS (NUKE THE ENTIRE QUEUE)
+  console.log('[QueueRebuilder] 💣 DELETING ALL SLOTS - nuking entire queue...');
+  const { db } = await import('../../db');
+  const { sql } = await import('drizzle-orm');
+  await db.execute(sql`DELETE FROM daily_send_slots`);
+  console.log('[QueueRebuilder] ✅ All slots deleted');
   
   // 5. Regenerate 3 days worth of fresh slots with new settings
   console.log('[QueueRebuilder] Regenerating slots for 3 days...');

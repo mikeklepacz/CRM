@@ -56,6 +56,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **E-Hub Queue Coordinator**: Centralized scheduling system enforcing FIFO ordering, rate limiting, and geographic distribution, using cohort-based timezone balancing and two-tier priority.
 - **Matrix2 Slot-First Scheduler**: Production email scheduling system using a slot-first architecture, pre-generating daily email slots and assigning eligible recipients.
 - **Matrix2 Priority Tiers (Planned)**: Three-tier priority system for slot assignment: Tier 1 (Manual Follow-Ups at step 1+ after human contact), Tier 2 (active follow-ups at step 2+), Tier 3 (cold outreach at step 0). Higher priority recipients get first access to available slots.
+- **Complete Queue Rebuild**: Admin can nuke and rebuild entire queue (all slots deleted, regenerated from today forward) via "Rebuild Queue" button in Queue view. Preserves all recipients and reassigns them to new slots in order, applying new jitter settings across entire queue.
 - **Manual Follow-Ups System Architecture**: 
   - **Step Numbering**: All manual emails (Store Details drafts + Scanner enrollments) are stored at Step 1, NOT Step 0. First AI follow-up happens at Step 2 after wait period. This prevents accidental instant-sends if stepDelays[1] = 0.
   - **Auto-Enrollment Triggers**: (1) Store Details Gmail drafts with `clientLink` parameter trigger automatic enrollment at Step 1 via POST /api/email-drafts. (2) Gmail Reply Scanner enrolls recipients at Step 1 when scanning sent emails.
