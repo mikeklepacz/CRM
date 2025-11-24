@@ -1,0 +1,56 @@
+E-Hub is an automated email campaign system that sends personalized cold outreach emails to potential customers (cannabis dispensaries) using AI to write every message. Here's what it does and its key features:
+
+Core Purpose
+Instead of manually writing hundreds of similar emails, E-Hub automates the entire process while maintaining personalization through AI-generated content for each recipient.
+
+Key Features
+1. Campaign Strategy Planning
+Chat with AI to define campaign goals, messaging, tone, and target audience
+AI stores this strategy as the blueprint for all emails in the sequence
+Set step delays (how many days between Email 1, Email 2, Email 3, etc.)
+2. Recipient Management
+Import contacts from Google Sheets (Store Database or Commission Tracker)
+Track contact status: never contacted, contacted, in sequence, replied, bounced
+View all contacts across sequences with filtering and search
+Blacklist emails to exclude from enrollment
+3. AI Email Generation
+Each email is uniquely written by AI (no templates)
+Uses your campaign strategy + recipient context (name, business info, timezone)
+Generates both subject lines and HTML body content
+Follow-ups reference previous emails naturally
+Uses specialized "Aligner" AI assistant with knowledge base
+4. Smart Scheduling (Matrix2 System)
+Respects recipient business hours and timezones
+Spreads emails throughout the day with random jitter to avoid spam flags
+Enforces daily email limits (default 150/day)
+Skips weekends if configured
+Three-tier priority: Manual Follow-Ups → Active Follow-Ups → Cold Outreach
+5. Reply Detection
+Auto-detects Gmail replies and stops sending to those recipients
+Marks recipients as "replied" to prevent further emails
+Scanner tool can detect manual Gmail draft sends and enroll them in follow-up sequences
+6. Queue Management
+View upcoming emails scheduled across next 3 days
+Color-coded status: Green (sent), Blue (scheduled), Gray (open slots), Red (overdue)
+Actions: pause recipient, skip step, send now, delay by X hours, remove from sequence
+Manual queue rebuild to apply new jitter settings
+7. Campaign Controls
+Activate/pause sequences
+View sent history with filtering
+Synthetic email preview (test how emails will look)
+Test email sending to verify templates
+8. Integration
+Gmail OAuth for sending
+Google Sheets for contact data
+Commission Tracker auto-updates to "Emailed" status
+Timezone detection from store locations
+Workflow Example
+Create sequence: "Cold Outreach Q1 2025"
+Chat with AI about campaign strategy
+Set delays: [0 days, 3 days, 7 days] = Email 1 immediately, Email 2 after 3 days, Email 3 after 7 more days
+Import 100 contacts from Google Sheets
+Activate sequence
+System automatically generates unique emails for each person and sends at optimal times
+If someone replies, system stops sending to them
+View progress in Queue tab
+The system handles all the complexity of timing, personalization, and reply detection automatically.
