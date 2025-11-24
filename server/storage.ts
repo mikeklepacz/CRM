@@ -4746,9 +4746,8 @@ export class DatabaseStorage implements IStorage {
           subject,
           body,
           sent_at,
-          gmail_message_id,
-          gmail_thread_id,
-          rfc822_message_id
+          message_id,
+          thread_id
         )
         VALUES (
           ${message.id},
@@ -4758,8 +4757,7 @@ export class DatabaseStorage implements IStorage {
           ${message.body || null},
           ${message.sentAt || sql`NOW()`},
           ${message.gmailMessageId || null},
-          ${message.gmailThreadId || null},
-          ${message.rfc822MessageId || null}
+          ${message.gmailThreadId || null}
         )
         RETURNING *
       `);

@@ -133,13 +133,24 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   }
   
   // 6. Reassign recipients in the same order to the new slots
+  // PRIORITY: Active sequences get slots first, then paused sequences
+  const activeRecipients = allRecipients.filter((r: any) => r.sequence_status === 'active');
+  const pausedRecipients = allRecipients.filter((r: any) => r.sequence_status !== 'active');
+  const orderedRecipients = [...activeRecipients, ...pausedRecipients];
+  
   console.log('[QueueRebuilder] Reassigning recipients to new slots...');
-  console.log('[QueueRebuilder] Recipients to assign:', allRecipients.map((r: any) => ({ email: r.email, id: r.id })));
+  console.log('[QueueRebuilder] Recipients to assign:', {
+    active: activeRecipients.length,
+    paused: pausedRecipients.length,
+    total: orderedRecipients.length,
+    activeEmails: activeRecipients.map((r: any) => r.email),
+    pausedEmails: pausedRecipients.slice(0, 3).map((r: any) => r.email)
+  });
   
   let assignedCount = 0;
   let skippedCount = 0;
   
-  for (const recipient of allRecipients) {
+  for (const recipient of orderedRecipients) {
     // Provide default timezone if missing
     const recipientTz = recipient.timezone || adminTz;
     const recipientWithDefaults = { ...recipient, timezone: recipientTz };
