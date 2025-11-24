@@ -19690,7 +19690,7 @@ Use this store information to provide context-aware responses. When helping draf
           sr.sequence_id,
           s.name as sequence_name
         FROM daily_send_slots dss
-        LEFT JOIN sequence_recipients sr ON dss.recipient_id::varchar = sr.id
+        LEFT JOIN sequence_recipients sr ON sr.id = dss.recipient_id::varchar
         LEFT JOIN sequences s ON sr.sequence_id = s.id
         WHERE dss.slot_time_utc >= ${now.toISOString()}
           AND dss.slot_time_utc < ${endDate.toISOString()}

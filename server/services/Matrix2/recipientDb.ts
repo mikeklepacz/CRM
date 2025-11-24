@@ -96,7 +96,7 @@ export async function getScheduledRecipientsFromDate(dateIso: string) {
       s.step_delays,
       s.status as sequence_status
     FROM sequence_recipients sr
-    INNER JOIN daily_send_slots dss ON dss.recipient_id::varchar = sr.id
+    INNER JOIN daily_send_slots dss ON sr.id = dss.recipient_id::varchar
     INNER JOIN sequences s ON sr.sequence_id = s.id
     WHERE dss.slot_date >= ${dateIso}
       AND dss.filled = TRUE
