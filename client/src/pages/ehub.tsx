@@ -32,6 +32,7 @@ import { TestTube2, RefreshCw, Reply } from "lucide-react";
  * Based on pure company sending window (not client timezone overlap)
  * Spacing = (endHour - startHour) × 60 ÷ dailyLimit
  * Jitter = configurable percentage of spacing (default ±50%)
+ * Handles midnight crossover: if endHour < startHour, adds 24 hours to window
  */
 function calculateOptimalDelays(
   companyStartHour: number,
@@ -40,7 +41,10 @@ function calculateOptimalDelays(
   jitterPercentage: number = 50
 ): { minDelayMinutes: number; maxDelayMinutes: number } {
   // Calculate pure company sending window (no client timezone logic)
-  const companyWindowHours = companyEndHour - companyStartHour;
+  // Handle midnight crossover: if endHour < startHour, use next day's end boundary
+  const companyWindowHours = companyEndHour < companyStartHour
+    ? (companyEndHour + 24) - companyStartHour
+    : companyEndHour - companyStartHour;
   const companyWindowMinutes = companyWindowHours * 60;
   
   // Calculate average spacing needed for daily limit
