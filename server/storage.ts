@@ -4494,7 +4494,7 @@ export class DatabaseStorage implements IStorage {
       .select({ count: sql<number>`count(*)::int` })
       .from(dailySendSlots)
       .where(sql`${dailySendSlots.recipientId} IN (
-        SELECT ${sequenceRecipients.id} 
+        SELECT CAST(${sequenceRecipients.id} AS uuid) 
         FROM ${sequenceRecipients} 
         WHERE ${buildEmailFilter(sequenceRecipients.email)}
       )`);
@@ -4551,7 +4551,7 @@ export class DatabaseStorage implements IStorage {
       const deletedSlots = await tx
         .delete(dailySendSlots)
         .where(sql`${dailySendSlots.recipientId} IN (
-          SELECT ${sequenceRecipients.id} 
+          SELECT CAST(${sequenceRecipients.id} AS uuid) 
           FROM ${sequenceRecipients} 
           WHERE ${buildEmailFilter(sequenceRecipients.email)}
         )`)
