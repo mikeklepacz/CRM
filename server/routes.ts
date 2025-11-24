@@ -19752,6 +19752,26 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Force Rebuild Queue - delete all future slots and regenerate with current settings (admin only)
+  app.post('/api/ehub/queue/rebuild', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      console.log('[API] Force rebuild queue triggered by user:', userId);
+      
+      const { rebuildQueueFromNextBusinessDay } = await import('./services/Matrix2/queueRebuilder');
+      await rebuildQueueFromNextBusinessDay(userId);
+      
+      res.json({ message: 'Queue rebuild completed successfully' });
+    } catch (error: any) {
+      console.error('Error rebuilding queue:', error);
+      res.status(500).json({ message: error.message || 'Failed to rebuild queue' });
+    }
+  });
+
   // Get paused recipients with history (admin only)
   app.get('/api/ehub/paused-recipients', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
