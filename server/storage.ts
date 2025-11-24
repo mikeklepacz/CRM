@@ -154,6 +154,8 @@ import {
   sequenceRecipientMessages,
   testEmailSends,
   testDataNukeLog,
+  dailySendSlots,
+  type DailySendSlot,
   type EhubSettings,
   type InsertEhubSettings,
   type Sequence,
