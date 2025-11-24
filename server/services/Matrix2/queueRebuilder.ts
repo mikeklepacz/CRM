@@ -6,9 +6,6 @@ import { parseBusinessHours } from "../timezoneHours";
 import { toZonedTime } from "date-fns-tz";
 import { addDays } from "date-fns";
 
-// Safety buffer: never assign recipients to slots within this many minutes of now
-// This prevents the race condition where emails send immediately after rebuild
-const SLOT_SAFETY_BUFFER_MINUTES = 15;
 
 /**
  * Calculate the next business day from a given date
@@ -165,12 +162,14 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       for (const slot of emptySlots) {
         const slotUtc = new Date(slot.slot_time_utc);
         const now = new Date();
-        const safetyBufferMs = SLOT_SAFETY_BUFFER_MINUTES * 60 * 1000;
-        const minSafeTime = new Date(now.getTime() + safetyBufferMs);
         
-        // Skip slots that are too close to now (within safety buffer)
-        if (slotUtc < minSafeTime) {
-          console.log(`[QueueRebuilder] ⏭️  Skipping slot at ${slotUtc.toISOString()} for ${recipient.email} - too close to now (safety buffer: ${SLOT_SAFETY_BUFFER_MINUTES}min)`);
+        // Only assign to slots that are at least minDelayMinutes in the future
+        // This respects the jitter spacing and prevents immediate sends
+        const minJitterMs = settings.minDelayMinutes * 60 * 1000;
+        const minAllowedTime = new Date(now.getTime() + minJitterMs);
+        
+        if (slotUtc < minAllowedTime) {
+          console.log(`[QueueRebuilder] ⏭️  Skipping slot at ${slotUtc.toISOString()} for ${recipient.email} - violates jitter law (needs ${settings.minDelayMinutes}min spacing)`);
           continue;
         }
         
