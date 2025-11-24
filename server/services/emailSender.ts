@@ -59,8 +59,16 @@ interface EmailResponse {
  */
 export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
   try {
+    console.log(`[EmailSender] sendEmail called for userId: ${options.userId}`);
     const integration = await storage.getUserIntegration(options.userId);
+    console.log(`[EmailSender] Integration lookup result:`, {
+      found: !!integration,
+      hasAccessToken: !!integration?.googleCalendarAccessToken,
+      hasRefreshToken: !!integration?.googleCalendarRefreshToken,
+      email: integration?.googleCalendarEmail
+    });
     if (!integration?.googleCalendarAccessToken) {
+      console.error(`[EmailSender] MISSING Gmail token for user ${options.userId}`);
       throw new Error("Gmail not connected. Please connect Gmail first.");
     }
 
