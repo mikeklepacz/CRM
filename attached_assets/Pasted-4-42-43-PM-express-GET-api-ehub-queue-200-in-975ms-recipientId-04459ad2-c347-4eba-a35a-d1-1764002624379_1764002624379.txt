@@ -1,0 +1,31 @@
+4:42:43 PM [express] GET /api/ehub/queue 200 in 975ms :: [{"recipientId":"04459ad2-c347-4eba-a35a-d1…
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+Error fetching sent history: ReferenceError: sequences is not defined
+    at <anonymous> (/home/runner/workspace/server/routes.ts:20018:23)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+    at isAdmin (/home/runner/workspace/server/routes.ts:720:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+4:43:01 PM [express] GET /api/ehub/sent-history 500 in 693ms :: {"message":"sequences is not defined…
+[EmailQueue] Processing 1 ready slots from ACTIVE sequences
+[EmailSender] Error sending email to recipient f1c4ba3d-29af-4ad3-b86c-84e9b34dcdc7: TypeError: storage.getRecipientById is not a function
+    at sendEmailToRecipient (/home/runner/workspace/server/services/emailSender.ts:343:37)
+    at processEmailQueue (/home/runner/workspace/server/services/emailQueue.ts:72:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Timeout._onTimeout (/home/runner/workspace/server/services/emailQueue.ts:117:7)
+[EmailQueue] ❌ Failed to send email for slot 5ab2ff52-4742-4a41-ae71-62724d977ae9
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+4:43:02 PM [express] GET /api/tickets/unread-count 304 in 323ms :: {"count":1}
+4:43:21 PM [express] GET /api/auth/user 304 in 258ms :: {"id":"4df35876-ab89-4860-8656-0440accfea14"…
+4:43:21 PM [express] GET /api/statuses 304 in 259ms :: {"statuses":[{"id":"5cb465e8-c69e-4af4-bdbd-c…
+🔴 [GET PREFERENCES] colorRowByStatus value being returned: false
+[CalendarSync] Found 0 reminders to sync for user 4df35876-ab89-4860-8656-0440accfea14
+[CalendarSync] Sync complete: 0 created, 0 errors
+4:43:21 PM [express] GET /api/user/preferences 304 in 450ms :: {"id":"bdc1c7a0-5592-4fea-94b0-10871d…
+4:43:22 PM [express] GET /api/tickets/unread-count 304 in 322ms :: {"count":1}
+4:43:22 PM [express] GET /api/ehub/settings 304 in 323ms :: {"id":"e24f5ab1-55bb-476e-a18b-ca80acb73…
+4:43:22 PM [express] GET /api/sequences 304 in 324ms :: [{"id":"d61128f1-b19a-4076-8404-835e1ade847f…
+4:43:22 PM [express] GET /api/users 304 in 387ms :: {"users":[{"id":"56e4b935-c71b-45c3-bca5-fda68bb…
+4:43:22 PM [express] GET /api/ehub/all-contacts 304 in 463ms :: {"contacts":[{"name":"1 Mill","email…
