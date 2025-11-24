@@ -19905,6 +19905,45 @@ Use this store information to provide context-aware responses. When helping draf
     }
   });
 
+  // Bulk remove recipients from sequence (admin only)
+  app.post('/api/ehub/recipients/bulk-delete', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
+    try {
+      const { recipientIds } = req.body;
+      
+      if (!Array.isArray(recipientIds) || recipientIds.length === 0) {
+        return res.status(400).json({ message: 'No recipients to delete' });
+      }
+
+      const { clearSlotsForRecipient } = await import('./services/Matrix2/slotDb');
+      const { invalidateCache } = await import('./services/ehubContactsService');
+      
+      // Delete each recipient and clean up slots
+      const results = [];
+      for (const recipientId of recipientIds) {
+        try {
+          const recipient = await storage.removeRecipient(recipientId);
+          await clearSlotsForRecipient(recipientId);
+          results.push({ id: recipientId, success: true });
+        } catch (err) {
+          console.error(`Failed to remove recipient ${recipientId}:`, err);
+          results.push({ id: recipientId, success: false, error: (err as any).message });
+        }
+      }
+      
+      // Invalidate cache after all deletions
+      invalidateCache();
+      
+      res.json({ 
+        deleted: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length,
+        results 
+      });
+    } catch (error: any) {
+      console.error('Error in bulk recipient delete:', error);
+      res.status(500).json({ message: error.message || 'Failed to delete recipients' });
+    }
+  });
+
   // Update E-Hub global settings (admin only)
   app.patch('/api/ehub/settings', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {

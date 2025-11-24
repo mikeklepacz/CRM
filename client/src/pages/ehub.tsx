@@ -1508,6 +1508,11 @@ export default function EHub() {
   const [targetSequenceId, setTargetSequenceId] = useState<string>('');
   const [deleteSequenceId, setDeleteSequenceId] = useState<string | null>(null);
 
+  // Recipients bulk actions state
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<Set<string>>(new Set());
+  const [recipientSelectAll, setRecipientSelectAll] = useState(false);
+  const [bulkDeleteConfirmDialogOpen, setBulkDeleteConfirmDialogOpen] = useState(false);
+
   // Sequence form state
   const [name, setName] = useState("");
 
@@ -2101,6 +2106,33 @@ export default function EHub() {
       toast({
         title: "Test Generation Failed",
         description: error.message || "Unable to generate synthetic emails",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Bulk delete recipients mutation
+  const bulkDeleteRecipientsMutation = useMutation({
+    mutationFn: (recipientIds: string[]) =>
+      apiRequest('POST', '/api/ehub/recipients/bulk-delete', { recipientIds }),
+    onSuccess: (data: any) => {
+      toast({
+        title: "Recipients Deleted",
+        description: `Deleted ${data.deleted} recipient(s)${data.failed > 0 ? ` (${data.failed} failed)` : ''}.`,
+      });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === '/api/sequences' && 
+          query.queryKey[2] === 'recipients'
+      });
+      setSelectedRecipientIds(new Set());
+      setRecipientSelectAll(false);
+      setBulkDeleteConfirmDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete recipients",
         variant: "destructive",
       });
     },
@@ -2795,7 +2827,66 @@ export default function EHub() {
                   </ToggleGroup>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {selectedRecipientIds.size > 0 && (
+                  <div className="flex items-center justify-between gap-2 p-3 bg-muted/50 border rounded-lg">
+                    <span className="text-sm font-medium">
+                      {selectedRecipientIds.size} recipient{selectedRecipientIds.size !== 1 ? 's' : ''} selected
+                    </span>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedRecipientIds(new Set());
+                          setRecipientSelectAll(false);
+                        }}
+                        data-testid="button-clear-selection"
+                      >
+                        Clear
+                      </Button>
+                      <AlertDialog open={bulkDeleteConfirmDialogOpen} onOpenChange={setBulkDeleteConfirmDialogOpen}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Recipients?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to permanently delete {selectedRecipientIds.size} recipient{selectedRecipientIds.size !== 1 ? 's' : ''}? They will be removed from the email sequence and all scheduled slots will be cleared.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={() => {
+                                bulkDeleteRecipientsMutation.mutate(Array.from(selectedRecipientIds));
+                              }}
+                              disabled={bulkDeleteRecipientsMutation.isPending}
+                              data-testid="button-confirm-bulk-delete"
+                            >
+                              {bulkDeleteRecipientsMutation.isPending ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Deleting...
+                                </>
+                              ) : (
+                                'Delete'
+                              )}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      <Button 
+                        size="sm" 
+                        variant="destructive"
+                        onClick={() => setBulkDeleteConfirmDialogOpen(true)}
+                        disabled={bulkDeleteRecipientsMutation.isPending}
+                        data-testid="button-delete-selected"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Selected
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {isLoadingRecipients ? (
                   <div className="flex justify-center py-8">
                     <Loader2 className="w-8 h-8 animate-spin" />
@@ -2808,6 +2899,21 @@ export default function EHub() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox 
+                            checked={recipientSelectAll}
+                            onCheckedChange={(checked) => {
+                              setRecipientSelectAll(checked as boolean);
+                              if (checked && recipients) {
+                                setSelectedRecipientIds(new Set(recipients.map(r => r.id)));
+                              } else {
+                                setSelectedRecipientIds(new Set());
+                              }
+                            }}
+                            data-testid="checkbox-select-all-recipients"
+                            aria-label="Select all recipients"
+                          />
+                        </TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Link</TableHead>
@@ -2819,6 +2925,24 @@ export default function EHub() {
                     <TableBody>
                       {recipients.map((recipient) => (
                         <TableRow key={recipient.id} data-testid={`row-recipient-${recipient.id}`}>
+                          <TableCell className="w-12">
+                            <Checkbox 
+                              checked={selectedRecipientIds.has(recipient.id)}
+                              onCheckedChange={(checked) => {
+                                const newSelected = new Set(selectedRecipientIds);
+                                if (checked) {
+                                  newSelected.add(recipient.id);
+                                } else {
+                                  newSelected.delete(recipient.id);
+                                }
+                                setSelectedRecipientIds(newSelected);
+                                // Update selectAll if all are selected
+                                setRecipientSelectAll(newSelected.size === recipients.length);
+                              }}
+                              data-testid={`checkbox-recipient-${recipient.id}`}
+                              aria-label={`Select ${recipient.name}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium">{recipient.name}</TableCell>
                           <TableCell>{recipient.email}</TableCell>
                           <TableCell className="max-w-xs truncate">
