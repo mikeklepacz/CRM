@@ -56,9 +56,15 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     return;
   }
   
+  // Phase 1-3: Support both duration and end hour for backward compatibility
+  const sendingHoursDuration = settings.sendingHoursDuration || 
+    (settings.sendingHoursEnd === settings.sendingHoursStart ? 24 : 
+     ((settings.sendingHoursEnd! - settings.sendingHoursStart + 24) % 24));
+  const endHourCalculated = (settings.sendingHoursStart + sendingHoursDuration) % 24;
+  
   console.log('[QueueRebuilder] Current E-Hub Settings:', {
     timezone: adminTz,
-    sendingWindow: `${settings.sendingHoursStart}:00 - ${settings.sendingHoursEnd}:00`,
+    sendingWindow: `${settings.sendingHoursStart}:00 - ${String(endHourCalculated).padStart(2, '0')}:00 (${sendingHoursDuration}h duration)`,
     jitterRange: `${settings.minDelayMinutes} - ${settings.maxDelayMinutes} minutes`,
     dailyLimit: settings.dailyEmailLimit,
     skipWeekends: settings.skipWeekends
@@ -124,7 +130,7 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     await generateSlotsForDay(targetDateIso, adminTz, {
       dailyEmailLimit: settings.dailyEmailLimit,
       sendingHoursStart: settings.sendingHoursStart,
-      sendingHoursEnd: settings.sendingHoursEnd,
+      sendingHoursDuration: sendingHoursDuration,
       minDelayMinutes: settings.minDelayMinutes,
       maxDelayMinutes: settings.maxDelayMinutes,
     });

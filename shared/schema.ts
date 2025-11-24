@@ -1222,7 +1222,8 @@ export const ehubSettings = pgTable("ehub_settings", {
   jitterPercentage: integer("jitter_percentage").notNull().default(50), // Jitter variance percentage (default ±50% of spacing)
   dailyEmailLimit: integer("daily_email_limit").notNull().default(200), // Max emails per day
   sendingHoursStart: integer("sending_hours_start").notNull().default(9), // Company time range start hour (24h format, e.g., 9 = 9 AM)
-  sendingHoursEnd: integer("sending_hours_end").notNull().default(14), // Company time range end hour (24h format, e.g., 14 = 2 PM)
+  sendingHoursDuration: integer("sending_hours_duration"), // Duration in hours (1-24), nullable during Phase 1-3 migration
+  sendingHoursEnd: integer("sending_hours_end").notNull().default(14), // Company time range end hour (24h format, e.g., 14 = 2 PM) - DEPRECATED after Phase 6
   clientWindowStartOffset: decimal("client_window_start_offset", { precision: 4, scale: 2 }).notNull().default('1.00'), // Hours after business opens to start sending (e.g., 1.00 = 1 hour after opening)
   clientWindowEndHour: integer("client_window_end_hour").notNull().default(14), // Client local cutoff hour (24h format, e.g., 14 = 2 PM local time)
   promptInjection: text("prompt_injection"), // Global AI instructions for email personalization
@@ -1425,22 +1426,32 @@ const ehubSettingsBaseSchema = createInsertSchema(ehubSettings).omit({
   jitterPercentage: z.number().min(1).max(100), // 1-100% jitter variance
   dailyEmailLimit: z.number().min(1).max(2000),
   sendingHoursStart: z.number().min(0).max(23),
-  sendingHoursEnd: z.number().min(0).max(23),
+  sendingHoursDuration: z.number().min(1).max(24).optional(), // Duration in hours (1-24), optional during Phase 1-3
+  sendingHoursEnd: z.number().min(0).max(23).optional(), // End hour (0-23), optional/deprecated after Phase 6
   // Coerce string/number to number for PostgreSQL decimal compatibility
   clientWindowStartOffset: z.preprocess(
     (val) => typeof val === 'string' ? parseFloat(val) : val,
     z.number().min(0).max(24) // Hours after business opens (0-24)
   ),
   clientWindowEndHour: z.number().min(0).max(23), // Cutoff hour in client local time (0-23)
-  skipWeekends: z.boolean(),
+  skipWeekends: z.boolean().optional(),
 });
 
 export const insertEhubSettingsSchema = ehubSettingsBaseSchema.refine(
   (data) => data.maxDelayMinutes >= data.minDelayMinutes,
   { message: 'Max delay must be greater than or equal to min delay', path: ['maxDelayMinutes'] }
 ).refine(
-  (data) => data.sendingHoursEnd > data.sendingHoursStart,
-  { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
+  (data) => {
+    // Phase 1-3: Accept either duration or end hour (or both for dual-field mode)
+    if (data.sendingHoursDuration) {
+      return data.sendingHoursDuration >= 1 && data.sendingHoursDuration <= 24;
+    }
+    if (data.sendingHoursEnd !== undefined && data.sendingHoursStart !== undefined) {
+      return data.sendingHoursEnd > data.sendingHoursStart || data.sendingHoursEnd === data.sendingHoursStart;
+    }
+    return true; // At least one should be provided, but optional during migration
+  },
+  { message: 'Provide either sendingHoursDuration (1-24) or valid sendingHoursEnd time', path: ['sendingHoursDuration'] }
 );
 
 export const updateEhubSettingsSchema = ehubSettingsBaseSchema.partial().refine(
@@ -1453,12 +1464,16 @@ export const updateEhubSettingsSchema = ehubSettingsBaseSchema.partial().refine(
   { message: 'Max delay must be greater than or equal to min delay', path: ['maxDelayMinutes'] }
 ).refine(
   (data) => {
-    if (data.sendingHoursEnd !== undefined && data.sendingHoursStart !== undefined) {
-      return data.sendingHoursEnd > data.sendingHoursStart;
+    // Phase 1-3: Accept either duration or end hour (or both for dual-field mode)
+    if (data.sendingHoursDuration !== undefined) {
+      return data.sendingHoursDuration >= 1 && data.sendingHoursDuration <= 24;
     }
-    return true;
+    if (data.sendingHoursEnd !== undefined && data.sendingHoursStart !== undefined) {
+      return data.sendingHoursEnd > data.sendingHoursStart || data.sendingHoursEnd === data.sendingHoursStart;
+    }
+    return true; // Both optional for partial updates during migration
   },
-  { message: 'End hour must be after start hour', path: ['sendingHoursEnd'] }
+  { message: 'If provided, sendingHoursDuration must be 1-24, or sendingHoursEnd must be valid', path: ['sendingHoursDuration'] }
 );
 
 export const insertSequenceScheduledSendSchema = createInsertSchema(sequenceScheduledSends).omit({

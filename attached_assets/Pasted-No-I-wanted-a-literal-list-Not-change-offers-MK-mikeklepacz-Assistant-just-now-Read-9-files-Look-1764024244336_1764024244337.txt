@@ -1,0 +1,255 @@
+No I wanted a literal list. Not change offers.
+
+MK
+
+mikeklepacz
+Assistant
+just now
+Read 9 files
+Looking at the user's request and the chat history, they want a literal list of all the specific lines of code that need to be changed for the duration mode migration, not change proposals.
+
+Here's the comprehensive list of every line that needs to be modified:
+
+Database Schema (shared/schema.ts)
+Lines to change in ehubSettings table definition:
+
+Line ~2800: Add sendingHoursDuration: integer("sending_hours_duration") after sendingHoursEnd
+Keep sendingHoursEnd for now (Phase 1-3), mark for removal in Phase 4
+Lines to change in Zod schemas:
+
+After insertEhubSettingsSchema: Add .extend({ sendingHoursDuration: z.number().int().min(1).max(24).optional() })
+After updateEhubSettingsSchema: Add .extend({ sendingHoursDuration: z.number().int().min(1).max(24).optional() })
+Lines to change in EhubSettings interface:
+
+Add sendingHoursDuration?: number; after sendingHoursEnd?: number;
+Backend Storage (server/storage.ts)
+No specific line changes needed - storage layer reads/writes fields generically via Drizzle ORM
+
+Backend API Routes (server/routes.ts)
+GET /api/ehub/settings endpoint (~line 2400-2450):
+
+No changes needed - returns all fields including new sendingHoursDuration
+PUT /api/ehub/settings endpoint (~line 2450-2500):
+
+Validation already uses updateEhubSettingsSchema which will include new field
+No specific line changes needed
+Slot Generator (server/services/Matrix2/slotGenerator.ts)
+Function generateSlotsForDay (~lines 15-80):
+
+Current lines (~35-40):
+
+const isMidnightCrossover = sendingHoursEnd < sendingHoursStart;
+const endDate = isMidnightCrossover ? addDays(parseISO(dateIso), 1) : parseISO(dateIso);
+const endDateIso = formatInTimeZone(endDate, adminTz, 'yyyy-MM-dd');
+const endTimeStr = `${endDateIso}T${String(sendingHoursEnd).padStart(2, '0')}:00:00`;
+const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
+Replace with:
+
+// Calculate end hour using duration
+const sendingHoursDuration = settings.sendingHoursDuration || ((sendingHoursEnd - sendingHoursStart + 24) % 24);
+const endHourCalculated = (sendingHoursStart + sendingHoursDuration) % 24;
+const needsNextDay = (sendingHoursStart + sendingHoursDuration) >= 24;
+const endDate = needsNextDay ? addDays(parseISO(dateIso), 1) : parseISO(dateIso);
+const endDateIso = formatInTimeZone(endDate, adminTz, 'yyyy-MM-dd');
+const endTimeStr = `${endDateIso}T${String(endHourCalculated).padStart(2, '0')}:00:00`;
+const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
+Function ensureDailySlots (~lines 85-130):
+
+Current lines (~95-100):
+
+const sendingHoursStart = settings.sendingHoursStart || 6;
+const sendingHoursEnd = settings.sendingHoursEnd || 23;
+Replace with:
+
+const sendingHoursStart = settings.sendingHoursStart || 6;
+const sendingHoursEnd = settings.sendingHoursEnd || 23;
+const sendingHoursDuration = settings.sendingHoursDuration || ((sendingHoursEnd - sendingHoursStart + 24) % 24);
+Current line (~120):
+
+await generateSlotsForDay(dateIso, adminTz, {
+  dailyEmailLimit: dailyLimit,
+  sendingHoursStart,
+  sendingHoursEnd,
+  minDelayMinutes,
+  maxDelayMinutes,
+});
+Replace with:
+
+await generateSlotsForDay(dateIso, adminTz, {
+  dailyEmailLimit: dailyLimit,
+  sendingHoursStart,
+  sendingHoursDuration,
+  minDelayMinutes,
+  maxDelayMinutes,
+});
+Update function signature (~line 15):
+
+export async function generateSlotsForDay(
+  dateIso: string,
+  adminTz: string,
+  settings: {
+    dailyEmailLimit: number;
+    sendingHoursStart: number;
+    sendingHoursDuration: number;  // Changed from sendingHoursEnd
+    minDelayMinutes: number;
+    maxDelayMinutes: number;
+  }
+)
+Queue Rebuilder (server/services/Matrix2/queueRebuilder.ts)
+Function rebuildQueueFromNextBusinessDay (~lines 50-250):
+
+Current lines (~75-80):
+
+console.log('[QueueRebuilder] Current E-Hub Settings:', {
+  timezone: adminTz,
+  sendingWindow: `${settings.sendingHoursStart}:00 - ${settings.sendingHoursEnd}:00`,
+  jitterRange: `${settings.minDelayMinutes} - ${settings.maxDelayMinutes} minutes`,
+  dailyLimit: settings.dailyEmailLimit,
+  skipWeekends: settings.skipWeekends
+});
+Replace with:
+
+const sendingHoursDuration = settings.sendingHoursDuration || ((settings.sendingHoursEnd - settings.sendingHoursStart + 24) % 24);
+const endHourCalculated = (settings.sendingHoursStart + sendingHoursDuration) % 24;
+console.log('[QueueRebuilder] Current E-Hub Settings:', {
+  timezone: adminTz,
+  sendingWindow: `${settings.sendingHoursStart}:00 - ${endHourCalculated}:00 (${sendingHoursDuration}h duration)`,
+  jitterRange: `${settings.minDelayMinutes} - ${settings.maxDelayMinutes} minutes`,
+  dailyLimit: settings.dailyEmailLimit,
+  skipWeekends: settings.skipWeekends
+});
+Current lines (~140-145):
+
+await generateSlotsForDay(targetDateIso, adminTz, {
+  dailyEmailLimit: settings.dailyEmailLimit,
+  sendingHoursStart: settings.sendingHoursStart,
+  sendingHoursEnd: settings.sendingHoursEnd,
+  minDelayMinutes: settings.minDelayMinutes,
+  maxDelayMinutes: settings.maxDelayMinutes,
+});
+Replace with:
+
+await generateSlotsForDay(targetDateIso, adminTz, {
+  dailyEmailLimit: settings.dailyEmailLimit,
+  sendingHoursStart: settings.sendingHoursStart,
+  sendingHoursDuration: sendingHoursDuration,
+  minDelayMinutes: settings.minDelayMinutes,
+  maxDelayMinutes: settings.maxDelayMinutes,
+});
+Frontend UI (client/src/pages/ehub.tsx)
+Interface EhubSettings (~lines 130-145):
+
+Current:
+
+interface EhubSettings {
+  id?: string;
+  minDelayMinutes: number;
+  maxDelayMinutes: number;
+  jitterPercentage: number;
+  dailyEmailLimit: number;
+  sendingHoursStart: number;
+  sendingHoursEnd: number;
+  clientWindowStartOffset: number;
+  clientWindowEndHour: number;
+  promptInjection: string;
+  keywordBin: string;
+  excludedDays: number[];
+}
+Replace with:
+
+interface EhubSettings {
+  id?: string;
+  minDelayMinutes: number;
+  maxDelayMinutes: number;
+  jitterPercentage: number;
+  dailyEmailLimit: number;
+  sendingHoursStart: number;
+  sendingHoursDuration: number;  // New field
+  sendingHoursEnd: number;  // Keep for backward compat (Phase 1-3)
+  clientWindowStartOffset: number;
+  clientWindowEndHour: number;
+  promptInjection: string;
+  keywordBin: string;
+  excludedDays: number[];
+}
+Function calculateOptimalDelays (~lines 25-70):
+
+Current lines (~35-40):
+
+const companyWindowHours = companyEndHour < companyStartHour
+  ? (companyEndHour + 24) - companyStartHour
+  : companyEndHour - companyStartHour;
+const companyWindowMinutes = companyWindowHours * 60;
+Replace with:
+
+const companyWindowMinutes = companyDurationHours * 60;
+Update function signature (~line 25):
+
+function calculateOptimalDelays(
+  companyStartHour: number,
+  companyDurationHours: number,  // Changed from companyEndHour
+  dailyEmailLimit: number,
+  jitterPercentage: number = 50
+): { minDelayMinutes: number; maxDelayMinutes: number }
+Settings Form JSX (find the "End Hour" input field ~lines 5000-5500):
+
+Current (approximate location):
+
+<Label htmlFor="sending-hours-end">End Hour (0-23)</Label>
+<Input
+  id="sending-hours-end"
+  type="number"
+  min="0"
+  max="23"
+  value={settings.sendingHoursEnd}
+  onChange={(e) => setSettings({ ...settings, sendingHoursEnd: parseInt(e.target.value) || 0 })}
+/>
+Replace with:
+
+<Label htmlFor="sending-hours-duration">Duration (hours, 1-24)</Label>
+<Input
+  id="sending-hours-duration"
+  type="number"
+  min="1"
+  max="24"
+  value={settings.sendingHoursDuration || ((settings.sendingHoursEnd - settings.sendingHoursStart + 24) % 24)}
+  onChange={(e) => {
+    const duration = parseInt(e.target.value) || 1;
+    setSettings({ ...settings, sendingHoursDuration: duration });
+  }}
+/>
+<p className="text-sm text-muted-foreground mt-1">
+  {settings.sendingHoursStart}:00 + {settings.sendingHoursDuration || 0}h → {((settings.sendingHoursStart + (settings.sendingHoursDuration || 0)) % 24).toString().padStart(2, '0')}:00
+  {((settings.sendingHoursStart + (settings.sendingHoursDuration || 0)) >= 24) && ' (next day)'}
+</p>
+Where calculateOptimalDelays is called (~line 5300):
+
+Current:
+
+const { minDelayMinutes, maxDelayMinutes } = calculateOptimalDelays(
+  settings.sendingHoursStart,
+  settings.sendingHoursEnd,
+  settings.dailyEmailLimit,
+  settings.jitterPercentage
+);
+Replace with:
+
+const duration = settings.sendingHoursDuration || ((settings.sendingHoursEnd - settings.sendingHoursStart + 24) % 24);
+const { minDelayMinutes, maxDelayMinutes } = calculateOptimalDelays(
+  settings.sendingHoursStart,
+  duration,
+  settings.dailyEmailLimit,
+  settings.jitterPercentage
+);
+Summary
+Total files requiring changes: 4
+
+shared/schema.ts - Add column + update Zod schemas
+server/services/Matrix2/slotGenerator.ts - Replace end hour logic with duration
+server/services/Matrix2/queueRebuilder.ts - Replace end hour logic with duration
+client/src/pages/ehub.tsx - Update UI to show duration input instead of end hour
+Migration will NOT require changes to:
+
+server/storage.ts (generic ORM operations)
+server/routes.ts (generic validation/CRUD)
+Any other Matrix2 service files (they don't reference these fields)

@@ -18,15 +18,24 @@ export async function generateSlotsForDay(
   settings: {
     dailyEmailLimit: number;
     sendingHoursStart: number;
-    sendingHoursEnd: number;
+    sendingHoursDuration?: number;
+    sendingHoursEnd?: number;
     minDelayMinutes: number;
     maxDelayMinutes: number;
   }
 ) {
-  const { dailyEmailLimit, sendingHoursStart, sendingHoursEnd, minDelayMinutes, maxDelayMinutes } = settings;
+  const { dailyEmailLimit, sendingHoursStart, minDelayMinutes, maxDelayMinutes } = settings;
+  
+  // Phase 1-3: Support both duration and end hour for backward compatibility
+  // Fallback logic: if duration not set, calculate from end hour
+  const sendingHoursDuration = settings.sendingHoursDuration || 
+    (settings.sendingHoursEnd === settings.sendingHoursStart ? 24 : 
+     ((settings.sendingHoursEnd! - settings.sendingHoursStart + 24) % 24));
+  const endHourCalculated = (sendingHoursStart + sendingHoursDuration) % 24;
+  const needsNextDay = (sendingHoursStart + sendingHoursDuration) >= 24;
 
   console.log(`[Matrix2 Generator] Generating up to ${dailyEmailLimit} slots for ${dateIso}`);
-  console.log(`[Matrix2 Generator] Send window: ${sendingHoursStart}:00 - ${sendingHoursEnd}:00 (${adminTz})`);
+  console.log(`[Matrix2 Generator] Send window: ${sendingHoursStart}:00 - ${String(endHourCalculated).padStart(2, '0')}:00 (duration: ${sendingHoursDuration}h) (${adminTz})`);
   console.log(`[Matrix2 Generator] Pure jitter range: ${minDelayMinutes}-${maxDelayMinutes} minutes`);
 
   // Generate slots starting at sendingHoursStart in admin timezone
@@ -44,16 +53,15 @@ export async function generateSlotsForDay(
     cursor = now;
   }
   
-  // End time boundary: dateIso at sendingHoursEnd
-  // Handle midnight crossover: if endHour < startHour, use NEXT day for endBoundary
-  const isMidnightCrossover = sendingHoursEnd < sendingHoursStart;
-  const endDate = isMidnightCrossover ? addDays(parseISO(dateIso), 1) : parseISO(dateIso);
+  // End time boundary: dateIso + duration hours
+  // If duration spans past midnight, use next day for endBoundary
+  const endDate = needsNextDay ? addDays(parseISO(dateIso), 1) : parseISO(dateIso);
   const endDateIso = formatInTimeZone(endDate, adminTz, 'yyyy-MM-dd');
-  const endTimeStr = `${endDateIso}T${String(sendingHoursEnd).padStart(2, '0')}:00:00`;
+  const endTimeStr = `${endDateIso}T${String(endHourCalculated).padStart(2, '0')}:00:00`;
   const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
   
-  if (isMidnightCrossover) {
-    console.log(`[Matrix2 Generator] ⏰ Midnight crossover detected: ${sendingHoursStart}:00 - ${sendingHoursEnd}:00 spans to next day`);
+  if (needsNextDay) {
+    console.log(`[Matrix2 Generator] ⏰ Duration spans past midnight: ${sendingHoursStart}:00 + ${sendingHoursDuration}h → ${String(endHourCalculated).padStart(2, '0')}:00 next day`);
   }
 
   let previousJitter: number | null = null;
@@ -121,10 +129,14 @@ export async function ensureDailySlots() {
   const now = new Date();
   const dailyLimit = settings.dailyEmailLimit || 20;
   const sendingHoursStart = settings.sendingHoursStart || 6;
-  const sendingHoursEnd = settings.sendingHoursEnd || 23;
   const minDelayMinutes = settings.minDelayMinutes || 6;
   const maxDelayMinutes = settings.maxDelayMinutes || 10;
   const excludedDays = settings.excludedDays || [];
+  
+  // Phase 1-3: Support both duration and end hour for backward compatibility
+  const sendingHoursDuration = settings.sendingHoursDuration || 
+    (settings.sendingHoursEnd === settings.sendingHoursStart ? 24 : 
+     ((settings.sendingHoursEnd! - settings.sendingHoursStart + 24) % 24));
 
   console.log('[Matrix2 Generator] Ensuring 3 days worth of slots...');
 
@@ -160,7 +172,7 @@ export async function ensureDailySlots() {
     await generateSlotsForDay(dateIso, adminTz, {
       dailyEmailLimit: dailyLimit,
       sendingHoursStart,
-      sendingHoursEnd,
+      sendingHoursDuration,
       minDelayMinutes,
       maxDelayMinutes,
     });
