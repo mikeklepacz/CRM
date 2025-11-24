@@ -1856,10 +1856,16 @@ export default function EHub() {
     setSyntheticPreview(null);
   }, [selectedSequenceId]);
 
-  // Fetch nuke counts when dialog opens
+  // Fetch nuke counts when dialog opens or email pattern changes
   useEffect(() => {
     if (nukeDialogOpen) {
-      fetch('/api/ehub/test-data/nuke/counts')
+      const params = new URLSearchParams();
+      if (nukeEmailPattern) {
+        params.append('emailPattern', nukeEmailPattern);
+      }
+      const url = `/api/ehub/test-data/nuke/counts?${params.toString()}`;
+      
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           setNukeCounts(data);
@@ -1870,7 +1876,7 @@ export default function EHub() {
           console.error('Error fetching nuke counts:', error);
         });
     }
-  }, [nukeDialogOpen]);
+  }, [nukeDialogOpen, nukeEmailPattern]);
 
   // Fetch selected sequence recipients with filter
   const { data: recipients, isLoading: isLoadingRecipients, error: recipientsError } = useQuery<Recipient[]>({
@@ -2172,7 +2178,7 @@ export default function EHub() {
 
   // Nuke Test Data mutation
   const nukeTestDataMutation = useMutation({
-    mutationFn: () => apiRequest('POST', '/api/ehub/test-data/nuke', {}),
+    mutationFn: () => apiRequest('POST', '/api/ehub/test-data/nuke', { emailPattern: nukeEmailPattern || undefined }),
     onSuccess: (data: any) => {
       toast({
         title: "Test Data Deleted",
@@ -4457,10 +4463,24 @@ export default function EHub() {
           </AlertDialogHeader>
           
           <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="nuke-email-pattern">Email Pattern (Optional)</Label>
+              <Input
+                id="nuke-email-pattern"
+                data-testid="input-nuke-email-pattern"
+                placeholder="e.g., michael@, %gmail.com, or leave blank for all"
+                value={nukeEmailPattern}
+                onChange={(e) => setNukeEmailPattern(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Leave blank to delete ALL test recipients. Use % as wildcard (e.g., %@test.com)
+              </p>
+            </div>
+
             {nukeCounts && (
               <Alert>
                 <AlertDescription className="space-y-2">
-                  <div className="font-medium mb-2">Preview:</div>
+                  <div className="font-medium mb-2">Preview (will be deleted):</div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>Recipients:</div>
                     <div className="font-mono">{nukeCounts.recipientsCount}</div>
@@ -4479,6 +4499,13 @@ export default function EHub() {
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>{countsError}</AlertDescription>
+              </Alert>
+            )}
+
+            {!nukeEmailPattern && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>⚠️ <strong>WARNING:</strong> No email pattern specified. This will delete ALL recipients and messages. This cannot be undone!</AlertDescription>
               </Alert>
             )}
           </div>
