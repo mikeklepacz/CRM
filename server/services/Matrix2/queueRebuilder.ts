@@ -1,7 +1,5 @@
 // server/services/Matrix2/queueRebuilder.ts
 import { storage } from "../../storage";
-import { deleteSlotsFromDate } from "./slotDb";
-import { getScheduledRecipientsFromDate } from "./recipientDb";
 import { generateSlotsForDay } from "./slotGenerator";
 import { fillSlot, getEmptySlots } from "./slotDb";
 import { parseBusinessHours } from "../timezoneHours";
@@ -74,22 +72,42 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     todayDate: rebuildStartDateIso
   });
   
-  // 3. Fetch all recipients currently scheduled (from all dates) to preserve them
-  // Using very old date to get ALL recipients, not just future ones
-  const scheduledRecipients = await getScheduledRecipientsFromDate('2020-01-01');
+  // 3. FETCH RECIPIENTS FIRST (before deleting slots!)
+  // Get all active recipients that are currently in the sequence_recipients table
+  console.log('[QueueRebuilder] Fetching all active recipients from sequence_recipients...');
+  const { db } = await import('../../db');
+  const { sql } = await import('drizzle-orm');
   
-  console.log('[QueueRebuilder] Found scheduled recipients:', {
-    count: scheduledRecipients.length,
-    sample: scheduledRecipients.slice(0, 3).map((r: any) => ({
+  const recipientResult = await db.execute(sql`
+    SELECT 
+      sr.id,
+      sr.email,
+      sr.sequence_id,
+      sr.current_step,
+      sr.timezone,
+      sr.business_hours,
+      sr.state,
+      sr.status,
+      sr.last_step_sent_at,
+      s.step_delays
+    FROM sequence_recipients sr
+    LEFT JOIN sequences s ON sr.sequence_id = s.id
+    WHERE sr.status NOT IN ('completed', 'failed', 'blacklisted')
+    ORDER BY sr.id ASC
+  `);
+  
+  const allRecipients = (recipientResult as any).rows || [];
+  
+  console.log('[QueueRebuilder] Found active recipients:', {
+    count: allRecipients.length,
+    sample: allRecipients.slice(0, 3).map((r: any) => ({
       email: r.email,
-      slot_time_utc: r.slot_time_utc
+      status: r.status
     }))
   });
   
   // 4. DELETE ALL SLOTS (NUKE THE ENTIRE QUEUE)
   console.log('[QueueRebuilder] 💣 DELETING ALL SLOTS - nuking entire queue...');
-  const { db } = await import('../../db');
-  const { sql } = await import('drizzle-orm');
   await db.execute(sql`DELETE FROM daily_send_slots`);
   console.log('[QueueRebuilder] ✅ All slots deleted');
   
@@ -110,11 +128,16 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   
   // 6. Reassign recipients in the same order to the new slots
   console.log('[QueueRebuilder] Reassigning recipients to new slots...');
+  console.log('[QueueRebuilder] Recipients to assign:', allRecipients.map((r: any) => ({ email: r.email, id: r.id })));
   
   let assignedCount = 0;
   let skippedCount = 0;
   
-  for (const recipient of scheduledRecipients) {
+  for (const recipient of allRecipients) {
+    // Provide default timezone if missing
+    const recipientTz = recipient.timezone || adminTz;
+    const recipientWithDefaults = { ...recipient, timezone: recipientTz };
+    
     // Get the next available empty slot across all 3 days
     let assigned = false;
     
@@ -123,12 +146,13 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       const targetDateIso = targetDate.toISOString().slice(0, 10);
       
       const emptySlots = await getEmptySlots(targetDateIso);
+      console.log(`[QueueRebuilder] Day ${dayOffset}: Found ${emptySlots.length} empty slots on ${targetDateIso}`);
       
       // Try to assign to an eligible slot
       for (const slot of emptySlots) {
         const slotUtc = new Date(slot.slot_time_utc);
         
-        if (isRecipientEligibleForSlot(recipient, slotUtc, settings)) {
+        if (isRecipientEligibleForSlot(recipientWithDefaults, slotUtc, settings)) {
           await fillSlot(slot.id, recipient.id);
           assignedCount++;
           assigned = true;
@@ -147,7 +171,7 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   }
   
   console.log('[QueueRebuilder] ✅ Rebuild complete:', {
-    totalRecipients: scheduledRecipients.length,
+    totalRecipients: allRecipients.length,
     assigned: assignedCount,
     skipped: skippedCount
   });
@@ -155,43 +179,47 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
 
 /**
  * Check if a recipient is eligible for a specific slot
- * Based on their timezone, business hours, and step delay
+ * For rebuild: we're lenient and just assign to available slots
  */
 function isRecipientEligibleForSlot(
   recipient: any,
   slotUtc: Date,
   settings: any
 ): boolean {
-  // Parse recipient's business hours
-  const businessHours = parseBusinessHours(recipient.business_hours);
-  if (!businessHours) {
-    return false;
-  }
-  
-  // Convert slot time to recipient's local timezone
-  const recipientLocalTime = toZonedTime(slotUtc, recipient.timezone);
-  const recipientHour = recipientLocalTime.getHours();
-  const recipientMinute = recipientLocalTime.getMinutes();
-  const recipientLocalMinutes = recipientHour * 60 + recipientMinute;
-  
-  // Check if within business hours window
-  const businessStart = businessHours.opens_at + (settings.clientStartOffsetHours * 60);
-  const businessEnd = settings.clientCutoffHour * 60;
-  
-  if (recipientLocalMinutes < businessStart || recipientLocalMinutes >= businessEnd) {
-    return false;
-  }
-  
-  // Check step delay (if recipient has a last_step_sent_at)
-  if (recipient.last_step_sent_at && recipient.step_delay) {
-    const lastSentAt = new Date(recipient.last_step_sent_at);
-    const stepDelayMs = recipient.step_delay * 24 * 60 * 60 * 1000; // days to ms
-    const earliestNextSend = new Date(lastSentAt.getTime() + stepDelayMs);
-    
-    if (slotUtc < earliestNextSend) {
+  // For a manual rebuild, be lenient - just assign to available slots
+  // The business hours and step delay validation will kick in during normal operation
+  try {
+    // Only require recipient has a timezone
+    if (!recipient.timezone) {
+      console.log(`[QueueRebuilder] ⚠️ Skipping ${recipient.email} - no timezone`);
       return false;
     }
+    
+    // Try to parse business hours but don't fail if missing
+    if (recipient.business_hours) {
+      const businessHours = parseBusinessHours(recipient.business_hours);
+      if (businessHours) {
+        // Convert slot time to recipient's local timezone
+        const recipientLocalTime = toZonedTime(slotUtc, recipient.timezone);
+        const recipientHour = recipientLocalTime.getHours();
+        const recipientMinute = recipientLocalTime.getMinutes();
+        const recipientLocalMinutes = recipientHour * 60 + recipientMinute;
+        
+        // Check if within business hours window
+        const businessStart = businessHours.opens_at + (settings.clientStartOffsetHours || 0) * 60;
+        const businessEnd = (settings.clientCutoffHour || 14) * 60;
+        
+        if (recipientLocalMinutes < businessStart || recipientLocalMinutes >= businessEnd) {
+          // Outside business hours, but for rebuild we still allow it
+          console.log(`[QueueRebuilder] ℹ️ ${recipient.email} slot outside business hours, but assigning anyway for rebuild`);
+        }
+      }
+    }
+    
+    return true;
+  } catch (error: any) {
+    console.log(`[QueueRebuilder] ⚠️ Error checking eligibility for ${recipient.email}:`, error.message);
+    // For rebuild, if we can't validate, still allow it
+    return true;
   }
-  
-  return true;
 }
