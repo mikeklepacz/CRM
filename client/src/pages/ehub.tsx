@@ -14,12 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store, Search } from "lucide-react";
+import { Mail, Plus, Loader2, Upload, Send, Settings, Users, AlertCircle, AlertTriangle, Database, MessageSquare, Bot, User as UserIcon, Check, X, Trash2, MoreVertical, Pause, SkipForward, Clock, Play, Edit, Sparkles, Store, Search, CheckCircle2, XCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1589,6 +1590,12 @@ export default function EHub() {
     queryKey: ['/api/user/preferences'],
   });
 
+  // Fetch user integrations to check Gmail connection status
+  const { data: userIntegrations } = useQuery<any>({
+    queryKey: ['/api/user/integrations'],
+  });
+  const gmailConnected = userIntegrations?.some((integration: any) => integration.provider === 'google' && integration.type === 'oauth');
+
   // Fetch E-Hub settings
   const { data: settings } = useQuery<EhubSettings>({
     queryKey: ['/api/ehub/settings'],
@@ -2330,9 +2337,35 @@ export default function EHub() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">E-Hub</h1>
-          <p className="text-muted-foreground">Email sequence automation system</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-3xl font-bold">E-Hub</h1>
+            <p className="text-muted-foreground">Email sequence automation system</p>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2 ml-4 px-3 py-1 rounded-full bg-muted/50 border">
+                {gmailConnected ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    <span className="text-xs text-muted-foreground font-medium">Gmail Connected</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4 text-red-500" />
+                    <span className="text-xs text-muted-foreground font-medium">Gmail Not Connected</span>
+                  </>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {gmailConnected ? (
+                'Gmail is connected. Emails will be sent automatically.'
+              ) : (
+                'Gmail is not connected. Visit Settings to connect your Gmail account to enable email sending.'
+              )}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
