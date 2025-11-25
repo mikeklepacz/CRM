@@ -3886,6 +3886,13 @@ export class DatabaseStorage implements IStorage {
     console.log(`[Storage] Calling forceSendNow for slot ${slot.id}`);
     await forceSendNow(slot.id);
 
+    // Trigger immediate queue processing instead of waiting 60 seconds
+    console.log(`[Storage] Triggering immediate queue processing...`);
+    const { triggerImmediateQueueProcess } = await import('./services/emailQueue');
+    triggerImmediateQueueProcess().catch(err => {
+      console.error('[Storage] Error triggering immediate queue process:', err);
+    });
+
     // Return updated recipient
     const [updated] = await db
       .select()

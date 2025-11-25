@@ -171,6 +171,27 @@ export async function processEmailQueue() {
 }
 
 /**
+ * Trigger immediate email queue processing
+ * Called by "Send Now" button to process emails without waiting for next cycle
+ */
+export async function triggerImmediateQueueProcess() {
+  if (isProcessing) {
+    console.log('[EmailQueue] Queue already processing, will send next cycle');
+    return;
+  }
+
+  console.log('[EmailQueue] ⚡ IMMEDIATE TRIGGER: Processing queue now...');
+  isProcessing = true;
+  try {
+    await processEmailQueue();
+  } catch (error) {
+    console.error('[EmailQueue] Error in immediate queue processing:', error);
+  } finally {
+    isProcessing = false;
+  }
+}
+
+/**
  * Start the email queue processor
  * Runs every 60 seconds to process pending emails
  */
