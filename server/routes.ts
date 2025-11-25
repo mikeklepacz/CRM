@@ -20144,11 +20144,12 @@ Use this store information to provide context-aware responses. When helping draf
         countQuery = countQuery.where(and(...conditions));
       }
 
-      const [{ count }] = await countQuery;
+      const countResult = await countQuery;
+      const total = countResult?.[0]?.count ? Number(countResult[0].count) : 0;
 
       res.json({
         messages: items,
-        total: Number(count),
+        total,
         limit,
         hasMore,
       });
