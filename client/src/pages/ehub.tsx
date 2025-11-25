@@ -998,6 +998,13 @@ function QueueView() {
   const scheduledItems = activeQueue?.filter(item => item.status === 'scheduled') || [];
   const overdueItems = activeQueue?.filter(item => item.status === 'overdue') || [];
   
+  // Get follow-up recipients: Step > 0 with real recipientIds (exclude open slots)
+  const followUpRecipients = new Set(
+    (activeQueue?.filter(
+      item => item.stepNumber > 0 && item.recipientId && item.recipientId !== "(Open slot)"
+    ) || []).map(item => item.recipientId)
+  );
+  
   // Get fresh recipients: Step 0 with real recipientIds (exclude open slots)
   const freshRecipients = (activeQueue?.filter(
     item => item.stepNumber === 0 && item.recipientId && item.recipientId !== "(Open slot)"
