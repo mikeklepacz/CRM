@@ -4803,6 +4803,8 @@ export class DatabaseStorage implements IStorage {
   async insertRecipientMessage(message: any): Promise<any> {
     try {
       const { sql } = await import('drizzle-orm');
+      // Store RFC822 Message-ID (for threading) - falls back to Gmail ID if not available
+      const messageIdToStore = message.rfc822MessageId || message.gmailMessageId || null;
       const result = await db.execute(sql`
         INSERT INTO sequence_recipient_messages (
           id,
@@ -4821,7 +4823,7 @@ export class DatabaseStorage implements IStorage {
           ${message.subject || null},
           ${message.body || null},
           ${message.sentAt || sql`NOW()`},
-          ${message.gmailMessageId || null},
+          ${messageIdToStore},
           ${message.gmailThreadId || null}
         )
         RETURNING *

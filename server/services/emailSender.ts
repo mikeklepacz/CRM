@@ -399,19 +399,26 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       const previousMessages = await storage.getRecipientMessages(recipient.id);
       if (previousMessages.length > 0) {
         // Sort by step number to get the first email
-        previousMessages.sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0));
+        // Handle both camelCase (Drizzle) and snake_case (raw SQL) field names
+        previousMessages.sort((a, b) => {
+          const aStep = a.stepNumber ?? a.step_number ?? 0;
+          const bStep = b.stepNumber ?? b.step_number ?? 0;
+          return aStep - bStep;
+        });
         const firstMessage = previousMessages[0];
         const lastMessage = previousMessages[previousMessages.length - 1];
         
         // Use the first email's threadId for Gmail threading
-        threadId = firstMessage.gmailThreadId || firstMessage.threadId || undefined;
+        // Handle both camelCase and snake_case field names
+        threadId = firstMessage.threadId || firstMessage.thread_id || undefined;
         
         // Use the most recent email's rfc822MessageId for In-Reply-To
-        inReplyTo = lastMessage.rfc822MessageId || undefined;
+        // The messageId/message_id column now stores RFC822 Message-ID
+        inReplyTo = lastMessage.messageId || lastMessage.message_id || undefined;
         
         // Build References chain from all previous emails
         const rfc822Ids = previousMessages
-          .map(m => m.rfc822MessageId)
+          .map(m => m.messageId || m.message_id)
           .filter((id): id is string => !!id);
         if (rfc822Ids.length > 0) {
           references = rfc822Ids.join(' ');
