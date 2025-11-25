@@ -36,7 +36,6 @@ export function Header({ colorPresets = [], setColorPresets = () => {}, deleteCo
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ['/api/tickets/unread-count'],
     enabled: user?.role === 'admin',
-    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   const unreadCount = unreadData?.count || 0;

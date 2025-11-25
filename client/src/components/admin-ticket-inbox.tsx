@@ -60,7 +60,6 @@ export function AdminTicketInbox() {
   // Fetch all tickets
   const { data: ticketsData, isLoading: ticketsLoading } = useQuery<{ tickets: Ticket[] }>({
     queryKey: ['/api/tickets/admin'],
-    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Fetch selected ticket details
