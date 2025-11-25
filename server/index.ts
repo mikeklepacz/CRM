@@ -59,9 +59,9 @@ app.use((req, res, next) => {
   voiceProxyServer.initialize(server);
   console.log('[Startup] VoiceProxy WebSocket server initialized and ready for connections');
 
-  // Initialize event gateway WebSocket server for real-time updates
-  eventGateway.initialize(server, '/events');
-  console.log('[Startup] EventGateway WebSocket server initialized on /events');
+  // Initialize event gateway for real-time updates (SSE-based)
+  eventGateway.initialize();
+  console.log('[Startup] EventGateway SSE server initialized');
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

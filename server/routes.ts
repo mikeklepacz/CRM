@@ -743,6 +743,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // Server-Sent Events endpoint for real-time updates
+  app.get('/api/events', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const clientId = `${userId}-${Date.now()}`;
+      
+      eventGateway.addClient(clientId, res, userId);
+      
+    } catch (error: any) {
+      console.error('[SSE] Error setting up event stream:', error);
+      res.status(500).json({ message: 'Failed to establish event stream' });
+    }
+  });
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticatedCustom, async (req: any, res) => {
     try {

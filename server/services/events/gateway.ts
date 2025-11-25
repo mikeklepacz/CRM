@@ -1,6 +1,4 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import { Server as HttpServer, IncomingMessage } from 'http';
-import { parse as parseCookie } from 'cookie';
+import { Response } from 'express';
 
 export type EventType = 
   | 'clients:updated'
@@ -16,119 +14,76 @@ export interface AppEvent {
   timestamp: number;
 }
 
-interface AuthenticatedClient {
-  ws: WebSocket;
+interface SSEClient {
+  res: Response;
   userId: string;
   tenantId?: string;
   connectedAt: number;
+  heartbeatInterval: NodeJS.Timeout;
 }
 
-type SessionValidator = (sessionId: string) => Promise<{ userId: string; tenantId?: string } | null>;
+const HEARTBEAT_INTERVAL_MS = 30000;
 
 class EventGateway {
-  private wss: WebSocketServer | null = null;
-  private clients: Map<string, AuthenticatedClient> = new Map();
+  private clients: Map<string, SSEClient> = new Map();
   private isInitialized = false;
-  private sessionValidator: SessionValidator | null = null;
 
-  setSessionValidator(validator: SessionValidator) {
-    this.sessionValidator = validator;
-  }
-
-  initialize(server: HttpServer, path: string = '/events') {
+  initialize() {
     if (this.isInitialized) {
       console.log('[EventGateway] Already initialized');
       return;
     }
-
-    this.wss = new WebSocketServer({ 
-      server,
-      path,
-    });
-
-    this.wss.on('connection', async (ws, req) => {
-      try {
-        const authResult = await this.authenticateConnection(req);
-        
-        if (!authResult) {
-          console.log('[EventGateway] Connection rejected - authentication failed');
-          ws.close(4001, 'Authentication required');
-          return;
-        }
-
-        const { userId, tenantId } = authResult;
-        const clientId = `${userId}-${Date.now()}`;
-        
-        this.clients.set(clientId, {
-          ws,
-          userId,
-          tenantId,
-          connectedAt: Date.now(),
-        });
-
-        console.log(`[EventGateway] Client connected: ${userId} (${this.clients.size} total)`);
-
-        ws.on('close', () => {
-          this.clients.delete(clientId);
-          console.log(`[EventGateway] Client disconnected: ${userId} (${this.clients.size} remaining)`);
-        });
-
-        ws.on('error', (error) => {
-          console.error(`[EventGateway] WebSocket error for ${userId}:`, error.message);
-          this.clients.delete(clientId);
-        });
-
-        ws.send(JSON.stringify({
-          type: 'connected',
-          userId,
-          timestamp: Date.now(),
-        }));
-      } catch (error: any) {
-        console.error('[EventGateway] Connection error:', error.message);
-        ws.close(4002, 'Connection error');
-      }
-    });
-
     this.isInitialized = true;
-    console.log(`[EventGateway] WebSocket server initialized on ${path}`);
+    console.log('[EventGateway] SSE event gateway initialized');
   }
 
-  private async authenticateConnection(req: IncomingMessage): Promise<{ userId: string; tenantId?: string } | null> {
-    const cookies = parseCookie(req.headers.cookie || '');
-    const sessionId = cookies['connect.sid'];
-    
-    if (sessionId && this.sessionValidator) {
-      const result = await this.sessionValidator(sessionId);
-      if (result) {
-        return result;
-      }
-    }
+  addClient(clientId: string, res: Response, userId: string, tenantId?: string) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
 
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const userId = url.searchParams.get('userId');
-    const tenantId = url.searchParams.get('tenantId') || undefined;
-    
-    if (userId && process.env.NODE_ENV === 'development') {
-      console.log(`[EventGateway] ⚠️ DEV-ONLY: Using query-param auth for ${userId}`);
-      return { userId, tenantId };
+    res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: Date.now() })}\n\n`);
+
+    const heartbeatInterval = setInterval(() => {
+      try {
+        res.write(`:heartbeat\n\n`);
+      } catch {
+        this.removeClient(clientId);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
+    this.clients.set(clientId, {
+      res,
+      userId,
+      tenantId,
+      connectedAt: Date.now(),
+      heartbeatInterval,
+    });
+
+    console.log(`[EventGateway] SSE client connected: ${userId}${tenantId ? ` (tenant: ${tenantId})` : ''} (${this.clients.size} total)`);
+
+    res.on('close', () => {
+      this.removeClient(clientId);
+    });
+  }
+
+  private removeClient(clientId: string) {
+    const client = this.clients.get(clientId);
+    if (client) {
+      clearInterval(client.heartbeatInterval);
+      this.clients.delete(clientId);
+      console.log(`[EventGateway] SSE client disconnected: ${client.userId} (${this.clients.size} remaining)`);
     }
-    
-    return null;
   }
 
   broadcast(event: AppEvent, options?: { userId?: string; tenantId?: string }) {
-    if (!this.wss) {
-      return;
-    }
-
-    const message = JSON.stringify(event);
+    const message = `data: ${JSON.stringify(event)}\n\n`;
     let sentCount = 0;
 
-    this.clients.forEach((client) => {
-      if (client.ws.readyState !== WebSocket.OPEN) {
-        return;
-      }
-
+    this.clients.forEach((client, clientId) => {
       if (options?.userId && client.userId !== options.userId) {
         return;
       }
@@ -138,10 +93,11 @@ class EventGateway {
       }
 
       try {
-        client.ws.send(message);
+        client.res.write(message);
         sentCount++;
       } catch (error) {
         console.error(`[EventGateway] Failed to send to ${client.userId}`);
+        this.clients.delete(clientId);
       }
     });
 

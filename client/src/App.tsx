@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ChatPanelProvider } from "@/hooks/useChatPanel";
 import { AgentFilterProvider } from "@/contexts/agent-filter-context";
+import { EventStreamProvider } from "@/lib/eventStream";
 import { useAuth } from "@/hooks/useAuth";
 import { useCustomTheme } from "@/hooks/use-custom-theme";
 import { Header } from "@/components/header";
@@ -62,37 +63,39 @@ function Router() {
   }
 
   return (
-    <ChatPanelProvider>
-      <TimezoneDetector userTimezone={userPreferences?.timezone} isLoading={prefsLoading} />
-      <div className="h-screen flex flex-col">
-        <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
-        <main className="flex-1 overflow-auto">
-          <Switch>
-            <Route path="/admin" component={Admin} />
-            <Route path="/settings" component={Settings} />
-            <Route path="/clients" component={ClientDashboard} />
-            <Route path="/documents" component={Documents} />
-            <Route path="/follow-up-center" component={FollowUpCenter} />
-            <Route path="/map-search" component={MapSearch} />
-            <Route path="/map-search-settings" component={MapSearchSettings} />
-            <Route path="/sales" component={SalesDashboard} />
-            <Route path="/assistant" component={SalesAssistant} />
-            <Route path="/voice">
-              {(user?.role === 'admin' || user?.hasVoiceAccess) ? <Voice /> : <NotFound />}
-            </Route>
-            <Route path="/call-manager">
-              {(user?.role === 'admin' || user?.hasVoiceAccess) ? <CallManager /> : <NotFound />}
-            </Route>
-            <Route path="/ehub">
-              {user?.role === 'admin' ? <EHub /> : <NotFound />}
-            </Route>
-            <Route path="/store/:storeId" component={StoreDetails} />
-            <Route path="/" component={Dashboard} />
-            <Route component={NotFound} />
-          </Switch>
-        </main>
-      </div>
-    </ChatPanelProvider>
+    <EventStreamProvider enabled={isAuthenticated}>
+      <ChatPanelProvider>
+        <TimezoneDetector userTimezone={userPreferences?.timezone} isLoading={prefsLoading} />
+        <div className="h-screen flex flex-col">
+          <Header colorPresets={colorPresets} setColorPresets={setColorPresets} deleteColorPreset={deleteColorPreset} />
+          <main className="flex-1 overflow-auto">
+            <Switch>
+              <Route path="/admin" component={Admin} />
+              <Route path="/settings" component={Settings} />
+              <Route path="/clients" component={ClientDashboard} />
+              <Route path="/documents" component={Documents} />
+              <Route path="/follow-up-center" component={FollowUpCenter} />
+              <Route path="/map-search" component={MapSearch} />
+              <Route path="/map-search-settings" component={MapSearchSettings} />
+              <Route path="/sales" component={SalesDashboard} />
+              <Route path="/assistant" component={SalesAssistant} />
+              <Route path="/voice">
+                {(user?.role === 'admin' || user?.hasVoiceAccess) ? <Voice /> : <NotFound />}
+              </Route>
+              <Route path="/call-manager">
+                {(user?.role === 'admin' || user?.hasVoiceAccess) ? <CallManager /> : <NotFound />}
+              </Route>
+              <Route path="/ehub">
+                {user?.role === 'admin' ? <EHub /> : <NotFound />}
+              </Route>
+              <Route path="/store/:storeId" component={StoreDetails} />
+              <Route path="/" component={Dashboard} />
+              <Route component={NotFound} />
+            </Switch>
+          </main>
+        </div>
+      </ChatPanelProvider>
+    </EventStreamProvider>
   );
 }
 
