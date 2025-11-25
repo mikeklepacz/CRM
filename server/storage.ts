@@ -4711,6 +4711,7 @@ export class DatabaseStorage implements IStorage {
         SELECT 
           id,
           name,
+          created_by as "createdBy",
           strategy_transcript as "strategyTranscript",
           finalized_strategy as "finalizedStrategy"
         FROM sequences
