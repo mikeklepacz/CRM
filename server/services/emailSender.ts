@@ -389,12 +389,47 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       sequence.finalizedStrategy
     );
 
+    // 3.5 Look up threading info from previous emails (for follow-ups)
+    let threadId: string | undefined;
+    let inReplyTo: string | undefined;
+    let references: string | undefined;
+    
+    if (currentStep > 1) {
+      // Get the first email's threading info
+      const previousMessages = await storage.getRecipientMessages(recipient.id);
+      if (previousMessages.length > 0) {
+        // Sort by step number to get the first email
+        previousMessages.sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0));
+        const firstMessage = previousMessages[0];
+        const lastMessage = previousMessages[previousMessages.length - 1];
+        
+        // Use the first email's threadId for Gmail threading
+        threadId = firstMessage.gmailThreadId || firstMessage.threadId || undefined;
+        
+        // Use the most recent email's rfc822MessageId for In-Reply-To
+        inReplyTo = lastMessage.rfc822MessageId || undefined;
+        
+        // Build References chain from all previous emails
+        const rfc822Ids = previousMessages
+          .map(m => m.rfc822MessageId)
+          .filter((id): id is string => !!id);
+        if (rfc822Ids.length > 0) {
+          references = rfc822Ids.join(' ');
+        }
+        
+        console.log(`[EmailSender] Follow-up threading: threadId=${threadId}, inReplyTo=${inReplyTo}, refs=${rfc822Ids.length}`);
+      }
+    }
+
     // 4. Send email via Gmail
     const emailResult = await sendEmail({
       userId: ADMIN_USER_ID,
       to: recipient.email,
       subject,
       body,
+      threadId,
+      inReplyTo,
+      references,
     });
 
     if (!emailResult.success) {
