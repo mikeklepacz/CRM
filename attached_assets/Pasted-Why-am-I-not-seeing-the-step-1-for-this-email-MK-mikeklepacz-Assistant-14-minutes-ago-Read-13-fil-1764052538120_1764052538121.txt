@@ -1,0 +1,187 @@
+Why am I not seeing the step 1 for this email?
+
+MK
+
+mikeklepacz
+Assistant
+14 minutes ago
+Read 13 files
+Looking at your screenshots, I can see the issue. You have:
+
+Step Delays configured: Email 1 (delay: 0 days) and Email 2 (delay: 0.0035 days with repeat enabled)
+Queue showing: Only "Step 0" emails are visible
+The problem is that Step 0 is not a real email step - it's an internal state in the Matrix2 system representing recipients who have been enrolled but haven't been sent their first email yet.
+
+Here's what's happening:
+
+Your sequence configuration:
+
+Email 1 = Step 1 (delay: 0 days from enrollment)
+Email 2 = Step 2 (delay: 0.0035 days from Step 1)
+What you're seeing:
+
+The recipient michael@naturalmaterials.pl is at currentStep: 0 in the database
+The slot shows Step 0 because the recipient hasn't been sent any emails yet
+Step 0 → Step 1 transition happens when the email queue processor sends the first email
+Why you're not seeing Step 1 in the queue:
+
+The queue view at /api/ehub/queue displays slots from daily_send_slots table, which shows the recipient's current step (current_step from sequence_recipients table). The logs confirm this:
+
+{
+  recipient_id: '0706abc3-0c81-4a18-a81a-025f18e07a07',
+  recipient_email: 'michael@naturalmaterials.pl',
+  current_step: 0,  // ← Still at step 0
+  sequence_id: 'd61128f1-b19a-4076-8404-835e1ade847f',
+  sequence_name: 'Test Fire.'
+}
+What needs to happen:
+
+The email queue processor (server/services/emailQueue.ts) needs to run during sending hours
+It will call sendEmailToRecipient() which sends the Step 1 email
+After successful send, it updates currentStep: 0 → 1 in the recipient record
+Then it triggers assignRecipientsToSlots() to schedule Step 2
+The issue: Your console logs show:
+
+[EmailQueue] Outside sending hours (7:00 not in 15:00-23:00 Europe/Warsaw)
+Your sending hours are configured for 3:00 PM - 11:00 PM Warsaw time, and it's currently 7:00 AM Warsaw time, so the email processor is sleeping.
+
+To see Step 1 appear in the queue, you need to either:
+
+Wait until 3:00 PM Warsaw time when the queue processor will wake up and send the Step 0→1 email
+Change your E-Hub settings to allow sending during current hours (Settings tab → adjust sendingHoursStart)
+Manually trigger a send using the "Send Now" action in the queue (if you want to test immediately)
+Once the Step 1 email is sent, the recipient's currentStep will update to 1, and you'll see "Step 1" in the queue view. Then after the 0.0035 day delay (~5 minutes), Step 2 will be scheduled.
+
+when I pause an email in the sequence, then resume it, what is meant to happen after?
+
+MK
+
+mikeklepacz
+Assistant
+11 minutes ago
+Read 12 files
+When you pause a recipient in a sequence and then resume them, here's what's meant to happen based on the codebase:
+
+Expected Behavior
+Pause: Sets the recipient's status to 'paused' and clears nextSendAt
+Resume: Sets the recipient's status back to 'in_sequence' and clears nextSendAt again
+From server/storage.ts (line ~3855):
+
+async resumeRecipient(id: string): Promise<SequenceRecipient> {
+  // ...validation...
+  
+  const [updated] = await db
+    .update(sequenceRecipients)
+    .set({ 
+      status: 'in_sequence',
+      nextSendAt: null, // Matrix2 slotAssigner will assign slot
+      updatedAt: new Date()
+    })
+    .where(eq(sequenceRecipients.id, id))
+    .returning();
+  return updated;
+}
+What Should Happen After Resume
+The Matrix2 slot assigner should automatically pick up the resumed recipient on its next cycle (runs every 60 seconds) and assign them to the next available slot that respects:
+
+Their timezone
+Their business hours
+Their state
+The step delay (if they're waiting between steps)
+Current Issue
+Looking at the console logs, I see this error when you tried to resume:
+
+[resumeRecipient] michael@naturalmaterials.pl resumed - Matrix2 slotAssigner will reschedule
+The resume did work, but then the slot assigner didn't automatically assign them to a new slot. The queue shows all empty slots after the resume.
+
+Root Cause
+The Matrix2 slot assigner (in server/services/Matrix2/slotAssigner.ts) should be running every 60 seconds and checking for recipients with status='in_sequence' who don't have a filled slot yet. However, it appears the assigner isn't picking up this resumed recipient.
+
+Let me check the eligibility query in recipientDb.ts:
+
+The query filters for recipients that:
+
+Have status = 'in_sequence' ✓
+Have a timezone ✓
+Have business hours ✓
+Don't already have a filled slot ✓
+This should work correctly. The resumed recipient should be picked up on the next assigner cycle (within 60 seconds) and assigned to the next available slot.
+
+The system is designed correctly - after resume, the Matrix2 slot assigner should automatically reschedule them within 60 seconds. If this isn't happening, the slot assigner might not be running or there might be an eligibility issue with the specific recipient's metadata (timezone/business_hours/state).
+
+and now?
+
+MK
+
+mikeklepacz
+Assistant
+8 minutes ago
+Read 10 files
+Looking at the logs, I can see that when you resumed the recipient michael@naturalmaterials.pl, they were briefly scheduled (showing at 14:00:00 UTC), but then they disappeared from the queue again, leaving only empty slots.
+
+The issue is clear from the architecture: the Matrix2 slot assigner is not running or not picking up the resumed recipient.
+
+Let me check what's happening. According to rag://rag_source_3, when you call resumeRecipient(), it sets:
+
+status = 'in_sequence'
+nextSendAt = null (so Matrix2 will assign a slot)
+Then the Matrix2 slot assigner (which runs every 60 seconds) should pick them up and assign them to the next available slot.
+
+However, based on the logs showing the recipient appearing briefly then disappearing, it seems like:
+
+The recipient was initially assigned to a slot (14:00:00 UTC)
+But then something cleared that assignment
+Let me verify the slot assigner is actually running and check for any eligibility issues:
+
+server/debug-resume-flow.ts
++116
+-0
+Run this script to diagnose the exact issue:
+
+npx tsx server/debug-resume-flow.ts
+
+
+Stop
+This will tell us:
+
+If the recipient has the correct metadata (timezone, business_hours, state)
+If they already have a slot assigned (which would make them ineligible)
+If they appear in the eligibility query the slot assigner uses
+If there are empty slots available
+Once we see the output, we'll know exactly what's preventing the automatic slot assignment after resume.
+
+Checkpoint made
+Add debug script for resume flow
+8 minutes ago
+•
+
+6ff1de3c
+
+Undo these changes
+ok
+
+MK
+
+mikeklepacz
+Assistant
+6 minutes ago
+Read 13 files
+I'll run the debug script to diagnose why the resumed recipient isn't being automatically rescheduled:
+
+npx tsx server/debug-resume-flow.ts
+
+
+Stop
+This will show us:
+
+If michael@naturalmaterials.pl has the required metadata (timezone, business_hours, state)
+If they already have a slot assigned (which would prevent reassignment)
+If they appear in the eligibility query that the Matrix2 slot assigner uses
+What empty slots are available
+Once we see the output, we'll know exactly what's blocking the automatic slot assignment after resume.
+
+Apply all:
+Run shell command:
+npx tsx server/debug-resume-flow.ts
+Nothing to commit
+says Nothing to commit
