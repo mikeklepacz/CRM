@@ -20050,102 +20050,78 @@ Use this store information to provide context-aware responses. When helping draf
       const sequenceId = req.query.sequenceId as string | undefined;
       const statusFilter = req.query.status as string | undefined;
 
-      // Build WHERE conditions array for filtering
-      const conditions = [];
-      
-      // Sequence filter
+      // Build WHERE clause parts
+      let whereClause = `WHERE sr.id IS NOT NULL`;
+      const params: any[] = [];
+
       if (sequenceId) {
-        conditions.push(eq(sequences.id, sequenceId));
+        whereClause += ` AND s.id = $${params.length + 1}`;
+        params.push(sequenceId);
       }
 
-      // Status filter using SQL CASE logic
       if (statusFilter && statusFilter !== 'all') {
         switch (statusFilter) {
           case 'replied':
-            conditions.push(sql`${sequenceRecipients.repliedAt} IS NOT NULL`);
+            whereClause += ` AND sr.replied_at IS NOT NULL`;
             break;
           case 'bounced':
-            conditions.push(sql`${sequenceRecipients.bouncedAt} IS NOT NULL`);
+            whereClause += ` AND sr.bounced_at IS NOT NULL`;
             break;
           case 'pending':
-            conditions.push(sql`${sequenceRecipients.status} = 'pending'`);
+            whereClause += ` AND sr.status = 'pending'`;
             break;
           case 'sent':
-            conditions.push(sql`${sequenceRecipients.repliedAt} IS NULL AND ${sequenceRecipients.bouncedAt} IS NULL AND ${sequenceRecipients.status} != 'pending'`);
+            whereClause += ` AND sr.replied_at IS NULL AND sr.bounced_at IS NULL AND sr.status != 'pending'`;
             break;
         }
       }
 
-      // Join sequence_recipient_messages -> sequence_recipients -> sequences
-      // Using LEFT JOINs to include messages even if recipient or sequence don't exist (for debugging)
-      let messagesQuery = db
-        .select({
-          messageId: sequenceRecipientMessages.id,
-          recipientId: sequenceRecipients.id,
-          recipientEmail: sequenceRecipients.email,
-          recipientName: sequenceRecipients.name,
-          sequenceId: sequences.id,
-          sequenceName: sequences.name,
-          stepNumber: sequenceRecipientMessages.stepNumber,
-          subject: sequenceRecipientMessages.subject,
-          sentAt: sequenceRecipientMessages.sentAt,
-          threadId: sequenceRecipientMessages.threadId,
-          // Keep raw fields for status derivation
-          recipientStatus: sequenceRecipients.status,
-          repliedAt: sequenceRecipients.repliedAt,
-          replyCount: sequenceRecipients.replyCount,
-          bouncedAt: sequenceRecipients.bouncedAt,
-        })
-        .from(sequenceRecipientMessages)
-        .leftJoin(
-          sequenceRecipients,
-          eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id)
-        )
-        .leftJoin(
-          sequences,
-          eq(sequenceRecipients.sequenceId, sequences.id)
-        );
+      console.log('[SENT-HISTORY] Fetching with params:', { sequenceId, statusFilter, limit, offset });
 
-      // Apply all WHERE conditions plus filter out orphaned messages (missing recipient or sequence)
-      const whereConditions = [...conditions, sql`${sequenceRecipients.id} IS NOT NULL`];
-      if (whereConditions.length > 0) {
-        // Handle single condition vs multiple conditions
-        const whereClause = whereConditions.length === 1 
-          ? whereConditions[0]
-          : and(...whereConditions);
-        messagesQuery = messagesQuery.where(whereClause);
-      }
+      // Fetch data - raw SQL bypasses Drizzle's ORM issues with NULL handling
+      const query = `
+        SELECT 
+          m.id AS "messageId",
+          sr.id AS "recipientId",
+          sr.email AS "recipientEmail",
+          sr.name AS "recipientName",
+          s.id AS "sequenceId",
+          s.name AS "sequenceName",
+          m.step_number AS "stepNumber",
+          m.subject,
+          m.sent_at AS "sentAt",
+          m.thread_id AS "threadId",
+          sr.status AS "recipientStatus",
+          sr.replied_at AS "repliedAt",
+          sr.reply_count AS "replyCount",
+          sr.bounced_at AS "bouncedAt"
+        FROM sequence_recipient_messages m
+        LEFT JOIN sequence_recipients sr ON m.recipient_id = sr.id
+        LEFT JOIN sequences s ON sr.sequence_id = s.id
+        ${whereClause}
+        ORDER BY m.sent_at DESC
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      `;
 
-      // Complete the query
-      console.log('[SENT-HISTORY] Fetching sent history with conditions:', { conditions: conditions.length, limit, offset });
-      const rows = await messagesQuery
-        .orderBy(desc(sequenceRecipientMessages.sentAt))
-        .limit(limit + 1) // Fetch one extra to check hasMore
-        .offset(offset);
+      params.push(limit + 1, offset);
+
+      const result = await db.execute(sql.raw(query, params));
+      const rows = result.rows || [];
 
       console.log('[SENT-HISTORY] Query returned rows:', rows.length);
-      if (rows.length > 0) {
-        console.log('[SENT-HISTORY] First row:', JSON.stringify(rows[0], null, 2));
-      } else {
-        console.log('[SENT-HISTORY] No rows returned - checking database directly...');
-        const directCount = await db.select({ count: sql<number>`count(*)` }).from(sequenceRecipientMessages);
-        const withSentAt = await db.select({ count: sql<number>`count(*)` }).from(sequenceRecipientMessages).where(sql`sent_at IS NOT NULL`);
-        console.log('[SENT-HISTORY] Direct message count:', directCount);
-        console.log('[SENT-HISTORY] Messages with sent_at:', withSentAt);
-      }
-      // Determine hasMore
+
       const hasMore = rows.length > limit;
       const messages = rows.slice(0, limit);
 
       // Map to response format with derived status
-      const items = messages.map((row) => {
+      const items = messages.map((row: any) => {
         let status: 'sent' | 'replied' | 'bounced' | 'pending' = 'sent';
         if (row.repliedAt) {
           status = 'replied';
         } else if (row.bouncedAt) {
           status = 'bounced';
-        } else if (row.recipientStatus === 'pending' || row.recipientStatus === 'in_sequence') {
-          status = row.recipientStatus === 'pending' ? 'pending' : 'sent';
+        } else if (row.recipientStatus === 'pending') {
+          status = 'pending';
         }
 
         return {
@@ -20157,38 +20133,25 @@ Use this store information to provide context-aware responses. When helping draf
           sequenceName: row.sequenceName,
           stepNumber: row.stepNumber,
           subject: row.subject,
-          sentAt: row.sentAt?.toISOString() || new Date().toISOString(),
+          sentAt: row.sentAt?.toISOString ? row.sentAt.toISOString() : new Date(row.sentAt).toISOString(),
           threadId: row.threadId,
           status,
-          repliedAt: row.repliedAt?.toISOString() || null,
+          repliedAt: row.repliedAt ? (row.repliedAt.toISOString ? row.repliedAt.toISOString() : new Date(row.repliedAt).toISOString()) : null,
           replyCount: row.replyCount,
         };
       });
 
-      // Get total count with same filters (expensive - only when needed)
-      let countQuery = db
-        .select({ count: sql<number>`count(*)` })
-        .from(sequenceRecipientMessages)
-        .leftJoin(
-          sequenceRecipients,
-          eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id)
-        )
-        .leftJoin(
-          sequences,
-          eq(sequenceRecipients.sequenceId, sequences.id)
-        );
+      // Get total count with same filters
+      const countQuery = `
+        SELECT COUNT(*) as count
+        FROM sequence_recipient_messages m
+        LEFT JOIN sequence_recipients sr ON m.recipient_id = sr.id
+        LEFT JOIN sequences s ON sr.sequence_id = s.id
+        ${whereClause}
+      `;
 
-      // Apply same WHERE conditions as main query (including orphan filter)
-      if (whereConditions.length > 0) {
-        // Handle single condition vs multiple conditions
-        const countWhereClause = whereConditions.length === 1 
-          ? whereConditions[0]
-          : and(...whereConditions);
-        countQuery = countQuery.where(countWhereClause);
-      }
-
-      const countResult = await countQuery;
-      const total = countResult?.[0]?.count ? Number(countResult[0].count) : 0;
+      const countResult = await db.execute(sql.raw(countQuery, params.slice(0, -2)));
+      const total = countResult.rows?.[0]?.count ? Number(countResult.rows[0].count) : 0;
 
       res.json({
         messages: items,
