@@ -38,7 +38,6 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   const wsProtocol = replitDomain.includes('localhost') ? 'ws' : 'wss';
   const wsUrl = `${wsProtocol}://${replitDomain}/media-stream`;
   
-  console.log(`[Twilio] Generating TwiML for voice proxy: ${wsUrl}`);
   
   // Connect to our WebSocket proxy
   const connect = response.connect();
@@ -84,7 +83,6 @@ export async function initiateOutboundCall(params: InitiateCallParams): Promise<
   }
   
   try {
-    console.log(`[Twilio] Initiating call from ${params.from} to ${params.to}`);
     
     const call = await client.calls.create({
       from: params.from,
@@ -95,8 +93,6 @@ export async function initiateOutboundCall(params: InitiateCallParams): Promise<
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
       statusCallbackMethod: 'POST'
     });
-    
-    console.log(`[Twilio] Call initiated successfully. SID: ${call.sid}`);
     
     return {
       callSid: call.sid,

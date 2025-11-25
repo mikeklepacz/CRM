@@ -61,16 +61,8 @@ interface EmailResponse {
  */
 export async function sendEmail(options: EmailOptions): Promise<EmailResponse> {
   try {
-    console.log(`[EmailSender] sendEmail called for userId: ${options.userId}`);
     const integration = await storage.getUserIntegration(options.userId);
-    console.log(`[EmailSender] Integration lookup result:`, {
-      found: !!integration,
-      hasAccessToken: !!integration?.googleCalendarAccessToken,
-      hasRefreshToken: !!integration?.googleCalendarRefreshToken,
-      email: integration?.googleCalendarEmail
-    });
     if (!integration?.googleCalendarAccessToken) {
-      console.error(`[EmailSender] MISSING Gmail token for user ${options.userId}`);
       throw new Error("Gmail not connected. Please connect Gmail first.");
     }
 
@@ -352,26 +344,22 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
     // 1. Fetch recipient with sequence data
     const recipient = await storage.getRecipientById(recipientId);
     if (!recipient) {
-      console.error(`[EmailSender] Recipient ${recipientId} not found`);
       return false;
     }
 
     const sequence = await storage.getSequenceById(recipient.sequenceId);
     if (!sequence) {
-      console.error(`[EmailSender] Sequence ${recipient.sequenceId} not found`);
       return false;
     }
 
     const settings = await storage.getEhubSettings();
     if (!settings) {
-      console.error('[EmailSender] E-Hub settings not found');
       return false;
     }
 
     // 2. Get admin user for Gmail OAuth
     // CRITICAL FIX: Hardcode the actual admin user ID to bypass ghost user bug
     const ADMIN_USER_ID = '4df35876-ab89-4860-8656-0440accfea14'; // michael@naturalmaterials.eu
-    console.log('[EmailSender] Using HARDCODED admin user ID for Gmail:', ADMIN_USER_ID);
 
     // 3. Generate email content using AI
     const currentStep = (recipient.currentStep || 0) + 1; // Next step to send
@@ -423,8 +411,6 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
         if (rfc822Ids.length > 0) {
           references = rfc822Ids.join(' ');
         }
-        
-        console.log(`[EmailSender] Follow-up threading: threadId=${threadId}, inReplyTo=${inReplyTo}, refs=${rfc822Ids.length}`);
       }
     }
 
@@ -440,7 +426,6 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
     });
 
     if (!emailResult.success) {
-      console.error(`[EmailSender] Failed to send email to ${recipient.email}:`, emailResult.error);
       return false;
     }
 
@@ -455,7 +440,6 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       updatedAt: now,
       threadId: emailResult.threadId,
     });
-    console.log(`[EmailSender] Saved threadId=${emailResult.threadId} to recipient for reply detection`);
 
     // 6. Record message in history
     await storage.insertRecipientMessage({
@@ -474,9 +458,8 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
     // Increment sequence sentCount (atomic operation to prevent race conditions)
     try {
       await storage.incrementSequenceSentCount(sequence.id);
-      console.log(`[EmailSender] ✅ Atomically incremented sentCount for sequence ${sequence.id}`);
     } catch (error) {
-      console.error(`[EmailSender] ⚠️  Failed to increment sequence sentCount:`, error);
+      // Silent failure - don't break email sending for bookkeeping errors
     }
 
     // 8. UPDATE COMMISSION TRACKER GOOGLE SHEETS (critical fix!)
@@ -486,22 +469,14 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
         const sequenceCreator = await storage.getUserById(sequence.createdBy);
         const agentName = sequenceCreator?.agentName || 'Unknown Agent';
         
-        const trackerResult = await updateCommissionTrackerStatus(
+        await updateCommissionTrackerStatus(
           recipient.link,
           agentName,
           'Emailed'
         );
-        
-        if (trackerResult.success) {
-          console.log(`[EmailSender] ✅ Updated Commission Tracker for ${recipient.link} to "Emailed"`);
-        } else {
-          console.warn(`[EmailSender] ⚠️  Commission Tracker update failed: ${trackerResult.message}`);
-        }
       } catch (error) {
-        console.error(`[EmailSender] ⚠️  Exception updating Commission Tracker:`, error);
+        // Silent failure - don't break email sending for tracker errors
       }
-    } else {
-      console.warn(`[EmailSender] ⚠️  No store link for recipient ${recipient.email}, skipping Commission Tracker update`);
     }
 
     // 9. SCHEDULE NEXT STEP (critical for multi-step progression)
@@ -509,17 +484,14 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
     if (recipient.status === 'in_sequence' || currentStep < (sequence.stepDelays?.length || 0)) {
       try {
         await assignSingleRecipient(recipient.id);
-        console.log(`[EmailSender] ✅ Assigned recipient to next slot after step ${currentStep}`);
       } catch (error) {
-        console.error(`[EmailSender] ⚠️  Failed to assign recipient to next slot:`, error);
+        // Silent failure - don't break email sending for scheduling errors
       }
     }
 
-    console.log(`[EmailSender] ✅ Sent email to ${recipient.email} (step ${currentStep})`);
     return true;
 
   } catch (error: any) {
-    console.error(`[EmailSender] Error sending email to recipient ${recipientId}:`, error);
     return false;
   }
 }

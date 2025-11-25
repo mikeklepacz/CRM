@@ -11,8 +11,6 @@ import { sql } from "drizzle-orm";
  * - has business_hours (required for eligibility checking)
  */
 export async function getEligibleRecipientsForAssignment() {
-  console.log('[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...');
-  
   const result = await db.execute(sql`
     SELECT
       sr.id,
@@ -43,17 +41,6 @@ export async function getEligibleRecipientsForAssignment() {
   
   const rows = (result as any).rows || [];
   
-  console.log('[RecipientDb.getEligibleRecipientsForAssignment] Raw results:', {
-    count: rows.length,
-    sample: rows.slice(0, 3).map((r: any) => ({
-      email: r.email,
-      status: r.status,
-      sequence_status: r.sequence_status,
-      timezone: r.timezone,
-      current_step: r.current_step
-    }))
-  });
-  
   // Calculate step_delay for each recipient
   return rows.map((r: any) => {
     const stepDelays = r.step_delays || [];
@@ -83,8 +70,6 @@ export async function markRecipientScheduled(recipientId: string, scheduledTime:
  * Returns them in chronological order (by their slot time)
  */
 export async function getScheduledRecipientsFromDate(dateIso: string) {
-  console.log('[RecipientDb.getScheduledRecipientsFromDate] Fetching recipients from:', dateIso);
-  
   const result = await db.execute(sql`
     SELECT 
       sr.id,
@@ -109,15 +94,6 @@ export async function getScheduledRecipientsFromDate(dateIso: string) {
   `);
   
   const rows = (result as any).rows || [];
-  
-  console.log('[RecipientDb.getScheduledRecipientsFromDate] Found:', {
-    count: rows.length,
-    fromDate: dateIso,
-    sample: rows.slice(0, 3).map((r: any) => ({
-      email: r.email,
-      slot_time_utc: r.slot_time_utc
-    }))
-  });
   
   // Calculate step_delay for each recipient
   return rows.map((r: any) => {

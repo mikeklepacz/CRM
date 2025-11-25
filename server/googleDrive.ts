@@ -172,7 +172,6 @@ export async function backupKbFileToDrive(
     const baseFilename = filename.replace(/\.txt$/, ''); // Remove .txt extension if present
     const backupFilename = `${dateStr}-${baseFilename}-v${versionNumber}.txt`;
 
-    console.log(`[KB Backup] Uploading ${backupFilename} to Drive folder ${backupFolder.folderId}`);
 
     // Upload to Google Drive
     const fileBuffer = Buffer.from(content, 'utf-8');
@@ -183,7 +182,6 @@ export async function backupKbFileToDrive(
       fileBuffer
     );
 
-    console.log(`[KB Backup] Successfully uploaded to Drive: ${result.webViewLink}`);
     return result;
   } catch (error: any) {
     console.error('[KB Backup] Failed to backup to Drive:', error);

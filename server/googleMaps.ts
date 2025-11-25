@@ -2,9 +2,6 @@ import fetch from 'node-fetch';
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
-if (!GOOGLE_MAPS_API_KEY) {
-  console.warn('GOOGLE_MAPS_API_KEY not configured - Map Search will not work');
-}
 
 // US State abbreviation to full name mapping
 const STATE_ABBREVIATIONS: Record<string, string> = {

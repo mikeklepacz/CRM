@@ -3,7 +3,6 @@ import { storage } from './storage';
 
 export async function analyzeCallTranscript(conversationId: string): Promise<void> {
   try {
-    console.log(`Starting AI reflection for conversation: ${conversationId}`);
 
     // Get OpenAI API key from storage
     const openaiSettings = await storage.getOpenaiSettings();
@@ -24,7 +23,6 @@ export async function analyzeCallTranscript(conversationId: string): Promise<voi
 
     const transcripts = await storage.getCallTranscripts(conversationId);
     if (transcripts.length === 0) {
-      console.log(`No transcripts to analyze for conversation: ${conversationId}`);
       return;
     }
 
@@ -60,7 +58,6 @@ You MUST respond with valid JSON containing exactly these fields:
 
 Return ONLY the JSON object - no markdown code fences, no explanations.`;
 
-    console.log(`[AI Reflection] 🤖 Using Aligner assistant for call analysis`);
 
     // Create thread and run with Aligner
     const thread = await openai.beta.threads.create({
@@ -132,8 +129,6 @@ Return ONLY the JSON object - no markdown code fences, no explanations.`;
       aiAnalysis: analysis,
     });
 
-    console.log(`✅ AI reflection completed for conversation: ${conversationId}`);
-    console.log(`Analysis: ${analysis.summary}`);
   } catch (error: any) {
     console.error(`Error analyzing call transcript for ${conversationId}:`, error.message);
   }

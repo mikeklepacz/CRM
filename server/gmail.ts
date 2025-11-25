@@ -44,7 +44,6 @@ export async function sendGmailNotification(
 
     // Check if token needs refresh
     if (integration.expiresAt && new Date(integration.expiresAt) <= new Date()) {
-      console.log('[Gmail] Token expired, refreshing...');
       const { credentials } = await oauth2Client.refreshAccessToken();
       
       if (credentials.access_token) {
@@ -84,8 +83,6 @@ export async function sendGmailNotification(
         raw: encodedEmail,
       },
     });
-
-    console.log(`[Gmail] Email sent to ${to}: ${subject}`);
   } catch (error) {
     console.error('[Gmail] Error sending email:', error);
     // Don't throw - email failures shouldn't break ticket creation

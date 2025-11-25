@@ -47,7 +47,6 @@ export class GmailReplyScanner {
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       
       if (!trackerSheet) {
-        console.log('[ReplyScanner] Commission Tracker sheet not found');
         return pocEmails;
       }
 
@@ -57,7 +56,6 @@ export class GmailReplyScanner {
       );
 
       if (!trackerData || trackerData.length === 0) {
-        console.log('[ReplyScanner] Commission Tracker sheet is empty');
         return pocEmails;
       }
 
@@ -100,9 +98,6 @@ export class GmailReplyScanner {
         }
       }
 
-      console.log(`[ReplyScanner] Found ${totalEmails} total POC Emails`);
-      console.log(`[ReplyScanner] Excluded ${excludedCustomers} existing customers (Amount > $0)`);
-      console.log(`[ReplyScanner] Tracking ${pocEmails.size} prospect emails (Amount = $0)`);
       return pocEmails;
     } catch (error: any) {
       console.error('[ReplyScanner] Error fetching POC Emails:', error);
@@ -173,7 +168,6 @@ export class GmailReplyScanner {
       const listData = await listResponse.json();
       const messageIds = (listData.messages || []).map((m: any) => m.id);
 
-      console.log(`[ReplyScanner] Found ${messageIds.length} total sent messages in Gmail (full historical scan)`);
 
       // Fetch full message details for each message (in batches)
       const messages: GmailMessage[] = [];
@@ -296,13 +290,11 @@ export class GmailReplyScanner {
           
           // If this message is from someone else, it's a reply
           if (fromEmail !== senderEmail) {
-            console.log(`[ReplyScanner] Found reply in thread ${threadId}: from ${fromEmail}`);
             return true;
           }
         }
       }
 
-      console.log(`[ReplyScanner] Thread ${threadId} has ${messages.length} messages but no replies (all from ${senderEmail})`);
       return false;
     } catch (error: any) {
       console.error('[ReplyScanner] Error checking for replies:', error);
@@ -391,7 +383,6 @@ export class GmailReplyScanner {
         })
         .returning();
 
-      console.log('[ReplyScanner] ✅ Created Manual Follow-Ups system sequence');
       return newSequence;
     } catch (error: any) {
       console.error('[ReplyScanner] Error ensuring system sequence:', error);
@@ -405,7 +396,6 @@ export class GmailReplyScanner {
   async scan(waitDays: number = 3, dryRun: boolean = false, selectedEmails?: string[]): Promise<ScanResult> {
     this.waitDays = waitDays;
     
-    console.log(`[ReplyScanner] Starting Gmail Sent box scan (waitDays: ${waitDays}, dryRun: ${dryRun}, selectedEmails: ${selectedEmails?.length || 'all'})`);
 
     const result: ScanResult = {
       scanned: 0,
@@ -435,7 +425,6 @@ export class GmailReplyScanner {
         .limit(1);
 
       if (!userIntegration?.googleCalendarAccessToken) {
-        console.log('[ReplyScanner] Gmail not connected for admin user');
         return result;
       }
 
@@ -475,7 +464,6 @@ export class GmailReplyScanner {
       const pocEmails = await this.fetchPOCEmails();
       
       if (pocEmails.size === 0) {
-        console.log('[ReplyScanner] No POC Emails found in Commission Tracker');
         return result;
       }
 
@@ -483,13 +471,11 @@ export class GmailReplyScanner {
       const sentMessages = await this.fetchSentMessages(accessToken, waitDays);
       
       if (sentMessages.length === 0) {
-        console.log('[ReplyScanner] No sent messages found');
         return result;
       }
 
       // Filter messages to only those sent to POC Emails
       const matchedMessages = sentMessages.filter(msg => pocEmails.has(msg.to));
-      console.log(`[ReplyScanner] ${matchedMessages.length}/${sentMessages.length} sent messages match Commission Tracker POC Emails`);
 
       // Deduplicate: Group messages by email address
       const emailGroups = new Map<string, GmailMessage[]>();
@@ -521,8 +507,6 @@ export class GmailReplyScanner {
         emailHasReply.set(email, hasAnyReply);
       }
 
-      console.log(`[ReplyScanner] Deduplicated to ${deduplicatedMessages.length} unique email addresses`);
-      console.log(`[ReplyScanner] Eliminated ${matchedMessages.length - deduplicatedMessages.length} duplicate sends`);
 
       // Ensure system sequence exists
       const systemSequence = await this.ensureSystemSequence(adminUser.id);
@@ -744,13 +728,6 @@ export class GmailReplyScanner {
         }
       }
 
-      console.log(`[ReplyScanner] ✅ Scan complete: ${result.scanned} scanned, ${result.newEnrollments} newly enrolled, ${result.promoted} promoted, ${result.errors} errors`);
-      console.log(`[ReplyScanner] Details breakdown: ${result.details.length} total items`);
-      const statusCounts = result.details.reduce((acc: any, d: any) => {
-        acc[d.status] = (acc[d.status] || 0) + 1;
-        return acc;
-      }, {});
-      console.log(`[ReplyScanner] Status counts:`, statusCounts);
       return result;
     } catch (error: any) {
       console.error('[ReplyScanner] Fatal error during scan:', error);

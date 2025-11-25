@@ -199,15 +199,9 @@ export function ClientsTable({ clients, currentUser, isLoading, onNotesClick }: 
                           variant="outline"
                           size="sm"
                           onClick={(e) => {
-                            console.log('🟡 [NOTES BUTTON] Click event triggered');
-                            console.log('🟡 [NOTES BUTTON] Client ID:', client.id);
-                            console.log('🟡 [NOTES BUTTON] onNotesClick handler exists:', !!onNotesClick);
                             e.stopPropagation();
                             if (onNotesClick) {
-                              console.log('🟡 [NOTES BUTTON] Calling onNotesClick...');
                               onNotesClick(client.id);
-                            } else {
-                              console.error('🔴 [NOTES BUTTON] onNotesClick handler is undefined!');
                             }
                           }}
                           data-testid={`button-notes-${client.id}`}

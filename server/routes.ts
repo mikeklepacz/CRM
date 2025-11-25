@@ -66,8 +66,6 @@ async function addCallsToThreadInMicroBatches(
     batches.push(calls.slice(i, i + callsPerBatch));
   }
 
-  console.log(`[Micro-Batch] Drip-feeding ${calls.length} calls in ${batches.length} batches of ${callsPerBatch}`);
-
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
     const batchLabel = `Batch ${i + 1}/${batches.length}`;
@@ -84,8 +82,6 @@ async function addCallsToThreadInMicroBatches(
       })
       .join('\n');
 
-    console.log(`[Micro-Batch] Adding ${batchLabel} (${batch.length} calls) to thread`);
-
     await openai.beta.threads.messages.create(threadId, {
       role: 'user',
       content: `${batchLabel}:\n${transcriptContent}`
@@ -97,7 +93,6 @@ async function addCallsToThreadInMicroBatches(
     }
   }
 
-  console.log(`[Micro-Batch] All ${batches.length} batches added to thread ${threadId}`);
 }
 
 // ============================================================================
@@ -569,7 +564,6 @@ async function syncKbFileToAlignerVectorStore(
       file_id: uploadedFile.id,
     });
 
-    console.log(`[Auto-Sync] Synced ${filename} to Aligner vector store: ${uploadedFile.id}`);
     return { success: true };
 
   } catch (error: any) {
@@ -767,10 +761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setImmediate(async () => {
         try {
           // Sync any reminders that don't have calendar events yet
-          const syncResult = await syncRemindersToCalendar(userId);
-          if (syncResult.created > 0) {
-            console.log(`[LoginSync] Created ${syncResult.created} calendar events for user ${userId}`);
-          }
+          await syncRemindersToCalendar(userId);
 
           // Renew watch channel if close to expiry
           await renewCalendarWatchIfNeeded(userId);
@@ -889,7 +880,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
       const preferences = await storage.getUserPreferences(userId);
-      console.log('🔴 [GET PREFERENCES] colorRowByStatus value being returned:', preferences?.colorRowByStatus);
       res.json(preferences || null);
     } catch (error: any) {
       console.error("Error fetching user preferences:", error);
@@ -949,28 +939,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/user/preferences', isAuthenticatedCustom, async (req: any, res) => {
     try {
-      console.log('🎨 [BACKEND] PUT /api/user/preferences - Request body:', JSON.stringify(req.body, null, 2));
-
       const validation = userPreferencesSchema.safeParse(req.body);
       if (!validation.success) {
-        console.error('🎨 [BACKEND] Validation failed:', validation.error.errors);
         return res.status(400).json({ message: validation.error.errors[0].message });
       }
 
-      console.log('🎨 [BACKEND] Validation successful, data:', JSON.stringify(validation.data, null, 2));
-
       const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
-      console.log('🎨 [BACKEND] User ID:', userId);
-      console.log('🔴 [BACKEND] colorRowByStatus value received:', validation.data.colorRowByStatus);
 
       const preferences = await storage.saveUserPreferences(userId, validation.data);
-      console.log('🎨 [BACKEND] Preferences saved to DB:', JSON.stringify(preferences, null, 2));
-      console.log('🔴 [BACKEND] colorRowByStatus value in saved preferences:', preferences.colorRowByStatus);
 
-      console.log('🎨 [BACKEND] Sending response with status 200');
       res.json(preferences);
     } catch (error: any) {
-      console.error("🎨 [BACKEND] Error saving user preferences:", error);
+      console.error("Error saving user preferences:", error);
       res.status(500).json({ message: error.message || "Failed to save preferences" });
     }
   });
@@ -1228,8 +1208,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
-
-      console.log(`[Agent Details] Fetching details for agent: ${agentId}`);
       
       const response = await axios.get(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
         headers: {
@@ -1237,17 +1215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      console.log('[Agent Details] Successfully fetched agent details');
-      console.log('[Agent Details] Full response keys:', Object.keys(response.data));
-      
-      // Log the full nested structure to find where the prompt lives
       const data = response.data;
-      if (data.conversation_config) {
-        console.log('[Agent Details] conversation_config keys:', Object.keys(data.conversation_config));
-      }
-      if (data.platform_settings) {
-        console.log('[Agent Details] platform_settings keys:', Object.keys(data.platform_settings));
-      }
       
       // Extract system prompt from nested structure
       let systemPrompt = data.prompt 
@@ -1264,8 +1232,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Ensure it's a string
       systemPrompt = String(systemPrompt || '');
-      
-      console.log('[Agent Details] Extracted system prompt:', systemPrompt ? systemPrompt.substring(0, 200) + '...' : '(empty)');
       
       // Return the response with the prompt at the top level for easier access
       res.json({
@@ -1293,9 +1259,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
-
-      console.log(`[Agent Prompt] Updating prompt for agent: ${agentId}`);
-      console.log(`[Agent Prompt] New prompt length: ${prompt.length} characters`);
       
       // ElevenLabs requires nested structure: conversation_config.agent.prompt.prompt
       const updatePayload = {
@@ -1308,8 +1271,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
       
-      console.log(`[Agent Prompt] Sending payload:`, JSON.stringify(updatePayload, null, 2));
-      
       const response = await axios.patch(
         `https://api.elevenlabs.io/v1/convai/agents/${agentId}`,
         updatePayload,
@@ -1321,8 +1282,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       );
 
-      console.log('[Agent Prompt] Successfully updated agent prompt');
-      console.log('[Agent Prompt] ElevenLabs response status:', response.status);
       res.json(response.data);
     } catch (error: any) {
       console.error('[Agent Prompt] Error updating agent prompt:', error.response?.data || error.message);
@@ -1337,8 +1296,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!config?.apiKey) {
         return res.status(400).json({ error: 'ElevenLabs API key not configured' });
       }
-
-      console.log('[PhoneSync] Fetching phone numbers from ElevenLabs API...');
       
       // Call ElevenLabs API to get phone numbers
       const response = await axios.get('https://api.elevenlabs.io/v1/convai/phone-numbers/', {
@@ -1349,8 +1306,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // ElevenLabs returns array directly, not wrapped in phone_numbers field
       const phoneNumbers = Array.isArray(response.data) ? response.data : (response.data.phone_numbers ?? []);
-      console.log('[PhoneSync] Received response:', JSON.stringify(response.data, null, 2));
-      console.log('[PhoneSync] Extracted phone numbers:', JSON.stringify(phoneNumbers, null, 2));
 
       if (!phoneNumbers || phoneNumbers.length === 0) {
         return res.json({ message: 'No phone numbers found in ElevenLabs account', phoneNumbers: [] });
@@ -1366,7 +1321,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             label: phone.label || phone.name || null,
           });
           storedCount++;
-          console.log(`[PhoneSync] Stored phone number: ${phone.number || phone.phone_number} (ID: ${phone.phone_number_id})`);
         } catch (err: any) {
           console.error(`[PhoneSync] Failed to store phone number ${phone.phone_number_id}:`, err.message);
         }
@@ -1382,7 +1336,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateElevenLabsAgent(agent.id, {
             phoneNumberId: phoneNumbers[0].phone_number_id,
           });
-          console.log(`[PhoneSync] Assigned phone ${phoneNumbers[0].phone_number_id} to agent ${agent.name}`);
           updatedCount++;
         }
       }
@@ -1416,7 +1369,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/elevenlabs/webhook', async (req: any, res) => {
     try {
       const payload = req.body;
-      console.log('Received ElevenLabs webhook:', JSON.stringify(payload, null, 2));
 
       // SECURITY: Validate webhook signature
       const config = await storage.getElevenLabsConfig();
@@ -1434,9 +1386,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('Invalid webhook signature - rejecting request');
           return res.status(401).json({ error: 'Invalid signature' });
         }
-        console.log('✅ Webhook signature validated');
-      } else {
-        console.warn('⚠️  No webhook secret configured - skipping signature validation');
       }
 
       // Handle different webhook types
@@ -1445,7 +1394,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (webhookType === 'call_initiation_failure') {
         // Handle call initiation failure (e.g., invalid phone number, network error)
-        console.log('[Webhook] Call initiation failure detected');
         const data = payload.data;
         const conversationId = data.conversation_id;
         const clientData = data.conversation_initiation_client_data || {};
@@ -1467,7 +1415,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               targetStatus: 'failed',
             });
             await storage.incrementCampaignCalls(target.campaignId, 'failed');
-            console.log(`[Webhook] Campaign target ${clientData.campaignTargetId} marked as failed due to initiation failure`);
           }
         }
         
@@ -1477,7 +1424,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (webhookType === 'post_call_audio') {
         // Early notification that call ended (before transcription)
         // We can update status but won't have transcript/analysis yet
-        console.log('[Webhook] Post-call audio received (early notification)');
         const data = payload.data;
         const conversationId = data.conversation_id;
         const metadata = data.metadata || {};
@@ -1494,14 +1440,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             costCredits: metadata.cost || null,
             endedAt,
           });
-          console.log(`[Webhook] Call ${conversationId} marked as processing (waiting for transcription)`);
         }
         
         return res.status(200).json({ status: 'processed', type: 'post_call_audio' });
       }
       
       if (webhookType !== 'post_call_transcription') {
-        console.log(`[Webhook] Ignoring unknown webhook type: ${webhookType}`);
         return res.status(200).json({ status: 'ignored', reason: `Unknown webhook type: ${webhookType}` });
       }
       
@@ -1541,8 +1485,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!session) {
         // Create new call session (this means webhook arrived before our initiate-call response)
-        console.log('Creating new session from webhook for conversation:', conversationId);
-
         session = await storage.createCallSession({
           conversationId,
           agentId: data.agent_id,
@@ -1606,9 +1548,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }));
 
           await storage.bulkCreateCallTranscripts(transcripts);
-          console.log(`Stored ${transcripts.length} transcript messages`);
-        } else {
-          console.log(`Transcripts already exist for conversation ${conversationId} - skipping duplicate insert`);
         }
       }
 
@@ -1636,10 +1575,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 
                 if (tool.name === 'play_keypad_touch_tone') {
                   detectionMethod = 'DTMF keypad tone detected in call transcript';
-                  console.log(`[IVR Detection] DTMF tone detected in conversation ${conversationId}`);
                 } else {
                   detectionMethod = `Voicemail/IVR detection tool triggered: ${tool.name}`;
-                  console.log(`[IVR Detection] Voicemail/IVR detected in conversation ${conversationId} (tool: ${tool.name})`);
                 }
                 break;
               }
@@ -1672,17 +1609,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   
                   // Update the cell to TRUE
                   await googleSheets.writeSheetData(spreadsheetId, cellRange, [['TRUE']]);
-                  
-                  console.log(`[IVR Detection] ✅ Updated store ${clientData.clientId} Automated Line to TRUE`);
-                  console.log(`[IVR Detection] Method: ${detectionMethod}`);
-                } else {
-                  console.warn(`[IVR Detection] "Automated Line" column not found in sheet ${sheetName}`);
                 }
-              } else {
-                console.warn(`[IVR Detection] Sheet not found with ID ${storeSnapshot.sheetId}`);
               }
-            } else {
-              console.warn(`[IVR Detection] Missing rowIndex or sheetId in storeSnapshot for clientId ${clientData.clientId}`);
             }
           } catch (ivrError: any) {
             console.error(`[IVR Detection] Error updating Automated Line:`, ivrError.message);
@@ -1695,7 +1623,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.status === 'done' && data.analysis && data.analysis.extracted_data) {
         try {
           const extractedData = data.analysis.extracted_data;
-          console.log('[Data Extraction] Processing extracted data:', extractedData);
           
           // Prepare update object with all extracted fields
           const extractedUpdate: any = {};
@@ -1764,7 +1691,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update call_sessions with extracted data
           if (Object.keys(extractedUpdate).length > 0) {
             await storage.updateCallSessionByConversationId(conversationId, extractedUpdate);
-            console.log(`[Data Extraction] ✅ Saved ${Object.keys(extractedUpdate).length} extracted fields to call_sessions`);
           }
           
           // UPDATE POC DATA TO GOOGLE SHEETS
@@ -1800,9 +1726,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       const columnLetter = columnIndexToLetter(columnIndex);
                       const cellRange = `${sheetName}!${columnLetter}${clientData.storeSnapshot.rowIndex}`;
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[update.value]]);
-                      console.log(`[Data Extraction] ✅ Updated ${update.columnName} in Store Database: ${update.value}`);
-                    } else {
-                      console.warn(`[Data Extraction] Column "${update.columnName}" not found in Store Database`);
                     }
                   }
                 }
@@ -1849,7 +1772,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       const columnLetter = columnIndexToLetter(pocTitleIndex);
                       const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[extractedData.poc_title]]);
-                      console.log(`[Data Extraction] ✅ Updated POC Title in Commission Tracker Column T: ${extractedData.poc_title}`);
                     }
                     
                     // Update Follow-up Date (Column I)
@@ -1857,7 +1779,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       const columnLetter = columnIndexToLetter(followUpDateIndex);
                       const cellRange = `${sheetName}!${columnLetter}${trackerRowIndex}`;
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[extractedData.follow_up_date]]);
-                      console.log(`[Data Extraction] ✅ Updated Follow-up Date in Commission Tracker Column I: ${extractedData.follow_up_date}`);
                     }
                     
                     // Build and append call notes (Column K)
@@ -1904,15 +1825,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         : newNote;
                       
                       await googleSheets.writeSheetData(spreadsheetId, cellRange, [[updatedNotes]]);
-                      console.log(`[Data Extraction] ✅ Appended call notes to Commission Tracker Column K`);
-                    } else {
-                      console.warn(`[Data Extraction] Notes column not found in Commission Tracker (should be Column K)`);
                     }
-                  } else {
-                    console.warn(`[Data Extraction] Could not find matching row in Commission Tracker for link: ${storeLink}`);
                   }
-                } else {
-                  console.warn(`[Data Extraction] Link column not found in Commission Tracker headers`);
                 }
               }
             } catch (sheetsError: any) {
@@ -1944,14 +1858,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const adminUser = allUsers.find((u: any) => u.role === 'admin');
             
             if (!adminUser) {
-              console.log('[Auto-Trigger] No admin user found, skipping auto-trigger check');
               return;
             }
             
             const preferences = await storage.getUserPreferences(adminUser.id);
             
             if (!preferences?.autoKbAnalysis) {
-              console.log('[Auto-Trigger] Auto KB analysis is disabled');
               return;
             }
             
@@ -1965,20 +1877,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             const unanalyzedCount = unanalyzedCalls.length;
-            console.log(`[Auto-Trigger] Agent ${agentId} has ${unanalyzedCount} unanalyzed calls (threshold: ${threshold})`);
             
             if (unanalyzedCount >= threshold) {
-              console.log(`[Auto-Trigger] Threshold met! Triggering full analysis chain for agent ${agentId}...`);
-              
               // Trigger the analysis endpoint (which chains WIC Coach → Aligner)
-              const analysisResponse = await axios.post(`http://localhost:${process.env.PORT || 5000}/api/elevenlabs/analyze-calls`, {
+              await axios.post(`http://localhost:${process.env.PORT || 5000}/api/elevenlabs/analyze-calls`, {
                 agentId,
                 limit: threshold,
               }, {
                 timeout: 300000, // 5 minute timeout for long-running analysis
               });
-              
-              console.log('[Auto-Trigger] Analysis chain completed successfully');
             }
           } catch (autoTriggerError: any) {
             console.error('[Auto-Trigger] Error during auto-triggered analysis:', autoTriggerError.message);
@@ -1997,8 +1904,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Twilio call status webhook - receives call progress updates
   app.post('/api/twilio/call-status', async (req, res) => {
     try {
-      console.log('[Twilio] Received call status webhook:', req.body);
-      
       // Validate Twilio signature for security
       const signature = req.headers['x-twilio-signature'] as string | undefined;
       const replitDomain = process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
@@ -2053,8 +1958,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       };
 
-      console.log('Initiating call to ElevenLabs:', JSON.stringify(requestBody, null, 2));
-
       // Call ElevenLabs API
       const response = await fetch(elevenlabsApiUrl, {
         method: 'POST',
@@ -2085,8 +1988,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           details: 'No conversation ID returned' 
         });
       }
-
-      console.log('Call initiated successfully:', conversationId);
 
       // Create initial call session in database
       const session = await storage.createCallSession({
@@ -2160,13 +2061,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           is_default: agent.isDefault,
         };
       });
-      
-      console.log('[API] Returning agents:', transformedAgents.map(a => ({ 
-        name: a.name, 
-        agent_id: a.agent_id, 
-        phone_number_id: a.phone_number_id,
-        phone_number: a.phone_number 
-      })));
       
       res.json(transformedAgents);
     } catch (error: any) {
@@ -2536,10 +2430,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      console.log(`[EligibleStores] Loaded ${commissionData.length} commission records and ${storeData.length} store records`);
-      console.log(`[EligibleStores] Commission headers:`, commissionHeaders);
-      console.log(`[EligibleStores] Store headers:`, storeHeaders);
-
       // Join commission data with store data on Link column
       const stores = commissionData.map((commission: any) => {
         const link = commission['Link'] || commission['link'];
@@ -2551,8 +2441,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Link: link,
         };
       }).filter((store: any) => store.Link);
-      
-      console.log(`[EligibleStores] Sample joined store:`, stores[0]);
       
       // Apply scenario-based filtering
       let eligibleStores = stores;
@@ -2665,49 +2553,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { agent_record_id, agent_id, phone_number_id, stores, store_data, scenario, name, scheduled_for, auto_schedule, ivr_behavior } = req.body;
       
-      console.log('[BatchCall] Request received:', {
-        agent_record_id,
-        agent_id,
-        phone_number_id,
-        stores_count: stores?.length,
-        store_data_count: store_data?.length,
-        scenario,
-        scheduled_for,
-        auto_schedule,
-        ivr_behavior,
-      });
-      
       if (!agent_record_id || !agent_id || !stores || !Array.isArray(stores) || stores.length === 0) {
-        console.error('[BatchCall] Validation failed: missing agent_record_id, agent_id, or stores');
         return res.status(400).json({ error: 'Agent record ID, agent ID, and stores array required' });
       }
 
       // Verify agent exists and has required fields using the database record ID
       const agent = await storage.getElevenLabsAgent(agent_record_id);
       if (!agent) {
-        console.error('[BatchCall] Agent not found:', agent_record_id);
         return res.status(404).json({ error: 'Agent not found' });
       }
       
       if (!agent.agentId || !agent.phoneNumberId) {
-        console.error('[BatchCall] Agent missing required fields:', agent);
         return res.status(400).json({ error: 'Agent configuration incomplete - missing agentId or phoneNumberId' });
       }
       
       // Validate phone_number_id - use from request if provided, otherwise use agent's configured value
       const effectivePhoneNumberId = phone_number_id || agent.phoneNumberId;
       if (!effectivePhoneNumberId) {
-        console.error('[BatchCall] No phone_number_id available');
         return res.status(400).json({ error: 'Phone number ID required for outbound calling' });
       }
-      
-      console.log('[BatchCall] Agent validated:', { 
-        name: agent.name, 
-        agentId: agent.agentId, 
-        phoneNumberId: effectivePhoneNumberId,
-        requestedPhoneNumberId: phone_number_id,
-        agentPhoneNumberId: agent.phoneNumberId
-      });
 
       // Create campaign with appropriate scheduling - use database record ID
       let scheduledStart = new Date();
@@ -2726,8 +2590,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scheduledStart,
         ivrBehavior: ivr_behavior || 'flag_and_end',
       });
-      
-      console.log('[BatchCall] Campaign created:', { id: campaign.id, name: campaign.name, totalStores: stores.length });
 
       // Create map of store link to store data for efficient lookup
       const storeDataMap = new Map();
@@ -2737,7 +2599,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storeDataMap.set(store.link, store);
           }
         }
-        console.log('[BatchCall] Store data map created with', storeDataMap.size, 'entries');
       }
 
       // Create campaign targets for each store
@@ -2754,7 +2615,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const phone = storeInfo.phone || storeInfo.Phone;
           
           if (!phone) {
-            console.warn(`[BatchCall] Skipping store ${storeLink} - no phone number in store_data`);
             skippedStores++;
             continue;
           }
@@ -2765,7 +2625,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             data: storeInfo,
             status: storeInfo.status || 'unassigned',
           });
-          console.log(`[BatchCall] Created new client for store ${storeLink}`);
         }
         
         // Create campaign target if we have a client
@@ -2774,7 +2633,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const phoneNumber = clientData?.Phone || clientData?.phone;
           
           if (!phoneNumber) {
-            console.warn(`[BatchCall] Skipping store ${storeLink} - no phone number in client data`);
             skippedStores++;
             continue;
           }
@@ -2797,38 +2655,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (optimalTime) {
                 targetData.scheduledFor = optimalTime;
                 targetData.nextAttemptAt = optimalTime;
-                console.log(`[BatchCall] Auto-scheduled call for ${storeLink} at ${optimalTime.toISOString()} (hours: ${hours}, state: ${state})`);
               } else {
                 targetData.nextAttemptAt = new Date();
-                console.log(`[BatchCall] Could not calculate optimal time for ${storeLink}, scheduling immediately`);
               }
             } else {
               targetData.nextAttemptAt = new Date();
-              console.log(`[BatchCall] Missing hours/state for ${storeLink}, scheduling immediately`);
             }
           } else if (scheduled_for) {
             targetData.scheduledFor = scheduledStart;
             targetData.nextAttemptAt = scheduledStart;
-            console.log(`[BatchCall] Scheduled call for ${storeLink} at ${scheduledStart.toISOString()}`);
           } else {
             targetData.nextAttemptAt = new Date();
-            console.log(`[BatchCall] Immediate call queued for ${storeLink}`);
           }
 
           await storage.createCallCampaignTarget(targetData);
           createdTargets++;
         } else {
-          console.warn(`[BatchCall] Skipping store ${storeLink} - client not found and no store_data provided`);
           skippedStores++;
         }
       }
-      
-      console.log('[BatchCall] ====== BATCH CALL SUMMARY ======');
-      console.log('[BatchCall] Campaign:', { id: campaign.id, name: campaign.name });
-      console.log('[BatchCall] Targets created:', createdTargets, '/', stores.length);
-      console.log('[BatchCall] Targets skipped:', skippedStores);
-      console.log('[BatchCall] Scheduling:', auto_schedule ? 'Auto (Smart Hours)' : scheduled_for ? 'Scheduled' : 'Immediate');
-      console.log('[BatchCall] ================================');
 
       res.json({
         campaignId: campaign.id,
@@ -7234,20 +7079,15 @@ IMPORTANT:
       // Decode Pub/Sub message
       const pubsubMessage = req.body?.message;
       if (!pubsubMessage?.data) {
-        console.log('[GmailPush] Received push without data, ignoring');
         return;
       }
 
       const data = Buffer.from(pubsubMessage.data, 'base64').toString('utf-8');
       const notification = JSON.parse(data);
 
-      console.log(`[GmailPush] 📬 Push received: email=${notification.emailAddress}, historyId=${notification.historyId}`);
-
       // Process history asynchronously (don't await - we already responded 200)
       processGmailHistory(notification.historyId).then(result => {
         if (result.repliesDetected > 0) {
-          console.log(`[GmailPush] ✅ Processed: ${result.repliesDetected} replies detected, recipients updated: ${result.recipientsUpdated.join(', ')}`);
-          
           // Emit WebSocket event for real-time UI updates
           eventGateway.emit('gmail:newMessage', {
             repliesDetected: result.repliesDetected,
@@ -7255,8 +7095,8 @@ IMPORTANT:
             historyId: notification.historyId,
           });
         }
-      }).catch(err => {
-        console.error('[GmailPush] Error processing history:', err);
+      }).catch(() => {
+        // Silent error handling - errors are handled in processGmailHistory
       });
 
     } catch (error: any) {
@@ -7569,7 +7409,6 @@ IMPORTANT:
       // Get Commission Tracker sheet (source of truth)
       const trackerSheet = await storage.getGoogleSheetByPurpose('commissions');
       if (!trackerSheet) {
-        console.log('[MY-CLIENTS] ❌ No Commission Tracker sheet found');
         return res.json([]);
       }
 
@@ -7592,14 +7431,10 @@ IMPORTANT:
       // Check if we have valid cached data
       const cached = getCached<any[]>(cacheKey, dataHash);
       if (cached) {
-        console.log(`[MY-CLIENTS] ⚡ Cache HIT - returning ${cached.length} clients (hash: ${dataHash.substring(0, 8)})`);
         return res.json(cached);
       }
-      
-      console.log(`[MY-CLIENTS] 🔄 Cache MISS - processing data (hash: ${dataHash.substring(0, 8)})`);
 
       if (trackerRows.length <= 1) {
-        console.log('[MY-CLIENTS] ❌ Commission Tracker is empty or has no data rows');
         return res.json([]);
       }
 
@@ -7659,7 +7494,6 @@ IMPORTANT:
         // SECURITY: Filter by allowed agent names (agents see only their clients)
         if (allowedAgentNames.length > 0) {
           if (agentNameIndex === -1) {
-            console.log(`[MY-CLIENTS] ❌ Agent Name column not found - filtering all rows`);
             continue; // No agent column means agents see nothing
           }
           const rowAgentNormalized = rowAgent ? rowAgent.toLowerCase().trim() : '';
@@ -7793,8 +7627,6 @@ IMPORTANT:
         clientCount: enrichedClients.length,
         hash: dataHash.substring(0, 8),
       }, { userId });
-      
-      console.log(`[MY-CLIENTS] ✅ Processing complete: ${enrichedClients.length} clients for ${currentUser.agentName || currentUser.email} | Processed: ${rowsProcessed}, Skipped: ${skippedNoLink} no-link, ${skippedChildLocation} child-locations, ${rowsFiltered} filtered-by-agent`);
 
       res.json(enrichedClients);
     } catch (error: any) {
@@ -7808,16 +7640,6 @@ IMPORTANT:
     try {
       const { search, nameFilter, cityFilter, states, cities, status } = req.body;
       const user = req.currentUser;
-
-      // DEBUG: Log received filters
-      console.log('🔍 [EXPORT FILTERS RECEIVED]:', JSON.stringify({
-        search,
-        nameFilter,
-        cityFilter,
-        states,
-        cities,
-        status
-      }, null, 2));
 
       // Build filters - ONLY visual filters, no category or agent filtering
       const filters: any = {
@@ -7838,10 +7660,6 @@ IMPORTANT:
       }
 
       const clients = await storage.getFilteredClients(filters);
-      console.log(`✅ [EXPORT RESULTS]: Returning ${clients.length} clients`);
-      if (clients.length <= 5) {
-        console.log('📋 [EXPORT CLIENT NAMES]:', clients.map(c => c.data?.Name || c.data?.name || 'Unknown'));
-      }
       res.json(clients);
     } catch (error: any) {
       console.error("Error fetching filtered clients:", error);
@@ -13892,21 +13710,16 @@ ${rawText}`;
         const storeName = brandName || name;
         query = `${storeName} ${address}`.trim();
         location = `${city || ''} ${state || ''}`.trim();
-        console.log(`[Google Search] Using DBA+Address search: "${query}" near "${location}"`);
       } else if (brandName && city && state) {
         // FALLBACK: Brand + location if no address available
         query = `${brandName} ${category || 'dispensary'} ${city} ${state}`.trim();
-        console.log(`[Google Search] Using Brand+Location search: "${query}"`);
       } else {
         // LAST RESORT: Name only
         query = name;
         if (city && state) {
           location = `${city}, ${state}`;
         }
-        console.log(`[Google Search] Using Name-only search: "${query}" near "${location}"`);
       }
-
-      console.log(`[Google Search] Final Query: "${query}", Location: "${location}"`);
 
       // Search Google Places API
       const searchResults = await googleMaps.searchPlaces(query, location);
@@ -13962,9 +13775,6 @@ ${rawText}`;
 
         if (stateFiltered.length > 0) {
           validResults = stateFiltered;
-          console.log(`[Google Search] Filtered to ${validResults.length} results matching state: ${state}`);
-        } else {
-          console.log(`[Google Search] Warning: No results matched input state "${state}", returning all results`);
         }
       }
 
@@ -13981,7 +13791,6 @@ ${rawText}`;
 
         if (cityFiltered.length > 0) {
           validResults = cityFiltered;
-          console.log(`[Google Search] Further filtered to ${validResults.length} results matching city: ${city}`);
         }
       }
 
@@ -14003,7 +13812,6 @@ ${rawText}`;
             const nameSimilarity = stringSimilarity.compareTwoStrings(inputName, resultName);
             confidence += nameSimilarity;
             matchCount++;
-            console.log(`[Fuzzy Match] Name: "${inputName}" vs "${resultName}" = ${(nameSimilarity * 100).toFixed(1)}%`);
           }
           
           // Compare address (if provided)
@@ -14013,23 +13821,17 @@ ${rawText}`;
             const addressSimilarity = stringSimilarity.compareTwoStrings(inputAddress, resultAddress);
             confidence += addressSimilarity;
             matchCount++;
-            console.log(`[Fuzzy Match] Address: "${inputAddress}" vs "${resultAddress}" = ${(addressSimilarity * 100).toFixed(1)}%`);
           }
           
           // Calculate average confidence
           const avgConfidence = matchCount > 0 ? confidence / matchCount : 0;
           const passed = avgConfidence >= MIN_CONFIDENCE;
           
-          console.log(`[Fuzzy Match] "${result.name}" overall confidence: ${(avgConfidence * 100).toFixed(1)}% - ${passed ? 'PASS' : 'REJECT'}`);
-          
           return passed;
         });
         
         if (fuzzyFiltered.length > 0) {
           validResults = fuzzyFiltered;
-          console.log(`[Google Search] Fuzzy match filtered to ${validResults.length} high-confidence results (>=${MIN_CONFIDENCE * 100}%)`);
-        } else {
-          console.log(`[Google Search] Warning: All results failed fuzzy match threshold, returning original ${validResults.length} results`);
         }
       }
 
@@ -14192,7 +13994,6 @@ ${rawText}`;
       }
 
       const storeHeaders = storeRows[0];
-      console.log('[DBA-PARENT] Store Database headers:', storeHeaders);
       
       const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
       const categoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
@@ -14219,9 +14020,6 @@ ${rawText}`;
       const storeEmailIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'email');
       const storeStatusIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'status');
 
-      console.log('[DBA-PARENT] Column indices - Name:', storeNameIndex, 'Link:', storeLinkIndex, 'Category:', categoryIndex, 'Status:', storeStatusIndex);
-      console.log('[DBA-PARENT] Values to write - dbaName:', dbaName, 'corporateUuid:', corporateUuid, 'category:', category, 'status:', status);
-
       const storeRow = new Array(storeHeaders.length).fill('');
       if (storeNameIndex !== -1) storeRow[storeNameIndex] = dbaName;
       if (storeLinkIndex !== -1) storeRow[storeLinkIndex] = corporateUuid;
@@ -14232,10 +14030,6 @@ ${rawText}`;
       if (storeEmailIndex !== -1) storeRow[storeEmailIndex] = email || '';
       if (categoryIndex !== -1) storeRow[categoryIndex] = category;
       if (storeStatusIndex !== -1 && status) storeRow[storeStatusIndex] = status;
-
-      console.log('[DBA-PARENT] Complete storeRow before append:', storeRow);
-      console.log('[DBA-PARENT] storeRow[0] (should be Name):', storeRow[0]);
-      console.log('[DBA-PARENT] storeRow[storeNameIndex]:', storeRow[storeNameIndex]);
 
       await googleSheets.appendSheetData(storeSheet.spreadsheetId, `${storeSheet.sheetName}`, [storeRow]);
 
@@ -14706,10 +14500,6 @@ ${rawText}`;
       let commission10Earnings = 0;
       const monthlyEarnings: { [key: string]: number } = {};
 
-      console.log('[DASHBOARD-SUMMARY] allowedAgentNames:', allowedAgentNames);
-      console.log('[DASHBOARD-SUMMARY] agentIndex:', agentIndex);
-      console.log('[DASHBOARD-SUMMARY] Processing', trackerRows.length - 1, 'tracker rows');
-
       // Process each tracker row
       for (let i = 1; i < trackerRows.length; i++) {
         const row = trackerRows[i];
@@ -14722,7 +14512,6 @@ ${rawText}`;
         if (allowedAgentNames.length > 0) {
           // If Agent column doesn't exist, agents see ZERO data
           if (agentIndex === -1) {
-            console.log(`[DASHBOARD-SUMMARY] Row ${i}: SKIPPING - Agent column missing, security requires filtering`);
             continue;
           }
 
@@ -14731,22 +14520,17 @@ ${rawText}`;
             name.toLowerCase().trim() === rowAgentNormalized
           );
           if (!isAllowed) {
-            console.log(`[DASHBOARD-SUMMARY] Row ${i}: SKIPPING - rowAgent="${rowAgent}" not in allowedAgentNames`);
             continue;
           }
         }
 
-        console.log(`[DASHBOARD-SUMMARY] Row ${i}:`, { dateStr, amountStr, commissionType, rowAgent });
-
         // Parse amount
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         if (amount === 0) {
-          console.log(`[DASHBOARD-SUMMARY] Row ${i}: Skipping - amount is 0`);
           continue;
         }
 
         totalEarnings += amount;
-        console.log(`[DASHBOARD-SUMMARY] Row ${i}: Added $${amount}, total now: $${totalEarnings}`);
 
         // Parse date (handle formats: MM/DD/YYYY, M/D/YYYY, etc.)
         let orderDate: Date | null = null;
@@ -15298,30 +15082,21 @@ ${rawText}`;
       };
 
       // Get Store Database sheet to look up company names by link
-      // Debug: Check all active sheets
       const allSheets = await storage.getAllActiveGoogleSheets();
-      console.log('[TOP-CLIENTS] All active sheets:', allSheets.map(s => ({ name: s.spreadsheetName, purpose: s.sheetPurpose })));
       
       const storeSheet = allSheets.find(s => s.sheetPurpose === 'Store Database');
       const linkToNameMap: { [normalizedLink: string]: string } = {};
-
-      console.log('[TOP-CLIENTS] Store sheet found:', !!storeSheet);
 
       if (storeSheet) {
         try {
           const storeRange = `${storeSheet.sheetName}!A:ZZ`;
           const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
 
-          console.log('[TOP-CLIENTS] Store Database rows:', storeRows.length);
-
           if (storeRows.length > 1) {
             const storeHeaders = storeRows[0];
             const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
             const nameIndex = 0; // Column A = Name
             const dbaIndex = 13; // Column N = DBA
-
-            console.log('[TOP-CLIENTS] Store Headers:', storeHeaders);
-            console.log('[TOP-CLIENTS] Link column index:', storeLinkIndex, 'Name index:', nameIndex, 'DBA index:', dbaIndex);
 
             // Build lookup map: normalized link -> company name
             for (let i = 1; i < storeRows.length; i++) {
@@ -15334,30 +15109,19 @@ ${rawText}`;
                 const normalized = normalizeLink(storeLink);
                 // Prefer DBA over Name
                 linkToNameMap[normalized] = dba || name || storeLink;
-                
-                if (i <= 3) {
-                  console.log(`[TOP-CLIENTS] Row ${i}: link="${storeLink}" -> normalized="${normalized}" -> name="${linkToNameMap[normalized]}"`);
-                }
               }
             }
-            console.log('[TOP-CLIENTS] Lookup map size:', Object.keys(linkToNameMap).length);
-            console.log('[TOP-CLIENTS] Sample lookup keys:', Object.keys(linkToNameMap).slice(0, 5));
           }
         } catch (error) {
-          console.error('[TOP-CLIENTS] Error reading Store Database for name lookup:', error);
           // Continue without names - will fall back to links
         }
       }
 
       // Convert to array and sort by total commission (descending)
       const topClients = Object.entries(clientMetrics)
-        .map(([link, metrics], index) => {
+        .map(([link, metrics]) => {
           const normalizedLink = normalizeLink(link);
           const companyName = linkToNameMap[normalizedLink] || link;
-          
-          if (index < 3) {
-            console.log(`[TOP-CLIENTS] Client ${index + 1}: original="${link}" -> normalized="${normalizedLink}" -> found="${companyName}"`);
-          }
           
           return {
             id: link,
@@ -15372,7 +15136,6 @@ ${rawText}`;
         .sort((a, b) => parseFloat(b.totalCommission) - parseFloat(a.totalCommission))
         .slice(0, topLimit);
 
-      console.log('[TOP-CLIENTS] Returning', topClients.length, 'clients');
       res.json({ topClients });
     } catch (error: any) {
       console.error('Error fetching top clients:', error);
@@ -15422,7 +15185,6 @@ ${rawText}`;
         // Fetch user info to add agentName to each reminder
         const reminderUser = await storage.getUserById(uid);
         if (!reminderUser) {
-          console.warn(`[Reminders] User ${uid} not found, skipping reminders`);
           continue; // Skip if user not found
         }
 
@@ -15647,19 +15409,15 @@ ${rawText}`;
       try {
         const integration = await storage.getUserIntegration(userId);
         if (integration?.googleCalendarAccessToken) {
-          console.log('[Calendar] Starting calendar event creation for reminder:', reminder.id);
-
           // Get system-wide OAuth credentials FIRST (needed for token refresh)
           const systemIntegration = await storage.getSystemIntegration('google_sheets');
           if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
-            console.error('[Calendar] System-wide Google OAuth not configured');
             throw new Error('Google OAuth not configured');
           }
 
           // Check if token needs refresh
           let accessToken = integration.googleCalendarAccessToken;
           if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
-            console.log('[Calendar] Token expired, refreshing...');
             // Token expired, refresh it using system OAuth credentials
             if (integration.googleCalendarRefreshToken) {
               const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -15680,17 +15438,10 @@ ${rawText}`;
                   googleCalendarAccessToken: tokens.access_token,
                   googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000)
                 });
-                console.log('[Calendar] Token refreshed successfully');
               } else {
-                const errorText = await tokenResponse.text();
-                console.error('[Calendar] Token refresh failed:', {
-                  status: tokenResponse.status,
-                  error: errorText
-                });
                 throw new Error(`Token refresh failed: ${tokenResponse.status}`);
               }
             } else {
-              console.error('[Calendar] Missing refresh token for token refresh');
               throw new Error('Missing refresh token');
             }
           }
@@ -15781,8 +15532,6 @@ ${rawText}`;
             },
           };
 
-          console.log('[Calendar] Creating event with payload:', JSON.stringify(event, null, 2));
-
           const createdEvent = await calendar.events.insert({
             calendarId: 'primary',
             requestBody: event,
@@ -15794,24 +15543,9 @@ ${rawText}`;
               googleCalendarEventId: createdEvent.data.id
             });
           }
-
-          console.log(`[Calendar] ✅ Created event ${createdEvent.data.id} for reminder ${reminder.id}`);
-        } else {
-          console.log('[Calendar] Skipping - Google Calendar not connected');
         }
       } catch (calendarError: any) {
-        // Log error but don't fail the request - comprehensive logging for debugging
-        console.error('[Calendar] ❌ Failed to create calendar event:', {
-          message: calendarError.message,
-          status: calendarError.response?.status || calendarError.status,
-          statusText: calendarError.response?.statusText,
-          errorData: calendarError.response?.data,
-          code: calendarError.code
-        });
-        // Also log stack trace for unexpected errors
-        if (!calendarError.response?.status) {
-          console.error('[Calendar] Stack trace:', calendarError.stack);
-        }
+        // Non-blocking - calendar event creation failed but reminder was still created
       }
 
       // Smart default: Update user preferences if calendar reminders differ from current defaults
@@ -15832,13 +15566,10 @@ ${rawText}`;
             await storage.saveUserPreferences(userId, {
               defaultCalendarReminders: calendarReminders
             });
-            console.log(`[Smart Default] Updated calendar reminder defaults for user ${userId}`, 
-              calendarReminders.length === 0 ? '(no reminders)' : `(${calendarReminders.length} reminder(s))`);
           }
         }
       } catch (prefsError: any) {
         // Don't fail the request if preference update fails
-        console.error('[Smart Default] Failed to update calendar reminder preferences:', prefsError.message);
       }
 
       res.json({ reminder });
@@ -17911,7 +17642,6 @@ Use this store information to provide context-aware responses. When helping draf
 
             // Update title if changed
             if (event.summary && event.summary !== reminder.title) {
-              console.log(`[Webhook] Calendar event ${calendarEventId} title changed, updating reminder ${reminder.id}`);
               await storage.updateReminder(reminder.id, {
                 title: event.summary
               });
@@ -17920,17 +17650,11 @@ Use this store information to provide context-aware responses. When helping draf
         } catch (eventError: any) {
           // Event not found (404) means it was deleted
           if (eventError.code === 404 || eventError.status === 404) {
-            console.log(`[Webhook] Calendar event ${calendarEventId} not found (deleted), deleting reminder ${reminder.id}`);
             await storage.deleteReminder(reminder.id);
-          } else {
-            console.error(`[Webhook] Error fetching event ${calendarEventId}:`, eventError.message);
           }
         }
       }
-
-      console.log('[Webhook] Calendar sync completed for user:', userId);
     } catch (error: any) {
-      console.error('[Webhook] Error processing calendar webhook:', error);
       // Don't send error response since we already responded with 200
     }
   });
@@ -17938,8 +17662,6 @@ Use this store information to provide context-aware responses. When helping draf
   // Automatic webhook renewal system - runs daily
   async function renewWebhooksIfNeeded() {
     try {
-      console.log('[Webhook Renewal] Checking for webhooks that need renewal...');
-
       const allIntegrations = await storage.getAllUserIntegrations();
       const threeDaysFromNow = Date.now() + (3 * 24 * 60 * 60 * 1000);
 
@@ -17954,13 +17676,11 @@ Use this store information to provide context-aware responses. When helping draf
         // Skip inactive users - don't renew webhooks for deactivated accounts
         const user = await storage.getUser(integration.userId);
         if (!user || user.isActive === false) {
-          console.log(`[Webhook Renewal] Skipping renewal for inactive user ${integration.userId}`);
           continue;
         }
 
         // Check if webhook expires in less than 3 days
         if (integration.googleCalendarWebhookExpiry < threeDaysFromNow) {
-          console.log(`[Webhook Renewal] Renewing webhook for user ${integration.userId}`);
 
           try {
             // Check if token needs refresh
@@ -18014,9 +17734,8 @@ Use this store information to provide context-aware responses. When helping draf
                     resourceId: integration.googleCalendarWebhookResourceId,
                   },
                 });
-                console.log(`[Webhook Renewal] Stopped old webhook ${integration.googleCalendarWebhookChannelId}`);
               } catch (stopError: any) {
-                console.error('[Webhook Renewal] Failed to stop old webhook:', stopError.message);
+                // Old webhook may already be expired - continue with renewal
               }
             }
 
@@ -18055,24 +17774,13 @@ Use this store information to provide context-aware responses. When helping draf
               googleCalendarWebhookResourceId: watchResponse.data.resourceId || undefined,
               googleCalendarWebhookExpiry: expiration,
             });
-
-            console.log(`[Webhook Renewal] ✅ Successfully renewed webhook for user ${integration.userId}`, {
-              channelId,
-              expiration: new Date(expiration).toISOString()
-            });
           } catch (renewError: any) {
-            console.error(`[Webhook Renewal] ❌ FAILED to renew webhook for user ${integration.userId}:`, {
-              error: renewError.message,
-              userId: integration.userId
-            });
-            // Alert: Bidirectional sync will stop working for this user
+            // Webhook renewal failed - bidirectional sync will stop working for this user
           }
         }
       }
-
-      console.log('[Webhook Renewal] Check completed');
     } catch (error: any) {
-      console.error('[Webhook Renewal] Error during renewal check:', error);
+      // Renewal check failed
     }
   }
 
@@ -18081,8 +17789,6 @@ Use this store information to provide context-aware responses. When helping draf
 
   // Run initial check 1 minute after startup
   setTimeout(renewWebhooksIfNeeded, 60 * 1000);
-
-  console.log('[Webhook Renewal] Automatic renewal system started');
 
   // ============================================================================
   // CATEGORY MANAGEMENT ROUTES
@@ -19822,12 +19528,6 @@ Use this store information to provide context-aware responses. When helping draf
       const endDate = new Date(now);
       endDate.setDate(endDate.getDate() + timeWindowDays);
       
-      console.log('[QueueView] Fetching slots:', {
-        now: now.toISOString(),
-        endDate: endDate.toISOString(),
-        timeWindowDays
-      });
-      
       // Query daily_send_slots and JOIN with recipient/sequence data
       const result = await db.execute(sql`
         SELECT 
@@ -19849,21 +19549,8 @@ Use this store information to provide context-aware responses. When helping draf
         LIMIT 100
       `);
       
-      console.log('[QueueView] Query result:', {
-        isArray: Array.isArray(result),
-        resultType: typeof result,
-        resultKeys: result ? Object.keys(result) : null,
-        rowCount: (result as any).rowCount,
-        rowsLength: (result as any).rows?.length
-      });
-      
       // Handle Drizzle result - extract rows from result object
       const rows = (result as any).rows || [];
-      
-      console.log('[QueueView] Rows extracted:', {
-        count: rows.length,
-        sample: rows.slice(0, 2)
-      });
       
       // Transform to IndividualSend format expected by frontend
       const queue = rows.map((row: any) => ({
@@ -19879,14 +19566,9 @@ Use this store information to provide context-aware responses. When helping draf
         subject: null,
       }));
       
-      console.log('[QueueView] Final queue:', {
-        count: queue.length,
-        sample: queue.slice(0, 2)
-      });
-      
       res.json(queue);
     } catch (error: any) {
-      console.error('[QueueView] Error fetching queue:', error);
+      console.error('Error fetching queue:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch queue' });
     }
   });
@@ -19894,7 +19576,6 @@ Use this store information to provide context-aware responses. When helping draf
   // Generate Queue - manually trigger 3-day slot generation (admin only)
   app.post('/api/ehub/queue/generate', isAuthenticatedCustom, isAdmin, async (req: any, res) => {
     try {
-      console.log('[API] Manual queue generation triggered');
       await ensureDailySlots();
       res.json({ message: 'Queue generation completed successfully' });
     } catch (error: any) {
@@ -19910,8 +19591,6 @@ Use this store information to provide context-aware responses. When helping draf
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-
-      console.log('[API] Force rebuild queue triggered by user:', userId);
       
       const { rebuildQueueFromNextBusinessDay } = await import('./services/Matrix2/queueRebuilder');
       await rebuildQueueFromNextBusinessDay(userId);

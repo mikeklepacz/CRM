@@ -194,11 +194,6 @@ export function useCustomTheme() {
     retry: false, // Don't retry on auth failures
   });
 
-  // Log when colorRowByStatus changes in userPreferences (for debugging)
-  useEffect(() => {
-    console.log('🔴 [QUERY UPDATE] userPreferences.colorRowByStatus changed to:', userPreferences?.colorRowByStatus);
-  }, [userPreferences?.colorRowByStatus]);
-
   useEffect(() => {
     const root = document.documentElement;
 
@@ -345,10 +340,6 @@ export function useCustomTheme() {
   // Mutation to save colors - centralized here to prevent state sync issues
   const saveColorsMutation = useMutation({
     mutationFn: async (colors: ThemeColors) => {
-      console.log('🎨 [COLOR SAVE] Starting mutation with colors:', colors);
-      console.log('🎨 [COLOR SAVE] Current theme:', actualTheme);
-      console.log('🎨 [COLOR SAVE] User preferences before merge:', userPreferences);
-      
       const preferences: any = userPreferences ? { ...userPreferences } : {};
 
       if (actualTheme === 'dark') {
@@ -359,27 +350,16 @@ export function useCustomTheme() {
         preferences.hasLightOverrides = true;
       }
 
-      console.log('🎨 [COLOR SAVE] Sending preferences to backend:', preferences);
-      
-      try {
-        const result = await apiRequest('PUT', '/api/user/preferences', preferences);
-        console.log('🎨 [COLOR SAVE] Backend response:', result);
-        return result;
-      } catch (error) {
-        console.error('🎨 [COLOR SAVE] Backend error:', error);
-        throw error;
-      }
+      return await apiRequest('PUT', '/api/user/preferences', preferences);
     },
-    onSuccess: (data) => {
-      console.log('🎨 [COLOR SAVE] onSuccess called with data:', data);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
       toast({
         title: "Colors saved",
         description: `${actualTheme === 'dark' ? 'Dark' : 'Light'} mode colors updated successfully.`,
       });
     },
-    onError: (error) => {
-      console.error('🎨 [COLOR SAVE] onError called with error:', error);
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to save color preferences",
@@ -392,7 +372,6 @@ export function useCustomTheme() {
   const saveColors = useCallback((colors: ThemeColors) => {
     // Validate colors before saving
     if (!colors || Object.keys(colors).length === 0) {
-      console.error('🎨 [COLOR SAVE] Attempted to save empty/null colors:', colors);
       toast({
         title: "Error",
         description: "Cannot save empty color settings",
@@ -401,7 +380,6 @@ export function useCustomTheme() {
       return;
     }
     
-    console.log('🎨 [COLOR SAVE] Validating colors before save:', colors);
     saveColorsMutation.mutate(colors);
   }, [saveColorsMutation, toast]);
 
@@ -417,15 +395,10 @@ export function useCustomTheme() {
   // Mutation to update colorRowByStatus preference
   const setColorRowByStatusMutation = useMutation({
     mutationFn: async (value: boolean) => {
-      console.log('🔴 [MUTATION] mutationFn called with value:', value);
-      console.log('🔴 [MUTATION] typeof value:', typeof value);
-      console.log('🔴 [MUTATION] Sending to API:', { colorRowByStatus: value });
       // Send only the field we're updating - backend will merge with existing preferences
-      const result = await apiRequest('PUT', '/api/user/preferences', {
+      return await apiRequest('PUT', '/api/user/preferences', {
         colorRowByStatus: value
       });
-      console.log('🔴 [MUTATION] API response:', result);
-      return result;
     },
     onMutate: async (value: boolean) => {
       // Cancel any outgoing refetches
@@ -439,27 +412,21 @@ export function useCustomTheme() {
         return old ? { ...old, colorRowByStatus: value } : old;
       });
       
-      console.log('🎨 [OPTIMISTIC UPDATE] colorRowByStatus set to:', value);
-      
       // Return context with the snapshot
       return { previousPreferences };
     },
     onError: (err, value, context: any) => {
       // If the mutation fails, use the context returned from onMutate to roll back
       queryClient.setQueryData(['/api/user/preferences'], context.previousPreferences);
-      console.error('🎨 [ROLLBACK] colorRowByStatus update failed, rolled back');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/preferences'] });
-      console.log('🎨 [SUCCESS] colorRowByStatus saved to database');
     },
   });
 
   const setColorRowByStatus = useCallback((value: boolean) => {
-    console.log('🔴 [TOGGLE] setColorRowByStatus called with value:', value);
-    console.log('🔴 [TOGGLE] Current userPreferences:', userPreferences);
     setColorRowByStatusMutation.mutate(value);
-  }, [setColorRowByStatusMutation, userPreferences]);
+  }, [setColorRowByStatusMutation]);
 
   // Mutation to update a single status entry (using clean status names)
   const updateStatusEntryMutation = useMutation({

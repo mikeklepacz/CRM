@@ -24,34 +24,26 @@ export class CallDispatcher {
 
   async processQueuedCalls(): Promise<void> {
     if (this.isRunning) {
-      console.log('[CallDispatcher] Already running, skipping this cycle');
       return;
     }
 
     try {
       this.isRunning = true;
-      console.log('[CallDispatcher] Starting call processing cycle');
 
       const config = await storage.getElevenLabsConfig();
       if (!config?.apiKey) {
-        console.warn('[CallDispatcher] No ElevenLabs API key configured, skipping');
         return;
       }
 
       const targets = await storage.getCallTargetsReadyForCalling();
       
       if (targets.length === 0) {
-        console.log('[CallDispatcher] No calls ready to process');
         return;
       }
-
-      console.log(`[CallDispatcher] Processing ${targets.length} calls`);
 
       for (const target of targets) {
         await this.processCallTarget(target, config.apiKey);
       }
-
-      console.log('[CallDispatcher] Call processing cycle complete');
       
       // Emit WebSocket event for real-time UI updates
       eventGateway.emit('calls:queueChanged', {
@@ -67,8 +59,6 @@ export class CallDispatcher {
 
   private async processCallTarget(target: any, apiKey: string): Promise<void> {
     try {
-      console.log(`[CallDispatcher] Processing call target ${target.id}`);
-
       await storage.updateCallCampaignTarget(target.id, {
         targetStatus: 'in-progress',
         attemptCount: target.attemptCount + 1,
@@ -113,10 +103,7 @@ export class CallDispatcher {
         agentPrompt = data.conversation_config?.agent?.prompt?.prompt
           || data.conversation_config?.prompt
           || '';
-        
-        console.log(`[CallDispatcher] Fetched agent prompt (${agentPrompt.length} chars)`);
       } catch (error: any) {
-        console.error(`[CallDispatcher] Failed to fetch agent prompt:`, error.message);
         // Continue without prompt - will use IVR instructions only
       }
 
@@ -191,8 +178,6 @@ export class CallDispatcher {
         callSessionId: callSession.id,
         lastError: null,
       });
-
-      console.log(`[CallDispatcher] Successfully initiated call for target ${target.id}, Twilio SID: ${result.callSid}`);
     } catch (error: any) {
       console.error(`[CallDispatcher] Error processing call target ${target.id}:`, error);
       await this.handleCallFailure(target, error);
@@ -230,9 +215,6 @@ export class CallDispatcher {
       userId: params.userId,
     };
 
-    console.log(`[CallDispatcher] IVR Behavior: ${ivrBehaviorSetting}`);
-    console.log(`[CallDispatcher] Base prompt length: ${(params.basePrompt || '').length} chars`);
-
     // Generate TwiML that routes to our WebSocket voice proxy
     const twiml = generateStreamTwiML({
       agentId: params.agentId,
@@ -242,8 +224,6 @@ export class CallDispatcher {
       clientData: clientDataWithMetadata,
       basePrompt: params.basePrompt || '',
     });
-
-    console.log(`[CallDispatcher] Generated TwiML:`, twiml);
 
     // Initiate the call using Twilio SDK
     const result = await twilioInitiateCall({
@@ -273,16 +253,12 @@ export class CallDispatcher {
       const retryDelay = RETRY_DELAY_BASE_MS * Math.pow(2, target.attemptCount);
       const nextAttemptAt = new Date(Date.now() + retryDelay);
 
-      console.log(`[CallDispatcher] Scheduling retry for target ${target.id} at ${nextAttemptAt.toISOString()}`);
-
       await storage.updateCallCampaignTarget(target.id, {
         targetStatus: 'pending',
         nextAttemptAt,
         lastError: errorMessage,
       });
     } else {
-      console.log(`[CallDispatcher] Marking target ${target.id} as failed (non-retryable or max attempts reached)`);
-
       await storage.updateCallCampaignTarget(target.id, {
         targetStatus: 'failed',
         lastError: errorMessage,

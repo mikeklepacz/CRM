@@ -10,7 +10,6 @@ let isProcessing = false;
 
 export async function startJobProcessor() {
   if (isProcessing) {
-    console.log('[Job Processor] Already processing, skipping...');
     return;
   }
 
@@ -53,8 +52,6 @@ async function processJob(jobId: string) {
       startedAt: new Date(),
     });
 
-    console.log(`[Job Processor] Starting job ${jobId} - ${job.type} analysis for ${job.agentId || 'all'}`);
-
     // Get Aligner assistant
     const alignerAssistant = await storage.getAssistantBySlug('aligner');
     if (!alignerAssistant || !alignerAssistant.assistantId) {
@@ -93,7 +90,6 @@ async function processJob(jobId: string) {
         completedAt: new Date(),
         currentCallIndex: job.totalCalls,
       });
-      console.log(`[Job Processor] Job ${jobId} completed - no calls to analyze`);
       return;
     }
 
@@ -110,8 +106,6 @@ async function processJob(jobId: string) {
       const batchCalls = callsData.slice(i, Math.min(i + CALLS_PER_BATCH, callsData.length));
       const batchNumber = Math.floor(i / CALLS_PER_BATCH) + 1;
       const totalBatches = Math.ceil(callsData.length / CALLS_PER_BATCH);
-
-      console.log(`[Job Processor] Processing batch ${batchNumber}/${totalBatches} (calls ${i + 1}-${i + batchCalls.length} of ${callsData.length})`);
 
       // Build transcript context for this batch
       const transcriptContext = batchCalls
@@ -316,7 +310,6 @@ ${recommendations || '(none)'}`;
         proposalsCreated: totalProposalsCreated,
       });
 
-      console.log(`[Job Processor] Batch ${batchNumber}/${totalBatches} complete - ${edits.length} proposals created`);
     }
 
     // Job complete
@@ -326,8 +319,6 @@ ${recommendations || '(none)'}`;
       currentCallIndex: callsData.length,
       proposalsCreated: totalProposalsCreated,
     });
-
-    console.log(`[Job Processor] Job ${jobId} completed - ${totalProposalsCreated} total proposals created`);
 
   } catch (error: any) {
     console.error(`[Job Processor] Job ${jobId} failed:`, error);
