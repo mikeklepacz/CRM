@@ -1,0 +1,314 @@
+Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 668,
+  sample: [
+    {
+      id: 'd2f2bb36-d0c8-4701-8989-1a85afaf9922',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:09:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '35618d9a-83d6-41d5-a986-7a2f12e8d0cf',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:16:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7a516013-43a3-470a-8f99-10ce4b3bbd95',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:20:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[SlotDb.getEmptySlots] Found: {
+  count: 168,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'd2f2bb36-d0c8-4701-8989-1a85afaf9922',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:09:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '35618d9a-83d6-41d5-a986-7a2f12e8d0cf',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:16:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7a516013-43a3-470a-8f99-10ce4b3bbd95',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:20:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 168 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '256ff4da-492f-4cb8-856b-60fb1c0f3e8b',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e35e6f61-a94c-4fbf-a1d8-5840233453ad',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:04:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '96077b19-fb4b-4138-86cd-0ed6aa93481b',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: 'e168deb9-7424-44b5-a355-f61a0d82ac2c',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '11f37162-80bb-415c-8683-c74fbe81aed9',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:04:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'd559c2c5-ff59-45fe-960e-3ab0043564ef',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 668,
+  sample: [
+    {
+      id: 'd2f2bb36-d0c8-4701-8989-1a85afaf9922',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:09:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '35618d9a-83d6-41d5-a986-7a2f12e8d0cf',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:16:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7a516013-43a3-470a-8f99-10ce4b3bbd95',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:20:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[SlotDb.getEmptySlots] Found: {
+  count: 168,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'd2f2bb36-d0c8-4701-8989-1a85afaf9922',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:09:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '35618d9a-83d6-41d5-a986-7a2f12e8d0cf',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:16:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7a516013-43a3-470a-8f99-10ce4b3bbd95',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:20:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 168 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '256ff4da-492f-4cb8-856b-60fb1c0f3e8b',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e35e6f61-a94c-4fbf-a1d8-5840233453ad',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:04:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '96077b19-fb4b-4138-86cd-0ed6aa93481b',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: 'e168deb9-7424-44b5-a355-f61a0d82ac2c',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '11f37162-80bb-415c-8683-c74fbe81aed9',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:04:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'd559c2c5-ff59-45fe-960e-3ab0043564ef',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 668,
+  sample: [
+    {
+      id: 'd2f2bb36-d0c8-4701-8989-1a85afaf9922',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:09:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '35618d9a-83d6-41d5-a986-7a2f12e8d0cf',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:16:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7a516013-43a3-470a-8f99-10ce4b3bbd95',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 12:20:49.189+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+12:56:19 PM [express] GET /api/tickets/unread-count 304 in 937ms :: {"count":1}
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
