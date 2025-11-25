@@ -20055,6 +20055,7 @@ Use this store information to provide context-aware responses. When helping draf
       }
 
       // Join sequence_recipient_messages -> sequence_recipients -> sequences
+      // Using LEFT JOINs to include messages even if recipient or sequence don't exist (for debugging)
       let messagesQuery = db
         .select({
           messageId: sequenceRecipientMessages.id,
@@ -20074,26 +20075,38 @@ Use this store information to provide context-aware responses. When helping draf
           bouncedAt: sequenceRecipients.bouncedAt,
         })
         .from(sequenceRecipientMessages)
-        .innerJoin(
+        .leftJoin(
           sequenceRecipients,
           eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id)
         )
-        .innerJoin(
+        .leftJoin(
           sequences,
           eq(sequenceRecipients.sequenceId, sequences.id)
         );
 
-      // Apply all WHERE conditions
-      if (conditions.length > 0) {
-        messagesQuery = messagesQuery.where(and(...conditions));
+      // Apply all WHERE conditions plus filter out orphaned messages (missing recipient or sequence)
+      const whereConditions = [...conditions, sql`${sequenceRecipients.id} IS NOT NULL`];
+      if (whereConditions.length > 0) {
+        messagesQuery = messagesQuery.where(and(...whereConditions));
       }
 
       // Complete the query
+      console.log('[SENT-HISTORY] Fetching sent history with conditions:', { conditions: conditions.length, limit, offset });
       const rows = await messagesQuery
         .orderBy(desc(sequenceRecipientMessages.sentAt))
         .limit(limit + 1) // Fetch one extra to check hasMore
         .offset(offset);
 
+      console.log('[SENT-HISTORY] Query returned rows:', rows.length);
+      if (rows.length > 0) {
+        console.log('[SENT-HISTORY] First row:', JSON.stringify(rows[0], null, 2));
+      } else {
+        console.log('[SENT-HISTORY] No rows returned - checking database directly...');
+        const directCount = await db.select({ count: sql<number>`count(*)` }).from(sequenceRecipientMessages);
+        const withSentAt = await db.select({ count: sql<number>`count(*)` }).from(sequenceRecipientMessages).where(sql`sent_at IS NOT NULL`);
+        console.log('[SENT-HISTORY] Direct message count:', directCount);
+        console.log('[SENT-HISTORY] Messages with sent_at:', withSentAt);
+      }
       // Determine hasMore
       const hasMore = rows.length > limit;
       const messages = rows.slice(0, limit);
@@ -20130,18 +20143,18 @@ Use this store information to provide context-aware responses. When helping draf
       let countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(sequenceRecipientMessages)
-        .innerJoin(
+        .leftJoin(
           sequenceRecipients,
           eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id)
         )
-        .innerJoin(
+        .leftJoin(
           sequences,
           eq(sequenceRecipients.sequenceId, sequences.id)
         );
 
-      // Apply same WHERE conditions as main query
-      if (conditions.length > 0) {
-        countQuery = countQuery.where(and(...conditions));
+      // Apply same WHERE conditions as main query (including orphan filter)
+      if (whereConditions.length > 0) {
+        countQuery = countQuery.where(and(...whereConditions));
       }
 
       const countResult = await countQuery;
