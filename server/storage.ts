@@ -3037,8 +3037,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEhubSettings(updates: Partial<InsertEhubSettings>): Promise<EhubSettings> {
-    // Validate settings
-    if (updates.sendingHoursStart !== undefined && updates.sendingHoursEnd !== undefined) {
+    // Validate settings - skip end > start check when duration is provided (allows midnight wrap)
+    if (updates.sendingHoursStart !== undefined && updates.sendingHoursEnd !== undefined && !updates.sendingHoursDuration) {
       if (updates.sendingHoursEnd <= updates.sendingHoursStart) {
         throw new Error('sendingHoursEnd must be greater than sendingHoursStart');
       }
