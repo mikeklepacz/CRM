@@ -1,0 +1,122 @@
+[SlotDb.getEmptySlots] Found: {
+  count: 113,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 113 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '6a9631ff-4431-4ff0-8c14-42131afcfe54',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '6d0dc8e1-40ff-485f-8709-458d0ee26044',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '8889e008-8df6-4ab2-adc3-18489adef371',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: '8f693369-41d7-4548-9714-6ec0a22835b0',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '2cd96077-8047-4433-8160-80b41d173dd1',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e919a530-4229-49ef-a93a-be2584060d28',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 613,
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
