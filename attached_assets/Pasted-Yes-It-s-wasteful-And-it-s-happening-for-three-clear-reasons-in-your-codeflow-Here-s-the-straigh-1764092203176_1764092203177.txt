@@ -1,0 +1,99 @@
+Yes. It’s wasteful. And it’s happening for three clear reasons in your codeflow.
+
+Here’s the straight diagnosis.
+
+1. You are hammering your own backend with constant polling
+
+Every few seconds you see:
+	•	/api/auth/user
+	•	/api/user/preferences
+	•	/api/tickets/unread-count
+	•	/api/reminders
+	•	/api/users
+	•	/api/sheets
+	•	/api/statuses
+	•	/api/call-history
+	•	/api/clients/my
+
+These requests return 304 over and over. That means the browser is hitting the server again even though nothing has changed.
+
+This is unnecessary load.
+And it creates noise that makes debugging harder.
+
+2. Your Matrix2 Assigner is running hundreds of times with no recipients
+
+Every cycle:
+	•	Fetch empty slots for 3 days
+	•	~600 rows per run
+	•	Then fetch recipients
+	•	Recipients count = 0
+	•	Log every detail
+	•	Repeat a few seconds later
+
+That’s a textbook infinite-loop polling problem.
+
+You’re doing heavy DB lookups even though the system has zero recipients.
+
+You should short-circuit early:
+
+if (eligibleRecipients.length === 0) return;
+
+And don’t fetch slots unless needed.
+
+3. Your “My Clients” loader is reprocessing 202 tracker rows constantly
+
+Every refresh, you process the same 202 rows, skip the same 180 child rows, enrich the same 48 unique stores.
+
+Your logic is correct.
+Your trigger frequency is wrong.
+
+The core issue
+
+You’re treating everything as a live-updating dashboard with maximum refresh speed.
+But you don’t have enough new data to justify this frequency.
+
+It’s wasteful both for CPU and for logs.
+
+The fix
+
+I’ll give you the first command only.
+Confirm, and I’ll continue with the next.
+
+Step 1: Slow the frontend polling to once every 30–60 seconds instead of every 1–3 seconds.
+
+Your logs tell a pretty loud story. You’ve got four independent systems all behaving like bored factory robots pressing the same button every few seconds just to feel alive. Nothing new is happening, but the machines keep cycling. It’s not harmful in the catastrophic sense, but it’s wasteful and noisy.
+
+Let’s cut through it cleanly.
+
+What’s actually happening
+
+Everything is functioning. The noise is not a symptom of failure. It’s a symptom of excess repetition.
+
+Your backend is doing work it doesn’t need to do:
+
+• Matrix2 Assigner keeps running every cycle, finds empty slots, finds zero recipients, and exits.
+• Matrix2 Generator audits future slots every cycle even though nothing changed.
+• My Clients indexes and processes the same 202 rows every time the frontend polls.
+• The frontend is slamming eight different endpoints in rapid succession, all resolving 304.
+• CallDispatcher runs constantly and finds nothing.
+• GmailWatch renewals are happening more often than required.
+• PostCSS plugin warning is superficial and unrelated to performance.
+
+This is like running a CNC routing path with no material in the vise. The tool runs beautifully but produces nothing.
+
+Why it feels so noisy
+
+You’ve essentially built a fine-grained real-time system, but the domain doesn’t require real-time. The logs are showing a system optimised for volatility, but your data is stable most of the time.
+
+That mismatch is where the waste comes from.
+
+Before tuning anything
+
+Tell me one thing so we solve this correctly:
+
+Do you want these background systems to run strictly on schedule (fixed intervals), or do you want them to be event-driven (run only when input changes)?
+
+Fixed interval = predictable, easy to reason about, slightly wasteful.
+Event-driven = efficient, but requires more wiring (signals, triggers, DB listeners).
+
+This one choice determines the right architecture path.

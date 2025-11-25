@@ -1,0 +1,78 @@
+Yes. Two pieces of pushback, and one refinement. All practical.
+
+1. Hybrid is good, but Matrix2 Generator hourly is too blunt
+
+Your generator is tied to your business rhythm, not the clock.
+
+If you generate slots days ahead, but your ops team edits availability a few times per day, an hourly sweep will either:
+
+• regenerate too often (tiny changes, wasted work), or
+• miss mid-day changes that should ripple forward
+
+Better rule:
+
+Regenerate when staff availability or schedule parameters change. Not based on time.
+If you want a fallback timer, use 6–12 hours, not 1.
+
+That balances cost with correctness.
+
+2. My Clients shouldn’t rely on “sheet changed” events alone
+
+Google’s sheet-change events are not reliable enough to be your only trigger.
+Sometimes they miss edits, especially from API-writes.
+
+Better pattern:
+
+Cache + checksum.
+
+Strategy:
+
+• Compute a cheap hash (CRC32 or SHA1) of the sheet’s relevant range
+• Store last hash
+• Only reprocess if hash changed
+• Poll every 30–60 seconds (very light)
+
+This is bulletproof and fast.
+
+3. Event-driven for the Matrix2 Assigner is right — but add one guardrail
+
+If it only runs when new recipients are added, good.
+
+But you need a secondary trigger:
+
+Run again whenever assignments are manually reversed, deleted, or errored.
+
+Otherwise your system can get stuck if a human makes a change but no new recipient enters the pool.
+This is a common edge case in scheduling systems.
+
+Make sure to re-run on:
+
+• row unassigned
+• recipient reactivated
+• status reset
+
+These are easy DB events to catch.
+
+Summary of what I’d actually implement
+
+Short, clean, practical:
+
+• Frontend polling → slow to 30–60s
+• Matrix2 Assigner → event-driven + re-run on unassign/recovery
+• Matrix2 Generator → run on config change + long fallback interval
+• My Clients → hash-diff + slow polling
+• CallDispatcher → interval is fine, but short-circuit instantly if empty
+• GmailWatch → reduce renewal to required frequency (Google recommends ~24h)
+
+Why this version is slightly better
+
+Claude’s hybrid suggestion is fine.
+What I’ve added makes your system:
+
+• more deterministic
+• less fragile
+• less noisy
+• more scalable
+• and still simple enough to implement today
+
+If you want, I can map each subsystem to a clean timeline diagram so you can see how everything will behave in production.
