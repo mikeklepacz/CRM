@@ -62,12 +62,21 @@ export async function processEmailQueue() {
   const now = new Date();
   const currentHour = parseInt(formatInTimeZone(now, adminTz, 'HH'));
   const sendingHoursStart = settings.sendingHoursStart || 6;
-  const sendingHoursEnd = settings.sendingHoursEnd || 23;
+  // Compute end hour from duration (Phase 1-3: support both duration and end hour for backwards compat)
+  const duration = settings.sendingHoursDuration || ((settings.sendingHoursEnd || 23) - sendingHoursStart) || 5;
+  const sendingHoursEnd = (sendingHoursStart + duration) % 24;
   
   // Only send emails during configured sending hours
   // (Slot assignment happens on-demand when recipients are enrolled)
-  if (currentHour < sendingHoursStart || currentHour >= sendingHoursEnd) {
-    console.log(`[EmailQueue] Outside sending hours (${currentHour}:00 not in ${sendingHoursStart}:00-${sendingHoursEnd}:00 ${adminTz})`);
+  // For windows crossing midnight (e.g., 20-04), check differently
+  const inSendingWindow = duration >= 24 
+    ? true // 24-hour window, always in range
+    : sendingHoursEnd > sendingHoursStart
+      ? currentHour >= sendingHoursStart && currentHour < sendingHoursEnd
+      : currentHour >= sendingHoursStart || currentHour < sendingHoursEnd;
+  
+  if (!inSendingWindow) {
+    console.log(`[EmailQueue] Outside sending hours (${currentHour}:00 not in ${sendingHoursStart}:00-${String(sendingHoursEnd).padStart(2, '0')}:00 ${adminTz}, duration=${duration}h)`);
     return;
   }
 

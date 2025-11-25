@@ -29,17 +29,24 @@ export async function assignSingleRecipient(recipientId: string) {
   }
 
   // Try to assign to first available slot
+  const now = new Date();
   for (const slot of slots) {
     const slotUtc = new Date(slot.slot_time_utc);
 
+    // CRITICAL: Don't assign slots in the past (prevents flash-disappear on pause/resume)
+    if (slotUtc < now) {
+      console.log(`[Matrix2 Assigner] Skipping past slot for ${recipient.email}: ${slotUtc.toISOString()} < ${now.toISOString()}`);
+      continue;
+    }
+
     if (isRecipientEligible(recipient, slotUtc, settings)) {
       await fillSlot(slot.id, recipient.id);
-      console.log(`[Matrix2 Assigner] Assigned recipient ${recipient.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
+      console.log(`[Matrix2 Assigner] ✅ Assigned recipient ${recipient.email} to future slot ${slot.id} at ${slotUtc.toISOString()}`);
       return;
     }
   }
 
-  console.log(`[Matrix2 Assigner] No eligible slots found for recipient ${recipient.email}`);
+  console.log(`[Matrix2 Assigner] ⚠️ No eligible future slots found for recipient ${recipient.email} (checked ${slots.length} slots)`);
 }
 
 // server/services/Matrix2/slotAssigner.ts
@@ -146,9 +153,17 @@ export async function assignRecipientsToSlots() {
   console.log(`[Matrix2 Assigner] Assigning ${sortedRecipients.length} recipients to ${allSlots.length} slots across 3 days`);
 
   let assignedCount = 0;
+  let skippedPastSlots = 0;
+  const now = new Date();
 
   for (const slot of allSlots) {
     const slotUtc = new Date(slot.slot_time_utc);
+
+    // CRITICAL: Don't assign past slots (prevents flash-disappear on pause/resume)
+    if (slotUtc < now) {
+      skippedPastSlots++;
+      continue;
+    }
 
     // Find first eligible recipient for this slot (now sorted by priority)
     for (let i = 0; i < sortedRecipients.length; i++) {
@@ -162,7 +177,7 @@ export async function assignRecipientsToSlots() {
       await fillSlot(slot.id, r.id);
       
       const tier = getPriorityTier(r);
-      console.log(`[Matrix2 Assigner] Assigned Tier ${tier} recipient ${r.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
+      console.log(`[Matrix2 Assigner] ✅ Assigned Tier ${tier} recipient ${r.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
       
       // Remove from available recipients
       sortedRecipients.splice(i, 1);
@@ -171,7 +186,10 @@ export async function assignRecipientsToSlots() {
     }
   }
 
-  console.log(`[Matrix2 Assigner] Assigned ${assignedCount} recipients to slots`);
+  if (skippedPastSlots > 0) {
+    console.log(`[Matrix2 Assigner] Skipped ${skippedPastSlots} past slots (current time: ${now.toISOString()})`);
+  }
+  console.log(`[Matrix2 Assigner] ✅ Assigned ${assignedCount} recipients to slots`);
 }
 
 function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): boolean {
@@ -179,7 +197,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   const recipientTimezone = recipient.timezone;
   
   if (!recipientTimezone) {
-    console.log(`[Matrix2 Assigner] Recipient ${recipient.email} has no timezone, skipping`);
+    console.log(`[Matrix2 Assigner] ❌ Recipient ${recipient.email} has no timezone, skipping`);
     return false;
   }
 
@@ -187,7 +205,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   try {
     Intl.DateTimeFormat(undefined, { timeZone: recipientTimezone });
   } catch (error) {
-    console.log(`[Matrix2 Assigner] Recipient ${recipient.email} has invalid timezone ${recipientTimezone}, skipping`);
+    console.log(`[Matrix2 Assigner] ❌ Recipient ${recipient.email} has invalid timezone ${recipientTimezone}, skipping`);
     return false;
   }
 
@@ -200,6 +218,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   // Check excluded days setting FIRST (before business hours parsing)
   const excludedDays = settings.excludedDays || [];
   if (excludedDays.includes(dayOfWeek)) {
+    console.log(`[Matrix2 Assigner] ❌ Slot ${slotUtc.toISOString()} on excluded day ${dayOfWeek} for ${recipient.email}`);
     return false;
   }
 
@@ -208,6 +227,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   
   // If business is closed, not eligible
   if (parsed.isClosed) {
+    console.log(`[Matrix2 Assigner] ❌ Business closed for ${recipient.email} on ${localTime.toISOString()}`);
     return false;
   }
 
@@ -215,6 +235,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   const daySchedule = parsed.schedule[dayOfWeek];
   
   if (!daySchedule || daySchedule.length === 0) {
+    console.log(`[Matrix2 Assigner] ❌ No schedule for ${recipient.email} on day ${dayOfWeek}`);
     return false; // No schedule for this day
   }
 
@@ -236,6 +257,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
 
   // Check if slot falls within eligible window
   if (localMinutes < windowStartMinutes || localMinutes > windowEndMinutes) {
+    console.log(`[Matrix2 Assigner] ❌ Slot ${localTime.toISOString()} outside business window (${Math.floor(windowStartMinutes/60)}:${String(windowStartMinutes%60).padStart(2,'0')}-${Math.floor(windowEndMinutes/60)}:${String(windowEndMinutes%60).padStart(2,'0')}) for ${recipient.email}`);
     return false;
   }
 
@@ -247,6 +269,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
       const earliestNext = new Date(lastSent.getTime() + delayMs);
       
       if (slotUtc < earliestNext) {
+        console.log(`[Matrix2 Assigner] ❌ Step delay not met for ${recipient.email}: ${slotUtc.toISOString()} < ${earliestNext.toISOString()}`);
         return false; // Too soon based on step delay
       }
     }
