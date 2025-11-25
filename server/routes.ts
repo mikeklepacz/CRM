@@ -20698,7 +20698,7 @@ ${conversationContext}`;
       
       // Create a temporary test recipient with REAL store data but FAKE email
       // CRITICAL: Use a proper UUID for test recipient ID (database column requires UUID type)
-      const testRecipientId = v4(); // Generate proper UUID for test recipient
+      const testRecipientId = uuidv4(); // Generate proper UUID for test recipient
       const testEmail = `synthetic-test-${Date.now()}@test.local`; // Unique fake email
       
       const testRecipient = {
