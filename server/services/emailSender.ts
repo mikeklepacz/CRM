@@ -6,6 +6,7 @@ import type {
 } from "../../shared/schema";
 import OpenAI from "openai";
 import { updateCommissionTrackerStatus } from "./commissionTrackerUpdate";
+import { assignSingleRecipient } from "./Matrix2/slotAssigner";
 
 /**
  * Convert time difference in milliseconds to casual timeframe reference
@@ -457,6 +458,17 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       }
     } else {
       console.warn(`[EmailSender] ⚠️  No store link for recipient ${recipient.email}, skipping Commission Tracker update`);
+    }
+
+    // 9. SCHEDULE NEXT STEP (critical for multi-step progression)
+    // Assign recipient to next available slot if still in_sequence
+    if (recipient.status === 'in_sequence' || currentStep < (sequence.stepDelays?.length || 0)) {
+      try {
+        await assignSingleRecipient(recipient.id);
+        console.log(`[EmailSender] ✅ Assigned recipient to next slot after step ${currentStep}`);
+      } catch (error) {
+        console.error(`[EmailSender] ⚠️  Failed to assign recipient to next slot:`, error);
+      }
     }
 
     console.log(`[EmailSender] ✅ Sent email to ${recipient.email} (step ${currentStep})`);
