@@ -100,6 +100,7 @@ export async function processEmailQueue() {
       dss.id, 
       dss.slot_time_utc, 
       dss.recipient_id,
+      s.id as sequence_id,
       s.status as sequence_status,
       s.name as sequence_name,
       sr.thread_id as thread_id,
@@ -147,6 +148,15 @@ export async function processEmailQueue() {
               repliedAt: new Date(),
             })
             .where(eq(sequenceRecipients.id, slot.recipient_id));
+          
+          // Increment sequence's replied_count
+          await db.execute(sql`
+            UPDATE sequences 
+            SET 
+              replied_count = replied_count + 1,
+              updated_at = NOW()
+            WHERE id = ${slot.sequence_id}
+          `);
           
           // Clear the slot
           await db.update(dailySendSlots)
