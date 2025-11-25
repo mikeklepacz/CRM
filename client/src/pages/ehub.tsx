@@ -3796,7 +3796,8 @@ export default function EHub() {
                     <div className="text-right">
                       <p className="text-2xl font-bold">
                         {(() => {
-                          const companyWindowHours = settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart;
+                          const companyWindowHours = settingsForm.sendingHoursDuration || 
+                            ((settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart + 24) % 24) || 1;
                           const companyWindowMinutes = companyWindowHours * 60;
                           const averageSpacing = settingsForm.dailyEmailLimit > 0 
                             ? companyWindowMinutes / settingsForm.dailyEmailLimit 
@@ -3806,7 +3807,7 @@ export default function EHub() {
                         <span className="text-sm font-normal text-muted-foreground ml-1">min</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart}hr window ÷ {settingsForm.dailyEmailLimit} emails
+                        {settingsForm.sendingHoursDuration || ((settingsForm.sendingHoursEnd - settingsForm.sendingHoursStart + 24) % 24) || 1}hr window ÷ {settingsForm.dailyEmailLimit} emails
                       </p>
                     </div>
                   </div>
