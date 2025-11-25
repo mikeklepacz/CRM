@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { callDispatcher } from "./call_dispatcher";
 import { voiceProxyServer } from "./voice-proxy.js";
 import { startJobProcessor } from "./analysis-job-processor";
+import { eventGateway } from "./services/events/gateway";
 import { renewCalendarWatchOnStartup } from "./calendarSync";
 import { startEmailQueueProcessor } from "./services/emailQueue";
 import { startSlotMaintenance } from "./services/slotMaintenance";
@@ -57,6 +58,10 @@ app.use((req, res, next) => {
   // Initialize voice proxy server
   voiceProxyServer.initialize(server);
   console.log('[Startup] VoiceProxy WebSocket server initialized and ready for connections');
+
+  // Initialize event gateway WebSocket server for real-time updates
+  eventGateway.initialize(server, '/events');
+  console.log('[Startup] EventGateway WebSocket server initialized on /events');
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

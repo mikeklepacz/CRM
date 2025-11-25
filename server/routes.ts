@@ -48,6 +48,8 @@ import { google } from "googleapis";
 import { syncRemindersToCalendar, setupCalendarWatch, renewCalendarWatchIfNeeded } from "./calendarSync";
 import { notifyNewTicket, notifyTicketReply } from "./gmail";
 import { format } from "date-fns";
+import { computeHash, getCached, setCache } from "./services/sheetCache";
+import { eventGateway } from "./services/events/gateway";
 
 // ============================================================================
 // Micro-Batching Helper for OpenAI Assistants
@@ -7553,6 +7555,27 @@ IMPORTANT:
       // Read Commission Tracker data (all columns to get Link, Agent Name, Amount, Total, etc.)
       const trackerRange = `${trackerSheet.sheetName}!A:ZZ`;
       const trackerRows = await googleSheets.readSheetData(trackerSheet.spreadsheetId, trackerRange);
+      
+      // Get Store Database sheet for later enrichment (needed for hash)
+      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      let storeRows: any[][] = [];
+      if (storeSheet) {
+        const storeRange = `${storeSheet.sheetName}!A:S`;
+        storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      }
+      
+      // HASH-DIFF: Compute hash of raw sheet data + user context
+      const cacheKey = `my-clients:${userId}:${allowedAgentNames.join(',')}`;
+      const dataHash = computeHash({ trackerRows, storeRows, allowedAgentNames });
+      
+      // Check if we have valid cached data
+      const cached = getCached<any[]>(cacheKey, dataHash);
+      if (cached) {
+        console.log(`[MY-CLIENTS] ⚡ Cache HIT - returning ${cached.length} clients (hash: ${dataHash.substring(0, 8)})`);
+        return res.json(cached);
+      }
+      
+      console.log(`[MY-CLIENTS] 🔄 Cache MISS - processing data (hash: ${dataHash.substring(0, 8)})`);
 
       if (trackerRows.length <= 1) {
         console.log('[MY-CLIENTS] ❌ Commission Tracker is empty or has no data rows');
@@ -7676,8 +7699,7 @@ IMPORTANT:
         }
       }
 
-      // Get Store Database to enrich client data with names and categories
-      const storeSheet = await storage.getGoogleSheetByPurpose('Store Database');
+      // Create base client objects from aggregated data
       let enrichedClients = Array.from(clientMap.values()).map(client => ({
         id: client.link,
         uniqueIdentifier: client.link,
@@ -7694,60 +7716,63 @@ IMPORTANT:
         lastSyncedAt: new Date(),
       }));
 
-      // Enrich with Store Database data if available (using same approach as Top Clients widget)
-      if (storeSheet) {
-        const storeRange = `${storeSheet.sheetName}!A:S`;
-        const storeRows = await googleSheets.readSheetData(storeSheet.spreadsheetId, storeRange);
+      // Enrich with Store Database data if available (using pre-fetched storeRows from hash check)
+      if (storeRows.length > 1) {
+        const storeHeaders = storeRows[0];
+        const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
+        const nameIndex = 0; // Column A = Name
+        const dbaIndex = 13; // Column N = DBA
+        const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
+        const pocNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'point of contact' || h.toLowerCase() === 'poc');
         
-        if (storeRows.length > 1) {
-          const storeHeaders = storeRows[0];
-          const storeLinkIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'link');
-          const nameIndex = 0; // Column A = Name
-          const dbaIndex = 13; // Column N = DBA
-          const storeCategoryIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'category');
-          const pocNameIndex = storeHeaders.findIndex((h: string) => h.toLowerCase() === 'point of contact' || h.toLowerCase() === 'poc');
+        // Build lookup map: normalized link -> store data (same as Top Clients)
+        const storeMap = new Map<string, { name: string; category: string; contact: string }>();
+        for (let i = 1; i < storeRows.length; i++) {
+          const row = storeRows[i];
+          const storeLink = row[storeLinkIndex]?.toString().trim();
+          const dba = row[dbaIndex]?.toString().trim() || '';
+          const name = row[nameIndex]?.toString().trim() || '';
+          const storeCategory = row[storeCategoryIndex]?.toString().trim() || '';
+          const pocName = row[pocNameIndex]?.toString().trim() || '';
           
-          // Build lookup map: normalized link -> store data (same as Top Clients)
-          const storeMap = new Map<string, { name: string; category: string; contact: string }>();
-          for (let i = 1; i < storeRows.length; i++) {
-            const row = storeRows[i];
-            const storeLink = row[storeLinkIndex]?.toString().trim();
-            const dba = row[dbaIndex]?.toString().trim() || '';
-            const name = row[nameIndex]?.toString().trim() || '';
-            const storeCategory = row[storeCategoryIndex]?.toString().trim() || '';
-            const pocName = row[pocNameIndex]?.toString().trim() || '';
-            
-            if (storeLink) {
-              const normalized = normalizeLink(storeLink);
-              // Column A (name) is the primary store name, DBA (Column N) is secondary
-              storeMap.set(normalized, {
-                name: name || dba || 'Unknown',
-                category: storeCategory,
-                contact: pocName,
-              });
-            }
+          if (storeLink) {
+            const normalized = normalizeLink(storeLink);
+            storeMap.set(normalized, {
+              name: name || dba || 'Unknown',
+              category: storeCategory,
+              contact: pocName,
+            });
           }
-          
-          // Enrich clients with store data using normalized link matching
-          enrichedClients = enrichedClients.map(client => {
-            const normalizedLink = normalizeLink(client.data.Link);
-            const storeData = storeMap.get(normalizedLink);
-            if (storeData) {
-              return {
-                ...client,
-                data: { 
-                  ...client.data, 
-                  Name: storeData.name,
-                  Contact: storeData.contact 
-                },
-                category: storeData.category,
-              };
-            }
-            return client;
-          });
         }
+        
+        // Enrich clients with store data using normalized link matching
+        enrichedClients = enrichedClients.map(client => {
+          const normalizedLink = normalizeLink(client.data.Link);
+          const storeData = storeMap.get(normalizedLink);
+          if (storeData) {
+            return {
+              ...client,
+              data: { 
+                ...client.data, 
+                Name: storeData.name,
+                Contact: storeData.contact 
+              },
+              category: storeData.category,
+            };
+          }
+          return client;
+        });
       }
 
+      // Store in cache for future requests
+      setCache(cacheKey, dataHash, enrichedClients);
+      
+      // Emit WebSocket event to notify connected clients of data change
+      eventGateway.emit('clients:updated', { 
+        clientCount: enrichedClients.length,
+        hash: dataHash.substring(0, 8),
+      }, { userId });
+      
       console.log(`[MY-CLIENTS] ✅ Processing complete: ${enrichedClients.length} clients for ${currentUser.agentName || currentUser.email} | Processed: ${rowsProcessed}, Skipped: ${skippedNoLink} no-link, ${skippedChildLocation} child-locations, ${rowsFiltered} filtered-by-agent`);
 
       res.json(enrichedClients);
