@@ -150,6 +150,14 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   let skippedCount = 0;
   
   for (const recipient of orderedRecipients) {
+    // CRITICAL: Clear any existing slot assignments for this recipient before reassigning
+    // This prevents the same recipient from being assigned to multiple slots
+    await db.execute(sql`
+      UPDATE daily_send_slots
+      SET recipient_id = NULL, filled = false
+      WHERE recipient_id = ${recipient.id}
+    `);
+    
     // Provide default timezone if missing
     const recipientTz = recipient.timezone || adminTz;
     const recipientWithDefaults = { ...recipient, timezone: recipientTz };
