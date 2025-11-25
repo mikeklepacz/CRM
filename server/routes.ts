@@ -7202,6 +7202,110 @@ IMPORTANT:
     }
   });
 
+  // Gmail Push Notification Webhook (from Google Pub/Sub)
+  // NO AUTH - Pub/Sub sends these directly
+  app.post('/api/gmail/push', async (req, res) => {
+    // IMMEDIATELY respond 200 to avoid Pub/Sub retries
+    res.status(200).send('OK');
+
+    try {
+      const { gmailWatchManager } = await import('./services/gmailWatchManager');
+      const { processGmailHistory } = await import('./services/gmailHistoryService');
+
+      // Update last push received timestamp
+      await gmailWatchManager.updateLastPushReceived();
+
+      // Decode Pub/Sub message
+      const pubsubMessage = req.body?.message;
+      if (!pubsubMessage?.data) {
+        console.log('[GmailPush] Received push without data, ignoring');
+        return;
+      }
+
+      const data = Buffer.from(pubsubMessage.data, 'base64').toString('utf-8');
+      const notification = JSON.parse(data);
+
+      console.log(`[GmailPush] 📬 Push received: email=${notification.emailAddress}, historyId=${notification.historyId}`);
+
+      // Process history asynchronously (don't await - we already responded 200)
+      processGmailHistory(notification.historyId).then(result => {
+        if (result.repliesDetected > 0) {
+          console.log(`[GmailPush] ✅ Processed: ${result.repliesDetected} replies detected, recipients updated: ${result.recipientsUpdated.join(', ')}`);
+        }
+      }).catch(err => {
+        console.error('[GmailPush] Error processing history:', err);
+      });
+
+    } catch (error: any) {
+      console.error('[GmailPush] Error handling push notification:', error);
+    }
+  });
+
+  // Gmail Push Notification Status (admin only)
+  app.get('/api/gmail/push/status', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const { gmailWatchManager } = await import('./services/gmailWatchManager');
+      const status = await gmailWatchManager.getStatus();
+      
+      res.json(status);
+    } catch (error: any) {
+      console.error('[GmailPush] Error getting status:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Start/Renew Gmail Watch (admin only)
+  app.post('/api/gmail/push/watch', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const { gmailWatchManager } = await import('./services/gmailWatchManager');
+      const result = await gmailWatchManager.watch();
+      
+      res.json({
+        success: true,
+        historyId: result.historyId,
+        expiration: result.expiration,
+        expiresAt: new Date(result.expiration).toISOString(),
+      });
+    } catch (error: any) {
+      console.error('[GmailPush] Error starting watch:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Stop Gmail Watch (admin only)
+  app.post('/api/gmail/push/stop', isAuthenticatedCustom, async (req: any, res) => {
+    try {
+      const userId = req.user.isPasswordAuth ? req.user.id : req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const { gmailWatchManager } = await import('./services/gmailWatchManager');
+      await gmailWatchManager.stop();
+      
+      res.json({ success: true, message: 'Gmail watch stopped' });
+    } catch (error: any) {
+      console.error('[GmailPush] Error stopping watch:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Get current user's webhook status
   app.get('/api/calendar/webhook-status', isAuthenticatedCustom, async (req: any, res) => {
     try {

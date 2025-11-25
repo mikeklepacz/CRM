@@ -52,6 +52,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Shared Timezone Service**: `server/services/timezoneHours.ts` for consistent timezone calculations.
 - **Campaign Strategy Architecture**: E-Hub sequences store `strategyTranscript` (AI chat history) and `stepDelays` (gap-based delays) in PostgreSQL.
 - **E-Hub Reply Detection**: Two-gate pre-send system checks Gmail for replies, cancelling sends and updating recipient status upon detection.
+- **Gmail Push Notifications**: Real-time reply detection using Google Pub/Sub. Replaces wasteful 60-second polling with instant push notifications when emails arrive. Architecture: Gmail → Pub/Sub → `/api/gmail/push` webhook → History fetch → Reply processing → Recipient status update. Watch lifecycle: 7-day expiration with automatic 6-hour renewal checks. Admin endpoints: `/api/gmail/push/status`, `/api/gmail/push/watch`, `/api/gmail/push/stop`.
 - **E-Hub AI Email Generation**: Uses the specialized Aligner Assistant for generating subjects and HTML bodies, leveraging knowledge base for best practices.
 - **E-Hub Queue Coordinator**: Centralized scheduling system enforcing FIFO ordering, rate limiting, and geographic distribution, using cohort-based timezone balancing and two-tier priority.
 - **Matrix2 Slot-First Scheduler**: Production email scheduling system using a slot-first architecture, pre-generating daily email slots and assigning eligible recipients. COMPLETE multi-step progression: After Step N sends, recipient automatically advances to Step N+1 and gets scheduled into the next available slot respecting step_delays. Slot eligibility query filters out recipients with pending slots to prevent double-scheduling. Post-send assignment trigger ensures seamless multi-step continuity without manual intervention. Duration-based window calculation (sendingHoursDuration: hours of continuous sending window, starting at sendingHoursStart) eliminates midnight crossover complexity. Jitter window calculation uses duration directly: endHour = (startHour + duration) % 24, ensuring correct average spacing and min/max delay ranges for all time windows including midnight crossovers.
@@ -95,5 +96,6 @@ Complete column schema for Store Database Google Sheet:
 - **PostgreSQL (Neon)**: Primary database for user data and preferences.
 - **OpenAI API**: For the AI-powered assistants (Wick Coach and Aligner), AI Insights, and E-Hub email generation.
 - **Gmail API**: For creating email drafts and E-Hub email sending/reply detection.
+- **Google Cloud Pub/Sub**: For Gmail push notifications (topic: `gmail-inbox-push`). Used by E-Hub for real-time reply detection without polling.
 - **Google Calendar API**: Per-user OAuth for creating calendar events.
 - **ElevenLabs API**: For AI Voice Calling.

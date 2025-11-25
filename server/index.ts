@@ -7,6 +7,7 @@ import { startJobProcessor } from "./analysis-job-processor";
 import { renewCalendarWatchOnStartup } from "./calendarSync";
 import { startEmailQueueProcessor } from "./services/emailQueue";
 import { startSlotMaintenance } from "./services/slotMaintenance";
+import { gmailWatchManager } from "./services/gmailWatchManager";
 
 const app = express();
 
@@ -103,5 +104,28 @@ app.use((req, res, next) => {
     }, 30000);
 
     log('[CallDispatcher] Background worker started (runs every 30s)');
+
+    // Start Gmail Push Notification watch (for E-Hub reply detection)
+    setTimeout(async () => {
+      try {
+        await gmailWatchManager.renewIfNeeded();
+        log('[GmailWatch] Gmail push notifications initialized');
+      } catch (err: any) {
+        console.error('[GmailWatch] Failed to initialize Gmail watch:', err.message);
+        console.error('[GmailWatch] Push notifications will not be active. You can manually start via /api/gmail/push/watch');
+      }
+    }, 5000); // Wait 5 seconds for other services to initialize
+
+    // Daily Gmail watch renewal check (every 6 hours)
+    setInterval(async () => {
+      try {
+        const renewed = await gmailWatchManager.renewIfNeeded();
+        if (renewed) {
+          log('[GmailWatch] Gmail watch renewed successfully');
+        }
+      } catch (err: any) {
+        console.error('[GmailWatch] Failed to renew Gmail watch:', err.message);
+      }
+    }, 6 * 60 * 60 * 1000); // Every 6 hours
   });
 })();

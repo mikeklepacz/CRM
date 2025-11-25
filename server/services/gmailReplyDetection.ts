@@ -1,5 +1,4 @@
-import { google } from 'googleapis';
-import { storage } from '../storage';
+import { getGmailClient } from './gmailClient';
 
 export interface ReplyDetectionResult {
   hasReply: boolean;
@@ -12,74 +11,13 @@ export interface ReplyDetectionResult {
 }
 
 /**
- * Get Gmail client with refreshed token
- */
-async function getGmailClient(userId: string) {
-  const integration = await storage.getUserIntegration(userId);
-  if (!integration?.googleCalendarAccessToken) {
-    throw new Error('Gmail not connected. Please connect Gmail first.');
-  }
-
-  const systemIntegration = await storage.getSystemIntegration('google_sheets');
-  if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
-    throw new Error('System OAuth not configured');
-  }
-
-  let accessToken = integration.googleCalendarAccessToken;
-  if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
-    if (!integration.googleCalendarRefreshToken) {
-      throw new Error('Gmail token expired. Please reconnect Gmail.');
-    }
-
-    const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: systemIntegration.googleClientId,
-        client_secret: systemIntegration.googleClientSecret,
-        refresh_token: integration.googleCalendarRefreshToken,
-        grant_type: 'refresh_token'
-      })
-    });
-
-    if (!refreshResponse.ok) {
-      throw new Error('Failed to refresh Gmail token');
-    }
-
-    const tokens = await refreshResponse.json();
-    accessToken = tokens.access_token;
-
-    await storage.updateUserIntegration(userId, {
-      googleCalendarAccessToken: accessToken,
-      googleCalendarTokenExpiry: Date.now() + (tokens.expires_in * 1000),
-    });
-  }
-
-  const oauth2Client = new google.auth.OAuth2(
-    systemIntegration.googleClientId,
-    systemIntegration.googleClientSecret
-  );
-
-  oauth2Client.setCredentials({
-    access_token: accessToken,
-    refresh_token: integration.googleCalendarRefreshToken,
-  });
-
-  return google.gmail({ version: 'v1', auth: oauth2Client });
-}
-
-/**
  * Check if a Gmail thread has received replies
  * Uses Gmail API threads.get to fetch all messages in a thread
  * Only counts messages FROM recipients (not our own follow-ups)
  */
 export async function checkForReplies(userId: string, threadId: string): Promise<ReplyDetectionResult> {
   try {
-    const gmail = await getGmailClient(userId);
-
-    // Get our own email address to filter out our sent emails
-    const profile = await gmail.users.getProfile({ userId: 'me' });
-    const ourEmail = profile.data.emailAddress?.toLowerCase() || '';
+    const { gmail, email: ourEmail } = await getGmailClient(userId);
     
     console.log(`[ReplyDetection] Checking thread ${threadId} for replies (our email: ${ourEmail})`);
 
@@ -137,7 +75,7 @@ export async function checkForReplies(userId: string, threadId: string): Promise
  */
 export async function getLatestMessageId(userId: string, threadId: string): Promise<string | null> {
   try {
-    const gmail = await getGmailClient(userId);
+    const { gmail } = await getGmailClient(userId);
 
     const thread = await gmail.users.threads.get({
       userId: 'me',
@@ -167,7 +105,7 @@ export async function getLatestMessageId(userId: string, threadId: string): Prom
  */
 export async function getAllMessageIds(userId: string, threadId: string): Promise<string[]> {
   try {
-    const gmail = await getGmailClient(userId);
+    const { gmail } = await getGmailClient(userId);
 
     const thread = await gmail.users.threads.get({
       userId: 'me',
