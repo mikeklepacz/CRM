@@ -1,0 +1,1938 @@
+> rest-express@1.0.0 dev
+[Webhook Renewal] Automatic renewal system started
+[VoiceProxy] WebSocket server initialized on /media-stream
+[Startup] VoiceProxy WebSocket server initialized and ready for connections
+[SlotMaintenance] Starting slot maintenance scheduler...
+[SlotMaintenance] Running initial slot generation on startup...
+[SlotMaintenance] ✅ Scheduler started (checks hourly schedule every 60s)
+[EmailQueue] Starting email queue processor (Matrix2)...
+[EmailQueue] ✅ Queue processor started (60s interval)
+5:29:12 PM [express] serving on port 5000
+5:29:12 PM [express] [CallDispatcher] Background worker started (runs every 30s)
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Generator] Admin user preferences: { hasUser: true, timezone: 'Europe/Warsaw', fallback: null }
+[Matrix2 Generator] Ensuring 3 days worth of slots...
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Generator] WARNING: Partial slots exist for 2025-11-25 (120/250), skipping to prevent duplicates
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[Matrix2 Generator] Sufficient slots already exist for 2025-11-26 (250/250 slots)
+[SlotDb.getEmptySlots] Found: {
+  count: 113,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 113 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+[Matrix2 Generator] Sufficient slots already exist for 2025-11-27 (250/250 slots)
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '6a9631ff-4431-4ff0-8c14-42131afcfe54',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '6d0dc8e1-40ff-485f-8709-458d0ee26044',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '8889e008-8df6-4ab2-adc3-18489adef371',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: '8f693369-41d7-4548-9714-6ec0a22835b0',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '2cd96077-8047-4433-8160-80b41d173dd1',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e919a530-4229-49ef-a93a-be2584060d28',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 613,
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[GmailWatch] Watch valid for 165h more
+5:29:18 PM [express] [GmailWatch] Gmail push notifications initialized
+[EmailQueue] No slots ready to send (or all sequences paused)
+5:29:33 PM [vite] hmr update /src/components/header.tsx, /src/index.css?v=EN8HH-FSEDRcFAm0aLWjO
+5:29:36 PM [vite] hmr update /src/components/admin-ticket-inbox.tsx, /src/index.css?v=EN8HH-FSEDRcFAm0aLWjO
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+5:29:43 PM [express] GET /api/statuses 304 in 272ms :: {"statuses":[{"id":"5cb465e8-c69e-4af4-bdbd-c…
+5:29:43 PM [express] GET /api/auth/user 304 in 326ms :: {"id":"4df35876-ab89-4860-8656-0440accfea14"…
+[CalendarSync] Found 0 reminders to sync for user 4df35876-ab89-4860-8656-0440accfea14
+[CalendarSync] Sync complete: 0 created, 0 errors
+🔴 [GET PREFERENCES] colorRowByStatus value being returned: false
+5:29:44 PM [express] GET /api/user/preferences 304 in 840ms :: {"id":"bdc1c7a0-5592-4fea-94b0-10871d…
+5:29:44 PM [express] GET /api/tickets/unread-count 304 in 324ms :: {"count":1}
+5:29:44 PM [express] GET /api/reminders 304 in 391ms :: {"reminders":[]}
+5:29:44 PM [express] GET /api/users 304 in 391ms :: {"users":[{"id":"56e4b935-c71b-45c3-bca5-fda68bb…
+5:29:44 PM [express] GET /api/call-history 304 in 389ms :: [{"id":"48a01bd6-c5e2-4de0-9d88-7b84f28ba…
+5:29:45 PM [express] GET /api/sheets 304 in 471ms :: {"sheets":[{"id":"7e9c491c-ef83-4541-b07a-1546f…
+5:29:45 PM [express] GET /api/reminders 304 in 808ms :: {"reminders":[]}
+[MY-CLIENTS] 👤 User: michael@naturalmaterials.eu Role: admin
+[MY-CLIENTS] 🏷️  User agentName field: Michael Klepacz
+[MY-CLIENTS] 🔐 allowedAgentNames: []
+[MY-CLIENTS] 📊 Processing 202 tracker rows
+[MY-CLIENTS] 📋 Column indices: {
+  linkIndex: 0,
+  agentNameIndex: 3,
+  amountIndex: 6,
+  totalIndex: 16,
+  dateIndex: 2,
+  statusIndex: 7,
+  parentLinkIndex: 18
+}
+[MY-CLIENTS] Row 1: link=https://www.leafly.com/cannabis-store/lift-cannabis-co, total=1500, amount=500
+[MY-CLIENTS] Row 4: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 5: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 6: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 7: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 8: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 9: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 10: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 11: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 12: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 13: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 14: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 15: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 16: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 17: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 18: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 19: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 20: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 36: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 37: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 38: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 39: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 40: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 41: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 42: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 44: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 45: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 46: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 47: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 52: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 60: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 61: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 62: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 64: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 65: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 66: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 67: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 68: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 69: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 70: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 71: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 72: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 73: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 74: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 75: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 76: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 77: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 78: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 79: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 80: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 81: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 82: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 83: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 84: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 85: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 86: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 87: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 88: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 89: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 90: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 91: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 92: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 93: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 94: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 95: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 96: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 97: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 98: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 99: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 100: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 101: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 102: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 103: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 104: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 105: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 106: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 107: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 108: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 109: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 110: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 111: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 112: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 113: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 115: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 116: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 117: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 118: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 119: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 120: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 121: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 122: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 123: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 124: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 125: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 126: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 127: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 128: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 129: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 130: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 131: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 132: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 133: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 134: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 135: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 136: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 137: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 138: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 139: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 140: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 142: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 143: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 144: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 145: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 146: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 147: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 148: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 149: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 150: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 151: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 152: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 153: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 154: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 155: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 156: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 157: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 158: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 159: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 160: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 161: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 162: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 163: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 164: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 165: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 166: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 168: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 169: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 170: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 171: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 172: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 173: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 174: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 175: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 176: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 177: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 178: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 180: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 181: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 182: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 183: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 184: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 197: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 198: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 199: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 200: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 201: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] ✅ Processing complete:
+[MY-CLIENTS]    - Rows processed: 48
+[MY-CLIENTS]    - Rows filtered out: 0
+[MY-CLIENTS]    - Unique stores found: 48
+[MY-CLIENTS]    - After enrichment: 48
+[MY-CLIENTS] Returning 48 clients for Michael Klepacz
+[MY-CLIENTS] Client 1: Lift Cannabis Co - totalSales=1500.00, commission=500.00
+[MY-CLIENTS] Client 2: House of Dank Recreational Cannabis - Kalamazoo - totalSales=0.00, commission=0.00
+[MY-CLIENTS] Client 3: Skymint - totalSales=0.00, commission=0.00
+5:29:47 PM [express] GET /api/clients/my 200 in 3414ms :: [{"id":"https://www.leafly.com/cannabis-st…
+[Webhook Renewal] Checking for webhooks that need renewal...
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[Webhook Renewal] Renewing webhook for user d7a18720-14c3-4586-ad1d-c820ab8176c1
+[Webhook Renewal] Failed to stop old webhook: invalid_request
+[Webhook Renewal] ❌ FAILED to renew webhook for user d7a18720-14c3-4586-ad1d-c820ab8176c1: {
+  error: 'invalid_request',
+  userId: 'd7a18720-14c3-4586-ad1d-c820ab8176c1'
+}
+[Webhook Renewal] Check completed
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[SlotDb.getEmptySlots] Found: {
+  count: 113,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 113 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '6a9631ff-4431-4ff0-8c14-42131afcfe54',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '6d0dc8e1-40ff-485f-8709-458d0ee26044',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '8889e008-8df6-4ab2-adc3-18489adef371',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: '8f693369-41d7-4548-9714-6ec0a22835b0',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '2cd96077-8047-4433-8160-80b41d173dd1',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e919a530-4229-49ef-a93a-be2584060d28',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 613,
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[SlotDb.getEmptySlots] Found: {
+  count: 113,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 113 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '6a9631ff-4431-4ff0-8c14-42131afcfe54',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '6d0dc8e1-40ff-485f-8709-458d0ee26044',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '8889e008-8df6-4ab2-adc3-18489adef371',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: '8f693369-41d7-4548-9714-6ec0a22835b0',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '2cd96077-8047-4433-8160-80b41d173dd1',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e919a530-4229-49ef-a93a-be2584060d28',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 613,
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[SlotDb.getEmptySlots] Found: {
+  count: 113,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 113 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '6a9631ff-4431-4ff0-8c14-42131afcfe54',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '6d0dc8e1-40ff-485f-8709-458d0ee26044',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '8889e008-8df6-4ab2-adc3-18489adef371',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: '8f693369-41d7-4548-9714-6ec0a22835b0',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '2cd96077-8047-4433-8160-80b41d173dd1',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e919a530-4229-49ef-a93a-be2584060d28',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 613,
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+5:32:22 PM [express] GET /api/auth/user 304 in 662ms :: {"id":"4df35876-ab89-4860-8656-0440accfea14"…
+🔴 [GET PREFERENCES] colorRowByStatus value being returned: false
+[CalendarSync] Found 0 reminders to sync for user 4df35876-ab89-4860-8656-0440accfea14
+[CalendarSync] Sync complete: 0 created, 0 errors
+5:32:22 PM [express] GET /api/user/preferences 304 in 799ms :: {"id":"bdc1c7a0-5592-4fea-94b0-10871d…
+5:32:23 PM [express] GET /api/sheets 304 in 876ms :: {"sheets":[{"id":"7e9c491c-ef83-4541-b07a-1546f…
+5:32:23 PM [express] GET /api/tickets/unread-count 304 in 940ms :: {"count":1}
+[MY-CLIENTS] 👤 User: michael@naturalmaterials.eu Role: admin
+[MY-CLIENTS] 🏷️  User agentName field: Michael Klepacz
+[MY-CLIENTS] 🔐 allowedAgentNames: []
+[MY-CLIENTS] 📊 Processing 202 tracker rows
+[MY-CLIENTS] 📋 Column indices: {
+  linkIndex: 0,
+  agentNameIndex: 3,
+  amountIndex: 6,
+  totalIndex: 16,
+  dateIndex: 2,
+  statusIndex: 7,
+  parentLinkIndex: 18
+}
+[MY-CLIENTS] Row 1: link=https://www.leafly.com/cannabis-store/lift-cannabis-co, total=1500, amount=500
+[MY-CLIENTS] Row 4: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 5: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 6: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 7: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 8: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 9: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 10: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 11: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 12: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 13: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 14: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 15: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 16: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 17: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 18: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 19: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 20: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 36: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 37: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 38: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 39: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 40: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 41: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 42: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 44: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 45: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 46: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 47: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 52: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 60: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 61: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 62: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 64: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 65: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 66: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 67: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 68: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 69: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 70: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 71: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 72: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 73: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 74: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 75: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 76: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 77: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 78: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 79: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 80: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 81: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 82: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 83: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 84: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 85: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 86: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 87: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 88: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 89: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 90: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 91: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 92: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 93: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 94: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 95: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 96: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 97: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 98: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 99: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 100: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 101: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 102: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 103: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 104: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 105: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 106: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 107: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 108: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 109: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 110: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 111: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 112: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 113: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 115: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 116: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 117: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 118: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 119: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 120: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 121: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 122: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 123: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 124: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 125: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 126: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 127: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 128: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 129: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 130: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 131: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 132: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 133: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 134: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 135: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 136: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 137: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 138: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 139: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 140: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 142: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 143: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 144: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 145: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 146: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 147: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 148: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 149: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 150: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 151: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 152: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 153: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 154: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 155: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 156: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 157: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 158: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 159: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 160: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 161: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 162: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 163: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 164: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 165: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 166: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 168: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 169: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 170: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 171: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 172: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 173: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 174: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 175: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 176: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 177: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 178: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 180: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 181: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 182: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 183: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 184: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 197: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 198: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 199: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 200: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 201: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+5:32:23 PM [express] GET /api/users 304 in 1009ms :: {"users":[{"id":"56e4b935-c71b-45c3-bca5-fda68b…
+5:32:23 PM [express] GET /api/call-history 304 in 390ms :: [{"id":"48a01bd6-c5e2-4de0-9d88-7b84f28ba…
+5:32:23 PM [express] GET /api/statuses 304 in 262ms :: {"statuses":[{"id":"5cb465e8-c69e-4af4-bdbd-c…
+5:32:23 PM [express] GET /api/reminders 304 in 392ms :: {"reminders":[]}
+[MY-CLIENTS] ✅ Processing complete:
+[MY-CLIENTS]    - Rows processed: 48
+[MY-CLIENTS]    - Rows filtered out: 0
+[MY-CLIENTS]    - Unique stores found: 48
+[MY-CLIENTS]    - After enrichment: 48
+[MY-CLIENTS] Returning 48 clients for Michael Klepacz
+[MY-CLIENTS] Client 1: Lift Cannabis Co - totalSales=1500.00, commission=500.00
+[MY-CLIENTS] Client 2: House of Dank Recreational Cannabis - Kalamazoo - totalSales=0.00, commission=0.00
+[MY-CLIENTS] Client 3: Skymint - totalSales=0.00, commission=0.00
+5:32:24 PM [express] GET /api/clients/my 200 in 1997ms :: [{"id":"https://www.leafly.com/cannabis-st…
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+5:32:53 PM [express] GET /api/auth/user 304 in 873ms :: {"id":"4df35876-ab89-4860-8656-0440accfea14"…
+[CalendarSync] Found 0 reminders to sync for user 4df35876-ab89-4860-8656-0440accfea14
+[CalendarSync] Sync complete: 0 created, 0 errors
+5:32:54 PM [express] GET /api/sheets 304 in 843ms :: {"sheets":[{"id":"7e9c491c-ef83-4541-b07a-1546f…
+🔴 [GET PREFERENCES] colorRowByStatus value being returned: false
+5:32:54 PM [express] GET /api/call-history 304 in 592ms :: [{"id":"48a01bd6-c5e2-4de0-9d88-7b84f28ba…
+5:32:54 PM [express] GET /api/user/preferences 304 in 1039ms :: {"id":"bdc1c7a0-5592-4fea-94b0-10871…
+5:32:54 PM [express] GET /api/tickets/unread-count 304 in 924ms :: {"count":1}
+5:32:54 PM [express] GET /api/users 304 in 993ms :: {"users":[{"id":"56e4b935-c71b-45c3-bca5-fda68bb…
+5:32:54 PM [express] GET /api/statuses 304 in 258ms :: {"statuses":[{"id":"5cb465e8-c69e-4af4-bdbd-c…
+5:32:54 PM [express] GET /api/reminders 304 in 481ms :: {"reminders":[]}
+[MY-CLIENTS] 👤 User: michael@naturalmaterials.eu Role: admin
+[MY-CLIENTS] 🏷️  User agentName field: Michael Klepacz
+[MY-CLIENTS] 🔐 allowedAgentNames: []
+[MY-CLIENTS] 📊 Processing 202 tracker rows
+[MY-CLIENTS] 📋 Column indices: {
+  linkIndex: 0,
+  agentNameIndex: 3,
+  amountIndex: 6,
+  totalIndex: 16,
+  dateIndex: 2,
+  statusIndex: 7,
+  parentLinkIndex: 18
+}
+[MY-CLIENTS] Row 1: link=https://www.leafly.com/cannabis-store/lift-cannabis-co, total=1500, amount=500
+[MY-CLIENTS] Row 4: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 5: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 6: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 7: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 8: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 9: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 10: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 11: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 12: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 13: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 14: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 15: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 16: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 17: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 18: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 19: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 20: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 36: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 37: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 38: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 39: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 40: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 41: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 42: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 44: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 45: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 46: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 47: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 52: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 60: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 61: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 62: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 64: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 65: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 66: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 67: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 68: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 69: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 70: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 71: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 72: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 73: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 74: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 75: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 76: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 77: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 78: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 79: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 80: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 81: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 82: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 83: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 84: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 85: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 86: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 87: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 88: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 89: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 90: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 91: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 92: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 93: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 94: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 95: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 96: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 97: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 98: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 99: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 100: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 101: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 102: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 103: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 104: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 105: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 106: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 107: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 108: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 109: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 110: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 111: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 112: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 113: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 115: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 116: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 117: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 118: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 119: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 120: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 121: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 122: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 123: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 124: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 125: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 126: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 127: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 128: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 129: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 130: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 131: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 132: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 133: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 134: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 135: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 136: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 137: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 138: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 139: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 140: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 142: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 143: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 144: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 145: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 146: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 147: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 148: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 149: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 150: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 151: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 152: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 153: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 154: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 155: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 156: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 157: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 158: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 159: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 160: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 161: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 162: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 163: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 164: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 165: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 166: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 168: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 169: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 170: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 171: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 172: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 173: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 174: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 175: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 176: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 177: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 178: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 180: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 181: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 182: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 183: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 184: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 197: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 198: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 199: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 200: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 201: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] ✅ Processing complete:
+[MY-CLIENTS]    - Rows processed: 48
+[MY-CLIENTS]    - Rows filtered out: 0
+[MY-CLIENTS]    - Unique stores found: 48
+[MY-CLIENTS]    - After enrichment: 48
+[MY-CLIENTS] Returning 48 clients for Michael Klepacz
+[MY-CLIENTS] Client 1: Lift Cannabis Co - totalSales=1500.00, commission=500.00
+[MY-CLIENTS] Client 2: House of Dank Recreational Cannabis - Kalamazoo - totalSales=0.00, commission=0.00
+[MY-CLIENTS] Client 3: Skymint - totalSales=0.00, commission=0.00
+5:32:56 PM [express] GET /api/clients/my 200 in 1619ms :: [{"id":"https://www.leafly.com/cannabis-st…
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[SlotDb.getEmptySlots] Found: {
+  count: 113,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 113 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '6a9631ff-4431-4ff0-8c14-42131afcfe54',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '6d0dc8e1-40ff-485f-8709-458d0ee26044',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '8889e008-8df6-4ab2-adc3-18489adef371',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: '8f693369-41d7-4548-9714-6ec0a22835b0',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '2cd96077-8047-4433-8160-80b41d173dd1',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e919a530-4229-49ef-a93a-be2584060d28',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 613,
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[SlotDb.getEmptySlots] Found: {
+  count: 113,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 113 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '6a9631ff-4431-4ff0-8c14-42131afcfe54',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '6d0dc8e1-40ff-485f-8709-458d0ee26044',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '8889e008-8df6-4ab2-adc3-18489adef371',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: '8f693369-41d7-4548-9714-6ec0a22835b0',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '2cd96077-8047-4433-8160-80b41d173dd1',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e919a530-4229-49ef-a93a-be2584060d28',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 613,
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+5:34:39 PM [express] GET /api/auth/user 304 in 858ms :: {"id":"4df35876-ab89-4860-8656-0440accfea14"…
+5:34:39 PM [express] GET /api/sheets 304 in 866ms :: {"sheets":[{"id":"7e9c491c-ef83-4541-b07a-1546f…
+5:34:39 PM [express] GET /api/statuses 304 in 880ms :: {"statuses":[{"id":"5cb465e8-c69e-4af4-bdbd-c…
+5:34:40 PM [express] GET /api/users 304 in 990ms :: {"users":[{"id":"56e4b935-c71b-45c3-bca5-fda68bb…
+[CalendarSync] Found 0 reminders to sync for user 4df35876-ab89-4860-8656-0440accfea14
+[CalendarSync] Sync complete: 0 created, 0 errors
+🔴 [GET PREFERENCES] colorRowByStatus value being returned: false
+5:34:40 PM [express] GET /api/user/preferences 304 in 1066ms :: {"id":"bdc1c7a0-5592-4fea-94b0-10871…
+[MY-CLIENTS] 👤 User: michael@naturalmaterials.eu Role: admin
+[MY-CLIENTS] 🏷️  User agentName field: Michael Klepacz
+[MY-CLIENTS] 🔐 allowedAgentNames: []
+[MY-CLIENTS] 📊 Processing 202 tracker rows
+[MY-CLIENTS] 📋 Column indices: {
+  linkIndex: 0,
+  agentNameIndex: 3,
+  amountIndex: 6,
+  totalIndex: 16,
+  dateIndex: 2,
+  statusIndex: 7,
+  parentLinkIndex: 18
+}
+[MY-CLIENTS] Row 1: link=https://www.leafly.com/cannabis-store/lift-cannabis-co, total=1500, amount=500
+[MY-CLIENTS] Row 4: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 5: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 6: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 7: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 8: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 9: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 10: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 11: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 12: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 13: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 14: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 15: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 16: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 17: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 18: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 19: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 20: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 36: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 37: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 38: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 39: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 40: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 41: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 42: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 44: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 45: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 46: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 47: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 52: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 60: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 61: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 62: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 64: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 65: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 66: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 67: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 68: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 69: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 70: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 71: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 72: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 73: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 74: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 75: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 76: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 77: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 78: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 79: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 80: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 81: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 82: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 83: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 84: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 85: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 86: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 87: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 88: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 89: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 90: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 91: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 92: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 93: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 94: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 95: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 96: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 97: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 98: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 99: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 100: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 101: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 102: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 103: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 104: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 105: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 106: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 107: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 108: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 109: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 110: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 111: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 112: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 113: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 115: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 116: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 117: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 118: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 119: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 120: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 121: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 122: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 123: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 124: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 125: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 126: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 127: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 128: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 129: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 130: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 131: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 132: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 133: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 134: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 135: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 136: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 137: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 138: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 139: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 140: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 142: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 143: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 144: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 145: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 146: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 147: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 148: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 149: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 150: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 151: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 152: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 153: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 154: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 155: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 156: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 157: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 158: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 159: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 160: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 161: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 162: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 163: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 164: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 165: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 166: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 168: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 169: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 170: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 171: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 172: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 173: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 174: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 175: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 176: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 177: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 178: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 180: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 181: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 182: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 183: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 184: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 197: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 198: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 199: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 200: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 201: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+5:34:40 PM [express] GET /api/tickets/unread-count 304 in 333ms :: {"count":1}
+5:34:40 PM [express] GET /api/call-history 304 in 389ms :: [{"id":"48a01bd6-c5e2-4de0-9d88-7b84f28ba…
+5:34:40 PM [express] GET /api/reminders 304 in 388ms :: {"reminders":[]}
+[MY-CLIENTS] ✅ Processing complete:
+[MY-CLIENTS]    - Rows processed: 48
+[MY-CLIENTS]    - Rows filtered out: 0
+[MY-CLIENTS]    - Unique stores found: 48
+[MY-CLIENTS]    - After enrichment: 48
+[MY-CLIENTS] Returning 48 clients for Michael Klepacz
+[MY-CLIENTS] Client 1: Lift Cannabis Co - totalSales=1500.00, commission=500.00
+[MY-CLIENTS] Client 2: House of Dank Recreational Cannabis - Kalamazoo - totalSales=0.00, commission=0.00
+[MY-CLIENTS] Client 3: Skymint - totalSales=0.00, commission=0.00
+5:34:41 PM [express] GET /api/clients/my 200 in 2338ms :: [{"id":"https://www.leafly.com/cannabis-st…
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+5:35:10 PM [express] GET /api/sheets 304 in 856ms :: {"sheets":[{"id":"7e9c491c-ef83-4541-b07a-1546f…
+5:35:10 PM [express] GET /api/auth/user 304 in 865ms :: {"id":"4df35876-ab89-4860-8656-0440accfea14"…
+5:35:10 PM [express] GET /api/statuses 304 in 854ms :: {"statuses":[{"id":"5cb465e8-c69e-4af4-bdbd-c…
+[CalendarSync] Found 0 reminders to sync for user 4df35876-ab89-4860-8656-0440accfea14
+[CalendarSync] Sync complete: 0 created, 0 errors
+5:35:11 PM [express] GET /api/tickets/unread-count 304 in 526ms :: {"count":1}
+5:35:11 PM [express] GET /api/users 304 in 977ms :: {"users":[{"id":"56e4b935-c71b-45c3-bca5-fda68bb…
+🔴 [GET PREFERENCES] colorRowByStatus value being returned: false
+5:35:11 PM [express] GET /api/user/preferences 304 in 1032ms :: {"id":"bdc1c7a0-5592-4fea-94b0-10871…
+5:35:11 PM [express] GET /api/call-history 304 in 385ms :: [{"id":"48a01bd6-c5e2-4de0-9d88-7b84f28ba…
+5:35:11 PM [express] GET /api/reminders 304 in 393ms :: {"reminders":[]}
+[MY-CLIENTS] 👤 User: michael@naturalmaterials.eu Role: admin
+[MY-CLIENTS] 🏷️  User agentName field: Michael Klepacz
+[MY-CLIENTS] 🔐 allowedAgentNames: []
+[MY-CLIENTS] 📊 Processing 202 tracker rows
+[MY-CLIENTS] 📋 Column indices: {
+  linkIndex: 0,
+  agentNameIndex: 3,
+  amountIndex: 6,
+  totalIndex: 16,
+  dateIndex: 2,
+  statusIndex: 7,
+  parentLinkIndex: 18
+}
+[MY-CLIENTS] Row 1: link=https://www.leafly.com/cannabis-store/lift-cannabis-co, total=1500, amount=500
+[MY-CLIENTS] Row 4: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 5: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 6: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 7: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 8: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 9: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 10: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 11: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 12: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 13: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 14: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 15: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 16: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 17: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 18: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 19: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 20: Skipping child location - has parent link ef3533ec-1c3c-4c59-96c6-6e8c1bdcf138
+[MY-CLIENTS] Row 36: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 37: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 38: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 39: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 40: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 41: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 42: Skipping child location - has parent link af4b4ad1-d01d-40ab-8809-1c687a66211b
+[MY-CLIENTS] Row 44: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 45: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 46: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 47: Skipping child location - has parent link 9c468460-c5e9-4f07-b20a-675bba795a5e
+[MY-CLIENTS] Row 52: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 60: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 61: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 62: Skipping child location - has parent link d24d8680-fa42-4ba8-ad1a-4bd7718f8357
+[MY-CLIENTS] Row 64: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 65: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 66: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 67: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 68: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 69: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 70: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 71: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 72: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 73: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 74: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 75: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 76: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 77: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 78: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 79: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 80: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 81: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 82: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 83: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 84: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 85: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 86: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 87: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 88: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 89: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 90: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 91: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 92: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 93: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 94: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 95: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 96: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 97: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 98: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 99: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 100: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 101: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 102: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 103: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 104: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 105: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 106: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 107: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 108: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 109: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 110: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 111: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 112: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 113: Skipping child location - has parent link 3a9f9ba3-f0a7-43c0-803b-4b824d728c8a
+[MY-CLIENTS] Row 115: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 116: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 117: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 118: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 119: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 120: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 121: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 122: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 123: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 124: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 125: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 126: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 127: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 128: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 129: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 130: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 131: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 132: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 133: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 134: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 135: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 136: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 137: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 138: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 139: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 140: Skipping child location - has parent link 22d9380d-1682-4c2c-a3cb-c0dd3e397ce0
+[MY-CLIENTS] Row 142: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 143: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 144: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 145: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 146: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 147: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 148: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 149: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 150: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 151: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 152: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 153: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 154: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 155: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 156: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 157: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 158: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 159: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 160: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 161: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 162: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 163: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 164: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 165: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 166: Skipping child location - has parent link 2725ea46-2d68-4861-a6a1-bfde5d4d2a48
+[MY-CLIENTS] Row 168: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 169: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 170: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 171: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 172: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 173: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 174: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 175: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 176: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 177: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 178: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 180: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 181: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 182: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 183: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 184: Skipping child location - has parent link https://www.leafly.com/dispensary-info/embarc-sacramento
+[MY-CLIENTS] Row 197: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 198: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 199: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 200: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[MY-CLIENTS] Row 201: Skipping child location - has parent link 229c7e55-cbae-4f0b-b8ef-880704fbde92
+[CallDispatcher] Starting call processing cycle
+[CallDispatcher] No calls ready to process
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[Matrix2 Generator] Using timezone from user 4df35876-ab89-4860-8656-0440accfea14: Europe/Warsaw
+[EmailQueue] Running slot assignment for waiting recipients...
+[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-25
+[SlotDb.getEmptySlots] Found: {
+  count: 113,
+  dateIso: '2025-11-25',
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 0 (2025-11-25): 113 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-26
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-26',
+  sample: [
+    {
+      id: '6a9631ff-4431-4ff0-8c14-42131afcfe54',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '6d0dc8e1-40ff-485f-8709-458d0ee26044',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '8889e008-8df6-4ab2-adc3-18489adef371',
+      slot_date: '2025-11-26',
+      slot_time_utc: '2025-11-26 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 1 (2025-11-26): 250 empty slots
+[SlotDb.getEmptySlots] Fetching empty slots for: 2025-11-27
+[SlotDb.getEmptySlots] Found: {
+  count: 250,
+  dateIso: '2025-11-27',
+  sample: [
+    {
+      id: '8f693369-41d7-4548-9714-6ec0a22835b0',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:00:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '2cd96077-8047-4433-8160-80b41d173dd1',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:03:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: 'e919a530-4229-49ef-a93a-be2584060d28',
+      slot_date: '2025-11-27',
+      slot_time_utc: '2025-11-27 07:07:00+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[Matrix2 Assigner] Day 2 (2025-11-27): 250 empty slots
+[Matrix2 Assigner] Empty slots found across 3 days: {
+  count: 613,
+  sample: [
+    {
+      id: 'bfdacf2d-6ff6-4727-b1ba-65be91882f3c',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:02:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7aeb5f09-6930-4993-9d3d-cfcd10658003',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:12:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    },
+    {
+      id: '7878da58-ce25-42cf-acbb-52329c1eaa25',
+      slot_date: '2025-11-25',
+      slot_time_utc: '2025-11-25 15:16:59.253+00',
+      filled: false,
+      sent: false,
+      recipient_id: null
+    }
+  ]
+}
+[RecipientDb.getEligibleRecipientsForAssignment] Fetching eligible recipients...
+[RecipientDb.getEligibleRecipientsForAssignment] Raw results: { count: 0, sample: [] }
+[Matrix2 Assigner] Eligible recipients found: { count: 0, sample: [] }
+[Matrix2 Assigner] No eligible recipients for assignment
+[EmailQueue] No slots ready to send (or all sequences paused)
+[MY-CLIENTS] ✅ Processing complete:
+[MY-CLIENTS]    - Rows processed: 48
+[MY-CLIENTS]    - Rows filtered out: 0
+[MY-CLIENTS]    - Unique stores found: 48
+[MY-CLIENTS]    - After enrichment: 48
+[MY-CLIENTS] Returning 48 clients for Michael Klepacz
+[MY-CLIENTS] Client 1: Lift Cannabis Co - totalSales=1500.00, commission=500.00
+[MY-CLIENTS] Client 2: House of Dank Recreational Cannabis - Kalamazoo - totalSales=0.00, commission=0.00
+[MY-CLIENTS] Client 3: Skymint - totalSales=0.00, commission=0.00
+5:35:13 PM [express] GET /api/clients/my 200 in 2102ms :: [{"id":"https://www.leafly.com/cannabis-st…
