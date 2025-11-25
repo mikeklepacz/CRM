@@ -28,6 +28,7 @@ import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { parseBusinessHours, resolveTimezone, STATE_TIMEZONES } from "./services/timezoneHours";
 import { updateCommissionTrackerStatus } from "./services/commissionTrackerUpdate";
 import { ensureDailySlots } from "./services/Matrix2/slotGenerator";
+import { assignSingleRecipient } from "./services/Matrix2/slotAssigner";
 import {
   insertConversationSchema,
   insertProjectSchema,
@@ -19820,10 +19821,8 @@ Use this store information to provide context-aware responses. When helping draf
       const { id } = req.params;
       const recipient = await storage.resumeRecipient(id);
       
-      // Clear any slot assignments in Matrix2 - slotAssigner will reschedule on next cycle
-      await db
-        .delete(dailySendSlots)
-        .where(eq(dailySendSlots.recipientId, id));
+      // Immediately assign the resumed recipient to the next available slot (regardless of sending hours)
+      await assignSingleRecipient(id);
       
       res.json(recipient);
     } catch (error: any) {
