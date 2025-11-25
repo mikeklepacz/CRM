@@ -36,6 +36,7 @@ The application is built around a client dashboard unifying data from "Store Dat
 - **Self-Evolving Knowledge Base System**: Complete KB management with version control and AI-powered improvements, including human-in-the-loop approval and Google Drive backup.
 - **E-Hub: Email Campaign System (Admin-Only)**: AI-powered cold outreach automation with automated follow-up sequences, reply detection, and CRM synchronization. AI generates all email content based on strategy conversations.
 - **Manual Follow-Ups System**: Automated human→AI handoff system that bridges manual outreach with AI-powered follow-up sequences, triggered by Gmail draft creation.
+- **Real-Time Event Gateway (SSE)**: Server-Sent Events implementation for push-based UI updates. Eliminates wasteful polling by broadcasting events (clients:updated, matrix:slotsChanged, matrix:assigned, calls:queueChanged, gmail:newMessage, calendar:eventChanged) to connected clients. Frontend EventStreamProvider automatically invalidates React Query caches on event receipt. Includes 30-second heartbeat keepalive for proxy compatibility.
 
 **System Design Choices:**
 - **Database**: PostgreSQL (Neon) for user management, preferences, and operational data.
