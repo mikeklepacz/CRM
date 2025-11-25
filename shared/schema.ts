@@ -184,9 +184,24 @@ export const userIntegrations = pgTable("user_integrations", {
   googleCalendarWebhookChannelId: varchar("google_calendar_webhook_channel_id"),
   googleCalendarWebhookResourceId: varchar("google_calendar_webhook_resource_id"),
   googleCalendarWebhookExpiry: bigint("google_calendar_webhook_expiry", { mode: "number" }),
+  // Gmail Push Notifications (via Pub/Sub)
+  gmailLastHistoryId: varchar("gmail_last_history_id"), // For delta queries with history.list
+  gmailWatchExpiration: bigint("gmail_watch_expiration", { mode: "number" }), // When Gmail watch expires (7 days)
+  gmailLastPushReceivedAt: timestamp("gmail_last_push_received_at"), // Health check: when we last got a push
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Gmail Push Notification idempotency - prevents processing same message twice
+export const processedGmailMessages = pgTable("processed_gmail_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  gmailMessageId: varchar("gmail_message_id").notNull().unique(), // Gmail's message ID
+  userId: varchar("user_id").notNull().references(() => users.id),
+  processedAt: timestamp("processed_at").defaultNow(),
+  action: varchar("action", { length: 50 }), // 'reply_detected', 'ignored', etc.
+}, (table) => [
+  index("idx_processed_gmail_message_id").on(table.gmailMessageId),
+]);
 
 // Dashboard card configurations - controls which roles see which cards
 export const dashboardCards = pgTable("dashboard_cards", {

@@ -100,3 +100,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:1.0.0", "google-sheet:1.0.0", "twilio:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+GMAIL_PUBSUB_TOPIC = "projects/durable-student-395209/topics/gmail-inbox-push"
