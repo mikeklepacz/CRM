@@ -1,3 +1,10 @@
+// server/services/Matrix2/slotAssigner.ts
+import { parseBusinessHours } from "../timezoneHours";
+import { toZonedTime } from "date-fns-tz";
+import { getEmptySlots, fillSlot } from "./slotDb";
+import { getEligibleRecipientsForAssignment } from "./recipientDb";
+import { storage } from "../../storage";
+import { eventGateway } from "../events/gateway";
 
 /**
  * Immediately assign a specific recipient to the next available slot
@@ -42,19 +49,20 @@ export async function assignSingleRecipient(recipientId: string) {
     if (isRecipientEligible(recipient, slotUtc, settings)) {
       await fillSlot(slot.id, recipient.id);
       console.log(`[Matrix2 Assigner] ✅ Assigned recipient ${recipient.email} to future slot ${slot.id} at ${slotUtc.toISOString()}`);
+      
+      // Emit WebSocket event for real-time UI updates
+      eventGateway.emit('matrix:assigned', {
+        recipientId: recipient.id,
+        slotId: slot.id,
+        email: recipient.email,
+        slotTime: slotUtc.toISOString(),
+      });
       return;
     }
   }
 
   console.log(`[Matrix2 Assigner] ⚠️ No eligible future slots found for recipient ${recipient.email} (checked ${slots.length} slots)`);
 }
-
-// server/services/Matrix2/slotAssigner.ts
-import { parseBusinessHours } from "../timezoneHours";
-import { toZonedTime } from "date-fns-tz";
-import { getEmptySlots, fillSlot } from "./slotDb";
-import { getEligibleRecipientsForAssignment } from "./recipientDb";
-import { storage } from "../../storage";
 
 /**
  * Calculate priority tier for a recipient
@@ -168,6 +176,15 @@ export async function assignRecipientsToSlots() {
       
       const tier = getPriorityTier(r);
       console.log(`[Matrix2 Assigner] ✅ Assigned Tier ${tier} recipient ${r.email} to slot ${slot.id} at ${slotUtc.toISOString()}`);
+      
+      // Emit WebSocket event for real-time UI updates
+      eventGateway.emit('matrix:assigned', {
+        recipientId: r.id,
+        slotId: slot.id,
+        email: r.email,
+        tier,
+        slotTime: slotUtc.toISOString(),
+      });
       
       // Remove from available recipients
       sortedRecipients.splice(i, 1);

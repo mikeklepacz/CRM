@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { storage } from './storage';
+import { eventGateway } from './services/events/gateway';
 
 /**
  * Syncs reminders to Google Calendar for a specific user
@@ -162,6 +163,17 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
     }
 
     console.log(`[CalendarSync] Sync complete: ${created} created, ${errors} errors`);
+    
+    // Emit WebSocket event for real-time UI updates if events were created
+    if (created > 0) {
+      eventGateway.emit('calendar:eventChanged', {
+        userId,
+        created,
+        errors,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    
     return { created, errors };
   } catch (error: any) {
     console.error('[CalendarSync] Sync failed:', error.message);

@@ -7233,6 +7233,13 @@ IMPORTANT:
       processGmailHistory(notification.historyId).then(result => {
         if (result.repliesDetected > 0) {
           console.log(`[GmailPush] ✅ Processed: ${result.repliesDetected} replies detected, recipients updated: ${result.recipientsUpdated.join(', ')}`);
+          
+          // Emit WebSocket event for real-time UI updates
+          eventGateway.emit('gmail:newMessage', {
+            repliesDetected: result.repliesDetected,
+            recipientsUpdated: result.recipientsUpdated,
+            historyId: notification.historyId,
+          });
         }
       }).catch(err => {
         console.error('[GmailPush] Error processing history:', err);

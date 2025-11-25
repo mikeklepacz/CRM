@@ -4,6 +4,7 @@ import { getSlotsForDate, createSlots } from "./slotDb";
 import { addMinutes, addDays, parseISO } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { randomInt } from "crypto";
+import { eventGateway } from "../events/gateway";
 
 /**
  * Generate slots for a single day based on E-Hub settings
@@ -99,6 +100,14 @@ export async function generateSlotsForDay(
   console.log(`[Matrix2 Generator] Created ${slots.length} slots for ${dateIso}`);
   console.log(`[Matrix2 Generator] First slot: ${slots[0].toISOString()}`);
   console.log(`[Matrix2 Generator] Last slot: ${slots[slots.length - 1].toISOString()}`);
+
+  // Emit WebSocket event for real-time UI updates
+  eventGateway.emit('matrix:slotsChanged', {
+    date: dateIso,
+    slotCount: slots.length,
+    firstSlot: slots[0].toISOString(),
+    lastSlot: slots[slots.length - 1].toISOString(),
+  });
 }
 
 /**

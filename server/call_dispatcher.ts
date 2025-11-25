@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { storage } from './storage';
 import { generateStreamTwiML, initiateOutboundCall as twilioInitiateCall, isTwilioConfigured } from './twilio-service';
+import { eventGateway } from './services/events/gateway';
 
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 const MAX_RETRY_ATTEMPTS = 3;
@@ -51,6 +52,12 @@ export class CallDispatcher {
       }
 
       console.log('[CallDispatcher] Call processing cycle complete');
+      
+      // Emit WebSocket event for real-time UI updates
+      eventGateway.emit('calls:queueChanged', {
+        processed: targets.length,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       console.error('[CallDispatcher] Error in processing cycle:', error);
     } finally {
