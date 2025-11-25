@@ -3688,7 +3688,7 @@ export class DatabaseStorage implements IStorage {
 
   async pauseRecipient(id: string): Promise<SequenceRecipient> {
     // Release any Matrix2 slots before pausing
-    const { releaseAllRecipientSlots } = await import('@server/services/Matrix2/matrix2Helper');
+    const { releaseAllRecipientSlots } = await import('./services/Matrix2/matrix2Helper');
     await releaseAllRecipientSlots(id);
 
     const [updated] = await db
@@ -3822,7 +3822,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Matrix2: Release all slots for this recipient before deletion
-    const { releaseAllRecipientSlots } = await import('@server/services/Matrix2/matrix2Helper');
+    const { releaseAllRecipientSlots } = await import('./services/Matrix2/matrix2Helper');
     await releaseAllRecipientSlots(id);
 
     // Delete all messages for this recipient
@@ -3865,7 +3865,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Matrix2: Get the recipient's current slot
-    const { getRecipientSlot, forceSendNow } = await import('@server/services/Matrix2/matrix2Helper');
+    const { getRecipientSlot, forceSendNow } = await import('./services/Matrix2/matrix2Helper');
     const slot = await getRecipientSlot(id);
 
     if (!slot) {
@@ -3908,7 +3908,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Matrix2: Get the recipient's current slot and reschedule it
-    const { getRecipientSlot, updateSlotTime } = await import('@server/services/Matrix2/matrix2Helper');
+    const { getRecipientSlot, updateSlotTime } = await import('./services/Matrix2/matrix2Helper');
     const slot = await getRecipientSlot(id);
 
     if (!slot) {
@@ -3956,7 +3956,7 @@ export class DatabaseStorage implements IStorage {
     const now = new Date();
 
     // Matrix2: Release current slot before advancing step
-    const { releaseAllRecipientSlots } = await import('@server/services/Matrix2/matrix2Helper');
+    const { releaseAllRecipientSlots } = await import('./services/Matrix2/matrix2Helper');
     await releaseAllRecipientSlots(id);
 
     // Determine status based on sequence completion
