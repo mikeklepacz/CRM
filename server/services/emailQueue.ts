@@ -122,7 +122,14 @@ export async function processEmailQueue() {
         
         // Immediately trigger slot assignment for next step (Matrix2 multi-step progression)
         try {
+          // First, run general assignment for any waiting recipients
           await assignRecipientsToSlots();
+          
+          // Then explicitly assign THIS recipient who just advanced to next step
+          // They won't show up in general assignment query because they just got updated
+          const { assignSingleRecipient } = await import('./Matrix2/slotAssigner');
+          await assignSingleRecipient(slot.recipient_id);
+          
           console.log(`[EmailQueue] 📧 Post-send slot assignment completed for recipient ${slot.recipient_id}`);
         } catch (assignError) {
           console.error(`[EmailQueue] ⚠️  Error during post-send slot assignment for recipient ${slot.recipient_id}:`, assignError);
