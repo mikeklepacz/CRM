@@ -169,6 +169,8 @@ function SentHistoryView() {
   // Fetch all sequences for filter dropdown
   const { data: sequences } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ['/api/sequences'],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   // Fetch sent history
@@ -209,7 +211,9 @@ function SentHistoryView() {
       
       return await res.json();
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 30000, // 30 seconds
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
+    refetchOnWindowFocus: true,
   });
 
   // Client-side filtering
@@ -982,7 +986,9 @@ function QueueView() {
       const data = await res.json();
       return data.count || 0;
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   // Calculate stats for ACTIVE queue only (don't calculate for paused view)
@@ -1593,6 +1599,8 @@ export default function EHub() {
   // Fetch sequences
   const { data: sequences, isLoading } = useQuery<Sequence[]>({
     queryKey: ['/api/sequences'],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   // Fetch user preferences for blacklist toggle
@@ -1901,6 +1909,8 @@ export default function EHub() {
         return res.json();
       });
     },
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   // Create sequence mutation
