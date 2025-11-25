@@ -88,6 +88,8 @@ export async function assignRecipientsToSlots() {
     return;
   }
 
+  console.log('[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========');
+
   // Get all empty slots across the next 3 days (matching slot generator window)
   const today = new Date();
   const allSlots = [];
@@ -98,6 +100,7 @@ export async function assignRecipientsToSlots() {
     const dateIso = targetDate.toISOString().slice(0, 10);
     
     const daySlots = await getEmptySlots(dateIso);
+    console.log(`[Matrix2 Assigner] Day ${dayOffset} (${dateIso}): ${daySlots.length} empty slots`);
     allSlots.push(...daySlots);
   }
   
@@ -118,7 +121,10 @@ export async function assignRecipientsToSlots() {
       email: r.email,
       sequenceId: r.sequence_id,
       currentStep: r.current_step,
-      status: r.status
+      status: r.status,
+      timezone: r.timezone,
+      businessHours: r.business_hours,
+      state: r.state
     }))
   });
   
@@ -196,6 +202,8 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   const recipientState = recipient.state || '';
   const recipientTimezone = recipient.timezone;
   
+  console.log(`[Matrix2 Assigner] 🔍 Checking eligibility for ${recipient.email} at slot ${slotUtc.toISOString()}`);
+  
   if (!recipientTimezone) {
     console.log(`[Matrix2 Assigner] ❌ Recipient ${recipient.email} has no timezone, skipping`);
     return false;
@@ -211,9 +219,11 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
 
   // Convert slot UTC time to recipient's local time
   const localTime = toZonedTime(slotUtc, recipientTimezone);
+  console.log(`[Matrix2 Assigner] 🕐 Slot local time: ${localTime.toISOString()} (${recipientTimezone})`);
 
   // Get day of week (0 = Sunday, 6 = Saturday)
   const dayOfWeek = localTime.getDay();
+  console.log(`[Matrix2 Assigner] 📅 Day of week: ${dayOfWeek}`);
 
   // Check excluded days setting FIRST (before business hours parsing)
   const excludedDays = settings.excludedDays || [];
@@ -223,7 +233,9 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   }
 
   // Parse business hours with state parameter
+  console.log(`[Matrix2 Assigner] 🏪 Parsing business hours: "${recipient.business_hours}" (state: ${recipientState})`);
   const parsed = parseBusinessHours(recipient.business_hours || '', recipientState);
+  console.log(`[Matrix2 Assigner] 📊 Parsed result:`, { isClosed: parsed.isClosed, scheduleKeys: Object.keys(parsed.schedule) });
   
   // If business is closed, not eligible
   if (parsed.isClosed) {
@@ -233,6 +245,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
 
   // Get schedule for this day
   const daySchedule = parsed.schedule[dayOfWeek];
+  console.log(`[Matrix2 Assigner] 🗓️ Day ${dayOfWeek} schedule:`, daySchedule);
   
   if (!daySchedule || daySchedule.length === 0) {
     console.log(`[Matrix2 Assigner] ❌ No schedule for ${recipient.email} on day ${dayOfWeek}`);
@@ -243,9 +256,11 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   const firstRange = daySchedule[0];
   const openMinutes = firstRange.open;
   const closeMinutes = firstRange.close;
+  console.log(`[Matrix2 Assigner] ⏰ Business hours: ${Math.floor(openMinutes/60)}:${String(openMinutes%60).padStart(2,'0')} - ${Math.floor(closeMinutes/60)}:${String(closeMinutes%60).padStart(2,'0')}`);
 
   // Get local time in minutes since midnight
   const localMinutes = localTime.getHours() * 60 + localTime.getMinutes();
+  console.log(`[Matrix2 Assigner] 🕐 Current local time: ${Math.floor(localMinutes/60)}:${String(localMinutes%60).padStart(2,'0')} (${localMinutes} minutes)`);
 
   // Apply client_window_start_offset (hours after open)
   const clientWindowStartOffset = parseFloat(String(settings.clientWindowStartOffset || 1));
@@ -254,6 +269,7 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   // Apply client_window_end_hour (local cutoff)
   const clientWindowEndHour = settings.clientWindowEndHour || 14;
   const windowEndMinutes = Math.min(closeMinutes, clientWindowEndHour * 60);
+  console.log(`[Matrix2 Assigner] 🪟 Eligible window: ${Math.floor(windowStartMinutes/60)}:${String(windowStartMinutes%60).padStart(2,'0')} - ${Math.floor(windowEndMinutes/60)}:${String(windowEndMinutes%60).padStart(2,'0')} (offset: ${clientWindowStartOffset}h, cutoff: ${clientWindowEndHour}:00)`);
 
   // Check if slot falls within eligible window
   if (localMinutes < windowStartMinutes || localMinutes > windowEndMinutes) {
@@ -275,5 +291,6 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
     }
   }
 
+  console.log(`[Matrix2 Assigner] ✅ Recipient ${recipient.email} is ELIGIBLE for slot ${slotUtc.toISOString()}`);
   return true;
 }

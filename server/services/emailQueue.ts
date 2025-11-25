@@ -80,6 +80,16 @@ export async function processEmailQueue() {
     return;
   }
 
+  // ALWAYS run slot assignment on every cycle (not just after sends)
+  // This ensures newly enrolled/resumed recipients get scheduled
+  console.log('[EmailQueue] Running slot assignment for waiting recipients...');
+  try {
+    await assignRecipientsToSlots();
+  } catch (assignError) {
+    console.error('[EmailQueue] ⚠️ Error during slot assignment:', assignError);
+    // Don't fail the queue - continue to send ready emails
+  }
+
   const nowUtcIso = new Date().toISOString();
 
   // Get slots that are ready to send (filled, not sent, time has arrived)
