@@ -1,5 +1,5 @@
-import { db } from '@server/db';
-import { dailySendSlots } from '@shared/schema';
+import { db } from '../../db';
+import { dailySendSlots } from '../../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 
 /**
