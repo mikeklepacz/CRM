@@ -71,10 +71,17 @@ async function getGmailClient(userId: string) {
 /**
  * Check if a Gmail thread has received replies
  * Uses Gmail API threads.get to fetch all messages in a thread
+ * Only counts messages FROM recipients (not our own follow-ups)
  */
 export async function checkForReplies(userId: string, threadId: string): Promise<ReplyDetectionResult> {
   try {
     const gmail = await getGmailClient(userId);
+
+    // Get our own email address to filter out our sent emails
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    const ourEmail = profile.data.emailAddress?.toLowerCase() || '';
+    
+    console.log(`[ReplyDetection] Checking thread ${threadId} for replies (our email: ${ourEmail})`);
 
     // Fetch the thread
     const thread = await gmail.users.threads.get({
@@ -84,21 +91,36 @@ export async function checkForReplies(userId: string, threadId: string): Promise
     });
 
     const messages = thread.data.messages || [];
+    console.log(`[ReplyDetection] Thread has ${messages.length} total messages`);
     
-    // First message is the original email we sent
-    // Any additional messages are replies
-    const replies = messages.slice(1).map(msg => {
+    // Filter to only messages NOT from us (these are genuine replies)
+    const replies: Array<{ from: string; snippet: string; receivedAt: string }> = [];
+    
+    for (const msg of messages) {
       const headers = msg.payload?.headers || [];
       const fromHeader = headers.find(h => h.name?.toLowerCase() === 'from');
       const dateHeader = headers.find(h => h.name?.toLowerCase() === 'date');
+      const fromValue = fromHeader?.value || '';
       
-      return {
-        from: fromHeader?.value || 'Unknown',
-        snippet: msg.snippet || '',
-        receivedAt: dateHeader?.value || '',
-      };
-    });
+      // Extract email from "Name <email@example.com>" format
+      const emailMatch = fromValue.match(/<([^>]+)>/) || [null, fromValue];
+      const senderEmail = (emailMatch[1] || fromValue).toLowerCase().trim();
+      
+      // Only count as reply if NOT from our email
+      if (senderEmail && !senderEmail.includes(ourEmail) && ourEmail && !ourEmail.includes(senderEmail)) {
+        console.log(`[ReplyDetection] ✅ Found reply from: ${fromValue}`);
+        replies.push({
+          from: fromValue,
+          snippet: msg.snippet || '',
+          receivedAt: dateHeader?.value || '',
+        });
+      } else {
+        console.log(`[ReplyDetection] ⏭️  Skipping our own message from: ${fromValue}`);
+      }
+    }
 
+    console.log(`[ReplyDetection] Result: ${replies.length} genuine replies found`);
+    
     return {
       hasReply: replies.length > 0,
       replyCount: replies.length,

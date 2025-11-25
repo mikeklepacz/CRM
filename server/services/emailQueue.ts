@@ -8,6 +8,7 @@ import { db } from "../db";
 import { sql, eq } from "drizzle-orm";
 import { dailySendSlots, sequenceRecipients } from "../../shared/schema";
 import { formatInTimeZone } from "date-fns-tz";
+import { shouldSendEmail } from "./replyGuard";
 
 // Queue state
 let isProcessing = false;
@@ -100,7 +101,9 @@ export async function processEmailQueue() {
       dss.slot_time_utc, 
       dss.recipient_id,
       s.status as sequence_status,
-      s.name as sequence_name
+      s.name as sequence_name,
+      sr.thread_id as thread_id,
+      s.created_by as user_id
     FROM daily_send_slots dss
     INNER JOIN sequence_recipients sr ON dss.recipient_id::varchar = sr.id
     INNER JOIN sequences s ON sr.sequence_id = s.id
@@ -124,6 +127,37 @@ export async function processEmailQueue() {
 
   for (const slot of slots) {
     try {
+      // REPLY GUARD: Check for replies before sending
+      // Use admin user ID for Gmail API access (emails sent via admin's Gmail)
+      const adminUser = await storage.getAdminUser();
+      const userId = adminUser?.id || slot.user_id;
+      
+      if (slot.thread_id) {
+        const canSend = await shouldSendEmail({
+          userId,
+          threadId: slot.thread_id,
+          scheduledAt: new Date(slot.slot_time_utc),
+        });
+        
+        if (!canSend) {
+          console.log(`[EmailQueue] 🛑 Reply detected for recipient ${slot.recipient_id} - stopping sequence`);
+          // Mark recipient as replied and cancel slot
+          await db.update(sequenceRecipients)
+            .set({ 
+              status: 'replied',
+              repliedAt: new Date(),
+            })
+            .where(eq(sequenceRecipients.id, slot.recipient_id));
+          
+          // Clear the slot
+          await db.update(dailySendSlots)
+            .set({ filled: false, recipientId: null })
+            .where(eq(dailySendSlots.id, slot.id));
+          
+          continue; // Skip to next slot
+        }
+      }
+      
       const ok = await sendEmailToRecipient(slot.recipient_id);
       if (ok) {
         await markSlotSent(slot.id);
