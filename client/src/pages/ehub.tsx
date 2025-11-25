@@ -375,6 +375,8 @@ function ScannerManagementView() {
     createdAt: string;
   }>>({
     queryKey: ['/api/ehub/blacklist'],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   // Add to blacklist mutation
@@ -1655,6 +1657,8 @@ export default function EHub() {
   const { data: testEmailHistory, isLoading: isLoadingTestEmails } = useQuery<TestEmailSend[]>({
     queryKey: ['/api/test-email/history'],
     enabled: activeTab === 'test-emails' && user?.role === 'admin',
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   // Derive current sequence to check for finalized strategy
