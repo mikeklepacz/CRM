@@ -5,10 +5,8 @@ import { db } from "./db";
 import { sql } from "drizzle-orm";
 
 async function debugResumeFlow() {
-  console.log("=== RESUME FLOW DEBUG ===\n");
 
   // 1. Check the resumed recipient
-  console.log("1. Checking recipient michael@naturalmaterials.pl:");
   const recipients = await db.execute(sql`
     SELECT 
       sr.id,
@@ -27,22 +25,12 @@ async function debugResumeFlow() {
   `);
   
   if (recipients.length === 0) {
-    console.log("  ❌ Recipient not found!");
     process.exit(1);
   }
 
   const recipient: any = recipients[0];
-  console.log(`  - Status: ${recipient.status}`);
-  console.log(`  - Current step: ${recipient.current_step}`);
-  console.log(`  - Timezone: ${recipient.timezone || 'MISSING ❌'}`);
-  console.log(`  - Business hours: ${recipient.business_hours || 'MISSING ❌'}`);
-  console.log(`  - State: ${recipient.state || 'MISSING ❌'}`);
-  console.log(`  - Next send at: ${recipient.next_send_at}`);
-  console.log(`  - Last step sent: ${recipient.last_step_sent_at}`);
-  console.log(`  - Step delays: ${recipient.step_delays}`);
 
   // 2. Check if they have any filled slots
-  console.log("\n2. Checking assigned slots:");
   const slots = await db.execute(sql`
     SELECT 
       id,
@@ -57,15 +45,12 @@ async function debugResumeFlow() {
   `);
 
   if (slots.length === 0) {
-    console.log("  ❌ No slots assigned to this recipient!");
   } else {
     slots.forEach((slot: any) => {
-      console.log(`  - Slot: ${slot.slot_time_utc}, filled: ${slot.filled}, sent: ${slot.sent}`);
     });
   }
 
   // 3. Check eligibility query (from slotAssigner)
-  console.log("\n3. Checking if recipient appears in eligibility query:");
   const eligible = await db.execute(sql`
     SELECT
       sr.id,
@@ -88,13 +73,10 @@ async function debugResumeFlow() {
 
   const found = eligible.find((r: any) => r.email === 'michael@naturalmaterials.pl');
   if (found) {
-    console.log(`  ✅ Recipient IS eligible for slot assignment`);
   } else {
-    console.log(`  ❌ Recipient NOT eligible - likely already has a filled slot`);
   }
 
   // 4. Check available empty slots
-  console.log("\n4. Checking available empty slots:");
   const emptySlots = await db.execute(sql`
     SELECT 
       slot_date,
@@ -108,7 +90,6 @@ async function debugResumeFlow() {
   `);
 
   emptySlots.forEach((row: any) => {
-    console.log(`  - ${row.slot_date}: ${row.empty_count} empty slots`);
   });
 
   process.exit(0);

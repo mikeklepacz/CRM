@@ -30,12 +30,10 @@ async function checkAndRunMaintenance() {
                       && lastRunHour !== currentHour;
 
     if (shouldRun) {
-      console.log(`[SlotMaintenance] Running slot maintenance at ${currentHour}:00 ${adminTz}`);
       await ensureDailySlots();
       lastRunHour = currentHour;
     }
   } catch (error) {
-    console.error('[SlotMaintenance] Error during maintenance check:', error);
   }
 }
 
@@ -44,18 +42,14 @@ async function checkAndRunMaintenance() {
  * Checks every minute if we're at a maintenance hour
  */
 export function startSlotMaintenance() {
-  console.log('[SlotMaintenance] Starting slot maintenance scheduler...');
   
   // Run on startup to ensure 3 days buffer
-  console.log('[SlotMaintenance] Running initial slot generation on startup...');
   ensureDailySlots().catch(err => {
-    console.error('[SlotMaintenance] Error during startup slot generation:', err);
   });
 
   // Check every minute if we're at a maintenance hour
   maintenanceInterval = setInterval(checkAndRunMaintenance, 60000); // 60 seconds
   
-  console.log('[SlotMaintenance] ✅ Scheduler started (checks hourly schedule every 60s)');
 }
 
 /**
@@ -65,6 +59,5 @@ export function stopSlotMaintenance() {
   if (maintenanceInterval) {
     clearInterval(maintenanceInterval);
     maintenanceInterval = null;
-    console.log('[SlotMaintenance] Scheduler stopped');
   }
 }

@@ -134,7 +134,6 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
         const groups = detectDuplicates(stores, 0.75, nonDuplicatePairs);
         setDuplicateGroups(groups);
       } catch (error: any) {
-        console.error('[DuplicateFinder] Error detecting duplicates:', error);
         toast({
           title: "Detection Error",
           description: "Failed to analyze store data for duplicates. Some data may be malformed.",
@@ -181,7 +180,6 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
         description: `Selected ${deletions.length} duplicates (keeping claimed stores with better status)`,
       });
     } catch (error: any) {
-      console.error('[DuplicateFinder] Error in smart select:', error);
       toast({
         title: "Selection Error",
         description: "Failed to automatically select duplicates. Please try selecting manually.",
@@ -211,7 +209,6 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
       setSelectedForDeletion(newSelection);
       setDeletionMap(newDeletionMap);
     } catch (error: any) {
-      console.error('[DuplicateFinder] Error toggling selection:', error);
       toast({
         title: "Selection Error",
         description: "Failed to toggle selection for this store",
@@ -285,7 +282,6 @@ export function DuplicateFinderDialog({ open, onOpenChange, stores, onDuplicates
         description: `Marked ${markedAsNotDuplicate.size} stores as not duplicates. They won't appear in these groups again.`,
       });
     } catch (error: any) {
-      console.error('[DuplicateFinder] Error saving not duplicates:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to save markings",

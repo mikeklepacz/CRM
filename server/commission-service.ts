@@ -22,7 +22,6 @@ export async function applyCommissions(orderId: string): Promise<void> {
   }
 
   if (!order.salesAgentName) {
-    console.log(`No sales agent name on order ${orderId}`);
     return;
   }
 
@@ -34,7 +33,6 @@ export async function applyCommissions(orderId: string): Promise<void> {
   );
 
   if (!agent) {
-    console.log(`No agent found for order ${orderId} with agent name "${order.salesAgentName}"`);
     return;
   }
 
@@ -72,7 +70,6 @@ export async function applyCommissions(orderId: string): Promise<void> {
         sourceAgentId: agent.id,
       });
     } else {
-      console.log(`Warning: Referring agent ${agent.referredBy} not found for agent ${agent.id}`);
     }
   }
 

@@ -57,11 +57,9 @@ app.use((req, res, next) => {
 
   // Initialize voice proxy server
   voiceProxyServer.initialize(server);
-  console.log('[Startup] VoiceProxy WebSocket server initialized and ready for connections');
 
   // Initialize event gateway for real-time updates (SSE-based)
   eventGateway.initialize();
-  console.log('[Startup] EventGateway SSE server initialized');
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -100,11 +98,9 @@ app.use((req, res, next) => {
     // Start E-Hub email queue processor (sends emails during sending hours)
     startEmailQueueProcessor();
 
-    console.log(`${new Date().toLocaleTimeString()} [express] serving on port ${port}`);
 
     setInterval(() => {
       callDispatcher.processQueuedCalls().catch(err => {
-        console.error('[CallDispatcher] Error in background worker:', err);
       });
     }, 30000);
 
@@ -116,8 +112,6 @@ app.use((req, res, next) => {
         await gmailWatchManager.renewIfNeeded();
         log('[GmailWatch] Gmail push notifications initialized');
       } catch (err: any) {
-        console.error('[GmailWatch] Failed to initialize Gmail watch:', err.message);
-        console.error('[GmailWatch] Push notifications will not be active. You can manually start via /api/gmail/push/watch');
       }
     }, 5000); // Wait 5 seconds for other services to initialize
 
@@ -129,7 +123,6 @@ app.use((req, res, next) => {
           log('[GmailWatch] Gmail watch renewed successfully');
         }
       } catch (err: any) {
-        console.error('[GmailWatch] Failed to renew Gmail watch:', err.message);
       }
     }, 6 * 60 * 60 * 1000); // Every 6 hours
   });

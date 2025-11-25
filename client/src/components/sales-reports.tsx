@@ -299,7 +299,6 @@ export function SalesReports() {
         description: `Generated ${pdfs.length} report${pdfs.length > 1 ? 's' : ''}`,
       });
     } catch (error) {
-      console.error("Error generating PDFs:", error);
       toast({
         title: "Error",
         description: "Failed to generate reports",

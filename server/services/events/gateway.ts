@@ -64,11 +64,9 @@ class EventGateway {
 
   initialize() {
     if (this.isInitialized) {
-      console.log('[EventGateway] Already initialized');
       return;
     }
     this.isInitialized = true;
-    console.log('[EventGateway] SSE event gateway initialized');
   }
 
   addClient(clientId: string, res: Response, userId: string, tenantId?: string) {
@@ -97,7 +95,6 @@ class EventGateway {
       heartbeatInterval,
     });
 
-    console.log(`[EventGateway] SSE client connected: ${userId}${tenantId ? ` (tenant: ${tenantId})` : ''} (${this.clients.size} total)`);
 
     res.on('close', () => {
       this.removeClient(clientId);
@@ -109,7 +106,6 @@ class EventGateway {
     if (client) {
       clearInterval(client.heartbeatInterval);
       this.clients.delete(clientId);
-      console.log(`[EventGateway] SSE client disconnected: ${client.userId} (${this.clients.size} remaining)`);
     }
   }
 
@@ -130,13 +126,11 @@ class EventGateway {
         client.res.write(message);
         sentCount++;
       } catch (error) {
-        console.error(`[EventGateway] Failed to send to ${client.userId}`);
         this.clients.delete(clientId);
       }
     });
 
     if (sentCount > 0) {
-      console.log(`[EventGateway] Broadcast ${event.type} to ${sentCount} clients`);
     }
   }
 

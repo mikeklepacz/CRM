@@ -19,7 +19,6 @@ export async function checkForReplies(userId: string, threadId: string): Promise
   try {
     const { gmail, email: ourEmail } = await getGmailClient(userId);
     
-    console.log(`[ReplyDetection] Checking thread ${threadId} for replies (our email: ${ourEmail})`);
 
     // Fetch the thread
     const thread = await gmail.users.threads.get({
@@ -29,7 +28,6 @@ export async function checkForReplies(userId: string, threadId: string): Promise
     });
 
     const messages = thread.data.messages || [];
-    console.log(`[ReplyDetection] Thread has ${messages.length} total messages`);
     
     // Filter to only messages NOT from us (these are genuine replies)
     const replies: Array<{ from: string; snippet: string; receivedAt: string }> = [];
@@ -46,18 +44,15 @@ export async function checkForReplies(userId: string, threadId: string): Promise
       
       // Only count as reply if NOT from our email
       if (senderEmail && !senderEmail.includes(ourEmail) && ourEmail && !ourEmail.includes(senderEmail)) {
-        console.log(`[ReplyDetection] ✅ Found reply from: ${fromValue}`);
         replies.push({
           from: fromValue,
           snippet: msg.snippet || '',
           receivedAt: dateHeader?.value || '',
         });
       } else {
-        console.log(`[ReplyDetection] ⏭️  Skipping our own message from: ${fromValue}`);
       }
     }
 
-    console.log(`[ReplyDetection] Result: ${replies.length} genuine replies found`);
     
     return {
       hasReply: replies.length > 0,
@@ -65,7 +60,6 @@ export async function checkForReplies(userId: string, threadId: string): Promise
       replies,
     };
   } catch (error: any) {
-    console.error('[ReplyDetection] Error checking for replies:', error);
     throw new Error(`Failed to check for replies: ${error.message}`);
   }
 }
@@ -95,7 +89,6 @@ export async function getLatestMessageId(userId: string, threadId: string): Prom
     
     return messageIdHeader?.value || null;
   } catch (error: any) {
-    console.error('[ReplyDetection] Error getting latest message ID:', error);
     return null;
   }
 }
@@ -127,7 +120,6 @@ export async function getAllMessageIds(userId: string, threadId: string): Promis
     // Gmail reads only last 20 references, so limit to that
     return messageIds.slice(-20);
   } catch (error: any) {
-    console.error('[ReplyDetection] Error getting all message IDs:', error);
     return [];
   }
 }

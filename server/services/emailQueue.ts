@@ -19,7 +19,6 @@ let queueInterval: NodeJS.Timeout | null = null;
  * When someone takes your slot, you take the next slot, displacing the next person, etc.
  */
 async function cascadeBumpRecipient(displacedRecipientId: string, fromSlotTime: string): Promise<void> {
-  console.log(`[EmailQueue] 🌊 Cascading bump for recipient ${displacedRecipientId}...`);
   
   // Find next available slot after the one they were displaced from
   const nextSlotResult = await db.execute(sql`
@@ -33,7 +32,6 @@ async function cascadeBumpRecipient(displacedRecipientId: string, fromSlotTime: 
   const nextSlotRows = (nextSlotResult as any).rows || [];
   
   if (nextSlotRows.length === 0) {
-    console.warn(`[EmailQueue] ⚠️  No next slot available for cascading bump - recipient ${displacedRecipientId} goes to pool`);
     return; // End of chain - this person stays in pool
   }
   
@@ -42,7 +40,6 @@ async function cascadeBumpRecipient(displacedRecipientId: string, fromSlotTime: 
   
   // Take the next slot
   await fillSlot(nextSlot.id, displacedRecipientId);
-  console.log(`[EmailQueue] 🔄 Cascaded: ${displacedRecipientId} → slot ${nextSlot.id} (was ${nextSlot.slot_time_utc})`);
   
   // If someone was in that next slot, cascade them forward too (domino effect)
   if (nextDisplacedRecipientId) {
@@ -53,7 +50,6 @@ async function cascadeBumpRecipient(displacedRecipientId: string, fromSlotTime: 
 export async function processEmailQueue() {
   const settings = await storage.getEhubSettings();
   if (!settings) {
-    console.log('[EmailQueue] No E-Hub settings found, skipping processing');
     return;
   }
 
@@ -77,17 +73,14 @@ export async function processEmailQueue() {
       : currentHour >= sendingHoursStart || currentHour < sendingHoursEnd;
   
   if (!inSendingWindow) {
-    console.log(`[EmailQueue] Outside sending hours (${currentHour}:00 not in ${sendingHoursStart}:00-${String(sendingHoursEnd).padStart(2, '0')}:00 ${adminTz}, duration=${duration}h)`);
     return;
   }
 
   // ALWAYS run slot assignment on every cycle (not just after sends)
   // This ensures newly enrolled/resumed recipients get scheduled
-  console.log('[EmailQueue] Running slot assignment for waiting recipients...');
   try {
     await assignRecipientsToSlots();
   } catch (assignError) {
-    console.error('[EmailQueue] ⚠️ Error during slot assignment:', assignError);
     // Don't fail the queue - continue to send ready emails
   }
 
@@ -120,11 +113,9 @@ export async function processEmailQueue() {
   const slots = (result as any).rows || [];
 
   if (slots.length === 0) {
-    console.log('[EmailQueue] No slots ready to send (or all sequences paused)');
     return;
   }
 
-  console.log(`[EmailQueue] Processing ${slots.length} ready slots from ACTIVE sequences`);
 
   for (const slot of slots) {
     try {
@@ -140,7 +131,6 @@ export async function processEmailQueue() {
         });
         
         if (!canSend) {
-          console.log(`[EmailQueue] 🛑 Reply detected for recipient ${slot.recipient_id} - stopping sequence`);
           // Mark recipient as replied and cancel slot
           await db.update(sequenceRecipients)
             .set({ 
@@ -170,7 +160,6 @@ export async function processEmailQueue() {
       const ok = await sendEmailToRecipient(slot.recipient_id);
       if (ok) {
         await markSlotSent(slot.id);
-        console.log(`[EmailQueue] ✅ Sent email for slot ${slot.id} to recipient ${slot.recipient_id} (sequence: ${slot.sequence_name})`);
         // Note: Recipient metadata is updated inside sendEmailToRecipient()
         
         // Immediately trigger slot assignment for next step (Matrix2 multi-step progression)
@@ -183,13 +172,10 @@ export async function processEmailQueue() {
           const { assignSingleRecipient } = await import('./Matrix2/slotAssigner');
           await assignSingleRecipient(slot.recipient_id);
           
-          console.log(`[EmailQueue] 📧 Post-send slot assignment completed for recipient ${slot.recipient_id}`);
         } catch (assignError) {
-          console.error(`[EmailQueue] ⚠️  Error during post-send slot assignment for recipient ${slot.recipient_id}:`, assignError);
           // Don't rethrow - continue processing other slots even if assignment fails
         }
       } else {
-        console.error(`[EmailQueue] ❌ Failed to send email for slot ${slot.id} - initiating cascade bump`);
         // Clear current slot first
         await db
           .update(dailySendSlots)
@@ -200,7 +186,6 @@ export async function processEmailQueue() {
         await cascadeBumpRecipient(slot.recipient_id, slot.slot_time_utc);
       }
     } catch (error) {
-      console.error(`[EmailQueue] Error sending slot ${slot.id}:`, error);
       // Clear current slot first
       await db
         .update(dailySendSlots)
@@ -219,16 +204,13 @@ export async function processEmailQueue() {
  */
 export async function triggerImmediateQueueProcess() {
   if (isProcessing) {
-    console.log('[EmailQueue] Queue already processing, will send next cycle');
     return;
   }
 
-  console.log('[EmailQueue] ⚡ IMMEDIATE TRIGGER: Processing queue now...');
   isProcessing = true;
   try {
     await processEmailQueue();
   } catch (error) {
-    console.error('[EmailQueue] Error in immediate queue processing:', error);
   } finally {
     isProcessing = false;
   }
@@ -239,17 +221,14 @@ export async function triggerImmediateQueueProcess() {
  * Runs every 60 seconds to process pending emails
  */
 export function startEmailQueueProcessor() {
-  console.log('[EmailQueue] Starting email queue processor (Matrix2)...');
   
   // Run immediately on startup
   processEmailQueue().catch(err => {
-    console.error('[EmailQueue] Error in initial queue processing:', err);
   });
 
   // Then run every 60 seconds
   queueInterval = setInterval(async () => {
     if (isProcessing) {
-      console.log('[EmailQueue] Queue already processing, skipping this cycle');
       return;
     }
 
@@ -257,11 +236,9 @@ export function startEmailQueueProcessor() {
     try {
       await processEmailQueue();
     } catch (error) {
-      console.error('[EmailQueue] Error processing email queue:', error);
     } finally {
       isProcessing = false;
     }
   }, 60000); // 60 seconds
 
-  console.log('[EmailQueue] ✅ Queue processor started (60s interval)');
 }

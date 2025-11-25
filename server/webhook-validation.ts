@@ -20,7 +20,6 @@ export function validateElevenLabsSignature(
     // Parse signature format: "timestamp.signature"
     const [timestamp, sig] = signature.split('.');
     if (!timestamp || !sig) {
-      console.error('Invalid signature format');
       return false;
     }
 
@@ -39,7 +38,6 @@ export function validateElevenLabsSignature(
       Buffer.from(expectedSignature, 'hex')
     );
   } catch (error) {
-    console.error('Error validating webhook signature:', error);
     return false;
   }
 }

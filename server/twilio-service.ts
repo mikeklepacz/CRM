@@ -4,7 +4,6 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 
 if (!accountSid || !authToken) {
-  console.warn('[Twilio] Credentials not configured. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN environment variables.');
 }
 
 const client = accountSid && authToken ? twilio(accountSid, authToken) : null;
@@ -38,7 +37,6 @@ export function generateStreamTwiML(params: TwiMLStreamParams): string {
   const wsProtocol = replitDomain.includes('localhost') ? 'ws' : 'wss';
   const wsUrl = `${wsProtocol}://${replitDomain}/media-stream`;
   
-  console.log(`[Twilio] Generating TwiML for voice proxy: ${wsUrl}`);
   
   // Connect to our WebSocket proxy
   const connect = response.connect();
@@ -84,7 +82,6 @@ export async function initiateOutboundCall(params: InitiateCallParams): Promise<
   }
   
   try {
-    console.log(`[Twilio] Initiating call from ${params.from} to ${params.to}`);
     
     const call = await client.calls.create({
       from: params.from,
@@ -96,7 +93,6 @@ export async function initiateOutboundCall(params: InitiateCallParams): Promise<
       statusCallbackMethod: 'POST'
     });
     
-    console.log(`[Twilio] Call initiated successfully. SID: ${call.sid}`);
     
     return {
       callSid: call.sid,
@@ -104,7 +100,6 @@ export async function initiateOutboundCall(params: InitiateCallParams): Promise<
       message: 'Call initiated successfully'
     };
   } catch (error: any) {
-    console.error('[Twilio] Error initiating call:', error.message);
     throw error;
   }
 }

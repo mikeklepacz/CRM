@@ -144,7 +144,6 @@ export default function SalesDashboard() {
           }
         }
       } catch (error) {
-        console.error('Failed to load widget layout:', error);
         // Fall back to default layouts on error
       }
     };
@@ -168,7 +167,6 @@ export default function SalesDashboard() {
         isDefault: true
       });
     } catch (error) {
-      console.error('Failed to save widget layout:', error);
     }
   };
 
@@ -377,7 +375,6 @@ export default function SalesDashboard() {
             >
               <RemindersWidget 
                 onPhoneClick={(storeIdentifier, phoneNumber) => {
-                  console.log('[SalesDashboard] onPhoneClick called:', { storeIdentifier, phoneNumber });
                   // Navigate to Clients page with store parameter to auto-open details
                   // Phone number will trigger dial after delay
                   const params = new URLSearchParams({ store: storeIdentifier });

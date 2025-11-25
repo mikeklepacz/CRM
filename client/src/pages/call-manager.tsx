@@ -244,29 +244,23 @@ function KBLibraryTab() {
   // Batch upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
-      console.log('[KB Upload] Preparing to upload', files.length, 'files');
       const formData = new FormData();
       files.forEach((file, idx) => {
-        console.log(`[KB Upload] Adding file ${idx + 1}:`, file.name, file.size, 'bytes');
         formData.append('files', file);
       });
 
-      console.log('[KB Upload] Sending request...');
       const response = await fetch('/api/kb/upload-batch', {
         method: 'POST',
         body: formData,
         credentials: 'include',
       });
 
-      console.log('[KB Upload] Response status:', response.status);
       if (!response.ok) {
         const error = await response.json();
-        console.error('[KB Upload] Error:', error);
         throw new Error(error.error || 'Upload failed');
       }
 
       const result = await response.json();
-      console.log('[KB Upload] Success:', result);
       return result;
     },
     onSuccess: (data: any) => {
@@ -289,14 +283,11 @@ function KBLibraryTab() {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    console.log('[KB Upload] Files selected:', files?.length);
     if (files && files.length > 0) {
       setUploadProgress({ current: 0, total: files.length });
       // Convert FileList to Array before passing to mutation
       const filesArray = Array.from(files);
       uploadMutation.mutate(filesArray);
-    } else {
-      console.log('[KB Upload] No files selected');
     }
     // Reset input so same files can be selected again
     e.target.value = '';
@@ -1630,7 +1621,6 @@ export default function CallManager() {
         });
       }
     } catch (error: any) {
-      console.error('Error syncing calls:', error);
       toast({
         variant: "destructive",
         title: "Sync Failed",
@@ -2024,7 +2014,6 @@ export default function CallManager() {
                 <div>
                   <label className="text-sm font-medium mb-2 block">Select Agent</label>
                   <Select value={selectedAgent} onValueChange={(value) => {
-                    console.log('[CallManager] Agent selected:', value);
                     setSelectedAgent(value);
                   }} disabled={agentsLoading}>
                     <SelectTrigger data-testid="select-agent">

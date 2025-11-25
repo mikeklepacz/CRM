@@ -36,7 +36,6 @@ async function getSystemAccessToken() {
 
       return newAccessToken;
     } catch (error) {
-      console.error('Failed to refresh Google access token:', error);
       throw new Error('Failed to refresh Google access token. Admin must reconnect in Admin Dashboard.');
     }
   }
@@ -70,7 +69,6 @@ export async function listFilesInFolder(folderId: string) {
 
     return response.data.files || [];
   } catch (error: any) {
-    console.error('Error listing Drive files:', error);
     throw new Error(`Failed to list files: ${error.message}`);
   }
 }
@@ -103,7 +101,6 @@ export async function uploadFileToDrive(
 
     return response.data;
   } catch (error: any) {
-    console.error('Error uploading file to Drive:', error);
     throw new Error(`Failed to upload file: ${error.message}`);
   }
 }
@@ -119,7 +116,6 @@ export async function downloadFileFromDrive(fileId: string) {
 
     return response.data;
   } catch (error: any) {
-    console.error('Error downloading file from Drive:', error);
     throw new Error(`Failed to download file: ${error.message}`);
   }
 }
@@ -131,7 +127,6 @@ export async function deleteFileFromDrive(fileId: string) {
     await drive.files.delete({ fileId, supportsAllDrives: true });
     return { success: true };
   } catch (error: any) {
-    console.error('Error deleting file from Drive:', error);
     throw new Error(`Failed to delete file: ${error.message}`);
   }
 }
@@ -148,7 +143,6 @@ export async function getFolderInfo(folderId: string) {
 
     return response.data;
   } catch (error: any) {
-    console.error('Error getting folder info:', error);
     throw new Error(`Failed to get folder info: ${error.message}`);
   }
 }
@@ -162,7 +156,6 @@ export async function backupKbFileToDrive(
     // Get KB Backups folder from database
     const backupFolder = await storage.getDriveFolderByName('KB Backups');
     if (!backupFolder) {
-      console.warn('[KB Backup] KB Backups folder not configured, skipping Drive backup');
       return null;
     }
 
@@ -172,7 +165,6 @@ export async function backupKbFileToDrive(
     const baseFilename = filename.replace(/\.txt$/, ''); // Remove .txt extension if present
     const backupFilename = `${dateStr}-${baseFilename}-v${versionNumber}.txt`;
 
-    console.log(`[KB Backup] Uploading ${backupFilename} to Drive folder ${backupFolder.folderId}`);
 
     // Upload to Google Drive
     const fileBuffer = Buffer.from(content, 'utf-8');
@@ -183,10 +175,8 @@ export async function backupKbFileToDrive(
       fileBuffer
     );
 
-    console.log(`[KB Backup] Successfully uploaded to Drive: ${result.webViewLink}`);
     return result;
   } catch (error: any) {
-    console.error('[KB Backup] Failed to backup to Drive:', error);
     // Don't throw - backup failure shouldn't break the main operation
     return null;
   }

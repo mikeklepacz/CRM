@@ -29,7 +29,6 @@ class AudioConverter {
     try {
       await fs.mkdir(ASSETS_DIR, { recursive: true });
     } catch (error) {
-      console.error('Error creating assets directory:', error);
     }
   }
 
@@ -105,7 +104,6 @@ class AudioConverter {
     try {
       return await fs.readFile(filePath);
     } catch (error) {
-      console.error('Error loading audio file:', error);
       throw new Error('Failed to load audio file');
     }
   }
@@ -114,7 +112,6 @@ class AudioConverter {
     try {
       await fs.unlink(filePath);
     } catch (error) {
-      console.error('Error deleting audio file:', error);
     }
   }
 }

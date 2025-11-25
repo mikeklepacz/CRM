@@ -261,7 +261,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       const stored = localStorage.getItem('storeDialog_sectionOrder');
       return stored ? JSON.parse(stored) : DEFAULT_SECTION_ORDER;
     } catch (error) {
-      console.warn('Failed to parse stored section order, using default:', error);
       return DEFAULT_SECTION_ORDER;
     }
   });
@@ -675,10 +674,8 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
           const nowHasValue = dbaName.trim() !== '';
           
           if (wasEmpty && nowHasValue) {
-            console.log('🎯 [AUTO-CLAIM] DBA created for first time, setting Status=Claimed');
             trackerChanges['Status'] = 'Claimed';
           } else {
-            console.log('ℹ️ [AUTO-CLAIM] DBA already exists, NOT overriding status', {
               wasEmpty,
               nowHasValue,
               initialDba: initialData.dba,
@@ -706,7 +703,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       // Save tracker changes (create row if needed)
       if (Object.keys(trackerChanges).length > 0) {
         const link = formData.link || getLinkValue(row);
-        console.log('🔍 [TRACKER SAVE] Link extraction:', {
           formDataLink: formData.link,
           getLinkValueResult: getLinkValue(row),
           finalLink: link,
@@ -722,14 +718,11 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         );
       }
 
-      console.log('💾 Starting save mutation', { storeChanges, trackerChanges });
       
       try {
         await Promise.all(promises);
-        console.log('✅ All promises resolved successfully');
         return { closeDialog, storeChanges, trackerChanges };
       } catch (error) {
-        console.error('❌ Promise.all failed:', error);
         throw error;
       }
     },
@@ -763,7 +756,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       return { previousData };
     },
     onSuccess: async (data) => {
-      console.log('✅ onSuccess fired!', data);
       
       try {
         setInitialData(formData); // Update initial data so changes are no longer "unsaved"
@@ -775,17 +767,14 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
         if (isUnclaimed && linkValue && trackerSheetId) {
           try {
-            console.log('🔄 Auto-claiming store...');
             await apiRequest("POST", `/api/sheets/${trackerSheetId}/claim-store`, {
               linkValue,
               column: "Agent",  // Claim with Agent column
               value: "",  // Empty value, just claiming
               joinColumn,
             });
-            console.log('✅ Auto-claim successful');
           } catch (error) {
             // Soft error - don't block the user
-            console.error("Auto-claim failed:", error);
           }
         }
 
@@ -806,7 +795,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
           onOpenChange(false);
         }
       } catch (error) {
-        console.error('❌ Error in onSuccess handler:', error);
         // Show error but don't crash
         toast({
           title: "⚠️ Partial Save",
@@ -822,8 +810,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       }
       
       // Log error to console for debugging
-      console.error("❌ SAVE FAILED:", error);
-      console.error("Store data:", { 
         storeRowIndex: row._storeRowIndex, 
         trackerRowIndex: row._trackerRowIndex,
         link: row.link || row.Link 
@@ -903,7 +889,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
 
     try {
       // Step 1: Check commission count
-      console.log('[Unclaim] Checking commission count for:', link);
       const encodedLink = encodeURIComponent(link);
       const countResponse = await apiRequest('GET', `/api/stores/${encodedLink}/commissions/count`);
       
@@ -917,7 +902,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       }
 
       // Step 2: Delete Commission Tracker row
-      console.log('[Unclaim] No commissions found, deleting tracker row');
       await apiRequest('DELETE', '/api/sheets/tracker/row', { link });
       
       toast({
@@ -930,7 +914,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
       await refetch();
       onOpenChange(false);
     } catch (error: any) {
-      console.error('[Unclaim] Error:', error);
       toast({
         title: "Unclaim Failed",
         description: error.message || "Failed to unclaim store. Please try again.",
@@ -940,8 +923,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   };
 
   const handleSave = () => {
-    console.log('🔘 Save button clicked');
-    console.log('📊 Current state:', { 
       formData, 
       initialData, 
       rowIndex: row._storeRowIndex,
@@ -952,7 +933,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
   };
 
   const handleSaveAndExit = () => {
-    console.log('🔘 Save & Exit button clicked');
     saveMutation.mutate({ closeDialog: true });
   };
 
@@ -989,7 +969,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
         storeName: formData.name || 'Unknown Store',
       });
     } catch (error) {
-      console.error('Failed to log call:', error);
       // Don't block the call if logging fails
     }
 
@@ -1801,7 +1780,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         // Close the dialog
                                         onOpenChange(false);
                                       } catch (error: any) {
-                                        console.error('[Claim DBA Error]', error);
                                         toast({
                                           title: "Error Claiming DBA",
                                           description: error.message || "Failed to claim locations. Please try again.",
@@ -2002,7 +1980,6 @@ export function StoreDetailsDialog({ open, onOpenChange, row, trackerSheetId, st
                                         }
                                       });
                                     } catch (error: any) {
-                                      console.error('[REMINDER] Error:', error);
                                       toast({
                                         title: "Error",
                                         description: error.message || "Failed to create reminder",

@@ -22,14 +22,12 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
   try {
     const lastHistoryId = await gmailWatchManager.getLastHistoryId();
     if (!lastHistoryId) {
-      console.log('[GmailHistory] No previous historyId, storing current and skipping processing');
       await gmailWatchManager.updateHistoryId(historyId);
       return result;
     }
 
     const { gmail, email: ourEmail } = await getAdminGmailClient();
 
-    console.log(`[GmailHistory] Fetching history from ${lastHistoryId} to ${historyId}`);
 
     let pageToken: string | undefined;
     const allNewMessages: Array<{ messageId: string; threadId: string }> = [];
@@ -60,7 +58,6 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
       pageToken = historyResponse.data.nextPageToken || undefined;
     } while (pageToken);
 
-    console.log(`[GmailHistory] Found ${allNewMessages.length} new messages`);
 
     for (const { messageId, threadId } of allNewMessages) {
       try {
@@ -71,7 +68,6 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
           .limit(1);
 
         if (alreadyProcessed.length > 0) {
-          console.log(`[GmailHistory] Message ${messageId} already processed, skipping`);
           continue;
         }
 
@@ -90,7 +86,6 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
         const senderEmail = (emailMatch[1] || fromValue).toLowerCase().trim();
 
         if (senderEmail === ourEmail.toLowerCase()) {
-          console.log(`[GmailHistory] Skipping our own sent email from ${senderEmail}`);
           await db.insert(processedGmailMessages).values({
             gmailMessageId: messageId,
             userId: GMAIL_ADMIN_USER_ID,
@@ -104,7 +99,6 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
         const recipientMatch = await findRecipientByThreadId(threadId);
         
         if (recipientMatch) {
-          console.log(`[GmailHistory] ✅ Reply detected from ${senderEmail} for recipient ${recipientMatch.id}`);
           
           await markRecipientReplied(recipientMatch.id, recipientMatch.sequenceId);
           
@@ -117,7 +111,6 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
             action: 'reply_detected',
           });
         } else {
-          console.log(`[GmailHistory] Message from ${senderEmail} not matched to any sequence recipient`);
           await db.insert(processedGmailMessages).values({
             gmailMessageId: messageId,
             userId: GMAIL_ADMIN_USER_ID,
@@ -126,18 +119,15 @@ export async function processGmailHistory(historyId: string): Promise<HistoryPro
         }
 
       } catch (msgError: any) {
-        console.error(`[GmailHistory] Error processing message ${messageId}:`, msgError.message);
         result.errors.push(`Message ${messageId}: ${msgError.message}`);
       }
     }
 
     await gmailWatchManager.updateHistoryId(historyId);
 
-    console.log(`[GmailHistory] Processing complete: ${result.messagesProcessed} messages, ${result.repliesDetected} replies`);
     return result;
 
   } catch (error: any) {
-    console.error('[GmailHistory] Error processing history:', error);
     result.errors.push(error.message);
     return result;
   }
@@ -185,5 +175,4 @@ async function markRecipientReplied(recipientId: string, sequenceId: string): Pr
     })
     .where(eq(dailySendSlots.recipientId, recipientId));
 
-  console.log(`[GmailHistory] Cleared pending slots for recipient ${recipientId}`);
 }

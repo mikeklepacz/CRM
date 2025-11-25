@@ -137,7 +137,6 @@ export function ParseLocationsDialog({
                 stillUnmatched.push(unmatchedStore);
               }
             } catch (error) {
-              console.error('Error searching Google for:', unmatchedStore.name, error);
               stillUnmatched.push(unmatchedStore);
             }
           }
@@ -164,7 +163,6 @@ export function ParseLocationsDialog({
             description: `Found ${data.summary.matched} database matches and ${googleResults.length} Google-verified locations`,
           });
         } catch (error) {
-          console.error('Error during Google search:', error);
           setSummary(data.summary || null);
           
           toast({

@@ -98,7 +98,6 @@ export default function Dashboard() {
         phoneNumber: phoneNumber,
         storeName: storeName,
       }).catch(error => {
-        console.error('Failed to log call:', error);
         // Don't block the call if logging fails
       });
 

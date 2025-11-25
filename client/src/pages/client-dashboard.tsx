@@ -633,7 +633,6 @@ export default function ClientDashboard() {
           queryClient.refetchQueries({ queryKey: ["merged-data"] });
         } catch (error) {
           // Soft error - don't block the user
-          console.error("Auto-claim failed:", error);
         }
       }
     },
@@ -806,7 +805,6 @@ export default function ClientDashboard() {
           queryClient.refetchQueries({ queryKey: ["merged-data"] });
         } catch (error) {
           // Soft error - don't block the user
-          console.error("Auto-claim failed:", error);
         }
       }
     },
@@ -1062,7 +1060,6 @@ export default function ClientDashboard() {
           }
         }
       } catch (e) {
-        console.warn('Failed to load from localStorage:', e);
       }
       
       // If no fresh cache, use database preferences
@@ -1241,7 +1238,6 @@ export default function ClientDashboard() {
               phoneNumber: phoneNumber,
               storeName: storeName,
             }).catch(error => {
-              console.error('Failed to log call:', error);
               // Don't block the call if logging fails
             });
           }
@@ -1270,7 +1266,6 @@ export default function ClientDashboard() {
       // Refetch data (which will now bypass cache)
       await refetch();
     } catch (error) {
-      console.error('Refresh failed:', error);
       toast({
         title: "Refresh failed",
         description: "Could not refresh data. Please try again.",
@@ -1605,10 +1600,8 @@ export default function ClientDashboard() {
             timestamp: Date.now(), // Only for localStorage cache validation
           }));
         } catch (e) {
-          console.warn('Failed to save to localStorage:', e);
         }
       } catch (error) {
-        console.error('Failed to save preferences:', error);
       }
     }, 1000); // Save 1 second after last change
 
@@ -3851,7 +3844,6 @@ export default function ClientDashboard() {
                     description: `Exported ${filteredData.length} contacts to vCard`,
                   });
                 } catch (error) {
-                  console.error('vCard Export Error:', error);
                   toast({
                     title: "Export Failed",
                     description: error instanceof Error ? error.message : "Failed to export contacts",

@@ -18,23 +18,19 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
     // Get user's calendar integration
     const integration = await storage.getUserIntegration(userId);
     if (!integration?.googleCalendarAccessToken) {
-      console.log(`[CalendarSync] User ${userId} doesn't have Google Calendar connected`);
       return { created: 0, errors: 0 };
     }
 
     // Get system OAuth credentials
     const systemIntegration = await storage.getSystemIntegration('google_sheets');
     if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
-      console.error('[CalendarSync] System OAuth not configured');
       return { created: 0, errors: 0 };
     }
 
     // Check if token needs refresh
     let accessToken = integration.googleCalendarAccessToken;
     if (integration.googleCalendarTokenExpiry && integration.googleCalendarTokenExpiry < Date.now()) {
-      console.log('[CalendarSync] Refreshing expired token...');
       if (!integration.googleCalendarRefreshToken) {
-        console.error('[CalendarSync] No refresh token available');
         return { created: 0, errors: 0 };
       }
 
@@ -50,7 +46,6 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
       });
 
       if (!tokenResponse.ok) {
-        console.error('[CalendarSync] Token refresh failed');
         return { created: 0, errors: 0 };
       }
 
@@ -75,7 +70,6 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
     const reminders = await storage.getRemindersByUser(userId);
     const remindersToSync = reminders.filter(r => !r.googleCalendarEventId && !r.isCompleted);
 
-    console.log(`[CalendarSync] Found ${remindersToSync.length} reminders to sync for user ${userId}`);
 
     let created = 0;
     let errors = 0;
@@ -154,15 +148,12 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
             googleCalendarEventId: createdEvent.data.id
           });
           created++;
-          console.log(`[CalendarSync] Created event ${createdEvent.data.id} for reminder ${reminder.id}`);
         }
       } catch (error: any) {
-        console.error(`[CalendarSync] Failed to create event for reminder ${reminder.id}:`, error.message);
         errors++;
       }
     }
 
-    console.log(`[CalendarSync] Sync complete: ${created} created, ${errors} errors`);
     
     // Emit WebSocket event for real-time UI updates if events were created
     if (created > 0) {
@@ -176,7 +167,6 @@ export async function syncRemindersToCalendar(userId: string): Promise<{ created
     
     return { created, errors };
   } catch (error: any) {
-    console.error('[CalendarSync] Sync failed:', error.message);
     return { created: 0, errors: 0 };
   }
 }
@@ -194,7 +184,6 @@ export async function setupCalendarWatch(userId: string): Promise<boolean> {
 
     const systemIntegration = await storage.getSystemIntegration('google_sheets');
     if (!systemIntegration?.googleClientId || !systemIntegration?.googleClientSecret) {
-      console.error('[CalendarWatch] System OAuth not configured');
       return false;
     }
 
@@ -271,13 +260,11 @@ export async function setupCalendarWatch(userId: string): Promise<boolean> {
         googleCalendarWebhookExpiry: parseInt(response.data.expiration)
       });
 
-      console.log(`[CalendarWatch] Set up watch channel for user ${userId}, expires ${new Date(parseInt(response.data.expiration))}`);
       return true;
     }
 
     return false;
   } catch (error: any) {
-    console.error('[CalendarWatch] Failed to setup watch:', error.message);
     return false;
   }
 }
@@ -301,10 +288,8 @@ export async function renewCalendarWatchIfNeeded(userId: string): Promise<boolea
       return false; // Still valid
     }
 
-    console.log(`[CalendarWatch] Renewing watch channel for user ${userId} (expires in ${hoursUntilExpiry.toFixed(1)} hours)`);
     return await setupCalendarWatch(userId);
   } catch (error: any) {
-    console.error('[CalendarWatch] Failed to renew watch:', error.message);
     return false;
   }
 }

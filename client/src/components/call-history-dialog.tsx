@@ -72,7 +72,6 @@ export function CallHistoryDialog({ open, onOpenChange, onCallStore }: CallHisto
       queryClient.invalidateQueries({ queryKey: ['/api/call-history'] });
     },
     onError: (error: Error) => {
-      console.error('Failed to log call:', error);
     },
   });
 

@@ -31,7 +31,6 @@ export async function createSlots(dateIso: string, slots: Date[]) {
 }
 
 export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
-  console.log('[SlotDb.getEmptySlots] Fetching empty slots for:', dateIso);
 
   const result = await db.execute(sql`
     SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
@@ -44,7 +43,6 @@ export async function getEmptySlots(dateIso: string): Promise<DailySlot[]> {
 
   const rows = (result as any).rows || [];
 
-  console.log('[SlotDb.getEmptySlots] Found:', {
     count: rows.length,
     dateIso,
     sample: rows.slice(0, 3)
@@ -75,18 +73,15 @@ export async function markSlotSent(slotId: string) {
 }
 
 export async function deleteSlotsFromDate(dateIso: string) {
-  console.log('[SlotDb.deleteSlotsFromDate] Deleting slots from:', dateIso);
   
   await db.execute(sql`
     DELETE FROM daily_send_slots
     WHERE slot_date >= ${dateIso}
   `);
   
-  console.log('[SlotDb.deleteSlotsFromDate] ✅ Deleted slots from', dateIso);
 }
 
 export async function getScheduledSlotsFromDate(dateIso: string): Promise<DailySlot[]> {
-  console.log('[SlotDb.getScheduledSlotsFromDate] Fetching scheduled slots from:', dateIso);
   
   const result = await db.execute(sql`
     SELECT id, slot_date, slot_time_utc, filled, sent, recipient_id
@@ -99,7 +94,6 @@ export async function getScheduledSlotsFromDate(dateIso: string): Promise<DailyS
   
   const rows = (result as any).rows || [];
   
-  console.log('[SlotDb.getScheduledSlotsFromDate] Found:', {
     count: rows.length,
     fromDate: dateIso,
     sample: rows.slice(0, 3)
@@ -132,7 +126,6 @@ export async function getNextAvailableSlot(afterSlotTimeUtc: string): Promise<Da
  * Called when a sequence is deleted to free up those slots
  */
 export async function clearSlotsForSequence(sequenceId: string) {
-  console.log('[SlotDb.clearSlotsForSequence] Clearing slots for sequence:', sequenceId);
   
   const result = await db.execute(sql`
     UPDATE daily_send_slots
@@ -143,7 +136,6 @@ export async function clearSlotsForSequence(sequenceId: string) {
   `);
   
   const affectedRows = (result as any).rowCount || 0;
-  console.log('[SlotDb.clearSlotsForSequence] ✅ Cleared', affectedRows, 'slots');
   
   return affectedRows;
 }
@@ -153,7 +145,6 @@ export async function clearSlotsForSequence(sequenceId: string) {
  * Called when a recipient is deleted to free up those slots
  */
 export async function clearSlotsForRecipient(recipientId: string) {
-  console.log('[SlotDb.clearSlotsForRecipient] Clearing slots for recipient:', recipientId);
   
   const result = await db.execute(sql`
     UPDATE daily_send_slots
@@ -162,7 +153,6 @@ export async function clearSlotsForRecipient(recipientId: string) {
   `);
   
   const affectedRows = (result as any).rowCount || 0;
-  console.log('[SlotDb.clearSlotsForRecipient] ✅ Cleared', affectedRows, 'slots');
   
   return affectedRows;
 }
@@ -172,7 +162,6 @@ export async function clearSlotsForRecipient(recipientId: string) {
  * Useful for cleanup after sequence deletion or data corruption
  */
 export async function clearOrphanedSlots() {
-  console.log('[SlotDb.clearOrphanedSlots] Finding and clearing orphaned slots...');
   
   const result = await db.execute(sql`
     UPDATE daily_send_slots
@@ -182,7 +171,6 @@ export async function clearOrphanedSlots() {
   `);
   
   const affectedRows = (result as any).rowCount || 0;
-  console.log('[SlotDb.clearOrphanedSlots] ✅ Cleared', affectedRows, 'orphaned slots');
   
   return affectedRows;
 }

@@ -85,7 +85,6 @@ export function ProposalDiffViewer({
       // Handle both array and single object
       return Array.isArray(parsed) ? parsed : [parsed];
     } catch (error) {
-      console.error('Failed to parse edits JSON:', error);
       return [];
     }
   }, [localProposedContent]);
@@ -182,7 +181,6 @@ export function ProposalDiffViewer({
     
     // Safety check: ensure editsSet is a Set
     if (!(editsSet instanceof Set)) {
-      console.error('[Approval] editsSet is not a Set:', editsSet);
       toast({
         title: "Selection Error",
         description: "Invalid edit selection state. Please refresh and try again.",

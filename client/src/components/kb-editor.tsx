@@ -74,13 +74,9 @@ export function KBEditor({ className }: KBEditorProps) {
   // Update content when agent data loads
   useEffect(() => {
     if (editorMode === 'agent' && agentData) {
-      console.log('[KB Editor] Agent data received:', agentData);
-      console.log('[KB Editor] Prompt field:', agentData.prompt);
 
       // ElevenLabs API returns nested structure: { prompt: { prompt: "actual content" } }
       const promptContent = agentData.prompt?.prompt || agentData.prompt || '';
-      console.log('[KB Editor] Extracted prompt content:', promptContent);
-      console.log('[KB Editor] Setting content with length:', promptContent.length);
 
       setContent(promptContent);
       setOriginalContent(promptContent);
@@ -164,7 +160,6 @@ export function KBEditor({ className }: KBEditorProps) {
 
       while (attempts < maxAttempts && !synced) {
         attempts++;
-        console.log(`[KB Editor] Polling ElevenLabs (attempt ${attempts}/${maxAttempts})...`);
 
         await new Promise(resolve => setTimeout(resolve, delayMs));
 
@@ -172,12 +167,10 @@ export function KBEditor({ className }: KBEditorProps) {
         const response = await apiRequest("GET", `/api/elevenlabs/agents/${selectedItemId}/details`);
         const freshPrompt = response?.prompt?.prompt || response?.prompt || '';
 
-        console.log('[KB Editor] Fresh prompt length:', freshPrompt.length, 'Expected length:', savedContent.length);
 
         // Check if the content matches (trim to avoid whitespace issues)
         if (freshPrompt.trim() === savedContent.trim()) {
           synced = true;
-          console.log('[KB Editor] ✅ ElevenLabs sync confirmed!');
 
           // Force cache invalidation with fresh data
           queryClient.setQueryData(['/api/elevenlabs/agents', selectedItemId, 'details'], response);
@@ -187,12 +180,10 @@ export function KBEditor({ className }: KBEditorProps) {
             description: "ElevenLabs confirmed prompt update",
           });
         } else {
-          console.log('[KB Editor] ⏳ Still waiting for ElevenLabs to sync...');
         }
       }
 
       if (!synced) {
-        console.warn('[KB Editor] ⚠️ Sync timeout - ElevenLabs may still be processing');
         toast({
           title: "Warning",
           description: "Sync timeout. ElevenLabs may still be processing the update.",

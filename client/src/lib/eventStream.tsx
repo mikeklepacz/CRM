@@ -117,7 +117,6 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
   const invalidateQueries = useCallback((eventType: EventType) => {
     const queryKeys = EVENT_TO_QUERY_KEYS[eventType];
     if (!queryKeys) {
-      console.log(`[EventStream] Unknown event type: ${eventType}`);
       return;
     }
 
@@ -131,12 +130,10 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
       const data = JSON.parse(event.data);
       
       if (data.type === 'connected') {
-        console.log('[EventStream] Connected to SSE gateway');
         return;
       }
 
       if (data.type === 'error') {
-        console.warn('[EventStream] Server error:', data.message);
         return;
       }
 
@@ -148,9 +145,7 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
 
       setLastEvent(eventPayload);
       invalidateQueries(data.type as EventType);
-      console.log(`[EventStream] Event received: ${data.type}`);
     } catch (err) {
-      console.warn('[EventStream] Failed to parse message:', err);
     }
   }, [invalidateQueries]);
 
@@ -164,7 +159,6 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
 
     try {
       const url = '/api/events';
-      console.log(`[EventStream] Connecting to SSE ${url}...`);
       
       const es = new EventSource(url, { withCredentials: true });
       eventSourceRef.current = es;
@@ -176,7 +170,6 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
         }
         setConnected(true);
         reconnectAttemptsRef.current = 0;
-        console.log('[EventStream] SSE connected');
       };
 
       es.onmessage = handleMessage;
@@ -190,7 +183,6 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
           
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
           reconnectAttemptsRef.current++;
-          console.log(`[EventStream] Connection closed, reconnecting in ${delay / 1000}s (attempt ${reconnectAttemptsRef.current})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             if (mountedRef.current) {
@@ -199,11 +191,9 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
           }, delay);
         } else {
           setConnected(false);
-          console.log('[EventStream] Connection error, browser will auto-reconnect');
         }
       };
     } catch (err) {
-      console.warn('[EventStream] Failed to create EventSource:', err);
     }
   }, [enabled, handleMessage]);
 
@@ -238,7 +228,6 @@ export function EventStreamProvider({ children, enabled = true }: EventStreamPro
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && enabled && !connected) {
-        console.log('[EventStream] Tab visible, checking connection...');
         connect();
       }
     };

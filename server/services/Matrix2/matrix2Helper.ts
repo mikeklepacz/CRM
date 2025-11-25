@@ -9,7 +9,6 @@ import { eq, and } from 'drizzle-orm';
 
 export async function getRecipientSlot(recipientId: string) {
   // Fetch the next unfilled/unsent slot for this recipient
-  console.log(`[Matrix2Helper] getRecipientSlot: Looking for filled slot for recipient ${recipientId}`);
   
   const [slot] = await db
     .select()
@@ -24,7 +23,6 @@ export async function getRecipientSlot(recipientId: string) {
     .orderBy(dailySendSlots.slotTimeUtc)
     .limit(1);
   
-  console.log(`[Matrix2Helper] getRecipientSlot: Found slot:`, slot ? { id: slot.id, timeUtc: slot.slotTimeUtc } : 'NONE');
   return slot || null;
 }
 
@@ -71,7 +69,6 @@ export async function updateSlotTime(slotId: string, newTimeUtc: Date) {
 export async function forceSendNow(slotId: string) {
   // Set slot_time_utc to 1 second ago (makes it immediately eligible)
   const oneSecondAgo = new Date(Date.now() - 1000);
-  console.log(`[Matrix2Helper] forceSendNow: Setting slot ${slotId} to ${oneSecondAgo.toISOString()}`);
   
   const result = await db
     .update(dailySendSlots)
@@ -81,5 +78,4 @@ export async function forceSendNow(slotId: string) {
     })
     .where(eq(dailySendSlots.id, slotId));
     
-  console.log(`[Matrix2Helper] forceSendNow: Update result for slot ${slotId}:`, result);
 }

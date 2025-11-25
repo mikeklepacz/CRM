@@ -6,21 +6,18 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
   if (signature && url && process.env.TWILIO_AUTH_TOKEN) {
     const isValid = validateTwilioSignature(url, payload, signature);
     if (!isValid) {
-      console.error('[Twilio Webhook] Invalid signature - rejecting webhook');
       throw new Error('Invalid Twilio signature');
     }
   }
   const callSid = payload.CallSid;
   const callStatus = payload.CallStatus; // 'initiated', 'ringing', 'in-progress', 'completed', 'busy', 'no-answer', 'failed', 'canceled'
   
-  console.log(`[Twilio Webhook] Call ${callSid} status: ${callStatus}`);
   
   try {
     // Find the call session by callSid
     const session = await storage.getCallSessionByCallSid(callSid);
     
     if (!session) {
-      console.warn(`[Twilio Webhook] No session found for callSid: ${callSid}`);
       return;
     }
     
@@ -43,7 +40,6 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
           status: newStatus,
           endedAt: now,
         });
-        console.log(`[Twilio Webhook] Call ${callSid} marked as ${newStatus}`);
         return;
       case 'busy':
       case 'no-answer':
@@ -54,7 +50,6 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
           status: newStatus,
           endedAt: now,
         });
-        console.log(`[Twilio Webhook] Call ${callSid} marked as ${newStatus} (${callStatus})`);
         return;
     }
     
@@ -63,9 +58,7 @@ export async function handleTwilioCallStatus(payload: any, signature?: string, u
       await storage.updateCallSession(session.id, {
         status: newStatus,
       });
-      console.log(`[Twilio Webhook] Call ${callSid} status updated to ${newStatus}`);
     }
   } catch (error) {
-    console.error(`[Twilio Webhook] Error handling status for ${callSid}:`, error);
   }
 }

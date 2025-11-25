@@ -80,9 +80,6 @@ export async function generateSlotsForDay(
   const endHourCalculated = (sendingHoursStart + sendingHoursDuration) % 24;
   const needsNextDay = (sendingHoursStart + sendingHoursDuration) >= 24;
 
-  console.log(`[Matrix2 Generator] Generating up to ${dailyEmailLimit} slots for ${dateIso}`);
-  console.log(`[Matrix2 Generator] Send window: ${sendingHoursStart}:00 - ${String(endHourCalculated).padStart(2, '0')}:00 (duration: ${sendingHoursDuration}h) (${adminTz})`);
-  console.log(`[Matrix2 Generator] Pure jitter range: ${minDelayMinutes}-${maxDelayMinutes} minutes`);
 
   // Generate slots starting at sendingHoursStart in admin timezone
   const slots: Date[] = [];
@@ -95,7 +92,6 @@ export async function generateSlotsForDay(
   const now = new Date();
   const todayIso = formatInTimeZone(now, adminTz, 'yyyy-MM-dd');
   if (dateIso === todayIso && now > cursor) {
-    console.log(`[Matrix2 Generator] 🚀 Today's slots - starting from NOW (${now.toISOString()}) instead of window start`);
     cursor = now;
   }
   
@@ -107,7 +103,6 @@ export async function generateSlotsForDay(
   const endBoundary = new Date(formatInTimeZone(endTimeStr, adminTz, "yyyy-MM-dd'T'HH:mm:ssXXX"));
   
   if (needsNextDay) {
-    console.log(`[Matrix2 Generator] ⏰ Duration spans past midnight: ${sendingHoursStart}:00 + ${sendingHoursDuration}h → ${String(endHourCalculated).padStart(2, '0')}:00 next day`);
   }
 
   let previousJitter: number | null = null;
@@ -131,7 +126,6 @@ export async function generateSlotsForDay(
       
       // Stop if we've exceeded the send window boundary
       if (cursor >= endBoundary) {
-        console.log(`[Matrix2 Generator] Reached send window boundary at slot ${i}, stopping`);
         break;
       }
       
@@ -142,9 +136,6 @@ export async function generateSlotsForDay(
   // Insert slots into database
   await createSlots(dateIso, slots);
 
-  console.log(`[Matrix2 Generator] Created ${slots.length} slots for ${dateIso}`);
-  console.log(`[Matrix2 Generator] First slot: ${slots[0].toISOString()}`);
-  console.log(`[Matrix2 Generator] Last slot: ${slots[slots.length - 1].toISOString()}`);
 
   // Emit WebSocket event for real-time UI updates
   eventGateway.emit('matrix:slotsChanged', {
@@ -167,13 +158,11 @@ export async function generateSlotsForDay(
 export async function ensureDailySlots() {
   const settings = await storage.getEhubSettings();
   if (!settings) {
-    console.log('[Matrix2 Generator] No E-Hub settings found, skipping slot generation');
     return;
   }
 
   // Get admin timezone from user preferences
   const adminUser = await storage.getAdminUser();
-  console.log('[Matrix2 Generator] Admin user preferences:', {
     hasUser: !!adminUser,
     timezone: adminUser?.timezone,
     fallback: !adminUser?.timezone ? 'America/New_York' : null
@@ -192,7 +181,6 @@ export async function ensureDailySlots() {
     (settings.sendingHoursEnd === settings.sendingHoursStart ? 24 : 
      ((settings.sendingHoursEnd! - settings.sendingHoursStart + 24) % 24));
 
-  console.log('[Matrix2 Generator] Ensuring 3 days worth of slots...');
 
   // Check next 3 calendar days
   for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
@@ -205,20 +193,17 @@ export async function ensureDailySlots() {
     // Convert ISO day (1=Mon, 7=Sun) to JS day (0=Sun, 1=Mon, etc.)
     const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
     if (excludedDays.includes(jsDay)) {
-      console.log(`[Matrix2 Generator] Skipping ${dateIso} (day ${jsDay} is excluded)`);
       continue;
     }
 
     // Check if slots already exist for this day
     const existing = await getSlotsForDate(dateIso);
     if (existing.length >= dailyLimit) {
-      console.log(`[Matrix2 Generator] Sufficient slots already exist for ${dateIso} (${existing.length}/${dailyLimit} slots)`);
       continue;
     }
     
     // If some slots exist but not enough, log warning and skip (don't partially fill)
     if (existing.length > 0 && existing.length < dailyLimit) {
-      console.log(`[Matrix2 Generator] WARNING: Partial slots exist for ${dateIso} (${existing.length}/${dailyLimit}), skipping to prevent duplicates`);
       continue;
     }
 
@@ -247,13 +232,11 @@ async function getAdminUser() {
   for (const user of users) {
     const preferences = await storage.getUserPreferences(user.id);
     if (preferences?.timezone) {
-      console.log(`[Matrix2 Generator] Using timezone from user ${user.id}: ${preferences.timezone}`);
       return preferences;
     }
   }
   
   // Fallback: return first user's preferences even if no timezone
-  console.log('[Matrix2 Generator] WARNING: No user with timezone found, using fallback');
   const preferences = await storage.getUserPreferences(users[0].id);
   return preferences;
 }

@@ -55,31 +55,22 @@ class VoiceProxyServer {
       path: '/media-stream'
     });
 
-    console.log('[VoiceProxy] WebSocket server initialized on /media-stream');
 
     this.wss.on('error', (error) => {
-      console.error('[VoiceProxy] WebSocket server error:', error);
     });
 
     this.wss.on('connection', (ws: WSClient, req) => {
       this.connectionAttempts++;
-      console.log('[VoiceProxy] ====== NEW TWILIO CONNECTION ======');
-      console.log('[VoiceProxy] Connection #' + this.connectionAttempts);
-      console.log('[VoiceProxy] Connection from:', req.socket.remoteAddress);
-      console.log('[VoiceProxy] Request URL:', req.url);
-      console.log('[VoiceProxy] Headers:', JSON.stringify(req.headers, null, 2));
 
       ws.on('message', async (data: Buffer) => {
         try {
           const message: TwilioMediaMessage = JSON.parse(data.toString());
           await this.handleTwilioMessage(ws, message);
         } catch (error) {
-          console.error('[VoiceProxy] Error handling message:', error);
         }
       });
 
       ws.on('close', () => {
-        console.log('[VoiceProxy] Twilio connection closed');
         const session = this.findSessionByTwilioWs(ws);
         if (session) {
           this.endSession(session.streamSid);
@@ -87,7 +78,6 @@ class VoiceProxyServer {
       });
 
       ws.on('error', (error) => {
-        console.error('[VoiceProxy] Twilio WebSocket error:', error);
       });
     });
   }
@@ -126,11 +116,6 @@ class VoiceProxyServer {
     const callSession = await storage.getCallSessionByCallSid(callSid);
     const basePrompt = callSession?.metadata?.combinedPrompt || '';
 
-    console.log(`[VoiceProxy] Stream started: ${streamSid}`);
-    console.log(`[VoiceProxy] Agent: ${agentId}`);
-    console.log(`[VoiceProxy] Phone Number ID: ${phoneNumberId}`);
-    console.log(`[VoiceProxy] IVR Behavior: ${ivrBehavior}`);
-    console.log(`[VoiceProxy] Client Data:`, clientData);
 
     // Create session in database
     await storage.createVoiceProxySession({
@@ -157,9 +142,7 @@ class VoiceProxyServer {
         // Calculate volume scalar from dB
         volumeScalar = Math.pow(10, settings.volumeDb / 20);
 
-        console.log(`[VoiceProxy] Loaded background audio: ${settings.fileName}, volume: ${settings.volumeDb}dB`);
       } catch (error) {
-        console.error('[VoiceProxy] Error loading background audio:', error);
       }
     }
 
@@ -174,7 +157,6 @@ class VoiceProxyServer {
 
     // If ElevenLabs connection failed, end the call
     if (!elevenLabsWs) {
-      console.error(`[VoiceProxy] Failed to connect to ElevenLabs for ${streamSid}`);
       await storage.createVoiceProxySession({
         streamSid,
         callSid,
@@ -213,15 +195,11 @@ class VoiceProxyServer {
           await storage.updateCallSession(callSession.id, {
             conversationId,
           });
-          console.log(`[VoiceProxy] Updated call session ${callSession.id} with conversation ID: ${conversationId}`);
         } else {
-          console.warn(`[VoiceProxy] No call session found for callSid: ${callSid}`);
         }
       } catch (error) {
-        console.error('[VoiceProxy] Error updating call session:', error);
       }
     } else {
-      console.warn('[VoiceProxy] No conversation ID received from ElevenLabs');
     }
 
     // Set up ElevenLabs message handler
@@ -231,7 +209,6 @@ class VoiceProxyServer {
       });
 
       elevenLabsWs.on('close', () => {
-        console.log(`[VoiceProxy] ElevenLabs connection closed for ${streamSid}`);
         session.isActive = false;
       });
     }
@@ -249,7 +226,6 @@ class VoiceProxyServer {
   }): Promise<{ ws: WSClient | null; conversationId: string | null }> {
     try {
       if (!ELEVENLABS_API_KEY) {
-        console.error('[VoiceProxy] ElevenLabs API key not configured');
         return { ws: null, conversationId: null };
       }
 
@@ -284,7 +260,6 @@ class VoiceProxyServer {
         };
       }
 
-      console.log(`[VoiceProxy] Connecting to ElevenLabs with payload:`, JSON.stringify(payload, null, 2));
 
       // Get signed URL for private agent with parameters
       const response = await fetch(
@@ -302,7 +277,6 @@ class VoiceProxyServer {
       // Check for HTTP errors
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[VoiceProxy] ElevenLabs API error (${response.status}):`, errorText);
         return { ws: null, conversationId: null };
       }
 
@@ -311,11 +285,9 @@ class VoiceProxyServer {
 
       // Validate that we got the required data
       if (!signed_url) {
-        console.error('[VoiceProxy] No signed_url in ElevenLabs response:', data);
         return { ws: null, conversationId: null };
       }
 
-      console.log(`[VoiceProxy] ElevenLabs conversation ID: ${conversation_id}`);
 
       const ws = new WSClient(signed_url);
 
@@ -326,18 +298,15 @@ class VoiceProxyServer {
 
         ws.on('open', () => {
           clearTimeout(timeout);
-          console.log(`[VoiceProxy] Connected to ElevenLabs for agent ${params.agentId}`);
           resolve({ ws, conversationId: conversation_id });
         });
 
         ws.on('error', (error) => {
           clearTimeout(timeout);
-          console.error('[VoiceProxy] ElevenLabs connection error:', error);
           reject(error);
         });
       });
     } catch (error) {
-      console.error('[VoiceProxy] Error connecting to ElevenLabs:', error);
       return { ws: null, conversationId: null };
     }
   }
@@ -409,10 +378,8 @@ class VoiceProxyServer {
 
       // Log unknown message types for debugging
       if (message.type && !['agent_response', 'agent_response_delta', 'interruption', 'ping'].includes(message.type)) {
-        console.log(`[VoiceProxy] Unknown message type: ${message.type}`);
       }
     } catch (error) {
-      console.error('[VoiceProxy] Error handling ElevenLabs message:', error);
     }
   }
 
@@ -509,7 +476,6 @@ class VoiceProxyServer {
     const session = this.sessions.get(streamSid);
     if (!session) return;
 
-    console.log(`[VoiceProxy] Ending session: ${streamSid}`);
 
     session.isActive = false;
 

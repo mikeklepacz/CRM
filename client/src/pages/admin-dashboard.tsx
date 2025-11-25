@@ -96,7 +96,6 @@ export default function AdminDashboard() {
                   setTimeout(() => setLocation('/agent'), 300);
                 }
               } catch (error) {
-                console.error('Failed to save view mode:', error);
                 toast({
                   title: "Error",
                   description: "Failed to save view preference",

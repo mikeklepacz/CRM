@@ -44,7 +44,6 @@ function getNextBusinessDay(fromDate: Date, adminTz: string, skipWeekends: boole
  * @param adminUserId - User ID to fetch timezone preferences
  */
 export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
-  console.log('[QueueRebuilder] 🔄 Starting COMPLETE queue rebuild - will NUKE entire queue and rebuild from scratch');
   
   // 1. Get admin timezone and E-Hub settings
   const userPrefs = await storage.getUserPreferences(adminUserId);
@@ -52,7 +51,6 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   
   const settings = await storage.getEhubSettings();
   if (!settings) {
-    console.log('[QueueRebuilder] ❌ No E-Hub settings found');
     return;
   }
   
@@ -62,7 +60,6 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
      ((settings.sendingHoursEnd! - settings.sendingHoursStart + 24) % 24));
   const endHourCalculated = (settings.sendingHoursStart + sendingHoursDuration) % 24;
   
-  console.log('[QueueRebuilder] Current E-Hub Settings:', {
     timezone: adminTz,
     sendingWindow: `${settings.sendingHoursStart}:00 - ${String(endHourCalculated).padStart(2, '0')}:00 (${sendingHoursDuration}h duration)`,
     jitterRange: `${settings.minDelayMinutes} - ${settings.maxDelayMinutes} minutes`,
@@ -75,13 +72,11 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   const rebuildStartDate = now;
   const rebuildStartDateIso = now.toISOString().slice(0, 10);
   
-  console.log('[QueueRebuilder] 🚀 COMPLETE rebuild - NUKING entire queue and regenerating from TODAY:', {
     todayDate: rebuildStartDateIso
   });
   
   // 3. FETCH RECIPIENTS FIRST (before deleting slots!)
   // Get all active recipients that are currently in the sequence_recipients table
-  console.log('[QueueRebuilder] Fetching all active recipients from sequence_recipients...');
   const { db } = await import('../../db');
   const { sql } = await import('drizzle-orm');
   
@@ -108,7 +103,6 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   
   const allRecipients = (recipientResult as any).rows || [];
   
-  console.log('[QueueRebuilder] Found active recipients:', {
     count: allRecipients.length,
     sample: allRecipients.slice(0, 3).map((r: any) => ({
       email: r.email,
@@ -117,12 +111,9 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   });
   
   // 4. DELETE ALL SLOTS (NUKE THE ENTIRE QUEUE)
-  console.log('[QueueRebuilder] 💣 DELETING ALL SLOTS - nuking entire queue...');
   await db.execute(sql`DELETE FROM daily_send_slots`);
-  console.log('[QueueRebuilder] ✅ All slots deleted');
   
   // 5. Regenerate 3 days worth of fresh slots with new settings
-  console.log('[QueueRebuilder] Regenerating slots for 3 days...');
   for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
     const targetDate = addDays(rebuildStartDate, dayOffset);
     const targetDateIso = targetDate.toISOString().slice(0, 10);
@@ -140,8 +131,6 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
   // All recipients fetched are from ACTIVE sequences only
   const orderedRecipients = allRecipients;
   
-  console.log('[QueueRebuilder] Reassigning recipients to new slots...');
-  console.log('[QueueRebuilder] Recipients to assign:', {
     total: orderedRecipients.length,
     emails: orderedRecipients.map((r: any) => r.email)
   });
@@ -170,7 +159,6 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
       const targetDateIso = targetDate.toISOString().slice(0, 10);
       
       const emptySlots = await getEmptySlots(targetDateIso);
-      console.log(`[QueueRebuilder] Day ${dayOffset}: Found ${emptySlots.length} empty slots on ${targetDateIso}`);
       
       // Try to assign to an eligible slot
       for (const slot of emptySlots) {
@@ -183,7 +171,6 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
         const minAllowedTime = new Date(now.getTime() + minJitterMs);
         
         if (slotUtc < minAllowedTime) {
-          console.log(`[QueueRebuilder] ⏭️  Skipping slot at ${slotUtc.toISOString()} for ${recipient.email} - violates jitter law (needs ${settings.minDelayMinutes}min spacing)`);
           continue;
         }
         
@@ -191,7 +178,6 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
           await fillSlot(slot.id, recipient.id);
           assignedCount++;
           assigned = true;
-          console.log(`[QueueRebuilder] ✓ Assigned ${recipient.email} to ${slotUtc.toISOString()}`);
           break;
         }
       }
@@ -201,11 +187,9 @@ export async function rebuildQueueFromNextBusinessDay(adminUserId: string) {
     
     if (!assigned) {
       skippedCount++;
-      console.log(`[QueueRebuilder] ⚠️  Could not find eligible slot for ${recipient.email}`);
     }
   }
   
-  console.log('[QueueRebuilder] ✅ Rebuild complete:', {
     totalRecipients: allRecipients.length,
     assigned: assignedCount,
     skipped: skippedCount
@@ -226,7 +210,6 @@ function isRecipientEligibleForSlot(
   try {
     // Only require recipient has a timezone
     if (!recipient.timezone) {
-      console.log(`[QueueRebuilder] ⚠️ Skipping ${recipient.email} - no timezone`);
       return false;
     }
     
@@ -246,14 +229,12 @@ function isRecipientEligibleForSlot(
         
         if (recipientLocalMinutes < businessStart || recipientLocalMinutes >= businessEnd) {
           // Outside business hours, but for rebuild we still allow it
-          console.log(`[QueueRebuilder] ℹ️ ${recipient.email} slot outside business hours, but assigning anyway for rebuild`);
         }
       }
     }
     
     return true;
   } catch (error: any) {
-    console.log(`[QueueRebuilder] ⚠️ Error checking eligibility for ${recipient.email}:`, error.message);
     // For rebuild, if we can't validate, still allow it
     return true;
   }
