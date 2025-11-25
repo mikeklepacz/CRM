@@ -998,12 +998,10 @@ function QueueView() {
   const scheduledItems = activeQueue?.filter(item => item.status === 'scheduled') || [];
   const overdueItems = activeQueue?.filter(item => item.status === 'overdue') || [];
   
-  // Get unique recipients for follow-ups vs fresh calculation (active only)
-  const uniqueRecipients = new Set(activeQueue?.map(item => item.recipientId) || []);
-  const followUpRecipients = new Set(
-    activeQueue?.filter(item => item.stepNumber > 1).map(item => item.recipientId) || []
-  );
-  const freshRecipients = uniqueRecipients.size - followUpRecipients.size;
+  // Get fresh recipients: Step 0 with real recipientIds (exclude open slots)
+  const freshRecipients = (activeQueue?.filter(
+    item => item.stepNumber === 0 && item.recipientId && item.recipientId !== "(Open slot)"
+  ).length || 0);
   
   // Get next send time from scheduled items (active only)
   const nextScheduled = scheduledItems.length > 0 && scheduledItems[0].scheduledAt
