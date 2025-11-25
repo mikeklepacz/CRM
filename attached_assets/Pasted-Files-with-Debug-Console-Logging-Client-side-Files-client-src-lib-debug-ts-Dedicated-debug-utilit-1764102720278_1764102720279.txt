@@ -1,0 +1,44 @@
+Files with Debug/Console Logging
+Client-side Files:
+client/src/lib/debug.ts - Dedicated debug utility with multiple debug functions
+client/src/lib/eventStream.tsx - EventStream connection/event logging
+client/src/pages/ehub.tsx - Queue view logging ([QueueView] prefix)
+client/src/components/inline-ai-chat-enhanced.tsx - Status preferences logging (🔴 [QUERY UPDATE])
+Server-side Files:
+server/services/emailQueue.ts - Email queue processing logs ([EmailQueue])
+server/services/emailSender.ts - Email sending logs ([EmailSender])
+server/services/Matrix2/slotAssigner.ts - Slot assignment logs ([Matrix2 Assigner])
+server/services/Matrix2/slotGenerator.ts - Slot generation logs ([Matrix2 Generator])
+server/services/Matrix2/slotDb.ts - Slot database logs ([SlotDb.getEmptySlots])
+server/services/Matrix2/recipientDb.ts - Recipient database logs ([RecipientDb.getEligibleRecipientsForAssignment])
+server/call_dispatcher.ts - Call dispatcher logs ([CallDispatcher])
+server/calendarSync.ts - Calendar sync logs ([CalendarSync])
+server/routes.ts - Queue view and preferences logs ([QueueView], 🔴 [GET PREFERENCES])
+server/services/events/gateway.ts - Event gateway logs ([EventGateway])
+server/services/commissionTrackerUpdate.ts - Likely has commission update logs
+server/services/gmailHistoryService.ts - Gmail history processing logs
+server/services/gmailReplyDetection.ts - Reply detection logs
+server/services/gmailWatchManager.ts - Watch manager logs
+server/services/matrixScheduler.ts - Matrix scheduler logs
+Debug/Testing Files:
+server/debug-resume-flow.ts - Dedicated debug script
+server/debug-slot-assignment.ts - Dedicated debug script
+Environment-Controlled Logging:
+The client/src/lib/debug.ts file uses VITE_DEBUG_MODE environment variable to control debug output, but based on the console logs shown, it appears to be enabled
+The console logs show extensive debugging across:
+
+EventStream WebSocket connections
+Queue fetching and processing
+Status preferences updates
+Slot assignment operations
+Email sending operations
+Calendar syncing
+These logs contain potentially sensitive data including:
+
+Email addresses
+Recipient IDs
+Sequence IDs
+Timezone information
+Business hours
+Slot timing information
+Database query results
