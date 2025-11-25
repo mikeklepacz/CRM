@@ -20052,8 +20052,18 @@ Use this store information to provide context-aware responses. When helping draf
 
       console.log('[SENT-HISTORY] Fetching with params:', { sequenceId, statusFilter, limit, offset });
 
+      // Build where conditions
+      const whereConditions: string[] = ['sr.id IS NOT NULL'];
+      if (sequenceId) whereConditions.push(`s.id = '${sequenceId}'`);
+      if (statusFilter === 'replied') whereConditions.push('sr.replied_at IS NOT NULL');
+      if (statusFilter === 'bounced') whereConditions.push('sr.bounced_at IS NOT NULL');
+      if (statusFilter === 'pending') whereConditions.push("sr.status = 'pending'");
+      if (statusFilter === 'sent') whereConditions.push('sr.replied_at IS NULL AND sr.bounced_at IS NULL AND sr.status != \'pending\'');
+      
+      const whereClause = whereConditions.join(' AND ');
+
       // Fetch data - raw SQL bypasses Drizzle's ORM issues with NULL handling
-      const result = await db.execute(sql`
+      const queryStr = `
         SELECT 
           m.id AS "messageId",
           sr.id AS "recipientId",
@@ -20072,15 +20082,12 @@ Use this store information to provide context-aware responses. When helping draf
         FROM sequence_recipient_messages m
         LEFT JOIN sequence_recipients sr ON m.recipient_id = sr.id
         LEFT JOIN sequences s ON sr.sequence_id = s.id
-        WHERE sr.id IS NOT NULL
-        ${sequenceId ? sql`AND s.id = ${sequenceId}` : sql``}
-        ${statusFilter === 'replied' ? sql`AND sr.replied_at IS NOT NULL` : sql``}
-        ${statusFilter === 'bounced' ? sql`AND sr.bounced_at IS NOT NULL` : sql``}
-        ${statusFilter === 'pending' ? sql`AND sr.status = 'pending'` : sql``}
-        ${statusFilter === 'sent' ? sql`AND sr.replied_at IS NULL AND sr.bounced_at IS NULL AND sr.status != 'pending'` : sql``}
+        WHERE ${whereClause}
         ORDER BY m.sent_at DESC
         LIMIT ${limit + 1} OFFSET ${offset}
-      `);
+      `;
+
+      const result = await db.execute(sql.raw(queryStr));
       const rows = result.rows || [];
 
       console.log('[SENT-HISTORY] Query returned rows:', rows.length);
@@ -20117,18 +20124,14 @@ Use this store information to provide context-aware responses. When helping draf
       });
 
       // Get total count with same filters
-      const countResult = await db.execute(sql`
+      const countQueryStr = `
         SELECT COUNT(*) as count
         FROM sequence_recipient_messages m
         LEFT JOIN sequence_recipients sr ON m.recipient_id = sr.id
         LEFT JOIN sequences s ON sr.sequence_id = s.id
-        WHERE sr.id IS NOT NULL
-        ${sequenceId ? sql`AND s.id = ${sequenceId}` : sql``}
-        ${statusFilter === 'replied' ? sql`AND sr.replied_at IS NOT NULL` : sql``}
-        ${statusFilter === 'bounced' ? sql`AND sr.bounced_at IS NOT NULL` : sql``}
-        ${statusFilter === 'pending' ? sql`AND sr.status = 'pending'` : sql``}
-        ${statusFilter === 'sent' ? sql`AND sr.replied_at IS NULL AND sr.bounced_at IS NULL AND sr.status != 'pending'` : sql``}
-      `);
+        WHERE ${whereClause}
+      `;
+      const countResult = await db.execute(sql.raw(countQueryStr));
       const total = countResult.rows?.[0]?.count ? Number(countResult.rows[0].count) : 0;
 
       res.json({
