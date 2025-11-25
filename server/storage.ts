@@ -4788,6 +4788,7 @@ export class DatabaseStorage implements IStorage {
           current_step = ${updates.currentStep || sql`current_step`},
           last_step_sent_at = ${updates.lastStepSentAt || sql`last_step_sent_at`},
           status = ${updates.status || sql`status`},
+          thread_id = ${updates.threadId || sql`thread_id`},
           updated_at = NOW()
         WHERE id = ${recipientId}
         RETURNING *
