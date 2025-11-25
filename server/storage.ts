@@ -3848,6 +3848,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async sendRecipientNow(id: string): Promise<SequenceRecipient> {
+    console.log(`[Storage] sendRecipientNow called for recipient ${id}`);
+    
     // Get current recipient to validate
     const [recipient] = await db
       .select()
@@ -3856,23 +3858,32 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     if (!recipient) {
+      console.error(`[Storage] Recipient ${id} not found`);
       throw new Error(`Recipient ${id} not found`);
     }
 
+    console.log(`[Storage] Recipient found: ${recipient.email}, status: ${recipient.status}`);
+
     // Only allow sending for pending/in_sequence recipients
     if (recipient.status !== 'pending' && recipient.status !== 'in_sequence') {
+      console.error(`[Storage] Cannot send: recipient status is ${recipient.status}`);
       throw new Error(`Cannot send: recipient status is ${recipient.status}`);
     }
 
     // Matrix2: Get the recipient's current slot
+    console.log(`[Storage] Fetching Matrix2 helper...`);
     const { getRecipientSlot, forceSendNow } = await import('./services/Matrix2/matrix2Helper');
     const slot = await getRecipientSlot(id);
 
     if (!slot) {
+      console.error(`[Storage] No slot assigned for recipient ${id}`);
       throw new Error('No slot assigned for this recipient');
     }
 
+    console.log(`[Storage] Slot found: ${slot.id}, current time: ${slot.slotTimeUtc}`);
+
     // Force immediate send by setting slot_time_utc to 1 second ago
+    console.log(`[Storage] Calling forceSendNow for slot ${slot.id}`);
     await forceSendNow(slot.id);
 
     // Return updated recipient
@@ -3882,6 +3893,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(sequenceRecipients.id, id))
       .limit(1);
 
+    console.log(`[Storage] sendRecipientNow complete for ${id}`);
     return updated!;
   }
 
