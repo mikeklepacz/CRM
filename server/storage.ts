@@ -4724,8 +4724,7 @@ export class DatabaseStorage implements IStorage {
           finalized_strategy as "finalizedStrategy",
           step_delays as "stepDelays",
           repeat_last_step as "repeatLastStep",
-          status,
-          settings_json as "settingsJson"
+          status
         FROM sequences
         WHERE id = ${sequenceId}
         LIMIT 1
