@@ -20109,7 +20109,11 @@ Use this store information to provide context-aware responses. When helping draf
       // Apply all WHERE conditions plus filter out orphaned messages (missing recipient or sequence)
       const whereConditions = [...conditions, sql`${sequenceRecipients.id} IS NOT NULL`];
       if (whereConditions.length > 0) {
-        messagesQuery = messagesQuery.where(and(...whereConditions));
+        // Handle single condition vs multiple conditions
+        const whereClause = whereConditions.length === 1 
+          ? whereConditions[0]
+          : and(...whereConditions);
+        messagesQuery = messagesQuery.where(whereClause);
       }
 
       // Complete the query
@@ -20176,7 +20180,11 @@ Use this store information to provide context-aware responses. When helping draf
 
       // Apply same WHERE conditions as main query (including orphan filter)
       if (whereConditions.length > 0) {
-        countQuery = countQuery.where(and(...whereConditions));
+        // Handle single condition vs multiple conditions
+        const countWhereClause = whereConditions.length === 1 
+          ? whereConditions[0]
+          : and(...whereConditions);
+        countQuery = countQuery.where(countWhereClause);
       }
 
       const countResult = await countQuery;
