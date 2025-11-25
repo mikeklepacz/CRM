@@ -1,3 +1,46 @@
+/**
+ * CRITICAL: Frontend Event Stream Integration
+ * 
+ * Receives real-time push updates from server via Server-Sent Events (SSE).
+ * Invalidates React Query caches to keep data synchronized without manual polling.
+ * 
+ * ARCHITECTURE DECISIONS (DO NOT CHANGE WITHOUT UNDERSTANDING):
+ * 
+ * 1. EVENT MAPPING:
+ *    - EVENT_TO_QUERY_KEYS maps each event type to query keys that should be invalidated
+ *    - Example: 'clients:updated' invalidates ['/api/clients/my'] and ['/api/recipients']
+ *    - DO NOT add/remove mappings without checking all places they're emitted from backend
+ * 
+ * 2. CONNECTION LIFECYCLE:
+ *    - EventSource automatically reconnects after error (browser built-in behavior)
+ *    - Don't close EventSource manually - let browser handle reconnection
+ *    - 30-second heartbeat keeps connection alive through proxies
+ *    - DO NOT implement custom reconnection logic - browser handles it natively
+ * 
+ * 3. FALLBACK POLLING:
+ *    - 2-minute polling in queryClient.ts as safety net
+ *    - If SSE breaks, polling ensures data eventually syncs (slower but reliable)
+ *    - DO NOT increase polling interval above 2 minutes - defeats purpose of event-driven arch
+ *    - DO NOT remove polling - provides resilience against SSE network issues
+ * 
+ * 4. ERROR HANDLING:
+ *    - Parse errors logged but don't crash app
+ *    - Connection errors trigger auto-reconnect (browser EventSource behavior)
+ *    - DO NOT catch and ignore ALL EventSource.onerror - may hide real errors
+ * 
+ * 5. WITHCREDENTIALS:
+ *    - withCredentials: true enables cookie-based authentication
+ *    - Browser sends session cookie automatically to /api/events
+ *    - DO NOT remove this - loses authentication and receives 401 errors
+ * 
+ * SAFEGUARDS:
+ * - DO NOT modify EVENT_TO_QUERY_KEYS without backend audit - cache invalidation critical for data sync
+ * - DO NOT remove EventSource reconnection logic - causes permanent disconnect on network hiccup
+ * - DO NOT remove fallback polling - event-driven must degrade gracefully to polling
+ * - DO NOT remove withCredentials - breaks session authentication
+ * - DO NOT change SSE endpoint path - hardcoded in server routes
+ */
+
 import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
 import { queryClient } from './queryClient';
 
@@ -29,6 +72,8 @@ export function useEventStream() {
   return useContext(EventStreamContext);
 }
 
+// Maps each event type to query keys that should be invalidated when event arrives
+// Example: 'clients:updated' means invalidate /api/clients/my and /api/recipients caches
 const EVENT_TO_QUERY_KEYS: Record<EventType, string[][]> = {
   'clients:updated': [
     ['/api/clients/my'],

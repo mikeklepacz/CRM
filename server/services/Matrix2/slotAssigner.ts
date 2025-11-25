@@ -1,3 +1,47 @@
+/**
+ * CRITICAL: Matrix2 Email Slot Assignment System
+ * 
+ * Assigns eligible recipients to pre-generated slots. Uses priority-based tier system
+ * to ensure manual follow-ups get sent before cold outreach, optimizing human engagement.
+ * 
+ * ARCHITECTURE DECISIONS (DO NOT CHANGE WITHOUT UNDERSTANDING):
+ * 
+ * 1. PRIORITY TIERS (critical for fairness):
+ *    - Tier 1 (Highest): Manual Follow-Ups at step 1+ (human handoffs getting AI follow-ups)
+ *    - Tier 2 (Medium): Active follow-ups at step 2+ (nurturing existing sequences)
+ *    - Tier 3 (Lowest): Cold outreach at step 0 (first contact)
+ *    - Recipients in higher tiers get first access to available slots
+ *    - DO NOT change tier ordering without considering impact on sequence completion rates
+ * 
+ * 2. SHORT-CIRCUIT OPTIMIZATION:
+ *    - Check eligible recipients FIRST (before fetching slots)
+ *    - If zero eligible recipients: Skip expensive slot query entirely
+ *    - Saves 200-500ms of unnecessary database queries per cycle
+ *    - DO NOT remove this check - significantly impacts CPU usage during queue cycles
+ * 
+ * 3. MULTI-STEP PROGRESSION:
+ *    - After recipient is assigned and email sent, automatic advancement happens in email sending logic
+ *    - Example: Recipient at step 1 receives email → automatically promoted to step 2
+ *    - Next queue cycle: Recipient fetched again at step 2, assigned to new slot
+ *    - DO NOT modify step advancement here - logic is in emailSender, keeping concerns separated
+ * 
+ * 4. PAST SLOT PREVENTION:
+ *    - Never assign slots with times in the past
+ *    - Prevents flash-disappear behavior when queue is paused/resumed
+ *    - DO NOT remove this check - causes UX issue where emails appear then vanish
+ * 
+ * 5. EVENT EMISSION:
+ *    - Emits matrix:assigned event after successful slot assignment
+ *    - Frontend invalidates /api/recipients cache to show updated status
+ *    - Keeps 2-minute fallback polling as safety net
+ * 
+ * SAFEGUARDS:
+ * - DO NOT change priority tier ordering - directly affects fairness and completion rates
+ * - DO NOT remove short-circuit recipient check - causes 10x+ increase in DB queries during idle periods
+ * - DO NOT remove past slot prevention - breaks queue pause/resume behavior
+ * - DO NOT modify step advancement logic here - keep in email sender for separation of concerns
+ */
+
 // server/services/Matrix2/slotAssigner.ts
 import { parseBusinessHours } from "../timezoneHours";
 import { toZonedTime } from "date-fns-tz";

@@ -1,3 +1,48 @@
+/**
+ * CRITICAL: Matrix2 Email Slot Generation System
+ * 
+ * Slot-first architecture: Pre-generates daily email sending slots to enable rate-limiting,
+ * geographic distribution, and predictable queue management. Recipients are assigned to
+ * available slots, not the other way around.
+ * 
+ * ARCHITECTURE DECISIONS (DO NOT CHANGE WITHOUT UNDERSTANDING):
+ * 
+ * 1. BOUNDARY CALCULATION:
+ *    - Slots are generated within: sendingHoursStart to sendingHoursStart + sendingHoursDuration
+ *    - Midnight crossover: If duration goes past 24:00, slots span into next day (e.g., 22:00 + 5h = 03:00 tomorrow)
+ *    - Formula for end hour: (startHour + duration) % 24
+ *    - DO NOT use sendingHoursEnd directly - use duration-based calculation to handle midnight properly
+ * 
+ * 2. JITTER STRATEGY:
+ *    - Pure random jitter: Each slot's delay is independently random between min/max (NOT evenly spaced)
+ *    - Why: Prevents thundering herd (all recipients sending at same time)
+ *    - First slot: Starts at exact sendingHoursStart (no jitter)
+ *    - Subsequent slots: Each adds random delay from minDelayMinutes to maxDelayMinutes
+ *    - Duplicate prevention: If random jitter equals previous, regenerate (max 10 attempts)
+ * 
+ * 3. TIMEZONE HANDLING:
+ *    - All times stored in UTC in database
+ *    - All boundary calculations done in admin timezone
+ *    - Conversions: admin TZ → UTC for storage, UTC → admin TZ for checking boundaries
+ *    - DO NOT mix timezones in calculations - always convert first
+ * 
+ * 4. TODAY'S SLOT GENERATION:
+ *    - If generating for today and window hasn't started yet: Start from sendingHoursStart
+ *    - If generating for today and window has started: Start from NOW (don't wait for window start)
+ *    - Why: Avoids needlessly delaying emails until tomorrow
+ * 
+ * 5. MIDDLEWARE INTEGRATION:
+ *    - Emits matrix:slotsChanged event after creation
+ *    - Frontend listens for event and invalidates /api/matrix2/slots cache
+ *    - Keeps 2-minute fallback polling as safety net
+ * 
+ * SAFEGUARDS:
+ * - DO NOT change end hour calculation - midnight crossover logic is fragile
+ * - DO NOT remove "today" special case - breaks real-time sending for same-day schedules
+ * - DO NOT change jitter strategy from pure random - evenly spaced causes rate limiting issues
+ * - DO NOT change timezone conversions - will cause slots in wrong time windows
+ */
+
 // server/services/Matrix2/slotGenerator.ts
 import { storage } from "../../storage";
 import { getSlotsForDate, createSlots } from "./slotDb";
