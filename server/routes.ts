@@ -20067,12 +20067,12 @@ Use this store information to provide context-aware responses. When helping draf
           recipientStatus: sequenceRecipients.status,
           repliedAt: sequenceRecipients.repliedAt,
           replyCount: sequenceRecipients.replyCount,
-          bouncedAt: sequenceRecipients.bouncedAt,
+          bounceType: sequenceRecipients.bounceType,
         })
         .from(sequenceRecipientMessages)
         .leftJoin(sequenceRecipients, eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id))
         .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
-        .where(isNotNull(sequenceRecipients.id));
+        .where(isNotNull(sequenceRecipientMessages.sentAt));
 
       if (sequenceId) {
         query = query.where(eq(sequences.id, sequenceId));
@@ -20081,14 +20081,14 @@ Use this store information to provide context-aware responses. When helping draf
       if (statusFilter === 'replied') {
         query = query.where(isNotNull(sequenceRecipients.repliedAt));
       } else if (statusFilter === 'bounced') {
-        query = query.where(isNotNull(sequenceRecipients.bouncedAt));
+        query = query.where(isNotNull(sequenceRecipients.bounceType));
       } else if (statusFilter === 'pending') {
         query = query.where(eq(sequenceRecipients.status, 'pending'));
       } else if (statusFilter === 'sent') {
         query = query.where(
           and(
             isNull(sequenceRecipients.repliedAt),
-            isNull(sequenceRecipients.bouncedAt),
+            isNull(sequenceRecipients.bounceType),
             ne(sequenceRecipients.status, 'pending')
           )
         );
@@ -20109,7 +20109,7 @@ Use this store information to provide context-aware responses. When helping draf
         let status: 'sent' | 'replied' | 'bounced' | 'pending' = 'sent';
         if (row.repliedAt) {
           status = 'replied';
-        } else if (row.bouncedAt) {
+        } else if (row.bounceType) {
           status = 'bounced';
         } else if (row.recipientStatus === 'pending') {
           status = 'pending';
@@ -20138,7 +20138,7 @@ Use this store information to provide context-aware responses. When helping draf
         .from(sequenceRecipientMessages)
         .leftJoin(sequenceRecipients, eq(sequenceRecipientMessages.recipientId, sequenceRecipients.id))
         .leftJoin(sequences, eq(sequenceRecipients.sequenceId, sequences.id))
-        .where(isNotNull(sequenceRecipients.id));
+        .where(isNotNull(sequenceRecipientMessages.sentAt));
 
       if (sequenceId) {
         countQuery = countQuery.where(eq(sequences.id, sequenceId));
@@ -20147,14 +20147,14 @@ Use this store information to provide context-aware responses. When helping draf
       if (statusFilter === 'replied') {
         countQuery = countQuery.where(isNotNull(sequenceRecipients.repliedAt));
       } else if (statusFilter === 'bounced') {
-        countQuery = countQuery.where(isNotNull(sequenceRecipients.bouncedAt));
+        countQuery = countQuery.where(isNotNull(sequenceRecipients.bounceType));
       } else if (statusFilter === 'pending') {
         countQuery = countQuery.where(eq(sequenceRecipients.status, 'pending'));
       } else if (statusFilter === 'sent') {
         countQuery = countQuery.where(
           and(
             isNull(sequenceRecipients.repliedAt),
-            isNull(sequenceRecipients.bouncedAt),
+            isNull(sequenceRecipients.bounceType),
             ne(sequenceRecipients.status, 'pending')
           )
         );
