@@ -7048,8 +7048,19 @@ IMPORTANT:
               subject: subject,
               body: body,
               sentAt: new Date(),
+              threadId: draft.message.threadId, // Gmail thread ID
               messageId: draft.message.id,
             });
+          
+          // Update sequence totalRecipients and stats
+          await db
+            .update(sequences)
+            .set({
+              totalRecipients: sql`${sequences.totalRecipients} + 1`,
+              sentCount: sql`${sequences.sentCount} + 1`,
+              lastSentAt: new Date()
+            })
+            .where(eq(sequences.id, systemSequence.id));
           
           console.log(`📧 [MANUAL FOLLOW-UPS] ✅ Enrolled ${to} at currentStep=1 (awaiting_reply). Original email saved as Step 1. Message ID: ${draft.message.id}`);
         } else {
@@ -19149,6 +19160,7 @@ Use this store information to provide context-aware responses. When helping draf
                 .returning();
               
               // Store original email content for AI context (Step 1 = manual email)
+              // Note: threadId/messageId will be populated when email is actually sent
               await db
                 .insert(sequenceRecipientMessages)
                 .values({
@@ -19157,8 +19169,18 @@ Use this store information to provide context-aware responses. When helping draf
                   subject: subject || '(No subject)',
                   body: body || '',
                   sentAt: new Date(),
+                  threadId: null, // Will be populated when sent
+                  messageId: null, // Will be populated when sent
                   createdAt: new Date()
                 });
+              
+              // Update sequence totalRecipients counter
+              await db
+                .update(sequences)
+                .set({
+                  totalRecipients: sql`${sequences.totalRecipients} + 1`
+                })
+                .where(eq(sequences.id, manualFollowUpsSequence.id));
               
               console.log('[ManualFollowUps] ✅ Auto-enrolled at Step 1:', recipientEmail);
             }
