@@ -7571,11 +7571,6 @@ IMPORTANT:
       const orderIdIndex = headers.findIndex((h: string) => h.toLowerCase() === 'order number' || h.toLowerCase() === 'order id');
       const parentLinkIndex = headers.findIndex((h: string) => h.toLowerCase() === 'parent link');
 
-      console.log('[MY-CLIENTS] 👤 User:', currentUser.email, 'Role:', currentUser.role);
-      console.log('[MY-CLIENTS] 🏷️  User agentName field:', currentUser.agentName);
-      console.log('[MY-CLIENTS] 🔐 allowedAgentNames:', allowedAgentNames);
-      console.log('[MY-CLIENTS] 📊 Processing', trackerRows.length - 1, 'tracker rows');
-      console.log('[MY-CLIENTS] 📋 Column indices:', { linkIndex, agentNameIndex, amountIndex, totalIndex, dateIndex, statusIndex, parentLinkIndex });
 
       // Group commissions by client Link
       const clientMap: Map<string, {
@@ -7590,6 +7585,8 @@ IMPORTANT:
 
       let rowsProcessed = 0;
       let rowsFiltered = 0;
+      let skippedNoLink = 0;
+      let skippedChildLocation = 0;
 
       // Process each tracker row
       for (let i = 1; i < trackerRows.length; i++) {
@@ -7605,13 +7602,13 @@ IMPORTANT:
         const parentLink = parentLinkIndex >= 0 ? row[parentLinkIndex]?.toString().trim() : '';
 
         if (!link) {
-          console.log(`[MY-CLIENTS] Row ${i + 1}: Skipping - no link`);
+          skippedNoLink++;
           continue;
         }
 
         // Skip child locations (locations with a Parent Link)
         if (parentLink) {
-          console.log(`[MY-CLIENTS] Row ${i + 1}: Skipping child location - has parent link ${parentLink}`);
+          skippedChildLocation++;
           continue;
         }
 
@@ -7626,9 +7623,6 @@ IMPORTANT:
             name.toLowerCase().trim() === rowAgentNormalized
           );
           if (!isAllowed) {
-            if (i <= 5) { // Only log first 5 filtered rows to avoid spam
-              console.log(`[MY-CLIENTS] Row ${i + 1}: Filtered out - rowAgent="${rowAgent}" not in allowedAgentNames`);
-            }
             rowsFiltered++;
             continue;
           }
@@ -7639,10 +7633,6 @@ IMPORTANT:
         // Parse amount (commission) and total (gross order amount)
         const amount = parseFloat(String(amountStr).replace(/[^0-9.-]/g, '')) || 0;
         const total = parseFloat(String(totalStr).replace(/[^0-9.-]/g, '')) || 0;
-        
-        if (total > 0) {
-          console.log(`[MY-CLIENTS] Row ${i}: link=${link}, total=${total}, amount=${amount}`);
-        }
 
         // Parse date
         let orderDate: Date | null = null;
@@ -7758,19 +7748,7 @@ IMPORTANT:
         }
       }
 
-      console.log(`[MY-CLIENTS] ✅ Processing complete:`);
-      console.log(`[MY-CLIENTS]    - Rows processed: ${rowsProcessed}`);
-      console.log(`[MY-CLIENTS]    - Rows filtered out: ${rowsFiltered}`);
-      console.log(`[MY-CLIENTS]    - Unique stores found: ${clientMap.size}`);
-      console.log(`[MY-CLIENTS]    - After enrichment: ${enrichedClients.length}`);
-      console.log(`[MY-CLIENTS] Returning ${enrichedClients.length} clients for ${currentUser.agentName || currentUser.email}`);
-      
-      // Debug: Log total sales for first few clients
-      if (enrichedClients.length > 0) {
-        enrichedClients.slice(0, 3).forEach((c, i) => {
-          console.log(`[MY-CLIENTS] Client ${i + 1}: ${c.data.Name || 'Unknown'} - totalSales=${c.totalSales}, commission=${c.commissionTotal}`);
-        });
-      }
+      console.log(`[MY-CLIENTS] ✅ Processing complete: ${enrichedClients.length} clients for ${currentUser.agentName || currentUser.email} | Processed: ${rowsProcessed}, Skipped: ${skippedNoLink} no-link, ${skippedChildLocation} child-locations, ${rowsFiltered} filtered-by-agent`);
 
       res.json(enrichedClients);
     } catch (error: any) {

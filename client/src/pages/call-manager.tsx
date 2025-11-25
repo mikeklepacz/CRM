@@ -1294,7 +1294,7 @@ export default function CallManager() {
   const { data: callQueueStats } = useQuery<CallQueueStats>({
     queryKey: ['/api/elevenlabs/call-queue'],
     enabled: hasAccess,
-    refetchInterval: 5000, // Poll every 5 seconds for real-time updates
+    refetchInterval: 30000, // Poll every 30 seconds (reduced from 5s)
   });
 
   // Fetch call analytics
@@ -1323,7 +1323,7 @@ export default function CallManager() {
   const { data: jobStatus } = useQuery<{ status: 'idle' | 'running'; job: any }>({
     queryKey: ['/api/analysis/job-status'],
     enabled: hasAccess,
-    refetchInterval: 2000, // Poll every 2 seconds
+    refetchInterval: 10000, // Poll every 10 seconds (reduced from 2s)
   });
 
   const runningJob = jobStatus?.status === 'running' ? jobStatus.job : null;

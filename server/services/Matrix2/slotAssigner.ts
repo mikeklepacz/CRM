@@ -88,7 +88,14 @@ export async function assignRecipientsToSlots() {
     return;
   }
 
-  console.log('[Matrix2 Assigner] ========== STARTING ASSIGNMENT CYCLE ==========');
+  // SHORT-CIRCUIT: Check recipients FIRST before fetching slots
+  const recipients = await getEligibleRecipientsForAssignment();
+  if (recipients.length === 0) {
+    console.log('[Matrix2 Assigner] No eligible recipients, skipping slot fetch');
+    return;
+  }
+
+  console.log(`[Matrix2 Assigner] Found ${recipients.length} eligible recipients, fetching slots...`);
 
   // Get all empty slots across the next 3 days (matching slot generator window)
   const today = new Date();
@@ -100,38 +107,15 @@ export async function assignRecipientsToSlots() {
     const dateIso = targetDate.toISOString().slice(0, 10);
     
     const daySlots = await getEmptySlots(dateIso);
-    console.log(`[Matrix2 Assigner] Day ${dayOffset} (${dateIso}): ${daySlots.length} empty slots`);
     allSlots.push(...daySlots);
   }
-  
-  console.log('[Matrix2 Assigner] Empty slots found across 3 days:', {
-    count: allSlots.length,
-    sample: allSlots.slice(0, 3)
-  });
   
   if (allSlots.length === 0) {
     console.log(`[Matrix2 Assigner] No empty slots available in 3-day window`);
     return;
   }
 
-  const recipients = await getEligibleRecipientsForAssignment();
-  console.log('[Matrix2 Assigner] Eligible recipients found:', {
-    count: recipients.length,
-    sample: recipients.slice(0, 3).map(r => ({
-      email: r.email,
-      sequenceId: r.sequence_id,
-      currentStep: r.current_step,
-      status: r.status,
-      timezone: r.timezone,
-      businessHours: r.business_hours,
-      state: r.state
-    }))
-  });
-  
-  if (recipients.length === 0) {
-    console.log(`[Matrix2 Assigner] No eligible recipients for assignment`);
-    return;
-  }
+  console.log(`[Matrix2 Assigner] ${allSlots.length} slots available, assigning ${recipients.length} recipients...`);
 
   // Apply three-tier priority sorting
   // Tier 1: Manual Follow-Ups at step 1+ (human handoffs getting AI follow-ups)
@@ -202,65 +186,45 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   const recipientState = recipient.state || '';
   const recipientTimezone = recipient.timezone;
   
-  console.log(`[Matrix2 Assigner] 🔍 Checking eligibility for ${recipient.email} at slot ${slotUtc.toISOString()}`);
-  
   if (!recipientTimezone) {
-    console.log(`[Matrix2 Assigner] ❌ Recipient ${recipient.email} has no timezone, skipping`);
-    return false;
+    return false; // No timezone - skip silently (common case)
   }
 
   // Validate timezone is valid IANA
   try {
     Intl.DateTimeFormat(undefined, { timeZone: recipientTimezone });
   } catch (error) {
-    console.log(`[Matrix2 Assigner] ❌ Recipient ${recipient.email} has invalid timezone ${recipientTimezone}, skipping`);
+    console.log(`[Matrix2 Assigner] ❌ Invalid timezone "${recipientTimezone}" for ${recipient.email}`);
     return false;
   }
 
   // Convert slot UTC time to recipient's local time
   const localTime = toZonedTime(slotUtc, recipientTimezone);
-  console.log(`[Matrix2 Assigner] 🕐 Slot local time: ${localTime.toISOString()} (${recipientTimezone})`);
-
-  // Get day of week (0 = Sunday, 6 = Saturday)
   const dayOfWeek = localTime.getDay();
-  console.log(`[Matrix2 Assigner] 📅 Day of week: ${dayOfWeek}`);
 
   // Check excluded days setting FIRST (before business hours parsing)
   const excludedDays = settings.excludedDays || [];
   if (excludedDays.includes(dayOfWeek)) {
-    console.log(`[Matrix2 Assigner] ❌ Slot ${slotUtc.toISOString()} on excluded day ${dayOfWeek} for ${recipient.email}`);
-    return false;
+    return false; // Excluded day - skip silently (expected behavior)
   }
 
   // Parse business hours with state parameter
-  console.log(`[Matrix2 Assigner] 🏪 Parsing business hours: "${recipient.business_hours}" (state: ${recipientState})`);
   const parsed = parseBusinessHours(recipient.business_hours || '', recipientState);
-  console.log(`[Matrix2 Assigner] 📊 Parsed result:`, { isClosed: parsed.isClosed, scheduleKeys: Object.keys(parsed.schedule) });
   
-  // If business is closed, not eligible
   if (parsed.isClosed) {
-    console.log(`[Matrix2 Assigner] ❌ Business closed for ${recipient.email} on ${localTime.toISOString()}`);
-    return false;
+    return false; // Business closed - skip silently (expected)
   }
 
-  // Get schedule for this day
   const daySchedule = parsed.schedule[dayOfWeek];
-  console.log(`[Matrix2 Assigner] 🗓️ Day ${dayOfWeek} schedule:`, daySchedule);
-  
   if (!daySchedule || daySchedule.length === 0) {
-    console.log(`[Matrix2 Assigner] ❌ No schedule for ${recipient.email} on day ${dayOfWeek}`);
-    return false; // No schedule for this day
+    return false; // No schedule for day - skip silently
   }
 
   // Use first time range
   const firstRange = daySchedule[0];
   const openMinutes = firstRange.open;
   const closeMinutes = firstRange.close;
-  console.log(`[Matrix2 Assigner] ⏰ Business hours: ${Math.floor(openMinutes/60)}:${String(openMinutes%60).padStart(2,'0')} - ${Math.floor(closeMinutes/60)}:${String(closeMinutes%60).padStart(2,'0')}`);
-
-  // Get local time in minutes since midnight
   const localMinutes = localTime.getHours() * 60 + localTime.getMinutes();
-  console.log(`[Matrix2 Assigner] 🕐 Current local time: ${Math.floor(localMinutes/60)}:${String(localMinutes%60).padStart(2,'0')} (${localMinutes} minutes)`);
 
   // Apply client_window_start_offset (hours after open)
   const clientWindowStartOffset = parseFloat(String(settings.clientWindowStartOffset || 1));
@@ -269,28 +233,22 @@ function isRecipientEligible(recipient: any, slotUtc: Date, settings: any): bool
   // Apply client_window_end_hour (local cutoff)
   const clientWindowEndHour = settings.clientWindowEndHour || 14;
   const windowEndMinutes = Math.min(closeMinutes, clientWindowEndHour * 60);
-  console.log(`[Matrix2 Assigner] 🪟 Eligible window: ${Math.floor(windowStartMinutes/60)}:${String(windowStartMinutes%60).padStart(2,'0')} - ${Math.floor(windowEndMinutes/60)}:${String(windowEndMinutes%60).padStart(2,'0')} (offset: ${clientWindowStartOffset}h, cutoff: ${clientWindowEndHour}:00)`);
 
-  // Check if slot falls within eligible window
   if (localMinutes < windowStartMinutes || localMinutes > windowEndMinutes) {
-    console.log(`[Matrix2 Assigner] ❌ Slot ${localTime.toISOString()} outside business window (${Math.floor(windowStartMinutes/60)}:${String(windowStartMinutes%60).padStart(2,'0')}-${Math.floor(windowEndMinutes/60)}:${String(windowEndMinutes%60).padStart(2,'0')}) for ${recipient.email}`);
-    return false;
+    return false; // Outside business window - skip silently (expected)
   }
 
   // Enforce step_delay if present
-  if (recipient.step_delay && recipient.step_delay > 0) {
-    if (recipient.last_step_sent_at) {
-      const lastSent = new Date(recipient.last_step_sent_at);
-      const delayMs = recipient.step_delay * 24 * 60 * 60 * 1000;
-      const earliestNext = new Date(lastSent.getTime() + delayMs);
-      
-      if (slotUtc < earliestNext) {
-        console.log(`[Matrix2 Assigner] ❌ Step delay not met for ${recipient.email}: ${slotUtc.toISOString()} < ${earliestNext.toISOString()}`);
-        return false; // Too soon based on step delay
-      }
+  if (recipient.step_delay && recipient.step_delay > 0 && recipient.last_step_sent_at) {
+    const lastSent = new Date(recipient.last_step_sent_at);
+    const delayMs = recipient.step_delay * 24 * 60 * 60 * 1000;
+    const earliestNext = new Date(lastSent.getTime() + delayMs);
+    
+    if (slotUtc < earliestNext) {
+      console.log(`[Matrix2 Assigner] ⏳ Step delay not met for ${recipient.email}: next eligible ${earliestNext.toISOString()}`);
+      return false;
     }
   }
 
-  console.log(`[Matrix2 Assigner] ✅ Recipient ${recipient.email} is ELIGIBLE for slot ${slotUtc.toISOString()}`);
   return true;
 }
