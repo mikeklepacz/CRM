@@ -128,13 +128,12 @@ export async function processEmailQueue() {
   for (const slot of slots) {
     try {
       // REPLY GUARD: Check for replies before sending
-      // Use admin user ID for Gmail API access (emails sent via admin's Gmail)
-      const adminUser = await storage.getAdminUser();
-      const userId = adminUser?.id || slot.user_id;
+      // Use HARDCODED admin user ID for Gmail API access (same as emailSender.ts)
+      const ADMIN_USER_ID = '4df35876-ab89-4860-8656-0440accfea14'; // michael@naturalmaterials.eu
       
       if (slot.thread_id) {
         const canSend = await shouldSendEmail({
-          userId,
+          userId: ADMIN_USER_ID,
           threadId: slot.thread_id,
           scheduledAt: new Date(slot.slot_time_utc),
         });

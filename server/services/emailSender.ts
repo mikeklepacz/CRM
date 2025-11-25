@@ -444,7 +444,7 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
       return false;
     }
 
-    // 5. Update recipient metadata
+    // 5. Update recipient metadata (CRITICAL: Save threadId for reply detection!)
     const now = new Date();
     await storage.updateRecipient(recipient.id, {
       currentStep,
@@ -453,7 +453,9 @@ export async function sendEmailToRecipient(recipientId: string): Promise<boolean
         ? 'completed' 
         : 'in_sequence',
       updatedAt: now,
+      threadId: emailResult.threadId,
     });
+    console.log(`[EmailSender] Saved threadId=${emailResult.threadId} to recipient for reply detection`);
 
     // 6. Record message in history
     await storage.insertRecipientMessage({
